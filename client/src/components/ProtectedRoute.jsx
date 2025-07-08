@@ -10,13 +10,9 @@ const ProtectedRoute = ({ allowedRoles, requireApproval = false }) => {
 
   // Check if route requires specific roles and if user has one of them
   if (allowedRoles && !allowedRoles.includes(role)) {
-    return <Navigate to="/unauthorized" replace />;
+    return <Navigate to="/login" replace />;
   }
 
-  // Additional check for provider approval status
-  if (requireApproval && role === 'provider' && !user?.approved) {
-    return <Navigate to="/pending-approval" replace />;
-  }
 
   return <Outlet />;
 };

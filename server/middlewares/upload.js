@@ -26,6 +26,18 @@ const profilePicStorage = multer.diskStorage({
   }
 });
 
+// Add this to your existing upload.js file
+const serviceImageStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/serviceImages/');
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'service-' + uniqueSuffix + ext);
+  }
+});
+
 // File filters
 const resumeFilter = (req, file, cb) => {
   if (file.mimetype === 'application/pdf') {
@@ -52,10 +64,17 @@ const uploadResume = multer({
 const uploadProfilePic = multer({
   storage: profilePicStorage,
   fileFilter: imageFilter,
-  limits: { fileSize: 2 * 1024 * 1024 } // 2MB limit
+  limits: { fileSize: 3 * 1024 * 1024 } // 2MB limit
+});
+
+const uploadServiceImage = multer({
+  storage: serviceImageStorage,
+  fileFilter: imageFilter, // Reuse the same image filter
+  limits: { fileSize: 3 * 1024 * 1024 } // 2MB limit
 });
 
 module.exports = {
   uploadResume,
-  uploadProfilePic
+  uploadProfilePic,
+  uploadServiceImage
 };

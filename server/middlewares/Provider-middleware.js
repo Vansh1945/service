@@ -1,67 +1,61 @@
 const jwt = require('jsonwebtoken');
 
 const Provider = require('../models/Provider-model');
-const Feedback = require('../models/Feedback-model');
-const Transaction = require('../models/Transaction-model ');
+
 
 /**
  * Provider Authentication Middleware
  */
 const providerAuthMiddleware = async (req, res, next) => {
-    // Extract token from header
-    const token = req.header('Authorization');
-
-    if (!token || !token.startsWith("Bearer ")) {
-        return res.status(401).json({
-            success: false,
-            message: "Unauthorized. Provider token not provided or invalid format."
-        });
-    }
-
-    const jwtToken = token.replace("Bearer ", "").trim();
-
     try {
-        // Verify token
+        const token = req.header('Authorization');
+
+        if (!token || !token.startsWith("Bearer ")) {
+            return res.status(401).json({
+                success: false,
+                message: "Authorization token required"
+            });
+        }
+
+        const jwtToken = token.replace("Bearer ", "").trim();
         const decoded = jwt.verify(jwtToken, process.env.JWT_SECRET);
 
-        // Find provider in database
-        const provider = await Provider.findById(decoded.id)
-            .select('-password')
-            .populate('feedbacks', 'rating comment')
-            .populate('earningsHistory', 'amount date');
+        // Basic provider query without populating first
+        let provider = await Provider.findById(decoded.id).select('-password');
 
         if (!provider) {
             return res.status(401).json({
                 success: false,
-                message: "Unauthorized. Provider not found."
+                message: "Provider account not found"
             });
         }
 
-        // Check if provider is approved
-        if (!provider.approved) {
-            return res.status(403).json({
-                success: false,
-                message: "Forbidden. Your provider account is not yet approved."
-            });
+        // Try to populate if models exist
+        try {
+            provider = await Provider.findById(decoded.id)
+                .select('-password')
+                .populate({
+                    path: 'feedbacks',
+                    select: 'rating comment',
+                    options: { limit: 5 } // Safety limit
+                })
+                .populate({
+                    path: 'earningsHistory',
+                    select: 'amount date',
+                    options: { limit: 5 } // Safety limit
+                });
+        } catch (populateError) {
         }
 
-        // Check if provider is blocked
-        if (provider.blockedTill && provider.blockedTill > new Date()) {
-            return res.status(403).json({
-                success: false,
-                message: `Forbidden. Your account is blocked until ${provider.blockedTill}.`
-            });
-        }
-
-        // Check if provider is deleted
+        // Rest of your middleware checks...
         if (provider.isDeleted) {
             return res.status(403).json({
                 success: false,
-                message: "Forbidden. This provider account has been deleted."
+                message: "Account deactivated"
             });
         }
 
-        // Attach provider data to request object
+        // Attach provider to request
         req.provider = provider;
         req.token = jwtToken;
         req.providerID = provider._id;
@@ -69,53 +63,109 @@ const providerAuthMiddleware = async (req, res, next) => {
 
         next();
     } catch (error) {
-        console.error("Provider auth middleware error:", error);
+        console.error("Provider auth error:", error);
 
-        let message = "Unauthorized. Invalid provider token.";
+        let message = "Authentication failed";
+        let status = 401;
+
         if (error.name === 'TokenExpiredError') {
-            message = "Provider session expired. Please login again.";
+            message = "Session expired. Please login again";
         } else if (error.name === 'JsonWebTokenError') {
-            message = "Invalid provider token. Please login again.";
+            message = "Invalid token format";
+        } else {
+            status = 500;
+            message = "Internal server error";
         }
 
-        res.status(401).json({
+        res.status(status).json({
             success: false,
-            message
+            message,
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
+
 /**
- * Middleware to check if provider passed the test
+ * Middleware to check if provider has passed the test
  */
 const providerTestPassedMiddleware = async (req, res, next) => {
     try {
         if (!req.provider) {
             return res.status(401).json({
                 success: false,
-                message: 'Provider not authenticated'
+                message: 'Authentication required'
             });
         }
 
         const provider = await Provider.findById(req.provider._id);
+        
+        if (!provider) {
+            return res.status(404).json({
+                success: false,
+                message: 'Provider account not found'
+            });
+        }
 
-        if (!provider || !provider.testPassed) {
+        if (!provider.testPassed) {
             return res.status(403).json({
                 success: false,
-                message: 'Complete provider test to access this feature'
+                message: 'You must complete the provider qualification test first',
+                testRequired: true,
+                testPassed: false
             });
         }
 
         next();
     } catch (error) {
-        console.error('[Test Middleware Error]', error);
+        console.error('Test check middleware error:', error);
         res.status(500).json({
             success: false,
-            message: 'Server error during authorization'
+            message: 'Internal server error'
+        });
+    }
+};
+
+/**
+ * Middleware to check if provider needs to take test
+ * (Allows access to test routes without test completion)
+ */
+const providerTestAccessMiddleware = async (req, res, next) => {
+    try {
+        if (!req.provider) {
+            return res.status(401).json({
+                success: false,
+                message: 'Authentication required'
+            });
+        }
+
+        const provider = await Provider.findById(req.provider._id);
+        
+        // Allow access to test-related routes
+        if (req.path.includes('/test/')) {
+            return next();
+        }
+
+        // Block other routes if test not passed
+        if (!provider.testPassed) {
+            return res.status(403).json({
+                success: false,
+                message: 'Complete the qualification test to access this feature',
+                testRequired: true
+            });
+        }
+
+        next();
+    } catch (error) {
+        console.error('Test access middleware error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error'
         });
     }
 };
 
 module.exports = {
     providerAuthMiddleware,
-    providerTestPassedMiddleware
+    providerTestPassedMiddleware,
+    providerTestAccessMiddleware
 };

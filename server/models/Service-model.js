@@ -5,33 +5,31 @@ const { Schema } = mongoose;
 const serviceSchema = new Schema({
   title: {
     type: String,
-    required: [true, 'Service title is required'],
+    required: true,
     trim: true,
-    maxlength: [100, 'Title cannot exceed 100 characters']
+    maxlength: 100,
   },
   category: {
     type: String,
-    required: [true, 'Category is required'],
-    enum: ['Electrical', 'Plumbing', 'HVAC', 'Handyman', 'Appliance Repair', 'Other'],
+    required: true,
+    enum: ['electrical', 'plumbing', 'appliance repair', 'other'],
     default: 'Other'
   },
   description: {
     type: String,
-    required: [true, 'Description is required'],
+    required: true,
     trim: true,
-    maxlength: [500, 'Description cannot exceed 500 characters']
+    maxlength: 500,
   },
   image: {
     type: String,
     default: 'default-service.jpg'
   },
-  // Admin-set base price
   basePrice: {
     type: Number,
-    required: [true, 'Base price is required'],
-    min: [0, 'Price cannot be negative']
+    required: true,
+    min: 0,
   },
-  // Provider-specific pricing adjustments
   providerPrices: [{
     provider: {
       type: Schema.Types.ObjectId,
@@ -42,8 +40,7 @@ const serviceSchema = new Schema({
       type: Number,
       required: true,
       validate: {
-        validator: function(value) {
-          // Check if price is within ±10% of base price
+        validator: function (value) {
           const minPrice = this.parent().basePrice * 0.9;
           const maxPrice = this.parent().basePrice * 1.1;
           return value >= minPrice && value <= maxPrice;
@@ -59,17 +56,17 @@ const serviceSchema = new Schema({
   createdBy: {
     type: Schema.Types.ObjectId,
     ref: 'Admin',
-    required: [true, 'Creator is required']
+    required: true
   },
   isActive: {
     type: Boolean,
     default: true
   },
   duration: {
-    type: Number, // in hours
-    required: [true, 'Duration is required'],
-    min: [0.25, 'Minimum duration is 15 minutes'],
-    max: [24, 'Maximum duration is 24 hours']
+    type: Number,
+    required: true,
+    min: 0.25,
+    max: 500,
   },
   createdAt: {
     type: Date,
@@ -81,8 +78,10 @@ const serviceSchema = new Schema({
   }
 }, {
   toJSON: { virtuals: true },
-  toObject: { virtuals: true }
+  toObject: { virtuals: true },
+  timestamps: false
 });
+
 
 // Indexes
 serviceSchema.index({ title: 'text', description: 'text' });
@@ -91,13 +90,13 @@ serviceSchema.index({ 'providerPrices.provider': 1 });
 serviceSchema.index({ createdBy: 1 });
 
 // Pre-save hook
-serviceSchema.pre('save', function(next) {
+serviceSchema.pre('save', function (next) {
   this.updatedAt = Date.now();
   next();
 });
 
-// Virtuals
-serviceSchema.virtual('durationFormatted').get(function() {
+// Virtual for formatted duration
+serviceSchema.virtual('durationFormatted').get(function () {
   const hours = Math.floor(this.duration);
   const minutes = Math.round((this.duration - hours) * 60);
   return `${hours > 0 ? `${hours} hr` : ''} ${minutes > 0 ? `${minutes} min` : ''}`.trim();
@@ -106,7 +105,7 @@ serviceSchema.virtual('durationFormatted').get(function() {
 // ADMIN METHODS ==============================================
 
 // Static method for admin to create service
-serviceSchema.statics.createService = async function(adminId, serviceData) {
+serviceSchema.statics.createService = async function (adminId, serviceData) {
   const service = new this({
     ...serviceData,
     createdBy: adminId
@@ -115,15 +114,15 @@ serviceSchema.statics.createService = async function(adminId, serviceData) {
 };
 
 // Static method for admin to update base price
-serviceSchema.statics.updateBasePrice = async function(adminId, serviceId, newPrice) {
+serviceSchema.statics.updateBasePrice = async function (adminId, serviceId, newPrice) {
   const service = await this.findById(serviceId);
-  
+
   if (!service.createdBy.equals(adminId)) {
     throw new Error('Not authorized to update this service');
   }
 
   service.basePrice = newPrice;
-  
+
   // Revalidate all provider prices against new base price
   service.providerPrices.forEach(pp => {
     const minPrice = newPrice * 0.9;
@@ -137,16 +136,16 @@ serviceSchema.statics.updateBasePrice = async function(adminId, serviceId, newPr
 // PROVIDER METHODS ==========================================
 
 // Method for provider to set their price
-serviceSchema.methods.setProviderPrice = function(providerId, price) {
+serviceSchema.methods.setProviderPrice = function (providerId, price) {
   const minPrice = this.basePrice * 0.9;
   const maxPrice = this.basePrice * 1.1;
-  
+
   if (price < minPrice || price > maxPrice) {
     throw new Error(`Price must be between ₹${minPrice.toFixed(2)} and ₹${maxPrice.toFixed(2)}`);
   }
 
   const existingPrice = this.providerPrices.find(pp => pp.provider.equals(providerId));
-  
+
   if (existingPrice) {
     existingPrice.adjustedPrice = price;
   } else {
@@ -160,13 +159,13 @@ serviceSchema.methods.setProviderPrice = function(providerId, price) {
 };
 
 // Method for provider to get their price
-serviceSchema.methods.getProviderPrice = function(providerId) {
+serviceSchema.methods.getProviderPrice = function (providerId) {
   const providerPrice = this.providerPrices.find(pp => pp.provider.equals(providerId));
   return providerPrice ? providerPrice.adjustedPrice : this.basePrice;
 };
 
 // Method to get all active provider prices
-serviceSchema.methods.getAllActivePrices = function() {
+serviceSchema.methods.getAllActivePrices = function () {
   return this.providerPrices
     .filter(pp => pp.isActive)
     .map(pp => ({
@@ -179,40 +178,48 @@ serviceSchema.methods.getAllActivePrices = function() {
 // QUERY METHODS =============================================
 
 // Query active services by category
-serviceSchema.statics.findActiveByCategory = function(category) {
+serviceSchema.statics.findActiveByCategory = function (category) {
   return this.find({ category, isActive: true });
 };
 
 // Query services with provider's specific price
-serviceSchema.statics.findForProvider = function(providerId) {
+serviceSchema.statics.findForProvider = function (providerId) {
   return this.aggregate([
     { $match: { isActive: true } },
-    { $addFields: {
-      providerPrice: {
-        $let: {
-          vars: {
-            pp: { $arrayElemAt: [
-              { $filter: {
-                input: "$providerPrices",
-                cond: { $eq: ["$$this.provider", providerId] }
-              }},
-              0
-            ]}
-          },
-          in: { $ifNull: ["$$pp.adjustedPrice", "$basePrice"] }
+    {
+      $addFields: {
+        providerPrice: {
+          $let: {
+            vars: {
+              pp: {
+                $arrayElemAt: [
+                  {
+                    $filter: {
+                      input: "$providerPrices",
+                      cond: { $eq: ["$$this.provider", providerId] }
+                    }
+                  },
+                  0
+                ]
+              }
+            },
+            in: { $ifNull: ["$$pp.adjustedPrice", "$basePrice"] }
+          }
         }
       }
-    }},
-    { $project: {
-      title: 1,
-      category: 1,
-      description: 1,
-      image: 1,
-      basePrice: 1,
-      providerPrice: 1,
-      duration: 1,
-      durationFormatted: 1
-    }}
+    },
+    {
+      $project: {
+        title: 1,
+        category: 1,
+        description: 1,
+        image: 1,
+        basePrice: 1,
+        providerPrice: 1,
+        duration: 1,
+        durationFormatted: 1
+      }
+    }
   ]);
 };
 

@@ -8,6 +8,8 @@ const providerRoutes = require("./routes/Provider-Routes");
 const customerRoutes = require("./routes/User-Routes");
 const authRoutes = require("./routes/Auth-routes");
 const questionRoutes = require("./routes/Question-route");
+const testRoutes = require("./routes/Test-route");
+const serviceRoutes = require("./routes/Service-route");
 
 // Load environment variables
 dotenv.config();
@@ -35,6 +37,9 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/provider", providerRoutes);
 app.use("/api/customer", customerRoutes);
 app.use("/api/question", questionRoutes);
+app.use("/api/test", testRoutes);
+app.use("/api/service", serviceRoutes);
+
 
 
 // Error handling middleware
