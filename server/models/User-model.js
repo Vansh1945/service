@@ -33,11 +33,8 @@ const userSchema = new mongoose.Schema({
   address: {
     street: String,
     city: String,
-    pincode: String,
-    location: {
-      type: { type: String, default: 'Point' },
-      coordinates: [Number] // [longitude, latitude]
-    }
+    state: String,
+    postalCode: String,
   },
   firstBookingUsed: {
     type: Boolean,

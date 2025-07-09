@@ -7,14 +7,12 @@ const providerSchema = new mongoose.Schema({
         type: String,
         required: true,
     },
-
     email: {
         type: String,
         required: true,
         unique: true,
         lowercase: true
     },
-
     phone: {
         type: String,
         required: true,
@@ -39,23 +37,20 @@ const providerSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
-
     testPassed: {
         type: Boolean,
         default: false
     },
-
     services: {
         type: String,
         required: true
     },
-
     address: {
         street: String,
         city: String,
-        pincode: String
+        state: String,
+        postalCode: String
     },
-
     serviceArea: {
         type: String,
         required: true,
@@ -66,66 +61,49 @@ const providerSchema = new mongoose.Schema({
         min: 0,
         max: 40
     },
-
     wallet: {
         type: Number,
         default: 0
     },
-
     commissionRate: {
         type: Number,
         default: null
     },
-
     blockedTill: {
         type: Date
     },
-
     completedBookings: {
         type: Number,
         default: 0
     },
-
     canceledBookings: {
         type: Number,
         default: 0
     },
-
-    feedbacks: [
-        {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'Feedback'
-        }
-    ],
-
-
+    feedbacks: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Feedback'
+    }],
     bankDetails: {
         accountNo: String,
         ifsc: String,
         upiId: String
     },
-
-    earningsHistory: [
-        {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'Transaction'
-        }
-    ],
-
+    earningsHistory: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Transaction'
+    }],
     isDeleted: {
         type: Boolean,
         default: false
     }
-
 }, {
     timestamps: true
 });
 
-
-// Password hashing before save
+// Password hashing and other methods remain the same
 providerSchema.pre('save', async function (next) {
     if (!this.isModified('password')) return next();
-
     try {
         const salt = await bcrypt.genSalt(10);
         this.password = await bcrypt.hash(this.password, salt);
@@ -135,12 +113,10 @@ providerSchema.pre('save', async function (next) {
     }
 });
 
-// Password comparison method
 providerSchema.methods.comparePassword = async function (enteredPassword) {
     return await bcrypt.compare(enteredPassword, this.password);
 };
 
-// Generate JWT
 providerSchema.methods.generateJWT = function () {
     return jwt.sign(
         {
@@ -153,26 +129,4 @@ providerSchema.methods.generateJWT = function () {
     );
 };
 
-
-// // Add these to your existing schema
-// providerSchema.virtual('averageRating').get(function () {
-//     if (!this.feedbacks || this.feedbacks.length === 0) return 0;
-//     const total = this.feedbacks.reduce((sum, feedback) => sum + feedback.rating, 0);
-//     return total / this.feedbacks.length;
-// });
-
-// // Add toJSON option to include virtuals in response
-// providerSchema.set('toJSON', {
-//     virtuals: true,
-//     transform: function (doc, ret) {
-//         delete ret.id;
-//         if (ret.averageRating) {
-//             ret.averageRating = ret.averageRating.toFixed(1);
-//         }
-//         return ret;
-//     }
-// });
-
-
-const Provider = mongoose.model('Provider', providerSchema);
-module.exports = Provider;
+module.exports = mongoose.model('Provider', providerSchema);

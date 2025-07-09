@@ -38,6 +38,8 @@ const serviceImageStorage = multer.diskStorage({
   }
 });
 
+
+
 // File filters
 const resumeFilter = (req, file, cb) => {
   if (file.mimetype === 'application/pdf') {

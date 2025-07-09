@@ -10,6 +10,12 @@ const authRoutes = require("./routes/Auth-routes");
 const questionRoutes = require("./routes/Question-route");
 const testRoutes = require("./routes/Test-route");
 const serviceRoutes = require("./routes/Service-route");
+const couponRoutes = require("./routes/Coupon-route");
+const bookingRoutes = require("./routes/Booking-route");
+const invoiceRoutes = require("./routes/Invoice-route");
+const transactionRoutes = require("./routes/Transaction-route");
+
+
 
 // Load environment variables
 dotenv.config();
@@ -39,7 +45,45 @@ app.use("/api/customer", customerRoutes);
 app.use("/api/question", questionRoutes);
 app.use("/api/test", testRoutes);
 app.use("/api/service", serviceRoutes);
+app.use("/api/coupon", couponRoutes);
+app.use("/api/booking", bookingRoutes);
+app.use("/api/invoice", invoiceRoutes);
+app.use("/api/transaction", transactionRoutes);
 
+
+
+
+
+// Add this route before other routes
+app.post('/razorpay-webhook', express.raw({ type: 'application/json' }), (req, res) => {
+  const crypto = require('crypto');
+  const signature = req.headers['x-razorpay-signature'];
+  const body = req.body.toString();
+  
+  const expectedSignature = crypto
+    .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET)
+    .update(body)
+    .digest('hex');
+
+  if (signature === expectedSignature) {
+    const event = JSON.parse(body).event;
+    if (event === 'payment.captured') {
+      const payload = JSON.parse(body).payload.payment.entity;
+      require('./models/Transaction-model ')
+        .verifyPayment(payload.order_id, payload.id, signature)
+        .catch(console.error);
+    }
+    res.status(200).send('OK');
+  } else {
+    res.status(400).send('Invalid signature');
+  }
+});
+
+// Schedule weekly auto-withdrawals (every Monday at 9 AM)
+cron.schedule('0 9 * * 1', () => {
+  console.log('Running weekly auto-withdrawals...');
+  Transaction.processAutoWithdrawals().catch(console.error);
+});
 
 
 // Error handling middleware

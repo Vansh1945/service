@@ -15,34 +15,16 @@ const addressSchema = new Schema({
     trim: true,
     maxlength: [50, 'City name cannot exceed 50 characters']
   },
-  pincode: {
+  postalCode: {
     type: String,
     required: [true, 'Pincode is required'],
     match: [/^[0-9]{6}$/, 'Please provide a valid 6-digit pincode']
   },
-  coordinates: {
-    type: {
-      type: String,
-      enum: ['Point'],
-      default: 'Point'
-    },
-    coordinates: {
-      type: [Number],
-      required: true,
-      validate: {
-        validator: function(coords) {
-          return coords.length === 2 && 
-                 coords[0] >= -180 && coords[0] <= 180 &&
-                 coords[1] >= -90 && coords[1] <= 90;
-        },
-        message: 'Invalid coordinates. Provide [longitude, latitude]'
-      }
-    }
-  }
 });
 
 // Booking Schema
 const bookingSchema = new Schema({
+
   customer: {
     type: Schema.Types.ObjectId,
     ref: 'User',
@@ -103,6 +85,10 @@ const bookingSchema = new Schema({
     type: Schema.Types.ObjectId,
     ref: 'Complaint'
   },
+  adminRemark: {
+    type: String,
+    default: null
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -120,38 +106,37 @@ bookingSchema.index({ customer: 1, status: 1 });
 bookingSchema.index({ provider: 1, status: 1 });
 bookingSchema.index({ service: 1, status: 1 });
 bookingSchema.index({ date: 1, time: 1 });
-bookingSchema.index({ 'address.coordinates': '2dsphere' });
 
 // Pre-save hook to update timestamps
-bookingSchema.pre('save', function(next) {
+bookingSchema.pre('save', function (next) {
   this.updatedAt = Date.now();
   next();
 });
 
 // Virtual for booking datetime
-bookingSchema.virtual('bookingDateTime').get(function() {
+bookingSchema.virtual('bookingDateTime').get(function () {
   const dateStr = this.date.toISOString().split('T')[0];
   return new Date(`${dateStr}T${this.time}`);
 });
 
 // Virtual for isUpcoming
-bookingSchema.virtual('isUpcoming').get(function() {
+bookingSchema.virtual('isUpcoming').get(function () {
   return this.status === 'accepted' && this.bookingDateTime > new Date();
 });
 
 // Static method to find upcoming bookings
-bookingSchema.statics.findUpcoming = function(userId, userType) {
+bookingSchema.statics.findUpcoming = function (userId, userType) {
   const query = {};
   query[userType] = userId;
   query.status = 'accepted';
-  
+
   return this.find(query)
     .where('bookingDateTime').gt(new Date())
     .sort({ date: 1, time: 1 });
 };
 
 // Instance method to cancel booking
-bookingSchema.methods.cancel = function(reason) {
+bookingSchema.methods.cancel = function (reason) {
   if (this.status === 'completed') {
     throw new Error('Cannot cancel a completed booking');
   }
@@ -160,7 +145,7 @@ bookingSchema.methods.cancel = function(reason) {
 };
 
 // Instance method to complete booking
-bookingSchema.methods.complete = function() {
+bookingSchema.methods.complete = function () {
   if (this.status !== 'accepted') {
     throw new Error('Only accepted bookings can be marked completed');
   }

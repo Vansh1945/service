@@ -275,20 +275,4 @@ exports.updateProfile = async (req, res) => {
 
 
 
-// Run this in a temporary route or directly in your code
-// const resetTestPassword = async () => {
-//   const email = 'vanshkholi022@gmail.com';
-//   const newPassword = '9876543210'; // Your test password
-  
-//   const salt = await bcrypt.genSalt(10);
-//   const hashedPassword = await bcrypt.hash(newPassword, salt);
-  
-//   await Provider.updateOne(
-//     { email },
-//     { $set: { password: hashedPassword } }
-//   );
-  
-//   console.log('Password reset successfully');
-// };
 
-// resetTestPassword();

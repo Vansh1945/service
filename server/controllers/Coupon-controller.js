@@ -1,0 +1,325 @@
+const Coupon = require('../models/Coupon-model');
+const User = require('../models/User-model');
+
+// ADMIN CONTROLLERS
+
+// Create new coupon
+const createCoupon = async (req, res) => {
+  try {
+    const { code, discountType, discountValue, expiryDate, minBookingValue, isGlobal, isFirstBooking, assignedTo, usageLimit } = req.body;
+
+    if (isFirstBooking) {
+      const existingFirstBookingCoupon = await Coupon.findOne({ isFirstBooking: true, isActive: true });
+      if (existingFirstBookingCoupon) {
+        return res.status(400).json({
+          success: false,
+          message: 'Active first-booking coupon already exists'
+        });
+      }
+    }
+
+    if (assignedTo) {
+      const userExists = await User.findById(assignedTo);
+      if (!userExists) {
+        return res.status(404).json({
+          success: false,
+          message: 'Assigned user not found'
+        });
+      }
+    }
+
+    const coupon = await Coupon.createCoupon(req.adminID, {
+      code,
+      discountType,
+      discountValue,
+      expiryDate,
+      minBookingValue: minBookingValue || 0,
+      isGlobal,
+      isFirstBooking,
+      assignedTo,
+      usageLimit: usageLimit || null // Set to null for unlimited usage
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Coupon created successfully',
+      data: coupon
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// Get all coupons with filters
+const getAllCoupons = async (req, res) => {
+  try {
+    const { status, type } = req.query;
+    const filters = {};
+
+    if (status === 'active') {
+      filters.isActive = true;
+      filters.expiryDate = { $gte: new Date() };
+    } else if (status === 'expired') {
+      filters.$or = [
+        { isActive: false },
+        { expiryDate: { $lt: new Date() } }
+      ];
+    }
+
+    if (type === 'global') {
+      filters.isGlobal = true;
+    } else if (type === 'first-booking') {
+      filters.isFirstBooking = true;
+    } else if (type === 'assigned') {
+      filters.assignedTo = { $ne: null };
+    }
+
+    const coupons = await Coupon.listAllCoupons(req.adminID, filters);
+    
+    res.json({
+      success: true,
+      count: coupons.length,
+      data: coupons
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// Update coupon
+const updateCoupon = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+
+    const coupon = await Coupon.findById(id);
+    if (!coupon) {
+      return res.status(404).json({
+        success: false,
+        message: 'Coupon not found'
+      });
+    }
+
+    // Check admin ownership
+    if (!coupon.createdBy.equals(req.adminID)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to update this coupon'
+      });
+    }
+
+    // Prevent changing critical fields if coupon has been used
+    if (coupon.usedBy.length > 0) {
+      const restrictedFields = ['discountType', 'discountValue', 'isFirstBooking', 'isGlobal'];
+      restrictedFields.forEach(field => {
+        if (updates[field] && updates[field] !== coupon[field]) {
+          return res.status(400).json({
+            success: false,
+            message: `Cannot change ${field} after coupon has been used`
+          });
+        }
+      });
+    }
+
+    // Validate first-booking coupon
+    if (updates.isFirstBooking) {
+      const existing = await Coupon.findOne({
+        isFirstBooking: true,
+        isActive: true,
+        _id: { $ne: id }
+      });
+      if (existing) {
+        return res.status(400).json({
+          success: false,
+          message: 'Active first-booking coupon already exists'
+        });
+      }
+    }
+
+    Object.assign(coupon, updates);
+    await coupon.save();
+
+    res.json({
+      success: true,
+      message: 'Coupon updated successfully',
+      data: coupon
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+
+// Delete coupon (soft delete)
+const deleteCoupon = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const coupon = await Coupon.findById(id);
+    if (!coupon) {
+      return res.status(404).json({
+        success: false,
+        message: 'Coupon not found'
+      });
+    }
+
+    // Check admin ownership
+    if (!coupon.createdBy.equals(req.adminID)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to delete this coupon'
+      });
+    }
+
+    // Soft delete by setting isActive to false
+    coupon.isActive = false;
+    await coupon.save();
+
+    res.json({
+      success: true,
+      message: 'Coupon deactivated successfully'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// Hard delete coupon (permanent removal)
+const hardDeleteCoupon = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const coupon = await Coupon.findById(id);
+    if (!coupon) {
+      return res.status(404).json({
+        success: false,
+        message: 'Coupon not found'
+      });
+    }
+
+    // Check admin ownership
+    if (!coupon.createdBy.equals(req.adminID)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to delete this coupon'
+      });
+    }
+
+    // Permanent deletion
+    await Coupon.findByIdAndDelete(id);
+
+    res.json({
+      success: true,
+      message: 'Coupon permanently deleted'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// USER CONTROLLERS
+
+// Validate and apply coupon
+const applyCoupon = async (req, res) => {
+  try {
+    const { code, bookingValue } = req.body;
+    const userId = req.user.id;
+
+    const coupon = await Coupon.validateCoupon(userId, code, bookingValue);
+    const discountDetails = coupon.applyCoupon(bookingValue);
+
+    res.json({
+      success: true,
+      message: 'Coupon applied successfully',
+      data: {
+        coupon: {
+          code: coupon.code,
+          discountType: coupon.discountType,
+          discountValue: coupon.discountValue,
+          formattedDiscount: coupon.formattedDiscount
+        },
+        discountAmount: discountDetails.discount,
+        finalAmount: discountDetails.finalAmount
+      }
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+const markCouponUsed = async (req, res) => {
+  try {
+    const { code, bookingValue } = req.body;
+    const userId = req.user.id;
+
+    const coupon = await Coupon.findOne({ code: code.toUpperCase() });
+    if (!coupon) {
+      return res.status(404).json({
+        success: false,
+        message: 'Coupon not found'
+      });
+    }
+
+    await coupon.markAsUsed(userId, bookingValue);
+
+    res.json({
+      success: true,
+      message: 'Coupon marked as used'
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+const getAvailableCoupons = async (req, res) => {
+  try {
+    const { bookingValue } = req.query;
+    const userId = req.user.id;
+
+    const coupons = await Coupon.getAvailableCoupons(userId, Number(bookingValue) || 0);
+    
+    res.json({
+      success: true,
+      count: coupons.length,
+      data: coupons
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+
+module.exports = {
+  createCoupon,
+  getAllCoupons,
+  updateCoupon,
+  deleteCoupon,
+  hardDeleteCoupon,
+  applyCoupon,
+  markCouponUsed,
+  getAvailableCoupons
+};
