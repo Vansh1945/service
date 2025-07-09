@@ -4,6 +4,11 @@ const jwt = require('jsonwebtoken');
 const Provider = require('../models/Provider-model');
 const User = require('../models/User-model')
 const sendEmail = require('../utils/sendEmail');
+const Booking = require('../models/Booking-model');
+const Service = require('../models/Service-model');
+const Complaint = require('../models/Complaint-model');
+const ProviderEarning = require('../models/ProviderEarning-model');
+const moment = require('moment');
 
 /**
  * Register a new admin
@@ -302,11 +307,225 @@ const getAllProviders = async (req, res) => {
     }
 };
 
+/**
+ * @desc    dashboard
+ * @route   GET /api/admin/dashboard/stats
+ * @access  Private (Admin)
+ */
+const getDashboardStats = async (req, res) => {
+    try {
+        // Set date ranges
+        const today = moment().startOf('day');
+        const currentWeek = moment().startOf('week');
+        const currentMonth = moment().startOf('month');
+        const currentYear = moment().startOf('year');
+
+        // Parallelize all database queries for better performance
+        const [
+            totalBookings,
+            todayBookings,
+            weeklyBookings,
+            monthlyBookings,
+            yearlyBookings,
+            bookingStatusStats,
+            revenueStats,
+            userStats,
+            providerStats,
+            serviceStats,
+            complaintStats,
+            recentBookings,
+            topServices,
+            topProviders
+        ] = await Promise.all([
+            // Booking counts
+            Booking.countDocuments(),
+            Booking.countDocuments({ createdAt: { $gte: today.toDate() } }),
+            Booking.countDocuments({ createdAt: { $gte: currentWeek.toDate() } }),
+            Booking.countDocuments({ createdAt: { $gte: currentMonth.toDate() } }),
+            Booking.countDocuments({ createdAt: { $gte: currentYear.toDate() } }),
+
+            // Booking status distribution
+            Booking.aggregate([
+                { $group: { _id: '$status', count: { $sum: 1 } } }
+            ]),
+
+            // Revenue calculations
+            Booking.aggregate([
+                { $match: { status: 'completed' } },
+                { 
+                    $group: { 
+                        _id: null,
+                        totalRevenue: { $sum: '$totalAmount' },
+                        todayRevenue: { 
+                            $sum: { 
+                                $cond: [
+                                    { $gte: ['$createdAt', today.toDate()] },
+                                    '$totalAmount',
+                                    0
+                                ]
+                            }
+                        },
+                        weeklyRevenue: { 
+                            $sum: { 
+                                $cond: [
+                                    { $gte: ['$createdAt', currentWeek.toDate()] },
+                                    '$totalAmount',
+                                    0
+                                ]
+                            }
+                        },
+                        monthlyRevenue: { 
+                            $sum: { 
+                                $cond: [
+                                    { $gte: ['$createdAt', currentMonth.toDate()] },
+                                    '$totalAmount',
+                                    0
+                                ]
+                            }
+                        }
+                    } 
+                }
+            ]),
+
+            // User statistics
+            Promise.all([
+                User.countDocuments(),
+                User.countDocuments({ createdAt: { $gte: currentMonth.toDate() } }),
+                User.aggregate([
+                    { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }, count: { $sum: 1 } } },
+                    { $sort: { _id: -1 } },
+                    { $limit: 7 }
+                ])
+            ]),
+
+            // Provider statistics
+            Promise.all([
+                Provider.countDocuments(),
+                Provider.countDocuments({ approved: true }),
+                Provider.countDocuments({ approved: false }),
+                Provider.countDocuments({ testPassed: true }),
+                Provider.countDocuments({ createdAt: { $gte: currentMonth.toDate() } })
+            ]),
+
+            // Service statistics
+            Promise.all([
+                Service.countDocuments(),
+                Service.countDocuments({ isActive: true }),
+                Service.countDocuments({ isActive: false })
+            ]),
+
+            // Complaint statistics
+            Complaint.aggregate([
+                { $group: { _id: '$status', count: { $sum: 1 } } }
+            ]),
+
+            // Recent bookings (last 5)
+            Booking.find()
+                .sort({ createdAt: -1 })
+                .limit(5)
+                .populate('customer', 'name')
+                .populate('provider', 'name')
+                .populate('service', 'title'),
+
+            // Top 5 services by bookings
+            Booking.aggregate([
+                { $group: { _id: '$service', count: { $sum: 1 } } },
+                { $sort: { count: -1 } },
+                { $limit: 5 },
+                { $lookup: { from: 'services', localField: '_id', foreignField: '_id', as: 'service' } },
+                { $unwind: '$service' },
+                { $project: { _id: 0, service: '$service.title', count: 1 } }
+            ]),
+
+            // Top 5 providers by earnings
+            ProviderEarning.aggregate([
+                { $group: { _id: '$provider', totalEarnings: { $sum: '$amount' } } },
+                { $sort: { totalEarnings: -1 } },
+                { $limit: 5 },
+                { $lookup: { from: 'providers', localField: '_id', foreignField: '_id', as: 'provider' } },
+                { $unwind: '$provider' },
+                { $project: { _id: 0, provider: '$provider.name', totalEarnings: 1 } }
+            ])
+        ]);
+
+        // Process the results
+        const revenue = revenueStats[0] || {
+            totalRevenue: 0,
+            todayRevenue: 0,
+            weeklyRevenue: 0,
+            monthlyRevenue: 0
+        };
+
+        const bookingStatusCounts = bookingStatusStats.reduce((acc, curr) => {
+            acc[curr._id] = curr.count;
+            return acc;
+        }, {});
+
+        const complaintStatusCounts = complaintStats.reduce((acc, curr) => {
+            acc[curr._id] = curr.count;
+            return acc;
+        }, {});
+
+        // Prepare the response
+        const dashboardStats = {
+            overview: {
+                totalBookings,
+                todayBookings,
+                weeklyBookings,
+                monthlyBookings,
+                yearlyBookings,
+                bookingStatus: bookingStatusCounts,
+                totalRevenue: revenue.totalRevenue,
+                todayRevenue: revenue.todayRevenue,
+                weeklyRevenue: revenue.weeklyRevenue,
+                monthlyRevenue: revenue.monthlyRevenue
+            },
+            users: {
+                total: userStats[0],
+                newThisMonth: userStats[1],
+                dailySignups: userStats[2]
+            },
+            providers: {
+                total: providerStats[0],
+                approved: providerStats[1],
+                pendingApproval: providerStats[2],
+                testPassed: providerStats[3],
+                newThisMonth: providerStats[4]
+            },
+            services: {
+                total: serviceStats[0],
+                active: serviceStats[1],
+                inactive: serviceStats[2]
+            },
+            complaints: {
+                ...complaintStatusCounts
+            },
+            recentBookings,
+            topServices,
+            topProviders
+        };
+
+        res.json({
+            success: true,
+            data: dashboardStats
+        });
+
+    } catch (error) {
+        console.error('Error fetching dashboard stats:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch dashboard statistics'
+        });
+    }
+};
+
+
 module.exports = {
     registerAdmin,
     getAdminProfile,
     approveProvider,
     getPendingProviders,
     getAllCustomers,
-    getAllProviders
+    getAllProviders,
+    getDashboardStats
 };

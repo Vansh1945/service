@@ -2,6 +2,9 @@ const mongoose = require('mongoose');
 const Service = require('../models/Service-model');
 const Admin = require('../models/Admin-model');
 const Provider = require('../models/Provider-model');
+const excelJS = require('exceljs');
+const fs = require('fs');
+const path = require('path');
 
 /**
  * ADMIN CONTROLLERS
@@ -443,6 +446,82 @@ const getServicesByCategory = async (req, res) => {
     }
 };
 
+
+// Bulk import services from Excel (Admin only)
+const bulkImportServices = async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({
+                success: false,
+                message: 'No file uploaded'
+            });
+        }
+
+        const workbook = new excelJS.Workbook();
+        const filePath = path.join(__dirname, '../uploads', req.file.filename);
+
+        // Load the Excel file
+        await workbook.xlsx.readFile(filePath);
+        const worksheet = workbook.getWorksheet(1); // Get first sheet
+
+        const services = [];
+        const errors = [];
+        let successCount = 0;
+
+        // Process each row
+        worksheet.eachRow({ includeEmpty: false }, async (row, rowNumber) => {
+            // Skip header row
+            if (rowNumber === 1) return;
+
+            try {
+                const serviceData = {
+                    title: row.getCell(1).value,
+                    category: row.getCell(2).value,
+                    description: row.getCell(3).value,
+                    basePrice: row.getCell(4).value,
+                    duration: row.getCell(5).value,
+                    createdBy: req.adminID,
+                    isActive: true
+                };
+
+                // Validate required fields
+                if (!serviceData.title || !serviceData.category || !serviceData.basePrice) {
+                    throw new Error('Missing required fields');
+                }
+
+                // Create service
+                const service = await Service.create(serviceData);
+                services.push(service);
+                successCount++;
+            } catch (error) {
+                errors.push({
+                    row: rowNumber,
+                    error: error.message
+                });
+            }
+        });
+
+        // Delete the uploaded file after processing
+        fs.unlinkSync(filePath);
+
+        return res.json({
+            success: true,
+            message: 'Bulk import completed',
+            importedCount: successCount,
+            errorCount: errors.length,
+            errors,
+            services
+        });
+
+    } catch (error) {
+        console.error('Error in bulk import:', error);
+        return res.status(500).json({
+            success: false,
+            message: error.message || 'Failed to process bulk import'
+        });
+    }
+};
+
 module.exports = {
     // Admin controllers
     createService,
@@ -451,6 +530,7 @@ module.exports = {
     deleteService,
     getAllServices,
     getServiceById,
+    bulkImportServices,
 
     // Provider controllers
     setProviderPrice,

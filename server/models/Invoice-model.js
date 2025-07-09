@@ -1,8 +1,7 @@
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
-const shortid = require('shortid');
 
-// Product Used Sub-Schema
+// Product Sub-Schema
 const productSchema = new Schema({
   name: {
     type: String,
@@ -27,16 +26,10 @@ const productSchema = new Schema({
   },
   total: {
     type: Number,
-    min: [0, 'Total cannot be negative']
+    min: [0, 'Total cannot be negative'],
+    default: 0
   }
 });
-
-// Counter Schema for invoice sequence
-const counterSchema = new Schema({
-  _id: { type: String, required: true },
-  seq: { type: Number, default: 1000 }
-});
-const Counter = mongoose.model('Counter', counterSchema);
 
 // Invoice Schema
 const invoiceSchema = new Schema({
@@ -45,7 +38,7 @@ const invoiceSchema = new Schema({
     required: true,
     unique: true
   },
-  bookingId: {
+  booking: {
     type: Schema.Types.ObjectId,
     ref: 'Booking',
     required: [true, 'Booking reference is required']
@@ -69,7 +62,7 @@ const invoiceSchema = new Schema({
     type: Number,
     required: [true, 'Service amount is required'],
     min: [0, 'Service amount cannot be negative'],
-    set: v => Math.round(v * 100) / 100
+    set: v => Math.round(v * 100) / 100 // Round to 2 decimal places
   },
   productsUsed: {
     type: [productSchema],
@@ -81,16 +74,16 @@ const invoiceSchema = new Schema({
     min: [0, 'Tax cannot be negative'],
     set: v => Math.round(v * 100) / 100
   },
-  advancePayment: {
-    type: Number,
-    default: 0,
-    min: [0, 'Advance payment cannot be negative'],
-    set: v => Math.round(v * 100) / 100
-  },
   discount: {
     type: Number,
     default: 0,
     min: [0, 'Discount cannot be negative'],
+    set: v => Math.round(v * 100) / 100
+  },
+  advancePayment: {
+    type: Number,
+    default: 0,
+    min: [0, 'Advance payment cannot be negative'],
     set: v => Math.round(v * 100) / 100
   },
   totalAmount: {
@@ -121,19 +114,20 @@ const invoiceSchema = new Schema({
   },
   dueDate: {
     type: Date,
-    default: function () {
+    default: function() {
       const date = new Date(this.generatedAt);
       date.setDate(date.getDate() + 7); // 7 days from generation
       return date;
     }
   }
 }, {
+  timestamps: true,
   toJSON: { virtuals: true },
   toObject: { virtuals: true }
 });
 
 // Indexes for better query performance
-invoiceSchema.index({ bookingId: 1 });
+invoiceSchema.index({ booking: 1 });
 invoiceSchema.index({ provider: 1 });
 invoiceSchema.index({ customer: 1 });
 invoiceSchema.index({ service: 1 });
@@ -141,34 +135,34 @@ invoiceSchema.index({ paymentStatus: 1 });
 invoiceSchema.index({ generatedAt: -1 });
 invoiceSchema.index({ dueDate: 1 });
 
-// Pre-save hook to calculate totals and generate invoice number
-invoiceSchema.pre('save', async function (next) {
-  // Generate invoice number if new document
-  if (this.isNew) {
-    const date = new Date();
-    const prefix = 'INV-' +
-      date.getFullYear().toString().slice(-2) +
-      (date.getMonth() + 1).toString().padStart(2, '0') +
-      date.getDate().toString().padStart(2, '0') + '-';
-    
-    // Get the next sequence number
-    const counter = await Counter.findByIdAndUpdate(
-      { _id: 'invoiceNo' },
-      { $inc: { seq: 1 } },
-      { new: true, upsert: true }
-    );
-    
-    this.invoiceNo = prefix + counter.seq.toString().padStart(4, '0');
-  }
+// Generate invoice number before save
+invoiceSchema.pre('save', async function(next) {
+  if (!this.isNew) return next();
+  
+  const date = new Date();
+  const prefix = 'INV-' +
+    date.getFullYear().toString().slice(-2) +
+    (date.getMonth() + 1).toString().padStart(2, '0') +
+    date.getDate().toString().padStart(2, '0') + '-';
+  
+  // Find the last invoice to generate sequential number
+  const lastInvoice = await this.constructor.findOne({}, {}, { sort: { createdAt: -1 } });
+  const lastSeq = lastInvoice ? parseInt(lastInvoice.invoiceNo.slice(-4)) : 0;
+  
+  this.invoiceNo = prefix + (lastSeq + 1).toString().padStart(4, '0');
+  next();
+});
 
-  // Calculate product totals with rounding
+// Calculate totals before save
+invoiceSchema.pre('save', function(next) {
+  // Calculate product totals
   this.productsUsed.forEach(product => {
     product.total = Math.round((product.quantity * product.rate) * 100) / 100;
   });
 
-  // Calculate sum of products
+  // Calculate products total
   const productsTotal = this.productsUsed.reduce(
-    (sum, product) => sum + product.total, 0
+    (sum, product) => sum + (product.total || 0), 0
   );
 
   // Calculate subtotal (service + products)
@@ -192,8 +186,8 @@ invoiceSchema.pre('save', async function (next) {
   next();
 });
 
-// Virtuals
-invoiceSchema.virtual('formattedDate').get(function () {
+// Virtuals for formatted dates
+invoiceSchema.virtual('formattedDate').get(function() {
   return this.generatedAt.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
@@ -201,7 +195,7 @@ invoiceSchema.virtual('formattedDate').get(function () {
   });
 });
 
-invoiceSchema.virtual('formattedDueDate').get(function () {
+invoiceSchema.virtual('formattedDueDate').get(function() {
   return this.dueDate.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
@@ -210,36 +204,38 @@ invoiceSchema.virtual('formattedDueDate').get(function () {
 });
 
 // Static Methods
-invoiceSchema.statics.findByCustomer = function (customerId, status = null) {
+invoiceSchema.statics.findByCustomer = function(customerId, status = null) {
   const query = { customer: customerId };
   if (status) query.paymentStatus = status;
   return this.find(query).sort({ generatedAt: -1 });
 };
 
-invoiceSchema.statics.findByProvider = function (providerId, status = null) {
+invoiceSchema.statics.findByProvider = function(providerId, status = null) {
   const query = { provider: providerId };
   if (status) query.paymentStatus = status;
   return this.find(query).sort({ generatedAt: -1 });
 };
 
 // Instance Methods
-invoiceSchema.methods.markAsPaid = function (paymentMethod) {
+invoiceSchema.methods.markAsPaid = function(paymentMethod) {
   if (this.paymentStatus === 'paid') {
     throw new Error('Invoice is already paid');
   }
   this.paymentStatus = 'paid';
   this.paidBy = paymentMethod;
   this.balanceDue = 0;
+  this.advancePayment = this.totalAmount;
   return this.save();
 };
 
-invoiceSchema.methods.addAdvancePayment = function (amount, paymentMethod) {
+invoiceSchema.methods.addAdvancePayment = function(amount, paymentMethod) {
   amount = Math.round(amount * 100) / 100;
   if (amount <= 0) {
     throw new Error('Advance amount must be positive');
   }
 
   this.advancePayment = Math.round((this.advancePayment + amount) * 100) / 100;
+  this.paidBy = paymentMethod;
 
   // Recalculate balance
   this.balanceDue = Math.round((this.totalAmount - this.advancePayment) * 100) / 100;
@@ -251,8 +247,33 @@ invoiceSchema.methods.addAdvancePayment = function (amount, paymentMethod) {
     this.paymentStatus = 'partially_paid';
   }
 
-  this.paidBy = paymentMethod;
   return this.save();
+};
+
+// Create from booking static method
+invoiceSchema.statics.createFromBooking = async function(booking) {
+  const productsUsed = booking.products.map(product => ({
+    name: product.name,
+    description: product.description,
+    quantity: product.quantity,
+    rate: product.price,
+    total: Math.round(product.quantity * product.price * 100) / 100
+  }));
+
+  const productsTotal = productsUsed.reduce((sum, p) => sum + p.total, 0);
+  const totalAmount = Math.round((booking.service.price + productsTotal) * 100) / 100;
+
+  return this.create({
+    booking: booking._id,
+    provider: booking.provider,
+    customer: booking.customer,
+    service: booking.service,
+    serviceAmount: booking.service.price,
+    productsUsed,
+    totalAmount,
+    balanceDue: totalAmount,
+    paidBy: 'pending'
+  });
 };
 
 const Invoice = mongoose.model('Invoice', invoiceSchema);

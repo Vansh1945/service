@@ -3,7 +3,7 @@ const router = express.Router();
 const serviceController = require('../controllers/Services-controller');
 const adminAuthMiddleware = require('../middlewares/Admin-middleware');
 const providerAuthMiddleware = require('../middlewares/Provider-middleware');
-const {uploadServiceImage} = require('../middlewares/upload'); // Configure multer for file uploads
+const {uploadServiceImage, upload } = require('../middlewares/upload'); // Configure multer for file uploads
 
 /**
  * ADMIN ROUTES
@@ -38,6 +38,13 @@ router.get('/admin/services',
 router.get('/admin/services/:id',
     adminAuthMiddleware,
     serviceController.getServiceById
+);
+
+// Add this with your other admin routes
+router.post('/bulk-import', 
+    adminAuthMiddleware,
+    upload.single('servicesFile'), 
+    serviceController.bulkImportServices
 );
 
 /**

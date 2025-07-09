@@ -21,4 +21,7 @@ router.get('/customers', adminAuthMiddleware, adminController.getAllCustomers);
 router.get('/providers', adminAuthMiddleware, adminController.getAllProviders);
 
 
+// Admin Dashboard Stats
+router.get('/dashboard/stats', adminAuthMiddleware, adminController.getDashboardStats);
+
 module.exports = router;

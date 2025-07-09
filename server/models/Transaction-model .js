@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
+require('dotenv').config();
 
 // Initialize Razorpay
 const razorpay = new Razorpay({
@@ -11,6 +12,10 @@ const razorpay = new Razorpay({
 
 const transactionSchema = new Schema({
   // Core transaction details
+  transactionId: {
+    type: String,
+    unique: true
+  },
   type: {
     type: String,
     required: true,
@@ -28,43 +33,53 @@ const transactionSchema = new Schema({
     required: true,
     min: 0
   },
+  adminAmount: {
+    type: Number,
+    min: 0
+  },
+  providerAmount: {
+    type: Number,
+    min: 0
+  },
   status: {
     type: String,
     required: true,
-    enum: ['pending', 'success', 'failed', 'processing'],
+    enum: ['pending', 'completed', 'failed', 'refunded', 'processing', 'success'],
     default: 'pending'
   },
   currency: {
     type: String,
     default: 'INR'
   },
-  razorpayOrderId: String,
-  razorpayPaymentId: String,
-  razorpaySignature: String,
+  paymentMethod: {
+    type: String,
+    enum: ['online', 'wallet', 'cash', 'card', 'upi', 'withdrawal', 'upi', 'debit_card', 'credit_card', 'netbanking', 'qr_scan']
+  },
   
-  // User-related transactions
-  user: {
+  // References
+  invoice: {
     type: Schema.Types.ObjectId,
-    ref: 'User'
+    ref: 'Invoice'
   },
   booking: {
     type: Schema.Types.ObjectId,
     ref: 'Booking'
   },
-  paymentMethod: {
-    type: String,
-    enum: ['upi', 'debit_card', 'credit_card', 'netbanking', 'wallet', 'qr_scan']
+  customer: {
+    type: Schema.Types.ObjectId,
+    ref: 'User'
   },
-  
-  // Provider-related transactions
   provider: {
     type: Schema.Types.ObjectId,
     ref: 'Provider'
   },
-  withdrawalMethod: {
-    type: String,
-    enum: ['upi', 'bank_transfer']
+  user: {
+    type: Schema.Types.ObjectId,
+    ref: 'User'
   },
+  
+  // Provider withdrawal details
+  withdrawalMethod: String,
   withdrawalDetails: {
     upiId: String,
     accountNumber: String,
@@ -80,16 +95,18 @@ const transactionSchema = new Schema({
   },
   commissionAmount: Number,
   
+  // Razorpay details
+  razorpayOrderId: String,
+  razorpayPaymentId: String,
+  razorpaySignature: String,
+  
   // Metadata
   description: String,
   fees: {
     type: Number,
     default: 0
   },
-  netAmount: {
-    type: Number,
-    required: true
-  },
+  netAmount: Number,
   isAutoWithdrawal: {
     type: Boolean,
     default: false
@@ -102,8 +119,17 @@ const transactionSchema = new Schema({
 // Indexes
 transactionSchema.index({ user: 1, status: 1 });
 transactionSchema.index({ provider: 1, status: 1 });
+transactionSchema.index({ customer: 1, status: 1 });
 transactionSchema.index({ razorpayOrderId: 1 });
 transactionSchema.index({ createdAt: 1 });
+
+// Generate transaction ID
+transactionSchema.pre('save', function(next) {
+  if (!this.transactionId) {
+    this.transactionId = `txn_${Date.now()}`;
+  }
+  next();
+});
 
 // ========================
 // CUSTOMER PAYMENT METHODS
@@ -133,6 +159,7 @@ transactionSchema.statics.createCustomerPayment = async function(userId, booking
       amount,
       status: 'pending',
       user: userId,
+      customer: userId,
       booking: bookingId,
       paymentMethod,
       razorpayOrderId: order.id,
@@ -168,13 +195,13 @@ transactionSchema.statics.verifyPayment = async function(razorpayOrderId, razorp
   }
 
   // Update transaction status
-  transaction.status = 'success';
+  transaction.status = 'completed';
   transaction.razorpayPaymentId = razorpayPaymentId;
   transaction.razorpaySignature = razorpaySignature;
   await transaction.save();
 
   // Handle different transaction types
-  if (transaction.type === 'user-payment') {
+  if (transaction.type === 'user-payment' || transaction.type === 'advance-payment') {
     await handleBookingPayment(transaction);
   } else if (transaction.type === 'wallet-topup') {
     await handleWalletTopup(transaction);
@@ -201,11 +228,13 @@ async function handleBookingPayment(transaction) {
     const commissionTx = new this({
       type: 'admin-commission',
       amount: commissionDetails.commissionAmount,
-      status: 'success',
+      status: 'completed',
       provider: booking.provider,
       booking: booking._id,
       commissionRule: commissionDetails.rule?._id,
       commissionAmount: commissionDetails.commissionAmount,
+      adminAmount: commissionDetails.commissionAmount,
+      providerAmount: transaction.amount - commissionDetails.commissionAmount,
       description: `Commission from booking ${booking._id}`,
       netAmount: commissionDetails.commissionAmount
     });
@@ -223,6 +252,11 @@ async function handleBookingPayment(transaction) {
         commissionAmount: commissionDetails.commissionAmount
       }
     }], { session });
+
+    // 4. Update transaction with amounts
+    transaction.adminAmount = commissionDetails.commissionAmount;
+    transaction.providerAmount = transaction.amount - commissionDetails.commissionAmount;
+    await transaction.save({ session });
 
     await session.commitTransaction();
   } catch (error) {
@@ -295,6 +329,7 @@ transactionSchema.statics.initiateWithdrawal = async function(providerId, amount
     amount,
     status: 'processing',
     provider: providerId,
+    paymentMethod: 'withdrawal',
     withdrawalMethod: method === 'upi' ? 'upi' : 'bank_transfer',
     withdrawalDetails: details,
     fees,
@@ -418,8 +453,9 @@ transactionSchema.statics.payFromWallet = async function(userId, bookingId, amou
     const transaction = new this({
       type: 'user-payment',
       amount,
-      status: 'success',
+      status: 'completed',
       user: userId,
+      customer: userId,
       booking: bookingId,
       paymentMethod: 'wallet',
       description: `Wallet payment for booking ${bookingId}`,

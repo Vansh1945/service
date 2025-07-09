@@ -1,49 +1,36 @@
 const express = require('express');
 const router = express.Router();
-const transactionController = require('../controllers/Transation-controller');
 const {
-    adminAuthMiddleware
-} = require('../middlewares/Admin-middleware');
-const {
-    userAuthMiddleware,
-} = require('../middlewares/User-middleware');
-const {
-    providerAuthMiddleware,
-} = require('../middlewares/Provider-middleware');
+  payForBooking,
+  verifyPayment,
+  topUpWallet,
+  initiateWithdrawal,
+  processAutoWithdrawals,
+  manageCommissionRule,
+  getApplicableCommission,
+  getTransactionHistory,
+  getProviderEarnings
+} = require('../controllers/Transaction-controller');
+const {userAuthMiddleware} = require('../middlewares/User-middleware');
+const { providerAuthMiddleware, providerTestPassedMiddleware } = require('../middlewares/Provider-middleware');
+const adminAuthMiddleware = require('../middlewares/Admin-middleware');
 
-// User routes
-router.post('/payment',
-    userAuthMiddleware,
-    transactionController.createPaymentOrder);
-
-router.post('/verify',
-    userAuthMiddleware,
-    transactionController.verifyPayment);
-
-router.post('/wallet/topup',
-    userAuthMiddleware,
-    transactionController.topUpWallet);
-
-router.post('/wallet/pay',
-    userAuthMiddleware,
-    transactionController.payFromWallet);
-
-router.get('/user',
-    userAuthMiddleware,
-    transactionController.getUserTransactions);
+// Customer routes
+router.post('/pay', userAuthMiddleware, payForBooking);
+router.post('/verify', userAuthMiddleware, verifyPayment);
+router.post('/wallet/topup', userAuthMiddleware, topUpWallet);
 
 // Provider routes
-router.post('/withdraw',
-    providerAuthMiddleware,
-    transactionController.initiateWithdrawal);
-
-router.get('/provider',
-    providerAuthMiddleware,
-    transactionController.getProviderTransactions);
+router.post('/withdraw', providerAuthMiddleware, providerTestPassedMiddleware, initiateWithdrawal);
+router.get('/earnings', providerAuthMiddleware, providerTestPassedMiddleware, getProviderEarnings);
 
 // Admin routes
-router.post('/process-withdrawals',
-    adminAuthMiddleware,
-    transactionController.processAutoWithdrawals);
+router.post('/auto-withdrawals', adminAuthMiddleware, processAutoWithdrawals);
+router.post('/commission', adminAuthMiddleware, manageCommissionRule);
+router.put('/commission/:id', adminAuthMiddleware, manageCommissionRule);
+router.get('/commission/:bookingId', adminAuthMiddleware, getApplicableCommission);
+
+// Shared routes (Customer and Provider)
+router.get('/transactions', [userAuthMiddleware, providerAuthMiddleware], getTransactionHistory);
 
 module.exports = router;
