@@ -9,6 +9,8 @@ const Service = require('../models/Service-model');
 const Complaint = require('../models/Complaint-model');
 const ProviderEarning = require('../models/ProviderEarning-model');
 const moment = require('moment');
+const path = require('path');
+const fs = require('fs');
 
 /**
  * Register a new admin
@@ -104,21 +106,35 @@ const getAdminProfile = async (req, res) => {
 };
 
 /**
- * @desc    Approve provider account
- * @route   PUT /api/admin/providers/:id/approve
+ * @desc    Approve or reject provider account with remarks
+ * @route   PUT /api/admin/providers/:id/status
  * @access  Private (Admin)
  */
 const approveProvider = async (req, res) => {
     try {
         const providerId = req.params.id;
+        const { status, remarks } = req.body; // status: 'approved' or 'rejected'
+        const adminId = req.user._id; // Assuming admin info is in req.user
+
+        if (!['approved', 'rejected'].includes(status)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid status. Must be "approved" or "rejected"'
+            });
+        }
+
+        // Prepare update data
+        const updateData = {
+            status,
+            [status === 'approved' ? 'approvedAt' : 'rejectedAt']: new Date(),
+            reviewedBy: adminId,
+            remarks: remarks || null
+        };
 
         // Find and update provider
         const provider = await Provider.findByIdAndUpdate(
             providerId,
-            {
-                approved: true,
-                approvedAt: new Date()
-            },
+            updateData,
             { new: true }
         ).select('-password');
 
@@ -129,53 +145,65 @@ const approveProvider = async (req, res) => {
             });
         }
 
-        // Send approval email
+        // Send notification email
         try {
-            const emailResponse = await sendEmail({
+            const emailTemplate = status === 'approved' ? `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h2 style="color: #2563eb;">Account Approved</h2>
+                    <p>Dear ${provider.name},</p>
+                    <p>Your provider account with Raj Electrical Service has been approved.</p>
+                    ${remarks ? `<p><strong>Admin Remarks:</strong> ${remarks}</p>` : ''}
+                    <p>You can now login and start using your account.</p>
+                    <p style="margin-top: 30px;">
+                        <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/provider/login" 
+                           style="background: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;">
+                            Login to Your Account
+                        </a>
+                    </p>
+                </div>
+            ` : `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h2 style="color: #dc2626;">Account Rejected</h2>
+                    <p>Dear ${provider.name},</p>
+                    <p>Your provider account with Raj Electrical Service has been rejected.</p>
+                    ${remarks ? `<p><strong>Rejection Reason:</strong> ${remarks}</p>` : ''}
+                    <p>Please contact support if you believe this is an error.</p>
+                    <p style="margin-top: 30px;">
+                        <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/contact" 
+                           style="background: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;">
+                            Contact Support
+                        </a>
+                    </p>
+                </div>
+            `;
+
+            await sendEmail({
                 to: provider.email,
-                subject: 'Your Provider Account Has Been Approved - Raj Electrical Service',
-                html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #2563eb;">Account Approved</h2>
-            <p>Dear ${provider.name},</p>
-            <p>Your provider account with Raj Electrical Service has been approved by the admin.</p>
-            <p>You can now login and start using your account.</p>
-            <p style="margin-top: 30px;">
-              <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/provider/login" 
-                 style="background: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;">
-                Login to Your Account
-              </a>
-            </p>
-            <p style="color: #6b7280; font-size: 0.9em; margin-top: 30px;">
-              If you didn't request this, please contact our support team.
-            </p>
-          </div>
-        `
+                subject: `Your Provider Account Has Been ${status === 'approved' ? 'Approved' : 'Rejected'} - Raj Electrical Service`,
+                html: emailTemplate
             });
 
-            console.log('Email sent successfully:', emailResponse);
-
         } catch (emailError) {
-            console.error('Failed to send approval email:', emailError);
+            console.error('Failed to send status email:', emailError);
             // Continue even if email fails
             return res.status(200).json({
                 success: true,
-                message: 'Provider approved but failed to send email',
+                message: `Provider ${status} but failed to send email`,
                 provider
             });
         }
 
         res.status(200).json({
             success: true,
-            message: 'Provider approved successfully. Notification email sent.',
+            message: `Provider ${status} successfully. Notification email sent.`,
             provider
         });
 
     } catch (error) {
-        console.error('Approve provider error:', error);
+        console.error('Update provider status error:', error);
         res.status(500).json({
             success: false,
-            message: 'Server error while approving provider'
+            message: 'Server error while updating provider status'
         });
     }
 };
@@ -303,6 +331,146 @@ const getAllProviders = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Server error while fetching providers'
+        });
+    }
+};
+
+
+/**
+ * @desc    Get single provider details
+ * @route   GET /api/admin/providers/:id
+ * @access  Private (Admin)
+ */
+const getProviderDetails = async (req, res) => {
+    try {
+        const providerId = req.params.id;
+
+        // Find provider with all details except password
+        const provider = await Provider.findById(providerId)
+            .select('-password -__v')
+            .populate('services', 'title description')
+
+        if (!provider) {
+            return res.status(404).json({
+                success: false,
+                message: 'Provider not found'
+            });
+        }
+
+        // Get additional statistics for this provider
+        const [earnings, bookings, complaints] = await Promise.all([
+            ProviderEarning.aggregate([
+                { $match: { provider: provider._id } },
+                { 
+                    $group: { 
+                        _id: null,
+                        totalEarnings: { $sum: '$amount' },
+                        completedJobs: { $sum: 1 },
+                        avgRating: { $avg: '$rating' }
+                    } 
+                }
+            ]),
+            Booking.countDocuments({ provider: provider._id }),
+            Complaint.countDocuments({ provider: provider._id })
+        ]);
+
+        const stats = earnings[0] || {
+            totalEarnings: 0,
+            completedJobs: 0,
+            avgRating: 0
+        };
+
+        const responseData = {
+            provider: {
+                ...provider.toObject(),
+                verificationStatus: {
+                    identityVerified: provider.identityVerified,
+                    addressVerified: provider.addressVerified,
+                    backgroundChecked: provider.backgroundChecked
+                }
+            },
+            statistics: {
+                ...stats,
+                totalBookings: bookings,
+                totalComplaints: complaints,
+                acceptanceRate: bookings > 0 
+                    ? Math.round((stats.completedJobs / bookings) * 100) 
+                    : 0
+            }
+        };
+
+        res.status(200).json({
+            success: true,
+            data: responseData
+        });
+
+    } catch (error) {
+        console.error('Get provider details error:', error);
+        if (error.kind === 'ObjectId') {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid provider ID format'
+            });
+        }
+        res.status(500).json({
+            success: false,
+            message: 'Server error while fetching provider details'
+        });
+    }
+};
+
+/**
+ * @desc    Get single provider resume
+ * @route   GET /api/admin/providers/:id/resume
+ * @access  Private (Admin)
+ */
+const getProviderResume = async (req, res) => {
+    try {
+        const providerId = req.params.id;
+
+        // Find provider
+        const provider = await Provider.findById(providerId).select('resume name');
+        
+        if (!provider) {
+            return res.status(404).json({
+                success: false,
+                message: 'Provider not found'
+            });
+        }
+
+        if (!provider.resume) {
+            return res.status(404).json({
+                success: false,
+                message: 'Resume not found for this provider'
+            });
+        }
+
+        // Get the file path (assuming resume is stored as a path in the database)
+        const filePath = path.join(__dirname, '..', 'uploads', 'resumes', provider.resume);
+        
+        // Check if file exists
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({
+                success: false,
+                message: 'Resume file not found'
+            });
+        }
+
+        // Set appropriate headers
+        const fileName = `${provider.name.replace(/\s+/g, '_')}_resume${path.extname(provider.resume)}`;
+        
+        res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+        res.setHeader('Content-Type', 'application/pdf'); // Adjust if you support other formats
+
+        // Stream the file to the client
+        const fileStream = fs.createReadStream(filePath);
+        fileStream.pipe(res);
+
+    } catch (error) {
+        console.error('Get provider resume error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error while fetching resume'
         });
     }
 };
@@ -527,5 +695,7 @@ module.exports = {
     getPendingProviders,
     getAllCustomers,
     getAllProviders,
+    getProviderDetails,
+    getProviderResume,
     getDashboardStats
 };

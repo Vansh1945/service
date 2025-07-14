@@ -17,8 +17,8 @@ const CustomerLayout = () => {
 
     const menuItems = [
         { name: 'Dashboard', path: '/customer/home', icon: <FiHome /> },
-        { name: 'Book Service', path: '/customer/book-service', icon: <FiShoppingCart /> },
-        { name: 'My Bookings', path: '/customer/bookings', icon: <FiCalendar /> },
+        { name: 'Book Service', path: '/customer/services', icon: <FiShoppingCart /> },
+        { name: 'My Bookings', path: '/customer/book-service', icon: <FiCalendar /> },
         { name: 'Payments', path: '/customer/payments', icon: <FiCreditCard /> },
         { name: 'Invoices', path: '/customer/invoices', icon: <FiFileText /> },
         { name: 'Feedback', path: '/customer/feedback', icon: <FiMessageSquare /> },

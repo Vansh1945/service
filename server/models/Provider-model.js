@@ -43,7 +43,7 @@ const providerSchema = new mongoose.Schema({
     },
     services: {
         type: String,
-        required: true
+        enum: ['Electrical', 'AC', 'Appliance Repair', 'Other'],
     },
     address: {
         street: String,
@@ -66,8 +66,8 @@ const providerSchema = new mongoose.Schema({
         default: 0
     },
     commissionRate: {
-        type: Number,
-        default: null
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Complaint'
     },
     blockedTill: {
         type: Date

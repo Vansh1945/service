@@ -20,6 +20,14 @@ const addressSchema = new Schema({
     required: [true, 'Pincode is required'],
     match: [/^[0-9]{6}$/, 'Please provide a valid 6-digit pincode']
   },
+  state: {
+    type: String,
+    required: true
+  },
+  country: {
+    type: String,
+    default: 'India'
+  }
 });
 
 // Booking Schema

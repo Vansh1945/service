@@ -242,64 +242,31 @@ const generateEarningsReport = async (req, res) => {
 // Provider: Get earnings summary
 const getEarningsSummary = async (req, res) => {
   try {
-    const providerId = req.user._id;
-
-    const [availableBalance, totalEarnings, pendingEarnings] = await Promise.all([
-      ProviderEarning.getAvailableBalance(providerId),
-      ProviderEarning.aggregate([
-        { $match: { provider: providerId } },
-        { $group: { _id: null, total: { $sum: '$amount' } } }
-      ]),
-      ProviderEarning.aggregate([
-        { $match: { provider: providerId, status: 'pending' } },
-        { $group: { _id: null, total: { $sum: '$amount' } } }
-      ])
-    ]);
-
-    return res.json({
-      success: true,
-      summary: {
-        availableBalance,
-        totalEarnings: totalEarnings.length ? totalEarnings[0].total : 0,
-        pendingEarnings: pendingEarnings.length ? pendingEarnings[0].total : 0
-      }
-    });
+    if (!req.provider || !req.provider._id) {
+      return res.status(400).json({ message: 'Provider information missing' });
+    }
+    
+    const providerId = req.provider._id;
+    // Rest of your function...
   } catch (error) {
-    console.error('Error getting earnings summary:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error while fetching earnings summary'
-    });
+    console.error('Error in getEarningsSummary:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
+
 
 // Provider: Get earnings statement
 const getEarningsStatement = async (req, res) => {
   try {
-    const { startDate, endDate } = req.query;
-    const filter = { provider: req.user._id };
-
-    if (startDate || endDate) {
-      filter.createdAt = {};
-      if (startDate) filter.createdAt.$gte = new Date(startDate);
-      if (endDate) filter.createdAt.$lte = new Date(endDate);
+    if (!req.provider || !req.provider._id) {
+      return res.status(400).json({ message: 'Provider information missing' });
     }
-
-    const earnings = await ProviderEarning.find(filter)
-      .populate('booking', 'date service')
-      .sort({ createdAt: -1 });
-
-    return res.json({
-      success: true,
-      count: earnings.length,
-      earnings
-    });
+    
+    const providerId = req.provider._id;
+    // Rest of your function...
   } catch (error) {
-    console.error('Error getting earnings statement:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error while fetching earnings statement'
-    });
+    console.error('Error in getEarningsStatement:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
 

@@ -12,6 +12,7 @@ router.post('/', userAuthMiddleware, bookingController.createBooking);
 router.get('/user', userAuthMiddleware, bookingController.getUserBookings);
 router.get('/user/:id', userAuthMiddleware, bookingController.getBooking);
 router.patch('/user/:id/cancel', userAuthMiddleware, bookingController.cancelBooking);
+router.patch('/user/:id/reschedule', userAuthMiddleware, bookingController.userUpdateBookingDateTime);
 
 // PROVIDER ROUTES
 router.get('/provider', providerAuthMiddleware, providerTestPassedMiddleware, bookingController.getProviderBookings);
@@ -24,6 +25,6 @@ router.get('/admin/:id', adminAuthMiddleware, bookingController.getBookingDetail
 router.patch('/admin/:id/assign', adminAuthMiddleware, bookingController.assignProvider);
 router.delete('/admin/:id', adminAuthMiddleware, bookingController.deleteBooking);
 router.delete('/admin/user/:userId/booking/:bookingId', adminAuthMiddleware, bookingController.deleteUserBooking);
-
+router.patch('/admin/:id/reschedule', adminAuthMiddleware, bookingController.updateBookingDateTime);
 
 module.exports = router;

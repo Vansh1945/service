@@ -22,7 +22,7 @@ router.get('/:id',
     invoiceController.getInvoice);
 
 router.get('/:id/download',
-    userAuthMiddleware,
+    userAuthMiddleware,adminAuthMiddleware,providerAuthMiddleware,
     invoiceController.downloadInvoice);
 
 // ======================
@@ -38,10 +38,10 @@ router.post('/',
     providerTestPassedMiddleware,
     invoiceController.autoGenerateInvoice);
 
-router.put('/:id',
-    providerAuthMiddleware,
-    providerTestPassedMiddleware,
-    invoiceController.updateInvoice);
+router.get('/:id/products', providerAuthMiddleware, invoiceController.getInvoiceProducts);
+router.post('/:id/products', providerAuthMiddleware, invoiceController.addProductToInvoice);
+router.put('/:id/products/:productId', providerAuthMiddleware, invoiceController.updateProductInInvoice);
+router.delete('/:id/products/:productId', providerAuthMiddleware, invoiceController.removeProductFromInvoice);
 
 // ======================
 // ADMIN ROUTES

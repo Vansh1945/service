@@ -9,7 +9,7 @@ const path = require('path');
 const { sendEmail } = require('../utils/sendEmail');
 
 // @desc    Get all invoices (Admin)
-// @route   GET /api/v1/invoices
+// @route   GET /api/invoices
 // @access  Private/Admin
 const getAllInvoices = async (req, res, next) => {
   try {
@@ -17,6 +17,7 @@ const getAllInvoices = async (req, res, next) => {
       .populate('customer', 'name email phone')
       .populate('provider', 'name email phone')
       .populate('service', 'title')
+      .setOptions({ showCommission: true })
       .sort({ generatedAt: -1 });
 
     res.status(200).json({
@@ -30,14 +31,26 @@ const getAllInvoices = async (req, res, next) => {
 };
 
 // @desc    Get single invoice
-// @route   GET /api/v1/invoices/:id
+// @route   GET /api/invoices/:id
 // @access  Private
 const getInvoice = async (req, res, next) => {
   try {
-    const invoice = await Invoice.findById(req.params.id)
-      .populate('customer', 'name email phone address')
-      .populate('provider', 'name email phone address')
-      .populate('service', 'title description');
+    let invoice;
+    
+    if (req.user.role === 'admin' || req.user.role === 'provider') {
+      // For admin/provider, show commission details
+      invoice = await Invoice.findById(req.params.id)
+        .setOptions({ showCommission: true })
+        .populate('customer', 'name email phone address')
+        .populate('provider', 'name email phone address')
+        .populate('service', 'title description');
+    } else {
+      // For regular users, hide commission details
+      invoice = await Invoice.findById(req.params.id)
+        .populate('customer', 'name email phone address')
+        .populate('provider', 'name email phone address')
+        .populate('service', 'title description');
+    }
 
     if (!invoice) {
       return res.status(404).json({
@@ -61,6 +74,18 @@ const getInvoice = async (req, res, next) => {
       });
     }
 
+    // For users, create a sanitized version without commission details
+    if (req.user.role === 'user') {
+      const invoiceObj = invoice.toObject();
+      delete invoiceObj.commissionDetails;
+      delete invoiceObj.commissionAmount;
+      delete invoiceObj.netAmount;
+      return res.status(200).json({
+        success: true,
+        data: invoiceObj
+      });
+    }
+
     res.status(200).json({
       success: true,
       data: invoice
@@ -71,7 +96,7 @@ const getInvoice = async (req, res, next) => {
 };
 
 // @desc    Get invoices for customer
-// @route   GET /api/v1/invoices/customer/my-invoices
+// @route   GET /api/invoices/customer/my-invoices
 // @access  Private/User
 const getMyInvoices = async (req, res, next) => {
   try {
@@ -80,10 +105,19 @@ const getMyInvoices = async (req, res, next) => {
       .populate('service', 'title')
       .sort({ generatedAt: -1 });
 
+    // Sanitize invoices to remove commission details for users
+    const sanitizedInvoices = invoices.map(invoice => {
+      const invoiceObj = invoice.toObject();
+      delete invoiceObj.commissionDetails;
+      delete invoiceObj.commissionAmount;
+      delete invoiceObj.netAmount;
+      return invoiceObj;
+    });
+
     res.status(200).json({
       success: true,
-      count: invoices.length,
-      data: invoices
+      count: sanitizedInvoices.length,
+      data: sanitizedInvoices
     });
   } catch (err) {
     next(err);
@@ -91,11 +125,12 @@ const getMyInvoices = async (req, res, next) => {
 };
 
 // @desc    Get invoices for provider
-// @route   GET /api/v1/invoices/provider/my-invoices
+// @route   GET /api/invoices/provider/my-invoices
 // @access  Private/Provider
 const getProviderInvoices = async (req, res, next) => {
   try {
     const invoices = await Invoice.find({ provider: req.user.id })
+      .setOptions({ showCommission: true })
       .populate('customer', 'name phone')
       .populate('service', 'title')
       .sort({ generatedAt: -1 });
@@ -106,7 +141,8 @@ const getProviderInvoices = async (req, res, next) => {
       data: invoices
     });
   } catch (err) {
-    next(err);
+    console.error('Error fetching provider invoices:', err);
+    next(err); // This should be handled by your error middleware
   }
 };
 
@@ -137,6 +173,11 @@ const autoGenerateInvoice = async (bookingId) => {
     const taxAmount = subTotal * 0.18; // Example: 18% GST
     const totalAmount = subTotal + taxAmount;
 
+    // Calculate commission (example logic)
+    const commissionRate = 0.15; // 15% commission
+    const commissionAmount = totalAmount * commissionRate;
+    const netAmount = totalAmount - commissionAmount;
+
     // Auto-generated invoice data
     const invoiceData = {
       bookingId: booking._id,
@@ -147,9 +188,16 @@ const autoGenerateInvoice = async (bookingId) => {
       productsUsed: booking.productsUsed || [],
       tax: taxAmount,
       totalAmount,
+      commissionAmount,
+      netAmount,
       paymentStatus: booking.paymentStatus === 'paid' ? 'paid' : 'pending',
       paidBy: booking.paymentMethod || 'cash',
-      invoiceNo: generateInvoiceNumber()
+      invoiceNo: generateInvoiceNumber(),
+      commissionDetails: {
+        baseRate: commissionRate * 100, // 15%
+        baseType: 'percentage',
+        penaltyRules: []
+      }
     };
 
     const invoice = await Invoice.create(invoiceData);
@@ -168,12 +216,14 @@ const autoGenerateInvoice = async (bookingId) => {
   }
 };
 
-// @desc    Update invoice (Add products, update amounts)
-// @route   PUT /api/v1/invoices/:id
+// @desc    Get all products from invoice (for the service)
+// @route   GET /api/v1/invoices/:id/products
 // @access  Private/Provider
-const updateInvoice = async (req, res, next) => {
+const getInvoiceProducts = async (req, res, next) => {
   try {
-    let invoice = await Invoice.findById(req.params.id);
+    const invoice = await Invoice.findById(req.params.id)
+      .select('productsUsed')
+      .populate('service', 'title');
 
     if (!invoice) {
       return res.status(404).json({
@@ -182,41 +232,181 @@ const updateInvoice = async (req, res, next) => {
       });
     }
 
-    // Check if provider is authorized
+    // Verify provider owns this invoice
     if (!invoice.provider.equals(req.user.id)) {
       return res.status(403).json({
         success: false,
-        message: 'Not authorized to update this invoice'
+        message: 'Not authorized to view this invoice'
       });
     }
 
-    // Only allow updates to certain fields
-    const updatableFields = [
-      'productsUsed',
-      'tax',
-      'advancePayment',
-      'discount',
-      'paidBy',
-      'paymentStatus'
-    ];
-
-    // Filter update data
-    const updateData = {};
-    Object.keys(req.body).forEach(key => {
-      if (updatableFields.includes(key)) {
-        updateData[key] = req.body[key];
-      }
+    res.status(200).json({
+      success: true,
+      service: invoice.service.title,
+      count: invoice.productsUsed.length,
+      data: invoice.productsUsed
     });
+  } catch (err) {
+    next(err);
+  }
+};
 
-    // Update invoice
-    invoice = await Invoice.findByIdAndUpdate(req.params.id, updateData, {
-      new: true,
-      runValidators: true
+// @desc    Add product to invoice (for the service)
+// @route   POST /api/v1/invoices/:id/products
+// @access  Private/Provider
+const addProductToInvoice = async (req, res, next) => {
+  try {
+    const invoice = await Invoice.findById(req.params.id);
+
+    if (!invoice) {
+      return res.status(404).json({
+        success: false,
+        message: 'Invoice not found'
+      });
+    }
+
+    // Verify provider owns this invoice
+    if (!invoice.provider.equals(req.user.id)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to modify this invoice'
+      });
+    }
+
+    const { name, description, quantity, rate } = req.body;
+
+    // Validate product data
+    if (!name || !quantity || !rate) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide name, quantity and rate for the product'
+      });
+    }
+
+    // Create new product
+    const newProduct = {
+      name,
+      description: description || '',
+      quantity: Number(quantity),
+      rate: Number(rate),
+      total: Math.round((quantity * rate) * 100) / 100
+    };
+
+    // Add product to invoice
+    invoice.productsUsed.push(newProduct);
+
+    // Recalculate invoice totals
+    await invoice.save();
+
+    res.status(201).json({
+      success: true,
+      data: invoice.productsUsed[invoice.productsUsed.length - 1] // Return the newly added product
     });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Update product in invoice (for the service)
+// @route   PUT /api/v1/invoices/:id/products/:productId
+// @access  Private/Provider
+const updateProductInInvoice = async (req, res, next) => {
+  try {
+    const invoice = await Invoice.findById(req.params.id);
+
+    if (!invoice) {
+      return res.status(404).json({
+        success: false,
+        message: 'Invoice not found'
+      });
+    }
+
+    // Verify provider owns this invoice
+    if (!invoice.provider.equals(req.user.id)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to modify this invoice'
+      });
+    }
+
+    const productIndex = invoice.productsUsed.findIndex(
+      p => p._id.toString() === req.params.productId
+    );
+
+    if (productIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: 'Product not found in this invoice'
+      });
+    }
+
+    const { name, description, quantity, rate } = req.body;
+    const product = invoice.productsUsed[productIndex];
+
+    // Update product fields if provided
+    if (name) product.name = name;
+    if (description) product.description = description;
+    if (quantity) product.quantity = Number(quantity);
+    if (rate) product.rate = Number(rate);
+
+    // Recalculate total
+    product.total = Math.round((product.quantity * product.rate) * 100) / 100;
+
+    // Save the invoice to trigger totals recalculation
+    await invoice.save();
 
     res.status(200).json({
       success: true,
-      data: invoice
+      data: product
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Remove product from invoice (for the service)
+// @route   DELETE /api/v1/invoices/:id/products/:productId
+// @access  Private/Provider
+const removeProductFromInvoice = async (req, res, next) => {
+  try {
+    const invoice = await Invoice.findById(req.params.id);
+
+    if (!invoice) {
+      return res.status(404).json({
+        success: false,
+        message: 'Invoice not found'
+      });
+    }
+
+    // Verify provider owns this invoice
+    if (!invoice.provider.equals(req.user.id)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to modify this invoice'
+      });
+    }
+
+    const productIndex = invoice.productsUsed.findIndex(
+      p => p._id.toString() === req.params.productId
+    );
+
+    if (productIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: 'Product not found in this invoice'
+      });
+    }
+
+    // Remove the product
+    const removedProduct = invoice.productsUsed.splice(productIndex, 1);
+
+    // Save the invoice to trigger totals recalculation
+    await invoice.save();
+
+    res.status(200).json({
+      success: true,
+      data: removedProduct[0],
+      message: 'Product removed from invoice'
     });
   } catch (err) {
     next(err);
@@ -224,11 +414,12 @@ const updateInvoice = async (req, res, next) => {
 };
 
 // @desc    Admin update invoice
-// @route   PUT /api/v1/invoices/admin/:id
+// @route   PUT /api/invoices/admin/:id
 // @access  Private/Admin
 const adminUpdateInvoice = async (req, res, next) => {
   try {
-    let invoice = await Invoice.findById(req.params.id);
+    let invoice = await Invoice.findById(req.params.id)
+      .setOptions({ showCommission: true });
 
     if (!invoice) {
       return res.status(404).json({
@@ -246,7 +437,7 @@ const adminUpdateInvoice = async (req, res, next) => {
     invoice = await Invoice.findByIdAndUpdate(req.params.id, updateData, {
       new: true,
       runValidators: true
-    });
+    }).setOptions({ showCommission: true });
 
     res.status(200).json({
       success: true,
@@ -258,14 +449,24 @@ const adminUpdateInvoice = async (req, res, next) => {
 };
 
 // @desc    Generate PDF for invoice
-// @route   GET /api/v1/invoices/:id/download
+// @route   GET /api/invoices/:id/download
 // @access  Private
 const downloadInvoice = async (req, res, next) => {
   try {
-    const invoice = await Invoice.findById(req.params.id)
-      .populate('customer', 'name email phone address')
-      .populate('provider', 'name email phone address')
-      .populate('service', 'title description');
+    let invoice;
+    
+    if (req.user.role === 'admin' || req.user.role === 'provider') {
+      invoice = await Invoice.findById(req.params.id)
+        .setOptions({ showCommission: true })
+        .populate('customer', 'name email phone address')
+        .populate('provider', 'name email phone address')
+        .populate('service', 'title description');
+    } else {
+      invoice = await Invoice.findById(req.params.id)
+        .populate('customer', 'name email phone address')
+        .populate('provider', 'name email phone address')
+        .populate('service', 'title description');
+    }
 
     if (!invoice) {
       return res.status(404).json({
@@ -373,6 +574,16 @@ const downloadInvoice = async (req, res, next) => {
     doc.fontSize(16).text(`Total Amount: ₹${invoice.totalAmount.toFixed(2)}`, { align: 'right' });
     doc.text(`Advance Paid: ₹${invoice.advancePayment.toFixed(2)}`, { align: 'right' });
     doc.text(`Balance Due: ₹${invoice.balanceDue.toFixed(2)}`, { align: 'right' });
+    
+    // Only show commission details to admin/provider
+    if (req.user.role === 'admin' || req.user.role === 'provider') {
+      doc.moveDown();
+      doc.fontSize(14).text('Commission Details', { underline: true });
+      doc.text(`Commission Rate: ${invoice.commissionDetails?.baseRate || 0}%`);
+      doc.text(`Commission Amount: ₹${invoice.commissionAmount.toFixed(2)}`);
+      doc.text(`Net Amount: ₹${invoice.netAmount.toFixed(2)}`);
+    }
+
     doc.moveDown();
 
     // Payment status
@@ -391,13 +602,10 @@ const downloadInvoice = async (req, res, next) => {
 };
 
 // @desc    Admin set invoice number sequence
-// @route   POST /api/v1/invoices/admin/set-invoice-sequence
+// @route   POST /api/invoices/admin/set-invoice-sequence
 // @access  Private/Admin
 const setInvoiceSequence = async (req, res, next) => {
   try {
-    // Since we're not using a counter, this can store the last used number in a config file
-    // or we can remove this endpoint if sequential numbers aren't required
-    
     res.status(200).json({
       success: true,
       message: 'Invoice sequence configuration is not needed with timestamp-based numbering'
@@ -457,7 +665,10 @@ module.exports = {
   getMyInvoices,
   getProviderInvoices,
   autoGenerateInvoice,
-  updateInvoice,
+  getInvoiceProducts,
+  addProductToInvoice,
+  updateProductInInvoice,
+  removeProductFromInvoice,
   adminUpdateInvoice,
   downloadInvoice,
   setInvoiceSequence

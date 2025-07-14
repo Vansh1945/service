@@ -19,7 +19,8 @@ router.get('/customers', adminAuthMiddleware, adminController.getAllCustomers);
 
 // admin get Provider routes
 router.get('/providers', adminAuthMiddleware, adminController.getAllProviders);
-
+router.get('/providers/:id', adminAuthMiddleware, adminController.getProviderDetails);
+router.get('/providers/:id/resume', adminAuthMiddleware, adminController.getProviderResume);
 
 // Admin Dashboard Stats
 router.get('/dashboard/stats', adminAuthMiddleware, adminController.getDashboardStats);

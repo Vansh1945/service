@@ -32,6 +32,14 @@ router.get(
   getComplaint
 );
 
+
+router.put(
+  '/:id/reopen',
+  userAuthMiddleware,
+  reopenComplaint
+);
+
+
 // Admin routes
 router.get(
   '/',
@@ -45,10 +53,6 @@ router.put(
   resolveComplaint
 );
 
-router.put(
-  '/:id/reopen',
-  userAuthMiddleware,
-  reopenComplaint
-);
+
 
 module.exports = router;

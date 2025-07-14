@@ -27,15 +27,10 @@ const commissionRuleSchema = new Schema({
     enum: ['all', 'specific'],
     default: 'all'
   },
-  // Specific providers if applicableTo is 'specific'
-  providers: [{
-    type: Schema.Types.ObjectId,
-    ref: 'Provider'
-  }],
   // Location-based rules
-  locations: [{
-    type: String,
-    enum: ['North', 'South', 'East', 'West', 'Central']
+  states: [{
+    type: String, 
+    trim: true
   }],
   // Performance tiers
   performanceTier: {
@@ -46,7 +41,7 @@ const commissionRuleSchema = new Schema({
   // Service categories this applies to
   serviceCategories: [{
     type: String,
-    enum: ['Electrical', 'Plumbing', 'HVAC', 'Handyman', 'Appliance Repair', 'Other']
+    enum: ['Electrical', 'AC', 'Appliance Repair', 'Other'],
   }],
   // Minimum booking amount for this rule to apply
   minBookingAmount: {
@@ -82,15 +77,15 @@ commissionRuleSchema.index({ performanceTier: 1 });
 commissionRuleSchema.index({ serviceCategories: 1 });
 
 // Static method to get applicable commission for a booking
-commissionRuleSchema.statics.getCommissionForBooking = async function(bookingDetails) {
+commissionRuleSchema.statics.getCommissionForBooking = async function (bookingDetails) {
   const { providerId, serviceCategory, bookingAmount, providerLocation, providerPerformanceTier } = bookingDetails;
-  
+
   // Find all active rules that could apply
   const rules = await this.find({
     isActive: true,
     $or: [
       { applicableTo: 'all' },
-      { 
+      {
         applicableTo: 'specific',
         providers: providerId
       }
@@ -103,14 +98,14 @@ commissionRuleSchema.statics.getCommissionForBooking = async function(bookingDet
   });
 
   // Filter rules by location if specified
-  const locationFiltered = rules.filter(rule => 
-    rule.locations.length === 0 || 
+  const locationFiltered = rules.filter(rule =>
+    rule.locations.length === 0 ||
     rule.locations.includes(providerLocation)
   );
 
   // Filter rules by performance tier if specified
-  const tierFiltered = locationFiltered.filter(rule => 
-    !rule.performanceTier || 
+  const tierFiltered = locationFiltered.filter(rule =>
+    !rule.performanceTier ||
     rule.performanceTier === providerPerformanceTier
   );
 
@@ -119,19 +114,19 @@ commissionRuleSchema.statics.getCommissionForBooking = async function(bookingDet
     // Rules with specific providers come first
     if (a.applicableTo === 'specific' && b.applicableTo !== 'specific') return -1;
     if (b.applicableTo === 'specific' && a.applicableTo !== 'specific') return 1;
-    
+
     // Then rules with location restrictions
     if (a.locations.length > 0 && b.locations.length === 0) return -1;
     if (b.locations.length > 0 && a.locations.length === 0) return 1;
-    
+
     // Then rules with performance tier
     if (a.performanceTier && !b.performanceTier) return -1;
     if (b.performanceTier && !a.performanceTier) return 1;
-    
+
     // Then rules with service category
     if (a.serviceCategories.length > 0 && b.serviceCategories.length === 0) return -1;
     if (b.serviceCategories.length > 0 && a.serviceCategories.length === 0) return 1;
-    
+
     // Finally by higher min booking amount (more specific)
     return b.minBookingAmount - a.minBookingAmount;
   });

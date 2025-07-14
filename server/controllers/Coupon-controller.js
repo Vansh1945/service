@@ -95,65 +95,66 @@ const getAllCoupons = async (req, res) => {
 // Update coupon
 const updateCoupon = async (req, res) => {
   try {
+    // Validate request
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
     const { id } = req.params;
-    const updates = req.body;
+    const updateData = req.body;
 
-    const coupon = await Coupon.findById(id);
-    if (!coupon) {
-      return res.status(404).json({
-        success: false,
-        message: 'Coupon not found'
-      });
+    // Check if coupon exists
+    const existingCoupon = await Coupon.findById(id);
+    if (!existingCoupon) {
+      return res.status(404).json({ message: 'Coupon not found' });
     }
 
-    // Check admin ownership
-    if (!coupon.createdBy.equals(req.adminID)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to update this coupon'
-      });
-    }
-
-    // Prevent changing critical fields if coupon has been used
-    if (coupon.usedBy.length > 0) {
-      const restrictedFields = ['discountType', 'discountValue', 'isFirstBooking', 'isGlobal'];
+    // Prevent modifying certain fields if coupon has been used
+    if (existingCoupon.usedBy.length > 0) {
+      const restrictedFields = ['code', 'discountType', 'discountValue', 'isGlobal', 'isFirstBooking'];
       restrictedFields.forEach(field => {
-        if (updates[field] && updates[field] !== coupon[field]) {
-          return res.status(400).json({
-            success: false,
-            message: `Cannot change ${field} after coupon has been used`
-          });
+        if (field in updateData) {
+          delete updateData[field];
         }
       });
     }
 
-    // Validate first-booking coupon
-    if (updates.isFirstBooking) {
-      const existing = await Coupon.findOne({
-        isFirstBooking: true,
-        isActive: true,
-        _id: { $ne: id }
-      });
-      if (existing) {
-        return res.status(400).json({
-          success: false,
-          message: 'Active first-booking coupon already exists'
-        });
-      }
+    // Handle date conversion if needed
+    if (updateData.expiryDate) {
+      updateData.expiryDate = new Date(updateData.expiryDate);
     }
 
-    Object.assign(coupon, updates);
-    await coupon.save();
+    const updatedCoupon = await Coupon.findByIdAndUpdate(
+      id,
+      updateData,
+      { new: true, runValidators: true }
+    );
 
-    res.json({
+    res.status(200).json({
       success: true,
       message: 'Coupon updated successfully',
-      data: coupon
+      data: updatedCoupon
     });
   } catch (error) {
-    res.status(500).json({
+    console.error('Error updating coupon:', error);
+
+    // Handle specific error types
+    let errorMessage = 'Failed to update coupon';
+    let statusCode = 500;
+
+    if (error.name === 'ValidationError') {
+      statusCode = 400;
+      errorMessage = Object.values(error.errors).map(val => val.message).join(', ');
+    } else if (error.code === 11000) {
+      statusCode = 409;
+      errorMessage = 'Coupon code already exists';
+    }
+
+    res.status(statusCode).json({
       success: false,
-      message: error.message
+      message: errorMessage,
+      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 };

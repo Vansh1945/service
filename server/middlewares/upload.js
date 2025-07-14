@@ -39,7 +39,7 @@ const resumeStorage = multer.diskStorage({
 // Profile picture upload configuration
 const profilePicStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'uploads/profilePics/');
+    cb(null, 'uploads/profilepic/');
   },
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname);

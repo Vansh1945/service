@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
-    FiMenu, FiX, FiHome, FiCheckCircle, FiUsers, FiCalendar,
-    FiDollarSign, FiTag, FiCreditCard, FiRepeat, FiMessageSquare,
+    FiMenu, FiX, FiHome, FiCheckCircle, FiUsers, FiCalendar, FiMessageCircle,
+    FiDollarSign, FiTag, FiPlus, FiTool,
     FiAlertCircle, FiChevronDown, FiLogOut, FiUser, FiBell
 } from 'react-icons/fi';
 import { useAuth } from '../store/auth'; // Adjust the import path as needed
@@ -29,9 +29,13 @@ const AdminLayout = () => {
         { name: 'Assign Booking', path: '/admin/assign-booking', icon: <FiCalendar /> },
         { name: 'Commission Settings', path: '/admin/commission', icon: <FiDollarSign /> },
         { name: 'Coupons', path: '/admin/coupons', icon: <FiTag /> },
-        { name: 'Wallet Reports', path: '/admin/wallet-reports', icon: <FiCreditCard /> },
-        { name: 'Refund Panel', path: '/admin/refund-panel', icon: <FiRepeat /> },
-        { name: 'Messaging', path: '/admin/messaging', icon: <FiMessageSquare /> },
+        { name: 'Test', path: '/admin/add-question', icon: <FiPlus /> },
+        { name: 'Add Services', path: '/admin/add-services', icon: <FiTool /> },
+        { name: 'Complaint', path: '/admin/Complaint', icon: <FiAlertCircle /> },
+        { name: 'Feedback', path: '/admin/feedback', icon: <FiMessageCircle /> },
+        { name: 'Invoice', path: '/admin/invoice', icon: <FiTool /> },
+        { name: 'Earning', path: '/admin/earning', icon: <FiAlertCircle /> },
+        // { name: 'Feedback', path: '/admin/feedback', icon: <FiMessageCircle /> },
     ];
 
     // Set Dashboard as active if no other path is matched
@@ -157,7 +161,7 @@ const AdminLayout = () => {
                     </div>
                 </div>
 
-                <main className="p-4 lg:p-6 bg-blue-50 min-h-full">
+                <main className="p-0 ">
                     <Outlet />
                 </main>
             </div>

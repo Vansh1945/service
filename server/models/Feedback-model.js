@@ -4,24 +4,30 @@ const Schema = mongoose.Schema;
 const feedbackSchema = new Schema({
   customer: {
     type: Schema.Types.ObjectId,
-    ref: 'User', // or 'Customer' if you have a separate model
-    required: true, 
+    ref: 'User',
+    required: true
   },
   provider: {
     type: Schema.Types.ObjectId,
     ref: 'Provider',
-    required: true, 
+    required: true
+  },
+  service: {
+    type: Schema.Types.ObjectId,
+    ref: 'Service',
+    required: true
   },
   booking: {
     type: Schema.Types.ObjectId,
     ref: 'Booking',
     required: true,
+    unique: true
   },
   rating: {
     type: Number,
-    required: true, 
-    min: 1, 
-    max: 5, 
+    required: true,
+    min: 1,
+    max: 5
   },
   comment: {
     type: String,
@@ -34,17 +40,18 @@ const feedbackSchema = new Schema({
     immutable: true
   }
 }, {
-  timestamps: true, // Adds createdAt and updatedAt automatically
-  toJSON: { virtuals: true }, // Include virtuals when converted to JSON
+  timestamps: true,
+  toJSON: { virtuals: true },
   toObject: { virtuals: true }
 });
 
-// Indexes for faster queries
+// Indexes
 feedbackSchema.index({ provider: 1 });
 feedbackSchema.index({ customer: 1 });
-feedbackSchema.index({ booking: 1 }, { unique: true }); // Ensures one feedback per booking
+feedbackSchema.index({ service: 1 });
+feedbackSchema.index({ booking: 1 }, { unique: true });
 
-// Virtual population (if you need to access data without storing it)
+// Virtuals
 feedbackSchema.virtual('customerDetails', {
   ref: 'User',
   localField: 'customer',
@@ -55,6 +62,13 @@ feedbackSchema.virtual('customerDetails', {
 feedbackSchema.virtual('providerDetails', {
   ref: 'Provider',
   localField: 'provider',
+  foreignField: '_id',
+  justOne: true
+});
+
+feedbackSchema.virtual('serviceDetails', {
+  ref: 'Service',
+  localField: 'service',
   foreignField: '_id',
   justOne: true
 });

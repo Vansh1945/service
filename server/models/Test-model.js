@@ -80,6 +80,14 @@ const providerTestSchema = new Schema({
   questionsAnswered: {
     type: Number,
     default: 0
+  },
+  attemptNumber: {
+    type: Number,
+    required: true,
+    default: 1 // Default to 1 for the first attempt
+  },
+  expiresAt: {
+    type: Date // To track when the test expires
   }
 }, {
   timestamps: true,

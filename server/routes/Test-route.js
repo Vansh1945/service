@@ -15,5 +15,4 @@ router.post('/submit', providerAuthMiddleware, testController.submitTest);
 router.get('/results', providerAuthMiddleware, testController.getTestResults);
 router.get('/details/:testId', providerAuthMiddleware, testController.getTestDetails);
 
-
 module.exports = router;

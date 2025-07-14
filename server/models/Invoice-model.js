@@ -31,6 +31,20 @@ const productSchema = new Schema({
   }
 });
 
+// Commission Penalty Sub-Schema
+const penaltyRuleSchema = new Schema({
+  amount: {
+    type: Number,
+    required: true,
+    min: 0
+  },
+  reason: {
+    type: String,
+    required: true,
+    trim: true
+  }
+});
+
 // Invoice Schema
 const invoiceSchema = new Schema({
   invoiceNo: {
@@ -62,7 +76,7 @@ const invoiceSchema = new Schema({
     type: Number,
     required: [true, 'Service amount is required'],
     min: [0, 'Service amount cannot be negative'],
-    set: v => Math.round(v * 100) / 100 // Round to 2 decimal places
+    set: v => Math.round(v * 100) / 100
   },
   productsUsed: {
     type: [productSchema],
@@ -98,14 +112,26 @@ const invoiceSchema = new Schema({
     min: [0, 'Balance due cannot be negative'],
     set: v => Math.round(v * 100) / 100
   },
+  commissionAmount: {
+    type: Number,
+    required: true,
+    min: 0,
+    set: v => Math.round(v * 100) / 100
+  },
+  netAmount: {
+    type: Number,
+    required: true,
+    min: 0,
+    set: v => Math.round(v * 100) / 100
+  },
   paidBy: {
     type: String,
-    enum: ['online', 'cash', 'wallet', 'card', 'upi'],
-    required: [true, 'Payment method is required']
+    enum: ['cod', 'online', 'wallet', 'cash', 'card', 'upi'],
+    default: 'cod'
   },
   paymentStatus: {
     type: String,
-    enum: ['paid', 'pending', 'partially_paid'],
+    enum: ['pending', 'paid', 'failed', 'partially_paid'],
     default: 'pending'
   },
   generatedAt: {
@@ -116,17 +142,52 @@ const invoiceSchema = new Schema({
     type: Date,
     default: function() {
       const date = new Date(this.generatedAt);
-      date.setDate(date.getDate() + 7); // 7 days from generation
+      date.setDate(date.getDate() + 7);
       return date;
     }
+  },
+  paymentDate: Date,
+  transactionId: String,
+  commissionDetails: {
+    baseRate: {
+      type: Number,
+      min: 0
+    },
+    baseType: {
+      type: String,
+      enum: ['percentage', 'fixed']
+    },
+    penaltyRules: [penaltyRuleSchema]
   }
 }, {
   timestamps: true,
-  toJSON: { virtuals: true },
-  toObject: { virtuals: true }
+  toJSON: {
+    virtuals: true,
+    transform: function(doc, ret, options) {
+      // Hide commission fields from non-admins/providers
+      if (options && !options.showCommission) {
+        delete ret.commissionDetails;
+        delete ret.commissionAmount;
+        delete ret.netAmount;
+      }
+      return ret;
+    }
+  },
+  toObject: {
+    virtuals: true,
+    transform: function(doc, ret, options) {
+      // Hide commission fields from non-admins/providers
+      if (options && !options.showCommission) {
+        delete ret.commissionDetails;
+        delete ret.commissionAmount;
+        delete ret.netAmount;
+      }
+      return ret;
+    }
+  }
 });
 
-// Indexes for better query performance
+// Indexes
 invoiceSchema.index({ booking: 1 });
 invoiceSchema.index({ provider: 1 });
 invoiceSchema.index({ customer: 1 });
@@ -145,7 +206,6 @@ invoiceSchema.pre('save', async function(next) {
     (date.getMonth() + 1).toString().padStart(2, '0') +
     date.getDate().toString().padStart(2, '0') + '-';
   
-  // Find the last invoice to generate sequential number
   const lastInvoice = await this.constructor.findOne({}, {}, { sort: { createdAt: -1 } });
   const lastSeq = lastInvoice ? parseInt(lastInvoice.invoiceNo.slice(-4)) : 0;
   
@@ -171,10 +231,13 @@ invoiceSchema.pre('save', function(next) {
   // Calculate total amount (subtotal + tax - discount)
   this.totalAmount = Math.round((subtotal + this.tax - this.discount) * 100) / 100;
 
+  // Calculate net amount (total - commission)
+  this.netAmount = Math.round((this.totalAmount - this.commissionAmount) * 100) / 100;
+
   // Calculate balance due (total - advance)
   this.balanceDue = Math.round((this.totalAmount - this.advancePayment) * 100) / 100;
 
-  // Update payment status based on balance
+  // Update payment status
   if (this.balanceDue <= 0) {
     this.paymentStatus = 'paid';
   } else if (this.advancePayment > 0) {
@@ -204,19 +267,35 @@ invoiceSchema.virtual('formattedDueDate').get(function() {
 });
 
 // Static Methods
-invoiceSchema.statics.findByCustomer = function(customerId, status = null) {
+invoiceSchema.statics.findByCustomer = function(customerId, status = null, showCommission = false) {
   const query = { customer: customerId };
   if (status) query.paymentStatus = status;
-  return this.find(query).sort({ generatedAt: -1 });
+  return this.find(query)
+    .setOptions({ showCommission })
+    .sort({ generatedAt: -1 });
 };
 
 invoiceSchema.statics.findByProvider = function(providerId, status = null) {
   const query = { provider: providerId };
   if (status) query.paymentStatus = status;
-  return this.find(query).sort({ generatedAt: -1 });
+  return this.find(query)
+    .setOptions({ showCommission: true })
+    .sort({ generatedAt: -1 });
 };
 
 // Instance Methods
+invoiceSchema.methods.toCustomerJSON = function() {
+  const obj = this.toObject();
+  delete obj.commissionDetails;
+  delete obj.commissionAmount;
+  delete obj.netAmount;
+  return obj;
+};
+
+invoiceSchema.methods.toAdminJSON = function() {
+  return this.toObject();
+};
+
 invoiceSchema.methods.markAsPaid = function(paymentMethod) {
   if (this.paymentStatus === 'paid') {
     throw new Error('Invoice is already paid');
@@ -225,6 +304,7 @@ invoiceSchema.methods.markAsPaid = function(paymentMethod) {
   this.paidBy = paymentMethod;
   this.balanceDue = 0;
   this.advancePayment = this.totalAmount;
+  this.paymentDate = new Date();
   return this.save();
 };
 
@@ -243,6 +323,7 @@ invoiceSchema.methods.addAdvancePayment = function(amount, paymentMethod) {
   // Update payment status
   if (this.balanceDue <= 0) {
     this.paymentStatus = 'paid';
+    this.paymentDate = new Date();
   } else {
     this.paymentStatus = 'partially_paid';
   }
@@ -251,17 +332,38 @@ invoiceSchema.methods.addAdvancePayment = function(amount, paymentMethod) {
 };
 
 // Create from booking static method
-invoiceSchema.statics.createFromBooking = async function(booking) {
-  const productsUsed = booking.products.map(product => ({
+invoiceSchema.statics.createFromBooking = async function(booking, commissionDetails) {
+  const productsUsed = booking.products?.map(product => ({
     name: product.name,
     description: product.description,
     quantity: product.quantity,
     rate: product.price,
     total: Math.round(product.quantity * product.price * 100) / 100
-  }));
+  })) || [];
 
   const productsTotal = productsUsed.reduce((sum, p) => sum + p.total, 0);
-  const totalAmount = Math.round((booking.service.price + productsTotal) * 100) / 100;
+  const subtotal = booking.service.price + productsTotal;
+  const totalAmount = Math.round(subtotal * 100) / 100;
+  
+  // Calculate commission
+  let commissionAmount = 0;
+  if (commissionDetails) {
+    if (commissionDetails.baseType === 'percentage') {
+      commissionAmount = totalAmount * (commissionDetails.baseRate / 100);
+    } else {
+      commissionAmount = commissionDetails.baseRate;
+    }
+    
+    // Add penalties
+    if (commissionDetails.penaltyRules?.length > 0) {
+      commissionAmount += commissionDetails.penaltyRules.reduce(
+        (sum, penalty) => sum + penalty.amount, 0
+      );
+    }
+  }
+  
+  commissionAmount = Math.round(commissionAmount * 100) / 100;
+  const netAmount = Math.round((totalAmount - commissionAmount) * 100) / 100;
 
   return this.create({
     booking: booking._id,
@@ -271,8 +373,12 @@ invoiceSchema.statics.createFromBooking = async function(booking) {
     serviceAmount: booking.service.price,
     productsUsed,
     totalAmount,
+    netAmount,
+    commissionAmount,
     balanceDue: totalAmount,
-    paidBy: 'pending'
+    paidBy: booking.paymentMethod || 'pending',
+    commissionDetails,
+    paymentStatus: booking.paymentStatus || 'pending'
   });
 };
 

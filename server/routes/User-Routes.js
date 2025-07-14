@@ -2,25 +2,23 @@ const express = require('express');
 const router = express.Router();
 const { 
     register,
-    login,
     getProfile,
-    updateProfile
+    updateProfile,
+    uploadProfilePicture
 } = require('../controllers/User-controller');
 const { userAuthMiddleware } = require('../middlewares/User-middleware');
-const { providerAuthMiddleware } = require('../middlewares/Provider-middleware');
+const { uploadProfilePic } = require('../middlewares/upload');
 
 // Public routes (no authentication required)
 router.post("/register", register);
 
-// Protected routes (require authentication)
-router.get('/profile', 
-    userAuthMiddleware, providerAuthMiddleware ,
-    getProfile
+router.get('/profile', userAuthMiddleware, getProfile);
+router.put('/profile-update', userAuthMiddleware, updateProfile);
+router.post('/profile-picture', 
+    userAuthMiddleware, 
+    uploadProfilePic.single('profilePic'),
+    uploadProfilePicture
 );
 
-router.put('/profile-update',
-    userAuthMiddleware,
-    updateProfile
-);
 
 module.exports = router;

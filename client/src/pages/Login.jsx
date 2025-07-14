@@ -59,7 +59,7 @@ const LoginPage = () => {
       }
 
       // Show success toast
-      toast.success('Login successfully');
+      // toast.success('Login successfully');
 
       // Handle successful login
       loginUser(data.token, data.user.role, data.user);

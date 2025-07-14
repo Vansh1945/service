@@ -1,47 +1,29 @@
 import { createContext, useContext, useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
+import { toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-    const getInitialUserState = () => {
-        try {
-            const userData = localStorage.getItem("user");
-            const token = localStorage.getItem("token");
-            const role = localStorage.getItem("role");
+    const navigate = useNavigate();
+    const API = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
-            if (!userData || !token || !role) return null;
-
-            // Verify token before using stored user data
-            if (isTokenExpired(token)) {
-                localStorage.clear();
-                return null;
-            }
-
-            const parsedUser = JSON.parse(userData);
-            
-            // Ensure role consistency between token and user data
-            const decodedToken = jwtDecode(token);
-            if (decodedToken.role !== role) {
-                localStorage.clear();
-                return null;
-            }
-
-            return parsedUser;
-        } catch (error) {
-            console.error("Auth initialization error:", error);
-            localStorage.clear();
-            return null;
-        }
-    };
-
+    // State management
     const [token, setToken] = useState(() => localStorage.getItem("token") || null);
     const [role, setRole] = useState(() => localStorage.getItem("role") || null);
-    const [user, setUser] = useState(getInitialUserState);
-    const navigate = useNavigate();
-    const API = import.meta.env.VITE_BACKEND_URL;
+    const [user, setUser] = useState(() => {
+        try {
+            const userData = localStorage.getItem("user");
+            if (!userData) return null;
+            return JSON.parse(userData);
+        } catch (error) {
+            return null;
+        }
+    });
 
+    // Helper functions
     const isTokenExpired = (token) => {
         if (!token) return true;
         try {
@@ -52,7 +34,8 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    const isAdmin = () => {
+    // Memoized admin check
+    const isAdmin = useMemo(() => {
         if (!token) return false;
         try {
             const decoded = jwtDecode(token);
@@ -60,80 +43,61 @@ export const AuthProvider = ({ children }) => {
         } catch (error) {
             return false;
         }
+    }, [token]);
+
+    const showToast = (message, type = 'success') => {
+        toast[type](message, {
+            position: "top-right",
+            autoClose: 3000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            progress: undefined,
+        });
     };
 
-const loginUser = async (newToken, newRole, userData) => {
-    try {
-        if (isTokenExpired(newToken)) {
-            throw new Error("Token is invalid or expired");
-        }
-
-        const decodedToken = jwtDecode(newToken);
-        
-        // Debug logging
-        console.log("Decoded Token:", decodedToken);
-        console.log("User Data:", userData);
-
-        // Enhanced admin validation
-        if (userData.isAdmin || decodedToken.isAdmin) {
-            if (decodedToken.role !== 'admin') {
-                console.warn("User has isAdmin but role is not admin");
-                // Force admin role if isAdmin is true
-                newRole = 'admin';
+    const loginUser = async (newToken, newRole, userData) => {
+        try {
+            if (isTokenExpired(newToken)) {
+                throw new Error("Token is invalid or expired");
             }
+
+            const decodedToken = jwtDecode(newToken);
+            const finalRole = (userData?.isAdmin || decodedToken.isAdmin) ? 'admin' : newRole;
             
-            if (!decodedToken.isAdmin) {
-                console.warn("Token missing isAdmin claim");
-                // Add isAdmin to token claims if missing
-                decodedToken.isAdmin = true;
-            }
-        }
+            const userObj = {
+                ...userData,
+                isAdmin: userData?.isAdmin || decodedToken.isAdmin || false
+            };
 
-        // Verify role consistency
-        if (decodedToken.role !== newRole) {
-            throw new Error(`Role mismatch in token (token: ${decodedToken.role}, expected: ${newRole})`);
-        }
+            localStorage.setItem("token", newToken);
+            localStorage.setItem("role", finalRole);
+            localStorage.setItem("user", JSON.stringify(userObj));
 
-        // Save auth data
-        localStorage.setItem("token", newToken);
-        localStorage.setItem("role", newRole);
-        localStorage.setItem("user", JSON.stringify({
-            ...userData,
-            isAdmin: userData.isAdmin || decodedToken.isAdmin
-        }));
+            setToken(newToken);
+            setRole(finalRole);
+            setUser(userObj);
 
-        setToken(newToken);
-        setRole(newRole);
-        setUser({
-            ...userData,
-            isAdmin: userData.isAdmin || decodedToken.isAdmin
-        });
+            showToast('Login successful!');
 
-        // Redirect with timeout to ensure state updates
-        setTimeout(() => {
-            if (newRole === 'admin' || userData.isAdmin) {
+            if (finalRole === 'admin' || userObj.isAdmin) {
                 navigate('/admin/dashboard', { replace: true });
-            } else if (newRole === 'provider') {
-                navigate(userData.approved ? '/provider/dashboard' : '/pending-approval');
+            } else if (finalRole === 'provider') {
+                navigate(userObj.approved ? '/provider/dashboard' : '/pending-approval');
             } else {
                 navigate('/customer/dashboard');
             }
-        }, 100);
 
-    } catch (error) {
-        console.error("Login error:", {
-            error: error.message,
-            token: newToken,
-            decodedToken: newToken ? jwtDecode(newToken) : null,
-            userData
-        });
-        
-        logoutUser();
-        throw error;
-    }
-};
+        } catch (error) {
+            console.error("Login error:", error);
+            showToast(error.message, 'error');
+            logoutUser();
+        }
+    };
 
     const logoutUser = () => {
+        showToast('Logged out successfully');
         localStorage.clear();
         setToken(null);
         setRole(null);
@@ -141,49 +105,18 @@ const loginUser = async (newToken, newRole, userData) => {
         navigate('/login');
     };
 
-    const refreshUserData = async () => {
-        if (!token) return;
-        
-        try {
-            const response = await fetch(`${API}/users/me`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            
-            if (!response.ok) throw new Error('Failed to refresh user data');
-            
-            const updatedUser = await response.json();
-            localStorage.setItem("user", JSON.stringify(updatedUser));
-            setUser(updatedUser);
-            return updatedUser;
-        } catch (error) {
-            console.error("Failed to refresh user data:", error);
-            throw error;
-        }
-    };
-
-    useEffect(() => {
-        const checkAuth = () => {
-            if (token && isTokenExpired(token)) {
-                logoutUser();
-            }
-        };
-
-        // Set up periodic auth check every 5 minutes
-        const interval = setInterval(checkAuth, 300000);
-        return () => clearInterval(interval);
-    }, [token]);
-
+    // Context value
     const contextValue = useMemo(() => ({
         token,
         role,
         user,
         isAuthenticated: !!token && !isTokenExpired(token),
-        isAdmin: isAdmin(),
+        isAdmin, // This is now a boolean value from the memoized calculation
         loginUser,
         logoutUser,
-        refreshUserData,
-        API
-    }), [token, role, user, API]);
+        API,
+        showToast
+    }), [token, role, user, isAdmin, API]);
 
     return (
         <AuthContext.Provider value={contextValue}>
@@ -192,12 +125,10 @@ const loginUser = async (newToken, newRole, userData) => {
     );
 };
 
-const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  return context;
+export const useAuth = () => {
+    const context = useContext(AuthContext);
+    if (!context) {
+        throw new Error("useAuth must be used within an AuthProvider");
+    }
+    return context;
 };
-
-export { useAuth };

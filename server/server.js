@@ -6,6 +6,23 @@ const crypto = require('crypto');
 const connectDB = require("./config/db");
 const Transaction = require("./models/Transaction-model ");
 
+// Initialize express app
+const app = express();
+
+// Localhost CORS configuration
+const corsOptions = {
+  origin: 'http://localhost:5173',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+
+// Middleware
+app.use(cors(corsOptions));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use("/uploads", express.static("uploads"));
+
 // Route imports
 const adminRoutes = require("./routes/Admin-Routes");
 const providerRoutes = require("./routes/Provider-Routes");
@@ -21,23 +38,7 @@ const transactionRoutes = require("./routes/Transaction-route");
 const complaintRoutes = require("./routes/complaintRoutes");
 const feedbackRoutes = require("./routes/feedback-routes");
 const earningRoutes = require("./routes/providerEarning-routes");
-
-// Initialize express app
-const app = express();
-
-// Enhanced CORS configuration
-const corsOptions = {
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-};
-
-// Middleware
-app.use(cors(corsOptions));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use("/uploads", express.static("uploads"));
+const commissionRoutes = require('./routes/commissionRoutes');
 
 // Routes
 app.use("/api/auth", authRoutes);
@@ -54,8 +55,9 @@ app.use('/api/transaction', transactionRoutes);
 app.use('/api/complaint', complaintRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/earning', earningRoutes);
+app.use('/api/commission', commissionRoutes);
 
-// Razorpay Webhook
+// Razorpay Webhook (localhost configuration)
 app.post('/razorpay-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   try {
     const signature = req.headers['x-razorpay-signature'];
@@ -83,7 +85,7 @@ app.post('/razorpay-webhook', express.raw({ type: 'application/json' }), async (
   }
 });
 
-// Schedule weekly auto-withdrawals
+// Schedule weekly auto-withdrawals (localhost)
 if (process.env.NODE_ENV !== 'test') {
   cron.schedule('0 9 * * 1', async () => {
     try {
@@ -116,5 +118,5 @@ connectDB();
 // Start server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-})
+  console.log(`Server running on ${PORT}`);
+});

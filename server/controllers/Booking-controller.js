@@ -3,12 +3,14 @@ const Service = require('../models/Service-model');
 const Provider = require('../models/Provider-model');
 const User = require('../models/User-model');
 const Invoice = require('../models/Invoice-model');
+const CommissionRule = require('../models/CommissionRule-model');
 const Coupon = require('../models/Coupon-model');
 const sendEmail = require('../utils/sendEmail');
+const { calculateDistance } = require('../services/geoUtils');
 
 // USER CONTROLLERS
 
-// Create new booking
+ // Create new booking
 const createBooking = async (req, res) => {
   try {
     const { serviceId, date, time, address, couponCode, notes } = req.body;
@@ -71,9 +73,8 @@ const createBooking = async (req, res) => {
     const providers = await Provider.find({
       services: service.category,
       approved: true,
-      testPassed: true,
       isDeleted: false,
-      'address.city': address.city // Match by city instead of coordinates
+      'address.city': address.city
     }).limit(5);
 
     if (providers.length === 0) {
@@ -86,7 +87,7 @@ const createBooking = async (req, res) => {
     // Create booking
     const booking = await Booking.create({
       customer: userId,
-      provider: providers[0]._id, // Assign to first available provider
+      provider: providers[0]._id,
       service: serviceId,
       date: bookingDate,
       time: time || null,
@@ -238,7 +239,7 @@ const cancelBooking = async (req, res) => {
     try {
       const user = await User.findById(userId);
       const service = await Service.findById(booking.service);
-      
+
       const emailHtml = `
         <h2>Booking Cancelled</h2>
         <p>Your booking has been successfully cancelled.</p>
@@ -251,7 +252,7 @@ const cancelBooking = async (req, res) => {
 
       await sendEmail({
         to: user.email,
-        subject: 'Booking Cancelled - Raj Electrical Service',
+        subject: 'Booking Cancelled',
         html: emailHtml
       });
     } catch (emailError) {
@@ -270,6 +271,123 @@ const cancelBooking = async (req, res) => {
   }
 };
 
+
+// User - Update Booking Date/Time (with restrictions)
+const userUpdateBookingDateTime = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { date, time } = req.body;
+    const userId = req.user.id;
+
+    // Validate input
+    if (!date && !time) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide either date or time to update'
+      });
+    }
+
+    // Find booking
+    const booking = await Booking.findOne({ _id: id, customer: userId });
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found'
+      });
+    }
+
+    // User can only modify pending bookings
+    if (booking.status !== 'pending') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only pending bookings can be rescheduled'
+      });
+    }
+
+    // Calculate minimum allowed time (6 hours from now)
+    const now = new Date();
+    const sixHoursLater = new Date(now.getTime() + 6 * 60 * 60 * 1000);
+    const bookingDateTime = new Date(`${booking.date.toISOString().split('T')[0]}T${booking.time || '00:00'}`);
+
+    // Check if it's too close to booking time
+    if (bookingDateTime < sixHoursLater) {
+      return res.status(403).json({
+        success: false,
+        message: 'Cannot reschedule within 6 hours of booking time. Please contact support.'
+      });
+    }
+
+    // Validate new date if provided
+    if (date) {
+      const newDate = new Date(date);
+      if (newDate < now) {
+        return res.status(400).json({
+          success: false,
+          message: 'New booking date must be in the future'
+        });
+      }
+      booking.date = newDate;
+    }
+
+    // Validate new time if provided
+    if (time) {
+      if (!/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(time)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid time format (use HH:MM)'
+        });
+      }
+      booking.time = time;
+    }
+
+    // Save changes
+    await booking.save();
+
+    // Send notification email
+    try {
+      const [user, provider, service] = await Promise.all([
+        User.findById(userId),
+        Provider.findById(booking.provider),
+        Service.findById(booking.service)
+      ]);
+
+      const emailHtml = `
+        <h2>Booking Rescheduled</h2>
+        <p>Your booking has been rescheduled by the customer.</p>
+        <p><strong>Booking ID:</strong> ${booking._id}</p>
+        <p><strong>Service:</strong> ${service.title}</p>
+        <p><strong>New Date:</strong> ${booking.date.toDateString()}</p>
+        <p><strong>New Time:</strong> ${booking.time || 'To be confirmed'}</p>
+        <p>Please contact the customer if you need to adjust this schedule.</p>
+      `;
+
+      await sendEmail({
+        to: provider.email,
+        subject: 'Booking Rescheduled by Customer',
+        html: emailHtml
+      });
+    } catch (emailError) {
+      console.error('Failed to send notification email:', emailError);
+    }
+
+    res.json({
+      success: true,
+      message: 'Booking date/time updated successfully',
+      data: {
+        _id: booking._id,
+        date: booking.date,
+        time: booking.time,
+        status: booking.status
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
 // PROVIDER CONTROLLERS
 
 // Get provider bookings
@@ -278,45 +396,18 @@ const getProviderBookings = async (req, res) => {
     const { status } = req.query;
     const providerId = req.provider.id;
 
-    // Get provider's address details
-    const provider = await Provider.findById(providerId);
-    if (!provider) {
-      return res.status(404).json({
-        success: false,
-        message: 'Provider not found'
-      });
-    }
-
     const query = { provider: providerId };
     if (status) query.status = status;
 
-    // Add address matching to populate
     const bookings = await Booking.find(query)
-      .populate({
-        path: 'customer',
-        select: 'name phone profilePicUrl',
-        match: {
-          $or: [
-            { 'address.city': provider.address.city },
-            { 'address.zipCode': provider.address.zipCode }
-          ]
-        }
-      })
+      .populate('customer', 'name phone profilePicUrl')
       .populate('service', 'title category')
       .sort({ date: 1, time: 1 });
 
-    // Filter out bookings where customer address doesn't match (if needed)
-    const filteredBookings = bookings.filter(booking => 
-      booking.customer && (
-        booking.customer.address?.city === provider.address.city ||
-        booking.customer.address?.zipCode === provider.address.zipCode
-      )
-    );
-
     res.json({
       success: true,
-      count: filteredBookings.length,
-      data: filteredBookings
+      count: bookings.length,
+      data: bookings
     });
   } catch (error) {
     res.status(500).json({
@@ -331,7 +422,7 @@ const acceptBooking = async (req, res) => {
   try {
     const { id } = req.params;
     const providerId = req.provider.id;
-    const { time } = req.body; // Provider can set time if not set by user
+    const { time } = req.body;
 
     const booking = await Booking.findOne({ _id: id, provider: providerId });
     if (!booking) {
@@ -348,7 +439,6 @@ const acceptBooking = async (req, res) => {
       });
     }
 
-    // If time wasn't set by user and provider is setting it
     if (!booking.time && time) {
       if (!/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(time)) {
         return res.status(400).json({
@@ -366,7 +456,7 @@ const acceptBooking = async (req, res) => {
     try {
       const user = await User.findById(booking.customer);
       const service = await Service.findById(booking.service);
-      
+
       const emailHtml = `
         <h2>Booking Accepted</h2>
         <p>Your service provider has accepted your booking request.</p>
@@ -379,7 +469,7 @@ const acceptBooking = async (req, res) => {
 
       await sendEmail({
         to: user.email,
-        subject: 'Booking Accepted - Raj Electrical Service',
+        subject: 'Booking Accepted',
         html: emailHtml
       });
     } catch (emailError) {
@@ -405,7 +495,10 @@ const completeBooking = async (req, res) => {
     const { id } = req.params;
     const providerId = req.provider.id;
 
-    const booking = await Booking.findOne({ _id: id, provider: providerId });
+    const booking = await Booking.findOne({ _id: id, provider: providerId })
+      .populate('provider')
+      .populate('service');
+
     if (!booking) {
       return res.status(404).json({
         success: false,
@@ -420,8 +513,31 @@ const completeBooking = async (req, res) => {
       });
     }
 
-    booking.status = 'completed';
-    await booking.save();
+    // Calculate commission
+    const commissionDetails = await CommissionRule.getCommissionForBooking({
+      providerId: booking.provider._id,
+      serviceCategory: booking.service.category,
+      bookingAmount: booking.servicePrice - (booking.discountAmount || 0),
+      providerLocation: booking.provider.address.region,
+      providerPerformanceTier: booking.provider.performanceTier
+    });
+
+    const totalAmount = booking.servicePrice - (booking.discountAmount || 0);
+    let commissionAmount = 0;
+
+    if (commissionDetails.baseRule.type === 'percentage') {
+      commissionAmount = totalAmount * (commissionDetails.baseRule.value / 100);
+    } else {
+      commissionAmount = commissionDetails.baseRule.value;
+    }
+
+    commissionDetails.penaltyRules.forEach(penalty => {
+      if (penalty.type === 'percentage') {
+        commissionAmount += totalAmount * (penalty.value / 100);
+      } else {
+        commissionAmount += penalty.value;
+      }
+    });
 
     // Create invoice
     const invoice = await Invoice.create({
@@ -430,51 +546,70 @@ const completeBooking = async (req, res) => {
       customer: booking.customer,
       serviceAmount: booking.servicePrice,
       discountAmount: booking.discountAmount || 0,
-      totalAmount: booking.servicePrice - (booking.discountAmount || 0),
-      paidBy: 'cod' // Default to cash on delivery
+      commissionAmount,
+      totalAmount,
+      netAmount: totalAmount - commissionAmount,
+      paidBy: 'cod',
+      commissionDetails: {
+        baseRate: commissionDetails.baseRule.value,
+        baseType: commissionDetails.baseRule.type,
+        penaltyRules: commissionDetails.penaltyRules.map(p => ({
+          amount: p.type === 'percentage'
+            ? totalAmount * (p.value / 100)
+            : p.value,
+          reason: p.penaltyReason
+        }))
+      }
     });
 
-    // Update booking with invoice
+    // Update booking status
+    booking.status = 'completed';
     booking.invoice = invoice._id;
+    booking.commission = {
+      amount: commissionAmount,
+      baseRule: commissionDetails.baseRule._id,
+      penaltyRules: commissionDetails.penaltyRules.map(p => p._id)
+    };
     await booking.save();
 
     // Update provider stats
     await Provider.findByIdAndUpdate(providerId, {
-      $inc: { completedBookings: 1 }
+      $inc: {
+        completedBookings: 1,
+        totalEarnings: totalAmount - commissionAmount
+      }
     });
 
     // Update user stats
     await User.findByIdAndUpdate(booking.customer, {
-      $inc: { totalBookings: 1, totalSpent: invoice.totalAmount }
+      $inc: { totalBookings: 1, totalSpent: totalAmount }
     });
 
     // Mark coupon as used if applied
     if (booking.couponApplied) {
       const coupon = await Coupon.findOne({ code: booking.couponApplied });
       if (coupon) {
-        await coupon.markAsUsed(booking.customer, invoice.totalAmount);
+        await coupon.markAsUsed(booking.customer, totalAmount);
       }
     }
 
-    // Send completion email to customer
+    // Send completion email
     try {
       const user = await User.findById(booking.customer);
-      const service = await Service.findById(booking.service);
-      
+
       const emailHtml = `
         <h2>Service Completed</h2>
         <p>Your service has been successfully completed.</p>
         <p><strong>Booking ID:</strong> ${booking._id}</p>
-        <p><strong>Service:</strong> ${service.title}</p>
+        <p><strong>Service:</strong> ${booking.service.title}</p>
         <p><strong>Date:</strong> ${booking.date.toDateString()}</p>
-        <p><strong>Amount Paid:</strong> ₹${invoice.totalAmount.toFixed(2)}</p>
-        <p>Thank you for choosing Raj Electrical Service!</p>
-        <p>Please consider leaving a review for your service provider.</p>
+        <p><strong>Amount Paid:</strong> ₹${totalAmount.toFixed(2)}</p>
+        <p>Thank you for choosing our service!</p>
       `;
 
       await sendEmail({
         to: user.email,
-        subject: 'Service Completed - Raj Electrical Service',
+        subject: 'Service Completed',
         html: emailHtml
       });
     } catch (emailError) {
@@ -484,9 +619,16 @@ const completeBooking = async (req, res) => {
     res.json({
       success: true,
       message: 'Booking completed successfully',
-      data: invoice
+      data: {
+        invoice,
+        commission: {
+          amount: commissionAmount,
+          netAmount: totalAmount - commissionAmount
+        }
+      }
     });
   } catch (error) {
+    console.error('Error completing booking:', error);
     res.status(500).json({
       success: false,
       message: error.message
@@ -499,14 +641,18 @@ const completeBooking = async (req, res) => {
 // Get all bookings
 const getAllBookings = async (req, res) => {
   try {
-    const { status, customer, provider, service, from, to } = req.query;
+    const { status, customer, provider, service, from, to, search } = req.query;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
     const query = {};
 
     if (status) query.status = status;
     if (customer) query.customer = customer;
     if (provider) query.provider = provider;
     if (service) query.service = service;
-    
+
     if (from && to) {
       query.date = {
         $gte: new Date(from),
@@ -514,15 +660,34 @@ const getAllBookings = async (req, res) => {
       };
     }
 
-    const bookings = await Booking.find(query)
-      .populate('customer', 'name email phone')
-      .populate('provider', 'name email phone')
-      .populate('service', 'title category')
-      .sort({ date: -1, time: -1 });
+    if (search) {
+      const searchRegex = new RegExp(search, 'i');
+      query.$or = [
+        { 'customer.name': searchRegex },
+        { 'provider.name': searchRegex },
+        { 'service.title': searchRegex },
+        { 'address.city': searchRegex },
+        { 'address.state': searchRegex }
+      ];
+    }
+
+    const [bookings, total] = await Promise.all([
+      Booking.find(query)
+        .populate('customer', 'name email phone')
+        .populate('provider', 'name email phone')
+        .populate('service', 'title category')
+        .sort({ date: -1, time: -1 })
+        .skip(skip)
+        .limit(limit),
+      Booking.countDocuments(query)
+    ]);
 
     res.json({
       success: true,
       count: bookings.length,
+      total,
+      page,
+      pages: Math.ceil(total / limit),
       data: bookings
     });
   } catch (error) {
@@ -622,7 +787,6 @@ const deleteBooking = async (req, res) => {
       });
     }
 
-    // Check if booking is completed or cancelled
     if (['completed', 'cancelled'].includes(booking.status)) {
       return res.status(400).json({
         success: false,
@@ -634,7 +798,6 @@ const deleteBooking = async (req, res) => {
     const customer = await User.findById(booking.customer);
     const service = await Service.findById(booking.service);
 
-    // Delete the booking
     await Booking.findByIdAndDelete(id);
 
     // Send deletion notification email
@@ -650,7 +813,7 @@ const deleteBooking = async (req, res) => {
 
       await sendEmail({
         to: customer.email,
-        subject: 'Booking Deleted - Raj Electrical Service',
+        subject: 'Booking Deleted',
         html: emailHtml
       });
     } catch (emailError) {
@@ -666,15 +829,14 @@ const deleteBooking = async (req, res) => {
       success: false,
       message: error.message
     });
-    }
+  }
 };
 
-// Delete user booking (Admin only - for specific user)
+// Delete user booking (Admin only)
 const deleteUserBooking = async (req, res) => {
   try {
     const { userId, bookingId } = req.params;
 
-    // Verify user exists
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({
@@ -691,7 +853,6 @@ const deleteUserBooking = async (req, res) => {
       });
     }
 
-    // Check if booking is completed or cancelled
     if (['completed', 'cancelled'].includes(booking.status)) {
       return res.status(400).json({
         success: false,
@@ -699,10 +860,8 @@ const deleteUserBooking = async (req, res) => {
       });
     }
 
-    // Get service details for email
     const service = await Service.findById(booking.service);
 
-    // Delete the booking
     await Booking.findByIdAndDelete(bookingId);
 
     // Send deletion notification email
@@ -718,7 +877,7 @@ const deleteUserBooking = async (req, res) => {
 
       await sendEmail({
         to: user.email,
-        subject: 'Booking Deleted - Raj Electrical Service',
+        subject: 'Booking Deleted',
         html: emailHtml
       });
     } catch (emailError) {
@@ -737,11 +896,114 @@ const deleteUserBooking = async (req, res) => {
   }
 };
 
+// Admin - Update Booking Date/Time
+const updateBookingDateTime = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { date, time } = req.body;
+
+    // Validate input
+    if (!date && !time) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide either date or time to update'
+      });
+    }
+
+    // Find booking
+    const booking = await Booking.findById(id);
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found'
+      });
+    }
+
+    // Validate new date if provided
+    if (date) {
+      const newDate = new Date(date);
+      if (newDate < new Date()) {
+        return res.status(400).json({
+          success: false,
+          message: 'New booking date must be in the future'
+        });
+      }
+      booking.date = newDate;
+    }
+
+    // Validate new time if provided
+    if (time) {
+      if (!/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(time)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid time format (use HH:MM)'
+        });
+      }
+      booking.time = time;
+    }
+
+    // Save changes
+    await booking.save();
+
+    // Send notification email to customer and provider
+    try {
+      const [customer, provider, service] = await Promise.all([
+        User.findById(booking.customer),
+        Provider.findById(booking.provider),
+        Service.findById(booking.service)
+      ]);
+
+      const emailHtml = `
+        <h2>Booking Schedule Updated</h2>
+        <p>Your booking has been rescheduled by the administrator.</p>
+        <p><strong>Booking ID:</strong> ${booking._id}</p>
+        <p><strong>Service:</strong> ${service.title}</p>
+        <p><strong>New Date:</strong> ${booking.date.toDateString()}</p>
+        <p><strong>New Time:</strong> ${booking.time || 'To be confirmed'}</p>
+        <p>Please contact support if you have any questions.</p>
+      `;
+
+      // Send to both customer and provider
+      await Promise.all([
+        sendEmail({
+          to: customer.email,
+          subject: 'Booking Schedule Updated',
+          html: emailHtml
+        }),
+        sendEmail({
+          to: provider.email,
+          subject: 'Booking Schedule Updated',
+          html: emailHtml
+        })
+      ]);
+    } catch (emailError) {
+      console.error('Failed to send notification emails:', emailError);
+    }
+
+    res.json({
+      success: true,
+      message: 'Booking date/time updated successfully',
+      data: {
+        _id: booking._id,
+        date: booking.date,
+        time: booking.time,
+        status: booking.status
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
 module.exports = {
   createBooking,
   getUserBookings,
   getBooking,
   cancelBooking,
+  userUpdateBookingDateTime,
   getProviderBookings,
   acceptBooking,
   completeBooking,
@@ -749,5 +1011,6 @@ module.exports = {
   getBookingDetails,
   assignProvider,
   deleteBooking,
-  deleteUserBooking
+  deleteUserBooking,
+  updateBookingDateTime
 };

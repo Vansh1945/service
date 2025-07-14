@@ -2,7 +2,9 @@ const User = require('../models/User-model');
 const { sendOTP, verifyOTP } = require('../utils/otpSend');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-
+const { uploadProfilePic } = require('../middlewares/upload'); // Assuming you have this configured
+const path = require('path');
+const fs = require('fs');
 
 /**
  * Register a new user with OTP verification
@@ -21,13 +23,13 @@ const register = async (req, res) => {
 
         // Check if user exists
         const userExists = await User.findOne({
-            $or: [{ email }, { phone }]
+            $or: [{ email }]
         });
 
         if (userExists) {
             return res.status(400).json({
                 success: false,
-                message: "Email or phone already registered"
+                message: "Email  already registered"
             });
         }
 
@@ -105,16 +107,22 @@ const register = async (req, res) => {
 /**
  * Get current user profile
  */
-
 const getProfile = async (req, res) => {
     try {
-        const user = await User.findById(req.user._id).select('-password');
+        const user = await User.findById(req.user._id)
+            .select('-password -__v')
+            .lean();
 
         if (!user) {
             return res.status(404).json({
                 success: false,
                 message: 'User not found'
             });
+        }
+
+        // If profilePicUrl exists, make it a full URL
+        if (user.profilePicUrl) {
+            user.profilePicUrl = `${req.protocol}://${req.get('host')}/${user.profilePicUrl}`;
         }
 
         res.status(200).json({
@@ -131,24 +139,21 @@ const getProfile = async (req, res) => {
 }
 
 /**
- * Update user profile
+ * Update user profile (text fields)
  */
-
-
 const updateProfile = async (req, res) => {
     try {
         const updates = {
             name: req.body.name,
             phone: req.body.phone,
-            address: req.body.address,
-            profilePicUrl: req.body.profilePicUrl
+            address: req.body.address
         };
 
         const user = await User.findByIdAndUpdate(
             req.user._id,
             updates,
             { new: true, runValidators: true }
-        ).select('-password');
+        ).select('-password -__v');
 
         if (!user) {
             return res.status(404).json({
@@ -171,9 +176,55 @@ const updateProfile = async (req, res) => {
     }
 }
 
+/**
+ * Upload profile picture
+ */
+const uploadProfilePicture = async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({
+                success: false,
+                message: 'No file uploaded'
+            });
+        }
+
+        // Get the file path
+        const filePath = req.file.path.replace(/\\/g, '/'); // Convert to forward slashes
+
+        // Update user's profile picture URL
+        const user = await User.findByIdAndUpdate(
+            req.user._id,
+            { profilePicUrl: filePath },
+            { new: true }
+        ).select('-password -__v');
+
+        // If there was an old profile picture, delete it
+        if (user.profilePicUrl && fs.existsSync(user.profilePicUrl)) {
+            fs.unlinkSync(user.profilePicUrl);
+        }
+
+        // Construct full URL for the response
+        const fullUrl = `${req.protocol}://${req.get('host')}/${filePath}`;
+
+        res.status(200).json({
+            success: true,
+            message: 'Profile picture uploaded successfully',
+            profilePicUrl: fullUrl,
+            user
+        });
+    } catch (error) {
+        console.error('Upload profile picture error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error'
+        });
+    }
+}
+
 module.exports = {
     register,
     getProfile,
-    updateProfile
+    updateProfile,
+    uploadProfilePicture
 };
 
