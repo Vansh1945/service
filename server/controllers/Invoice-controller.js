@@ -8,7 +8,7 @@ const path = require('path');
 const mongoose = require('mongoose');
 
 // Configure PDF storage directory
-const INVOICE_STORAGE_PATH = path.join(__dirname, '../../public/invoices');
+const INVOICE_STORAGE_PATH = path.join(__dirname, '../uploads/invoices');
 
 // Ensure invoice directory exists
 if (!fs.existsSync(INVOICE_STORAGE_PATH)) {
