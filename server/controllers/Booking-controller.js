@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Booking = require('../models/Booking-model');
 const Service = require('../models/Service-model');
 const Provider = require('../models/Provider-model');
@@ -5,13 +6,111 @@ const User = require('../models/User-model');
 const Invoice = require('../models/Invoice-model');
 const CommissionRule = require('../models/CommissionRule-model');
 const Coupon = require('../models/Coupon-model');
+const Cart = require('../models/Cart-model');
 const sendEmail = require('../utils/sendEmail');
-const { calculateDistance } = require('../services/geoUtils');
+const { autoGenerateInvoice } = require('./Invoice-controller');
 
 // USER CONTROLLERS
 
- // Create new booking
-const createBooking = async (req, res) => {
+// Create new booking from cart
+const createBookingFromCart = async (req, res) => {
+  try {
+    const { date, time, address, couponCode, notes } = req.body;
+    const userId = req.user.id;
+
+    // Validate user exists
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Get user's cart
+    const cart = await Cart.findOne({ user: userId }).populate('items.service');
+    if (!cart || cart.items.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cart is empty'
+      });
+    }
+
+    // Validate date and time
+    const bookingDate = new Date(date);
+    if (bookingDate < new Date()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Booking date must be in the future'
+      });
+    }
+
+    // Prepare service items for booking
+    const serviceItems = cart.items.map(item => ({
+      service: item.service._id,
+      quantity: item.quantity,
+      price: item.service.basePrice,
+      discountAmount: 0
+    }));
+
+    // Calculate subtotal
+    let subtotal = cart.items.reduce((sum, item) => {
+      return sum + (item.service.basePrice * item.quantity);
+    }, 0);
+
+    let totalDiscount = 0;
+    let totalAmount = subtotal;
+
+    // Apply coupon if provided
+    if (couponCode) {
+      const coupon = await Coupon.validateCoupon(userId, couponCode, subtotal);
+      const discountDetails = coupon.applyCoupon(subtotal);
+
+      // Update discount for each service proportionally
+      const discountRatio = discountDetails.discount / subtotal;
+      serviceItems.forEach(item => {
+        item.discountAmount = Math.round(item.price * item.quantity * discountRatio * 100) / 100;
+      });
+
+      totalDiscount = discountDetails.discount;
+      totalAmount = discountDetails.finalAmount;
+    }
+
+    // Create booking
+    const booking = await Booking.create({
+      customer: userId,
+      services: serviceItems,
+      date: bookingDate,
+      time: time || null,
+      address,
+      couponApplied: couponCode || null,
+      totalDiscount,
+      subtotal,
+      totalAmount,
+      notes: notes || null
+    });
+
+    // Clear the cart
+    await Cart.findOneAndUpdate(
+      { user: userId },
+      { $set: { items: [] } }
+    );
+
+    res.status(201).json({
+      success: true,
+      message: 'Booking created successfully from cart',
+      data: booking
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// Create single service booking (for backward compatibility)
+const createSingleBooking = async (req, res) => {
   try {
     const { serviceId, date, time, address, couponCode, notes } = req.body;
     const userId = req.user.id;
@@ -51,16 +150,27 @@ const createBooking = async (req, res) => {
       });
     }
 
-    // Calculate total amount
-    let totalAmount = service.basePrice;
-    let discountAmount = 0;
+    // Prepare service item
+    const serviceItem = {
+      service: serviceId,
+      quantity: 1,
+      price: service.basePrice,
+      discountAmount: 0
+    };
 
+    let subtotal = service.basePrice;
+    let totalDiscount = 0;
+    let totalAmount = subtotal;
+
+    // Apply coupon if provided
     if (couponCode) {
       try {
-        const coupon = await Coupon.validateCoupon(userId, couponCode, service.basePrice);
-        const discountDetails = coupon.applyCoupon(service.basePrice);
+        const coupon = await Coupon.validateCoupon(userId, couponCode, subtotal);
+        const discountDetails = coupon.applyCoupon(subtotal);
+
+        serviceItem.discountAmount = discountDetails.discount;
+        totalDiscount = discountDetails.discount;
         totalAmount = discountDetails.finalAmount;
-        discountAmount = discountDetails.discount;
       } catch (couponError) {
         return res.status(400).json({
           success: false,
@@ -69,33 +179,19 @@ const createBooking = async (req, res) => {
       }
     }
 
-    // Find providers in the same city
-    const providers = await Provider.find({
-      services: service.category,
-      approved: true,
-      isDeleted: false,
-      'address.city': address.city
-    }).limit(5);
-
-    if (providers.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'No available providers in your area'
-      });
-    }
 
     // Create booking
     const booking = await Booking.create({
       customer: userId,
-      provider: providers[0]._id,
-      service: serviceId,
+      services: [serviceItem],
       date: bookingDate,
       time: time || null,
       address,
       couponApplied: couponCode || null,
-      discountAmount,
-      notes: notes || null,
-      servicePrice: service.basePrice
+      totalDiscount,
+      subtotal,
+      totalAmount,
+      notes: notes || null
     });
 
     // Send confirmation email
@@ -109,7 +205,7 @@ const createBooking = async (req, res) => {
         ${time ? `<p><strong>Time:</strong> ${time}</p>` : ''}
         <p><strong>Address:</strong> ${address.street}, ${address.city}, ${address.state}</p>
         <p><strong>Total Amount:</strong> ₹${totalAmount.toFixed(2)}</p>
-        ${discountAmount > 0 ? `<p><strong>Discount Applied:</strong> ₹${discountAmount.toFixed(2)}</p>` : ''}
+        ${totalDiscount > 0 ? `<p><strong>Discount Applied:</strong> ₹${totalDiscount.toFixed(2)}</p>` : ''}
       `;
 
       await sendEmail({
@@ -145,7 +241,7 @@ const getUserBookings = async (req, res) => {
 
     const bookings = await Booking.find(query)
       .populate('provider', 'name profilePicUrl')
-      .populate('service', 'title category image')
+      .populate('services.service', 'title category image')
       .sort({ date: -1, time: -1 });
 
     res.json({
@@ -169,7 +265,7 @@ const getBooking = async (req, res) => {
 
     const booking = await Booking.findOne({ _id: id, customer: userId })
       .populate('provider', 'name phone profilePicUrl')
-      .populate('service', 'title category description image')
+      .populate('services.service', 'title category description image')
       .populate('invoice');
 
     if (!booking) {
@@ -401,8 +497,6 @@ const getProviderBookings = async (req, res) => {
 
     const bookings = await Booking.find(query)
       .populate('customer', 'name phone profilePicUrl')
-      .populate('service', 'title category')
-      .sort({ date: 1, time: 1 });
 
     res.json({
       success: true,
@@ -424,7 +518,10 @@ const acceptBooking = async (req, res) => {
     const providerId = req.provider.id;
     const { time } = req.body;
 
-    const booking = await Booking.findOne({ _id: id, provider: providerId });
+    // Find booking with customer and service details
+    const booking = await Booking.findOne({ _id: id })
+      .populate('customer', 'city state address')
+
     if (!booking) {
       return res.status(404).json({
         success: false,
@@ -432,6 +529,18 @@ const acceptBooking = async (req, res) => {
       });
     }
 
+    // Get provider details
+    const provider = await Provider.findById(providerId)
+      .select('serviceArea address city state');
+
+    if (!provider) {
+      return res.status(404).json({
+        success: false,
+        message: 'Provider not found'
+      });
+    }
+
+    // Check if booking is pending
     if (booking.status !== 'pending') {
       return res.status(400).json({
         success: false,
@@ -439,6 +548,8 @@ const acceptBooking = async (req, res) => {
       });
     }
 
+
+    // Validate and update time if provided
     if (!booking.time && time) {
       if (!/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(time)) {
         return res.status(400).json({
@@ -449,12 +560,13 @@ const acceptBooking = async (req, res) => {
       booking.time = time;
     }
 
+    // Update booking status
     booking.status = 'accepted';
     await booking.save();
 
     // Send acceptance email to customer
     try {
-      const user = await User.findById(booking.customer);
+      const user = await User.findById(booking.customer._id);
       const service = await Service.findById(booking.service);
 
       const emailHtml = `
@@ -464,6 +576,7 @@ const acceptBooking = async (req, res) => {
         <p><strong>Service:</strong> ${service.title}</p>
         <p><strong>Date:</strong> ${booking.date.toDateString()}</p>
         <p><strong>Time:</strong> ${booking.time || 'To be confirmed'}</p>
+        <p><strong>Provider Address:</strong> ${provider.address.street}, ${provider.address.city}, ${provider.address.state}</p>
         <p>Your service provider will contact you shortly to confirm details.</p>
       `;
 
@@ -489,15 +602,24 @@ const acceptBooking = async (req, res) => {
   }
 };
 
-// Complete booking
+// Complete booking with commission calculation
 const completeBooking = async (req, res) => {
   try {
     const { id } = req.params;
-    const providerId = req.provider.id;
+    const providerId = req.provider?.id;
 
-    const booking = await Booking.findOne({ _id: id, provider: providerId })
-      .populate('provider')
-      .populate('service');
+    if (!providerId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Provider authentication required'
+      });
+    }
+
+    // Find and validate booking
+    const booking = await Booking.findOne({ _id: id })
+      .populate('provider', 'id address performanceTier')
+      .populate('customer', 'email')
+      .populate('services.service');
 
     if (!booking) {
       return res.status(404).json({
@@ -506,73 +628,128 @@ const completeBooking = async (req, res) => {
       });
     }
 
-    if (booking.status !== 'accepted') {
-      return res.status(400).json({
+    // Handle provider assignment
+    if (!booking.provider || !booking.provider._id) {
+      const rawBooking = await Booking.findOne({ _id: id }).lean();
+      if (!rawBooking.provider) {
+        await Booking.updateOne(
+          { _id: id },
+          { $set: { provider: providerId } }
+        );
+        booking.provider = { _id: providerId };
+      } else {
+        booking.provider = await Provider.findById(rawBooking.provider)
+          .select('id address performanceTier');
+        if (!booking.provider) {
+          return res.status(400).json({
+            success: false,
+            message: 'Assigned provider not found'
+          });
+        }
+      }
+    }
+
+    // Validate provider authorization
+    if (booking.provider._id.toString() !== providerId.toString()) {
+      return res.status(403).json({
         success: false,
-        message: 'Only accepted bookings can be completed'
+        message: 'Unauthorized to complete this booking'
       });
     }
 
-    // Calculate commission
-    const commissionDetails = await CommissionRule.getCommissionForBooking({
-      providerId: booking.provider._id,
-      serviceCategory: booking.service.category,
-      bookingAmount: booking.servicePrice - (booking.discountAmount || 0),
-      providerLocation: booking.provider.address.region,
-      providerPerformanceTier: booking.provider.performanceTier
-    });
-
-    const totalAmount = booking.servicePrice - (booking.discountAmount || 0);
-    let commissionAmount = 0;
-
-    if (commissionDetails.baseRule.type === 'percentage') {
-      commissionAmount = totalAmount * (commissionDetails.baseRule.value / 100);
-    } else {
-      commissionAmount = commissionDetails.baseRule.value;
+    // Validate booking status
+    if (booking.status !== 'accepted') {
+      return res.status(400).json({
+        success: false,
+        message: `Booking must be in 'accepted' status (current: ${booking.status})`
+      });
     }
 
-    commissionDetails.penaltyRules.forEach(penalty => {
-      if (penalty.type === 'percentage') {
-        commissionAmount += totalAmount * (penalty.value / 100);
+    // Calculate amounts
+    const servicePrice = booking.subtotal || 0;
+    const discountAmount = booking.totalDiscount || 0;
+    const totalAmount = booking.totalAmount || (servicePrice - discountAmount);
+
+    // Calculate commission
+    let commissionAmount = 0;
+    let commissionRuleId = null;
+    let commissionType = 'percentage';
+    let commissionValue = 10; // Default 10%
+
+    try {
+      const performanceTier = booking.provider?.performanceTier || 'standard';
+      const commissionRule = await CommissionRule.getCommissionForProvider(providerId, performanceTier);
+
+      if (commissionRule) {
+        commissionRuleId = commissionRule._id;
+        commissionType = commissionRule.type;
+        commissionValue = commissionRule.value;
+
+        if (commissionType === 'percentage') {
+          commissionAmount = totalAmount * (commissionValue / 100);
+        } else {
+          commissionAmount = commissionValue;
+        }
       } else {
-        commissionAmount += penalty.value;
+        // Fallback to default 10% if no rule found
+        commissionAmount = totalAmount * 0.10;
       }
-    });
+    } catch (commissionError) {
+      console.error('Commission calculation error:', commissionError);
+      commissionAmount = totalAmount * 0.10;
+    }
+
+    // Generate invoice number
+    const date = new Date();
+    const prefix = 'INV-' +
+      date.getFullYear().toString().slice(-2) +
+      (date.getMonth() + 1).toString().padStart(2, '0') +
+      date.getDate().toString().padStart(2, '0') + '-';
+    
+    const lastInvoice = await Invoice.findOne().sort({ createdAt: -1 });
+    const lastSeq = lastInvoice ? parseInt(lastInvoice.invoiceNo.replace(prefix, '')) || 0 : 0;
+    const invoiceNo = prefix + (lastSeq + 1).toString().padStart(4, '0');
+
+    // Prepare commission data
+    const commissionData = {
+      amount: commissionAmount,
+      type: commissionType,
+      value: commissionValue
+    };
+
+    // Only add rule if it's a valid ObjectId
+    if (commissionRuleId && mongoose.Types.ObjectId.isValid(commissionRuleId)) {
+      commissionData.rule = commissionRuleId;
+    }
 
     // Create invoice
-    const invoice = await Invoice.create({
-      bookingId: booking._id,
-      provider: providerId,
-      customer: booking.customer,
-      serviceAmount: booking.servicePrice,
-      discountAmount: booking.discountAmount || 0,
-      commissionAmount,
-      totalAmount,
-      netAmount: totalAmount - commissionAmount,
-      paidBy: 'cod',
-      commissionDetails: {
-        baseRate: commissionDetails.baseRule.value,
-        baseType: commissionDetails.baseRule.type,
-        penaltyRules: commissionDetails.penaltyRules.map(p => ({
-          amount: p.type === 'percentage'
-            ? totalAmount * (p.value / 100)
-            : p.value,
-          reason: p.penaltyReason
-        }))
-      }
+    const invoice = new Invoice({
+      invoiceNo,
+      booking: booking._id,
+      provider: booking.provider._id,
+      customer: booking.customer._id,
+      service: booking.services[0].service._id,
+      serviceAmount: booking.subtotal,
+      totalAmount: booking.totalAmount,
+      netAmount: booking.totalAmount - commissionAmount,
+      commission: commissionData,
+      paymentStatus: booking.paymentStatus === 'paid' ? 'paid' : 'pending'
     });
 
-    // Update booking status
+    // Save invoice
+    await invoice.save();
+
+    // Update booking
     booking.status = 'completed';
     booking.invoice = invoice._id;
     booking.commission = {
       amount: commissionAmount,
-      baseRule: commissionDetails.baseRule._id,
-      penaltyRules: commissionDetails.penaltyRules.map(p => p._id)
+      baseRule: commissionRuleId,
+      penaltyRules: []
     };
     await booking.save();
 
-    // Update provider stats
+    // Update provider and customer stats
     await Provider.findByIdAndUpdate(providerId, {
       $inc: {
         completedBookings: 1,
@@ -580,61 +757,72 @@ const completeBooking = async (req, res) => {
       }
     });
 
-    // Update user stats
-    await User.findByIdAndUpdate(booking.customer, {
-      $inc: { totalBookings: 1, totalSpent: totalAmount }
-    });
+    if (booking.customer?._id) {
+      await User.findByIdAndUpdate(booking.customer._id, {
+        $inc: { totalBookings: 1, totalSpent: totalAmount }
+      });
+    }
 
-    // Mark coupon as used if applied
+    // Handle coupon if applied
     if (booking.couponApplied) {
-      const coupon = await Coupon.findOne({ code: booking.couponApplied });
-      if (coupon) {
-        await coupon.markAsUsed(booking.customer, totalAmount);
+      try {
+        const coupon = await Coupon.findOne({ code: booking.couponApplied });
+        if (coupon) {
+          await coupon.markAsUsed(booking.customer?._id, totalAmount);
+        }
+      } catch (couponError) {
+        console.error('Coupon processing error:', couponError);
       }
     }
 
-    // Send completion email
-    try {
-      const user = await User.findById(booking.customer);
-
-      const emailHtml = `
-        <h2>Service Completed</h2>
-        <p>Your service has been successfully completed.</p>
-        <p><strong>Booking ID:</strong> ${booking._id}</p>
-        <p><strong>Service:</strong> ${booking.service.title}</p>
-        <p><strong>Date:</strong> ${booking.date.toDateString()}</p>
-        <p><strong>Amount Paid:</strong> ₹${totalAmount.toFixed(2)}</p>
-        <p>Thank you for choosing our service!</p>
-      `;
-
-      await sendEmail({
-        to: user.email,
-        subject: 'Service Completed',
-        html: emailHtml
-      });
-    } catch (emailError) {
-      console.error('Failed to send completion email:', emailError);
+    // Send notification email
+    if (booking.customer?.email) {
+      try {
+        await sendEmail({
+          to: booking.customer.email,
+          subject: 'Service Completed',
+          html: `
+            <h2>Service Completed</h2>
+            <p>Your service has been successfully completed.</p>
+            <p><strong>Booking ID:</strong> ${booking._id}</p>
+            <p><strong>Invoice No:</strong> ${invoice.invoiceNo}</p>
+            <p><strong>Total Amount:</strong> ₹${totalAmount.toFixed(2)}</p>
+            <p><strong>Commission:</strong> ₹${commissionAmount.toFixed(2)}</p>
+            <p><strong>Net Amount to Provider:</strong> ₹${(totalAmount - commissionAmount).toFixed(2)}</p>
+            <p>Thank you for choosing our service!</p>
+          `
+        });
+      } catch (emailError) {
+        console.error('Email sending error:', emailError);
+      }
     }
 
     res.json({
       success: true,
       message: 'Booking completed successfully',
       data: {
-        invoice,
-        commission: {
-          amount: commissionAmount,
-          netAmount: totalAmount - commissionAmount
-        }
+        invoiceId: invoice._id,
+        invoiceNo: invoice.invoiceNo,
+        totalAmount: totalAmount.toFixed(2),
+        commission: commissionAmount.toFixed(2),
+        netAmount: (totalAmount - commissionAmount).toFixed(2),
+        bookingStatus: 'completed'
       }
     });
+
   } catch (error) {
-    console.error('Error completing booking:', error);
+    console.error('Booking completion failed:', error);
     res.status(500).json({
       success: false,
-      message: error.message
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? {
+        message: error.message,
+        stack: error.stack
+      } : undefined
     });
   }
 };
+
 
 // ADMIN CONTROLLERS
 
@@ -675,7 +863,6 @@ const getAllBookings = async (req, res) => {
       Booking.find(query)
         .populate('customer', 'name email phone')
         .populate('provider', 'name email phone')
-        .populate('service', 'title category')
         .sort({ date: -1, time: -1 })
         .skip(skip)
         .limit(limit),
@@ -759,12 +946,17 @@ const assignProvider = async (req, res) => {
       });
     }
 
-    booking.provider = providerId;
-    await booking.save();
+    // Use findByIdAndUpdate instead of modifying and saving to avoid validation issues
+    const updatedBooking = await Booking.findByIdAndUpdate(
+      id,
+      { provider: providerId },
+      { new: true, runValidators: true }
+    );
 
     res.json({
       success: true,
-      message: 'Provider assigned successfully'
+      message: 'Provider assigned successfully',
+      data: updatedBooking
     });
   } catch (error) {
     res.status(500).json({
@@ -999,7 +1191,8 @@ const updateBookingDateTime = async (req, res) => {
 };
 
 module.exports = {
-  createBooking,
+  createBookingFromCart,
+  createSingleBooking,
   getUserBookings,
   getBooking,
   cancelBooking,

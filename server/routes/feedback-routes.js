@@ -5,7 +5,9 @@ const {
   getCustomerFeedbacks,
   getProviderFeedbacks,
   getAllFeedbacks,
-  getServiceFeedbacks
+  getServiceFeedbacks,
+  getFeedback,
+  editFeedback
 } = require('../controllers/feedback-controller');
 const { userAuthMiddleware } = require('../middlewares/User-middleware');
 const { providerAuthMiddleware } = require('../middlewares/Provider-middleware');
@@ -14,6 +16,8 @@ const adminAuthMiddleware = require('../middlewares/Admin-middleware');
 // Customer routes
 router.post('/', userAuthMiddleware, submitFeedback);
 router.get('/my-feedbacks', userAuthMiddleware, getCustomerFeedbacks);
+router.get('/:feedbackId', userAuthMiddleware, getFeedback);
+router.put('/:feedbackId', userAuthMiddleware, editFeedback);
 
 // Provider routes
 router.get('/provider/my-feedbacks', providerAuthMiddleware, getProviderFeedbacks);

@@ -68,9 +68,7 @@ const updateService = async (req, res) => {
 
         // Update fields
         Object.keys(updates).forEach(key => {
-            if (key !== 'basePrice' && key !== 'providerPrices') {
-                service[key] = updates[key];
-            }
+            service[key] = updates[key];
         });
 
         await service.save();
@@ -175,8 +173,7 @@ const getServiceById = async (req, res) => {
         const { id } = req.params;
 
         const service = await Service.findById(id)
-            .populate('createdBy', 'name email')
-            .populate('providerPrices.provider', 'name profilePicUrl');
+            .populate('createdBy', 'name email');
 
         if (!service) {
             return res.status(404).json({
@@ -210,43 +207,10 @@ const getServiceById = async (req, res) => {
  * PROVIDER CONTROLLERS
  */
 
-// Set provider's price for a service
-const setProviderPrice = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { price } = req.body;
-
-        const service = await Service.findById(id);
-        if (!service || !service.isActive) {
-            return res.status(404).json({
-                success: false,
-                message: 'Service not found or inactive'
-            });
-        }
-
-        await service.setProviderPrice(req.providerID, price);
-
-        res.json({
-            success: true,
-            message: 'Price updated successfully',
-            data: {
-                basePrice: service.basePrice,
-                yourPrice: price
-            }
-        });
-    } catch (error) {
-        console.error('Error setting provider price:', error);
-        res.status(500).json({
-            success: false,
-            message: error.message || 'Failed to set provider price'
-        });
-    }
-};
-
-// Get services with provider's specific pricing
+// Get services for provider
 const getServicesForProvider = async (req, res) => {
     try {
-        const services = await Service.findForProvider(req.providerID);
+        const services = await Service.findForProvider();
 
         res.json({
             success: true,
@@ -262,68 +226,15 @@ const getServicesForProvider = async (req, res) => {
     }
 };
 
-// Get service details with provider's price
+// Get service details for provider
 const getServiceDetailsForProvider = async (req, res) => {
     try {
         const { id } = req.params;
-        
-        // Convert IDs to ObjectId once at the beginning
-        const serviceId = new mongoose.Types.ObjectId(id);
-        const providerId = new mongoose.Types.ObjectId(req.providerID);
 
-        const [service] = await Service.aggregate([
-            { 
-                $match: { 
-                    _id: serviceId, 
-                    isActive: true 
-                } 
-            },
-            {
-                $addFields: {
-                    providerPrice: {
-                        $let: {
-                            vars: {
-                                pp: {
-                                    $arrayElemAt: [
-                                        {
-                                            $filter: {
-                                                input: "$providerPrices",
-                                                cond: { 
-                                                    $eq: ["$$this.provider", providerId] 
-                                                }
-                                            }
-                                        },
-                                        0
-                                    ]
-                                }
-                            },
-                            in: { $ifNull: ["$$pp.adjustedPrice", "$basePrice"] }
-                        }
-                    }
-                }
-            },
-            {
-                $project: {
-                    title: 1,
-                    category: 1,
-                    description: 1,
-                    image: 1,
-                    basePrice: 1,
-                    providerPrice: 1,
-                    duration: 1,
-                    durationFormatted: 1,
-                    providerPrices: {
-                        $filter: {
-                            input: "$providerPrices",
-                            as: "pp",
-                            cond: { $eq: ["$$pp.provider", providerId] }
-                        }
-                    }
-                }
-            }
-        ]);
+        const service = await Service.findById(id)
+            .select('title category description image basePrice duration durationFormatted');
 
-        if (!service) {
+        if (!service || !service.isActive) {
             return res.status(404).json({
                 success: false,
                 message: 'Service not found or inactive'
@@ -382,8 +293,7 @@ const getPublicServiceById = async (req, res) => {
         }
 
         const service = await Service.findById(id)
-            .select('title category description image basePrice duration durationFormatted isActive')
-            .populate('providerPrices.provider', 'name profilePicUrl experience');
+            .select('title category description image basePrice duration durationFormatted isActive');
 
         if (!service) {
             return res.status(404).json({
@@ -399,21 +309,9 @@ const getPublicServiceById = async (req, res) => {
             });
         }
 
-        // Format provider prices with names
-        const providerPrices = service.providerPrices.map(pp => ({
-            provider: pp.provider,
-            price: pp.adjustedPrice,
-            discount: pp.adjustedPrice ? 
-                ((service.basePrice - pp.adjustedPrice) / service.basePrice * 100).toFixed(1) : 
-                '0'
-        }));
-
         res.json({
             success: true,
-            data: {
-                ...service.toObject(),
-                providerPrices
-            }
+            data: service
         });
     } catch (error) {
         console.error('Error fetching service:', error);
@@ -445,7 +343,6 @@ const getServicesByCategory = async (req, res) => {
         });
     }
 };
-
 
 // Bulk import services from Excel (Admin only)
 const bulkImportServices = async (req, res) => {
@@ -533,7 +430,6 @@ module.exports = {
     bulkImportServices,
 
     // Provider controllers
-    setProviderPrice,
     getServicesForProvider,
     getServiceDetailsForProvider,
 

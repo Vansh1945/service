@@ -16,14 +16,13 @@ export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(() => {
         try {
             const userData = localStorage.getItem("user");
-            if (!userData) return null;
-            return JSON.parse(userData);
+            return userData ? JSON.parse(userData) : null;
         } catch (error) {
             return null;
         }
     });
 
-    // Helper functions
+    // Check if token is expired
     const isTokenExpired = (token) => {
         if (!token) return true;
         try {
@@ -45,6 +44,7 @@ export const AuthProvider = ({ children }) => {
         }
     }, [token]);
 
+    // Toast notification
     const showToast = (message, type = 'success') => {
         toast[type](message, {
             position: "top-right",
@@ -57,6 +57,7 @@ export const AuthProvider = ({ children }) => {
         });
     };
 
+    // Login function
     const loginUser = async (newToken, newRole, userData) => {
         try {
             if (isTokenExpired(newToken)) {
@@ -68,19 +69,23 @@ export const AuthProvider = ({ children }) => {
             
             const userObj = {
                 ...userData,
+                _id: decodedToken.id,
                 isAdmin: userData?.isAdmin || decodedToken.isAdmin || false
             };
 
+            // Save to localStorage
             localStorage.setItem("token", newToken);
             localStorage.setItem("role", finalRole);
             localStorage.setItem("user", JSON.stringify(userObj));
 
+            // Update state
             setToken(newToken);
             setRole(finalRole);
             setUser(userObj);
 
             showToast('Login successful!');
 
+            // Redirect based on role
             if (finalRole === 'admin' || userObj.isAdmin) {
                 navigate('/admin/dashboard', { replace: true });
             } else if (finalRole === 'provider') {
@@ -91,19 +96,36 @@ export const AuthProvider = ({ children }) => {
 
         } catch (error) {
             console.error("Login error:", error);
-            showToast(error.message, 'error');
+            showToast(error.message || 'Login failed', 'error');
             logoutUser();
         }
     };
 
+    // Logout function
     const logoutUser = () => {
-        showToast('Logged out successfully');
         localStorage.clear();
         setToken(null);
         setRole(null);
         setUser(null);
+        showToast('Logged out successfully');
         navigate('/login');
     };
+
+    // Auto-logout when token expires
+    useEffect(() => {
+        const checkTokenExpiration = () => {
+            if (token && isTokenExpired(token)) {
+                logoutUser();
+            }
+        };
+
+        // Check immediately
+        checkTokenExpiration();
+
+        // Set up interval to check every minute
+        const interval = setInterval(checkTokenExpiration, 60000);
+        return () => clearInterval(interval);
+    }, [token]);
 
     // Context value
     const contextValue = useMemo(() => ({
@@ -111,11 +133,12 @@ export const AuthProvider = ({ children }) => {
         role,
         user,
         isAuthenticated: !!token && !isTokenExpired(token),
-        isAdmin, // This is now a boolean value from the memoized calculation
+        isAdmin,
         loginUser,
         logoutUser,
         API,
-        showToast
+        showToast,
+        isTokenExpired
     }), [token, role, user, isAdmin, API]);
 
     return (

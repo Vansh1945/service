@@ -30,9 +30,32 @@ const addressSchema = new Schema({
   }
 });
 
+// Service Item Sub-Schema
+const serviceItemSchema = new Schema({
+  service: {
+    type: Schema.Types.ObjectId,
+    ref: 'Service',
+    required: true
+  },
+  quantity: {
+    type: Number,
+    default: 1,
+    min: [1, 'Quantity must be at least 1']
+  },
+  price: {
+    type: Number,
+    required: true,
+    min: [0, 'Price cannot be negative']
+  },
+  discountAmount: {
+    type: Number,
+    default: 0,
+    min: [0, 'Discount cannot be negative']
+  }
+}, { _id: true });
+
 // Booking Schema
 const bookingSchema = new Schema({
-
   customer: {
     type: Schema.Types.ObjectId,
     ref: 'User',
@@ -41,17 +64,19 @@ const bookingSchema = new Schema({
   provider: {
     type: Schema.Types.ObjectId,
     ref: 'Provider',
-    required: [true, 'Provider ID is required']
+    required: true
   },
-  service: {
-    type: Schema.Types.ObjectId,
-    ref: 'Service',
-    required: [true, 'Service ID is required']
-  },
+  services: [serviceItemSchema],
   date: {
     type: Date,
     required: [true, 'Booking date is required'],
-    min: [Date.now, 'Booking date cannot be in the past']
+    min: [Date.now, 'Booking date cannot be in the past'],
+    validate: {
+      validator: function(value) {
+        return value instanceof Date && !isNaN(value);
+      },
+      message: 'Invalid date format'
+    }
   },
   time: {
     type: String,
@@ -76,19 +101,29 @@ const bookingSchema = new Schema({
     type: String,
     trim: true
   },
-  discountAmount: {
+  totalDiscount: {
     type: Number,
     default: 0,
     min: [0, 'Discount cannot be negative']
+  },
+  subtotal: {
+    type: Number,
+    required: true,
+    min: [0, 'Subtotal cannot be negative']
+  },
+  totalAmount: {
+    type: Number,
+    required: true,
+    min: [0, 'Total amount cannot be negative']
   },
   invoice: {
     type: Schema.Types.ObjectId,
     ref: 'Invoice'
   },
-  feedback: {
+  feedback: [{
     type: Schema.Types.ObjectId,
     ref: 'Feedback'
-  },
+  }],
   complaint: {
     type: Schema.Types.ObjectId,
     ref: 'Complaint'
@@ -105,15 +140,25 @@ const bookingSchema = new Schema({
     type: Date
   }
 }, {
-  toJSON: { virtuals: true },
-  toObject: { virtuals: true }
+  toJSON: { 
+    virtuals: true,
+    transform: function(doc, ret) {
+      // Remove virtuals that might cause issues during serialization
+      delete ret.id;
+      delete ret._id;
+      return ret;
+    }
+  },
+  toObject: { 
+    virtuals: true,
+    transform: function(doc, ret) {
+      // Remove virtuals that might cause issues during serialization
+      delete ret.id;
+      delete ret._id;
+      return ret;
+    }
+  }
 });
-
-// Indexes
-bookingSchema.index({ customer: 1, status: 1 });
-bookingSchema.index({ provider: 1, status: 1 });
-bookingSchema.index({ service: 1, status: 1 });
-bookingSchema.index({ date: 1, time: 1 });
 
 // Pre-save hook to update timestamps
 bookingSchema.pre('save', function (next) {
@@ -121,15 +166,27 @@ bookingSchema.pre('save', function (next) {
   next();
 });
 
-// Virtual for booking datetime
+// Virtual for booking datetime - with null checks
 bookingSchema.virtual('bookingDateTime').get(function () {
-  const dateStr = this.date.toISOString().split('T')[0];
-  return new Date(`${dateStr}T${this.time}`);
+  if (!this.date || !this.time) return null;
+  
+  try {
+    const dateStr = this.date.toISOString().split('T')[0];
+    return new Date(`${dateStr}T${this.time}`);
+  } catch (error) {
+    return null;
+  }
 });
 
-// Virtual for isUpcoming
+// Virtual for isUpcoming - with null checks
 bookingSchema.virtual('isUpcoming').get(function () {
-  return this.status === 'accepted' && this.bookingDateTime > new Date();
+  if (!this.bookingDateTime || !this.status) return false;
+  
+  try {
+    return this.status === 'accepted' && this.bookingDateTime > new Date();
+  } catch (error) {
+    return false;
+  }
 });
 
 // Static method to find upcoming bookings

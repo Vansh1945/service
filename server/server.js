@@ -39,6 +39,7 @@ const complaintRoutes = require("./routes/complaintRoutes");
 const feedbackRoutes = require("./routes/feedback-routes");
 const earningRoutes = require("./routes/providerEarning-routes");
 const commissionRoutes = require('./routes/commissionRoutes');
+const cartRoutes = require('./routes/Cart-routes');
 
 // Routes
 app.use("/api/auth", authRoutes);
@@ -56,6 +57,15 @@ app.use('/api/complaint', complaintRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/earning', earningRoutes);
 app.use('/api/commission', commissionRoutes);
+app.use('/api/cart', cartRoutes);
+
+
+
+
+const paymentRoutes = require('./routes/payments');
+app.use('/api', paymentRoutes);
+
+
 
 // Razorpay Webhook (localhost configuration)
 app.post('/razorpay-webhook', express.raw({ type: 'application/json' }), async (req, res) => {

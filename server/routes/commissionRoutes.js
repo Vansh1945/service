@@ -5,7 +5,7 @@ const adminAuthMiddleware = require('../middlewares/Admin-middleware');
 
 // Admin routes for managing commission rules
 router.post('/rules', adminAuthMiddleware, commissionController.createCommissionRule);
-router.get('/get-rules', adminAuthMiddleware, commissionController.listCommissionRules);
+router.get('/rules', adminAuthMiddleware, commissionController.listCommissionRules);
 router.patch('/rules/:id/toggle', adminAuthMiddleware, commissionController.toggleCommissionRuleStatus);
 
 // Booking commission processing

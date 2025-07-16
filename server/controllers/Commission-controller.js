@@ -1,12 +1,9 @@
 const CommissionRule = require('../models/CommissionRule-model');
 const Booking = require('../models/Booking-model');
 const Provider = require('../models/Provider-model');
-const Transaction = require('../models/Transaction-model ');
+const Invoice = require('../models/Invoice-model');
 
-// Helper function to normalize state names for comparison
-const normalizeState = (state) => state ? state.toLowerCase().trim().replace(/\s+/g, ' ') : '';
-
- // Process commission for a completed booking
+// Process commission for a completed booking
 exports.processBookingCommission = async (req, res) => {
   try {
     const bookingId = req.params.id;
@@ -36,29 +33,14 @@ exports.processBookingCommission = async (req, res) => {
       });
     }
 
-    // Get provider's state from address
-    const providerState = provider.address?.state;
-    if (!providerState) {
-      return res.status(400).json({
-        success: false,
-        message: 'Provider state information is missing'
-      });
-    }
-
-    // Determine provider's performance tier (you might calculate this based on ratings, completion rate, etc.)
-    const performanceTier = provider.performanceTier || 'standard'; // Default to standard
-    
-    // Determine service category (assuming service model has category field)
-    const serviceCategory = booking.service.category || 'Other';
+    // Get provider's performance tier (default to standard if not set)
+    const performanceTier = provider.performanceTier || 'standard';
     
     // Get applicable commission rule
-    const commissionDetails = await CommissionRule.getCommissionForBooking({
-      providerId: booking.provider._id,
-      serviceCategory,
-      bookingAmount: booking.totalAmount,
-      providerState, // Pass the provider's state
-      providerPerformanceTier: performanceTier
-    });
+    const commissionDetails = await CommissionRule.getCommissionForProvider(
+      booking.provider._id,
+      performanceTier
+    );
     
     // Calculate commission amount
     let commissionAmount;
@@ -68,34 +50,34 @@ exports.processBookingCommission = async (req, res) => {
       commissionAmount = commissionDetails.value;
     }
     
-    // Create transaction record
-    const transaction = new Transaction({
+    // Create invoice record
+    const invoice = new Invoice({
       booking: booking._id,
       provider: booking.provider._id,
       customer: booking.customer,
-      amount: booking.totalAmount,
-      commissionRate: commissionDetails.value,
-      commissionType: commissionDetails.type,
-      commissionAmount,
+      totalAmount: booking.totalAmount,
+      commission: {
+        rate: commissionDetails.value,
+        type: commissionDetails.type,
+        amount: commissionAmount
+      },
       providerEarning: booking.totalAmount - commissionAmount,
-      status: 'completed',
-      transactionType: 'booking',
+      status: 'paid',
       paymentMethod: booking.paymentMethod,
       details: {
         appliedRule: commissionDetails._id ? commissionDetails._id.toString() : 'default',
-        providerState,
         performanceTier
       }
     });
     
-    await transaction.save();
+    await invoice.save();
     
     // Update provider's wallet
     provider.wallet += (booking.totalAmount - commissionAmount);
     await provider.save();
     
-    // Update booking with transaction reference
-    booking.invoice = transaction._id;
+    // Update booking with invoice reference
+    booking.invoice = invoice._id;
     await booking.save();
     
     res.status(200).json({
@@ -106,9 +88,8 @@ exports.processBookingCommission = async (req, res) => {
         commissionRate: `${commissionDetails.value}${commissionDetails.type === 'percentage' ? '%' : ' fixed'}`,
         commissionAmount,
         providerEarning: booking.totalAmount - commissionAmount,
-        transaction: transaction._id,
-        appliedRule: commissionDetails.name || 'Default Commission',
-        providerState
+        invoice: invoice._id,
+        appliedRule: commissionDetails.name || 'Default Commission'
       }
     });
     
@@ -134,34 +115,18 @@ exports.getProviderCommissionDetails = async (req, res) => {
       });
     }
     
-    const providerState = provider.address?.state;
-    if (!providerState) {
-      return res.status(400).json({
-        success: false,
-        message: 'Provider state information is missing'
-      });
-    }
-
-    // Get all applicable commission rules for this provider
-    const rules = await CommissionRule.find({
-      isActive: true,
-      $or: [
-        { applicableTo: 'all' },
-        { 
-          applicableTo: 'specific',
-          providers: providerId
-        }
-      ]
-    }).sort({ applicableTo: 1 }); // Specific rules first
-    
-    // Filter rules by state if specified
-    const stateFilteredRules = rules.filter(rule => 
-      !rule.states || rule.states.length === 0 || 
-      rule.states.some(state => normalizeState(state) === normalizeState(providerState))
-    );
-    
     // Get provider's performance tier
     const performanceTier = provider.performanceTier || 'standard';
+    
+    // Get all applicable commission rules
+    const currentRule = await CommissionRule.getCommissionForProvider(
+      providerId,
+      performanceTier
+    );
+    
+    // Get all active rules for reference
+    const allRules = await CommissionRule.find({ isActive: true })
+      .sort({ applyTo: 1, createdAt: -1 });
     
     res.status(200).json({
       success: true,
@@ -169,20 +134,10 @@ exports.getProviderCommissionDetails = async (req, res) => {
         provider: {
           id: provider._id,
           name: provider.name,
-          state: providerState,
           performanceTier
         },
-        commissionRules: stateFilteredRules,
-        defaultCommission: {
-          type: 'percentage',
-          value: 20,
-          description: 'Default commission applied when no specific rules match'
-        },
-        effectiveCommission: stateFilteredRules[0] || { 
-          type: 'percentage', 
-          value: 20,
-          description: 'Default commission (no matching rules found)'
-        }
+        currentCommission: currentRule,
+        allActiveRules: allRules
       }
     });
     
@@ -205,7 +160,6 @@ exports.listCommissionRules = async (req, res) => {
     }
     
     const rules = await CommissionRule.find(query)
-      .populate('providers', 'name email phone')
       .populate('createdBy updatedBy', 'name email')
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
@@ -233,22 +187,23 @@ exports.listCommissionRules = async (req, res) => {
 // Create new commission rule
 exports.createCommissionRule = async (req, res) => {
   try {
-    const { name, type, value, applicableTo, providers = [], states = [], 
-            performanceTier, serviceCategories = [], minBookingAmount } = req.body;
+    const { name, description, type, value, applyTo, performanceTier } = req.body;
     
-    // Validate state names
-    const normalizedStates = states.map(normalizeState).filter(s => s);
+    // Validate input
+    if (applyTo === 'performanceTier' && !performanceTier) {
+      return res.status(400).json({
+        success: false,
+        message: 'Performance tier is required when applyTo is performanceTier'
+      });
+    }
     
     const newRule = new CommissionRule({
       name,
+      description,
       type,
       value,
-      applicableTo,
-      providers: applicableTo === 'specific' ? providers : [],
-      states: normalizedStates,
-      performanceTier: performanceTier || null,
-      serviceCategories: serviceCategories || [],
-      minBookingAmount: minBookingAmount || 0,
+      applyTo,
+      performanceTier: applyTo === 'performanceTier' ? performanceTier : undefined,
       createdBy: req.admin._id
     });
 

@@ -1,61 +1,42 @@
 const express = require('express');
 const router = express.Router();
 const invoiceController = require('../controllers/Invoice-controller');
+
 const {
-    providerAuthMiddleware,
-    providerTestPassedMiddleware
+  providerAuthMiddleware,
+  providerTestPassedMiddleware
 } = require('../middlewares/Provider-middleware');
-const adminAuthMiddleware = require('../middlewares/Admin-middleware');
-const {
-    userAuthMiddleware
-} = require('../middlewares/User-middleware');
+const { userAuthMiddleware } = require('../middlewares/User-middleware');
 
-// ======================
-// USER ROUTES
-// ======================
-router.get('/customer/my-invoices',
-    userAuthMiddleware,
-    invoiceController.getMyInvoices);
+// Get invoice data for frontend
+router.get('/frontend/:id',
+  userAuthMiddleware,
+  invoiceController.getInvoiceForFrontend
+);
 
-router.get('/:id',
-    userAuthMiddleware,
-    invoiceController.getInvoice);
+// Get single invoice (accessible by both users and providers)
+router.get('/:id', 
+  userAuthMiddleware,
+  invoiceController.getInvoice
+);
 
-router.get('/:id/download',
-    userAuthMiddleware,adminAuthMiddleware,providerAuthMiddleware,
-    invoiceController.downloadInvoice);
+// Get customer's invoices
+router.get('/user/my-invoices',
+  userAuthMiddleware,
+  invoiceController.getMyInvoices
+);
 
-// ======================
-// PROVIDER ROUTES
-// ======================
+// Get provider's invoices (with commission details)
 router.get('/provider/my-invoices',
-    providerAuthMiddleware,
-    providerTestPassedMiddleware,
-    invoiceController.getProviderInvoices);
+  providerAuthMiddleware,
+  providerTestPassedMiddleware,
+  invoiceController.getProviderInvoices
+);
 
-router.post('/',
-    providerAuthMiddleware,
-    providerTestPassedMiddleware,
-    invoiceController.autoGenerateInvoice);
-
-router.get('/:id/products', providerAuthMiddleware, invoiceController.getInvoiceProducts);
-router.post('/:id/products', providerAuthMiddleware, invoiceController.addProductToInvoice);
-router.put('/:id/products/:productId', providerAuthMiddleware, invoiceController.updateProductInInvoice);
-router.delete('/:id/products/:productId', providerAuthMiddleware, invoiceController.removeProductFromInvoice);
-
-// ======================
-// ADMIN ROUTES
-// ======================
-router.get('/',
-    adminAuthMiddleware,
-    invoiceController.getAllInvoices);
-
-router.put('/admin/:id',
-    adminAuthMiddleware,
-    invoiceController.adminUpdateInvoice);
-
-router.post('/admin/set-invoice-sequence',
-    adminAuthMiddleware,
-    invoiceController.setInvoiceSequence);
+// Download invoice PDF (accessible by both users and providers)
+router.get('/:id/download',
+  userAuthMiddleware,
+  invoiceController.downloadInvoice
+);
 
 module.exports = router;

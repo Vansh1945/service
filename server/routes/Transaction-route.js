@@ -1,28 +1,13 @@
 const express = require('express');
 const router = express.Router();
-const {
-  payForBooking,
-  verifyPayment,
-  topUpWallet,
-  initiateWithdrawal,
+const paymentController = require('../controllers/Transaction-controller');
+const { userAuthMiddleware } = require('../middlewares/User-middleware');
 
-  getTransactionHistory,
-  getProviderEarnings
-} = require('../controllers/Transaction-controller');
-const {userAuthMiddleware} = require('../middlewares/User-middleware');
-const { providerAuthMiddleware, providerTestPassedMiddleware } = require('../middlewares/Provider-middleware');
+// User payment routes
+router.post('/create-order', userAuthMiddleware, paymentController.createRazorpayOrder);
+router.post('/verify', userAuthMiddleware, paymentController.verifyPayment);
 
-// Customer routes
-router.post('/pay', userAuthMiddleware, payForBooking);
-router.post('/verify', userAuthMiddleware, verifyPayment);
-router.post('/wallet/topup', userAuthMiddleware, topUpWallet);
-
-// Provider routes
-router.post('/withdraw', providerAuthMiddleware, providerTestPassedMiddleware, initiateWithdrawal);
-router.get('/earnings', providerAuthMiddleware, providerTestPassedMiddleware, getProviderEarnings);
-
-
-// Shared routes (Customer and Provider)
-router.get('/transactions', [userAuthMiddleware, providerAuthMiddleware], getTransactionHistory);
+// Razorpay webhook (no auth needed)
+router.post('/webhook', paymentController.handleWebhook);
 
 module.exports = router;

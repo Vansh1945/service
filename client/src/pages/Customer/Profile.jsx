@@ -29,9 +29,9 @@ const UserProfile = () => {
                     'Authorization': `Bearer ${token}`
                 }
             });
-            
+
             if (!response.ok) throw new Error('Failed to fetch profile');
-            
+
             const data = await response.json();
             setProfile(data.user);
             setIsLoading(false);
@@ -99,15 +99,22 @@ const UserProfile = () => {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`
+                    // Don't set Content-Type header - let the browser set it
                 },
                 body: formData
             });
 
-            if (!response.ok) throw new Error('Failed to upload image');
-
             const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.message || 'Failed to upload image');
+            }
+
             toast.success('Profile picture updated!');
-            setProfile(prev => ({ ...prev, profilePicUrl: data.profilePicUrl }));
+            setProfile(prev => ({
+                ...prev,
+                profilePicUrl: data.profilePicUrl
+            }));
             setSelectedFile(null);
         } catch (error) {
             console.error('Image upload error:', error);
@@ -134,9 +141,9 @@ const UserProfile = () => {
                         <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-4">
                                 <div className="relative">
-                                    <img 
-                                        src={profile.profilePicUrl || 'https://via.placeholder.com/150'} 
-                                        alt="Profile" 
+                                    <img
+                                        src={profile.profilePicUrl || 'https://via.placeholder.com/150'}
+                                        alt="Profile"
                                         className="w-20 h-20 rounded-full border-4 border-white object-cover"
                                     />
                                 </div>

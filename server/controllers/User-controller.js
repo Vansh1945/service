@@ -181,31 +181,34 @@ const updateProfile = async (req, res) => {
  */
 const uploadProfilePicture = async (req, res) => {
     try {
+        console.log('Upload request received'); // Debug log
+        console.log('File:', req.file); // Debug log
+        
         if (!req.file) {
+            console.log('No file in request'); // Debug log
             return res.status(400).json({
                 success: false,
                 message: 'No file uploaded'
             });
         }
 
-        // Get the file path
-        const filePath = req.file.path.replace(/\\/g, '/'); // Convert to forward slashes
-
+        // Get the relative file path
+        const relativePath = req.file.path.replace(/\\/g, '/');
+        
         // Update user's profile picture URL
         const user = await User.findByIdAndUpdate(
             req.user._id,
-            { profilePicUrl: filePath },
+            { profilePicUrl: relativePath },
             { new: true }
         ).select('-password -__v');
 
-        // If there was an old profile picture, delete it
-        if (user.profilePicUrl && fs.existsSync(user.profilePicUrl)) {
-            fs.unlinkSync(user.profilePicUrl);
-        }
+        console.log('User before update:', user); // Debug log
 
         // Construct full URL for the response
-        const fullUrl = `${req.protocol}://${req.get('host')}/${filePath}`;
+        const fullUrl = `${req.protocol}://${req.get('host')}/${relativePath}`;
 
+        console.log('Upload successful:', fullUrl); // Debug log
+        
         res.status(200).json({
             success: true,
             message: 'Profile picture uploaded successfully',
@@ -216,7 +219,7 @@ const uploadProfilePicture = async (req, res) => {
         console.error('Upload profile picture error:', error);
         res.status(500).json({
             success: false,
-            message: 'Internal server error'
+            message: error.message || 'Internal server error'
         });
     }
 }

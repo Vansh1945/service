@@ -16,6 +16,8 @@ import AdminLayout from "./components/AdminLayout";
 import CustomerLayout from "./components/CustomerLayout";
 import ProviderLayout from "./components/ProviderLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
+
+// Admin Pages
 import ProviderList from "./pages/Admin/Approved-Provider";
 import AdminProvidersPage from "./pages/Admin/Providers";
 import AdminCustomersView from "./pages/Admin/Customer";
@@ -31,25 +33,31 @@ import AdminInvoice from "./pages/Admin/Invoice";
 import AdminEarnings from "./pages/Admin/Earning";
 import AdminProfile from "./pages/Admin/Profile";
 import AdminDashboard from "./pages/Admin/Dashboard";
+
+// Provider Pages
 import ProviderBookingsPage from "./pages/Provider/Provider-Booking";
 import ProviderInvoicesPage from "./pages/Provider/Invoice";
 import ProviderEarning from "./pages/Provider/Earning";
 import ProviderDashboard from "./pages/Provider/Dashboard";
 import ProviderTestPage from "./pages/Provider/Test";
+
+// Customer Pages
 import CustomerDashboard from "./pages/Customer/Dashboard";
 import ServiceBooking from "./pages/Customer/Service-Booking";
 import ServiceListingPage from "./pages/Customer/Services";
 import ServiceDetailPage from "./pages/Customer/Servicedetail";
 import UserProfile from "./pages/Customer/Profile";
-// import AdminRegistration from "./pages/Admin/Admin-Register";
+import PaymentPage from "./pages/Customer/Payments";
+import CustomerFeedbackPage from "./pages/Customer/Feedback";
+import BookService from "./pages/Customer/Book-Service";
+import BookingConfirmation from "./pages/Customer/BookingConfirmation";
+import CartPage from "./pages/Customer/Cart";
 
 const App = () => {
   const location = useLocation();
 
   // Check if current route is a protected/dashboard route
-  const isDashboardRoute = location.pathname.startsWith('/admin') ||
-    location.pathname.startsWith('/customer') ||
-    location.pathname.startsWith('/provider');
+  const isDashboardRoute = /^\/(admin|customer|provider)/.test(location.pathname);
 
   return (
     <>
@@ -68,11 +76,10 @@ const App = () => {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
 
-        {/* <Route path="/admin-register" element={<AdminRegistration />} /> */}
-
         {/* Protected admin routes */}
         <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
-          <Route path="admin" element={<AdminLayout />}>
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<AdminDashboard />} />
             <Route path="profile" element={<AdminProfile />} />
             <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="approve-providers" element={<ProviderList />} />
@@ -82,40 +89,48 @@ const App = () => {
             <Route path="assign-booking" element={<AdminBookingsPage />} />
             <Route path="commission" element={<AdminCommissionPage />} />
             <Route path="coupons" element={<AdminCoupons />} />
-            <Route path="add-question" element={<AdminQuestions />} />
-            <Route path="add-services" element={<AdminServices />} />
-            <Route path="complaint" element={<AdminComplaints />} />
+            <Route path="questions" element={<AdminQuestions />} />
+            <Route path="services" element={<AdminServices />} />
+            <Route path="complaints" element={<AdminComplaints />} />
             <Route path="feedback" element={<AdminServiceFeedback />} />
-            <Route path="invoice" element={<AdminInvoice />} />
-            <Route path="earning" element={<AdminEarnings />} />
-
+            <Route path="invoices" element={<AdminInvoice />} />
+            <Route path="earnings" element={<AdminEarnings />} />
           </Route>
         </Route>
-
 
         {/* Protected customer routes */}
         <Route element={<ProtectedRoute allowedRoles={['customer']} />}>
-          <Route path="customer" element={<CustomerLayout />}>
+          <Route path="/customer" element={<CustomerLayout />}>
+            <Route index element={<CustomerDashboard />} />
             <Route path="profile" element={<UserProfile />} />
             <Route path="dashboard" element={<CustomerDashboard />} />
             <Route path="services" element={<ServiceListingPage />} />
-            <Route path="service-detail" element={<ServiceDetailPage />} />
+            {/* service in detail */}
+            <Route path="services/:id" element={<ServiceDetailPage />} />
+            <Route path="cart" element={<CartPage />} />
+            <Route path="book-service/:serviceId" element={<BookService />} />
+            <Route path="payments/:bookingId" element={<PaymentPage />} />
 
-            <Route path="book-service" element={<ServiceBooking />} />
+            {/* <Route path="booking-confirmation/:id" element={<BookingConfirmation />} />
+            <Route path="payments" element={<PaymentPage />} />
+            <Route path="feedback" element={<CustomerFeedbackPage />} /> */}
           </Route>
         </Route>
 
-        {/* Protected provider routes - requires approval */}
+        {/* Protected provider routes */}
         <Route element={<ProtectedRoute allowedRoles={['provider']} requireApproval />}>
           <Route path="/provider" element={<ProviderLayout />}>
+            <Route index element={<ProviderDashboard />} />
             <Route path="dashboard" element={<ProviderDashboard />} />
-            <Route path="booking-requests" element={<ProviderBookingsPage />} />
+            <Route path="bookings" element={<ProviderBookingsPage />} />
             <Route path="test" element={<ProviderTestPage />} />
-            <Route path="invoice-creator" element={<ProviderInvoicesPage />} />
+            <Route path="invoices" element={<ProviderInvoicesPage />} />
             <Route path="earnings" element={<ProviderEarning />} />
           </Route>
         </Route>
 
+        {/* 404 Not Found Route - should be last */}
+        <Route path="*" element={<Home />} />
       </Routes>
 
       {/* Only show Footer for public routes */}

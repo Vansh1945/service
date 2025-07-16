@@ -1,3 +1,4 @@
+// routes/Booking-routes.js
 const express = require('express');
 const router = express.Router();
 const bookingController = require('../controllers/Booking-controller');
@@ -8,7 +9,8 @@ const { providerAuthMiddleware, providerTestPassedMiddleware } = require('../mid
 const adminAuthMiddleware = require('../middlewares/Admin-middleware');
 
 // USER ROUTES
-router.post('/', userAuthMiddleware, bookingController.createBooking);
+router.post('/from-cart', userAuthMiddleware, bookingController.createBookingFromCart);
+router.post('/', userAuthMiddleware, bookingController.createSingleBooking);
 router.get('/user', userAuthMiddleware, bookingController.getUserBookings);
 router.get('/user/:id', userAuthMiddleware, bookingController.getBooking);
 router.patch('/user/:id/cancel', userAuthMiddleware, bookingController.cancelBooking);

@@ -29,20 +29,53 @@ const productSchema = new Schema({
     min: [0, 'Total cannot be negative'],
     default: 0
   }
-});
+}, { _id: true });
 
-// Commission Penalty Sub-Schema
-const penaltyRuleSchema = new Schema({
+// Payment Details Sub-Schema
+const paymentDetailSchema = new Schema({
+  method: {
+    type: String,
+    required: true,
+    enum: ['cod', 'online', 'wallet', 'cash', 'card', 'upi']
+  },
+  transactionId: String,
   amount: {
     type: Number,
     required: true,
     min: 0
   },
-  reason: {
+  date: {
+    type: Date,
+    default: Date.now
+  },
+  status: {
     type: String,
-    required: true,
-    trim: true
+    enum: ['pending', 'success', 'failed'],
+    default: 'pending'
   }
+});
+
+// Commission Details Sub-Schema
+const commissionDetailSchema = new Schema({
+  amount: {
+    type: Number,
+    required: true,
+    min: 0
+  },
+  rule: {
+    type: Schema.Types.ObjectId,
+    ref: 'CommissionRule'
+  },
+  type: {
+    type: String,
+    enum: ['percentage', 'fixed'],
+    required: true
+  },
+  value: {
+    type: Number,
+    required: true
+  },
+  description: String
 });
 
 // Invoice Schema
@@ -94,11 +127,9 @@ const invoiceSchema = new Schema({
     min: [0, 'Discount cannot be negative'],
     set: v => Math.round(v * 100) / 100
   },
-  advancePayment: {
-    type: Number,
-    default: 0,
-    min: [0, 'Advance payment cannot be negative'],
-    set: v => Math.round(v * 100) / 100
+  commission: {
+    type: commissionDetailSchema,
+    required: true
   },
   totalAmount: {
     type: Number,
@@ -106,34 +137,18 @@ const invoiceSchema = new Schema({
     min: [0, 'Total amount cannot be negative'],
     set: v => Math.round(v * 100) / 100
   },
-  balanceDue: {
-    type: Number,
-    default: 0,
-    min: [0, 'Balance due cannot be negative'],
-    set: v => Math.round(v * 100) / 100
-  },
-  commissionAmount: {
-    type: Number,
-    required: true,
-    min: 0,
-    set: v => Math.round(v * 100) / 100
-  },
   netAmount: {
     type: Number,
     required: true,
-    min: 0,
+    min: [0, 'Net amount cannot be negative'],
     set: v => Math.round(v * 100) / 100
-  },
-  paidBy: {
-    type: String,
-    enum: ['cod', 'online', 'wallet', 'cash', 'card', 'upi'],
-    default: 'cod'
   },
   paymentStatus: {
     type: String,
     enum: ['pending', 'paid', 'failed', 'partially_paid'],
     default: 'pending'
   },
+  paymentDetails: [paymentDetailSchema],
   generatedAt: {
     type: Date,
     default: Date.now
@@ -146,45 +161,14 @@ const invoiceSchema = new Schema({
       return date;
     }
   },
-  paymentDate: Date,
-  transactionId: String,
-  commissionDetails: {
-    baseRate: {
-      type: Number,
-      min: 0
-    },
-    baseType: {
-      type: String,
-      enum: ['percentage', 'fixed']
-    },
-    penaltyRules: [penaltyRuleSchema]
+  notes: {
+    type: String,
+    maxlength: 500
   }
 }, {
   timestamps: true,
-  toJSON: {
-    virtuals: true,
-    transform: function(doc, ret, options) {
-      // Hide commission fields from non-admins/providers
-      if (options && !options.showCommission) {
-        delete ret.commissionDetails;
-        delete ret.commissionAmount;
-        delete ret.netAmount;
-      }
-      return ret;
-    }
-  },
-  toObject: {
-    virtuals: true,
-    transform: function(doc, ret, options) {
-      // Hide commission fields from non-admins/providers
-      if (options && !options.showCommission) {
-        delete ret.commissionDetails;
-        delete ret.commissionAmount;
-        delete ret.netAmount;
-      }
-      return ret;
-    }
-  }
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
 // Indexes
@@ -232,15 +216,16 @@ invoiceSchema.pre('save', function(next) {
   this.totalAmount = Math.round((subtotal + this.tax - this.discount) * 100) / 100;
 
   // Calculate net amount (total - commission)
-  this.netAmount = Math.round((this.totalAmount - this.commissionAmount) * 100) / 100;
+  this.netAmount = Math.round((this.totalAmount - (this.commission?.amount || 0)) * 100) / 100;
 
-  // Calculate balance due (total - advance)
-  this.balanceDue = Math.round((this.totalAmount - this.advancePayment) * 100) / 100;
+  // Calculate payment status based on payment details
+  const totalPaid = this.paymentDetails.reduce(
+    (sum, payment) => sum + (payment.status === 'success' ? payment.amount : 0), 0
+  );
 
-  // Update payment status
-  if (this.balanceDue <= 0) {
+  if (totalPaid >= this.totalAmount) {
     this.paymentStatus = 'paid';
-  } else if (this.advancePayment > 0) {
+  } else if (totalPaid > 0) {
     this.paymentStatus = 'partially_paid';
   } else {
     this.paymentStatus = 'pending';
@@ -266,120 +251,67 @@ invoiceSchema.virtual('formattedDueDate').get(function() {
   });
 });
 
+// Virtual for total paid amount
+invoiceSchema.virtual('totalPaid').get(function() {
+  return this.paymentDetails.reduce(
+    (sum, payment) => sum + (payment.status === 'success' ? payment.amount : 0), 0
+  );
+});
+
+// Virtual for balance due
+invoiceSchema.virtual('balanceDue').get(function() {
+  return Math.max(0, this.totalAmount - this.totalPaid);
+});
+
 // Static Methods
-invoiceSchema.statics.findByCustomer = function(customerId, status = null, showCommission = false) {
-  const query = { customer: customerId };
-  if (status) query.paymentStatus = status;
-  return this.find(query)
-    .setOptions({ showCommission })
-    .sort({ generatedAt: -1 });
-};
-
-invoiceSchema.statics.findByProvider = function(providerId, status = null) {
-  const query = { provider: providerId };
-  if (status) query.paymentStatus = status;
-  return this.find(query)
-    .setOptions({ showCommission: true })
-    .sort({ generatedAt: -1 });
-};
-
-// Instance Methods
-invoiceSchema.methods.toCustomerJSON = function() {
-  const obj = this.toObject();
-  delete obj.commissionDetails;
-  delete obj.commissionAmount;
-  delete obj.netAmount;
-  return obj;
-};
-
-invoiceSchema.methods.toAdminJSON = function() {
-  return this.toObject();
-};
-
-invoiceSchema.methods.markAsPaid = function(paymentMethod) {
-  if (this.paymentStatus === 'paid') {
-    throw new Error('Invoice is already paid');
-  }
-  this.paymentStatus = 'paid';
-  this.paidBy = paymentMethod;
-  this.balanceDue = 0;
-  this.advancePayment = this.totalAmount;
-  this.paymentDate = new Date();
-  return this.save();
-};
-
-invoiceSchema.methods.addAdvancePayment = function(amount, paymentMethod) {
-  amount = Math.round(amount * 100) / 100;
-  if (amount <= 0) {
-    throw new Error('Advance amount must be positive');
-  }
-
-  this.advancePayment = Math.round((this.advancePayment + amount) * 100) / 100;
-  this.paidBy = paymentMethod;
-
-  // Recalculate balance
-  this.balanceDue = Math.round((this.totalAmount - this.advancePayment) * 100) / 100;
-
-  // Update payment status
-  if (this.balanceDue <= 0) {
-    this.paymentStatus = 'paid';
-    this.paymentDate = new Date();
-  } else {
-    this.paymentStatus = 'partially_paid';
-  }
-
-  return this.save();
-};
-
-// Create from booking static method
 invoiceSchema.statics.createFromBooking = async function(booking, commissionDetails) {
-  const productsUsed = booking.products?.map(product => ({
-    name: product.name,
-    description: product.description,
-    quantity: product.quantity,
-    rate: product.price,
-    total: Math.round(product.quantity * product.price * 100) / 100
-  })) || [];
-
-  const productsTotal = productsUsed.reduce((sum, p) => sum + p.total, 0);
-  const subtotal = booking.service.price + productsTotal;
-  const totalAmount = Math.round(subtotal * 100) / 100;
+  const Service = mongoose.model('Service');
   
-  // Calculate commission
-  let commissionAmount = 0;
-  if (commissionDetails) {
-    if (commissionDetails.baseType === 'percentage') {
-      commissionAmount = totalAmount * (commissionDetails.baseRate / 100);
-    } else {
-      commissionAmount = commissionDetails.baseRate;
-    }
-    
-    // Add penalties
-    if (commissionDetails.penaltyRules?.length > 0) {
-      commissionAmount += commissionDetails.penaltyRules.reduce(
-        (sum, penalty) => sum + penalty.amount, 0
-      );
-    }
-  }
-  
-  commissionAmount = Math.round(commissionAmount * 100) / 100;
-  const netAmount = Math.round((totalAmount - commissionAmount) * 100) / 100;
+  const service = await Service.findById(booking.services[0].service);
+  if (!service) throw new Error('Service not found');
 
-  return this.create({
+  const invoiceData = {
     booking: booking._id,
     provider: booking.provider,
     customer: booking.customer,
-    service: booking.service,
-    serviceAmount: booking.service.price,
-    productsUsed,
-    totalAmount,
-    netAmount,
-    commissionAmount,
-    balanceDue: totalAmount,
-    paidBy: booking.paymentMethod || 'pending',
-    commissionDetails,
-    paymentStatus: booking.paymentStatus || 'pending'
-  });
+    service: booking.services[0].service,
+    serviceAmount: service.basePrice,
+    totalAmount: booking.totalAmount,
+    netAmount: booking.totalAmount - (commissionDetails.amount || 0),
+    commission: {
+      amount: commissionDetails.amount,
+      rule: commissionDetails.baseRule._id,
+      type: commissionDetails.baseRule.type,
+      value: commissionDetails.baseRule.value,
+      description: `Commission (${commissionDetails.baseRule.type === 'percentage' ? 
+        commissionDetails.baseRule.value + '%' : 
+        '₹' + commissionDetails.baseRule.value})`
+    },
+    paymentStatus: booking.paymentStatus === 'paid' ? 'paid' : 'pending'
+  };
+
+  if (booking.paymentStatus === 'paid') {
+    invoiceData.paymentDetails = [{
+      method: booking.paymentMethod || 'online',
+      amount: booking.totalAmount,
+      status: 'success'
+    }];
+  }
+
+  return this.create(invoiceData);
+};
+
+// Instance Methods
+invoiceSchema.methods.addPayment = async function(paymentData) {
+  this.paymentDetails.push(paymentData);
+  await this.save();
+  return this;
+};
+
+invoiceSchema.methods.addProduct = async function(productData) {
+  this.productsUsed.push(productData);
+  await this.save();
+  return this;
 };
 
 const Invoice = mongoose.model('Invoice', invoiceSchema);
