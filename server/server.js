@@ -4,7 +4,7 @@ const cors = require("cors");
 const cron = require('node-cron');
 const crypto = require('crypto');
 const connectDB = require("./config/db");
-const Transaction = require("./models/Transaction-model ");
+const Transaction = require("./models/Transaction-model .js");
 
 // Initialize express app
 const app = express();

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../store/auth';
 import { DataGrid } from '@mui/x-data-grid';
 import { 
@@ -38,34 +38,35 @@ const AdminInvoice = () => {
   const [downloadAllLoading, setDownloadAllLoading] = useState(false);
 
   // Fetch all invoices
-  useEffect(() => {
-    const fetchInvoices = async () => {
-      try {
-        const response = await fetch(`${API}/invoice`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        
-        if (!response.ok) {
-          if (response.status === 401) {
-            logoutUser();
-            return;
-          }
-          throw new Error('Failed to fetch invoices');
+  const fetchInvoices = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(`${API}/invoice`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
         }
-        
-        const data = await response.json();
-        setInvoices(data.data);
-        setLoading(false);
-      } catch (error) {
-        showToast(error.message, 'error');
-        setLoading(false);
+      });
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          logoutUser();
+          return;
+        }
+        throw new Error('Failed to fetch invoices');
       }
-    };
-    
-    fetchInvoices();
+      
+      const data = await response.json();
+      setInvoices(data.data);
+      setLoading(false);
+    } catch (error) {
+      showToast(error.message, 'error');
+      setLoading(false);
+    }
   }, [token, API, logoutUser, showToast]);
+
+  useEffect(() => {
+    fetchInvoices();
+  }, [fetchInvoices]);
 
   // Columns for DataGrid
   const columns = [

@@ -1,8 +1,8 @@
 import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "../store/auth";
 
-const ProtectedRoute = ({ allowedRoles, requireApproval = false }) => {
-  const { isAuthenticated, role, user } = useAuth();
+const ProtectedRoute = ({ allowedRoles, requireApproval: _requireApproval = false }) => {
+  const { isAuthenticated, role } = useAuth();
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
