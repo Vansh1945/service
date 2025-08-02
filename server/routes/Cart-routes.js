@@ -6,7 +6,7 @@ const {
   updateCartItem,
   removeFromCart,
   clearCart
-} = require('../controllers/cart-controller');
+} = require('../controllers/Cart-controller');
 const {userAuthMiddleware} = require('../middlewares/User-middleware');
 
 // Protect all cart routes

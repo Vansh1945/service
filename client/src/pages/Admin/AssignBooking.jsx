@@ -5,7 +5,6 @@ import {
   Button,
   Modal,
   Select,
-  message,
   Card,
   Descriptions,
   Tag,
@@ -245,7 +244,7 @@ const AdminBookingsPage = () => {
         throw new Error(errorData.message || 'Failed to assign provider');
       }
 
-      const result = await response.json();
+      await response.json();
       const assignedProvider = providers.find(p => p._id === providerId);
       
       toast.success('Provider assigned successfully!');
