@@ -1,88 +1,101 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Search, Filter, Star, Clock, IndianRupee, 
-  Zap, Droplet, Wrench, Settings, ChevronRight, 
-  Sparkles, Heart, Shield, Award, Users
+import {
+    Search, Filter, Star, Clock, IndianRupee,
+    ChevronRight, Heart, Loader2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { useAuth } from '../../store/auth';
+import ServiceImg from '../../assets/ServiceImg.png';
 
-const ServicesPage = () => {
+const ServiceListingPage = () => {
+    const { API } = useAuth();
+    const navigate = useNavigate();
+
     const [services, setServices] = useState([]);
     const [filteredServices, setFilteredServices] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('All');
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
     const [sortBy, setSortBy] = useState('popular');
     const [categories, setCategories] = useState([]);
-    const navigate = useNavigate();
+    const [isLoading, setIsLoading] = useState(true);
 
-    const API = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+    // Fetch services
+    const fetchServices = async () => {
+        try {
+            setIsLoading(true);
+            const response = await fetch(`${API}/service/services`);
+            const data = await response.json();
 
-    // Icon mapping for categories
-    const categoryIcons = {
-        'Electrical': <Zap className="w-5 h-5 text-yellow-500" />,
-        'AC': <Droplet className="w-5 h-5 text-blue-400" />,
-        'Appliance Repair': <Wrench className="w-5 h-5 text-gray-600" />,
-        'Other': <Settings className="w-5 h-5 text-purple-500" />
+            if (data.success) {
+                setServices(data.data);
+                setFilteredServices(data.data);
+
+                // Extract unique categories
+                const uniqueCategories = ['All', ...new Set(
+                    data.data.map(service => service.category)
+                )];
+                setCategories(uniqueCategories);
+            } else {
+                toast.error(data.message || 'Failed to fetch services');
+            }
+        } catch (error) {
+            toast.error('Network error. Please try again later.');
+            console.error('Fetch error:', error);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
-    // Fetch services and categories
-    useEffect(() => {
-        const fetchData = async () => {
-            try {
-                setLoading(true);
-                
-                // Fetch services
-                const servicesResponse = await fetch(`${API}/service/services`);
-                const servicesData = await servicesResponse.json();
-                
-                if (servicesData.success) {
-                    setServices(servicesData.data);
-                    setFilteredServices(servicesData.data);
-                    
-                    // Extract unique categories
-                    const uniqueCategories = ['All', ...new Set(
-                        servicesData.data.map(service => service.category)
-                    )];
-                    setCategories(uniqueCategories);
-                } else {
-                    setError(servicesData.message || 'Failed to fetch services');
-                }
-            } catch (err) {
-                setError('Network error. Please try again later.');
-                console.error('Fetch error:', err);
-            } finally {
-                setLoading(false);
+    // Fetch services by category
+    const fetchServicesByCategory = async (category) => {
+        try {
+            setIsLoading(true);
+            const response = await fetch(`${API}/service/services/category/${category}`);
+            const data = await response.json();
+
+            if (data.success) {
+                setFilteredServices(data.data);
+            } else {
+                toast.error(data.message || 'Failed to fetch services');
             }
-        };
-
-        fetchData();
-    }, [API]);
-
-    // Filter and search services
-    useEffect(() => {
-        let filtered = [...services];
-
-        // Category filter
-        if (selectedCategory !== 'All') {
-            filtered = filtered.filter(service => service.category === selectedCategory);
+        } catch (error) {
+            toast.error('Network error. Please try again later.');
+            console.error('Fetch error:', error);
+        } finally {
+            setIsLoading(false);
         }
+    };
 
-        // Search filter
+    useEffect(() => {
+        fetchServices();
+    }, []);
+
+    // Handle category change
+    useEffect(() => {
+        if (selectedCategory !== 'All') {
+            fetchServicesByCategory(selectedCategory);
+        } else {
+            setFilteredServices(services);
+        }
+    }, [selectedCategory]);
+
+    // Filter and sort services
+    useEffect(() => {
+        let results = [...filteredServices];
+
+        // Apply search filter
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
-            filtered = filtered.filter(service =>
+            results = results.filter(service =>
                 service.title.toLowerCase().includes(term) ||
-                service.description.toLowerCase().includes(term) ||
-                service.category.toLowerCase().includes(term)
+                service.description.toLowerCase().includes(term)
             );
         }
 
-        // Sort
-        filtered.sort((a, b) => {
+        // Apply sorting
+        results.sort((a, b) => {
             switch (sortBy) {
                 case 'price-low':
                     return a.basePrice - b.basePrice;
@@ -95,8 +108,8 @@ const ServicesPage = () => {
             }
         });
 
-        setFilteredServices(filtered);
-    }, [services, searchTerm, selectedCategory, sortBy]);
+        setFilteredServices(results);
+    }, [searchTerm, sortBy]);
 
     const handleBookNow = (serviceId) => {
         navigate(`/customer/services/${serviceId}`);
@@ -106,25 +119,35 @@ const ServicesPage = () => {
         <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 border border-gray-100 overflow-hidden group relative">
             <div className="relative overflow-hidden h-48">
                 <img
-                    src={service.image ? `${API}/service/uploads/services/${service.image}` : '/placeholder-service.jpg'}
+                    src={
+                        service.image
+                            ? `${API}/uploads/serviceImages/${service.image}`
+                            : ServiceImg
+                    }
                     alt={service.title}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     onError={(e) => {
-                        e.target.src = '/placeholder-service.jpg';
+                        e.target.onerror = null; // prevent infinite loop
+                        e.target.src = ServiceImg;
                     }}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
-                <button className="absolute top-3 right-3 p-2 bg-white/90 backdrop-blur-sm rounded-full hover:bg-white transition-all shadow-sm hover:shadow-md">
+                <button
+                    className="absolute top-3 right-3 p-2 bg-white/90 backdrop-blur-sm rounded-full hover:bg-white transition-all shadow-sm hover:shadow-md"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        toast.info('Feature coming soon!');
+                    }}
+                >
                     <Heart className="w-4 h-4 text-rose-500 hover:fill-rose-500" />
                 </button>
             </div>
 
             <div className="p-5">
                 <div className="flex items-center gap-2 mb-2">
-                    {categoryIcons[service.category] || categoryIcons['Other']}
-                    <span className="text-sm font-medium text-gray-500">{service.category}</span>
+                    <span className="text-sm font-medium text-gray-600">{service.category}</span>
                 </div>
-                
+
                 <h3 className="font-bold text-lg text-gray-800 mb-2 group-hover:text-blue-600 transition-colors">
                     {service.title}
                 </h3>
@@ -135,7 +158,13 @@ const ServicesPage = () => {
                 <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2 bg-blue-50 px-2 py-1 rounded-full">
                         <Clock className="w-4 h-4 text-blue-600" />
-                        <span className="text-xs text-blue-600 font-medium">{service.durationFormatted || '30 mins'}</span>
+                        <span className="text-xs text-blue-600 font-medium">
+                            {service.durationFormatted || '30 mins'}
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                        <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+                        <span className="text-xs font-medium text-gray-700">4.8</span>
                     </div>
                 </div>
 
@@ -148,7 +177,7 @@ const ServicesPage = () => {
                     </div>
                     <button
                         onClick={() => handleBookNow(service._id)}
-                        className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all font-medium flex items-center gap-2 shadow-md hover:shadow-lg"
+                        className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all font-medium flex items-center gap-2 shadow-md hover:shadow-lg"
                     >
                         Book Now
                         <ChevronRight className="w-4 h-4" />
@@ -158,57 +187,17 @@ const ServicesPage = () => {
         </div>
     );
 
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
-                <div className="text-center">
-                    <div className="inline-flex items-center space-x-2">
-                        <div className="w-4 h-4 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0ms' }}></div>
-                        <div className="w-4 h-4 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '150ms' }}></div>
-                        <div className="w-4 h-4 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '300ms' }}></div>
-                    </div>
-                    <p className="mt-4 text-gray-600 font-medium">Loading services...</p>
-                </div>
-            </div>
-        );
-    }
-
-    if (error) {
-        return (
-            <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
-                <div className="text-center max-w-md p-6 bg-white rounded-xl shadow-md border border-gray-100">
-                    <div className="mx-auto w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
-                        <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                    </div>
-                    <h3 className="text-xl font-bold text-gray-800 mb-2">Service Unavailable</h3>
-                    <p className="text-gray-600 mb-6">{error}</p>
-                    <button 
-                        onClick={() => window.location.reload()}
-                        className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors shadow-sm"
-                    >
-                        Try Again
-                    </button>
-                </div>
-            </div>
-        );
-    }
-
     return (
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-blue-50">
             {/* Hero Section */}
-            <div className="relative bg-gradient-to-r from-blue-600 to-blue-700 text-white py-16 px-4 sm:px-6 lg:px-8 overflow-hidden">
+            <div className="relative bg-gradient-to-r from-blue-900 to-indigo-900 text-white py-10 px-4 sm:px-6 lg:px-8 overflow-hidden">
                 <div className="absolute inset-0 opacity-10">
-                    <div className="absolute inset-0 bg-[url('https://tailwindui.com/img/beams-pricing.png')] bg-[length:800px] bg-top"></div>
+                    <div className="absolute inset-0 bg-top"></div>
                 </div>
-                
+
                 <div className="relative max-w-7xl mx-auto text-center">
-                    <h1 className="text-4xl md:text-5xl font-extrabold mb-4 tracking-tight">Professional Home Services</h1>
-                    <p className="text-xl md:text-2xl mb-8 max-w-3xl mx-auto text-blue-100">
-                        Quality services delivered with guaranteed satisfaction
-                    </p>
-                    
+
+
                     <div className="max-w-2xl mx-auto relative">
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <Search className="h-5 w-5 text-blue-300" />
@@ -218,7 +207,7 @@ const ServicesPage = () => {
                             placeholder="Search for services (e.g. 'AC repair', 'Electrician')..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="block w-full pl-10 pr-3 py-4 border border-transparent rounded-lg bg-blue-500/20 backdrop-blur-sm placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-white focus:border-transparent text-white"
+                            className="block w-full pl-10 pr-3 py-4 border border-transparent rounded-lg bg-blue-800/20 backdrop-blur-sm placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-white focus:border-transparent text-white"
                         />
                     </div>
                 </div>
@@ -234,13 +223,11 @@ const ServicesPage = () => {
                             <button
                                 key={category}
                                 onClick={() => setSelectedCategory(category)}
-                                className={`px-4 py-2 rounded-full flex items-center gap-2 transition-all duration-200 ${
-                                    selectedCategory === category 
+                                className={`px-4 py-2 rounded-full transition-all duration-200 ${selectedCategory === category
                                         ? 'bg-blue-600 text-white shadow-md'
                                         : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 hover:border-gray-300 shadow-sm'
-                                }`}
+                                    }`}
                             >
-                                {categoryIcons[category] || categoryIcons['Other']}
                                 <span>{category}</span>
                             </button>
                         ))}
@@ -252,9 +239,18 @@ const ServicesPage = () => {
                         <h2 className="text-2xl font-bold text-gray-800">
                             {selectedCategory === 'All' ? 'All Services' : selectedCategory}
                         </h2>
-                        <p className="text-gray-500">{filteredServices.length} services available</p>
+                        <p className="text-gray-600">
+                            {isLoading ? (
+                                <span className="inline-flex items-center gap-2">
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    Loading...
+                                </span>
+                            ) : (
+                                `${filteredServices.length} services available`
+                            )}
+                        </p>
                     </div>
-                    
+
                     <div className="flex gap-3">
                         <div className="relative">
                             <select
@@ -275,14 +271,30 @@ const ServicesPage = () => {
                 </div>
 
                 {/* Services Grid */}
-                {filteredServices.length === 0 ? (
+                {isLoading ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                        {[...Array(4)].map((_, i) => (
+                            <div key={i} className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden animate-pulse">
+                                <div className="h-48 bg-gray-200"></div>
+                                <div className="p-5 space-y-4">
+                                    <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                                    <div className="h-3 bg-gray-200 rounded w-full"></div>
+                                    <div className="h-3 bg-gray-200 rounded w-5/6"></div>
+                                    <div className="h-8 bg-gray-200 rounded w-full"></div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : filteredServices.length === 0 ? (
                     <div className="text-center py-16 bg-white rounded-xl shadow-sm border border-gray-200">
                         <div className="mx-auto w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
                             <Search className="w-10 h-10 text-gray-400" />
                         </div>
                         <h3 className="text-xl font-medium text-gray-800 mb-2">No services found</h3>
-                        <p className="text-gray-500 mb-6 max-w-md mx-auto">We couldn't find any services matching your criteria. Try adjusting your search or filters.</p>
-                        <button 
+                        <p className="text-gray-500 mb-6 max-w-md mx-auto">
+                            We couldn't find any services matching your criteria. Try adjusting your search or filters.
+                        </p>
+                        <button
                             onClick={() => {
                                 setSearchTerm('');
                                 setSelectedCategory('All');
@@ -305,4 +317,4 @@ const ServicesPage = () => {
     );
 };
 
-export default ServicesPage;
+export default ServiceListingPage;

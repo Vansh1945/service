@@ -1,202 +1,179 @@
 const Transaction = require('../models/Transaction-model ');
 const Booking = require('../models/Booking-model');
+const Invoice = require('../models/Invoice-model');
 const User = require('../models/User-model');
+const Provider = require('../models/Provider-model');
 const mongoose = require('mongoose');
-const asyncHandler = require('express-async-handler');
 const crypto = require('crypto');
+const Razorpay = require('razorpay');
+const { sendEmail } = require('../utils/sendEmail');
 
-// @desc    Create Razorpay order
-// @route   POST /api/payments/create-order
-// @access  Private
-const createRazorpayOrder = asyncHandler(async (req, res) => {
-  const { amount, bookingId } = req.body;
-  const userId = req.user._id;
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID,
+  key_secret: process.env.RAZORPAY_KEY_SECRET
+});
 
-  if (!amount || !bookingId) {
-    return res.status(400).json({ 
-      success: false, 
-      message: 'Amount and booking ID are required' 
-    });
-  }
-
-  if (!mongoose.Types.ObjectId.isValid(bookingId)) {
-    return res.status(400).json({ 
-      success: false, 
-      message: 'Invalid booking ID' 
-    });
-  }
-
+const createOrder = async (req, res) => {
   try {
-    // Verify the booking exists and belongs to the user
-    const booking = await Booking.findOne({ 
-      _id: bookingId, 
-      user: userId 
+    const { bookingId, amount, paymentMethod } = req.body;
+    const userId = req.user._id;
+
+    // Validate input
+    if (!bookingId || !amount) {
+      return res.status(400).json({
+        success: false,
+        message: 'Booking ID and amount are required'
+      });
+    }
+
+    // Check if booking exists and belongs to user
+    const booking = await Booking.findOne({
+      _id: bookingId,
+      customer: userId
     });
 
     if (!booking) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Booking not found or does not belong to user' 
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found or unauthorized'
       });
     }
-
-    // Check if booking is already paid
-    if (booking.paymentStatus === 'paid') {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Booking is already paid' 
-      });
-    }
-
-    // Create transaction record
-    const transaction = new Transaction({
-      amount,
-      currency: 'INR',
-      status: 'pending',
-      paymentMethod: 'unknown',
-      booking: bookingId,
-      user: userId,
-      description: `Payment for booking ${bookingId}`
-    });
-
-    await transaction.save();
 
     // Create Razorpay order
-    const razorpayOrder = await Transaction.createRazorpayOrder(
-      amount,
-      'INR',
-      `booking_${bookingId}`,
-      {
-        transactionId: transaction._id.toString(),
+    const options = {
+      amount: Math.round(amount * 100), // Convert to paise
+      currency: 'INR',
+      receipt: `booking_${bookingId}`,
+      payment_capture: 1,
+      notes: {
         bookingId: bookingId.toString(),
         userId: userId.toString()
       }
-    );
+    };
 
-    // Update transaction with Razorpay order ID
-    transaction.razorpayOrderId = razorpayOrder.id;
+    const order = await razorpay.orders.create(options);
+
+    // Create transaction record
+    const transaction = new Transaction({
+      amount: amount,
+      currency: 'INR',
+      paymentMethod: paymentMethod || 'online',
+      booking: bookingId,
+      user: userId,
+      razorpayOrderId: order.id,
+      paymentStatus: 'pending'
+    });
+
     await transaction.save();
 
-    res.json({
+    res.status(200).json({
       success: true,
-      order: {
-        id: razorpayOrder.id,
-        amount: razorpayOrder.amount,
-        currency: razorpayOrder.currency,
-        receipt: razorpayOrder.receipt
-      },
-      transactionId: transaction._id,
-      key: process.env.RAZORPAY_KEY_ID
+      message: 'Order created successfully',
+      data: {
+        order,
+        key: RAZORPAY_KEY_ID,
+        transactionId: transaction._id
+      }
     });
+
   } catch (error) {
-    console.error('Order creation error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: error.message || 'Failed to create payment order'
+    console.error('Error creating order:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to create order'
     });
   }
-});
+};
 
-// @desc    Verify payment
-// @route   POST /api/payments/verify
-// @access  Private
-const verifyPayment = asyncHandler(async (req, res) => {
-  const { orderId, paymentId, signature } = req.body;
-  const userId = req.user._id;
-
-  if (!orderId || !paymentId || !signature) {
-    return res.status(400).json({ 
-      success: false, 
-      message: 'Missing payment verification data' 
-    });
-  }
-
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
+const verifyPayment = async (req, res) => {
   try {
+    const {
+      orderId,
+      paymentId,
+      signature,
+      bookingId,
+      transactionId
+    } = req.body;
+
+    // Validate input
+    if (!orderId || !paymentId || !signature || !bookingId || !transactionId) {
+      return res.status(400).json({
+        success: false,
+        message: 'All payment verification fields are required'
+      });
+    }
+
     // Verify the payment signature
-    const isValidSignature = Transaction.verifySignature(orderId, paymentId, signature);
-    
-    if (!isValidSignature) {
-      throw new Error('Invalid payment signature');
+    const generatedSignature = crypto
+      .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET)
+      .update(`${orderId}|${paymentId}`)
+      .digest('hex');
+
+    if (generatedSignature !== signature) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid payment signature'
+      });
     }
 
-    // Find the transaction
-    const transaction = await Transaction.findOne({ 
-      razorpayOrderId: orderId,
-      user: userId
-    }).session(session);
-
+    // Update transaction record
+    const transaction = await Transaction.findById(transactionId);
     if (!transaction) {
-      throw new Error('Transaction not found');
+      return res.status(404).json({
+        success: false,
+        message: 'Transaction not found'
+      });
     }
 
-    // Get payment details from Razorpay
-    const paymentDetails = await Transaction.fetchPaymentDetails(paymentId);
-    
-    // Update transaction
     transaction.razorpayPaymentId = paymentId;
     transaction.razorpaySignature = signature;
-    transaction.razorpayResponse = paymentDetails;
-    transaction.paymentMethod = paymentDetails.method || 'unknown';
-    
-    // Check if payment was successful
-    if (paymentDetails.status === 'captured') {
-      transaction.status = 'completed';
-      
-      // Update booking payment status
-      await Booking.findByIdAndUpdate(
-        transaction.booking,
-        { 
-          $set: { 
-            paymentStatus: 'paid',
-            paidAmount: transaction.amount,
-            paymentDate: new Date()
-          } 
-        },
-        { session, new: true }
-      );
-    } else {
-      transaction.status = 'failed';
+    transaction.paymentStatus = 'completed';
+    transaction.razorpayResponse = req.body;
+    await transaction.save();
+
+    // Update booking status
+    const booking = await Booking.findById(bookingId);
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found'
+      });
     }
 
-    await transaction.save({ session });
-    await session.commitTransaction();
+    booking.paymentStatus = 'paid';
+    booking.status = 'accepted';
+    await booking.save();
 
-    res.json({
-      success: transaction.status === 'completed',
-      transaction: {
-        id: transaction._id,
-        amount: transaction.amount,
-        status: transaction.status,
-        paymentMethod: transaction.paymentMethod,
-        createdAt: transaction.createdAt
-      },
-      bookingId: transaction.booking
+    res.status(200).json({
+      success: true,
+      message: 'Payment verified successfully',
+      data: {
+        transactionId: transaction._id,
+        bookingId: booking._id
+      }
     });
+
   } catch (error) {
-    await session.abortTransaction();
-    console.error('Payment verification failed:', error);
-    res.status(400).json({ 
-      success: false, 
-      message: error.message 
+    console.error('Error verifying payment:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Payment verification failed'
     });
-  } finally {
-    session.endSession();
   }
-});
+};
 
-// @desc    Razorpay webhook handler
-// @route   POST /api/payments/webhook
-// @access  Public
-const handleWebhook = asyncHandler(async (req, res) => {
+/**
+ * @desc    Razorpay webhook handler
+ * @route   POST /api/payments/webhook
+ * @access  Public
+ */
+const handleWebhook = async (req, res) => {
   const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
   const razorpaySignature = req.headers['x-razorpay-signature'];
 
   if (!webhookSecret) {
     console.error('Webhook secret not configured');
-    return res.status(500).json({ success: false, message: 'Server error' });
+    return res.status(500).send('Server error');
   }
 
   // Verify webhook signature
@@ -206,83 +183,88 @@ const handleWebhook = asyncHandler(async (req, res) => {
 
   if (generatedSignature !== razorpaySignature) {
     console.warn('Webhook signature verification failed');
-    return res.status(400).json({ success: false, message: 'Invalid signature' });
+    return res.status(400).send('Invalid signature');
   }
 
   const event = req.body.event;
   const payment = req.body.payload.payment?.entity;
 
   if (!payment) {
-    return res.status(400).json({ success: false, message: 'Invalid webhook payload' });
+    return res.status(400).send('Invalid webhook payload');
   }
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
   try {
     // Handle different webhook events
     switch (event) {
       case 'payment.captured':
-        await handleSuccessfulPayment(payment);
+        await handleSuccessfulPayment(payment, session);
         break;
       case 'payment.failed':
-        await handleFailedPayment(payment);
+        await handleFailedPayment(payment, session);
         break;
       default:
         console.log(`Unhandled event type: ${event}`);
     }
 
+    await session.commitTransaction();
     res.json({ success: true });
   } catch (error) {
+    await session.abortTransaction();
     console.error('Webhook processing error:', error);
     res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-// Helper function to handle successful payment
-const handleSuccessfulPayment = async (payment) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
-  try {
-    // Find transaction by order ID
-    const transaction = await Transaction.findOneAndUpdate(
-      { razorpayOrderId: payment.order_id },
-      {
-        status: 'completed',
-        razorpayPaymentId: payment.id,
-        razorpayResponse: payment,
-        paymentMethod: payment.method || 'unknown',
-        updatedAt: new Date()
-      },
-      { new: true, session }
-    );
-
-    if (!transaction) {
-      throw new Error('Transaction not found for successful payment');
-    }
-
-    // Update booking
-    await Booking.findByIdAndUpdate(
-      transaction.booking,
-      { 
-        $set: { 
-          paymentStatus: 'paid',
-          paidAmount: transaction.amount,
-          paymentDate: new Date()
-        } 
-      },
-      { session }
-    );
-
-    await session.commitTransaction();
-  } catch (error) {
-    await session.abortTransaction();
-    throw error;
   } finally {
     session.endSession();
   }
 };
 
-// Helper function to handle failed payment
-const handleFailedPayment = async (payment) => {
+// Helper function to handle successful payment from webhook
+const handleSuccessfulPayment = async (payment, session) => {
+  // 1. Find transaction by order ID
+  const transaction = await Transaction.findOneAndUpdate(
+    { razorpayOrderId: payment.order_id },
+    {
+      status: 'completed',
+      razorpayPaymentId: payment.id,
+      razorpayResponse: payment,
+      paymentMethod: payment.method || 'online',
+      updatedAt: new Date()
+    },
+    { new: true, session }
+  );
+
+  if (!transaction) {
+    throw new Error('Transaction not found for successful payment');
+  }
+
+  // 2. Find the booking
+  const booking = await Booking.findById(transaction.booking).session(session);
+  
+  if (!booking) {
+    throw new Error('Booking not found');
+  }
+
+  // 3. Update booking payment status
+  booking.paymentStatus = 'paid';
+  booking.paidAmount = transaction.amount;
+  booking.paymentDate = new Date();
+  await booking.save({ session });
+
+  // 4. If this is a post-service payment, ensure invoice is created
+  if (transaction.paymentType === 'post_service' && !booking.invoice) {
+    const invoice = await createInvoiceForBooking(booking, session);
+    booking.invoice = invoice._id;
+    await booking.save({ session });
+  }
+
+  // 5. Send payment confirmation email
+  await sendPaymentConfirmationEmail(booking, transaction, transaction.user);
+};
+
+// Helper function to handle failed payment from webhook
+const handleFailedPayment = async (payment, session) => {
   await Transaction.findOneAndUpdate(
     { razorpayOrderId: payment.order_id },
     {
@@ -290,12 +272,126 @@ const handleFailedPayment = async (payment) => {
       razorpayPaymentId: payment.id,
       razorpayResponse: payment,
       updatedAt: new Date()
-    }
+    },
+    { session }
   );
+
+  // For upfront payments, mark booking as payment failed
+  const transaction = await Transaction.findOne({ 
+    razorpayOrderId: payment.order_id 
+  }).session(session);
+
+  if (transaction && transaction.paymentType !== 'post_service') {
+    await Booking.findByIdAndUpdate(
+      transaction.booking,
+      { paymentStatus: 'failed' },
+      { session }
+    );
+  }
+};
+
+// Helper function to create invoice for booking
+const createInvoiceForBooking = async (booking, session) => {
+  // 1. Calculate commission (same logic as in your completeBooking controller)
+  let commissionAmount = 0;
+  let commissionRuleId = null;
+  let commissionType = 'percentage';
+  let commissionValue = 10; // Default 10%
+
+  try {
+    const provider = await Provider.findById(booking.provider).session(session);
+    const performanceTier = provider?.performanceTier || 'standard';
+    const commissionRule = await CommissionRule.getCommissionForProvider(booking.provider, performanceTier);
+
+    if (commissionRule) {
+      commissionRuleId = commissionRule._id;
+      commissionType = commissionRule.type;
+      commissionValue = commissionRule.value;
+
+      if (commissionType === 'percentage') {
+        commissionAmount = booking.totalAmount * (commissionValue / 100);
+      } else {
+        commissionAmount = commissionValue;
+      }
+    } else {
+      // Fallback to default 10% if no rule found
+      commissionAmount = booking.totalAmount * 0.10;
+    }
+  } catch (commissionError) {
+    console.error('Commission calculation error:', commissionError);
+    commissionAmount = booking.totalAmount * 0.10;
+  }
+
+  // 2. Generate invoice number
+  const date = new Date();
+  const prefix = 'INV-' +
+    date.getFullYear().toString().slice(-2) +
+    (date.getMonth() + 1).toString().padStart(2, '0') +
+    date.getDate().toString().padStart(2, '0') + '-';
+  
+  const lastInvoice = await Invoice.findOne().sort({ createdAt: -1 }).session(session);
+  const lastSeq = lastInvoice ? parseInt(lastInvoice.invoiceNo.replace(prefix, '')) || 0 : 0;
+  const invoiceNo = prefix + (lastSeq + 1).toString().padStart(4, '0');
+
+  // 3. Create invoice
+  const invoice = new Invoice({
+    invoiceNo,
+    booking: booking._id,
+    provider: booking.provider,
+    customer: booking.customer,
+    service: booking.services[0].service,
+    serviceAmount: booking.subtotal,
+    totalAmount: booking.totalAmount,
+    netAmount: booking.totalAmount - commissionAmount,
+    commission: {
+      amount: commissionAmount,
+      type: commissionType,
+      value: commissionValue,
+      ...(commissionRuleId && { rule: commissionRuleId })
+    },
+    paymentStatus: 'paid',
+    paymentDetails: [{
+      method: 'online',
+      amount: booking.totalAmount,
+      status: 'success',
+      transactionId: booking._id
+    }]
+  });
+
+  await invoice.save({ session });
+  return invoice;
+};
+
+// Helper function to send payment confirmation email
+const sendPaymentConfirmationEmail = async (booking, transaction, userId) => {
+  try {
+    const user = await User.findById(userId);
+    const service = await Service.findById(booking.services[0].service);
+
+    const emailHtml = `
+      <h2>Payment Confirmation</h2>
+      <p>Your payment has been successfully processed.</p>
+      <p><strong>Transaction ID:</strong> ${transaction._id}</p>
+      <p><strong>Booking ID:</strong> ${booking._id}</p>
+      <p><strong>Service:</strong> ${service.title}</p>
+      <p><strong>Amount Paid:</strong> ₹${transaction.amount.toFixed(2)}</p>
+      <p><strong>Payment Method:</strong> ${transaction.paymentMethod}</p>
+      <p><strong>Payment Date:</strong> ${new Date().toLocaleString()}</p>
+      <p>Thank you for your payment!</p>
+    `;
+
+    await sendEmail({
+      to: user.email,
+      subject: 'Payment Confirmation',
+      html: emailHtml
+    });
+  } catch (emailError) {
+    console.error('Failed to send payment confirmation email:', emailError);
+  }
 };
 
 module.exports = {
-  createRazorpayOrder,
+  createOrder,
   verifyPayment,
   handleWebhook
 };

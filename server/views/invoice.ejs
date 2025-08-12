@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Invoice <%= invoice.invoiceNo %></title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 30px;
+      border-bottom: 2px solid #eee;
+      padding-bottom: 20px;
+    }
+    .logo {
+      max-height: 80px;
+    }
+    .company-info {
+      text-align: right;
+    }
+    .invoice-title {
+      font-size: 24px;
+      font-weight: bold;
+      color: #2c3e50;
+      margin-bottom: 5px;
+    }
+    .invoice-info {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 30px;
+    }
+    .info-box {
+      flex: 1;
+      padding: 15px;
+      background: #f9f9f9;
+      border-radius: 5px;
+      margin: 0 10px;
+    }
+    .info-box:first-child {
+      margin-left: 0;
+    }
+    .info-box:last-child {
+      margin-right: 0;
+    }
+    .info-box h3 {
+      margin-top: 0;
+      color: #2c3e50;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 10px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 30px;
+    }
+    th {
+      background-color: #f2f2f2;
+      text-align: left;
+      padding: 10px;
+      font-weight: bold;
+    }
+    td {
+      padding: 10px;
+      border-bottom: 1px solid #ddd;
+    }
+    .text-right {
+      text-align: right;
+    }
+    .text-center {
+      text-align: center;
+    }
+    .total-row {
+      font-weight: bold;
+      background-color: #f2f2f2;
+    }
+    .footer {
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 2px solid #eee;
+      display: flex;
+      justify-content: space-between;
+    }
+    .qr-code {
+      width: 120px;
+      height: 120px;
+    }
+    .terms {
+      font-size: 12px;
+      color: #777;
+      margin-top: 30px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <img src="<%= companyLogo %>" alt="Company Logo" class="logo">
+      <h1><%= companyName %></h1>
+      <p><%= companyAddress %></p>
+      <p><%= companyContact %></p>
+    </div>
+    <div class="company-info">
+      <div class="invoice-title">INVOICE</div>
+      <p><strong>Invoice No:</strong> <%= invoice.invoiceNo %></p>
+      <p><strong>Date:</strong> <%= date %></p>
+      <p><strong>Due Date:</strong> <%= dueDate %></p>
+    </div>
+  </div>
+
+  <div class="invoice-info">
+    <div class="info-box">
+      <h3>Bill To:</h3>
+      <p><strong><%= invoice.customer.name %></strong></p>
+      <p><%= invoice.customer.address %></p>
+      <p>Phone: <%= invoice.customer.phone %></p>
+      <p>Email: <%= invoice.customer.email %></p>
+    </div>
+    <div class="info-box">
+      <h3>Service Provider:</h3>
+      <p><strong><%= invoice.provider.businessName || invoice.provider.name %></strong></p>
+      <p><%= invoice.provider.address %></p>
+      <p>Phone: <%= invoice.provider.contactPhone || invoice.provider.phone %></p>
+      <p>Email: <%= invoice.provider.contactEmail || invoice.provider.email %></p>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Description</th>
+        <th class="text-right">Rate</th>
+        <th class="text-center">Qty</th>
+        <th class="text-right">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><%= invoice.service.name %></td>
+        <td class="text-right">₹<%= invoice.serviceAmount.toFixed(2) %></td>
+        <td class="text-center">1</td>
+        <td class="text-right">₹<%= invoice.serviceAmount.toFixed(2) %></td>
+      </tr>
+      <% invoice.productsUsed.forEach(product => { %>
+        <tr>
+          <td><%= product.name %></td>
+          <td class="text-right">₹<%= product.rate.toFixed(2) %></td>
+          <td class="text-center"><%= product.quantity %></td>
+          <td class="text-right">₹<%= (product.rate * product.quantity).toFixed(2) %></td>
+        </tr>
+      <% }); %>
+    </tbody>
+  </table>
+
+  <div style="display: flex; justify-content: flex-end;">
+    <div style="width: 300px;">
+      <table>
+        <tr>
+          <td><strong>Subtotal:</strong></td>
+          <td class="text-right">₹<%= (invoice.serviceAmount + invoice.productsUsed.reduce((sum, p) => sum + (p.rate * p.quantity), 0)).toFixed(2) %></td>
+        </tr>
+        <% if (invoice.discount > 0) { %>
+          <tr>
+            <td><strong>Discount:</strong></td>
+            <td class="text-right">-₹<%= invoice.discount.toFixed(2) %></td>
+          </tr>
+        <% } %>
+        <tr class="total-row">
+          <td><strong>Total Amount:</strong></td>
+          <td class="text-right">₹<%= invoice.totalAmount.toFixed(2) %></td>
+        </tr>
+        <tr>
+          <td><strong>Amount Paid:</strong></td>
+          <td class="text-right">₹<%= invoice.paymentDetails.reduce((sum, p) => p.status === 'success' ? sum + p.amount : sum, 0).toFixed(2) %></td>
+        </tr>
+        <tr class="total-row">
+          <td><strong>Balance Due:</strong></td>
+          <td class="text-right">₹<%= Math.max(0, invoice.totalAmount - invoice.paymentDetails.reduce((sum, p) => p.status === 'success' ? sum + p.amount : sum, 0)).toFixed(2) %></td>
+        </tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="terms">
+      <p><strong>Terms & Conditions:</strong></p>
+      <p>1. Payment is due within 7 days of invoice date.</p>
+      <p>2. Please make checks payable to <%= companyName %>.</p>
+      <p>3. For any questions regarding this invoice, please contact us.</p>
+    </div>
+    <div>
+      <img src="<%= qrCode %>" alt="Verification QR Code" class="qr-code">
+      <p style="text-align: center; font-size: 12px;">Scan to verify invoice</p>
+    </div>
+  </div>
+</body>
+</html>

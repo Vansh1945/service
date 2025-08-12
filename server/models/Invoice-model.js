@@ -180,23 +180,6 @@ invoiceSchema.index({ paymentStatus: 1 });
 invoiceSchema.index({ generatedAt: -1 });
 invoiceSchema.index({ dueDate: 1 });
 
-// Generate invoice number before save
-invoiceSchema.pre('save', async function(next) {
-  if (!this.isNew) return next();
-  
-  const date = new Date();
-  const prefix = 'INV-' +
-    date.getFullYear().toString().slice(-2) +
-    (date.getMonth() + 1).toString().padStart(2, '0') +
-    date.getDate().toString().padStart(2, '0') + '-';
-  
-  const lastInvoice = await this.constructor.findOne({}, {}, { sort: { createdAt: -1 } });
-  const lastSeq = lastInvoice ? parseInt(lastInvoice.invoiceNo.slice(-4)) : 0;
-  
-  this.invoiceNo = prefix + (lastSeq + 1).toString().padStart(4, '0');
-  next();
-});
-
 // Calculate totals before save
 invoiceSchema.pre('save', function(next) {
   // Calculate product totals
@@ -264,28 +247,46 @@ invoiceSchema.virtual('balanceDue').get(function() {
 });
 
 // Static Methods
-invoiceSchema.statics.createFromBooking = async function(booking, commissionDetails) {
+invoiceSchema.statics.generateInvoiceNumber = async function() {
+  const date = new Date();
+  const prefix = 'INV-' +
+    date.getFullYear().toString().slice(-2) +
+    (date.getMonth() + 1).toString().padStart(2, '0') +
+    date.getDate().toString().padStart(2, '0') + '-';
+  
+  const lastInvoice = await this.findOne({}, {}, { sort: { createdAt: -1 } });
+  const lastSeq = lastInvoice ? parseInt(lastInvoice.invoiceNo.slice(-4)) : 0;
+  return prefix + (lastSeq + 1).toString().padStart(4, '0');
+};
+
+invoiceSchema.statics.createFromBooking = async function(booking, options = {}) {
   const Service = mongoose.model('Service');
   
   const service = await Service.findById(booking.services[0].service);
   if (!service) throw new Error('Service not found');
 
+  // Generate invoice number
+  const invoiceNo = await this.generateInvoiceNumber();
+
   const invoiceData = {
+    invoiceNo,
     booking: booking._id,
     provider: booking.provider,
     customer: booking.customer,
     service: booking.services[0].service,
     serviceAmount: service.basePrice,
     totalAmount: booking.totalAmount,
-    netAmount: booking.totalAmount - (commissionDetails.amount || 0),
+    netAmount: booking.totalAmount - booking.commissionAmount,
     commission: {
-      amount: commissionDetails.amount,
-      rule: commissionDetails.baseRule._id,
-      type: commissionDetails.baseRule.type,
-      value: commissionDetails.baseRule.value,
-      description: `Commission (${commissionDetails.baseRule.type === 'percentage' ? 
-        commissionDetails.baseRule.value + '%' : 
-        '₹' + commissionDetails.baseRule.value})`
+      amount: booking.commissionAmount,
+      rule: booking.commissionRule,
+      type: booking.commissionRule?.type || 'percentage',
+      value: booking.commissionRule?.value || 0,
+      description: booking.commissionRule 
+        ? `Commission (${booking.commissionRule.type === 'percentage' ? 
+          booking.commissionRule.value + '%' : 
+          '₹' + booking.commissionRule.value})`
+        : 'No commission applied'
     },
     paymentStatus: booking.paymentStatus === 'paid' ? 'paid' : 'pending'
   };
@@ -298,6 +299,11 @@ invoiceSchema.statics.createFromBooking = async function(booking, commissionDeta
     }];
   }
 
+  // Create invoice with session if provided
+  if (options.session) {
+    return this.create([invoiceData], { session: options.session }).then(invoices => invoices[0]);
+  }
+  
   return this.create(invoiceData);
 };
 

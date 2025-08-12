@@ -9,19 +9,27 @@ const Transaction = require("./models/Transaction-model ");
 // Initialize express app
 const app = express();
 
-// Localhost CORS configuration
 const corsOptions = {
-  origin: 'http://localhost:5173',
-  credentials: true,
+  origin: 'http://localhost:5173', // Your frontend origin
+  credentials: true, // Allow credentials (cookies)
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 };
 
-// Middleware
 app.use(cors(corsOptions));
+
+// Middleware
 app.use(express.json());
+
+// Test Route 
+app.get('/api/test-route', (req, res) => {
+  res.send('Raj Electrical Service API is running!');
+});
+
 app.use(express.urlencoded({ extended: true }));
 app.use("/uploads", express.static("uploads"));
+
+
 
 // Route imports
 const adminRoutes = require("./routes/Admin-Routes");
@@ -37,9 +45,9 @@ const invoiceRoutes = require("./routes/Invoice-route");
 const transactionRoutes = require("./routes/Transaction-route");
 const complaintRoutes = require("./routes/complaintRoutes");
 const feedbackRoutes = require("./routes/feedback-routes");
-const earningRoutes = require("./routes/providerEarning-routes");
 const commissionRoutes = require('./routes/commissionRoutes');
 const cartRoutes = require('./routes/Cart-routes');
+const paymentRoutes = require('./routes/payment-routes');
 
 // Routes
 app.use("/api/auth", authRoutes);
@@ -55,15 +63,9 @@ app.use("/api/invoice", invoiceRoutes);
 app.use('/api/transaction', transactionRoutes);
 app.use('/api/complaint', complaintRoutes);
 app.use('/api/feedback', feedbackRoutes);
-app.use('/api/earning', earningRoutes);
 app.use('/api/commission', commissionRoutes);
 app.use('/api/cart', cartRoutes);
-
-
-
-
-const paymentRoutes = require('./routes/payments');
-app.use('/api', paymentRoutes);
+app.use('/api/payment', paymentRoutes);
 
 
 
@@ -111,6 +113,7 @@ if (process.env.NODE_ENV !== 'test') {
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', timestamp: new Date() });
 });
+
 
 // Error handling middleware
 app.use((err, req, res, next) => {

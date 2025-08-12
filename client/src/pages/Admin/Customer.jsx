@@ -1,6 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../store/auth';
-import { Search, Users, Calendar, Phone, Mail, MapPin, Eye, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+    Search,
+    Users,
+    Calendar,
+    Phone,
+    Mail,
+    MapPin,
+    Eye,
+    Filter,
+    ChevronLeft,
+    ChevronRight,
+    User,
+    DollarSign,
+    Bookmark,
+    Clock,
+    Shield
+} from 'lucide-react';
 
 const AdminCustomersView = () => {
     const { token, API, showToast } = useAuth();
@@ -34,15 +50,15 @@ const AdminCustomersView = () => {
             }
 
             const data = await response.json();
-            
+
             if (data.success) {
                 setCustomers(data.customers);
-                setPagination(prev => ({
-                    ...prev,
+                setPagination({
                     page: data.page,
+                    limit: data.limit || pagination.limit,
                     total: data.total,
                     pages: data.pages
-                }));
+                });
             } else {
                 showToast(data.message || 'Failed to fetch customers', 'error');
             }
@@ -63,7 +79,7 @@ const AdminCustomersView = () => {
     const handleSearch = (e) => {
         const value = e.target.value;
         setSearchTerm(value);
-        
+
         // Debounce search
         const timeoutId = setTimeout(() => {
             fetchCustomers(1, value);
@@ -89,20 +105,31 @@ const AdminCustomersView = () => {
         return new Date(dateString).toLocaleDateString('en-US', {
             year: 'numeric',
             month: 'short',
-            day: 'numeric'
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
         });
+    };
+
+    // Format currency
+    const formatCurrency = (amount) => {
+        return new Intl.NumberFormat('en-IN', {
+            style: 'currency',
+            currency: 'INR',
+            minimumFractionDigits: 0
+        }).format(amount);
     };
 
     // Loading skeleton
     const LoadingSkeleton = () => (
-        <div className="animate-pulse">
+        <div className="animate-pulse space-y-4">
             {[...Array(5)].map((_, i) => (
-                <div key={i} className="bg-white rounded-lg shadow-sm p-6 mb-4">
+                <div key={i} className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
                     <div className="flex items-center space-x-4">
-                        <div className="w-12 h-12 bg-blue-100 rounded-full"></div>
-                        <div className="flex-1 space-y-2">
-                            <div className="h-4 bg-blue-100 rounded w-1/4"></div>
-                            <div className="h-3 bg-blue-100 rounded w-1/3"></div>
+                        <div className="w-12 h-12 bg-gray-200 rounded-full"></div>
+                        <div className="flex-1 space-y-3">
+                            <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+                            <div className="h-3 bg-gray-200 rounded w-1/3"></div>
                         </div>
                     </div>
                 </div>
@@ -111,11 +138,11 @@ const AdminCustomersView = () => {
     );
 
     return (
-        <div className="min-h-screen bg-blue-50 p-4 md:p-6">
+        <div className="min-h-screen bg-gray-50 p-4 md:p-6">
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <div className="mb-6 md:mb-8">
-                    <h1 className="text-2xl md:text-3xl font-bold text-blue-900 mb-2">
+                    <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
                         Customer Management
                     </h1>
                     <p className="text-gray-600">
@@ -124,65 +151,91 @@ const AdminCustomersView = () => {
                 </div>
 
                 {/* Stats Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
-                    <div className="bg-white rounded-lg shadow-sm p-4 md:p-6 border border-blue-100">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-8">
+                    <div className="bg-white rounded-lg shadow-sm p-4 md:p-6 border border-gray-200">
                         <div className="flex items-center">
                             <div className="p-2 md:p-3 bg-blue-100 rounded-full">
                                 <Users className="h-5 w-5 md:h-6 md:w-6 text-blue-600" />
                             </div>
                             <div className="ml-3 md:ml-4">
                                 <p className="text-xs md:text-sm font-medium text-gray-600">Total Customers</p>
-                                <p className="text-xl md:text-2xl font-semibold text-blue-900">{pagination.total}</p>
+                                <p className="text-xl md:text-2xl font-semibold text-gray-900">{pagination.total}</p>
                             </div>
                         </div>
                     </div>
-                    <div className="bg-white rounded-lg shadow-sm p-4 md:p-6 border border-green-100">
+                    <div className="bg-white rounded-lg shadow-sm p-4 md:p-6 border border-gray-200">
                         <div className="flex items-center">
                             <div className="p-2 md:p-3 bg-green-100 rounded-full">
                                 <Calendar className="h-5 w-5 md:h-6 md:w-6 text-green-600" />
                             </div>
                             <div className="ml-3 md:ml-4">
                                 <p className="text-xs md:text-sm font-medium text-gray-600">Active Today</p>
-                                <p className="text-xl md:text-2xl font-semibold text-green-800">
+                                <p className="text-xl md:text-2xl font-semibold text-gray-900">
                                     {customers.filter(c => {
-                                        const today = new Date().toDateString();
-                                        return new Date(c.updatedAt).toDateString() === today;
+                                        const today = new Date();
+                                        const updatedAt = new Date(c.updatedAt);
+                                        return updatedAt.toDateString() === today.toDateString();
                                     }).length}
                                 </p>
                             </div>
                         </div>
                     </div>
-                    <div className="bg-white rounded-lg shadow-sm p-4 md:p-6 border border-purple-100">
+                    <div className="bg-white rounded-lg shadow-sm p-4 md:p-6 border border-gray-200">
                         <div className="flex items-center">
                             <div className="p-2 md:p-3 bg-purple-100 rounded-full">
-                                <Filter className="h-5 w-5 md:h-6 md:w-6 text-purple-600" />
+                                <DollarSign className="h-5 w-5 md:h-6 md:w-6 text-purple-600" />
                             </div>
                             <div className="ml-3 md:ml-4">
-                                <p className="text-xs md:text-sm font-medium text-gray-600">Showing Results</p>
-                                <p className="text-xl md:text-2xl font-semibold text-purple-800">{customers.length}</p>
+                                <p className="text-xs md:text-sm font-medium text-gray-600">Total Spent</p>
+                                <p className="text-xl md:text-2xl font-semibold text-gray-900">
+                                    {formatCurrency(customers.reduce((sum, c) => sum + (c.totalSpent || 0), 0))}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="bg-white rounded-lg shadow-sm p-4 md:p-6 border border-gray-200">
+                        <div className="flex items-center">
+                            <div className="p-2 md:p-3 bg-yellow-100 rounded-full">
+                                <Bookmark className="h-5 w-5 md:h-6 md:w-6 text-yellow-600" />
+                            </div>
+                            <div className="ml-3 md:ml-4">
+                                <p className="text-xs md:text-sm font-medium text-gray-600">Avg. Bookings</p>
+                                <p className="text-xl md:text-2xl font-semibold text-gray-900">
+                                    {customers.length > 0
+                                        ? (customers.reduce((sum, c) => sum + (c.totalBookings || 0), 0) / customers.length)
+                                        : 0}
+                                </p>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Search Bar */}
-                <div className="bg-white rounded-lg shadow-sm p-4 md:p-6 mb-4 md:mb-6 border border-blue-100">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4 md:h-5 md:w-5" />
-                        <input
-                            type="text"
-                            placeholder="Search customers by name, email, or phone..."
-                            value={searchTerm}
-                            onChange={handleSearch}
-                            className="w-full pl-9 md:pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm md:text-base"
-                        />
+                {/* Search and Filters */}
+                <div className="bg-white rounded-lg shadow-sm p-4 md:p-6 mb-4 md:mb-6 border border-gray-200">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                        <div className="relative flex-grow">
+                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4 md:h-5 md:w-5" />
+                            <input
+                                type="text"
+                                placeholder="Search customers by name, email, or phone..."
+                                value={searchTerm}
+                                onChange={handleSearch}
+                                className="w-full pl-9 md:pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm md:text-base"
+                            />
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <button className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                                <Filter className="h-4 w-4 mr-1 inline" />
+                                Filters
+                            </button>
+                        </div>
                     </div>
                 </div>
 
                 {/* Customers List */}
-                <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-blue-100">
-                    <div className="px-4 py-3 md:px-6 md:py-4 border-b border-gray-200 bg-blue-50">
-                        <h2 className="text-base md:text-lg font-medium text-blue-900">
+                <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-gray-200">
+                    <div className="px-4 py-3 md:px-6 md:py-4 border-b border-gray-200 bg-gray-50">
+                        <h2 className="text-base md:text-lg font-medium text-gray-900">
                             All Customers ({pagination.total})
                         </h2>
                     </div>
@@ -195,152 +248,195 @@ const AdminCustomersView = () => {
                         <div className="p-8 md:p-12 text-center">
                             <Users className="h-10 w-10 md:h-12 md:w-12 text-gray-400 mx-auto mb-3 md:mb-4" />
                             <p className="text-gray-500">No customers found</p>
+                            {searchTerm && (
+                                <button
+                                    onClick={() => {
+                                        setSearchTerm('');
+                                        fetchCustomers();
+                                    }}
+                                    className="mt-4 text-blue-600 hover:text-blue-800 text-sm font-medium"
+                                >
+                                    Clear search and try again
+                                </button>
+                            )}
                         </div>
                     ) : (
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-200">
-                                <thead className="bg-blue-50">
-                                    <tr>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-blue-900 uppercase tracking-wider">
-                                            Customer
-                                        </th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-blue-900 uppercase tracking-wider">
-                                            Contact
-                                        </th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-blue-900 uppercase tracking-wider hidden md:table-cell">
-                                            Location
-                                        </th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-blue-900 uppercase tracking-wider hidden sm:table-cell">
-                                            Stats
-                                        </th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-blue-900 uppercase tracking-wider">
-                                            Actions
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-gray-200">
-                                    {customers.map((customer) => (
-                                        <React.Fragment key={customer._id}>
-                                            <tr className="hover:bg-blue-50">
-                                                <td className="px-4 py-4 whitespace-nowrap">
-                                                    <div className="flex items-center">
-                                                        <div className="h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
-                                                            <span className="text-blue-600 font-medium">
-                                                                {customer.name.charAt(0).toUpperCase()}
-                                                            </span>
+                        <div className="divide-y divide-gray-200">
+                            {customers.map((customer) => (
+                                <div key={customer._id} className="p-4 md:p-6 hover:bg-gray-50">
+                                    <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+                                        {/* Customer Info */}
+                                        <div className="flex items-start space-x-4">
+                                            <div className="flex-shrink-0">
+                                                <div className="h-12 w-12 bg-blue-100 rounded-full flex items-center justify-center">
+                                                    <User className="h-5 w-5 text-blue-600" />
+                                                </div>
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center space-x-2">
+                                                    <p className="text-sm md:text-base font-medium text-gray-900 truncate">
+                                                        {customer.name}
+                                                    </p>
+                                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                                        {customer.role || 'customer'}
+                                                    </span>
+                                                </div>
+                                                <p className="text-sm text-gray-500 truncate">
+                                                    {customer.email}
+                                                </p>
+                                                <div className="mt-1 flex flex-wrap gap-2">
+                                                    <span className="inline-flex items-center text-xs text-gray-500">
+                                                        <Phone className="h-3 w-3 mr-1" />
+                                                        {customer.phone || 'No phone'}
+                                                    </span>
+                                                    {customer.address?.city && (
+                                                        <span className="inline-flex items-center text-xs text-gray-500">
+                                                            <MapPin className="h-3 w-3 mr-1" />
+                                                            {customer.address.city}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Stats and Actions */}
+                                        <div className="mt-4 md:mt-0 flex items-center space-x-4">
+                                            <div className="hidden md:flex space-x-4">
+                                                <div className="text-center">
+                                                    <p className="text-sm font-medium text-gray-500">Bookings</p>
+                                                    <p className="text-sm font-semibold text-gray-900">
+                                                        {customer.totalBookings || 0}
+                                                    </p>
+                                                </div>
+                                                <div className="text-center">
+                                                    <p className="text-sm font-medium text-gray-500">Spent</p>
+                                                    <p className="text-sm font-semibold text-gray-900">
+                                                        {formatCurrency(customer.totalSpent || 0)}
+                                                    </p>
+                                                </div>
+                                                <div className="text-center">
+                                                    <p className="text-sm font-medium text-gray-500">Joined</p>
+                                                    <p className="text-sm font-semibold text-gray-900">
+                                                        {formatDate(customer.createdAt).split(',')[0]}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => toggleCustomerDetails(customer._id)}
+                                                className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                            >
+                                                <Eye className="h-4 w-4 mr-1" />
+                                                {expandedCustomer === customer._id ? 'Hide' : 'View'}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Expanded Details */}
+                                    {expandedCustomer === customer._id && (
+                                        <div className="mt-6 pt-6 border-t border-gray-200">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                                {/* Personal Information */}
+                                                <div className="bg-gray-50 p-4 rounded-lg">
+                                                    <h3 className="text-sm font-medium text-gray-900 mb-3 flex items-center">
+                                                        <User className="h-4 w-4 mr-2 text-gray-500" />
+                                                        Personal Information
+                                                    </h3>
+                                                    <dl className="space-y-2">
+                                                        <div className="flex justify-between">
+                                                            <dt className="text-sm text-gray-500">Full Name</dt>
+                                                            <dd className="text-sm text-gray-900">{customer.name}</dd>
                                                         </div>
-                                                        <div className="ml-3">
-                                                            <div className="text-sm font-medium text-blue-900">
-                                                                {customer.name}
+                                                        <div className="flex justify-between">
+                                                            <dt className="text-sm text-gray-500">Email</dt>
+                                                            <dd className="text-sm text-gray-900">{customer.email}</dd>
+                                                        </div>
+                                                        <div className="flex justify-between">
+                                                            <dt className="text-sm text-gray-500">Phone</dt>
+                                                            <dd className="text-sm text-gray-900">{customer.phone || 'Not provided'}</dd>
+                                                        </div>
+                                                        <div className="flex justify-between">
+                                                            <dt className="text-sm text-gray-500">Account Created</dt>
+                                                            <dd className="text-sm text-gray-900">{formatDate(customer.createdAt)}</dd>
+                                                        </div>
+                                                        <div className="flex justify-between">
+                                                            <dt className="text-sm text-gray-500">Last Active</dt>
+                                                            <dd className="text-sm text-gray-900">{formatDate(customer.updatedAt)}</dd>
+                                                        </div>
+                                                    </dl>
+                                                </div>
+
+                                                {/* Address Information */}
+                                                <div className="bg-gray-50 p-4 rounded-lg">
+                                                    <h3 className="text-sm font-medium text-gray-900 mb-3 flex items-center">
+                                                        <MapPin className="h-4 w-4 mr-2 text-gray-500" />
+                                                        Address Information
+                                                    </h3>
+                                                    {customer.address ? (
+                                                        <dl className="space-y-2">
+                                                            <div className="flex justify-between">
+                                                                <dt className="text-sm text-gray-500">Street</dt>
+                                                                <dd className="text-sm text-gray-900">{customer.address.street || 'Not provided'}</dd>
                                                             </div>
-                                                            <div className="text-xs text-gray-500">
-                                                                ID: {customer._id.slice(-8)}
+                                                            <div className="flex justify-between">
+                                                                <dt className="text-sm text-gray-500">City</dt>
+                                                                <dd className="text-sm text-gray-900">{customer.address.city || 'Not provided'}</dd>
                                                             </div>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-4 whitespace-nowrap">
-                                                    <div className="text-sm text-gray-900">
-                                                        <div className="flex items-center mb-1">
-                                                            <Mail className="h-4 w-4 text-gray-400 mr-2" />
-                                                            <span className="truncate max-w-[120px] md:max-w-none">{customer.email}</span>
-                                                        </div>
-                                                        <div className="flex items-center">
-                                                            <Phone className="h-4 w-4 text-gray-400 mr-2" />
-                                                            {customer.phone || 'N/A'}
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-4 whitespace-nowrap hidden md:table-cell">
-                                                    <div className="text-sm text-gray-900">
-                                                        {customer.address ? (
-                                                            <div className="flex items-center">
-                                                                <MapPin className="h-4 w-4 text-gray-400 mr-2" />
-                                                                <div>
-                                                                    <div>{customer.address.city || 'N/A'}</div>
-                                                                    <div className="text-xs text-gray-500">
-                                                                        {customer.address.state || 'N/A'}
-                                                                    </div>
-                                                                </div>
+                                                            <div className="flex justify-between">
+                                                                <dt className="text-sm text-gray-500">State</dt>
+                                                                <dd className="text-sm text-gray-900">{customer.address.state || 'Not provided'}</dd>
                                                             </div>
-                                                        ) : (
-                                                            <span className="text-gray-500">No address</span>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-4 whitespace-nowrap hidden sm:table-cell">
-                                                    <div className="text-sm text-gray-900">
-                                                        <div className="mb-1">
-                                                            <span className="font-medium">Bookings:</span> {customer.totalBookings || 0}
-                                                        </div>
-                                                        <div className="mb-1">
-                                                            <span className="font-medium">Spent:</span> ₹{customer.totalSpent || 0}
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                    <button
-                                                        onClick={() => toggleCustomerDetails(customer._id)}
-                                                        className="flex items-center text-blue-600 hover:text-blue-800"
-                                                    >
-                                                        <Eye className="h-4 w-4 mr-1" />
-                                                        <span>{expandedCustomer === customer._id ? 'Hide' : 'View'}</span>
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                            {expandedCustomer === customer._id && (
-                                                <tr className="bg-blue-50">
-                                                    <td colSpan="5" className="px-4 py-4">
-                                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                                            <div className="bg-white p-4 rounded-lg shadow-xs border border-blue-100">
-                                                                <h3 className="text-sm font-medium text-blue-900 mb-2 flex items-center">
-                                                                    <MapPin className="h-4 w-4 mr-2 text-blue-600" />
-                                                                    Address Details
-                                                                </h3>
-                                                                {customer.address ? (
-                                                                    <div className="text-sm text-gray-700 space-y-1">
-                                                                        <p><span className="font-medium">Street:</span> {customer.address.street || 'N/A'}</p>
-                                                                        <p><span className="font-medium">City:</span> {customer.address.city || 'N/A'}</p>
-                                                                        <p><span className="font-medium">State:</span> {customer.address.state || 'N/A'}</p>
-                                                                        <p><span className="font-medium">Country:</span> {customer.address.country || 'N/A'}</p>
-                                                                        <p><span className="font-medium">Postal Code:</span> {customer.address.postalCode || 'N/A'}</p>
-                                                                    </div>
-                                                                ) : (
-                                                                    <p className="text-sm text-gray-500">No address information available</p>
-                                                                )}
+                                                            <div className="flex justify-between">
+                                                                <dt className="text-sm text-gray-500">Postal Code</dt>
+                                                                <dd className="text-sm text-gray-900">{customer.address.postalCode || 'Not provided'}</dd>
                                                             </div>
-                                                            <div className="bg-white p-4 rounded-lg shadow-xs border border-blue-100">
-                                                                <h3 className="text-sm font-medium text-blue-900 mb-2 flex items-center">
-                                                                    <Calendar className="h-4 w-4 mr-2 text-blue-600" />
-                                                                    Account Information
-                                                                </h3>
-                                                                <div className="text-sm text-gray-700 space-y-1">
-                                                                    <p><span className="font-medium">Joined:</span> {formatDate(customer.createdAt)}</p>
-                                                                    <p><span className="font-medium">Last Active:</span> {formatDate(customer.updatedAt)}</p>
-                                                                    <p><span className="font-medium">Status:</span> <span className="text-green-600">Active</span></p>
-                                                                    <p><span className="font-medium">Discount:</span> {customer.customDiscount || 0}%</p>
-                                                                </div>
-                                                            </div>
-                                                            <div className="bg-white p-4 rounded-lg shadow-xs border border-blue-100">
-                                                                <h3 className="text-sm font-medium text-blue-900 mb-2 flex items-center">
-                                                                    <Users className="h-4 w-4 mr-2 text-blue-600" />
-                                                                    Customer Stats
-                                                                </h3>
-                                                                <div className="text-sm text-gray-700 space-y-1">
-                                                                    <p><span className="font-medium">Total Bookings:</span> {customer.totalBookings || 0}</p>
-                                                                    <p><span className="font-medium">Total Spent:</span> ₹{customer.totalSpent || 0}</p>
-                                                                    <p><span className="font-medium">Average Booking:</span> ₹{customer.totalBookings ? Math.round(customer.totalSpent / customer.totalBookings) : 0}</p>
-                                                                    <p><span className="font-medium">Loyalty Points:</span> {customer.loyaltyPoints || 0}</p>
-                                                                </div>
-                                                            </div>
+                                                        </dl>
+                                                    ) : (
+                                                        <p className="text-sm text-gray-500">No address information available</p>
+                                                    )}
+                                                </div>
+
+                                                {/* Customer Stats */}
+                                                <div className="bg-gray-50 p-4 rounded-lg">
+                                                    <h3 className="text-sm font-medium text-gray-900 mb-3 flex items-center">
+                                                        <DollarSign className="h-4 w-4 mr-2 text-gray-500" />
+                                                        Customer Statistics
+                                                    </h3>
+                                                    <dl className="space-y-2">
+                                                        <div className="flex justify-between">
+                                                            <dt className="text-sm text-gray-500">Total Bookings</dt>
+                                                            <dd className="text-sm text-gray-900">{customer.totalBookings || 0}</dd>
                                                         </div>
-                                                    </td>
-                                                </tr>
-                                            )}
-                                        </React.Fragment>
-                                    ))}
-                                </tbody>
-                            </table>
+                                                        <div className="flex justify-between">
+                                                            <dt className="text-sm text-gray-500">Total Amount Spent</dt>
+                                                            <dd className="text-sm text-gray-900">{formatCurrency(customer.totalSpent || 0)}</dd>
+                                                        </div>
+                                                        <div className="flex justify-between">
+                                                            <dt className="text-sm text-gray-500">Average Booking</dt>
+                                                            <dd className="text-sm text-gray-900">
+                                                                {customer.totalBookings
+                                                                    ? formatCurrency(Math.round((customer.totalSpent || 0) / customer.totalBookings))
+                                                                    : formatCurrency(0)}
+                                                            </dd>
+                                                        </div>
+                                                        <div className="flex justify-between">
+                                                            <dt className="text-sm text-gray-500">First Booking Used</dt>
+                                                            <dd className="text-sm text-gray-900">
+                                                                {customer.firstBookingUsed ? 'Yes' : 'No'}
+                                                            </dd>
+                                                        </div>
+                                                        <div className="flex justify-between">
+                                                            <dt className="text-sm text-gray-500">Custom Discount</dt>
+                                                            <dd className="text-sm text-gray-900">
+                                                                {customer.customDiscount || 0}%
+                                                            </dd>
+                                                        </div>
+                                                    </dl>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
                         </div>
                     )}
 
@@ -351,14 +447,14 @@ const AdminCustomersView = () => {
                                 <button
                                     onClick={() => handlePageChange(pagination.page - 1)}
                                     disabled={pagination.page === 1}
-                                    className="relative inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-blue-50 disabled:opacity-50"
+                                    className="relative inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
                                 >
                                     Previous
                                 </button>
                                 <button
                                     onClick={() => handlePageChange(pagination.page + 1)}
                                     disabled={pagination.page === pagination.pages}
-                                    className="ml-3 relative inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-blue-50 disabled:opacity-50"
+                                    className="ml-3 relative inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
                                 >
                                     Next
                                 </button>
@@ -366,63 +462,74 @@ const AdminCustomersView = () => {
                             <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
                                 <div>
                                     <p className="text-sm text-gray-700">
-                                        Showing{' '}
-                                        <span className="font-medium text-blue-900">
-                                            {(pagination.page - 1) * pagination.limit + 1}
-                                        </span>{' '}
-                                        to{' '}
-                                        <span className="font-medium text-blue-900">
-                                            {Math.min(pagination.page * pagination.limit, pagination.total)}
-                                        </span>{' '}
-                                        of{' '}
-                                        <span className="font-medium text-blue-900">{pagination.total}</span>{' '}
-                                        results
+                                        Showing <span className="font-medium">{(pagination.page - 1) * pagination.limit + 1}</span> to{' '}
+                                        <span className="font-medium">{Math.min(pagination.page * pagination.limit, pagination.total)}</span> of{' '}
+                                        <span className="font-medium">{pagination.total}</span> results
                                     </p>
                                 </div>
                                 <div>
                                     <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
                                         <button
+                                            onClick={() => handlePageChange(1)}
+                                            disabled={pagination.page === 1}
+                                            className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                                        >
+                                            <span className="sr-only">First</span>
+                                            <ChevronLeft className="h-5 w-5" />
+                                            <ChevronLeft className="h-5 w-5 -ml-2" />
+                                        </button>
+                                        <button
                                             onClick={() => handlePageChange(pagination.page - 1)}
                                             disabled={pagination.page === 1}
-                                            className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-blue-50 disabled:opacity-50"
+                                            className="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
                                         >
+                                            <span className="sr-only">Previous</span>
                                             <ChevronLeft className="h-5 w-5" />
                                         </button>
-                                        {[...Array(pagination.pages)].map((_, i) => {
-                                            // Show limited page numbers with ellipsis
-                                            if (pagination.pages <= 7 || 
-                                                i === 0 || 
-                                                i === pagination.pages - 1 || 
-                                                Math.abs(pagination.page - (i + 1)) <= 2) {
-                                                return (
-                                                    <button
-                                                        key={i + 1}
-                                                        onClick={() => handlePageChange(i + 1)}
-                                                        className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
-                                                            pagination.page === i + 1
-                                                                ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
-                                                                : 'bg-white border-gray-300 text-gray-500 hover:bg-blue-50'
+
+                                        {/* Page numbers */}
+                                        {Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
+                                            let pageNum;
+                                            if (pagination.pages <= 5) {
+                                                pageNum = i + 1;
+                                            } else if (pagination.page <= 3) {
+                                                pageNum = i + 1;
+                                            } else if (pagination.page >= pagination.pages - 2) {
+                                                pageNum = pagination.pages - 4 + i;
+                                            } else {
+                                                pageNum = pagination.page - 2 + i;
+                                            }
+
+                                            return (
+                                                <button
+                                                    key={pageNum}
+                                                    onClick={() => handlePageChange(pageNum)}
+                                                    className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${pagination.page === pageNum
+                                                        ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
+                                                        : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
                                                         }`}
-                                                    >
-                                                        {i + 1}
-                                                    </button>
-                                                );
-                                            }
-                                            if (Math.abs(pagination.page - (i + 1)) === 3) {
-                                                return (
-                                                    <span key={i + 1} className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
-                                                        ...
-                                                    </span>
-                                                );
-                                            }
-                                            return null;
+                                                >
+                                                    {pageNum}
+                                                </button>
+                                            );
                                         })}
+
                                         <button
                                             onClick={() => handlePageChange(pagination.page + 1)}
                                             disabled={pagination.page === pagination.pages}
-                                            className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-blue-50 disabled:opacity-50"
+                                            className="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
                                         >
+                                            <span className="sr-only">Next</span>
                                             <ChevronRight className="h-5 w-5" />
+                                        </button>
+                                        <button
+                                            onClick={() => handlePageChange(pagination.pages)}
+                                            disabled={pagination.page === pagination.pages}
+                                            className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                                        >
+                                            <span className="sr-only">Last</span>
+                                            <ChevronRight className="h-5 w-5" />
+                                            <ChevronRight className="h-5 w-5 -ml-2" />
                                         </button>
                                     </nav>
                                 </div>

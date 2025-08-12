@@ -1,278 +1,838 @@
 const Provider = require('../models/Provider-model');
+const { sendOTP, verifyOTP, clearOTP } = require('../utils/otpSend');
+const { uploadProfilePic, uploadResume, uploadPassbookImg } = require('../middlewares/upload');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
-const { sendOTP, verifyOTP } = require('../utils/otpSend');
+
+// Helper function to delete file
+const deleteFile = (filePath) => {
+    if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+    }
+};
+
 
 /**
- * @desc    Register a new provider
- * @route   POST /api/providers/register
+ * @desc    Register provider with email verification (step 1: send OTP)
+ * @route   POST /api/providers/register/initiate
  * @access  Public
  */
-exports.register = async (req, res) => {
-  try {
-    const { name, email, phone, password, otp, services, experience, serviceArea, address } = req.body;
+exports.initiateRegistration = async (req, res) => {
+    try {
+        const { email } = req.body;
 
-    // Validate required fields
-    if (!name || !email || !phone || !password ) {
-      return res.status(400).json({
-        success: false,
-        message: "Please provide all required fields: name, email, phone, password, services, and serviceArea"
-      });
-    }
+        if (!email) {
+            return res.status(400).json({
+                success: false,
+                message: 'Email is required'
+            });
+        }
 
-    // Check if provider already exists
-    const existingProvider = await Provider.findOne({ email });
-    if (existingProvider) {
-      return res.status(400).json({
-        success: false,
-        message: "Provider already exists with this email"
-      });
-    }
+        // Validate email format
+        const emailRegex = /\S+@\S+\.\S+/;
+        if (!emailRegex.test(email)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please enter a valid email address'
+            });
+        }
 
-    // Handle OTP verification
-    if (!otp) {
-      try {
+        // Check if provider already exists (either fully registered or in progress)
+        const existingProvider = await Provider.findOne({ 
+            email: { $regex: new RegExp(`^${email}$`, 'i') }, 
+            isDeleted: false 
+        });
+        
+        if (existingProvider) {
+            if (existingProvider.profileComplete) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Provider with this email already exists'
+                });
+            } 
+        }
+
+        // Send OTP to email
         await sendOTP(email);
-        return res.status(200).json({
-          success: true,
-          message: "OTP sent to email"
+
+        res.status(200).json({
+            success: true,
+            message: 'OTP sent to email'
         });
-      } catch (error) {
-        return res.status(500).json({
-          success: false,
-          message: "Failed to send OTP"
+    } catch (error) {
+        console.error('Initiate registration error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to initiate registration',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
-      }
     }
-
-    // Verify OTP
-    const isOTPValid = await verifyOTP(email, otp);
-    if (!isOTPValid) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid OTP"
-      });
-    }
-
-    // Handle resume file
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: "Resume file is required"
-      });
-    }
-    const resume = req.file.filename;
-
-    // Hash password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-
-    // Create new provider
-    const provider = await Provider.create({
-      name,
-      email,
-      phone,
-      password: hashedPassword,
-      resume,
-      services,
-      experience: experience || 0,
-      serviceArea,
-      address: address || {},
-      role: 'provider'
-    });
-
-    // Generate JWT token
-    const token = provider.generateJWT();
-
-    // Prepare response data (excluding sensitive info)
-    const providerData = {
-      _id: provider._id,
-      name: provider.name,
-      email: provider.email,
-      phone: provider.phone,
-      role: provider.role,
-      approved: provider.approved,
-      services: provider.services,
-      serviceArea: provider.serviceArea,
-      experience: provider.experience,
-      createdAt: provider.createdAt
-    };
-
-    res.status(201).json({
-      success: true,
-      message: "Provider registered successfully. Awaiting approval.",
-      token,
-      provider: providerData
-    });
-
-  } catch (error) {
-    console.error("Registration error:", error);
-
-    // Clean up uploaded file if error occurs
-    if (req.file) {
-      const filePath = path.join(__dirname, '../uploads/resumes', req.file.filename);
-      fs.unlink(filePath, (err) => {
-        if (err) console.error("Failed to delete file:", err);
-      });
-    }
-
-    res.status(500).json({
-      success: false,
-      message: error.message || "Server error during registration"
-    });
-  }
 };
+
+/**
+ * @desc    Verify OTP and complete registration (step 2: verify OTP and create basic account)
+ * @route   POST /api/providers/register/complete
+ * @access  Public
+ */
+exports.completeRegistration = async (req, res) => {
+    try {
+        const { email, otp, password, name, phone, dateOfBirth } = req.body;
+
+        // Validate required fields for registration only
+        if (!email || !otp || !password || !name || !phone || !dateOfBirth) {
+            return res.status(400).json({
+                success: false,
+                message: 'Email, OTP, password, name, phone and date of birth are required'
+            });
+        }
+
+        // Validate email format
+        const emailRegex = /\S+@\S+\.\S+/;
+        if (!emailRegex.test(email)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please enter a valid email address'
+            });
+        }
+
+        // Verify OTP
+        try {
+            verifyOTP(email, otp);
+        } catch (otpError) {
+            return res.status(400).json({
+                success: false,
+                message: otpError.message
+            });
+        }
+
+        // Clear OTP after successful verification
+        clearOTP(email);
+
+        // Check if provider already exists and profile is complete
+        const existingCompleteProvider = await Provider.findOne({ 
+            email: { $regex: new RegExp(`^${email}$`, 'i') },
+            isDeleted: false,
+            profileComplete: true
+        });
+        if (existingCompleteProvider) {
+            return res.status(400).json({
+                success: false,
+                message: 'Provider with this email already exists'
+            });
+        }
+
+        // Calculate age from date of birth
+        const dob = new Date(dateOfBirth);
+        const today = new Date();
+        let age = today.getFullYear() - dob.getFullYear();
+        const monthDiff = today.getMonth() - dob.getMonth();
+        
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+            age--;
+        }
+
+        // Minimum age requirement (18 years)
+        if (age < 18) {
+            return res.status(400).json({
+                success: false,
+                message: 'You must be at least 18 years old to register'
+            });
+        }
+
+        // Check if provider exists but profile is incomplete (update instead of create)
+        const existingIncompleteProvider = await Provider.findOne({ 
+            email: { $regex: new RegExp(`^${email}$`, 'i') },
+            isDeleted: false,
+            profileComplete: false
+        });
+
+        let provider;
+        
+        if (existingIncompleteProvider) {
+            // Update existing incomplete provider
+            existingIncompleteProvider.password = password;
+            existingIncompleteProvider.name = name;
+            existingIncompleteProvider.phone = phone;
+            existingIncompleteProvider.dateOfBirth = dob;
+            provider = await existingIncompleteProvider.save();
+        } else {
+            // Create new provider with basic info only
+            provider = new Provider({
+                email,
+                password,
+                name,
+                phone,
+                dateOfBirth: dob,
+                profileComplete: false // Mark as incomplete
+            });
+            await provider.save();
+        }
+
+        // Generate JWT token
+        const token = provider.generateJWT();
+
+        res.status(201).json({
+            success: true,
+            message: 'Registration successful. Please complete your profile.',
+            token,
+            provider: {
+                id: provider._id,
+                name: provider.name,
+                email: provider.email,
+                phone: provider.phone,
+                profileComplete: provider.profileComplete
+            }
+        });
+    } catch (error) {
+        console.error('Complete registration error:', error);
+        
+        // Handle specific validation errors
+        if (error.name === 'ValidationError') {
+            const messages = Object.values(error.errors).map(val => val.message);
+            return res.status(400).json({
+                success: false,
+                message: 'Validation error',
+                errors: messages
+            });
+        }
+        
+        res.status(500).json({
+            success: false,
+            message: 'Failed to complete registration',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
+/**
+ * @desc    Login for profile completion (step 3)
+ * @route   POST /api/providers/login-for-completion
+ * @access  Public
+ */
+exports.loginForCompletion = async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        // Validate input
+        if (!email || !password) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please provide both email and password'
+            });
+        }
+
+        // Find provider (case insensitive email search)
+        const provider = await Provider.findOne({ 
+            email: { $regex: new RegExp(`^${email}$`, 'i') }
+        }).select('+password +profileComplete');
+
+        if (!provider) {
+            return res.status(401).json({
+                success: false,
+                message: 'Invalid credentials'
+            });
+        }
+
+        // Check if profile is already complete
+        if (provider.profileComplete) {
+            return res.status(400).json({
+                success: false,
+                message: 'Profile is already completed'
+            });
+        }
+
+        // Verify password
+        const isMatch = await provider.comparePassword(password);
+        if (!isMatch) {
+            return res.status(401).json({
+                success: false,
+                message: 'Invalid credentials'
+            });
+        }
+
+        // Generate JWT token
+        const token = provider.generateJWT();
+
+        res.status(200).json({
+            success: true,
+            message: 'Login successful. Please complete your profile.',
+            token,
+            provider: {
+                id: provider._id,
+                name: provider.name,
+                email: provider.email,
+                profileComplete: provider.profileComplete
+            }
+        });
+    } catch (error) {
+        console.error('Login for completion error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to login',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
+/**
+ * @desc    Complete provider profile (step 4: after login)
+ * @route   PUT /api/providers/profile/complete
+ * @access  Private (requires authentication)
+ */
+exports.completeProfile = async (req, res) => {
+    try {
+        const providerId = req.providerID;
+        const {
+            services,
+            experience,
+            serviceArea,
+            street,
+            city,
+            state,
+            postalCode,
+            country,
+            accountNo,
+            ifsc
+        } = req.body;
+
+        // Validate required fields
+        if (!services || !experience || !serviceArea || !street || !city || 
+            !state || !postalCode || !accountNo || !ifsc) {
+            return res.status(400).json({
+                success: false,
+                message: 'All professional and bank details are required'
+            });
+        }
+
+        // Validate IFSC format
+        const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+        if (!ifscRegex.test(ifsc)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please enter a valid IFSC code'
+            });
+        }
+
+        // Validate account number
+        const accountNoRegex = /^[0-9]{9,18}$/;
+        if (!accountNoRegex.test(accountNo)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please enter a valid account number (9-18 digits)'
+            });
+        }
+
+        // Get provider
+        const provider = await Provider.findById(providerId);
+        if (!provider) {
+            return res.status(404).json({
+                success: false,
+                message: 'Provider not found'
+            });
+        }
+
+        // Check if profile is already complete
+        if (provider.profileComplete) {
+            return res.status(400).json({
+                success: false,
+                message: 'Profile is already completed'
+            });
+        }
+
+        // Update professional info
+        provider.services = services;
+        provider.experience = experience;
+        provider.serviceArea = serviceArea;
+
+        // Update address
+        provider.address = {
+            street,
+            city,
+            state,
+            postalCode,
+            country: country || 'India'
+        };
+
+        // Update bank details
+        provider.bankDetails = {
+            accountNo,
+            ifsc,
+            passbookImage: req.files['passbookImage'] ? req.files['passbookImage'][0].path : undefined,
+            verified: false
+        };
+
+        // Update profile picture if uploaded
+        if (req.files['profilePic']) {
+            provider.profilePicUrl = req.files['profilePic'][0].path;
+        }
+
+        // Update resume if uploaded
+        if (req.files['resume']) {
+            provider.resume = req.files['resume'][0].path;
+        }
+
+        // Mark profile as complete
+        provider.profileComplete = true;
+        provider.registrationDate = new Date();
+        await provider.save();
+
+        res.status(200).json({
+            success: true,
+            message: 'Profile completed successfully. Your account is pending approval.',
+            provider: {
+                id: provider._id,
+                name: provider.name,
+                email: provider.email,
+                profileComplete: provider.profileComplete,
+                kycStatus: provider.kycStatus,
+                approved: provider.approved
+            }
+        });
+    } catch (error) {
+        console.error('Complete profile error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to complete profile',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
 
 /**
  * @desc    Get provider profile
- * @route   GET /api/provider/profile
+ * @route   GET /api/providers/profile
  * @access  Private (Provider)
  */
 exports.getProfile = async (req, res) => {
-  try {
-    const provider = await Provider.findById(req.providerID)
-      .select('-password -__v')
-      .populate({
-        path: 'feedbacks',
-        select: 'rating comment createdAt',
-        populate: {
-          path: 'user',
-          select: 'name profilePicUrl'
+    try {
+        const provider = await Provider.findById(req.providerID)
+            .select('-password -bankDetails.passbookImage -__v')
+            .populate({
+                path: 'feedbacks',
+                select: 'rating comment createdAt',
+                options: { limit: 5, sort: { createdAt: -1 } }
+            })
+            .populate({
+                path: 'earningsHistory',
+                select: 'amount date description',
+                options: { limit: 5, sort: { date: -1 } }
+            });
+
+        if (!provider) {
+            return res.status(404).json({
+                success: false,
+                message: 'Provider not found'
+            });
         }
-      })
-      .populate('earningsHistory', 'amount date description transactionType');
 
-    if (!provider || provider.isDeleted) {
-      return res.status(404).json({
-        success: false,
-        message: "Provider not found"
-      });
+        res.status(200).json({
+            success: true,
+            provider
+        });
+    } catch (error) {
+        console.error('Get profile error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to get profile',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
-
-    // Calculate average rating
-    let averageRating = 0;
-    if (provider.feedbacks && provider.feedbacks.length > 0) {
-      const total = provider.feedbacks.reduce((sum, feedback) => sum + feedback.rating, 0);
-      averageRating = total / provider.feedbacks.length;
-    }
-
-    const profileData = {
-      ...provider.toObject(),
-      averageRating: averageRating.toFixed(1)
-    };
-
-    res.status(200).json({
-      success: true,
-      profile: profileData
-    });
-
-  } catch (error) {
-    console.error("Get profile error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Server error while fetching profile"
-    });
-  }
 };
 
 /**
- * @desc    Update provider profile
- * @route   PUT /api/provider/update-profile
+ * @desc    Update provider profile (basic info)
+ * @route   PUT /api/providers/profile
  * @access  Private (Provider)
  */
 exports.updateProfile = async (req, res) => {
-  try {
-    const updates = req.body;
-    const providerId = req.providerID;
+    try {
+        const { name, phone, dateOfBirth } = req.body;
+        const updates = {};
 
-    // Find the existing provider
-    const existingProvider = await Provider.findById(providerId);
-    if (!existingProvider || existingProvider.isDeleted) {
-      return res.status(404).json({
-        success: false,
-        message: "Provider not found"
-      });
-    }
+        if (name) updates.name = name;
+        if (phone) updates.phone = phone;
+        if (dateOfBirth) updates.dateOfBirth = new Date(dateOfBirth);
 
-    // Handle profile picture update if provided
-    if (req.file) {
-      // Delete old profile picture if exists and not default
-      if (existingProvider.profilePicUrl && existingProvider.profilePicUrl !== 'default-provider.jpg') {
-        const oldFilePath = path.join(__dirname, '../uploads/profilePics', existingProvider.profilePicUrl);
-        if (fs.existsSync(oldFilePath)) {
-          fs.unlink(oldFilePath, (err) => {
-            if (err) console.error("Failed to delete old profile picture:", err);
-          });
+        const provider = await Provider.findByIdAndUpdate(
+            req.providerID,
+            updates,
+            { new: true, runValidators: true }
+        ).select('-password -bankDetails.passbookImage -__v');
+
+        if (!provider) {
+            return res.status(404).json({
+                success: false,
+                message: 'Provider not found'
+            });
         }
-      }
-      updates.profilePicUrl = req.file.filename;
-    }
 
-    // Prevent updating restricted fields
-    const restrictedFields = [
-      '_id', 'password', 'role', 'approved', 'wallet', 
-      'blockedTill', 'completedBookings', 'canceledBookings', 
-      'feedbacks', 'earningsHistory', 'isDeleted', 'testPassed'
-    ];
-    
-    restrictedFields.forEach(field => delete updates[field]);
-
-    // Handle address update
-    if (updates.address) {
-      updates.address = {
-        ...existingProvider.address,
-        ...updates.address
-      };
-    }
-
-    // Handle bank details update
-    if (updates.bankDetails) {
-      updates.bankDetails = {
-        ...existingProvider.bankDetails,
-        ...updates.bankDetails
-      };
-    }
-
-    // Update provider
-    const updatedProvider = await Provider.findByIdAndUpdate(
-      providerId,
-      updates,
-      { new: true, runValidators: true }
-    ).select('-password -__v');
-
-    res.status(200).json({
-      success: true,
-      message: "Profile updated successfully",
-      provider: updatedProvider
-    });
-
-  } catch (error) {
-    console.error("Update profile error:", error);
-
-    // Clean up uploaded file if error occurs
-    if (req.file) {
-      const filePath = path.join(__dirname, '../uploads/profilePics', req.file.filename);
-      if (fs.existsSync(filePath)) {
-        fs.unlink(filePath, (err) => {
-          if (err) console.error("Failed to delete file:", err);
+        res.status(200).json({
+            success: true,
+            message: 'Profile updated successfully',
+            provider
         });
-      }
+    } catch (error) {
+        console.error('Update profile error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update profile',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
-
-    let errorMessage = "Server error while updating profile";
-    if (error.name === 'ValidationError') {
-      errorMessage = Object.values(error.errors).map(val => val.message).join(', ');
-    }
-
-    res.status(500).json({
-      success: false,
-      message: errorMessage
-    });
-  }
 };
 
+/**
+ * @desc    Update provider professional info
+ * @route   PUT /api/providers/profile/professional
+ * @access  Private (Provider)
+ */
+exports.updateProfessionalInfo = async (req, res) => {
+    try {
+        const { services, experience, serviceArea } = req.body;
+        const updates = {};
 
+        if (services) updates.services = services;
+        if (experience) updates.experience = experience;
+        if (serviceArea) updates.serviceArea = serviceArea;
+
+        const provider = await Provider.findByIdAndUpdate(
+            req.providerID,
+            updates,
+            { new: true, runValidators: true }
+        ).select('-password -bankDetails.passbookImage -__v');
+
+        if (!provider) {
+            return res.status(404).json({
+                success: false,
+                message: 'Provider not found'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: 'Professional info updated successfully',
+            provider
+        });
+    } catch (error) {
+        console.error('Update professional info error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update professional info',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
+/**
+ * @desc    Update provider address
+ * @route   PUT /api/providers/profile/address
+ * @access  Private (Provider)
+ */
+exports.updateAddress = async (req, res) => {
+    try {
+        const { street, city, state, postalCode, country } = req.body;
+
+        if (!street || !city || !state || !postalCode) {
+            return res.status(400).json({
+                success: false,
+                message: 'All address fields are required'
+            });
+        }
+
+        const address = {
+            street,
+            city,
+            state,
+            postalCode,
+            country: country || 'India'
+        };
+
+        const provider = await Provider.findByIdAndUpdate(
+            req.providerID,
+            { address },
+            { new: true, runValidators: true }
+        ).select('-password -bankDetails.passbookImage -__v');
+
+        if (!provider) {
+            return res.status(404).json({
+                success: false,
+                message: 'Provider not found'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: 'Address updated successfully',
+            provider
+        });
+    } catch (error) {
+        console.error('Update address error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update address',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
+/**
+ * @desc    Update provider bank details
+ * @route   PUT /api/providers/profile/bank
+ * @access  Private (Provider)
+ */
+exports.updateBankDetails = async (req, res) => {
+    try {
+        const { accountNo, ifsc } = req.body;
+
+        if (!accountNo || !ifsc) {
+            return res.status(400).json({
+                success: false,
+                message: 'Account number and IFSC code are required'
+            });
+        }
+
+        const updates = {
+            'bankDetails.accountNo': accountNo,
+            'bankDetails.ifsc': ifsc,
+            'bankDetails.verified': false // Reset verification status when details change
+        };
+
+        // Add passbook image if uploaded
+        if (req.file) {
+            // Get provider to delete old passbook image
+            const provider = await Provider.findById(req.providerID);
+            if (provider?.bankDetails?.passbookImage) {
+                deleteFile(path.join(__dirname, '../', provider.bankDetails.passbookImage));
+            }
+            updates['bankDetails.passbookImage'] = req.file.path;
+        }
+
+        const updatedProvider = await Provider.findByIdAndUpdate(
+            req.providerID,
+            updates,
+            { new: true, runValidators: true }
+        ).select('-password -__v');
+
+        if (!updatedProvider) {
+            return res.status(404).json({
+                success: false,
+                message: 'Provider not found'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: 'Bank details updated successfully. Verification will be processed.',
+            provider: updatedProvider
+        });
+    } catch (error) {
+        console.error('Update bank details error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update bank details',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
+/**
+ * @desc    Update provider profile picture
+ * @route   PUT /api/providers/profile/picture
+ * @access  Private (Provider)
+ */
+exports.updateProfilePicture = [
+    uploadProfilePic.single('profilePic'),
+    async (req, res) => {
+        try {
+            if (!req.file) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Profile picture is required'
+                });
+            }
+
+            // Get provider to delete old picture
+            const provider = await Provider.findById(req.providerID);
+            if (!provider) {
+                // Delete the just uploaded file if provider not found
+                deleteFile(req.file.path);
+                return res.status(404).json({
+                    success: false,
+                    message: 'Provider not found'
+                });
+            }
+
+            // Delete old profile picture if it exists and not the default
+            if (provider.profilePicUrl && provider.profilePicUrl !== 'default-provider.jpg') {
+                deleteFile(path.join(__dirname, '../', provider.profilePicUrl));
+            }
+
+            // Update profile picture
+            provider.profilePicUrl = req.file.path;
+            await provider.save();
+
+            res.status(200).json({
+                success: true,
+                message: 'Profile picture updated successfully',
+                profilePicUrl: provider.profilePicUrl
+            });
+        } catch (error) {
+            console.error('Update profile picture error:', error);
+            // Delete the uploaded file if error occurred
+            if (req.file) {
+                deleteFile(req.file.path);
+            }
+            res.status(500).json({
+                success: false,
+                message: 'Failed to update profile picture',
+                error: process.env.NODE_ENV === 'development' ? error.message : undefined
+            });
+        }
+    }
+];
+
+/**
+ * @desc    Update provider resume
+ * @route   PUT /api/providers/profile/resume
+ * @access  Private (Provider)
+ */
+exports.updateResume = [
+    uploadResume.single('resume'),
+    async (req, res) => {
+        try {
+            if (!req.file) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Resume file is required'
+                });
+            }
+
+            // Get provider to delete old resume
+            const provider = await Provider.findById(req.providerID);
+            if (!provider) {
+                // Delete the just uploaded file if provider not found
+                deleteFile(req.file.path);
+                return res.status(404).json({
+                    success: false,
+                    message: 'Provider not found'
+                });
+            }
+
+            // Delete old resume if it exists
+            if (provider.resume) {
+                deleteFile(path.join(__dirname, '../', provider.resume));
+            }
+
+            // Update resume
+            provider.resume = req.file.path;
+            await provider.save();
+
+            res.status(200).json({
+                success: true,
+                message: 'Resume updated successfully',
+                resumeUrl: provider.resume
+            });
+        } catch (error) {
+            console.error('Update resume error:', error);
+            // Delete the uploaded file if error occurred
+            if (req.file) {
+                deleteFile(req.file.path);
+            }
+            res.status(500).json({
+                success: false,
+                message: 'Failed to update resume',
+                error: process.env.NODE_ENV === 'development' ? error.message : undefined
+            });
+        }
+    }
+];
+
+/**
+ * @desc    Delete provider account (soft delete)
+ * @route   DELETE /api/providers/profile
+ * @access  Private (Provider)
+ */
+exports.deleteAccount = async (req, res) => {
+    try {
+        const provider = await Provider.findById(req.providerID);
+        if (!provider) {
+            return res.status(404).json({
+                success: false,
+                message: 'Provider not found'
+            });
+        }
+
+        // Mark as deleted
+        provider.isDeleted = true;
+        provider.isActive = false;
+        await provider.save();
+
+        res.status(200).json({
+            success: true,
+            message: 'Account deleted successfully'
+        });
+    } catch (error) {
+        console.error('Delete account error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to delete account',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
+/**
+ * @desc    Permanently delete provider account (admin only)
+ * @route   DELETE /api/providers/:id/permanent
+ * @access  Private (Admin)
+ */
+exports.permanentDeleteAccount = async (req, res) => {
+    try {
+        // Check if user is admin (you would implement your own admin check)
+        if (req.role !== 'admin') {
+            return res.status(403).json({
+                success: false,
+                message: 'Unauthorized: Admin access required'
+            });
+        }
+
+        const provider = await Provider.findById(req.params.id);
+        if (!provider) {
+            return res.status(404).json({
+                success: false,
+                message: 'Provider not found'
+            });
+        }
+
+        // Delete files
+        if (provider.profilePicUrl && provider.profilePicUrl !== 'default-provider.jpg') {
+            deleteFile(path.join(__dirname, '../', provider.profilePicUrl));
+        }
+        if (provider.resume) {
+            deleteFile(path.join(__dirname, '../', provider.resume));
+        }
+        if (provider.bankDetails.passbookImage) {
+            deleteFile(path.join(__dirname, '../', provider.bankDetails.passbookImage));
+        }
+
+        // Permanent delete
+        await Provider.findByIdAndDelete(req.params.id);
+
+        res.status(200).json({
+            success: true,
+            message: 'Account permanently deleted'
+        });
+    } catch (error) {
+        console.error('Permanent delete error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to permanently delete account',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
 
 

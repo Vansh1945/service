@@ -22,7 +22,10 @@ const addToCart = async (req, res) => {
     // Verify service exists
     const service = await Service.findById(serviceId);
     if (!service) {
-      return res.status(404).json({ message: 'Service not found' });
+      return res.status(404).json({ 
+        success: false,
+        message: 'Service not found' 
+      });
     }
 
     // Find or create cart for user
@@ -33,9 +36,26 @@ const addToCart = async (req, res) => {
 
     // Add item to cart
     await cart.addItem(serviceId, quantity);
-    res.json(await cart.populate('items.service'));
+    
+    res.json({
+      success: true,
+      cart: await cart.populate('items.service')
+    });
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    console.error('Add to cart error:', error);
+    
+    // Specific error for duplicate items
+    if (error.message.includes('already in cart')) {
+      return res.status(400).json({ 
+        success: false,
+        message: error.message 
+      });
+    }
+    
+    res.status(400).json({ 
+      success: false,
+      message: error.message || 'Failed to add to cart' 
+    });
   }
 };
 

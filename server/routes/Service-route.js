@@ -3,7 +3,7 @@ const router = express.Router();
 const serviceController = require('../controllers/Services-controller');
 const adminAuthMiddleware = require('../middlewares/Admin-middleware');
 const providerAuthMiddleware = require('../middlewares/Provider-middleware');
-const { uploadServiceImage, upload } = require('../middlewares/upload');
+const { uploadServiceImage, uploadServicesFile, upload} = require('../middlewares/upload');
 
 /**
  * ADMIN ROUTES
@@ -14,7 +14,7 @@ router.post('/admin/services',
     serviceController.createService
 );
 
-router.put('/admin/services/:id',
+router.put('/admin/service/:id',
     adminAuthMiddleware,
     uploadServiceImage.single('image'),
     serviceController.updateService
@@ -42,7 +42,7 @@ router.get('/admin/services/:id',
 
 router.post('/admin/bulk-import', 
     adminAuthMiddleware,
-    upload.single('servicesFile'), 
+    uploadServicesFile.single('servicesFile'), 
     serviceController.bulkImportServices
 );
 

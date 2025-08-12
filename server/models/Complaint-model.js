@@ -40,6 +40,19 @@ const complaintSchema = new Schema({
     maxlength: [1000, 'Admin response cannot exceed 1000 characters'],
     default: null
   },
+  reopenedBy: {  // Added this field
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
+  reopenedAt: {  // Added this field
+    type: Date,
+    default: null
+  },
+  reopenedReason: {  // Added this field
+    type: String,
+    default: null
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -110,11 +123,14 @@ complaintSchema.methods.resolveComplaint = function(adminResponse) {
 };
 
 // Instance method to reopen complaint
-complaintSchema.methods.reopenComplaint = function() {
+complaintSchema.methods.reopenComplaint = function(reason, userId) {
   if (this.status !== 'resolved') {
     throw new Error('Only resolved complaints can be reopened');
   }
   this.status = 'open';
+  this.reopenedAt = new Date();
+  this.reopenedBy = userId;
+  this.reopenedReason = reason;
   this.resolvedAt = null;
   return this.save();
 };

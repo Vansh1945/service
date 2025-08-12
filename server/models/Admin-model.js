@@ -18,7 +18,8 @@ const adminSchema = new mongoose.Schema({
   },
   isAdmin: {
     type: Boolean,
-    default: true
+    default: true,
+    required: true
   }
 }, {
   timestamps: true
@@ -26,11 +27,15 @@ const adminSchema = new mongoose.Schema({
 
 // Hash password before saving
 adminSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) return next(); // Only hash if modified
+  if (!this.isModified('password')) return next();
 
-  const salt = await bcrypt.genSalt(10);
-  this.password = await bcrypt.hash(this.password, salt);
-
+  try {
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+    next();
+  } catch (error) {
+    next(error);
+  }
 });
 
 // Compare password
@@ -47,7 +52,7 @@ adminSchema.methods.generateJWT = function () {
       isAdmin: this.isAdmin
     },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN }
+    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   );
 };
 

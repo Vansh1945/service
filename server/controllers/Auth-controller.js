@@ -5,7 +5,6 @@ const { sendOTP, verifyOTP, clearOTP } = require('../utils/otpSend');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
-
 /**
  * @desc    Unified login for all user types
  * @route   POST /api/auth/login
@@ -13,10 +12,13 @@ const jwt = require('jsonwebtoken');
  */
 exports.Login = async (req, res) => {
   try {
+    console.log("Login request received:", req.body); // Debug log
+
     const { email, password } = req.body;
 
     // Validate input
     if (!email || !password) {
+      console.log("Missing email or password");
       return res.status(400).json({
         success: false,
         message: 'Please provide both email and password'
@@ -27,11 +29,17 @@ exports.Login = async (req, res) => {
     const trimmedEmail = email.trim().toLowerCase();
     const trimmedPassword = password.trim();
 
-    // Try to find user in all collections
-    let user = await User.findOne({ email: trimmedEmail }).select('+password');
+    console.log(`Searching for user: ${trimmedEmail}`);
+
+    // Try to find user in all collections with case-insensitive search
+    let user = await User.findOne({ 
+      email: { $regex: new RegExp(`^${trimmedEmail}$`, 'i') }
+    }).select('+password');
+
     let userType = 'customer';
 
     if (!user) {
+      console.log("Not found in User collection, checking Provider...");
       user = await Provider.findOne({ 
         email: { $regex: new RegExp(`^${trimmedEmail}$`, 'i') }
       }).select('+password +approved +blockedTill');
@@ -39,53 +47,45 @@ exports.Login = async (req, res) => {
     }
 
     if (!user) {
-      user = await Admin.findOne({ email: trimmedEmail }).select('+password');
+      console.log("Not found in Provider collection, checking Admin...");
+      user = await Admin.findOne({ 
+        email: { $regex: new RegExp(`^${trimmedEmail}$`, 'i') }
+      }).select('+password');
       userType = 'admin';
     }
 
     // If no user found
     if (!user) {
+      console.log("User not found in any collection");
       return res.status(401).json({
         success: false,
-        message: 'Invalid credentials'
+        message: 'Invalid email or password'
       });
     }
 
-    // Role-specific validations
-    if (userType === 'provider') {
-      // Check approval status
-      if (!user.approved) {
-        return res.status(403).json({
-          success: false,
-          message: 'Your account is pending approval from admin'
-        });
-      }
+    console.log(`User found in ${userType} collection`);
+    console.log("Stored password hash:", user.password);
 
-      // Check blocked status
-      if (user.blockedTill && user.blockedTill > new Date()) {
-        return res.status(403).json({
-          success: false,
-          message: `Your account is blocked until ${user.blockedTill}`
-        });
-      }
-    }
-
-    if (userType === 'admin' && !user.isAdmin) {
-      return res.status(403).json({
+    // Verify password
+    let isMatch;
+    try {
+      // Always use bcrypt.compare for consistency across all user types
+      console.log("Using bcrypt.compare for password verification");
+      isMatch = await bcrypt.compare(trimmedPassword, user.password);
+    } catch (compareError) {
+      console.error("Password comparison error:", compareError);
+      return res.status(500).json({
         success: false,
-        message: 'Admin access denied'
+        message: 'Error during password verification'
       });
     }
 
-    // Verify password (using appropriate method based on model)
-    const isMatch = user.comparePassword 
-      ? await user.comparePassword(trimmedPassword)
-      : await bcrypt.compare(trimmedPassword, user.password);
+    console.log("Password match result:", isMatch);
 
     if (!isMatch) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid credentials'
+        message: 'Invalid email or password'
       });
     }
 
@@ -102,7 +102,7 @@ exports.Login = async (req, res) => {
       { expiresIn: process.env.JWT_EXPIRE || '30d' }
     );
 
-    // Prepare response data (excluding sensitive fields)
+    // Prepare response data
     const userData = {
       _id: user._id,
       name: user.name,
@@ -118,7 +118,8 @@ exports.Login = async (req, res) => {
       })
     };
 
-    // Return token in response body without setting cookie
+    console.log("Login successful for:", user.email);
+
     res.status(200).json({
       success: true,
       message: 'Login successful',
@@ -130,7 +131,7 @@ exports.Login = async (req, res) => {
     console.error('Login error:', error);
     res.status(500).json({
       success: false,
-      message: 'Internal server error. Please try again later.',
+      message: 'Internal server error',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }

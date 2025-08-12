@@ -4,7 +4,8 @@ const {
     register,
     getProfile,
     updateProfile,
-    uploadProfilePicture
+    uploadProfilePicture,
+    getCustomerDashboardStats
 } = require('../controllers/User-controller');
 const { userAuthMiddleware } = require('../middlewares/User-middleware');
 const { uploadProfilePic } = require('../middlewares/upload');
@@ -20,6 +21,7 @@ router.post('/profile-picture',
     uploadProfilePicture
 );
 
+router.get('/dashboard', userAuthMiddleware, getCustomerDashboardStats);
 
 
 

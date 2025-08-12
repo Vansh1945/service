@@ -64,7 +64,6 @@ const bookingSchema = new Schema({
   provider: {
     type: Schema.Types.ObjectId,
     ref: 'Provider',
-    required: true
   },
   services: [serviceItemSchema],
   date: {
@@ -72,7 +71,7 @@ const bookingSchema = new Schema({
     required: [true, 'Booking date is required'],
     min: [Date.now, 'Booking date cannot be in the past'],
     validate: {
-      validator: function(value) {
+      validator: function (value) {
         return value instanceof Date && !isNaN(value);
       },
       message: 'Invalid date format'
@@ -90,8 +89,13 @@ const bookingSchema = new Schema({
   },
   paymentStatus: {
     type: String,
-    enum: ['pending', 'paid', 'cod'],
+    enum: ['pending', 'processing', 'paid', 'failed', 'refunded'],
     default: 'pending'
+  },
+  paymentMethod: {
+    type: String,
+    enum: ['online', 'cash', null],
+    default: null
   },
   address: {
     type: addressSchema,
@@ -116,6 +120,15 @@ const bookingSchema = new Schema({
     required: true,
     min: [0, 'Total amount cannot be negative']
   },
+  commissionAmount: {
+    type: Number,
+    default: 0,
+    min: [0, 'Commission cannot be negative']
+  },
+  commissionRule: {
+    type: Schema.Types.ObjectId,
+    ref: 'CommissionRule'
+  },
   invoice: {
     type: Schema.Types.ObjectId,
     ref: 'Invoice'
@@ -138,55 +151,84 @@ const bookingSchema = new Schema({
   },
   updatedAt: {
     type: Date
+  },
+  confirmedBooking: {
+    type: Boolean,
+    default: false
   }
 }, {
-  toJSON: { 
+  toJSON: {
     virtuals: true,
-    transform: function(doc, ret) {
-      // Remove virtuals that might cause issues during serialization
+    transform: function (doc, ret) {
       delete ret.id;
       delete ret._id;
       return ret;
     }
   },
-  toObject: { 
+  toObject: {
     virtuals: true,
-    transform: function(doc, ret) {
-      // Remove virtuals that might cause issues during serialization
+    transform: function (doc, ret) {
       delete ret.id;
       delete ret._id;
       return ret;
     }
-  }
+  },
+  timestamps: false
 });
 
-// Pre-save hook to update timestamps
-bookingSchema.pre('save', function (next) {
+// Pre-save hook to calculate commission and totals
+bookingSchema.pre('save', async function (next) {
   this.updatedAt = Date.now();
+
+  // Calculate subtotal from services
+  this.subtotal = this.services.reduce((sum, service) => {
+    return sum + (service.price * service.quantity) - service.discountAmount;
+  }, 0);
+
+  // Calculate total amount after discount
+  this.totalAmount = this.subtotal - this.totalDiscount;
+
+  // Only calculate commission if provider is set and payment is being processed
+  if (this.provider && (this.isModified('paymentStatus') || this.isNew)) {
+    try {
+      const CommissionRule = mongoose.model('CommissionRule');
+      const commissionRule = await CommissionRule.getCommissionForProvider(this.provider);
+      
+      if (commissionRule) {
+        const { commission } = CommissionRule.calculateCommission(this.totalAmount, commissionRule);
+        this.commissionAmount = commission;
+        this.commissionRule = commissionRule._id;
+      } else {
+        // No commission rule found - set to 0
+        this.commissionAmount = 0;
+        this.commissionRule = null;
+      }
+    } catch (error) {
+      console.error('Error calculating commission:', error);
+      this.commissionAmount = 0;
+      this.commissionRule = null;
+    }
+  }
+
+  // Automatically confirm booking when payment is marked as paid
+  if (this.paymentStatus === 'paid' && !this.confirmedBooking) {
+    this.confirmedBooking = true;
+  }
+
   next();
 });
 
-// Virtual for booking datetime - with null checks
+// Virtual for booking datetime
 bookingSchema.virtual('bookingDateTime').get(function () {
   if (!this.date || !this.time) return null;
-  
-  try {
-    const dateStr = this.date.toISOString().split('T')[0];
-    return new Date(`${dateStr}T${this.time}`);
-  } catch (error) {
-    return null;
-  }
+  const dateStr = this.date.toISOString().split('T')[0];
+  return new Date(`${dateStr}T${this.time}`);
 });
 
-// Virtual for isUpcoming - with null checks
+// Virtual for isUpcoming
 bookingSchema.virtual('isUpcoming').get(function () {
   if (!this.bookingDateTime || !this.status) return false;
-  
-  try {
-    return this.status === 'accepted' && this.bookingDateTime > new Date();
-  } catch (error) {
-    return false;
-  }
+  return this.status === 'accepted' && this.bookingDateTime > new Date();
 });
 
 // Static method to find upcoming bookings
@@ -215,6 +257,29 @@ bookingSchema.methods.complete = function () {
     throw new Error('Only accepted bookings can be marked completed');
   }
   this.status = 'completed';
+  return this.save();
+};
+
+// Instance method to confirm payment and booking
+bookingSchema.methods.confirmPayment = async function (paymentMethod) {
+  if (this.paymentStatus === 'paid') {
+    throw new Error('Payment is already confirmed');
+  }
+
+  // Recalculate commission in case amount changed
+  const CommissionRule = mongoose.model('CommissionRule');
+  const commissionRule = await CommissionRule.getCommissionForProvider(this.provider);
+  
+  if (commissionRule) {
+    const { commission } = CommissionRule.calculateCommission(this.totalAmount, commissionRule);
+    this.commissionAmount = commission;
+    this.commissionRule = commissionRule._id;
+  }
+
+  this.paymentStatus = 'paid';
+  this.paymentMethod = paymentMethod;
+  this.confirmedBooking = true;
+
   return this.save();
 };
 

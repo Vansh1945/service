@@ -1,222 +1,405 @@
+const mongoose = require('mongoose');
 const Invoice = require('../models/Invoice-model');
 const Booking = require('../models/Booking-model');
 const Service = require('../models/Service-model');
-const CommissionRule = require('../models/CommissionRule-model');
-const PDFDocument = require('pdfkit');
-const fs = require('fs');
+const User = require('../models/User-model');
+const Provider = require('../models/Provider-model');
+const sendEmail = require('../utils/sendEmail');
+const { generatePDFFromHTML } = require('../utils/pdfGenerator');
 const path = require('path');
-const mongoose = require('mongoose');
+const fs = require('fs');
+const { generateCustomerInvoiceHTML } = require('../utils/invoiceTemplate');
 
-// Configure PDF storage directory
-const INVOICE_STORAGE_PATH = path.join(__dirname, '../uploads/invoices');
-
-// Ensure invoice directory exists
-if (!fs.existsSync(INVOICE_STORAGE_PATH)) {
-  fs.mkdirSync(INVOICE_STORAGE_PATH, { recursive: true });
-}
-
-// Generate PDF Invoice
-const generatePDF = async (invoice, filePath, userRole) => {
-  return new Promise((resolve, reject) => {
-    try {
-      const doc = new PDFDocument({ margin: 50, size: 'A4' });
-      const stream = fs.createWriteStream(filePath);
-      doc.pipe(stream);
-
-      // Header
-      doc.fontSize(20).text('INVOICE', { align: 'center' });
-      doc.moveDown();
-      
-      // Invoice Details
-      doc.fontSize(12)
-         .text(`Invoice Number: ${invoice.invoiceNo}`, { align: 'left' })
-         .text(`Date: ${invoice.formattedDate}`, { align: 'left' })
-         .moveDown();
-
-      // Customer Details
-      doc.text(`Customer: ${invoice.customer.name}`)
-         .text(`Phone: ${invoice.customer.phone}`)
-         .moveDown();
-
-      // Provider Details
-      doc.text(`Provider: ${invoice.provider.name}`)
-         .text(`GSTIN: ${invoice.provider.gstin || 'N/A'}`)
-         .moveDown();
-
-      // Service Details
-      doc.fontSize(14).text('Service Details', { underline: true });
-      doc.fontSize(12)
-         .text(`Service: ${invoice.service.title}`)
-         .text(`Amount: ₹${invoice.serviceAmount.toFixed(2)}`)
-         .moveDown();
-
-      // Products Used
-      if (invoice.productsUsed && invoice.productsUsed.length > 0) {
-        doc.fontSize(14).text('Products Used', { underline: true });
-        invoice.productsUsed.forEach(product => {
-          doc.text(`${product.name} (${product.quantity} x ₹${product.rate.toFixed(2)}) - ₹${product.total.toFixed(2)}`);
-        });
-        doc.moveDown();
-      }
-
-      // Discount Details
-      if (invoice.discount > 0) {
-        doc.text(`Discount: -₹${invoice.discount.toFixed(2)}`)
-           .moveDown();
-      }
-
-      // Tax Details
-      if (invoice.tax > 0) {
-        doc.text(`Tax: ₹${invoice.tax.toFixed(2)}`)
-           .moveDown();
-      }
-
-      // Commission Details (only for providers)
-      if (userRole === 'provider' && invoice.commission) {
-        doc.fontSize(14).text('Commission Details', { underline: true });
-        doc.fontSize(12)
-           .text(`Commission: ${invoice.commission.type === 'percentage' ? 
-                  `${invoice.commission.value}%` : 
-                  `₹${invoice.commission.value}`}`)
-           .text(`Commission Amount: -₹${invoice.commission.amount.toFixed(2)}`)
-           .moveDown();
-      }
-
-      // Total Amount
-      doc.fontSize(16)
-         .text(`Total Amount: ₹${invoice.totalAmount.toFixed(2)}`, { align: 'right' });
-      
-      if (userRole === 'provider') {
-        doc.text(`Net Amount After Commission: ₹${invoice.netAmount.toFixed(2)}`, 
-               { align: 'right' });
-      }
-
-      // Payment Status
-      doc.moveDown()
-         .text(`Payment Status: ${invoice.paymentStatus.toUpperCase().replace('_', ' ')}`, 
-               { align: 'right' });
-
-      doc.end();
-      
-      stream.on('finish', () => resolve(filePath));
-      stream.on('error', reject);
-    } catch (err) {
-      console.error('PDF generation error:', err);
-      reject(err);
-    }
-  });
+// Utility function to populate invoice data
+const populateInvoiceData = async (query) => {
+  return await Invoice.findOne(query)
+    .populate('customer', 'name email phone address')
+    .populate('provider', 'name email phone address')
+    .populate('service', 'title category basePrice duration')
+    .populate('booking', 'date time status paymentStatus')
+    .populate('commission.rule', 'name type value')
+    .lean()
+    .exec();
 };
 
-// Generate Invoice Data for Frontend
-const generateInvoiceData = async (invoiceId, userRole) => {
-  try {
-    const invoice = await Invoice.findById(invoiceId)
-      .populate('customer', 'name email phone address')
-      .populate('provider', 'name address gstin')
-      .populate('service', 'title description')
-      .populate('booking', 'subtotal totalDiscount totalAmount paymentMethod')
-      .populate('commission.rule', 'name description type value');
+// Generate PDF and save to disk
+const generateAndSavePDF = async (invoiceData) => {
+  const pdfBuffer = await generatePDF(invoiceData);
+  const fileName = `invoice_${invoiceData.invoiceNo}.pdf`;
+  const filePath = path.join(__dirname, '../public/invoices', fileName);
 
-    if (!invoice) {
-      throw new Error('Invoice not found');
+  fs.writeFileSync(filePath, pdfBuffer);
+  return {
+    filePath,
+    fileName,
+    url: `/invoices/${fileName}`
+  };
+};
+
+// @desc    Get invoice for customer (without commission)
+// @route   GET /api/invoices/customer/:id
+// @access  Private (Customer)
+exports.getCustomerInvoice = async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid invoice ID'
+      });
     }
 
-    // Prepare role-specific data
-    const invoiceData = invoice.toObject();
-    
-    // Format dates
-    invoiceData.formattedDate = new Date(invoice.createdAt).toLocaleDateString();
-    invoiceData.formattedDueDate = invoice.dueDate 
-      ? new Date(invoice.dueDate).toLocaleDateString()
-      : 'On Receipt';
+    const invoice = await Invoice.findOne({
+      _id: req.params.id,
+      customer: req.user._id
+    })
+      .populate('customer', 'name email phone address')
+      .populate('provider', 'businessName contactPerson phone address')
+      .populate('service', 'title category basePrice duration description')
+      .populate('booking', 'date time status paymentStatus')
+      .select('-commission -commissionAmount -commissionRule') // Exclude commission fields
+      .lean();
 
-    // Format amounts
-    invoiceData.formattedAmounts = {
-      serviceAmount: invoice.serviceAmount?.toFixed(2) || '0.00',
-      discount: invoice.discount?.toFixed(2) || '0.00',
-      tax: invoice.tax?.toFixed(2) || '0.00',
-      totalAmount: invoice.totalAmount?.toFixed(2) || '0.00',
-      netAmount: invoice.netAmount?.toFixed(2) || '0.00',
-      commissionAmount: invoice.commission?.amount?.toFixed(2) || '0.00'
+    if (!invoice) {
+      return res.status(404).json({
+        success: false,
+        message: 'Invoice not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: invoice
+    });
+  } catch (error) {
+    console.error('Get customer invoice error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};
+
+// @desc    Download invoice as PDF for customer
+// @route   GET /api/invoices/customer/:id/download
+// @access  Private (Customer)
+exports.downloadCustomerInvoice = async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid invoice ID'
+      });
+    }
+
+    const invoice = await Invoice.findOne({
+      _id: req.params.id,
+      customer: req.user._id
+    })
+      .populate('customer', 'name email phone address')
+      .populate('provider', 'businessName contactPerson phone address')
+      .populate('service', 'title category basePrice duration description')
+      .populate('booking', 'date time status paymentStatus')
+      .select('-commission -commissionAmount -commissionRule') // Exclude commission fields
+      .lean();
+
+    if (!invoice) {
+      return res.status(404).json({
+        success: false,
+        message: 'Invoice not found'
+      });
+    }
+
+    const html = generateCustomerInvoiceHTML(invoice);
+    const pdfBuffer = await generatePDFFromHTML(html);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=invoice_${invoice.invoiceNo}.pdf`);
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error('Download customer invoice error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate invoice'
+    });
+  }
+};
+
+// @desc    Get single invoice by ID (Provider only)
+// @route   GET /api/invoices/provider/:id
+// @access  Private (Provider only)
+exports.getProviderInvoiceById = async (req, res) => {
+  try {
+    const invoice = await Invoice.findOne({
+      _id: req.params.id,
+      provider: req.provider._id // Ensure the invoice belongs to this provider
+    })
+    .populate('customer', 'name email phone')
+    .populate('service', 'name basePrice')
+    .populate('booking', 'bookingDate status')
+    .populate('commission.rule', 'name type value description');
+
+    if (!invoice) {
+      return res.status(404).json({
+        success: false,
+        message: 'Invoice not found or unauthorized'
+      });
+    }
+
+    // Format the response with provider-specific details
+    const response = {
+      success: true,
+      data: {
+        invoiceNo: invoice.invoiceNo,
+        date: invoice.formattedDate,
+        dueDate: invoice.formattedDueDate,
+        customer: invoice.customer,
+        service: {
+          name: invoice.service.name,
+          amount: invoice.serviceAmount
+        },
+        products: invoice.productsUsed.map(product => ({
+          name: product.name,
+          description: product.description,
+          quantity: product.quantity,
+          rate: product.rate,
+          total: product.total
+        })),
+        subtotal: invoice.serviceAmount + invoice.productsUsed.reduce((sum, p) => sum + p.total, 0),
+        tax: invoice.tax,
+        discount: invoice.discount,
+        totalAmount: invoice.totalAmount,
+        paymentStatus: invoice.paymentStatus,
+        paymentDetails: invoice.paymentDetails,
+        commission: {
+          amount: invoice.commission.amount,
+          type: invoice.commission.type,
+          value: invoice.commission.value,
+          description: invoice.commission.description,
+          rule: invoice.commission.rule
+        },
+        netAmount: invoice.netAmount,
+        totalPaid: invoice.totalPaid,
+        balanceDue: invoice.balanceDue,
+        notes: invoice.notes,
+        booking: invoice.booking
+      }
     };
 
-    // Hide commission details from non-providers
-    if (userRole !== 'provider') {
-      delete invoiceData.commission;
-      delete invoiceData.netAmount;
-    }
-
-    return invoiceData;
+    res.status(200).json(response);
   } catch (error) {
-    console.error('Error generating invoice data:', error);
-    throw error;
+    console.error('Get provider invoice by ID error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 
-// Auto-generate invoice with commission
-const autoGenerateInvoice = async (booking, commissionDetails) => {
-  const invoiceData = {
-    booking: booking._id,
-    provider: booking.provider,
-    customer: booking.customer,
-    service: booking.services[0].service,
-    serviceAmount: booking.subtotal || 0,
-    discount: booking.totalDiscount || 0,
-    totalAmount: booking.totalAmount || 0,
-    netAmount: booking.totalAmount - (commissionDetails.amount || 0),
-    commission: {
-      amount: commissionDetails.amount,
-      rule: commissionDetails.baseRule._id,
-      type: commissionDetails.baseRule.type,
-      value: commissionDetails.baseRule.value,
-      description: `Platform commission (${commissionDetails.baseRule.value}${commissionDetails.baseRule.type === 'percentage' ? '%' : ' fixed'})`
-    },
-    paymentStatus: booking.paymentStatus === 'paid' ? 'paid' : 'pending',
-    notes: `Booking completed on ${new Date().toLocaleDateString()}`
-  };
-
-  if (booking.paymentStatus === 'paid') {
-    invoiceData.paymentDetails = [{
-      method: booking.paymentMethod || 'online',
-      amount: booking.totalAmount,
-      status: 'success'
-    }];
-  }
-
-  const invoice = await Invoice.create(invoiceData);
-  return invoice;
-};
-
-// Get invoice data for frontend template
-const getInvoiceForFrontend = async (req, res, next) => {
+// @desc    Add product to invoice (Admin, Provider)
+// @route   POST /api/invoices/:id/products
+// @access  Private
+exports.addProductToInvoice = async (req, res) => {
   try {
-    const invoiceData = await generateInvoiceData(req.params.id, req.user.role);
-    
+    // Check if body exists and is an object
+    if (!req.body || typeof req.body !== 'object') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid request body'
+      });
+    }
+
+    const { name, description, quantity, rate } = req.body;
+
+    if (!name || !quantity || !rate) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name, quantity and rate are required',
+        requiredFields: ['name', 'quantity', 'rate']
+      });
+    }
+
+    // Validate quantity and rate are numbers
+    if (isNaN(quantity) || isNaN(rate)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Quantity and rate must be numbers'
+      });
+    }
+
+    let invoice;
+
+    if (req.role === 'admin') {
+      invoice = await Invoice.findById(req.params.id);
+    } else if (req.role === 'provider') {
+      invoice = await Invoice.findById({
+        _id: req.params.id,
+        provider: req.provider._id
+      });
+    } else {
+      return res.status(403).json({
+        success: false,
+        message: 'Unauthorized'
+      });
+    }
+
+    if (!invoice) {
+      return res.status(404).json({
+        success: false,
+        message: 'Invoice not found or unauthorized'
+      });
+    }
+
+    const newProduct = {
+      name: name.trim(),
+      description: description ? description.trim() : '',
+      quantity: Number(quantity),
+      rate: Number(rate),
+      total: Number(quantity) * Number(rate)
+    };
+
+    invoice.productsUsed.push(newProduct);
+    await invoice.save();
+
     res.status(200).json({
       success: true,
-      data: invoiceData
+      data: invoice
     });
-  } catch (err) {
-    next(err);
+  } catch (error) {
+    console.error('Add product error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 
-// Get single invoice with role-based data
-const getInvoice = async (req, res, next) => {
+// @desc    Update product in invoice (Admin, Provider)
+// @route   PUT /api/invoices/:id/products/:productId
+// @access  Private
+exports.updateProductInInvoice = async (req, res) => {
   try {
-    const invoice = await Invoice.findById(req.params.id)
-      .populate('customer', 'name email phone address')
-      .populate('provider', 'name email phone address gstin')
-      .populate('service', 'title description')
-      .populate('commission.rule', 'name description type value')
-      .populate({
-        path: 'booking',
-        select: 'subtotal totalDiscount totalAmount paymentMethod',
-        populate: {
-          path: 'services.service',
-          select: 'title description'
-        }
+    const { name, description, quantity, rate } = req.body;
+
+    let invoice;
+
+    if (req.role === 'admin') {
+      invoice = await Invoice.findById(req.params.id);
+    } else if (req.role === 'provider') {
+      invoice = await Invoice.findById({
+        _id: req.params.id,
+        provider: req.provider._id
       });
+    } else {
+      return res.status(403).json({
+        success: false,
+        message: 'Unauthorized'
+      });
+    }
+
+    if (!invoice) {
+      return res.status(404).json({
+        success: false,
+        message: 'Invoice not found or unauthorized'
+      });
+    }
+
+    const productIndex = invoice.productsUsed.findIndex(
+      p => p._id.toString() === req.params.productId
+    );
+
+    if (productIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: 'Product not found in invoice'
+      });
+    }
+
+    const product = invoice.productsUsed[productIndex];
+
+    if (name) product.name = name;
+    if (description) product.description = description;
+    if (quantity) product.quantity = quantity;
+    if (rate) product.rate = rate;
+
+    product.total = product.quantity * product.rate;
+
+    await invoice.save();
+
+    res.status(200).json({
+      success: true,
+      data: invoice
+    });
+  } catch (error) {
+    console.error('Update product error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};
+
+// @desc    Remove product from invoice (Admin, Provider)
+// @route   DELETE /api/invoices/:id/products/:productId
+// @access  Private
+exports.removeProductFromInvoice = async (req, res) => {
+  try {
+    let invoice;
+
+    if (req.role === 'admin') {
+      invoice = await Invoice.findById(req.params.id);
+    } else if (req.role === 'provider') {
+      invoice = await Invoice.findById({
+        _id: req.params.id,
+        provider: req.provider._id
+      });
+    } else {
+      return res.status(403).json({
+        success: false,
+        message: 'Unauthorized'
+      });
+    }
+
+    if (!invoice) {
+      return res.status(404).json({
+        success: false,
+        message: 'Invoice not found or unauthorized'
+      });
+    }
+
+    invoice.productsUsed = invoice.productsUsed.filter(
+      p => p._id.toString() !== req.params.productId
+    );
+
+    await invoice.save();
+
+    res.status(200).json({
+      success: true,
+      data: invoice
+    });
+  } catch (error) {
+    console.error('Remove product error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};
+
+// @desc    Update invoice details (Admin only)
+// @route   PUT /api/invoices/:id
+// @access  Private (Admin)
+exports.updateInvoice = async (req, res) => {
+  try {
+    if (req.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only admin can update invoice details'
+      });
+    }
+
+    const invoice = await Invoice.findById(req.params.id);
 
     if (!invoice) {
       return res.status(404).json({
@@ -225,185 +408,146 @@ const getInvoice = async (req, res, next) => {
       });
     }
 
-    // Authorization checks
-    if (req.user.role === 'user' && !invoice.customer._id.equals(req.user.id)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to access this invoice'
-      });
-    }
+    const { serviceAmount, tax, discount, notes } = req.body;
 
-    if (req.user.role === 'provider' && !invoice.provider._id.equals(req.user.id)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to access this invoice'
-      });
-    }
+    if (serviceAmount !== undefined) invoice.serviceAmount = serviceAmount;
+    if (tax !== undefined) invoice.tax = tax;
+    if (discount !== undefined) invoice.discount = discount;
+    if (notes !== undefined) invoice.notes = notes;
 
-    // Prepare role-specific response
-    const responseData = invoice.toObject();
-    
-    // Format dates
-    responseData.formattedDate = new Date(invoice.createdAt).toLocaleDateString();
-    responseData.formattedDueDate = invoice.dueDate 
-      ? new Date(invoice.dueDate).toLocaleDateString()
-      : 'On Receipt';
-
-    // Hide commission details from non-providers
-    if (req.user.role !== 'provider') {
-      delete responseData.commission;
-      delete responseData.netAmount;
-    }
+    await invoice.save();
 
     res.status(200).json({
       success: true,
-      data: responseData
+      data: invoice
     });
-  } catch (err) {
-    next(err);
+  } catch (error) {
+    console.error('Update invoice error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
   }
 };
 
-// Get customer invoices
-const getMyInvoices = async (req, res, next) => {
+// @desc    Get all invoices for admin
+// @route   GET /api/invoices/admin/all
+// @access  Private (Admin)
+exports.getAllInvoicesForAdmin = async (req, res) => {
   try {
-    const invoices = await Invoice.find({ customer: req.user.id })
-      .populate('provider', 'name')
-      .populate('service', 'title')
-      .populate('booking', 'subtotal totalDiscount totalAmount')
-      .sort({ createdAt: -1 });
+    if (req.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only admin can access all invoices'
+      });
+    }
 
-    const sanitizedInvoices = invoices.map(invoice => {
-      const invoiceObj = invoice.toObject();
-      delete invoiceObj.commission;
-      delete invoiceObj.netAmount;
-      return invoiceObj;
-    });
+    const { page = 1, limit = 10, status } = req.query;
+    const skip = (page - 1) * limit;
+
+    const query = {};
+    if (status) query.paymentStatus = status;
+
+    const invoices = await Invoice.find(query)
+      .populate('customer', 'name email')
+      .populate('provider', 'businessName')
+      .sort({ generatedAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await Invoice.countDocuments(query);
 
     res.status(200).json({
       success: true,
-      count: sanitizedInvoices.length,
-      data: sanitizedInvoices
-    });
-  } catch (err) {
-    next(err);
-  }
-};
-
-// Get provider invoices with commission calculation
-const getProviderInvoices = async (req, res, next) => {
-  try {
-    const invoices = await Invoice.find({ provider: req.provider.id })
-      .populate('customer', 'name phone')
-      .populate('service', 'title')
-      .populate('commission.rule', 'name type value')
-      .populate('booking', 'subtotal totalDiscount totalAmount')
-      .sort({ createdAt: -1 });
-
-    // Calculate totals
-    const totalEarnings = invoices.reduce((sum, inv) => sum + inv.netAmount, 0);
-    const totalCommission = invoices.reduce((sum, inv) => sum + (inv.commission?.amount || 0), 0);
-
-    res.status(200).json({
-      success: true,
-      count: invoices.length,
-      summary: {
-        totalEarnings: totalEarnings.toFixed(2),
-        totalCommission: totalCommission.toFixed(2),
-        totalInvoices: invoices.length
-      },
-      data: invoices.map(invoice => ({
-        ...invoice.toObject(),
-        formattedAmounts: {
-          totalAmount: invoice.totalAmount?.toFixed(2) || '0.00',
-          netAmount: invoice.netAmount?.toFixed(2) || '0.00',
-          commissionAmount: (invoice.commission?.amount || 0).toFixed(2)
-        }
-      }))
-    });
-  } catch (err) {
-    next(err);
-  }
-};
-
-// Download invoice PDF
-const downloadInvoice = async (req, res, next) => {
-  try {
-    const invoice = await Invoice.findById(req.params.id)
-      .populate('customer', 'name email phone address')
-      .populate('provider', 'name email phone address gstin')
-      .populate('service', 'title description')
-      .populate('commission.rule', 'name type value')
-      .populate('booking', 'subtotal totalDiscount totalAmount');
-
-    if (!invoice) {
-      return res.status(404).json({
-        success: false,
-        message: 'Invoice not found'
-      });
-    }
-
-    // Authorization checks
-    if (req.user.role === 'user' && !invoice.customer._id.equals(req.user.id)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to access this invoice'
-      });
-    }
-
-    if (req.user.role === 'provider' && !invoice.provider._id.equals(req.user.id)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to access this invoice'
-      });
-    }
-
-    // Check/Generate PDF
-    let filePath;
-    if (invoice.invoicePdf) {
-      filePath = path.join(__dirname, '../../public', invoice.invoicePdf);
-      if (!fs.existsSync(filePath)) {
-        invoice.invoicePdf = null;
-        await invoice.save();
+      data: invoices,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        pages: Math.ceil(total / limit)
       }
-    }
-
-    if (!invoice.invoicePdf || !fs.existsSync(filePath)) {
-      const fileName = `invoice_${invoice.invoiceNo}.pdf`.replace(/\s+/g, '_');
-      filePath = path.join(INVOICE_STORAGE_PATH, fileName);
-      
-      await generatePDF(invoice, filePath, req.user.role);
-      
-      invoice.invoicePdf = `/invoices/${fileName}`;
-      await invoice.save();
-    }
-
-    // Stream the PDF
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${invoice.invoiceNo}.pdf"`);
-    
-    const fileStream = fs.createReadStream(filePath);
-    fileStream.pipe(res);
-    
-    fileStream.on('error', (err) => {
-      console.error('File stream error:', err);
-      res.status(500).json({
-        success: false,
-        message: 'Error streaming invoice file'
-      });
     });
-
-  } catch (err) {
-    next(err);
+  } catch (error) {
+    console.error('Get all invoices error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
   }
 };
 
-module.exports = {
-  autoGenerateInvoice,
-  getInvoice,
-  getInvoiceForFrontend,
-  getMyInvoices,
-  getProviderInvoices,
-  downloadInvoice,
-  generateInvoiceData
+// @desc    Get invoices for provider
+// @route   GET /api/invoices/provider/all
+// @access  Private (Provider)
+exports.getInvoicesForProvider = async (req, res) => {
+  try {
+    const { page = 1, limit = 10, status } = req.query;
+    const skip = (page - 1) * limit;
+
+    const query = { provider: req.provider._id };
+    if (status) query.paymentStatus = status;
+
+    const invoices = await Invoice.find(query)
+      .populate('customer', 'name email')
+      .sort({ generatedAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await Invoice.countDocuments(query);
+
+    res.status(200).json({
+      success: true,
+      data: invoices,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('Get provider invoices error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};
+
+// @desc    Get invoices for customer
+// @route   GET /api/invoices/customer/all
+// @access  Private (Customer)
+exports.getInvoicesForCustomer = async (req, res) => {
+  try {
+    const { page = 1, limit = 10, status } = req.query;
+    const skip = (page - 1) * limit;
+
+    const query = { customer: req.user._id };
+    if (status) query.paymentStatus = status;
+
+    const invoices = await Invoice.find(query)
+      .populate('provider', 'businessName')
+      .sort({ generatedAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await Invoice.countDocuments(query);
+
+    res.status(200).json({
+      success: true,
+      data: invoices,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('Get customer invoices error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
 };

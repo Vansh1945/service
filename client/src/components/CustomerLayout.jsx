@@ -16,10 +16,10 @@ const CustomerLayout = () => {
     const { user, logoutUser } = useAuth();
 
     const menuItems = [
-        { name: 'Dashboard', path: '/customer/home', icon: <FiHome /> },
+        { name: 'Dashboard', path: '/customer/dashboard', icon: <FiHome /> },
         { name: 'Book Service', path: '/customer/services', icon: <FiShoppingCart /> },
-        { name: 'My Bookings', path: '/customer/book-service', icon: <FiCalendar /> },
-        { name: 'Payments', path: '/customer/payments', icon: <FiCreditCard /> },
+        { name: 'My Bookings', path: '/customer/bookings', icon: <FiCalendar /> },
+        // { name: 'Payments', path: '/customer/payments', icon: <FiCreditCard /> },
         { name: 'Invoices', path: '/customer/invoices', icon: <FiFileText /> },
         { name: 'Feedback', path: '/customer/feedback', icon: <FiMessageSquare /> },
         { name: 'Complaints', path: '/customer/complaints', icon: <FiAlertCircle /> },
@@ -208,7 +208,7 @@ const CustomerLayout = () => {
                 </div>
 
                 {/* Page content */}
-                <main className="p-4 lg:p-6">
+                <main >
                     <Outlet />
                 </main>
             </div>

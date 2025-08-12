@@ -19,10 +19,10 @@ const ProviderLayout = () => {
     const menuItems = [
         { name: 'Dashboard', path: '/provider/dashboard', icon: <FiHome /> },
  { name: 'Booking Requests', path: '/provider/booking-requests', icon: <FiCheckCircle /> },        { name: 'Active Jobs', path: '/provider/active-jobs', icon: <FiCalendar /> },
-        { name: 'Invoice Creator', path: '/provider/invoice-creator', icon: <FiFileText /> },
+        { name: 'Invoice Creator', path: '/provider/invoices', icon: <FiFileText /> },
         { name: 'Earnings', path: '/provider/earnings', icon: <FiDollarSign /> },
         { name: 'Withdraw', path: '/provider/withdraw', icon: <FiCreditCard /> },
-        { name: 'Feedback Viewer', path: '/provider/feedback', icon: <FiMessageSquare /> },
+        { name: 'Feedback Viewer', path: '/provider/feedbacks', icon: <FiMessageSquare /> },
         { name: 'Test Result', path: '/provider/test', icon: <FiActivity /> }
     ];
 

@@ -1,690 +1,965 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   FaUser, FaEnvelope, FaPhone, FaLock,
   FaHome, FaMapMarkerAlt, FaCity,
   FaFileAlt, FaBriefcase, FaCheck,
-  FaArrowLeft, FaSpinner
+  FaArrowLeft, FaBuilding,
+  FaWallet, FaCalendarAlt, FaRedo
 } from 'react-icons/fa';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/auth';
+import { toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 const ProviderRegistration = () => {
   const navigate = useNavigate();
-  const { loginUser, showToast, API } = useAuth();
+  const { API } = useAuth();
 
   const [formData, setFormData] = useState({
-    name: '',
+    // Step 1: Email
     email: '',
+
+    // Step 2: OTP and Basic Details
+    otp: '',
+    name: '',
     phone: '',
     password: '',
     confirmPassword: '',
-    otp: '',
-    services: [],
-    experience: 0,
+    dateOfBirth: '',
+
+    // Step 4: Professional Details
+    services: '',
+    experience: '',
     serviceArea: '',
     resume: null,
-    address: {
-      street: '',
-      city: '',
-      pincode: ''
-    }
+    street: '',
+    city: '',
+    state: '',
+    postalCode: '',
+    country: 'India',
+    accountNo: '',
+    ifsc: '',
+    passbookImage: null,
+    profilePic: null
   });
 
-  const [step, setStep] = useState(1); // 1: Basic info, 2: Additional details, 3: OTP verification + complete registration
-  const [isLoading, setIsLoading] = useState(false);
-  const [otpSent, setOtpSent] = useState(false);
-  const [errors, setErrors] = useState({});
+  const [step, setStep] = useState(1);
+  const [otpSentTime, setOtpSentTime] = useState(null);
+  const [canResendOtp, setCanResendOtp] = useState(false);
+  const [resendCountdown, setResendCountdown] = useState(60);
+  const [otpExpiryTime, setOtpExpiryTime] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Handle OTP resend countdown and expiry
+  useEffect(() => {
+    let timer;
+    if (otpSentTime) {
+      timer = setInterval(() => {
+        const now = Date.now();
+        const secondsSinceSent = Math.round((now - otpSentTime) / 1000);
+
+        // Handle resend countdown (60 seconds)
+        if (secondsSinceSent < 60) {
+          setResendCountdown(60 - secondsSinceSent);
+          setCanResendOtp(false);
+        } else {
+          setCanResendOtp(true);
+        }
+
+        // Handle OTP expiry (5 minutes)
+        if (secondsSinceSent >= 300) {
+          setOtpExpiryTime(null);
+          clearInterval(timer);
+        } else if (otpExpiryTime === null) {
+          setOtpExpiryTime(new Date(otpSentTime + 300000));
+        }
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [otpSentTime, otpExpiryTime]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
 
-    if (name.includes('address.')) {
-      const addressField = name.split('.')[1];
-      setFormData(prev => ({
-        ...prev,
-        address: {
-          ...prev.address,
-          [addressField]: value
+  const handleFileChange = (field) => (e) => {
+    setFormData(prev => ({ ...prev, [field]: e.target.files[0] }));
+  };
+
+  // Step 1: Initiate Registration (Send OTP)
+  const handleInitiateRegistration = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    const promise = new Promise(async (resolve, reject) => {
+      try {
+        const response = await fetch(`${API}/provider/register/initiate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: formData.email })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || 'Failed to send OTP');
         }
-      }));
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        [name]: value
-      }));
-    }
 
-    // Clear error when field is changed
-    if (errors[name]) {
-      setErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors[name];
-        return newErrors;
-      });
-    }
-  };
-
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      // Validate file type and size
-      if (file.type !== 'application/pdf') {
-        setErrors(prev => ({
-          ...prev,
-          resume: 'Only PDF files are allowed'
-        }));
-        return;
+        const sentTime = Date.now();
+        setOtpSentTime(sentTime);
+        setOtpExpiryTime(new Date(sentTime + 300000)); // 5 minutes from now
+        setCanResendOtp(false);
+        setResendCountdown(60);
+        setStep(2);
+        resolve('OTP sent successfully! Check your email.');
+      } catch (error) {
+        reject(error.message);
+      } finally {
+        setIsSubmitting(false);
       }
+    });
 
-      if (file.size > 5 * 1024 * 1024) { // 5MB limit
-        setErrors(prev => ({
-          ...prev,
-          resume: 'File size should be less than 5MB'
-        }));
-        return;
+    toast.promise(promise, {
+      pending: 'Sending OTP...',
+      success: {
+        render({ data }) { return data; },
+        autoClose: 3000
+      },
+      error: {
+        render({ data }) { return data; },
+        autoClose: 3000
       }
-
-      setFormData(prev => ({
-        ...prev,
-        resume: file
-      }));
-
-      // Clear any previous errors
-      setErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors['resume'];
-        return newErrors;
-      });
-    }
+    });
   };
 
-  const validateBasicInfo = () => {
-    const newErrors = {};
-
-    if (!formData.name) newErrors.name = 'Name is required';
-    if (!formData.email) {
-      newErrors.email = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = 'Invalid email format';
-    }
-    if (!formData.phone) {
-      newErrors.phone = 'Phone number is required';
-    } else if (!/^\d{10,15}$/.test(formData.phone)) {
-      newErrors.phone = 'Invalid phone number';
-    }
-    if (!formData.password) {
-      newErrors.password = 'Password is required';
-    } else if (formData.password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters';
-    }
-    if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = 'Passwords do not match';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const validateAdditionalInfo = () => {
-    const newErrors = {};
-
-    if (!formData.serviceArea) newErrors.serviceArea = 'Service area is required';
-    if (!formData.resume) newErrors.resume = 'Resume is required';
-    if (formData.services.length === 0) newErrors.services = 'At least one service must be selected';
-    if (formData.experience < 0) newErrors.experience = 'Experience cannot be negative';
-    if (!formData.address.street) newErrors['address.street'] = 'Street address is required';
-    if (!formData.address.city) newErrors['address.city'] = 'City is required';
-    if (!formData.address.pincode) newErrors['address.pincode'] = 'Postal code is required';
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSendOtp = async (e) => {
+  // Step 2: Complete Registration (Verify OTP and create account)
+  const handleCompleteRegistration = async (e) => {
     e.preventDefault();
-    setIsLoading(true);
+    setIsSubmitting(true);
 
-    if (!validateBasicInfo()) {
-      setIsLoading(false);
-      return;
-    }
+    const promise = new Promise(async (resolve, reject) => {
+      try {
+        const response = await fetch(`${API}/provider/register/complete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: formData.email,
+            otp: formData.otp,
+            password: formData.password,
+            name: formData.name,
+            phone: formData.phone,
+            dateOfBirth: formData.dateOfBirth
+          })
+        });
 
-    try {
-      const response = await fetch(`${API}/provider/register`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: formData.name,
-          email: formData.email,
-          phone: formData.phone,
-          password: formData.password
-        })
-      });
+        const data = await response.json();
 
-      const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.message || 'Registration failed');
+        }
 
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to send OTP');
+        localStorage.setItem('providerToken', data.token);
+        setStep(3);
+        resolve('Registration successful! Please login to complete your profile.');
+      } catch (error) {
+        reject(error.message);
+      } finally {
+        setIsSubmitting(false);
       }
+    });
 
-      setOtpSent(true);
-      showToast('OTP sent to your email');
-      setStep(2); // Move to additional details step
-    } catch (error) {
-      showToast(error.message, 'error');
-      console.error('OTP sending error:', error);
-    } finally {
-      setIsLoading(false);
-    }
+    toast.promise(promise, {
+      pending: 'Registering...',
+      success: {
+        render({ data }) { return data; },
+        autoClose: 3000
+      },
+      error: {
+        render({ data }) { return data; },
+        autoClose: 3000
+      }
+    });
   };
 
-  const handleSubmit = async (e) => {
+  // Step 3: Login for profile completion
+  const handleLogin = async (e) => {
     e.preventDefault();
-    setIsLoading(true);
+    setIsSubmitting(true);
 
-    // Validate all information before submitting
-    if (!validateBasicInfo() || !validateAdditionalInfo()) {
-      setIsLoading(false);
-      return;
-    }
+    const promise = new Promise(async (resolve, reject) => {
+      try {
+        const response = await fetch(`${API}/provider/login-for-completion`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: formData.email,
+            password: formData.password
+          })
+        });
 
-    if (!formData.otp || formData.otp.length !== 6) {
-      setErrors({ otp: 'Please enter a valid 6-digit OTP' });
-      setIsLoading(false);
-      return;
-    }
+        const data = await response.json();
 
-    try {
-      const formDataToSend = new FormData();
-      formDataToSend.append('name', formData.name);
-      formDataToSend.append('email', formData.email);
-      formDataToSend.append('phone', formData.phone);
-      formDataToSend.append('password', formData.password);
-      formDataToSend.append('otp', formData.otp);
-      formDataToSend.append('resume', formData.resume);
-      formDataToSend.append('services', formData.services.join(','));
-      formDataToSend.append('experience', formData.experience);
-      formDataToSend.append('serviceArea', formData.serviceArea);
-      formDataToSend.append('address[street]', formData.address.street);
-      formDataToSend.append('address[city]', formData.address.city);
-      formDataToSend.append('address[pincode]', formData.address.pincode);
+        if (!response.ok) {
+          throw new Error(data.message || 'Login failed');
+        }
 
-      const response = await fetch(`${API}/provider/register`, {
-        method: 'POST',
-        body: formDataToSend
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Registration failed');
+        localStorage.setItem('providerToken', data.token);
+        setStep(4);
+        resolve('Login successful! Please complete your profile.');
+      } catch (error) {
+        reject(error.message);
+      } finally {
+        setIsSubmitting(false);
       }
+    });
 
-      // Show success message and redirect to home page
-      showToast('Registration successful! Awaiting admin approval.');
-      navigate('/');
-
-    } catch (error) {
-      showToast(error.message, 'error');
-      console.error('Registration error:', error);
-
-      if (error.message.includes('OTP not found') || error.message.includes('expired')) {
-        setErrors({ otp: 'Invalid or expired OTP. Please request a new one.' });
-        setFormData(prev => ({ ...prev, otp: '' }));
+    toast.promise(promise, {
+      pending: 'Logging in...',
+      success: {
+        render({ data }) { return data; },
+        autoClose: 3000
+      },
+      error: {
+        render({ data }) { return data; },
+        autoClose: 3000
       }
-    } finally {
-      setIsLoading(false);
-    }
+    });
+  };
+
+  // Step 4: Complete Profile
+  const handleCompleteProfile = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    const promise = new Promise(async (resolve, reject) => {
+      try {
+        const formDataToSend = new FormData();
+
+        Object.entries(formData).forEach(([key, value]) => {
+          if (value !== null && value !== undefined && value !== '') {
+            if (key === 'resume' || key === 'passbookImage' || key === 'profilePic') {
+              if (value) formDataToSend.append(key, value);
+            } else {
+              formDataToSend.append(key, value);
+            }
+          }
+        });
+
+        const response = await fetch(`${API}/provider/profile/complete`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('providerToken')}`
+          },
+          body: formDataToSend
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || 'Profile completion failed');
+        }
+
+        resolve('Profile completed successfully! Your account is pending approval.');
+        navigate('/');
+      } catch (error) {
+        reject(error.message);
+      } finally {
+        setIsSubmitting(false);
+      }
+    });
+
+    toast.promise(promise, {
+      pending: 'Completing profile...',
+      success: {
+        render({ data }) { return data; },
+        autoClose: 3000
+      },
+      error: {
+        render({ data }) { return data; },
+        autoClose: 3000
+      }
+    });
+  };
+
+  // Resend OTP
+  const handleResendOTP = async () => {
+    if (!canResendOtp) return;
+
+    setIsSubmitting(true);
+    const promise = new Promise(async (resolve, reject) => {
+      try {
+        const response = await fetch(`${API}/provider/register/initiate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: formData.email })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || 'Failed to resend OTP');
+        }
+
+        const sentTime = Date.now();
+        setOtpSentTime(sentTime);
+        setOtpExpiryTime(new Date(sentTime + 300000)); // 5 minutes from now
+        setCanResendOtp(false);
+        setResendCountdown(60);
+        resolve('New OTP sent successfully!');
+      } catch (error) {
+        reject(error.message);
+      } finally {
+        setIsSubmitting(false);
+      }
+    });
+
+    toast.promise(promise, {
+      pending: 'Resending OTP...',
+      success: {
+        render({ data }) { return data; },
+        autoClose: 3000
+      },
+      error: {
+        render({ data }) { return data; },
+        autoClose: 3000
+      }
+    });
+  };
+
+  // Format expiry time for display
+  const formatExpiryTime = (date) => {
+    if (!date) return '';
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center p-4">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="w-full max-w-lg"
-      >
-        {/* Header */}
-        <div className="text-center mb-8">
-          <motion.h1
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.1 }}
-            className="text-4xl font-bold text-blue-900 mb-2"
-          >
-            {step === 1 && 'Provider Registration'}
-            {step === 2 && 'Complete Your Profile'}
-            {step === 3 && 'Verify & Complete'}
-          </motion.h1>
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.2 }}
-            className="text-gray-600"
-          >
-            {step === 1 && 'Create your provider account'}
-            {step === 2 && 'Add your professional details'}
-            {step === 3 && 'Verify OTP and complete registration'}
-          </motion.p>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-3xl mx-auto">
+        {/* Progress Steps */}
+        <div className="flex justify-between items-center mb-12 relative">
+          <div className="absolute top-1/3 left-0 right-0 h-1.5 bg-blue-200 -translate-y-1/2 z-0 rounded-full">
+            <div
+              className="h-full bg-yellow-500 transition-all duration-500 ease-in-out rounded-full"
+              style={{ width: `${(step - 1) * 33.33}%` }}
+            ></div>
+          </div>
+          {[1, 2, 3, 4].map((stepNumber) => (
+            <div key={stepNumber} className="relative z-10 flex flex-col items-center">
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center shadow-md transition-all
+                ${step >= stepNumber ? 'bg-yellow-500 text-blue-900' : 'bg-white text-gray-400 border-2 border-blue-200'}`}>
+                {step > stepNumber ? <FaCheck className="text-sm" /> : stepNumber}
+              </div>
+              <span className={`mt-2 text-sm font-medium ${step >= stepNumber ? 'text-blue-900' : 'text-blue-700'}`}>
+                {stepNumber === 1 ? 'Email' :
+                  stepNumber === 2 ? 'Details' :
+                    stepNumber === 3 ? 'Login' : 'Profile'}
+              </span>
+            </div>
+          ))}
         </div>
 
         {/* Form Container */}
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5 }}
-          className="bg-white rounded-2xl shadow-xl p-8"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="bg-white rounded-2xl shadow-xl overflow-hidden border border-blue-100"
         >
-          {/* Progress Steps */}
-          <div className="flex justify-between mb-8 relative">
-            <div className="absolute top-1/2 left-0 right-0 h-1 bg-blue-100 -translate-y-1/2 z-0"></div>
-            {[1, 2, 3].map((stepNumber) => (
-              <div key={stepNumber} className="relative z-10">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${step >= stepNumber ? 'bg-yellow-400 text-blue-900' : 'bg-blue-100 text-gray-500'}`}>
-                  {step > stepNumber ? (
-                    <FaCheck className="text-lg" />
-                  ) : (
-                    <span className="font-bold">{stepNumber}</span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
+          <div className="p-8">
+            <div className="text-center mb-8">
+              <h2 className="text-3xl font-bold text-blue-900 mb-2">
+                {step === 1 ? 'Start Your Provider Journey' :
+                  step === 2 ? 'Complete Your Registration' :
+                    step === 3 ? 'Login to Continue' : 'Complete Your Profile'}
+              </h2>
+              <p className="text-blue-700">
+                {step === 1 ? 'Enter your email to begin the registration process' :
+                  step === 2 ? 'Verify your email and set up your account' :
+                    step === 3 ? 'Login to complete your provider profile' :
+                      'Add your professional details to start offering services'}
+              </p>
+            </div>
 
-          <form onSubmit={
-            step === 1 ? handleSendOtp :
-              step === 2 ? (e) => { e.preventDefault(); setStep(3); } :
-                handleSubmit
-          }>
-            {/* Step 1: Basic Information */}
-            {step === 1 && (
-              <div className="space-y-5">
-                {/* Name Field */}
-                <div>
-                  <label htmlFor="name" className="block text-gray-700 mb-2 font-medium">Full Name</label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-blue-400">
-                      <FaUser className="text-lg" />
-                    </div>
-                    <input
-                      type="text"
-                      id="name"
-                      name="name"
-                      value={formData.name}
-                      onChange={handleChange}
-                      className={`w-full pl-10 pr-4 py-3 rounded-xl border-2 ${errors.name ? 'border-red-300' : 'border-blue-100'} focus:border-yellow-400 focus:ring-2 focus:ring-yellow-200 transition-all`}
-                      placeholder="John Doe"
-                      required
-                    />
-                  </div>
-                  {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
-                </div>
-
-                {/* Email Field */}
-                <div>
-                  <label htmlFor="email" className="block text-gray-700 mb-2 font-medium">Email Address</label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-blue-400">
-                      <FaEnvelope className="text-lg" />
-                    </div>
-                    <input
-                      type="email"
-                      id="email"
-                      name="email"
-                      value={formData.email}
-                      onChange={handleChange}
-                      className={`w-full pl-10 pr-4 py-3 rounded-xl border-2 ${errors.email ? 'border-red-300' : 'border-blue-100'} focus:border-yellow-400 focus:ring-2 focus:ring-yellow-200 transition-all`}
-                      placeholder="your@email.com"
-                      required
-                    />
-                  </div>
-                  {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email}</p>}
-                </div>
-
-                {/* Phone Field */}
-                <div>
-                  <label htmlFor="phone" className="block text-gray-700 mb-2 font-medium">Phone Number</label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-blue-400">
-                      <FaPhone className="text-lg" />
-                    </div>
-                    <input
-                      type="tel"
-                      id="phone"
-                      name="phone"
-                      value={formData.phone}
-                      onChange={handleChange}
-                      className={`w-full pl-10 pr-4 py-3 rounded-xl border-2 ${errors.phone ? 'border-red-300' : 'border-blue-100'} focus:border-yellow-400 focus:ring-2 focus:ring-yellow-200 transition-all`}
-                      placeholder="+1 (123) 456-7890"
-                      required
-                    />
-                  </div>
-                  {errors.phone && <p className="text-red-500 text-sm mt-1">{errors.phone}</p>}
-                </div>
-
-                {/* Password Field */}
-                <div>
-                  <label htmlFor="password" className="block text-gray-700 mb-2 font-medium">Password</label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-blue-400">
-                      <FaLock className="text-lg" />
-                    </div>
-                    <input
-                      type="password"
-                      id="password"
-                      name="password"
-                      value={formData.password}
-                      onChange={handleChange}
-                      className={`w-full pl-10 pr-4 py-3 rounded-xl border-2 ${errors.password ? 'border-red-300' : 'border-blue-100'} focus:border-yellow-400 focus:ring-2 focus:ring-yellow-200 transition-all`}
-                      placeholder="Create a password"
-                      minLength="6"
-                      required
-                    />
-                  </div>
-                  {errors.password && <p className="text-red-500 text-sm mt-1">{errors.password}</p>}
-                </div>
-
-                {/* Confirm Password Field */}
-                <div>
-                  <label htmlFor="confirmPassword" className="block text-gray-700 mb-2 font-medium">Confirm Password</label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-blue-400">
-                      <FaLock className="text-lg" />
-                    </div>
-                    <input
-                      type="password"
-                      id="confirmPassword"
-                      name="confirmPassword"
-                      value={formData.confirmPassword}
-                      onChange={handleChange}
-                      className={`w-full pl-10 pr-4 py-3 rounded-xl border-2 ${errors.confirmPassword ? 'border-red-300' : 'border-blue-100'} focus:border-yellow-400 focus:ring-2 focus:ring-yellow-200 transition-all`}
-                      placeholder="Confirm your password"
-                      minLength="6"
-                      required
-                    />
-                  </div>
-                  {errors.confirmPassword && <p className="text-red-500 text-sm mt-1">{errors.confirmPassword}</p>}
-                </div>
-              </div>
-            )}
-
-            {/* Step 2: Additional Details */}
-            {step === 2 && (
-              <div className="space-y-5">
-                {/* Service Area */}
-                <div>
-                  <label htmlFor="serviceArea" className="block text-gray-700 mb-2">Service Area (City/Pincode)</label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-blue-400">
-                      <FaMapMarkerAlt className="text-lg" />
-                    </div>
-                    <input
-                      type="text"
-                      id="serviceArea"
-                      name="serviceArea"
-                      value={formData.serviceArea}
-                      onChange={handleChange}
-                      className={`w-full pl-10 pr-4 py-3 rounded-xl border-2 ${errors.serviceArea ? 'border-red-300' : 'border-blue-100'} focus:border-yellow-400 focus:ring-2 focus:ring-yellow-200 transition-all`}
-                      placeholder="City or Pincode where you provide services"
-                      required
-                    />
-                  </div>
-                  {errors.serviceArea && <p className="text-red-500 text-sm mt-1">{errors.serviceArea}</p>}
-                </div>
-
-                {/* Resume Upload */}
-                <div>
-                  <label htmlFor="resume" className="block text-gray-700 mb-2">Upload Resume (PDF)</label>
-                  <div className="relative">
-                    <input
-                      type="file"
-                      id="resume"
-                      name="resume"
-                      onChange={handleFileUpload}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                      accept=".pdf"
-                      required
-                    />
-                    <div className={`flex items-center justify-between px-4 py-3 bg-blue-50 rounded-xl border-2 ${errors.resume ? 'border-red-300' : 'border-blue-100'}`}>
-                      <span className="text-gray-600 truncate mr-2">
-                        {formData.resume ? formData.resume.name : 'No file selected'}
-                      </span>
-                      <FaFileAlt className="text-blue-400" />
-                    </div>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">Upload your professional resume in PDF format (max 5MB)</p>
-                  {errors.resume && <p className="text-red-500 text-sm mt-1">{errors.resume}</p>}
-                </div>
-
-                {/* Years of Experience */}
-                <div>
-                  <label htmlFor="experience" className="block text-gray-700 mb-2">Years of Experience</label>
-                  <input
-                    type="number"
-                    id="experience"
-                    name="experience"
-                    value={formData.experience}
-                    onChange={handleChange}
-                    min="0"
-                    max="50"
-                    className={`w-full px-4 py-3 rounded-xl border-2 ${errors.experience ? 'border-red-300' : 'border-blue-100'} focus:border-yellow-400 focus:ring-2 focus:ring-yellow-200 transition-all`}
-                    placeholder="0"
-                    required
-                  />
-                  {errors.experience && <p className="text-red-500 text-sm mt-1">{errors.experience}</p>}
-                </div>
-
-                {/* Service Categories */}
-                <div>
-                  <label className="block text-gray-700 mb-2">Service Categories</label>
-                  {errors.services && <p className="text-red-500 text-sm mb-2">{errors.services}</p>}
-                  <div className="grid grid-cols-2 gap-2">
-                    {['Electrical', 'AC', 'Appliance Repair', 'Other'].map(service => (
-                      <div key={service} className="flex items-center">
-                        <input
-                          type="checkbox"
-                          id={service}
-                          name="services"
-                          value={service}
-                          checked={formData.services.includes(service)}
-                          onChange={(e) => {
-                            const { value, checked } = e.target;
-                            setFormData(prev => ({
-                              ...prev,
-                              services: checked
-                                ? [...prev.services, value]
-                                : prev.services.filter(s => s !== value)
-                            }));
-
-                            if (checked && errors.services) {
-                              setErrors(prev => {
-                                const newErrors = { ...prev };
-                                delete newErrors['services'];
-                                return newErrors;
-                              });
-                            }
-                          }}
-                          className="h-4 w-4 text-yellow-500 focus:ring-yellow-400 border-blue-200 rounded"
-                        />
-                        <label htmlFor={service} className="ml-2 text-sm text-gray-700">
-                          {service}
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Address Section */}
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
-                    <FaMapMarkerAlt className="mr-2 text-blue-500" />
-                    Address Information
-                  </h3>
-
-                  {/* Street Address */}
-                  <div className="mb-4">
-                    <label htmlFor="street" className="block text-gray-700 mb-2">Street Address</label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-blue-400">
-                        <FaHome className="text-lg" />
-                      </div>
-                      <input
-                        type="text"
-                        id="street"
-                        name="address.street"
-                        value={formData.address.street}
-                        onChange={handleChange}
-                        className={`w-full pl-10 pr-4 py-3 rounded-xl border-2 ${errors['address.street'] ? 'border-red-300' : 'border-blue-100'} focus:border-yellow-400 focus:ring-2 focus:ring-yellow-200 transition-all`}
-                        placeholder="123 Main St"
-                        required
-                      />
-                    </div>
-                    {errors['address.street'] && <p className="text-red-500 text-sm mt-1">{errors['address.street']}</p>}
-                  </div>
-
-                  {/* City */}
-                  <div className="mb-4">
-                    <label htmlFor="city" className="block text-gray-700 mb-2">City</label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-blue-400">
-                        <FaCity className="text-lg" />
-                      </div>
-                      <input
-                        type="text"
-                        id="city"
-                        name="address.city"
-                        value={formData.address.city}
-                        onChange={handleChange}
-                        className={`w-full pl-10 pr-4 py-3 rounded-xl border-2 ${errors['address.city'] ? 'border-red-300' : 'border-blue-100'} focus:border-yellow-400 focus:ring-2 focus:ring-yellow-200 transition-all`}
-                        placeholder="Your city"
-                        required
-                      />
-                    </div>
-                    {errors['address.city'] && <p className="text-red-500 text-sm mt-1">{errors['address.city']}</p>}
-                  </div>
-
-                  {/* Pincode */}
+            <form onSubmit={
+              step === 1 ? handleInitiateRegistration :
+                step === 2 ? handleCompleteRegistration :
+                  step === 3 ? handleLogin :
+                    handleCompleteProfile
+            }>
+              {/* Step 1: Email Verification */}
+              {step === 1 && (
+                <div className="space-y-6">
                   <div>
-                    <label htmlFor="pincode" className="block text-gray-700 mb-2">Postal/Zip Code</label>
+                    <label htmlFor="email" className="block text-blue-900 font-medium mb-2">
+                      Email Address
+                    </label>
                     <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-blue-400">
-                        <FaMapMarkerAlt className="text-lg" />
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-yellow-500">
+                        <FaEnvelope />
+                      </div>
+                      <input
+                        type="email"
+                        id="email"
+                        name="email"
+                        value={formData.email}
+                        onChange={handleChange}
+                        className="w-full pl-10 pr-4 py-3 border-2 border-blue-100 rounded-xl focus:ring-2 focus:ring-yellow-200 focus:border-yellow-400 transition"
+                        placeholder="your@email.com"
+
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full bg-gradient-to-r from-yellow-400 to-yellow-500 hover:from-yellow-500 hover:to-yellow-600 text-blue-900 font-bold py-3 px-4 rounded-xl shadow-md transition duration-300 disabled:opacity-70"
+                    disabled={isSubmitting}
+                  >
+                    Send Verification Code
+                  </button>
+                </div>
+              )}
+
+              {/* Step 2: OTP and Basic Details */}
+              {step === 2 && (
+                <div className="space-y-6">
+                  <div className="text-center bg-blue-50 p-4 rounded-xl border border-blue-200">
+                    <p className="text-blue-900">
+                      We've sent a 6-digit code to <span className="font-semibold text-yellow-600">{formData.email}</span>
+                    </p>
+                    <p className="text-sm text-blue-700 mt-1">
+                      {otpExpiryTime ? (
+                        <>
+                          Code expires at {formatExpiryTime(otpExpiryTime)} •
+                          {canResendOtp ? (
+                            <button
+                              onClick={handleResendOTP}
+                              className="ml-1 text-yellow-600 hover:text-yellow-800 font-medium"
+                              disabled={isSubmitting}
+                            >
+                              Resend now
+                            </button>
+                          ) : (
+                            <span className="ml-1">Resend in {resendCountdown}s</span>
+                          )}
+                        </>
+                      ) : 'Code expired'}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label htmlFor="otp" className="block text-blue-900 font-medium mb-2">
+                      Verification Code
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        id="otp"
+                        name="otp"
+                        value={formData.otp}
+                        onChange={handleChange}
+                        className="flex-1 px-4 py-3 border-2 border-blue-100 rounded-xl focus:ring-2 focus:ring-yellow-200 focus:border-yellow-400 transition text-center font-mono text-lg"
+                        placeholder="••••••"
+                        maxLength="6"
+
+                      />
+                      <button
+                        type="button"
+                        onClick={handleResendOTP}
+                        disabled={!canResendOtp || isSubmitting}
+                        className={`px-4 py-3 rounded-xl transition flex items-center ${canResendOtp ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-blue-200 text-blue-500 cursor-not-allowed'} disabled:opacity-70`}
+                      >
+                        <FaRedo className="mr-2" /> {isSubmitting ? 'Sending...' : 'Resend'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="name" className="block text-blue-900 font-medium mb-2">
+                        Full Name
+                      </label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-yellow-500">
+                          <FaUser />
+                        </div>
+                        <input
+                          type="text"
+                          id="name"
+                          name="name"
+                          value={formData.name}
+                          onChange={handleChange}
+                          className="w-full pl-10 pr-4 py-3 border-2 border-blue-100 rounded-xl focus:ring-2 focus:ring-yellow-200 focus:border-yellow-400 transition"
+                          placeholder="John Doe"
+
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label htmlFor="phone" className="block text-blue-900 font-medium mb-2">
+                        Phone Number
+                      </label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-yellow-500">
+                          <FaPhone />
+                        </div>
+                        <input
+                          type="tel"
+                          id="phone"
+                          name="phone"
+                          value={formData.phone}
+                          onChange={handleChange}
+                          className="w-full pl-10 pr-4 py-3 border-2 border-blue-100 rounded-xl focus:ring-2 focus:ring-yellow-200 focus:border-yellow-400 transition"
+                          placeholder="9876543210"
+
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="dateOfBirth" className="block text-blue-900 font-medium mb-2">
+                      Date of Birth
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-yellow-500">
+                        <FaCalendarAlt />
+                      </div>
+                      <input
+                        type="date"
+                        id="dateOfBirth"
+                        name="dateOfBirth"
+                        value={formData.dateOfBirth}
+                        onChange={handleChange}
+                        className="w-full pl-10 pr-4 py-3 border-2 border-blue-100 rounded-xl focus:ring-2 focus:ring-yellow-200 focus:border-yellow-400 transition appearance-none"
+
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="password" className="block text-blue-900 font-medium mb-2">
+                        Password
+                      </label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-yellow-500">
+                          <FaLock />
+                        </div>
+                        <input
+                          type="password"
+                          id="password"
+                          name="password"
+                          value={formData.password}
+                          onChange={handleChange}
+                          className="w-full pl-10 pr-4 py-3 border-2 border-blue-100 rounded-xl focus:ring-2 focus:ring-yellow-200 focus:border-yellow-400 transition"
+                          placeholder="••••••••"
+                          minLength="8"
+
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label htmlFor="confirmPassword" className="block text-blue-900 font-medium mb-2">
+                        Confirm Password
+                      </label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-yellow-500">
+                          <FaLock />
+                        </div>
+                        <input
+                          type="password"
+                          id="confirmPassword"
+                          name="confirmPassword"
+                          value={formData.confirmPassword}
+                          onChange={handleChange}
+                          className="w-full pl-10 pr-4 py-3 border-2 border-blue-100 rounded-xl focus:ring-2 focus:ring-yellow-200 focus:border-yellow-400 transition"
+                          placeholder="••••••••"
+
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between pt-4">
+                    <button
+                      type="button"
+                      onClick={() => setStep(1)}
+                      className="text-yellow-600 hover:text-yellow-800 font-medium flex items-center px-4 py-2 rounded-lg hover:bg-yellow-50 transition"
+                      disabled={isSubmitting}
+                    >
+                      <FaArrowLeft className="mr-2" /> Back
+                    </button>
+
+                    <button
+                      type="submit"
+                      className="bg-gradient-to-r from-yellow-400 to-yellow-500 hover:from-yellow-500 hover:to-yellow-600 text-blue-900 font-bold py-3 px-6 rounded-xl shadow-md transition duration-300 disabled:opacity-70"
+                      disabled={isSubmitting}
+                    >
+                      Complete Registration
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 3: Login */}
+              {step === 3 && (
+                <div className="space-y-6">
+                  <div>
+                    <label htmlFor="email" className="block text-blue-900 font-medium mb-2">
+                      Email Address
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-yellow-500">
+                        <FaEnvelope />
+                      </div>
+                      <input
+                        type="email"
+                        id="email"
+                        name="email"
+                        value={formData.email}
+                        onChange={handleChange}
+                        className="w-full pl-10 pr-4 py-3 border-2 border-blue-100 rounded-xl focus:ring-2 focus:ring-yellow-200 focus:border-yellow-400 transition"
+                        placeholder="your@email.com"
+
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="password" className="block text-blue-900 font-medium mb-2">
+                      Password
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-yellow-500">
+                        <FaLock />
+                      </div>
+                      <input
+                        type="password"
+                        id="password"
+                        name="password"
+                        value={formData.password}
+                        onChange={handleChange}
+                        className="w-full pl-10 pr-4 py-3 border-2 border-blue-100 rounded-xl focus:ring-2 focus:ring-yellow-200 focus:border-yellow-400 transition"
+                        placeholder="••••••••"
+
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between pt-4">
+                    <button
+                      type="button"
+                      onClick={() => setStep(2)}
+                      className="text-yellow-600 hover:text-yellow-800 font-medium flex items-center px-4 py-2 rounded-lg hover:bg-yellow-50 transition"
+                      disabled={isSubmitting}
+                    >
+                      <FaArrowLeft className="mr-2" /> Back
+                    </button>
+
+                    <button
+                      type="submit"
+                      className="bg-gradient-to-r from-yellow-400 to-yellow-500 hover:from-yellow-500 hover:to-yellow-600 text-blue-900 font-bold py-3 px-6 rounded-xl shadow-md transition duration-300 disabled:opacity-70"
+                      disabled={isSubmitting}
+                    >
+                      Login
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 4: Complete Profile */}
+              {step === 4 && (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="services" className="block text-blue-900 font-medium mb-2">
+                        Service Type
+                      </label>
+                      <select
+                        id="services"
+                        name="services"
+                        value={formData.services}
+                        onChange={handleChange}
+                        className="w-full px-4 py-3 border-2 border-blue-100 rounded-xl focus:ring-2 focus:ring-yellow-200 focus:border-yellow-400 transition"
+
+                      >
+                        <option value="">Select service</option>
+                        <option value="Electrical">Electrical</option>
+                        <option value="AC">AC Services</option>
+                        <option value="Appliance Repair">Appliance Repair</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label htmlFor="experience" className="block text-blue-900 font-medium mb-2">
+                        Years of Experience
+                      </label>
+                      <input
+                        type="number"
+                        id="experience"
+                        name="experience"
+                        value={formData.experience}
+                        onChange={handleChange}
+                        min="0"
+                        max="40"
+                        className="w-full px-4 py-3 border-2 border-blue-100 rounded-xl focus:ring-2 focus:ring-yellow-200 focus:border-yellow-400 transition"
+                        placeholder="0"
+
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="serviceArea" className="block text-blue-900 font-medium mb-2">
+                      Service Area (Cities/Pincodes)
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-yellow-500">
+                        <FaMapMarkerAlt />
                       </div>
                       <input
                         type="text"
-                        id="pincode"
-                        name="address.pincode"
-                        value={formData.address.pincode}
+                        id="serviceArea"
+                        name="serviceArea"
+                        value={formData.serviceArea}
                         onChange={handleChange}
-                        className={`w-full pl-10 pr-4 py-3 rounded-xl border-2 ${errors['address.pincode'] ? 'border-red-300' : 'border-blue-100'} focus:border-yellow-400 focus:ring-2 focus:ring-yellow-200 transition-all`}
-                        placeholder="12345"
-                        required
+                        className="w-full pl-10 pr-4 py-3 border-2 border-blue-100 rounded-xl focus:ring-2 focus:ring-yellow-200 focus:border-yellow-400 transition"
+                        placeholder="Cities or pincodes you serve"
+
                       />
                     </div>
-                    {errors['address.pincode'] && <p className="text-red-500 text-sm mt-1">{errors['address.pincode']}</p>}
+                  </div>
+
+                  <div>
+                    <label htmlFor="resume" className="block text-blue-900 font-medium mb-2">
+                      Professional Resume (PDF)
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="file"
+                        id="resume"
+                        name="resume"
+                        onChange={handleFileChange('resume')}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        accept=".pdf"
+
+                      />
+                      <div className="flex items-center justify-between px-4 py-3 bg-blue-50 border-2 border-blue-100 rounded-xl hover:border-yellow-400 transition">
+                        <span className="text-blue-700 truncate">
+                          {formData.resume ? formData.resume.name : 'Choose file...'}
+                        </span>
+                        <FaFileAlt className="text-blue-400" />
+                      </div>
+                    </div>
+                    <p className="mt-1 text-sm text-blue-700">Upload your resume in PDF format</p>
+                  </div>
+
+                  <div>
+                    <label htmlFor="profilePic" className="block text-blue-900 font-medium mb-2">
+                      Profile Picture
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="file"
+                        id="profilePic"
+                        name="profilePic"
+                        onChange={handleFileChange('profilePic')}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        accept="image/*"
+
+                      />
+                      <div className="flex items-center justify-between px-4 py-3 bg-blue-50 border-2 border-blue-100 rounded-xl hover:border-yellow-400 transition">
+                        <span className="text-blue-700 truncate">
+                          {formData.profilePic ? formData.profilePic.name : 'Choose file...'}
+                        </span>
+                        <FaUser className="text-blue-400" />
+                      </div>
+                    </div>
+                    <p className="mt-1 text-sm text-blue-700">Upload a clear profile photo</p>
+                  </div>
+
+                  <div className="border-t border-blue-200 pt-6 mt-6">
+                    <h3 className="text-lg font-bold text-blue-900 mb-4 flex items-center">
+                      <FaHome className="mr-2 text-yellow-500" />
+                      Address Information
+                    </h3>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label htmlFor="street" className="block text-blue-900 font-medium mb-2">
+                          Street Address
+                        </label>
+                        <input
+                          type="text"
+                          id="street"
+                          name="street"
+                          value={formData.street}
+                          onChange={handleChange}
+                          className="w-full px-4 py-3 border-2 border-blue-100 rounded-xl focus:ring-2 focus:ring-yellow-200 focus:border-yellow-400 transition"
+                          placeholder="123 Main St"
+
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="city" className="block text-blue-900 font-medium mb-2">
+                          City
+                        </label>
+                        <input
+                          type="text"
+                          id="city"
+                          name="city"
+                          value={formData.city}
+                          onChange={handleChange}
+                          className="w-full px-4 py-3 border-2 border-blue-100 rounded-xl focus:ring-2 focus:ring-yellow-200 focus:border-yellow-400 transition"
+                          placeholder="Your city"
+
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                      <div>
+                        <label htmlFor="state" className="block text-blue-900 font-medium mb-2">
+                          State
+                        </label>
+                        <input
+                          type="text"
+                          id="state"
+                          name="state"
+                          value={formData.state}
+                          onChange={handleChange}
+                          className="w-full px-4 py-3 border-2 border-blue-100 rounded-xl focus:ring-2 focus:ring-yellow-200 focus:border-yellow-400 transition"
+                          placeholder="Your state"
+
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="postalCode" className="block text-blue-900 font-medium mb-2">
+                          Postal Code
+                        </label>
+                        <input
+                          type="text"
+                          id="postalCode"
+                          name="postalCode"
+                          value={formData.postalCode}
+                          onChange={handleChange}
+                          className="w-full px-4 py-3 border-2 border-blue-100 rounded-xl focus:ring-2 focus:ring-yellow-200 focus:border-yellow-400 transition"
+                          placeholder="123456"
+
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-blue-200 pt-6 mt-6">
+                    <h3 className="text-lg font-bold text-blue-900 mb-4 flex items-center">
+                      <FaWallet className="mr-2 text-yellow-500" />
+                      Bank Details
+                    </h3>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label htmlFor="accountNo" className="block text-blue-900 font-medium mb-2">
+                          Account Number
+                        </label>
+                        <input
+                          type="text"
+                          id="accountNo"
+                          name="accountNo"
+                          value={formData.accountNo}
+                          onChange={handleChange}
+                          className="w-full px-4 py-3 border-2 border-blue-100 rounded-xl focus:ring-2 focus:ring-yellow-200 focus:border-yellow-400 transition"
+                          placeholder="1234567890"
+
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="ifsc" className="block text-blue-900 font-medium mb-2">
+                          IFSC Code
+                        </label>
+                        <input
+                          type="text"
+                          id="ifsc"
+                          name="ifsc"
+                          value={formData.ifsc}
+                          onChange={handleChange}
+                          className="w-full px-4 py-3 border-2 border-blue-100 rounded-xl focus:ring-2 focus:ring-yellow-200 focus:border-yellow-400 transition"
+                          placeholder="ABCD0123456"
+
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-4">
+                      <label htmlFor="passbookImage" className="block text-blue-900 font-medium mb-2">
+                        Passbook Image
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="file"
+                          id="passbookImage"
+                          name="passbookImage"
+                          onChange={handleFileChange('passbookImage')}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                          accept="image/*"
+
+                        />
+                        <div className="flex items-center justify-between px-4 py-3 bg-blue-50 border-2 border-blue-100 rounded-xl hover:border-yellow-400 transition">
+                          <span className="text-blue-700 truncate">
+                            {formData.passbookImage ? formData.passbookImage.name : 'Choose Passbook file...'}
+                          </span>
+                          <FaFileAlt className="text-blue-400" />
+                        </div>
+                      </div>
+                      <p className="mt-1 text-sm text-blue-700">Upload clear image of your passbook </p>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between pt-8">
+                    <button
+                      type="button"
+                      onClick={() => setStep(3)}
+                      className="text-yellow-600 hover:text-yellow-800 font-medium flex items-center px-4 py-2 rounded-lg hover:bg-yellow-50 transition"
+                      disabled={isSubmitting}
+                    >
+                      <FaArrowLeft className="mr-2" /> Back
+                    </button>
+
+                    <button
+                      type="submit"
+                      className="bg-gradient-to-r from-yellow-400 to-yellow-500 hover:from-yellow-500 hover:to-yellow-600 text-blue-900 font-bold py-3 px-6 rounded-xl shadow-md transition duration-300 disabled:opacity-70"
+                      disabled={isSubmitting}
+                    >
+                      Complete Profile
+                    </button>
                   </div>
                 </div>
-
-                <div className="text-center mt-4">
-                  <button
-                    type="button"
-                    onClick={() => setStep(1)}
-                    className="text-blue-600 hover:text-blue-800 text-sm flex items-center justify-center mx-auto"
-                  >
-                    <FaArrowLeft className="mr-1" /> Back to basic info
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Step 3: OTP Verification and Completion */}
-            {step === 3 && (
-              <div className="space-y-5">
-                <div className="text-center mb-6">
-                  <p className="text-gray-700 mb-4">
-                    We've sent a 6-digit verification code to<br />
-                    <span className="font-semibold">{formData.email}</span>
-                  </p>
-                  {otpSent && (
-                    <p className="text-green-500 mb-4 flex items-center justify-center">
-                      <FaCheck className="mr-2" /> OTP sent successfully!
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label htmlFor="otp" className="block text-gray-700 mb-2 font-medium">Enter OTP</label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      id="otp"
-                      name="otp"
-                      value={formData.otp}
-                      onChange={handleChange}
-                      className={`w-full px-4 py-3 rounded-xl border-2 ${errors.otp ? 'border-red-300' : 'border-blue-100'} focus:border-yellow-400 focus:ring-2 focus:ring-yellow-200 transition-all text-center tracking-widest`}
-                      placeholder="123456"
-                      maxLength="6"
-                      required
-                    />
-                  </div>
-                  {errors.otp && <p className="text-red-500 text-sm mt-1">{errors.otp}</p>}
-                </div>
-
-                <div className="text-center mt-4">
-                  <button
-                    type="button"
-                    onClick={() => setStep(2)}
-                    className="text-blue-600 hover:text-blue-800 text-sm flex items-center justify-center mx-auto"
-                  >
-                    <FaArrowLeft className="mr-1" /> Back to profile details
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSendOtp}
-                    className="text-blue-600 hover:text-blue-800 text-sm flex items-center justify-center mx-auto mt-2"
-                  >
-                    Didn't receive code? Resend OTP
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Submit Button */}
-            <motion.button
-              type="submit"
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              disabled={isLoading}
-              className={`w-full mt-6 bg-gradient-to-r from-yellow-400 to-yellow-500 hover:from-yellow-500 hover:to-yellow-600 text-blue-900 font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 text-lg ${isLoading ? 'opacity-75' : ''}`}
-            >
-              {isLoading ? (
-                <span className="flex items-center justify-center">
-                  <FaSpinner className="animate-spin mr-2" />
-                  {step === 1 ? 'Sending OTP...' : step === 2 ? 'Continue...' : 'Complete Registration'}
-                </span>
-              ) : (
-                <span>
-                  {step === 1 ? 'Send OTP' : step === 2 ? 'Continue' : 'Complete Registration'}
-                </span>
               )}
-            </motion.button>
-          </form>
+            </form>
 
-          {/* Login Link */}
-          <div className="text-center mt-6">
-            <p className="text-gray-600">
-              Already have an account?{' '}
-              <Link to="/login" className="text-blue-600 hover:text-blue-800 font-medium">
-                Sign in
-              </Link>
-            </p>
+            <div className="mt-8 text-center">
+              <p className="text-blue-700">
+                {step === 1 ? 'Already have an account? ' : step === 3 ? 'Need to register? ' : 'Need help? '}
+                <Link
+                  to={step === 1 || step === 3 ? '/login' : '/contact'}
+                  className="text-yellow-600 hover:text-yellow-800 font-medium"
+                >
+                  {step === 1 ? 'Login' : step === 3 ? 'Register' : 'Contact Support'}
+                </Link>
+              </p>
+            </div>
           </div>
         </motion.div>
-      </motion.div>
+      </div>
     </div>
   );
 };

@@ -8,7 +8,7 @@ const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
     const navigate = useNavigate();
-    const API = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+    const API = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api';
 
     // State management
     const [token, setToken] = useState(() => localStorage.getItem("token") || null);

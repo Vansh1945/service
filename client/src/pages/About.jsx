@@ -1,17 +1,7 @@
 import React from 'react';
-import { motion } from 'framer-motion';
 import { FaBolt, FaTwitter, FaLinkedin, FaMapMarkerAlt, FaUsers, FaBullseye, FaHistory } from 'react-icons/fa';
 
 const AboutPage = () => {
-  const sectionVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.6 } }
-  };
-
-  const cardVariants = {
-    hidden: { opacity: 0, y: 30 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.5 } }
-  };
 
   return (
     <div className="bg-blue-50">
@@ -23,10 +13,7 @@ const AboutPage = () => {
         </div>
         
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <motion.div
-            initial="hidden"
-            animate="visible"
-            variants={sectionVariants}
+          <div
             className="text-center"
           >
             <div className="inline-flex items-center bg-white/10 backdrop-blur-sm px-6 py-3 rounded-full border border-blue-700 mb-6">
@@ -39,17 +26,13 @@ const AboutPage = () => {
             <p className="text-xl text-blue-200 max-w-3xl mx-auto">
               Delivering reliable electrical solutions with certified expertise and cutting-edge technology.
             </p>
-          </motion.div>
+          </div>
         </div>
       </section>
 
       {/* Our Story Section */}
       <section className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <motion.div
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true }}
-          variants={sectionVariants}
+        <div
           className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center"
         >
           <div>
@@ -72,8 +55,7 @@ const AboutPage = () => {
             </div>
           </div>
           
-          <motion.div 
-            whileHover={{ scale: 1.02 }}
+          <div 
             className="relative rounded-xl overflow-hidden shadow-2xl border-4 border-white"
           >
             <img 
@@ -84,18 +66,14 @@ const AboutPage = () => {
             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-blue-900/90 to-transparent p-6">
               <p className="text-white font-medium">Precision electrical installations</p>
             </div>
-          </motion.div>
-        </motion.div>
+          </div>
+        </div>
       </section>
 
       {/* Service Area Section */}
       <section className="py-20 bg-blue-900 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
-            variants={sectionVariants}
+          <div
             className="text-center mb-16"
           >
             <div className="inline-flex items-center bg-white/10 backdrop-blur-sm px-6 py-3 rounded-full border border-blue-700 mb-6">
@@ -106,7 +84,7 @@ const AboutPage = () => {
             <p className="text-blue-200 max-w-3xl mx-auto">
               Comprehensive electrical solutions tailored to your specific needs
             </p>
-          </motion.div>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {[
@@ -121,10 +99,8 @@ const AboutPage = () => {
                 icon: <FaBolt className="text-yellow-400 text-3xl" />
               }
             ].map((item, index) => (
-              <motion.div
+              <div
                 key={index}
-                variants={cardVariants}
-                whileHover={{ y: -10 }}
                 className="bg-blue-800 rounded-xl p-8 shadow-lg"
               >
                 <div className="flex items-center mb-6">
@@ -141,7 +117,7 @@ const AboutPage = () => {
                     </li>
                   ))}
                 </ul>
-              </motion.div>
+              </div>
             ))}
           </div>
         </div>
@@ -149,11 +125,7 @@ const AboutPage = () => {
 
       {/* Mission/Vision Section */}
       <section className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <motion.div
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true }}
-          variants={sectionVariants}
+        <div
           className="text-center mb-16"
         >
           <div className="inline-flex items-center bg-blue-100 px-6 py-3 rounded-full border border-blue-200 mb-6">
@@ -164,11 +136,10 @@ const AboutPage = () => {
           <p className="text-gray-600 max-w-3xl mx-auto">
             The foundation that guides our work and aspirations
           </p>
-        </motion.div>
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-          <motion.div
-            variants={cardVariants}
+          <div
             className="bg-white rounded-xl shadow-xl overflow-hidden border border-blue-100"
           >
             <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-6 text-white">
@@ -197,10 +168,9 @@ const AboutPage = () => {
                 ))}
               </ul>
             </div>
-          </motion.div>
+          </div>
 
-          <motion.div
-            variants={cardVariants}
+          <div
             className="bg-white rounded-xl shadow-xl overflow-hidden border border-blue-100"
           >
             <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 p-6 text-white">
@@ -229,18 +199,14 @@ const AboutPage = () => {
                 ))}
               </ul>
             </div>
-          </motion.div>
+          </div>
         </div>
       </section>
 
       {/* Team Section */}
       {/* <section className="py-20 bg-blue-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
-            variants={sectionVariants}
+          <div
             className="text-center mb-16"
           >
             <div className="inline-flex items-center bg-white px-6 py-3 rounded-full shadow-sm border border-blue-200 mb-6">
@@ -251,7 +217,7 @@ const AboutPage = () => {
             <p className="text-gray-600 max-w-3xl mx-auto">
               Skilled professionals dedicated to electrical excellence
             </p>
-          </motion.div>
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 max-w-2xl mx-auto">
             {[
@@ -268,10 +234,8 @@ const AboutPage = () => {
                 quote: "Commercial electrical systems expert"
               }
             ].map((member, index) => (
-              <motion.div
+              <div
                 key={index}
-                variants={cardVariants}
-                whileHover={{ y: -10 }}
                 className="bg-white rounded-xl shadow-lg overflow-hidden"
               >
                 <div className="h-64 overflow-hidden">
@@ -297,7 +261,7 @@ const AboutPage = () => {
                     ))}
                   </div>
                 </div>
-              </motion.div>
+              </div>
             ))}
           </div>
         </div>
@@ -306,24 +270,17 @@ const AboutPage = () => {
       {/* CTA Section */}
       <section className="py-20 bg-gradient-to-r from-blue-900 to-indigo-900 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
-            variants={sectionVariants}
-          >
+          <div>
             <h2 className="text-3xl sm:text-4xl font-bold mb-6">Need Professional Electrical Services?</h2>
             <p className="text-xl text-blue-200 max-w-3xl mx-auto mb-8">
               Contact us today for reliable solutions from certified electricians.
             </p>
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+            <button
               className="bg-gradient-to-r from-yellow-400 to-yellow-500 hover:from-yellow-500 hover:to-yellow-600 text-blue-900 font-bold py-4 px-8 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 inline-flex items-center"
             >
               <FaBolt className="mr-2" /> Get Your Free Consultation
-            </motion.button>
-          </motion.div>
+            </button>
+          </div>
         </div>
       </section>
       <br/>

@@ -8,43 +8,6 @@ const addQuestion = async (req, res) => {
   try {
     const { questionText, options, correctAnswer, category, subcategory } = req.body;
 
-    // Validation checks
-    if (!questionText || questionText.trim() === '') {
-      return res.status(400).json({
-        success: false,
-        message: 'Question text is required'
-      });
-    }
-
-    if (!options || !Array.isArray(options) || options.length < 2) {
-      return res.status(400).json({
-        success: false,
-        message: 'At least two options are required'
-      });
-    }
-
-    if (typeof correctAnswer !== 'string' || correctAnswer.trim() === '') {
-      return res.status(400).json({
-        success: false,
-        message: 'Correct answer is required'
-      });
-    }
-
-    if (!category || category.trim() === '') {
-      return res.status(400).json({
-        success: false,
-        message: 'Category is required'
-      });
-    }
-
-    // Ensure correctAnswer is one of the provided options
-    if (!options.includes(correctAnswer)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Correct answer must be one of the provided options'
-      });
-    }
-
     const newQuestion = new Question({
       questionText,
       options,

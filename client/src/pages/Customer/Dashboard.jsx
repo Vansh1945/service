@@ -1,81 +1,72 @@
 import React, { useState, useEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from 'recharts';
-import { Users, TrendingUp, DollarSign, ShoppingCart, UserPlus, UserMinus, Star, MapPin } from 'lucide-react';
+import { useAuth } from '../../store/auth';
+import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { Users, TrendingUp, DollarSign, ShoppingCart, Calendar, CheckCircle, XCircle, Star, MapPin, Clock, CreditCard, Tag, MessageSquare } from 'lucide-react';
+import { toast } from 'react-toastify';
+
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
 const CustomerDashboard = () => {
+  const { token, user, API, logoutUser, showToast } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
   const [dateRange, setDateRange] = useState('7d');
 
-  // Mock data for customer metrics
-  const customerMetrics = {
-    totalCustomers: 12450,
-    newCustomers: 324,
-    activeCustomers: 8967,
-    churnRate: 2.3,
-    avgOrderValue: 145.50,
-    customerLifetimeValue: 850.25,
-    customerSatisfaction: 4.6,
-    retentionRate: 89.5
-  };
+  useEffect(() => {
+    const fetchDashboardStats = async () => {
+      try {
+        const response = await fetch(`${API}/customer/dashboard`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          }
+        });
 
-  // Mock data for customer acquisition over time
-  const acquisitionData = [
-    { date: '2024-01-01', newCustomers: 150, totalCustomers: 11800 },
-    { date: '2024-01-08', newCustomers: 180, totalCustomers: 11980 },
-    { date: '2024-01-15', newCustomers: 200, totalCustomers: 12180 },
-    { date: '2024-01-22', newCustomers: 160, totalCustomers: 12340 },
-    { date: '2024-01-29', newCustomers: 110, totalCustomers: 12450 }
-  ];
+        if (!response.ok) {
+          throw new Error('Failed to fetch dashboard data');
+        }
 
-  // Mock data for customer segments
-  const segmentData = [
-    { name: 'Premium', value: 15, color: '#8B5CF6' },
-    { name: 'Regular', value: 65, color: '#06B6D4' },
-    { name: 'Basic', value: 20, color: '#10B981' }
-  ];
+        const data = await response.json();
+        setStats(data.data);
+        setLoading(false);
+      } catch (error) {
+        console.error('Error fetching dashboard stats:', error);
+        showToast(error.message || 'Failed to load dashboard', 'error');
+        setLoading(false);
+      }
+    };
 
-  // Mock data for customer geography
-  const geographyData = [
-    { region: 'North America', customers: 4500, revenue: 680000 },
-    { region: 'Europe', customers: 3200, revenue: 450000 },
-    { region: 'Asia Pacific', customers: 2800, revenue: 420000 },
-    { region: 'Latin America', customers: 1500, revenue: 180000 },
-    { region: 'Middle East', customers: 450, revenue: 75000 }
-  ];
-
-  // Mock recent customer activity
-  const recentActivity = [
-    { id: 1, customer: 'John Smith', action: 'Made purchase', amount: '$234.50', time: '2 hours ago' },
-    { id: 2, customer: 'Sarah Johnson', action: 'Account created', amount: null, time: '3 hours ago' },
-    { id: 3, customer: 'Mike Brown', action: 'Support ticket', amount: null, time: '5 hours ago' },
-    { id: 4, customer: 'Emma Davis', action: 'Made purchase', amount: '$89.99', time: '6 hours ago' },
-    { id: 5, customer: 'Alex Wilson', action: 'Profile updated', amount: null, time: '8 hours ago' }
-  ];
+    if (token) {
+      fetchDashboardStats();
+    }
+  }, [token, API]);
 
   const MetricCard = ({ title, value, change, icon: Icon, trend }) => (
-    <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-      <div className="flex items-center justify-between mb-4">
+    <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-100">
+      <div className="flex items-center justify-between mb-3">
         <div className="flex items-center">
-          <div className="p-2 bg-blue-100 rounded-lg mr-3">
-            <Icon className="h-6 w-6 text-blue-600" />
+          <div className="p-2 bg-blue-50 rounded-lg mr-3">
+            <Icon className="h-5 w-5 text-blue-600" />
           </div>
           <h3 className="text-sm font-medium text-gray-700">{title}</h3>
         </div>
         {trend && (
-          <div className={`flex items-center ${trend === 'up' ? 'text-green-600' : 'text-red-600'}`}>
-            <TrendingUp className="h-4 w-4 mr-1" />
-            <span className="text-sm font-medium">{change}%</span>
+          <div className={`flex items-center text-xs ${trend === 'up' ? 'text-green-600' : 'text-red-600'}`}>
+            <TrendingUp className="h-3 w-3 mr-1" />
+            <span className="font-medium">{change}%</span>
           </div>
         )}
       </div>
-      <p className="text-2xl font-bold text-gray-900">{value}</p>
+      <p className="text-xl font-bold text-gray-900">{value}</p>
     </div>
   );
 
   const TabButton = ({ id, label, active, onClick }) => (
     <button
       onClick={() => onClick(id)}
-      className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+      className={`px-3 py-1.5 text-sm rounded-md font-medium transition-colors ${
         active 
           ? 'bg-blue-600 text-white' 
           : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -85,71 +76,115 @@ const CustomerDashboard = () => {
     </button>
   );
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading your dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!stats) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center p-6 bg-white rounded-lg shadow-sm border border-gray-200 max-w-md">
+          <h2 className="text-xl font-bold text-gray-800 mb-2">Dashboard Unavailable</h2>
+          <p className="text-gray-600 mb-4">We couldn't load your dashboard data. Please try again later.</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Prepare chart data from stats
+  const bookingTrends = [
+    { name: 'Completed', value: stats.overview.completedBookings, icon: CheckCircle, color: '#10B981' },
+    { name: 'Upcoming', value: stats.overview.upcomingBookings, icon: Calendar, color: '#3B82F6' },
+    { name: 'Cancelled', value: stats.overview.cancelledBookings, icon: XCircle, color: '#EF4444' },
+  ];
+
+  const spendingData = [
+    { name: 'Total', value: stats.overview.totalSpent },
+    { name: 'This Month', value: stats.overview.monthlySpent },
+    { name: 'This Week', value: stats.overview.weeklySpent },
+  ];
+
+  const complaintsData = [
+    { name: 'Active', value: stats.overview.activeComplaints, color: '#F59E0B' },
+    { name: 'Resolved', value: stats.overview.resolvedComplaints, color: '#10B981' },
+  ];
+
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-50 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Customer Dashboard</h1>
-          <p className="text-gray-600">Monitor customer metrics, acquisition, and engagement</p>
+        <div className="mb-6">
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-1">Welcome back, {user?.name || 'Customer'}!</h1>
+          <p className="text-gray-600">Here's what's happening with your account</p>
         </div>
 
         {/* Date Range Selector */}
-        <div className="mb-6">
-          <div className="flex space-x-2">
-            {['7d', '30d', '90d', '1y'].map((range) => (
-              <button
-                key={range}
-                onClick={() => setDateRange(range)}
-                className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                  dateRange === range
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white text-gray-600 hover:bg-gray-100'
-                }`}
-              >
-                {range === '7d' ? 'Last 7 Days' : 
-                 range === '30d' ? 'Last 30 Days' :
-                 range === '90d' ? 'Last 90 Days' : 'Last Year'}
-              </button>
-            ))}
-          </div>
+        <div className="mb-6 flex flex-wrap gap-2">
+          {['7d', '30d', '90d', '1y'].map((range) => (
+            <button
+              key={range}
+              onClick={() => setDateRange(range)}
+              className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                dateRange === range
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+              }`}
+            >
+              {range === '7d' ? 'Last 7 Days' : 
+               range === '30d' ? 'Last 30 Days' :
+               range === '90d' ? 'Last 90 Days' : 'Last Year'}
+            </button>
+          ))}
         </div>
 
         {/* Key Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <MetricCard
-            title="Total Customers"
-            value={customerMetrics.totalCustomers.toLocaleString()}
-            change={5.2}
-            icon={Users}
-            trend="up"
-          />
-          <MetricCard
-            title="New Customers"
-            value={customerMetrics.newCustomers.toLocaleString()}
+            title="Total Bookings"
+            value={stats.overview.totalBookings}
             change={12.5}
-            icon={UserPlus}
+            icon={ShoppingCart}
             trend="up"
           />
           <MetricCard
-            title="Avg Order Value"
-            value={`$${customerMetrics.avgOrderValue}`}
+            title="Upcoming"
+            value={stats.overview.upcomingBookings}
+            change={5.2}
+            icon={Calendar}
+            trend="up"
+          />
+          <MetricCard
+            title="Total Spent"
+            value={`$${stats.overview.totalSpent.toFixed(2)}`}
             change={-2.1}
             icon={DollarSign}
             trend="down"
           />
           <MetricCard
-            title="Customer Satisfaction"
-            value={customerMetrics.customerSatisfaction}
+            title="Pending Feedback"
+            value={stats.overview.pendingFeedback}
             change={8.3}
-            icon={Star}
+            icon={MessageSquare}
             trend="up"
           />
         </div>
 
         {/* Tabs */}
         <div className="mb-6">
-          <div className="flex space-x-2">
+          <div className="flex flex-wrap gap-2">
             <TabButton
               id="overview"
               label="Overview"
@@ -157,21 +192,15 @@ const CustomerDashboard = () => {
               onClick={setActiveTab}
             />
             <TabButton
-              id="acquisition"
-              label="Acquisition"
-              active={activeTab === 'acquisition'}
+              id="bookings"
+              label="Bookings"
+              active={activeTab === 'bookings'}
               onClick={setActiveTab}
             />
             <TabButton
-              id="segments"
-              label="Segments"
-              active={activeTab === 'segments'}
-              onClick={setActiveTab}
-            />
-            <TabButton
-              id="geography"
-              label="Geography"
-              active={activeTab === 'geography'}
+              id="spending"
+              label="Spending"
+              active={activeTab === 'spending'}
               onClick={setActiveTab}
             />
             <TabButton
@@ -187,132 +216,212 @@ const CustomerDashboard = () => {
         <div className="space-y-6">
           {activeTab === 'overview' && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <h3 className="text-lg font-semibold mb-4">Customer Acquisition Trend</h3>
+              {/* Bookings Overview */}
+              <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-100">
+                <h3 className="text-lg font-semibold mb-4 flex items-center">
+                  <ShoppingCart className="h-5 w-5 mr-2 text-blue-600" />
+                  Bookings Overview
+                </h3>
                 <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={acquisitionData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis 
-                      dataKey="date" 
-                      tickFormatter={(value) => new Date(value).toLocaleDateString()}
+                  <PieChart>
+                    <Pie
+                      data={bookingTrends}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {bookingTrends.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      formatter={(value) => [`${value} bookings`, 'Count']}
                     />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Spending Overview */}
+              <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-100">
+                <h3 className="text-lg font-semibold mb-4 flex items-center">
+                  <DollarSign className="h-5 w-5 mr-2 text-green-600" />
+                  Spending Overview
+                </h3>
+                <div className="grid grid-cols-3 gap-4 mb-4">
+                  {spendingData.map((item, index) => (
+                    <div key={index} className="bg-gray-50 p-3 rounded-md">
+                      <p className="text-sm text-gray-600">{item.name}</p>
+                      <p className="font-bold text-lg">${item.value.toFixed(2)}</p>
+                    </div>
+                  ))}
+                </div>
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={spendingData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
                     <YAxis />
                     <Tooltip 
-                      labelFormatter={(value) => new Date(value).toLocaleDateString()}
+                      formatter={(value) => [`$${value.toFixed(2)}`, 'Amount']}
+                    />
+                    <Bar dataKey="value" fill="#4ADE80" name="Amount ($)" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'bookings' && (
+            <div className="space-y-6">
+              {/* Recent Bookings */}
+              <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-100">
+                <h3 className="text-lg font-semibold mb-4 flex items-center">
+                  <Clock className="h-5 w-5 mr-2 text-blue-600" />
+                  Recent Bookings
+                </h3>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Service</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Provider</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {stats.recentBookings.map((booking, index) => (
+                        <tr key={index}>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {booking.services.service.title}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                            {booking.provider.name}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                            {new Date(booking.date).toLocaleDateString()}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <span className={`px-2 py-1 text-xs rounded-full ${
+                              booking.status === 'completed' ? 'bg-green-100 text-green-800' :
+                              booking.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                              'bg-blue-100 text-blue-800'
+                            }`}>
+                              {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Favorite Services */}
+              <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-100">
+                <h3 className="text-lg font-semibold mb-4 flex items-center">
+                  <Star className="h-5 w-5 mr-2 text-yellow-500" />
+                  Favorite Services
+                </h3>
+                {stats.favoriteServices.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {stats.favoriteServices.map((service, index) => (
+                      <div key={index} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                        <div className="flex items-center mb-2">
+                          <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center mr-3">
+                            <span className="text-blue-600 font-bold">{index + 1}</span>
+                          </div>
+                          <div>
+                            <h4 className="font-medium">{service.serviceName}</h4>
+                            <p className="text-sm text-gray-600">{service.category}</p>
+                          </div>
+                        </div>
+                        <div className="flex justify-between items-center mt-2">
+                          <span className="text-sm text-gray-500">Booked</span>
+                          <span className="font-semibold">{service.count} times</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-500 text-center py-4">No favorite services yet</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'spending' && (
+            <div className="space-y-6">
+              {/* Spending Trends */}
+              <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-100">
+                <h3 className="text-lg font-semibold mb-4 flex items-center">
+                  <DollarSign className="h-5 w-5 mr-2 text-green-600" />
+                  Spending Trends
+                </h3>
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart
+                    data={[
+                      { name: 'Jan', value: 320 },
+                      { name: 'Feb', value: 450 },
+                      { name: 'Mar', value: 280 },
+                      { name: 'Apr', value: 390 },
+                      { name: 'May', value: 510 },
+                      { name: 'Jun', value: 420 },
+                    ]}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip 
+                      formatter={(value) => [`$${value}`, 'Amount']}
                     />
                     <Legend />
                     <Line 
                       type="monotone" 
-                      dataKey="newCustomers" 
-                      stroke="#8884d8" 
+                      dataKey="value" 
+                      stroke="#106981" 
                       strokeWidth={2}
-                      name="New Customers"
+                      name="Amount ($)"
                     />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
 
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <h3 className="text-lg font-semibold mb-4">Key Performance Metrics</h3>
+              {/* Recent Transactions */}
+              <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-100">
+                <h3 className="text-lg font-semibold mb-4 flex items-center">
+                  <CreditCard className="h-5 w-5 mr-2 text-blue-600" />
+                  Recent Transactions
+                </h3>
                 <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Active Customers</span>
-                    <span className="font-semibold">{customerMetrics.activeCustomers.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Churn Rate</span>
-                    <span className="font-semibold text-red-600">{customerMetrics.churnRate}%</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Retention Rate</span>
-                    <span className="font-semibold text-green-600">{customerMetrics.retentionRate}%</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Customer Lifetime Value</span>
-                    <span className="font-semibold">${customerMetrics.customerLifetimeValue}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'acquisition' && (
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h3 className="text-lg font-semibold mb-4">Customer Acquisition Over Time</h3>
-              <ResponsiveContainer width="100%" height={400}>
-                <LineChart data={acquisitionData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis 
-                    dataKey="date" 
-                    tickFormatter={(value) => new Date(value).toLocaleDateString()}
-                  />
-                  <YAxis yAxisId="left" />
-                  <YAxis yAxisId="right" orientation="right" />
-                  <Tooltip 
-                    labelFormatter={(value) => new Date(value).toLocaleDateString()}
-                  />
-                  <Legend />
-                  <Bar 
-                    yAxisId="left"
-                    dataKey="newCustomers" 
-                    fill="#8884d8" 
-                    name="New Customers"
-                  />
-                  <Line 
-                    yAxisId="right"
-                    type="monotone" 
-                    dataKey="totalCustomers" 
-                    stroke="#82ca9d" 
-                    strokeWidth={2}
-                    name="Total Customers"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-
-          {activeTab === 'segments' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <h3 className="text-lg font-semibold mb-4">Customer Segments</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={segmentData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, value }) => `${name} ${value}%`}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {segmentData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <h3 className="text-lg font-semibold mb-4">Segment Details</h3>
-                <div className="space-y-4">
-                  {segmentData.map((segment, index) => (
-                    <div key={index} className="flex items-center justify-between">
+                  {stats.recentTransactions.map((txn, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 border border-gray-100 rounded-lg hover:bg-gray-50">
                       <div className="flex items-center">
-                        <div 
-                          className="w-4 h-4 rounded mr-3"
-                          style={{ backgroundColor: segment.color }}
-                        ></div>
-                        <span className="font-medium">{segment.name}</span>
+                        <div className="p-2 bg-blue-100 rounded-full mr-3">
+                          <CreditCard className="h-4 w-4 text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-sm">
+                            {txn.booking?.services?.map(s => s.title).join(', ') || 'Service Payment'}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {new Date(txn.createdAt).toLocaleDateString()}
+                          </p>
+                        </div>
                       </div>
                       <div className="text-right">
-                        <div className="font-semibold">{segment.value}%</div>
-                        <div className="text-sm text-gray-600">
-                          {Math.round(customerMetrics.totalCustomers * segment.value / 100).toLocaleString()} customers
-                        </div>
+                        <p className={`font-semibold ${
+                          txn.paymentStatus === 'paid' ? 'text-green-600' : 'text-yellow-600'
+                        }`}>
+                          ${txn.amount.toFixed(2)}
+                        </p>
+                        <p className="text-xs text-gray-500 capitalize">
+                          {txn.paymentStatus}
+                        </p>
                       </div>
                     </div>
                   ))}
@@ -321,47 +430,67 @@ const CustomerDashboard = () => {
             </div>
           )}
 
-          {activeTab === 'geography' && (
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h3 className="text-lg font-semibold mb-4">Customer Distribution by Geography</h3>
-              <ResponsiveContainer width="100%" height={400}>
-                <BarChart data={geographyData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="region" />
-                  <YAxis yAxisId="left" />
-                  <YAxis yAxisId="right" orientation="right" />
-                  <Tooltip />
-                  <Legend />
-                  <Bar yAxisId="left" dataKey="customers" fill="#8884d8" name="Customers" />
-                  <Bar yAxisId="right" dataKey="revenue" fill="#82ca9d" name="Revenue ($)" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-
           {activeTab === 'activity' && (
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h3 className="text-lg font-semibold mb-4">Recent Customer Activity</h3>
-              <div className="space-y-4">
-                {recentActivity.map((activity) => (
-                  <div key={activity.id} className="flex items-center justify-between py-3 border-b border-gray-200 last:border-b-0">
-                    <div className="flex items-center">
-                      <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-3">
-                        <Users className="h-5 w-5 text-blue-600" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">{activity.customer}</p>
-                        <p className="text-sm text-gray-600">{activity.action}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      {activity.amount && (
-                        <p className="font-semibold text-green-600">{activity.amount}</p>
-                      )}
-                      <p className="text-sm text-gray-500">{activity.time}</p>
-                    </div>
+            <div className="space-y-6">
+              {/* Coupons & Discounts */}
+              <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-100">
+                <h3 className="text-lg font-semibold mb-4 flex items-center">
+                  <Tag className="h-5 w-5 mr-2 text-purple-600" />
+                  Coupons & Discounts
+                </h3>
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div className="bg-purple-50 p-4 rounded-lg">
+                    <p className="text-sm text-purple-600">Available</p>
+                    <p className="text-2xl font-bold">{stats.overview.availableCoupons}</p>
                   </div>
-                ))}
+                  <div className="bg-green-50 p-4 rounded-lg">
+                    <p className="text-sm text-green-600">Used</p>
+                    <p className="text-2xl font-bold">{stats.overview.usedCoupons}</p>
+                  </div>
+                </div>
+                <div className="text-center">
+                  <button className="text-sm text-purple-600 font-medium hover:underline">
+                    View all coupons
+                  </button>
+                </div>
+              </div>
+
+              {/* Complaints */}
+              <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-100">
+                <h3 className="text-lg font-semibold mb-4 flex items-center">
+                  <MessageSquare className="h-5 w-5 mr-2 text-red-600" />
+                  Complaints & Issues
+                </h3>
+                <div className="flex justify-center mb-4">
+                  <ResponsiveContainer width="100%" height={200}>
+                    <PieChart>
+                      <Pie
+                        data={complaintsData}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                        outerRadius={60}
+                        innerRadius={30}
+                        fill="#8884d8"
+                        dataKey="value"
+                      >
+                        {complaintsData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        formatter={(value) => [`${value} complaints`, 'Count']}
+                      />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="text-center">
+                  <button className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition-colors">
+                    Create New Complaint
+                  </button>
+                </div>
               </div>
             </div>
           )}

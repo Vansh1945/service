@@ -34,7 +34,7 @@ import {
   EditOutlined
 } from '@ant-design/icons';
 import {
-  User,
+  User as UserIcon,
   Clock,
   MapPin,
   Eye,
@@ -63,7 +63,7 @@ const statusFilters = [
 ];
 
 const AdminBookingsPage = () => {
-  const { API, isAdmin, logoutUser , user } = useAuth();
+  const { API, isAdmin, logoutUser, user } = useAuth();
   const [bookings, setBookings] = useState([]);
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [providers, setProviders] = useState([]);
@@ -81,7 +81,7 @@ const AdminBookingsPage = () => {
     total: 0,
   });
   const [filters, setFilters] = useState({
-    status: 'pending', // Default to pending only
+    status: 'pending',
     dateRange: null
   });
   const [showFilters, setShowFilters] = useState(false);
@@ -105,45 +105,34 @@ const AdminBookingsPage = () => {
       const queryParams = new URLSearchParams({
         page: current,
         limit: pageSize,
-        status: 'pending', // Only fetch pending bookings initially
+        status: filters.status,
         ...(filters.dateRange && {
-          from: filters.dateRange[0],
-          to: filters.dateRange[1]
+          from: dayjs(filters.dateRange[0]).format('YYYY-MM-DD'),
+          to: dayjs(filters.dateRange[1]).format('YYYY-MM-DD')
         }),
         ...(searchText && { search: searchText }),
         ...params
       });
 
-      const response = await fetch(`${API}/booking/admin?${queryParams.toString()}`, {
+      const response = await fetch(`${API}/booking/admin/admin?${queryParams.toString()}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
 
-      if (response.status === 401) {
-        logoutUser ();
-        return;
-      }
+      
 
       if (!response.ok) {
         throw new Error('Failed to fetch bookings');
       }
 
       const data = await response.json();
-      // Filter bookings by admin's city if admin has city information
-      let filteredBookings = data.data || [];
-      if (user?.city) {
-        filteredBookings = filteredBookings.filter(
-          booking => booking.address?.city === user.city
-        );
-      }
-      
-      setBookings(filteredBookings);
+      setBookings(data.bookings || []);
       setPagination({
         ...pagination,
-        total: filteredBookings.length || 0,
+        total: data.totalCount || 0,
       });
-      calculateStats(filteredBookings);
+      calculateStats(data.bookings || []);
     } catch (error) {
       toast.error(error.message);
     } finally {
@@ -161,8 +150,8 @@ const AdminBookingsPage = () => {
 
     bookings.forEach(booking => {
       stats[booking.status]++;
-      if (booking.status === 'completed' && booking.invoice) {
-        stats.revenue += booking.invoice.totalAmount || 0;
+      if (booking.status === 'completed' && booking.payment) {
+        stats.revenue += booking.payment.amount || 0;
       }
     });
 
@@ -190,7 +179,7 @@ const AdminBookingsPage = () => {
 
       // Then fetch available approved providers for that city
       const providersResponse = await fetch(
-        `${API}/admin/providers?city=${encodeURIComponent(city)}&status=approved`,
+        `${API}/admin/provider?city=${encodeURIComponent(city)}&status=approved`,
         {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -203,7 +192,7 @@ const AdminBookingsPage = () => {
       }
 
       const providersData = await providersResponse.json();
-      setProviders(providersData.providers || []);
+      setProviders(providersData.data || []);
     } catch (error) {
       toast.error(error.message);
     } finally {
@@ -278,14 +267,10 @@ const AdminBookingsPage = () => {
     }
   };
 
-  const deleteBooking = async (bookingId, userId) => {
+  const deleteBooking = async (bookingId) => {
     try {
       setDeleteLoading(true);
-      const endpoint = userId
-        ? `${API}/booking/admin/user/${userId}/booking/${bookingId}`
-        : `${API}/booking/admin/${bookingId}`;
-
-      const response = await fetch(endpoint, {
+      const response = await fetch(`${API}/booking/admin/${bookingId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -315,7 +300,7 @@ const AdminBookingsPage = () => {
       okType: 'danger',
       cancelText: 'Cancel',
       onOk() {
-        return deleteBooking(booking._id, booking.customer?._id);
+        return deleteBooking(booking._id);
       }
     });
   };
@@ -334,14 +319,11 @@ const AdminBookingsPage = () => {
     if (dates && dates.length === 2) {
       setFilters(prev => ({
         ...prev,
-        dateRange: [
-          dates[0].startOf('day').toISOString(),
-          dates[1].endOf('day').toISOString()
-        ]
+        dateRange: dates
       }));
       fetchBookings({
-        from: dates[0].startOf('day').toISOString(),
-        to: dates[1].endOf('day').toISOString()
+        from: dates[0].format('YYYY-MM-DD'),
+        to: dates[1].format('YYYY-MM-DD')
       });
     } else {
       setFilters(prev => ({ ...prev, dateRange: null }));
@@ -392,9 +374,9 @@ const AdminBookingsPage = () => {
 
       const rows = bookings.map(booking => [
         booking._id,
-        booking.customer?.name || 'N/A',
-        booking.customer?.email || 'N/A',
-        booking.customer?.phone || 'N/A',
+        booking.user?.name || 'N/A',
+        booking.user?.email || 'N/A',
+        booking.user?.phone || 'N/A',
         booking.service?.title || 'N/A',
         booking.service?.category || 'N/A',
         dayjs(booking.date).format('YYYY-MM-DD'),
@@ -405,8 +387,8 @@ const AdminBookingsPage = () => {
         booking.address?.state || 'N/A',
         booking.address?.postalCode || 'N/A',
         booking.address?.country || 'N/A',
-        booking.paymentStatus || 'N/A',
-        booking.invoice?.totalAmount || '0',
+        booking.payment?.method || 'N/A',
+        booking.payment?.amount || '0',
         dayjs(booking.createdAt).format('YYYY-MM-DD HH:mm:ss')
       ]);
 
@@ -483,20 +465,20 @@ const AdminBookingsPage = () => {
     },
     {
       title: 'Customer',
-      dataIndex: ['customer', 'name'],
+      dataIndex: ['user', 'name'],
       key: 'customer',
       render: (text, record) => (
         <div className="flex items-center">
           <Avatar
-            src={record.customer?.profilePicUrl}
-            icon={<User Outlined />}
+            src={record.user?.profilePicture}
+            icon={<UserOutlined />}
             size="small"
             className="mr-2 bg-blue-100 text-blue-600"
           />
           <div>
             <div className="font-medium text-blue-900">{text || 'N/A'}</div>
             <div className="text-gray-500 text-xs flex items-center">
-              <Phone className="w-3 h-3 mr-1" /> {record.customer?.phone || 'N/A'}
+              <Phone className="w-3 h-3 mr-1" /> {record.user?.phone || 'N/A'}
             </div>
           </div>
         </div>
@@ -550,7 +532,7 @@ const AdminBookingsPage = () => {
       key: 'amount',
       render: (record) => (
         <div className="font-medium text-blue-900">
-          ₹{(record.invoice?.totalAmount || 0).toFixed(2)}
+          ₹{(record.payment?.amount || 0).toFixed(2)}
         </div>
       ),
       width: 100
@@ -603,7 +585,7 @@ const AdminBookingsPage = () => {
             type="text"
             size="small"
             onClick={() => showAssignModal(record)}
-            icon={<User Check className ="w-4 h-4 text-blue-600" />}
+            icon={<UserCheck className="w-4 h-4 text-blue-600" />}
             className="hover:bg-blue-50"
             title="Assign provider"
             disabled={record.status !== 'pending'}
@@ -667,14 +649,6 @@ const AdminBookingsPage = () => {
             </div>
             <h2 className="text-xl font-bold mb-2 text-blue-900">Access Denied</h2>
             <p className="text-gray-600 mb-6">You don't have permission to access this page.</p>
-            <Button
-              type="primary"
-              onClick={logoutUser }
-              className="bg-blue-600 hover:bg-blue-700 h-10 px-6"
-              size="large"
-            >
-              Return to Login
-            </Button>
           </div>
         </Card>
       </div>
@@ -739,10 +713,7 @@ const AdminBookingsPage = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Date Range</label>
                   <RangePicker
                     className="w-full"
-                    value={filters.dateRange ? [
-                      dayjs(filters.dateRange[0]),
-                      dayjs(filters.dateRange[1])
-                    ] : null}
+                    value={filters.dateRange}
                     onChange={handleDateRangeChange}
                   />
                 </div>
@@ -881,23 +852,23 @@ const AdminBookingsPage = () => {
                 {/* Customer Section */}
                 <div>
                   <h4 className="font-semibold text-blue-900 mb-3 flex items-center">
-                    <User  className="w-5 h-5 text-blue-600 mr-2" />
+                    <UserIcon className="w-5 h-5 text-blue-600 mr-2" />
                     Customer Details
                   </h4>
                   <Descriptions column={1} size="small" className="custom-descriptions">
                     <Descriptions.Item label="Name">
-                      <span className="font-medium">{selectedBooking.customer?.name || 'N/A'}</span>
+                      <span className="font-medium">{selectedBooking.user?.name || 'N/A'}</span>
                     </Descriptions.Item>
                     <Descriptions.Item label="Contact">
                       <div className="flex items-center">
                         <Phone className="w-4 h-4 text-blue-600 mr-2" />
-                        <span>{selectedBooking.customer?.phone || 'N/A'}</span>
+                        <span>{selectedBooking.user?.phone || 'N/A'}</span>
                       </div>
                     </Descriptions.Item>
                     <Descriptions.Item label="Email">
                       <div className="flex items-center">
                         <Mail className="w-4 h-4 text-blue-600 mr-2" />
-                        <span>{selectedBooking.customer?.email || 'N/A'}</span>
+                        <span>{selectedBooking.user?.email || 'N/A'}</span>
                       </div>
                     </Descriptions.Item>
                   </Descriptions>
@@ -917,7 +888,7 @@ const AdminBookingsPage = () => {
                       {selectedBooking.service?.category || 'N/A'}
                     </Descriptions.Item>
                     <Descriptions.Item label="Amount">
-                      <span className="font-medium">₹{(selectedBooking.invoice?.totalAmount || 0).toFixed(2)}</span>
+                      <span className="font-medium">₹{(selectedBooking.payment?.amount || 0).toFixed(2)}</span>
                     </Descriptions.Item>
                   </Descriptions>
                 </div>
@@ -980,8 +951,8 @@ const AdminBookingsPage = () => {
                       </div>
                       <div className="flex items-center">
                         <Avatar
-                          src={assignedProvider.profilePicUrl}
-                          icon={<User Outlined />}
+                          src={assignedProvider.profilePicture}
+                          icon={<UserOutlined />}
                           size="large"
                           className="mr-3 bg-blue-100 text-blue-600"
                         />
@@ -1026,8 +997,8 @@ const AdminBookingsPage = () => {
                           <Option key={provider._id} value={provider._id}>
                             <div className="flex items-center">
                               <Avatar
-                                src={provider.profilePicUrl}
-                                icon={<User Outlined />}
+                                src={provider.profilePicture}
+                                icon={<UserOutlined />}
                                 size="small"
                                 className="mr-3 bg-blue-100 text-blue-600"
                               />
@@ -1089,7 +1060,7 @@ const AdminBookingsPage = () => {
                     type="primary"
                     onClick={handleRescheduleSubmit}
                     loading={rescheduleLoading}
-                    className="bg-blue -600 hover:bg-blue-700"
+                    className="bg-blue-600 hover:bg-blue-700"
                   >
                     Update Schedule
                   </Button>

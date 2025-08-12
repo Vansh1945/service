@@ -306,10 +306,18 @@ const resolveComplaint = async (req, res) => {
 
 const reopenComplaint = async (req, res) => {
   try {
+    const { reason } = req.body;
+    
+    if (!reason) {
+      return res.status(400).json({
+        success: false,
+        message: 'Reason is required for reopening complaint'
+      });
+    }
+
     const complaint = await Complaint.findById(req.params.id)
       .populate('customer', 'email name')
-      .populate('provider', 'email name')
-      .populate('reopenedBy', 'email name');
+      .populate('provider', 'email name');
 
     if (!complaint) {
       return res.status(404).json({
@@ -332,10 +340,7 @@ const reopenComplaint = async (req, res) => {
       });
     }
 
-    complaint.status = 'open';
-    complaint.reopenedAt = new Date();
-    complaint.reopenedBy = req.user._id;
-    await complaint.save();
+    await complaint.reopenComplaint(reason, req.user._id);
 
     // Send email notification about reopening
     try {
@@ -345,7 +350,7 @@ const reopenComplaint = async (req, res) => {
         html: `
           <h2>Dear ${complaint.provider.name},</h2>
           <p>The complaint regarding booking ${complaint.booking} has been reopened by the customer.</p>
-          <p><strong>Reason:</strong> ${req.body.reason || 'No reason provided'}</p>
+          <p><strong>Reason:</strong> ${reason}</p>
           <p>Please review this matter and contact support if needed.</p>
           <p>Best regards,</p>
           <p>Raj Electrical Service Team</p>

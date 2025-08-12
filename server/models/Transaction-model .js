@@ -19,10 +19,10 @@ const transactionSchema = new Schema({
     required: true,
     min: 0
   },
-  status: {
+  paymentStatus: {
     type: String,
     required: true,
-    enum: ['pending', 'completed', 'failed', 'refunded'],
+    enum: ['pending', 'processing', 'completed', 'failed', 'refunded'],
     default: 'pending'
   },
   currency: {
@@ -31,8 +31,8 @@ const transactionSchema = new Schema({
   },
   paymentMethod: {
     type: String,
-    enum: ['card', 'netbanking', 'wallet', 'upi', 'emi', 'unknown'],
-    default: 'unknown'
+    enum: ['card', 'netbanking', 'wallet', 'upi', 'emi', 'cod', 'online'], // Added 'online'
+    default: 'online' 
   },
   booking: {
     type: Schema.Types.ObjectId,

@@ -6,23 +6,23 @@ const adminAuthMiddleware = require('../middlewares/Admin-middleware');
 // Public routes
 router.post('/register', adminController.registerAdmin);
 
-// Protected route (requires admin authentication)
-router.get('/profile', adminAuthMiddleware, adminController.getAdminProfile);
+// Protected routes (require admin authentication)
+router.use(adminAuthMiddleware); // Apply admin auth middleware to all routes below
 
-// Admin provider approval routes
-router.get('/providers/pending', adminAuthMiddleware, adminController.getPendingProviders);
-router.put('/providers/:id/approve', adminAuthMiddleware, adminController.approveProvider);
+// Admin profile
+router.get('/profile', adminController.getAdminProfile);
 
+// Customer management
+router.get('/customers', adminController.getAllCustomers);
 
-// admin get Customer routes
-router.get('/customers', adminAuthMiddleware, adminController.getAllCustomers);
+// Provider management
+router.get('/providers/pending', adminController.getPendingProviders);
+router.put('/providers/:id/status', adminController.approveProvider); // Changed from /approve to /status
+router.get('/providers', adminController.getAllProviders);
+router.get('/providers/:id', adminController.getProviderDetails);
+router.get('/providers/:id/documents/:type', adminController.getProviderDocument); // Consolidated document routes
 
-// admin get Provider routes
-router.get('/providers', adminAuthMiddleware, adminController.getAllProviders);
-router.get('/providers/:id', adminAuthMiddleware, adminController.getProviderDetails);
-router.get('/providers/:id/resume', adminAuthMiddleware, adminController.getProviderResume);
-
-// Admin Dashboard Stats
-router.get('/dashboard/stats', adminAuthMiddleware, adminController.getDashboardStats);
+// Dashboard
+router.get('/dashboard/stats', adminController.getDashboardStats);
 
 module.exports = router;

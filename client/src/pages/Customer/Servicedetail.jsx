@@ -8,38 +8,60 @@ import {
   ClockIcon,
   CheckBadgeIcon,
   ShieldCheckIcon,
-  SparklesIcon,
-  HandThumbUpIcon,
-  CurrencyRupeeIcon,
-  ChevronRightIcon,
-  HeartIcon,
   UserIcon,
-  CalendarIcon,
-  WrenchScrewdriverIcon
+  WrenchScrewdriverIcon,
+  ChevronDownIcon,
+  CheckIcon,
+  XMarkIcon,
+  CurrencyRupeeIcon,
+  ChevronRightIcon
 } from '@heroicons/react/24/outline';
 
 const ServiceDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { API, showToast, user, setCartCount } = useAuth();
+  const { API, showToast, user, setCartCount, isAuthenticated, logoutUser } = useAuth();
   const [service, setService] = useState(null);
   const [relatedServices, setRelatedServices] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [activeImage, setActiveImage] = useState(0);
   const [isAddingToCart, setIsAddingToCart] = useState(false);
+  const [openAccordion, setOpenAccordion] = useState(null);
 
-  // Calculate total price automatically
+  // FAQ data
+  const faqs = [
+    {
+      question: "Does the cost include spare parts?",
+      answer: "Yes, our service cost includes all necessary spare parts unless specified otherwise in the exclusions.",
+      included: true
+    },
+    {
+      question: "What if the same issue occurs again?",
+      answer: "We provide a 30-day warranty on all services. If the same issue reoccurs within this period, we'll fix it at no additional cost.",
+      included: true
+    },
+    {
+      question: "What if anything gets damaged during service?",
+      answer: "Our professionals are fully insured. Any accidental damage caused during service will be covered by us.",
+      included: true
+    },
+    {
+      question: "Are spare parts covered under warranty?",
+      answer: "Yes, all replacement parts come with a 90-day manufacturer warranty unless otherwise specified.",
+      included: true
+    },
+    {
+      question: "What is excluded from the service?",
+      answer: "Wiring beyond 2 meters is not included. Extra charges apply for additional materials or complex installations.",
+      included: false
+    }
+  ];
+
   const totalPrice = service ? (service.basePrice * quantity) : 0;
 
   useEffect(() => {
     const fetchServiceData = async () => {
       try {
-        setLoading(true);
-        setError(null);
-
-        // Fetch the main service
         const serviceResponse = await fetch(`${API}/service/services/${id}`);
         const serviceData = await serviceResponse.json();
 
@@ -53,7 +75,7 @@ const ServiceDetailPage = () => {
 
         setService(serviceData.data);
 
-        // Fetch related services from the same category
+        // Fetch related services
         const relatedResponse = await fetch(
           `${API}/service/services/category/${serviceData.data.category}`
         );
@@ -66,10 +88,7 @@ const ServiceDetailPage = () => {
           setRelatedServices(filteredRelated.slice(0, 4));
         }
       } catch (err) {
-        setError(err.message);
         showToast(err.message, 'error');
-      } finally {
-        setLoading(false);
       }
     };
 
@@ -87,48 +106,68 @@ const ServiceDetailPage = () => {
     });
   };
 
+  // const handleAddToCart = async () => {
+  //   // First check authentication
+  //   if (!isAuthenticated || !user?.token) {
+  //     showToast('Please login to add services to cart', 'error');
+  //     navigate('/login', { state: { from: `/customer/services/${id}` } });
+  //     return;
+  //   }
+
+  //   setIsAddingToCart(true);
+
+  //   try {
+  //     const response = await fetch(`${API}/cart/add`, {
+  //       method: 'POST',
+  //       headers: {
+  //         'Content-Type': 'application/json',
+  //         'Authorization': `Bearer ${user.token}`
+  //       },
+  //       body: JSON.stringify({
+  //         serviceId: id,
+  //         quantity: quantity
+  //       }),
+  //       credentials: 'include' // Important for cookies if using them
+  //     });
+
+  //     const data = await response.json();
+
+  //     if (!response.ok) {
+  //       // Handle specific error cases
+  //       if (response.status === 401) {
+  //         // Token expired or invalid
+  //         showToast('Session expired. Please login again.', 'error');
+  //         logoutUser();
+  //         navigate('/login', { state: { from: `/customer/services/${id}` } });
+  //         return;
+  //       }
+  //       throw new Error(data.message || 'Failed to add to cart');
+  //     }
+
+  //     // Success case
+  //     showToast('Service added to cart successfully', 'success');
+
+  //     // Update cart count - make sure setCartCount is passed in props or context
+  //     if (setCartCount && typeof setCartCount === 'function') {
+  //       setCartCount(prev => (prev || 0) + quantity);
+  //     }
+
+  //   } catch (err) {
+  //     console.error('Add to cart error:', err);
+  //     showToast(err.message || 'Failed to add to cart', 'error');
+  //   } finally {
+  //     setIsAddingToCart(false);
+  //   }
+  // };
+
+
   const handleAddToCart = async () => {
-    if (!user) {
-      showToast('Please login to add services to cart', 'error');
-      navigate('/login');
-      return;
-    }
-
-    setIsAddingToCart(true);
-
-    try {
-      const response = await fetch(`${API}/cart/add`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user.token}` // Ensure this matches your backend expectation
-        },
-        body: JSON.stringify({
-          serviceId: id,
-          quantity: quantity
-        })
-      });
-
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to add to cart');
-      }
-
-      showToast('Service added to cart successfully', 'success');
-      setCartCount(prev => prev + quantity);
-      navigate('/customer/cart');
-    } catch (err) {
-      showToast(err.message || 'Failed to add to cart', 'error');
-    } finally {
-      setIsAddingToCart(false);
-    }
+    showToast('Add to cart feature is coming soon!', 'info');
   };
 
-  const navigateToService = (serviceId) => {
-    navigate(`/customer/services/${serviceId}`);
-    window.scrollTo(0, 0);
+
+  const toggleAccordion = (index) => {
+    setOpenAccordion(openAccordion === index ? null : index);
   };
 
   const formatDuration = (hours) => {
@@ -137,14 +176,14 @@ const ServiceDetailPage = () => {
     return `${hrs > 0 ? `${hrs} hr` : ''} ${mins > 0 ? `${mins} min` : ''}`.trim();
   };
 
-  if (loading) {
+  if (!service) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-blue-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-flex items-center space-x-2">
-            <div className="w-4 h-4 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0ms' }}></div>
-            <div className="w-4 h-4 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '150ms' }}></div>
-            <div className="w-4 h-4 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '300ms' }}></div>
+            <div className="w-4 h-4 bg-blue-600 rounded-full animate-pulse" style={{ animationDelay: '0ms' }}></div>
+            <div className="w-4 h-4 bg-blue-600 rounded-full animate-pulse" style={{ animationDelay: '150ms' }}></div>
+            <div className="w-4 h-4 bg-blue-600 rounded-full animate-pulse" style={{ animationDelay: '300ms' }}></div>
           </div>
           <p className="mt-4 text-gray-600 font-medium">Loading service details...</p>
         </div>
@@ -152,47 +191,8 @@ const ServiceDetailPage = () => {
     );
   }
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="text-center max-w-md p-6 bg-white rounded-xl shadow-md border border-gray-100">
-          <div className="mx-auto w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
-            <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-            </svg>
-          </div>
-          <h3 className="text-xl font-bold text-gray-800 mb-2">Service Unavailable</h3>
-          <p className="text-gray-600 mb-6">{error}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors shadow-sm"
-          >
-            Try Again
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (!service) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center max-w-md p-6 bg-white rounded-xl shadow-md border border-gray-100">
-          <h3 className="text-xl font-bold text-gray-800 mb-2">Service Not Found</h3>
-          <p className="text-gray-600 mb-6">The service you're looking for doesn't exist or may have been removed.</p>
-          <button
-            onClick={() => navigate('/customer/services')}
-            className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors shadow-sm"
-          >
-            Browse Services
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="bg-gray-50 min-h-screen">
+    <div className="bg-blue-50 min-h-screen">
       {/* Breadcrumb Navigation */}
       <div className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -255,7 +255,7 @@ const ServiceDetailPage = () => {
                     <button
                       key={index}
                       onClick={() => setActiveImage(index)}
-                      className={`flex-shrink-0 w-16 h-16 rounded-md overflow-hidden border-2 ${activeImage === index ? 'border-blue-500' : 'border-transparent'}`}
+                      className={`flex-shrink-0 w-16 h-16 rounded-md overflow-hidden border-2 ${activeImage === index ? 'border-blue-600' : 'border-transparent'}`}
                     >
                       <img
                         src={`${API}/service/uploads/services/${img}`}
@@ -272,8 +272,8 @@ const ServiceDetailPage = () => {
               )}
 
               {/* Service Highlights */}
-              <div className="bg-gray-50 p-6 rounded-lg border border-gray-200 mb-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Service Highlights</h3>
+              <div className="bg-blue-50 p-6 rounded-lg border border-blue-200 mb-6">
+                <h3 className="text-lg font-semibold text-blue-900 mb-4">Service Highlights</h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex items-center">
                     <ClockIcon className="w-5 h-5 text-blue-600 mr-2" />
@@ -308,7 +308,7 @@ const ServiceDetailPage = () => {
 
               {/* Description Section */}
               <div className="mb-6">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">Service Description</h2>
+                <h2 className="text-xl font-semibold text-blue-900 mb-4">Service Description</h2>
                 <div className="prose prose-sm text-gray-700">
                   <p>{service.description}</p>
                   <p className="mt-3">Our certified technicians will provide a complete solution for your {service.title.toLowerCase()} needs, using only high-quality parts and materials that meet industry standards.</p>
@@ -321,7 +321,7 @@ const ServiceDetailPage = () => {
               <div className="sticky top-6">
                 <div className="flex justify-between items-start mb-4">
                   <div>
-                    <h1 className="text-3xl font-bold text-gray-900 mb-1">{service.title}</h1>
+                    <h1 className="text-3xl font-bold text-blue-900 mb-1">{service.title}</h1>
                     <div className="flex items-center">
                       <div className="flex items-center mr-4">
                         {[...Array(5)].map((_, i) => (
@@ -341,33 +341,33 @@ const ServiceDetailPage = () => {
                 </div>
 
                 {/* Price and Duration Section */}
-                <div className="mb-6 p-4 bg-blue-50 rounded-lg">
+                <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
                   <div className="flex justify-between items-center mb-2">
                     <div>
-                      <span className="text-sm text-gray-600">Service Price</span>
+                      <span className="text-sm text-blue-900">Service Price</span>
                       <div className="flex items-baseline">
-                        <CurrencyRupeeIcon className="w-5 h-5 text-gray-600" />
-                        <span className="text-3xl font-bold text-gray-900 ml-1">
+                        <CurrencyRupeeIcon className="w-5 h-5 text-blue-900" />
+                        <span className="text-3xl font-bold text-blue-900 ml-1">
                           {service.basePrice?.toFixed(2) || '0.00'}
                         </span>
                       </div>
                     </div>
                     <div className="text-right">
-                      <span className="text-sm text-gray-600">Duration</span>
+                      <span className="text-sm text-blue-900">Duration</span>
                       <div className="flex items-center justify-end">
-                        <ClockIcon className="w-5 h-5 text-gray-600 mr-1" />
-                        <span className="text-lg font-medium text-gray-900">
+                        <ClockIcon className="w-5 h-5 text-blue-900 mr-1" />
+                        <span className="text-lg font-medium text-blue-900">
                           {formatDuration(service.duration)}
                         </span>
                       </div>
                     </div>
                   </div>
-                  <p className="text-sm text-gray-600">Inclusive of all taxes</p>
+                  <p className="text-sm text-blue-700">Inclusive of all taxes</p>
                 </div>
 
                 {/* Quantity Selector */}
                 <div className="mb-6">
-                  <label htmlFor="quantity" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="quantity" className="block text-sm font-medium text-blue-900 mb-2">
                     Quantity
                   </label>
                   <div className="flex items-center max-w-[120px]">
@@ -390,16 +390,16 @@ const ServiceDetailPage = () => {
                 </div>
 
                 {/* Total Price Calculation */}
-                <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
                   <div className="flex justify-between items-center mb-2">
-                    <span className="text-gray-600">Price per service</span>
-                    <span className="font-medium">
+                    <span className="text-blue-900">Price per service</span>
+                    <span className="font-medium text-blue-900">
                       ₹{service.basePrice?.toFixed(2) || '0.00'}
                     </span>
                   </div>
-                  <div className="border-t border-gray-200 my-2"></div>
+                  <div className="border-t border-blue-200 my-2"></div>
                   <div className="flex justify-between items-center">
-                    <span className="text-gray-900 font-semibold">Total</span>
+                    <span className="text-blue-900 font-semibold">Total</span>
                     <span className="text-xl font-bold text-blue-600">
                       ₹{totalPrice?.toFixed(2) || '0.00'}
                     </span>
@@ -438,8 +438,8 @@ const ServiceDetailPage = () => {
                 </div>
 
                 {/* Service Benefits */}
-                <div className="border-t border-gray-200 pt-6">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Why Choose Us?</h3>
+                <div className="border-t border-blue-200 pt-6">
+                  <h3 className="text-lg font-medium text-blue-900 mb-4">Why Choose Us?</h3>
                   <ul className="space-y-3">
                     <li className="flex items-start">
                       <div className="bg-blue-100 p-1 rounded-full mr-3">
@@ -472,10 +472,10 @@ const ServiceDetailPage = () => {
           </div>
 
           {/* Detailed Information Section */}
-          <div className="border-t border-gray-200 p-6">
-            <div className="grid md:grid-cols-1 gap-8">
+          <div className="border-t border-blue-200 p-6">
+            <div className="grid md:grid-cols-2 gap-8">
               <div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-4">Service Inclusions</h3>
+                <h3 className="text-xl font-semibold text-blue-900 mb-4">Service Inclusions</h3>
                 <div className="prose prose-sm text-gray-600">
                   <ul className="list-disc pl-5 space-y-2">
                     <li>Professional diagnosis of the issue</li>
@@ -487,20 +487,52 @@ const ServiceDetailPage = () => {
                   </ul>
                 </div>
               </div>
+
+              {/* FAQ Accordion Section */}
+              <div>
+                <h3 className="text-xl font-semibold text-blue-900 mb-4">Frequently Asked Questions</h3>
+                <div className="space-y-3">
+                  {faqs.map((faq, index) => (
+                    <div key={index} className="border border-blue-200 rounded-lg overflow-hidden">
+                      <button
+                        className={`flex items-center justify-between w-full p-4 text-left ${openAccordion === index ? 'bg-blue-50' : 'bg-white'}`}
+                        onClick={() => toggleAccordion(index)}
+                      >
+                        <span className="font-medium text-blue-900">{faq.question}</span>
+                        <div className="flex items-center">
+                          {faq.included ? (
+                            <CheckIcon className="w-5 h-5 text-green-500 mr-2" />
+                          ) : (
+                            <XMarkIcon className="w-5 h-5 text-red-500 mr-2" />
+                          )}
+                          <ChevronDownIcon
+                            className={`w-5 h-5 text-blue-600 transition-transform ${openAccordion === index ? 'transform rotate-180' : ''}`}
+                          />
+                        </div>
+                      </button>
+                      {openAccordion === index && (
+                        <div className="p-4 bg-white border-t border-blue-100">
+                          <p className="text-gray-700">{faq.answer}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Related Services Section */}
         <div className="mt-12">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Related Services</h2>
+          <h2 className="text-2xl font-bold text-blue-900 mb-6">Related Services</h2>
           {relatedServices.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {relatedServices.map((relatedService) => (
                 <div
                   key={relatedService._id}
                   className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-all cursor-pointer border border-gray-100"
-                  onClick={() => navigateToService(relatedService._id)}
+                  onClick={() => navigate(`/customer/services/${relatedService._id}`)}
                 >
                   <div className="relative h-48 bg-gray-100">
                     <img
@@ -546,7 +578,7 @@ const ServiceDetailPage = () => {
               ))}
             </div>
           ) : (
-            <div className="bg-gray-50 p-8 rounded-xl border border-gray-200 text-center">
+            <div className="bg-blue-50 p-8 rounded-xl border border-blue-200 text-center">
               <p className="text-gray-600">No related services found in this category.</p>
               <button
                 onClick={() => navigate('/customer/services')}

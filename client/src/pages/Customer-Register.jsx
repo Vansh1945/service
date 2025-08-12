@@ -88,7 +88,7 @@ const CustomerRegistration = () => {
     }
     
     try {
-      const response = await fetch(`${API}/customer/register`, {
+      const response = await fetch(`${API}/api/customer/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -135,7 +135,7 @@ const CustomerRegistration = () => {
     }
     
     try {
-      const response = await fetch(`${API}/customer/register`, {
+      const response = await fetch(`${API}/api/customer/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

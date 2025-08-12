@@ -25,54 +25,51 @@ const LoginPage = () => {
     }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setIsLoading(true);
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setError('');
+  setIsLoading(true);
 
-    // Basic validation
-    if (!formData.email || !formData.password) {
-      setError('Please fill in all fields');
-      toast.error('Please fill in all fields');
-      setIsLoading(false);
-      return;
+  // Basic validation
+  if (!formData.email || !formData.password) {
+    setError('Please fill in all fields');
+    toast.error('Please fill in all fields');
+    setIsLoading(false);
+    return;
+  }
+
+  try {
+    console.log("Attempting login with:", formData.email); // Debug log
+
+    const response = await fetch(`${API}/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        email: formData.email.trim().toLowerCase(),
+        password: formData.password.trim()
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error("Login failed:", data.message || 'Unknown error');
+      throw new Error(data.message || 'Login failed');
     }
 
-    try {
-      const response = await fetch(`${API}/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          "Accept": "application/json"
-        },
-        body: JSON.stringify(formData),
-        credentials: 'include'
-      });
 
-
-      const data = await response.json();
-
-      
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Login failed');
-      }
-
-      // Show success toast
-      // toast.success('Login successfully');
-
-      // Handle successful login
-      loginUser(data.token, data.user.role, data.user);
-
-    } catch (err) {
-      const errorMsg = err.message || 'Invalid email or password';
-      setError(errorMsg);
-      toast.error(errorMsg);
-      console.error('Login failed:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  } catch (err) {
+    const errorMsg = err.message || 'Invalid email or password';
+    console.error("Login error:", errorMsg);
+    setError(errorMsg);
+    toast.error(errorMsg);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center p-4">

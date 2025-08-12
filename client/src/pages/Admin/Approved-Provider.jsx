@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../store/auth';
 import {
-  Users, 
-  Search, 
-  Eye, 
-  XCircle, 
-  Phone, 
-  Mail, 
+  Users,
+  Search,
+  Eye,
+  XCircle,
+  Phone,
+  Mail,
   MapPin,
   Briefcase,
   Star,
@@ -19,7 +19,10 @@ import {
   ChevronRight,
   Download,
   User,
-  Home
+  Home,
+  File,
+  Image,
+  FileImage
 } from 'lucide-react';
 
 const ProviderList = () => {
@@ -30,6 +33,12 @@ const ProviderList = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [selectedProvider, setSelectedProvider] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [documents, setDocuments] = useState({
+    profilePic: null,
+    resume: null,
+    passbook: null
+  });
+  const [loadingDocuments, setLoadingDocuments] = useState(false);
 
   const fetchProviders = async () => {
     try {
@@ -42,7 +51,10 @@ const ProviderList = () => {
         }
       );
 
+      // Add this debug log
       const data = await response.json();
+      console.log("API Response:", data);
+
       if (data.success) {
         setProviders(data.providers || []);
         setTotalPages(data.pages || 1);
@@ -62,7 +74,8 @@ const ProviderList = () => {
 
       const data = await response.json();
       if (data.success) {
-        setSelectedProvider(data.data?.provider || data.provider);
+        setSelectedProvider(data.provider || data.data?.provider);
+        fetchProviderDocuments(providerId);
         setDialogOpen(true);
       }
     } catch (error) {
@@ -70,11 +83,54 @@ const ProviderList = () => {
     }
   };
 
-  useEffect(() => {
-    if (isAdmin) {
-      fetchProviders();
+  const fetchProviderDocuments = async (providerId) => {
+    setLoadingDocuments(true);
+    try {
+      // Fetch all document URLs in parallel
+      const [profilePicUrl, resumeUrl, passbookUrl] = await Promise.all([
+        fetchDocument(providerId, 'profile'),
+        fetchDocument(providerId, 'resume'),
+        fetchDocument(providerId, 'passbook')
+      ]);
+
+      setDocuments({
+        profilePic: profilePicUrl,
+        resume: resumeUrl,
+        passbook: passbookUrl
+      });
+    } catch (error) {
+      console.error('Error fetching documents:', error);
+    } finally {
+      setLoadingDocuments(false);
     }
-  }, [page, searchTerm, isAdmin]);
+  };
+
+  const fetchDocument = async (providerId, type) => {
+    try {
+      const response = await fetch(`${API}/admin/providers/${providerId}/documents/${type}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        // For images, we can use the URL directly
+        if (type === 'profile' || type === 'passbook') {
+          const blob = await response.blob();
+          return URL.createObjectURL(blob);
+        }
+        // For PDFs, we can download them
+        if (type === 'resume') {
+          const blob = await response.blob();
+          return URL.createObjectURL(blob);
+        }
+      }
+      return null;
+    } catch (error) {
+      console.error(`Error fetching ${type} document:`, error);
+      return null;
+    }
+  };
 
   const handleViewDetails = (provider) => {
     if (provider._id) {
@@ -97,25 +153,36 @@ const ProviderList = () => {
     }
   };
 
-  const formatAddress = (address) => {
-    if (!address) return 'Not specified';
-    if (typeof address === 'string') return address;
-    
-    const parts = [
-      address.street,
-      address.city,
-      address.state,
-      address.postalCode,
-      address.country || 'India'
-    ].filter(Boolean);
-    
-    return parts.join(', ');
-  };
-
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     const options = { year: 'numeric', month: 'short', day: 'numeric' };
     return new Date(dateString).toLocaleDateString('en-US', options);
+  };
+
+  const getDocumentIcon = (type) => {
+    switch (type) {
+      case 'profile':
+        return <Image className="w-4 h-4 mr-2" />;
+      case 'resume':
+        return <File className="w-4 h-4 mr-2" />;
+      case 'passbook':
+        return <FileImage className="w-4 h-4 mr-2" />;
+      default:
+        return <File className="w-4 h-4 mr-2" />;
+    }
+  };
+
+  const getDocumentName = (type) => {
+    switch (type) {
+      case 'profile':
+        return 'Profile Picture';
+      case 'resume':
+        return 'Resume/CV';
+      case 'passbook':
+        return 'Bank Passbook';
+      default:
+        return type;
+    }
   };
 
   if (!isAdmin) {
@@ -145,7 +212,7 @@ const ProviderList = () => {
           <h1 className="text-2xl md:text-3xl font-bold mb-2">Approved Service Providers</h1>
           <p className="text-blue-200">Manage and view all approved service providers</p>
         </div>
-        
+
         <div className="relative flex-1 w-full max-w-2xl">
           <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-blue-200 w-5 h-5" />
           <input
@@ -177,7 +244,7 @@ const ProviderList = () => {
             <tbody>
               {providers.length > 0 ? (
                 providers.map((provider) => (
-                  <tr 
+                  <tr
                     key={provider._id}
                     className="hover:bg-blue-50 transition-colors border-b border-blue-100 last:border-0"
                   >
@@ -189,9 +256,8 @@ const ProviderList = () => {
                         <div>
                           <p className="font-bold text-blue-900 text-sm md:text-base">{provider.name}</p>
                           <div className="flex gap-1 md:gap-2 mt-1">
-                            <span className={`px-1.5 py-0.5 md:px-2 md:py-1 rounded-full text-xs font-medium ${
-                              provider.approved ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                            }`}>
+                            <span className={`px-1.5 py-0.5 md:px-2 md:py-1 rounded-full text-xs font-medium ${provider.approved ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                              }`}>
                               {provider.approved ? 'Approved' : 'Pending'}
                             </span>
                             {provider.testPassed && (
@@ -298,26 +364,25 @@ const ProviderList = () => {
             >
               <ChevronLeft className="w-4 h-4 md:w-5 md:h-5" />
             </button>
-            
+
             {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-              const pageNum = page <= 3 ? i + 1 : 
-                            page >= totalPages - 2 ? totalPages - 4 + i :
-                            page - 2 + i;
+              const pageNum = page <= 3 ? i + 1 :
+                page >= totalPages - 2 ? totalPages - 4 + i :
+                  page - 2 + i;
               return pageNum > 0 && pageNum <= totalPages && (
                 <button
                   key={pageNum}
                   onClick={() => handlePageChange(pageNum)}
-                  className={`w-8 h-8 md:w-10 md:h-10 rounded-lg transition-colors text-sm md:text-base ${
-                    page === pageNum
+                  className={`w-8 h-8 md:w-10 md:h-10 rounded-lg transition-colors text-sm md:text-base ${page === pageNum
                       ? 'bg-blue-600 text-white'
                       : 'bg-white border border-blue-200 text-blue-600 hover:bg-blue-50'
-                  }`}
+                    }`}
                 >
                   {pageNum}
                 </button>
               );
             })}
-            
+
             <button
               onClick={() => handlePageChange(page + 1)}
               disabled={page === totalPages}
@@ -339,7 +404,15 @@ const ProviderList = () => {
               <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                 <div className="flex items-center">
                   <div className="w-16 h-16 md:w-20 md:h-20 bg-white rounded-full flex items-center justify-center mr-4 md:mr-6 border-4 border-yellow-400">
-                    <User className="w-6 h-6 md:w-8 md:h-8 text-blue-600" />
+                    {documents.profilePic ? (
+                      <img
+                        src={documents.profilePic}
+                        alt="Profile"
+                        className="w-full h-full rounded-full object-cover"
+                      />
+                    ) : (
+                      <User className="w-6 h-6 md:w-8 md:h-8 text-blue-600" />
+                    )}
                   </div>
                   <div>
                     <h2 className="text-xl md:text-2xl font-bold flex items-center">
@@ -352,9 +425,8 @@ const ProviderList = () => {
                       {selectedProvider.services} • {selectedProvider.serviceArea}
                     </p>
                     <div className="flex flex-wrap gap-1 md:gap-2 mt-2">
-                      <span className={`px-2 py-0.5 md:px-3 md:py-1 rounded-full text-xs md:text-sm font-medium ${
-                        selectedProvider.approved ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                      }`}>
+                      <span className={`px-2 py-0.5 md:px-3 md:py-1 rounded-full text-xs md:text-sm font-medium ${selectedProvider.approved ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                        }`}>
                         {selectedProvider.approved ? 'Approved' : 'Pending'}
                       </span>
                       {selectedProvider.testPassed && (
@@ -372,7 +444,18 @@ const ProviderList = () => {
                   </div>
                 </div>
                 <button
-                  onClick={() => setDialogOpen(false)}
+                  onClick={() => {
+                    setDialogOpen(false);
+                    // Clean up object URLs when dialog closes
+                    Object.values(documents).forEach(url => {
+                      if (url) URL.revokeObjectURL(url);
+                    });
+                    setDocuments({
+                      profilePic: null,
+                      resume: null,
+                      passbook: null
+                    });
+                  }}
                   className="p-1 md:p-2 text-blue-200 hover:text-white self-start md:self-center"
                   aria-label="Close dialog"
                 >
@@ -380,7 +463,7 @@ const ProviderList = () => {
                 </button>
               </div>
             </div>
-            
+
             {/* Dialog Content */}
             <div className="p-4 md:p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
@@ -545,34 +628,109 @@ const ProviderList = () => {
                   </div>
                 </div>
 
-                {/* Documents */}
-                {selectedProvider.documents && selectedProvider.documents.length > 0 && (
-                  <div className="col-span-2 bg-blue-50 p-3 md:p-4 rounded-xl border border-blue-100">
-                    <div className="flex items-center mb-3 md:mb-4">
-                      <Download className="w-5 h-5 md:w-6 md:h-6 text-blue-900 mr-2 md:mr-3" />
-                      <h3 className="text-base md:text-lg font-bold text-blue-900">Documents</h3>
-                    </div>
-                    <div className="flex flex-wrap gap-2 md:gap-3">
-                      {selectedProvider.documents.map((doc, index) => (
-                        <button
-                          key={index}
-                          onClick={() => window.open(doc.url, '_blank')}
-                          className="px-3 py-1.5 md:px-4 md:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-900 transition-colors flex items-center text-xs md:text-sm"
-                        >
-                          <Download className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
-                          {doc.type || `Document ${index + 1}`}
-                        </button>
-                      ))}
-                    </div>
+                {/* Documents Section */}
+                <div className="col-span-2 bg-blue-50 p-3 md:p-4 rounded-xl border border-blue-100">
+                  <div className="flex items-center mb-3 md:mb-4">
+                    <Download className="w-5 h-5 md:w-6 md:h-6 text-blue-900 mr-2 md:mr-3" />
+                    <h3 className="text-base md:text-lg font-bold text-blue-900">Documents</h3>
                   </div>
-                )}
+                  {loadingDocuments ? (
+                    <div className="flex justify-center py-4">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
+                      {/* Profile Picture */}
+                      {documents.profilePic && (
+                        <div className="bg-white p-3 rounded-lg border border-blue-200">
+                          <div className="flex items-center mb-2">
+                            <Image className="w-4 h-4 mr-2 text-blue-600" />
+                            <span className="font-medium text-sm">Profile Picture</span>
+                          </div>
+                          <div className="aspect-square bg-gray-100 rounded-md overflow-hidden mb-2">
+                            <img
+                              src={documents.profilePic}
+                              alt="Profile"
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <button
+                            onClick={() => window.open(documents.profilePic, '_blank')}
+                            className="w-full py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm flex items-center justify-center"
+                          >
+                            <Download className="w-3 h-3 mr-1" />
+                            Download
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Resume */}
+                      {documents.resume && (
+                        <div className="bg-white p-3 rounded-lg border border-blue-200">
+                          <div className="flex items-center mb-2">
+                            <File className="w-4 h-4 mr-2 text-blue-600" />
+                            <span className="font-medium text-sm">Resume/CV</span>
+                          </div>
+                          <div className="aspect-[4/3] bg-gray-100 rounded-md flex items-center justify-center mb-2">
+                            <FileText className="w-8 h-8 text-gray-400" />
+                          </div>
+                          <button
+                            onClick={() => window.open(documents.resume, '_blank')}
+                            className="w-full py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm flex items-center justify-center"
+                          >
+                            <Download className="w-3 h-3 mr-1" />
+                            Download
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Passbook */}
+                      {documents.passbook && (
+                        <div className="bg-white p-3 rounded-lg border border-blue-200">
+                          <div className="flex items-center mb-2">
+                            <FileImage className="w-4 h-4 mr-2 text-blue-600" />
+                            <span className="font-medium text-sm">Bank Passbook</span>
+                          </div>
+                          <div className="aspect-[4/3] bg-gray-100 rounded-md flex items-center justify-center mb-2">
+                            <FileText className="w-8 h-8 text-gray-400" />
+                          </div>
+                          <button
+                            onClick={() => window.open(documents.passbook, '_blank')}
+                            className="w-full py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm flex items-center justify-center"
+                          >
+                            <Download className="w-3 h-3 mr-1" />
+                            Download
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Show message if no documents */}
+                      {!documents.profilePic && !documents.resume && !documents.passbook && (
+                        <div className="col-span-3 text-center py-4 text-gray-500">
+                          No documents available for this provider
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-            
+
             {/* Dialog Footer */}
             <div className="p-3 md:p-4 bg-blue-50 border-t border-blue-100 flex justify-end">
               <button
-                onClick={() => setDialogOpen(false)}
+                onClick={() => {
+                  setDialogOpen(false);
+                  // Clean up object URLs when dialog closes
+                  Object.values(documents).forEach(url => {
+                    if (url) URL.revokeObjectURL(url);
+                  });
+                  setDocuments({
+                    profilePic: null,
+                    resume: null,
+                    passbook: null
+                  });
+                }}
                 className="px-4 py-1.5 md:px-6 md:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-900 transition-colors text-sm md:text-base"
               >
                 Close

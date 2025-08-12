@@ -21,7 +21,10 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
-  Download
+  Download,
+  FileImage,
+  Image,
+  File
 } from 'lucide-react';
 import { useAuth } from '../../store/auth';
 
@@ -39,7 +42,12 @@ const AdminProvidersPage = () => {
   const [approvalRemarks, setApprovalRemarks] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [resumeViewUrl, setResumeViewUrl] = useState(null);
+  const [documents, setDocuments] = useState({
+    profilePic: null,
+    resume: null,
+    passbook: null
+  });
+  const [loadingDocuments, setLoadingDocuments] = useState(false);
 
   useEffect(() => {
     fetchProviders();
@@ -91,16 +99,59 @@ const AdminProvidersPage = () => {
       });
       const data = await response.json();
       if (data.success) {
-        setSelectedProvider(data.data);
+        setSelectedProvider(data.provider || data.data?.provider);
+        fetchProviderDocuments(providerId);
       }
     } catch (error) {
       console.error('Error fetching provider details:', error);
     }
   };
 
+  const fetchProviderDocuments = async (providerId) => {
+    setLoadingDocuments(true);
+    try {
+      // Fetch all document URLs in parallel
+      const [profilePicUrl, resumeUrl, passbookUrl] = await Promise.all([
+        fetchDocument(providerId, 'profile'),
+        fetchDocument(providerId, 'resume'),
+        fetchDocument(providerId, 'passbook')
+      ]);
+
+      setDocuments({
+        profilePic: profilePicUrl,
+        resume: resumeUrl,
+        passbook: passbookUrl
+      });
+    } catch (error) {
+      console.error('Error fetching documents:', error);
+    } finally {
+      setLoadingDocuments(false);
+    }
+  };
+
+  const fetchDocument = async (providerId, type) => {
+    try {
+      const response = await fetch(`${API}/admin/providers/${providerId}/documents/${type}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const blob = await response.blob();
+      return URL.createObjectURL(blob);
+    } catch (error) {
+      console.error(`Error fetching ${type} document:`, error);
+      return null;
+    }
+  };
+
   const handleApproveProvider = async () => {
     try {
-      const response = await fetch(`${API}/admin/providers/${selectedProvider.provider._id}/approve`, {
+      const response = await fetch(`${API}/admin/providers/${selectedProvider._id}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -118,6 +169,7 @@ const AdminProvidersPage = () => {
         setApprovalRemarks('');
         fetchProviders();
         fetchPendingProviders();
+        setSelectedProvider(null);
         alert(`Provider ${approvalAction} successfully!`);
       }
     } catch (error) {
@@ -126,75 +178,31 @@ const AdminProvidersPage = () => {
   };
 
   const openApprovalModal = (action, provider) => {
-    setSelectedProvider({ provider });
+    setSelectedProvider(provider);
     setApprovalAction(action);
     setShowApprovalModal(true);
   };
 
-  const viewResume = async (providerId) => {
-    try {
-      const response = await fetch(`${API}/admin/providers/${providerId}/resume`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch resume');
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      setResumeViewUrl(url);
-    } catch (error) {
-      console.error('Error viewing resume:', error);
-      alert('Failed to view resume');
-    }
+  const closeModal = () => {
+    setSelectedProvider(null);
+    // Clean up object URLs when modal closes
+    Object.values(documents).forEach(url => {
+      if (url) URL.revokeObjectURL(url);
+    });
+    setDocuments({
+      profilePic: null,
+      resume: null,
+      passbook: null
+    });
   };
 
-  const downloadResume = async (providerId) => {
-    try {
-      const response = await fetch(`${API}/admin/providers/${providerId}/resume`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to download resume');
-      }
-
-      // Get the filename from the Content-Disposition header
-      const contentDisposition = response.headers.get('Content-Disposition');
-      const filename = contentDisposition 
-        ? contentDisposition.split('filename=')[1].replace(/"/g, '')
-        : `resume_${providerId}.pdf`;
-
-      // Create a blob from the response
-      const blob = await response.blob();
-      
-      // Create a download link and trigger click
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      
-      // Clean up
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (error) {
-      console.error('Error downloading resume:', error);
-      alert('Failed to download resume');
-    }
-  };
-
-  const closeResumeViewer = () => {
-    if (resumeViewUrl) {
-      window.URL.revokeObjectURL(resumeViewUrl);
-      setResumeViewUrl(null);
-    }
+  const downloadDocument = (url, filename) => {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename || 'document';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   const ProviderCard = ({ provider, isPending = false }) => (
@@ -202,8 +210,16 @@ const AdminProvidersPage = () => {
       <div className="p-6">
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center space-x-4">
-            <div className="w-16 h-16 bg-gradient-to-r from-blue-900 to-indigo-900 rounded-full flex items-center justify-center">
-              <User className="w-8 h-8 text-white" />
+            <div className="w-16 h-16 bg-gradient-to-r from-blue-900 to-indigo-900 rounded-full flex items-center justify-center overflow-hidden">
+              {provider.profilePicUrl && provider.profilePicUrl !== 'default-provider.jpg' ? (
+                <img 
+                  src={`${API}/admin/providers/${provider._id}/documents/profile`} 
+                  alt="Profile" 
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <User className="w-8 h-8 text-white" />
+              )}
             </div>
             <div>
               <h3 className="text-xl font-semibold text-gray-800">{provider.name}</h3>
@@ -236,11 +252,11 @@ const AdminProvidersPage = () => {
         <div className="grid grid-cols-2 gap-4 mb-4">
           <div className="flex items-center text-sm text-gray-600">
             <MapPin className="w-4 h-4 mr-2" />
-            {provider.serviceArea}
+            {provider.serviceArea || 'N/A'}
           </div>
           <div className="flex items-center text-sm text-gray-600">
             <Award className="w-4 h-4 mr-2" />
-            {provider.experience} years exp.
+            {provider.experience || '0'} years exp.
           </div>
           <div className="flex items-center text-sm text-gray-600">
             <Calendar className="w-4 h-4 mr-2" />
@@ -254,7 +270,7 @@ const AdminProvidersPage = () => {
 
         <div className="mb-4">
           <p className="text-sm text-gray-600 mb-2">Services:</p>
-          <p className="text-sm font-medium text-gray-800">{provider.services}</p>
+          <p className="text-sm font-medium text-gray-800">{provider.services || 'N/A'}</p>
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -265,25 +281,6 @@ const AdminProvidersPage = () => {
             <Eye className="w-4 h-4 mr-2" />
             View Details
           </button>
-          
-          {provider.resume && (
-            <>
-              <button
-                onClick={() => viewResume(provider._id)}
-                className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-800 transition-colors"
-              >
-                <Eye className="w-4 h-4 mr-2" />
-                View Resume
-              </button>
-              <button
-                onClick={() => downloadResume(provider._id)}
-                className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-800 transition-colors"
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Download
-              </button>
-            </>
-          )}
           
           {isPending && (
             <>
@@ -311,8 +308,6 @@ const AdminProvidersPage = () => {
   const ProviderDetailsModal = () => {
     if (!selectedProvider) return null;
 
-    const { provider, statistics } = selectedProvider;
-
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
         <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
@@ -320,7 +315,7 @@ const AdminProvidersPage = () => {
             <div className="flex items-center justify-between">
               <h2 className="text-2xl font-bold text-gray-800">Provider Details</h2>
               <button
-                onClick={() => setSelectedProvider(null)}
+                onClick={closeModal}
                 className="p-2 hover:bg-gray-100 rounded-full transition-colors"
               >
                 <X className="w-6 h-6" />
@@ -338,28 +333,28 @@ const AdminProvidersPage = () => {
                     <User className="w-5 h-5 mr-3 text-blue-900" />
                     <div>
                       <p className="text-sm text-gray-600">Name</p>
-                      <p className="font-medium">{provider.name}</p>
+                      <p className="font-medium">{selectedProvider.name}</p>
                     </div>
                   </div>
                   <div className="flex items-center">
                     <Mail className="w-5 h-5 mr-3 text-blue-900" />
                     <div>
                       <p className="text-sm text-gray-600">Email</p>
-                      <p className="font-medium">{provider.email}</p>
+                      <p className="font-medium">{selectedProvider.email}</p>
                     </div>
                   </div>
                   <div className="flex items-center">
                     <Phone className="w-5 h-5 mr-3 text-blue-900" />
                     <div>
                       <p className="text-sm text-gray-600">Phone</p>
-                      <p className="font-medium">{provider.phone}</p>
+                      <p className="font-medium">{selectedProvider.phone}</p>
                     </div>
                   </div>
                   <div className="flex items-center">
                     <MapPin className="w-5 h-5 mr-3 text-blue-900" />
                     <div>
                       <p className="text-sm text-gray-600">Service Area</p>
-                      <p className="font-medium">{provider.serviceArea}</p>
+                      <p className="font-medium">{selectedProvider.serviceArea || 'N/A'}</p>
                     </div>
                   </div>
                 </div>
@@ -367,23 +362,27 @@ const AdminProvidersPage = () => {
 
               {/* Statistics */}
               <div className="bg-blue-50 rounded-lg p-4">
-                <h3 className="text-lg font-semibold mb-4 text-gray-800">Statistics</h3>
+                <h3 className="text-lg font-semibold mb-4 text-gray-800">Performance</h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="text-center p-3 bg-white rounded-lg">
-                    <p className="text-2xl font-bold text-blue-600">₹{statistics?.totalEarnings || 0}</p>
-                    <p className="text-sm text-gray-600">Total Earnings</p>
+                    <p className="text-2xl font-bold text-blue-600">₹{selectedProvider.wallet || 0}</p>
+                    <p className="text-sm text-gray-600">Wallet Balance</p>
                   </div>
                   <div className="text-center p-3 bg-white rounded-lg">
-                    <p className="text-2xl font-bold text-green-600">{statistics?.completedJobs || 0}</p>
+                    <p className="text-2xl font-bold text-green-600">{selectedProvider.completedBookings || 0}</p>
                     <p className="text-sm text-gray-600">Completed Jobs</p>
                   </div>
                   <div className="text-center p-3 bg-white rounded-lg">
-                    <p className="text-2xl font-bold text-yellow-500">{statistics?.totalBookings || 0}</p>
+                    <p className="text-2xl font-bold text-yellow-500">
+                      {selectedProvider.completedBookings + (selectedProvider.canceledBookings || 0) || 0}
+                    </p>
                     <p className="text-sm text-gray-600">Total Bookings</p>
                   </div>
                   <div className="text-center p-3 bg-white rounded-lg">
-                    <p className="text-2xl font-bold text-indigo-900">{statistics?.acceptanceRate || 0}%</p>
-                    <p className="text-sm text-gray-600">Acceptance Rate</p>
+                    <p className="text-2xl font-bold text-indigo-900">
+                      {selectedProvider.rating ? `${selectedProvider.rating}/5` : 'N/A'}
+                    </p>
+                    <p className="text-sm text-gray-600">Rating</p>
                   </div>
                 </div>
               </div>
@@ -394,19 +393,23 @@ const AdminProvidersPage = () => {
                 <div className="space-y-3">
                   <div>
                     <p className="text-sm text-gray-600">Services</p>
-                    <p className="font-medium">{provider.services}</p>
+                    <p className="font-medium">{selectedProvider.services || 'N/A'}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Experience</p>
-                    <p className="font-medium">{provider.experience} years</p>
+                    <p className="font-medium">{selectedProvider.experience || '0'} years</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Wallet Balance</p>
-                    <p className="font-medium">₹{provider.wallet || 0}</p>
+                    <p className="text-sm text-gray-600">Bank Account</p>
+                    <p className="font-medium">
+                      {selectedProvider.bankDetails?.accountNo || 'Not provided'}
+                    </p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Commission Rate</p>
-                    <p className="font-medium">{provider.commissionRate || 'Not set'}%</p>
+                    <p className="text-sm text-gray-600">IFSC Code</p>
+                    <p className="font-medium">
+                      {selectedProvider.bankDetails?.ifsc || 'Not provided'}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -418,73 +421,156 @@ const AdminProvidersPage = () => {
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-gray-600">Approval Status</span>
                     <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                      provider.approved 
+                      selectedProvider.approved 
                         ? 'bg-green-100 text-green-800' 
                         : 'bg-yellow-400 text-yellow-900'
                     }`}>
-                      {provider.approved ? 'Approved' : 'Pending'}
+                      {selectedProvider.approved ? 'Approved' : 'Pending'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">KYC Status</span>
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                      selectedProvider.kycStatus === 'approved' 
+                        ? 'bg-green-100 text-green-800' 
+                        : selectedProvider.kycStatus === 'rejected'
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-yellow-400 text-yellow-900'
+                    }`}>
+                      {selectedProvider.kycStatus || 'pending'}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-gray-600">Test Status</span>
                     <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                      provider.testPassed 
+                      selectedProvider.testPassed 
                         ? 'bg-blue-200 text-blue-900' 
                         : 'bg-gray-100 text-gray-800'
                     }`}>
-                      {provider.testPassed ? 'Passed' : 'Not Taken'}
+                      {selectedProvider.testPassed ? 'Passed' : 'Not Taken'}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Account Status</span>
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                      provider.isDeleted 
-                        ? 'bg-red-100 text-red-800' 
-                        : 'bg-green-100 text-green-800'
-                    }`}>
-                      {provider.isDeleted ? 'Deleted' : 'Active'}
-                    </span>
-                  </div>
+                  {selectedProvider.kycStatus === 'rejected' && selectedProvider.rejectionReason && (
+                    <div>
+                      <p className="text-sm text-gray-600">Rejection Reason</p>
+                      <p className="text-sm font-medium text-red-600">
+                        {selectedProvider.rejectionReason}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* Resume Section */}
-            {provider.resume && (
-              <div className="mt-6 bg-blue-50 rounded-lg p-4">
-                <h3 className="text-lg font-semibold mb-4 text-gray-800">Resume</h3>
-                <div className="flex items-center space-x-3">
-                  <FileText className="w-5 h-5 text-blue-900" />
-                  <button
-                    onClick={() => viewResume(provider._id)}
-                    className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-800 transition-colors"
-                  >
-                    <Eye className="w-5 h-5 mr-2" />
-                    View Resume
-                  </button>
-                  <button
-                    onClick={() => downloadResume(provider._id)}
-                    className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-800 transition-colors"
-                  >
-                    <Download className="w-5 h-5 mr-2" />
-                    Download
-                  </button>
+            {/* Documents Section */}
+            <div className="mt-6 bg-blue-50 rounded-lg p-4">
+              <h3 className="text-lg font-semibold mb-4 text-gray-800">Documents</h3>
+              {loadingDocuments ? (
+                <div className="flex justify-center py-4">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                 </div>
-              </div>
-            )}
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Profile Picture */}
+                  {documents.profilePic && (
+                    <div className="bg-white p-3 rounded-lg border border-blue-200">
+                      <div className="flex items-center mb-2">
+                        <Image className="w-4 h-4 mr-2 text-blue-600" />
+                        <span className="font-medium text-sm">Profile Picture</span>
+                      </div>
+                      <div className="aspect-square bg-gray-100 rounded-md overflow-hidden mb-2">
+                        <img 
+                          src={documents.profilePic} 
+                          alt="Profile" 
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <button
+                        onClick={() => downloadDocument(documents.profilePic, 'profile.jpg')}
+                        className="w-full py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm flex items-center justify-center"
+                      >
+                        <Download className="w-3 h-3 mr-1" />
+                        Download
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Resume */}
+                  {documents.resume && (
+                    <div className="bg-white p-3 rounded-lg border border-blue-200">
+                      <div className="flex items-center mb-2">
+                        <File className="w-4 h-4 mr-2 text-blue-600" />
+                        <span className="font-medium text-sm">Resume/CV</span>
+                      </div>
+                      <div className="aspect-[4/3] bg-gray-100 rounded-md flex items-center justify-center mb-2">
+                        <FileText className="w-8 h-8 text-gray-400" />
+                      </div>
+                      <button
+                        onClick={() => window.open(documents.resume, '_blank')}
+                        className="w-full py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm flex items-center justify-center"
+                      >
+                        <Eye className="w-3 h-3 mr-1" />
+                        View
+                      </button>
+                      <button
+                        onClick={() => downloadDocument(documents.resume, 'resume.pdf')}
+                        className="w-full py-1.5 bg-green-600 text-white rounded hover:bg-green-700 text-sm flex items-center justify-center mt-2"
+                      >
+                        <Download className="w-3 h-3 mr-1" />
+                        Download
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Passbook */}
+                  {documents.passbook && (
+                    <div className="bg-white p-3 rounded-lg border border-blue-200">
+                      <div className="flex items-center mb-2">
+                        <FileImage className="w-4 h-4 mr-2 text-blue-600" />
+                        <span className="font-medium text-sm">Bank Passbook</span>
+                      </div>
+                      <div className="aspect-[4/3] bg-gray-100 rounded-md flex items-center justify-center mb-2">
+                        <FileText className="w-8 h-8 text-gray-400" />
+                      </div>
+                      <button
+                        onClick={() => window.open(documents.passbook, '_blank')}
+                        className="w-full py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm flex items-center justify-center"
+                      >
+                        <Eye className="w-3 h-3 mr-1" />
+                        View
+                      </button>
+                      <button
+                        onClick={() => downloadDocument(documents.passbook, 'passbook.pdf')}
+                        className="w-full py-1.5 bg-green-600 text-white rounded hover:bg-green-700 text-sm flex items-center justify-center mt-2"
+                      >
+                        <Download className="w-3 h-3 mr-1" />
+                        Download
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Show message if no documents */}
+                  {!documents.profilePic && !documents.resume && !documents.passbook && (
+                    <div className="col-span-3 text-center py-4 text-gray-500">
+                      No documents available for this provider
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
             {/* Action Buttons */}
-            {!provider.approved && (
+            {!selectedProvider.approved && (
               <div className="mt-6 flex space-x-3">
                 <button
-                  onClick={() => openApprovalModal('approved', provider)}
+                  onClick={() => openApprovalModal('approved', selectedProvider)}
                   className="flex items-center px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-800 transition-colors"
                 >
                   <CheckCircle className="w-5 h-5 mr-2" />
                   Approve Provider
                 </button>
                 <button
-                  onClick={() => openApprovalModal('rejected', provider)}
+                  onClick={() => openApprovalModal('rejected', selectedProvider)}
                   className="flex items-center px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-800 transition-colors"
                 >
                   <XCircle className="w-5 h-5 mr-2" />
@@ -492,47 +578,6 @@ const AdminProvidersPage = () => {
                 </button>
               </div>
             )}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const ResumeViewerModal = () => {
-    if (!resumeViewUrl) return null;
-
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-lg shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col">
-          <div className="flex justify-between items-center p-4 border-b">
-            <h3 className="text-lg font-semibold">Resume Viewer</h3>
-            <button
-              onClick={closeResumeViewer}
-              className="p-2 hover:bg-gray-100 rounded-full"
-            >
-              <X className="w-6 h-6" />
-            </button>
-          </div>
-          <div className="flex-1">
-            <iframe 
-              src={resumeViewUrl} 
-              className="w-full h-full"
-              title="Resume Viewer"
-            />
-          </div>
-          <div className="p-4 border-t flex justify-end">
-            <button
-              onClick={() => {
-                const a = document.createElement('a');
-                a.href = resumeViewUrl;
-                a.download = 'resume.pdf';
-                a.click();
-              }}
-              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-800 transition-colors"
-            >
-              <Download className="w-5 h-5 mr-2" />
-              Download
-            </button>
           </div>
         </div>
       </div>
@@ -551,24 +596,26 @@ const AdminProvidersPage = () => {
           </p>
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Remarks (Optional)
+              Remarks {approvalAction === 'rejected' && '(Required)'}
             </label>
             <textarea
               value={approvalRemarks}
               onChange={(e) => setApprovalRemarks(e.target.value)}
               className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               rows="3"
-              placeholder="Add any remarks..."
+              placeholder={`Enter ${approvalAction === 'rejected' ? 'rejection' : 'approval'} remarks...`}
+              required={approvalAction === 'rejected'}
             />
           </div>
           <div className="flex space-x-3">
             <button
               onClick={handleApproveProvider}
+              disabled={approvalAction === 'rejected' && !approvalRemarks}
               className={`flex-1 py-3 px-4 rounded-lg text-white font-medium transition-colors ${
                 approvalAction === 'approved' 
                   ? 'bg-green-600 hover:bg-green-800' 
                   : 'bg-red-600 hover:bg-red-800'
-              }`}
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
             >
               {approvalAction === 'approved' ? 'Approve' : 'Reject'}
             </button>
@@ -708,6 +755,7 @@ const AdminProvidersPage = () => {
                 <option value="all">All Status</option>
                 <option value="approved">Approved</option>
                 <option value="pending">Pending</option>
+                <option value="rejected">Rejected</option>
               </select>
             </div>
           </div>
@@ -743,7 +791,6 @@ const AdminProvidersPage = () => {
         {/* Modals */}
         {selectedProvider && <ProviderDetailsModal />}
         {showApprovalModal && <ApprovalModal />}
-        {resumeViewUrl && <ResumeViewerModal />}
       </div>
     </div>
   );

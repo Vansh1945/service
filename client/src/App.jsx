@@ -30,12 +30,11 @@ import AdminServices from "./pages/Admin/Services";
 import AdminComplaints from "./pages/Admin/Complaint";
 import AdminServiceFeedback from "./pages/Admin/Feedback";
 import AdminInvoice from "./pages/Admin/Invoice";
-import AdminEarnings from "./pages/Admin/Earning";
 import AdminProfile from "./pages/Admin/Profile";
 import AdminDashboard from "./pages/Admin/Dashboard";
 
 // Provider Pages
-import ProviderBookingsPage from "./pages/Provider/Provider-Booking";
+import ProviderBookingDashboard from "./pages/Provider/Provider-Booking";
 import ProviderInvoicesPage from "./pages/Provider/Invoice";
 import ProviderEarning from "./pages/Provider/Earning";
 import ProviderDashboard from "./pages/Provider/Dashboard";
@@ -43,15 +42,19 @@ import ProviderTestPage from "./pages/Provider/Test";
 
 // Customer Pages
 import CustomerDashboard from "./pages/Customer/Dashboard";
-import ServiceBooking from "./pages/Customer/Service-Booking";
+import BookService from "./pages/Customer/Book-Service";
 import ServiceListingPage from "./pages/Customer/Services";
 import ServiceDetailPage from "./pages/Customer/Servicedetail";
 import UserProfile from "./pages/Customer/Profile";
-import PaymentPage from "./pages/Customer/Payments";
-import CustomerFeedbackPage from "./pages/Customer/Feedback";
-import BookService from "./pages/Customer/Book-Service";
-import BookingConfirmation from "./pages/Customer/BookingConfirmation";
 import CartPage from "./pages/Customer/Cart";
+import CustomerBookingsPage from "./pages/Customer/CustomerBookingsPage";
+import ProviderProfile from "./pages/Provider/Profile";
+import AdminPayments from "./pages/Admin/Earning";
+import BookingConfirmation from "./pages/Customer/BookingConfirmation";
+import UserInvoicesPage from "./pages/Customer/Invoice";
+import FeedbackManagement from "./pages/Customer/Feedback";
+import ComplaintsPage from "./pages/Customer/Complaint";
+import ProviderFeedback from "./pages/Provider/Feedback";
 
 const App = () => {
   const location = useLocation();
@@ -89,12 +92,12 @@ const App = () => {
             <Route path="assign-booking" element={<AdminBookingsPage />} />
             <Route path="commission" element={<AdminCommissionPage />} />
             <Route path="coupons" element={<AdminCoupons />} />
-            <Route path="questions" element={<AdminQuestions />} />
-            <Route path="services" element={<AdminServices />} />
+            <Route path="add-questions" element={<AdminQuestions />} />
+            <Route path="add-services" element={<AdminServices />} />
             <Route path="complaints" element={<AdminComplaints />} />
             <Route path="feedback" element={<AdminServiceFeedback />} />
             <Route path="invoices" element={<AdminInvoice />} />
-            <Route path="earnings" element={<AdminEarnings />} />
+            <Route path="earning" element={<AdminPayments />} />
           </Route>
         </Route>
 
@@ -109,23 +112,26 @@ const App = () => {
             <Route path="services/:id" element={<ServiceDetailPage />} />
             <Route path="cart" element={<CartPage />} />
             <Route path="book-service/:serviceId" element={<BookService />} />
-            <Route path="payments/:bookingId" element={<PaymentPage />} />
-
-            {/* <Route path="booking-confirmation/:id" element={<BookingConfirmation />} />
-            <Route path="payments" element={<PaymentPage />} />
-            <Route path="feedback" element={<CustomerFeedbackPage />} /> */}
+            <Route path="bookings" element={<CustomerBookingsPage />} />
+            <Route path="booking-confirm/:bookingId" element={<BookingConfirmation />} />
+            <Route path="invoices" element={<UserInvoicesPage />} />
+            <Route path="feedback" element={<FeedbackManagement />} />
+            <Route path="complaints" element={<ComplaintsPage />} />
           </Route>
         </Route>
 
         {/* Protected provider routes */}
         <Route element={<ProtectedRoute allowedRoles={['provider']} requireApproval />}>
           <Route path="/provider" element={<ProviderLayout />}>
-            <Route index element={<ProviderDashboard />} />
+            <Route path="profile" element={<ProviderProfile />} />
+
             <Route path="dashboard" element={<ProviderDashboard />} />
-            <Route path="bookings" element={<ProviderBookingsPage />} />
+            <Route path="booking-requests" element={<ProviderBookingDashboard />} />
             <Route path="test" element={<ProviderTestPage />} />
             <Route path="invoices" element={<ProviderInvoicesPage />} />
             <Route path="earnings" element={<ProviderEarning />} />
+            <Route path="feedbacks" element={<ProviderFeedback />} />
+
           </Route>
         </Route>
 

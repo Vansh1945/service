@@ -8,9 +8,9 @@ router.use(adminAuthMiddleware);
 
 // Question CRUD routes
 router.post('/',  questionController.addQuestion);
-router.put('/:id',  questionController.updateQuestion);
+router.put('/edit/:id',  questionController.updateQuestion);
 router.delete('/:id', questionController.deleteQuestion);
-router.get('/', questionController.getAllQuestions);
+router.get('/get', questionController.getAllQuestions);
 router.get('/:id', questionController.getQuestion);
 
 // Bulk operations

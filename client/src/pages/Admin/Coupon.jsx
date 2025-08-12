@@ -4,16 +4,17 @@ import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
+import { FiEdit, FiTrash2, FiX, FiPlus, FiSearch } from 'react-icons/fi';
+import { FaPercentage, FaRupeeSign } from 'react-icons/fa';
 
 const AdminCoupons = () => {
   const { API, isAdmin, logoutUser } = useAuth();
   const [coupons, setCoupons] = useState([]);
+  const [users, setUsers] = useState([]); // Store users for name lookup
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [currentCoupon, setCurrentCoupon] = useState(null);
@@ -31,6 +32,26 @@ const AdminCoupons = () => {
     usageLimit: '',
     isActive: true
   });
+
+  // Fetch all users for name lookup
+  const fetchUsers = async () => {
+    try {
+      const response = await fetch(`${API}/admin/customers`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch users');
+      }
+      
+      const data = await response.json();
+      setUsers(data.data || []);
+    } catch (err) {
+      console.error('Error fetching users:', err);
+    }
+  };
 
   // Fetch coupons from backend
   const fetchCoupons = async () => {
@@ -51,8 +72,7 @@ const AdminCoupons = () => {
       }
       
       const data = await response.json();
-      setCoupons(data.data);
-      setTotalPages(Math.ceil(data.count / 10));
+      setCoupons(data.data || []);
       setLoading(false);
     } catch (err) {
       setError(err.message);
@@ -64,16 +84,42 @@ const AdminCoupons = () => {
   useEffect(() => {
     if (isAdmin) {
       fetchCoupons();
+      fetchUsers();
     }
-  }, [isAdmin, filter, searchTerm, currentPage]);
+  }, [isAdmin]);
+
+  // Get user name by ID
+  const getUserName = (userId) => {
+    if (!userId) return null;
+    const user = users.find(u => u._id === userId);
+    return user ? `${user.firstName} ${user.lastName}` : 'Unknown User';
+  };
 
   // Handle input changes
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
+    
+    // Prevent setting both isGlobal and isFirstBooking to true
+    if (name === 'isGlobal' && checked) {
+      setFormData(prev => ({
+        ...prev,
+        isGlobal: true,
+        isFirstBooking: false,
+        assignedTo: '' // Clear assignedTo when making global
+      }));
+    } else if (name === 'isFirstBooking' && checked) {
+      setFormData(prev => ({
+        ...prev,
+        isFirstBooking: true,
+        isGlobal: false,
+        assignedTo: '' // Clear assignedTo when making first-booking
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: type === 'checkbox' ? checked : value
+      }));
+    }
   };
 
   // Handle date change
@@ -88,6 +134,11 @@ const AdminCoupons = () => {
   const handleCreateCoupon = async (e) => {
     e.preventDefault();
     try {
+      // Validate form data
+      if (formData.discountType === 'percent' && formData.discountValue > 100) {
+        throw new Error('Percentage discount cannot exceed 100%');
+      }
+
       const response = await fetch(`${API}/coupon/add-coupons`, {
         method: 'POST',
         headers: {
@@ -96,7 +147,8 @@ const AdminCoupons = () => {
         },
         body: JSON.stringify({
           ...formData,
-          expiryDate: formData.expiryDate.toISOString()
+          expiryDate: formData.expiryDate.toISOString(),
+          assignedTo: formData.assignedTo || null // Send null if empty
         })
       });
 
@@ -122,7 +174,8 @@ const AdminCoupons = () => {
       // Prepare the data to send
       const updateData = {
         ...formData,
-        expiryDate: formData.expiryDate.toISOString()
+        expiryDate: formData.expiryDate.toISOString(),
+        assignedTo: formData.assignedTo || null // Send null if empty
       };
 
       // Remove fields that shouldn't be updated if coupon has been used
@@ -143,16 +196,16 @@ const AdminCoupons = () => {
         body: JSON.stringify(updateData)
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
+        const errorData = await response.json();
         // Handle specific error messages from backend
-        if (data.error && data.error.includes('duplicate key')) {
+        if (errorData.error && errorData.error.includes('duplicate key')) {
           throw new Error('Coupon code already exists');
         }
-        throw new Error(data.message || 'Failed to update coupon');
+        throw new Error(errorData.message || 'Failed to update coupon');
       }
 
+      const data = await response.json();
       setCoupons(coupons.map(c => c._id === data.data._id ? data.data : c));
       setShowEditModal(false);
       toast.success('Coupon updated successfully!');
@@ -253,15 +306,23 @@ const AdminCoupons = () => {
     return true;
   }).filter(coupon => 
     coupon.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    coupon.discountValue.toString().includes(searchTerm)
+    coupon.discountValue.toString().includes(searchTerm) ||
+    (coupon.assignedTo && getUserName(coupon.assignedTo).toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   if (!isAdmin) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-lg shadow-md">
-          <p className="font-medium">Access Denied</p>
-          <p>You don't have permission to access this page.</p>
+      <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-red-100 flex items-center justify-center p-4">
+        <div className="bg-white border border-red-200 rounded-2xl shadow-2xl p-8 max-w-md w-full">
+          <div className="text-center">
+            <div className="mx-auto w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
+              <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-bold text-gray-800 mb-2">Access Denied</h3>
+            <p className="text-gray-600">You don't have permission to access this page.</p>
+          </div>
         </div>
       </div>
     );
@@ -269,9 +330,13 @@ const AdminCoupons = () => {
 
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="relative">
+            <div className="w-20 h-20 border-4 border-blue-200 rounded-full animate-spin border-t-blue-600 mx-auto mb-4"></div>
+            <div className="absolute inset-0 w-20 h-20 border-4 border-transparent rounded-full animate-ping border-t-blue-400 mx-auto"></div>
+          </div>
+          <p className="text-gray-600 font-medium">Loading coupons...</p>
         </div>
       </div>
     );
@@ -279,454 +344,456 @@ const AdminCoupons = () => {
 
   if (error) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-lg shadow-md">
-          <p className="font-medium">Error</p>
-          <p>{error}</p>
+      <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-red-100 flex items-center justify-center p-4">
+        <div className="bg-white border border-red-200 rounded-2xl shadow-2xl p-8 max-w-md w-full">
+          <div className="text-center">
+            <div className="mx-auto w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
+              <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-bold text-gray-800 mb-2">Error</h3>
+            <p className="text-gray-600">{error}</p>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="bg-white rounded-xl shadow-md overflow-hidden p-6 mb-8">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4 md:mb-0">Coupon Management</h2>
-          
-          <div className="flex flex-col space-y-4 md:space-y-0 md:flex-row md:space-x-4">
-            <div className="relative">
-              <input
-                type="text"
-                className="w-full md:w-64 pl-10 pr-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Search coupons..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-              <div className="absolute left-3 top-2.5 text-gray-400">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
+      <div className="container mx-auto px-4 py-8">
+        {/* Header Section */}
+        <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-white/20 overflow-hidden mb-8">
+          <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-blue-600 p-8 text-white">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
+              <div className="mb-6 lg:mb-0">
+                <h1 className="text-4xl font-bold mb-2">Coupon Management</h1>
+                <p className="text-indigo-100 text-lg">Create and manage discount coupons for your customers</p>
+              </div>
+              
+              <div className="flex flex-col space-y-4 lg:space-y-0 lg:flex-row lg:space-x-4">
+                {/* Search Bar */}
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <FiSearch className="text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
+                  </div>
+                  <input
+                    type="text"
+                    className="w-full lg:w-80 pl-12 pr-4 py-3 rounded-2xl border-0 bg-white/90 focus:bg-white focus:outline-none focus:ring-4 focus:ring-white/30 transition-all placeholder-gray-500"
+                    placeholder="Search coupons..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+                
+                {/* Filter Dropdown */}
+                <select
+                  className="px-6 py-3 rounded-2xl border-0 bg-white/90 focus:bg-white focus:outline-none focus:ring-4 focus:ring-white/30 transition-all font-medium"
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value)}
+                >
+                  <option value="all">All Coupons</option>
+                  <option value="active">Active</option>
+                  <option value="expired">Expired</option>
+                  <option value="global">Global</option>
+                  <option value="first-booking">First Booking</option>
+                  <option value="assigned">Assigned</option>
+                </select>
+                
+                {/* Create Button */}
+                <button
+                  className="px-8 py-3 bg-gradient-to-r from-emerald-500 to-green-600 text-white rounded-2xl hover:from-emerald-600 hover:to-green-700 focus:outline-none focus:ring-4 focus:ring-emerald-300 transition-all duration-300 flex items-center font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                  onClick={() => setShowCreateModal(true)}
+                >
+                  <FiPlus className="mr-2 text-lg" />
+                  Create Coupon
+                </button>
               </div>
             </div>
-            
-            <select
-              className="px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-            >
-              <option value="all">All Coupons</option>
-              <option value="active">Active</option>
-              <option value="expired">Expired</option>
-              <option value="global">Global</option>
-              <option value="first-booking">First Booking</option>
-              <option value="assigned">Assigned</option>
-            </select>
-            
-            <button
-              className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 flex items-center"
-              onClick={() => setShowCreateModal(true)}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-              Create Coupon
-            </button>
           </div>
         </div>
 
-        {/* Coupons Table */}
-        <div className="overflow-x-auto rounded-lg border border-gray-200">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Code</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Discount</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Min Value</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expiry</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usage</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredCoupons.length > 0 ? (
-                filteredCoupons.map(coupon => (
-                  <tr key={coupon._id} className={!coupon.isActive ? 'bg-gray-50' : 'hover:bg-gray-50'}>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0 h-10 w-10 flex items-center justify-center bg-blue-100 rounded-lg">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" />
-                          </svg>
-                        </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">{coupon.code}</div>
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {coupon.isFirstBooking && (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">First Booking</span>
-                            )}
-                            {coupon.isGlobal && (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Global</span>
-                            )}
-                            {coupon.assignedTo && (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Assigned</span>
-                            )}
-                          </div>
-                        </div>
+        {/* Coupons Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {filteredCoupons.length > 0 ? (
+            filteredCoupons.map(coupon => (
+              <div key={coupon._id} className={`group relative bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 overflow-hidden transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 ${!coupon.isActive ? 'opacity-60' : ''}`}>
+                {/* Coupon Header */}
+                <div className="bg-gradient-to-r from-indigo-500 to-purple-600 p-6 text-white relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16"></div>
+                  <div className="absolute bottom-0 left-0 w-20 h-20 bg-white/10 rounded-full -translate-x-10 translate-y-10"></div>
+                  
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="bg-white/20 p-3 rounded-xl">
+                        <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" />
+                        </svg>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
-                        {coupon.discountType === 'flat' ? (
-                          <span className="text-green-600">₹{coupon.discountValue} OFF</span>
-                        ) : (
-                          <span className="text-green-600">{coupon.discountValue}% OFF</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800 capitalize">
-                        {coupon.discountType}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      ₹{coupon.minBookingValue || 0}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        {new Date(coupon.expiryDate).toLocaleDateString()}
-                        {new Date(coupon.expiryDate) < new Date() && (
-                          <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Expired</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="w-full bg-gray-200 rounded-full h-2.5">
-                          <div 
-                            className="bg-blue-600 h-2.5 rounded-full" 
-                            style={{ 
-                              width: `${coupon.usageLimit ? 
-                                Math.min(100, (coupon.usedBy.length / coupon.usageLimit) * 100) : 
-                                0}%` 
-                            }}
-                          ></div>
-                        </div>
-                        <span className="text-xs text-gray-500 ml-2">
-                          {coupon.usedBy.length}/{coupon.usageLimit || '∞'}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {coupon.isActive ? (
-                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                          Active
-                        </span>
-                      ) : (
-                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
-                          Inactive
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex justify-end space-x-2">
+                      <div className="flex space-x-2">
                         <button
                           onClick={() => openEditModal(coupon)}
-                          className="text-blue-600 hover:text-blue-900 p-1 rounded-full hover:bg-blue-50"
+                          className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
                           title="Edit"
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
+                          <FiEdit className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handleDeleteCoupon(coupon._id)}
-                          className="text-yellow-600 hover:text-yellow-900 p-1 rounded-full hover:bg-yellow-50"
+                          className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
                           title="Deactivate"
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
                           </svg>
                         </button>
                         <button
                           onClick={() => handleHardDeleteCoupon(coupon._id)}
-                          className="text-red-600 hover:text-red-900 p-1 rounded-full hover:bg-red-50"
+                          className="p-2 bg-red-500/80 hover:bg-red-600/80 rounded-lg transition-colors"
                           title="Delete Permanently"
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
+                          <FiTrash2 className="w-4 h-4" />
                         </button>
                       </div>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="8" className="px-6 py-4 text-center text-sm text-gray-500">
-                    No coupons found matching your criteria
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="mt-6 flex items-center justify-between">
-            <div className="flex-1 flex justify-between sm:hidden">
-              <button
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-              >
-                Previous
-              </button>
-              <button
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-                className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-              >
-                Next
-              </button>
-            </div>
-            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm text-gray-700">
-                  Showing <span className="font-medium">{(currentPage - 1) * 10 + 1}</span> to{' '}
-                  <span className="font-medium">{Math.min(currentPage * 10, filteredCoupons.length)}</span> of{' '}
-                  <span className="font-medium">{filteredCoupons.length}</span> results
-                </p>
-              </div>
-              <div>
-                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                  <button
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                    className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
-                  >
-                    <span className="sr-only">Previous</span>
-                    <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                      <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                  </button>
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                    <button
-                      key={page}
-                      onClick={() => setCurrentPage(page)}
-                      className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
-                        currentPage === page 
-                          ? 'z-10 bg-blue-50 border-blue-500 text-blue-600' 
-                          : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
-                      }`}
-                    >
-                      {page}
-                    </button>
-                  ))}
-                  <button
-                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages}
-                    className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
-                  >
-                    <span className="sr-only">Next</span>
-                    <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                      <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                    </svg>
-                  </button>
-                </nav>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Create Coupon Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true" onClick={() => {
-              setShowCreateModal(false);
-              resetForm();
-            }}></div>
-
-            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-
-            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
-              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                <div className="sm:flex sm:items-start">
-                  <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 sm:mx-0 sm:h-10 sm:w-10">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" />
-                    </svg>
-                  </div>
-                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
-                    <h3 className="text-lg leading-6 font-medium text-gray-900" id="modal-title">Create New Coupon</h3>
-                    <div className="mt-2">
-                      <form onSubmit={handleCreateCoupon}>
-                        <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
-                          <div className="sm:col-span-3">
-                            <label htmlFor="code" className="block text-sm font-medium text-gray-700">Coupon Code</label>
-                            <input
-                              type="text"
-                              name="code"
-                              id="code"
-                              value={formData.code}
-                              onChange={handleInputChange}
-                              required
-                              pattern="[A-Z0-9_]{5,20}"
-                              title="5-20 uppercase letters, numbers or underscores"
-                              className="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
-                            />
-                          </div>
-
-                          <div className="sm:col-span-3">
-                            <label htmlFor="discountType" className="block text-sm font-medium text-gray-700">Discount Type</label>
-                            <select
-                              id="discountType"
-                              name="discountType"
-                              value={formData.discountType}
-                              onChange={handleInputChange}
-                              required
-                              className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
-                            >
-                              <option value="flat">Flat Amount</option>
-                              <option value="percent">Percentage</option>
-                            </select>
-                          </div>
-
-                          <div className="sm:col-span-3">
-                            <label htmlFor="discountValue" className="block text-sm font-medium text-gray-700">Discount Value</label>
-                            <input
-                              type="number"
-                              name="discountValue"
-                              id="discountValue"
-                              value={formData.discountValue}
-                              onChange={handleInputChange}
-                              required
-                              min="1"
-                              max={formData.discountType === 'percent' ? '100' : undefined}
-                              className="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
-                            />
-                          </div>
-
-                          <div className="sm:col-span-3">
-                            <label htmlFor="minBookingValue" className="block text-sm font-medium text-gray-700">Minimum Booking Value</label>
-                            <input
-                              type="number"
-                              name="minBookingValue"
-                              id="minBookingValue"
-                              value={formData.minBookingValue}
-                              onChange={handleInputChange}
-                              min="0"
-                              className="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
-                            />
-                          </div>
-
-                          <div className="sm:col-span-3">
-                            <label htmlFor="expiryDate" className="block text-sm font-medium text-gray-700">Expiry Date</label>
-                            <DatePicker
-                              selected={formData.expiryDate}
-                              onChange={handleDateChange}
-                              minDate={new Date()}
-                              className="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
-                              required
-                            />
-                          </div>
-
-                          <div className="sm:col-span-3">
-                            <label htmlFor="usageLimit" className="block text-sm font-medium text-gray-700">Usage Limit</label>
-                            <input
-                              type="number"
-                              name="usageLimit"
-                              id="usageLimit"
-                              value={formData.usageLimit}
-                              onChange={handleInputChange}
-                              min="1"
-                              placeholder="Leave empty for unlimited"
-                              className="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
-                            />
-                          </div>
-
-                          <div className="sm:col-span-6">
-                            <div className="flex items-center">
-                              <input
-                                id="isGlobal"
-                                name="isGlobal"
-                                type="checkbox"
-                                checked={formData.isGlobal}
-                                onChange={handleInputChange}
-                                className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded"
-                              />
-                              <label htmlFor="isGlobal" className="ml-2 block text-sm text-gray-700">Global Coupon</label>
-                            </div>
-                          </div>
-
-                          <div className="sm:col-span-6">
-                            <div className="flex items-center">
-                              <input
-                                id="isFirstBooking"
-                                name="isFirstBooking"
-                                type="checkbox"
-                                checked={formData.isFirstBooking}
-                                onChange={handleInputChange}
-                                className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded"
-                              />
-                              <label htmlFor="isFirstBooking" className="ml-2 block text-sm text-gray-700">First Booking Only</label>
-                            </div>
-                          </div>
-
-                          <div className="sm:col-span-6">
-                            <div className="flex items-center">
-                              <input
-                                id="isActive"
-                                name="isActive"
-                                type="checkbox"
-                                checked={formData.isActive}
-                                onChange={handleInputChange}
-                                className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded"
-                              />
-                              <label htmlFor="isActive" className="ml-2 block text-sm text-gray-700">Active</label>
-                            </div>
-                          </div>
-
-                          <div className="sm:col-span-6">
-                            <label htmlFor="assignedTo" className="block text-sm font-medium text-gray-700">Assign to User (optional)</label>
-                            <input
-                              type="text"
-                              name="assignedTo"
-                              id="assignedTo"
-                              value={formData.assignedTo}
-                              onChange={handleInputChange}
-                              placeholder="User ID"
-                              className="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
-                            />
-                          </div>
+                    </div>
+                    
+                    <h3 className="text-xl font-bold mb-2">{coupon.code}</h3>
+                    
+                    <div className="flex items-center mb-3">
+                      {coupon.discountType === 'flat' ? (
+                        <div className="flex items-center text-2xl font-bold">
+                          <FaRupeeSign className="mr-1" />
+                          {coupon.discountValue}
+                          <span className="text-sm font-normal ml-2">OFF</span>
                         </div>
-                      </form>
+                      ) : (
+                        <div className="flex items-center text-2xl font-bold">
+                          {coupon.discountValue}
+                          <FaPercentage className="ml-1 text-lg" />
+                          <span className="text-sm font-normal ml-2">OFF</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Coupon Body */}
+                <div className="p-6">
+                  {/* Tags */}
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {coupon.isFirstBooking && (
+                      <span className="px-3 py-1 bg-gradient-to-r from-purple-100 to-purple-200 text-purple-700 rounded-full text-xs font-semibold">First Booking</span>
+                    )}
+                    {coupon.isGlobal && (
+                      <span className="px-3 py-1 bg-gradient-to-r from-green-100 to-emerald-200 text-green-700 rounded-full text-xs font-semibold">Global</span>
+                    )}
+                    {coupon.assignedTo && (
+                      <span className="px-3 py-1 bg-gradient-to-r from-amber-100 to-yellow-200 text-amber-700 rounded-full text-xs font-semibold">
+                        {getUserName(coupon.assignedTo)}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Details */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600">Min Value:</span>
+                      <span className="font-semibold">₹{coupon.minBookingValue || 0}</span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600">Expires:</span>
+                      <span className={`font-semibold ${new Date(coupon.expiryDate) < new Date() ? 'text-red-600' : 'text-gray-800'}`}>
+                        {new Date(coupon.expiryDate).toLocaleDateString()}
+                      </span>
+                    </div>
+
+                    {/* Usage Progress */}
+                    <div>
+                      <div className="flex items-center justify-between text-sm mb-2">
+                        <span className="text-gray-600">Usage:</span>
+                        <span className="font-semibold text-gray-800">
+                          {coupon.usedBy.length}/{coupon.usageLimit || '∞'}
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-gradient-to-r from-blue-500 to-blue-600 h-2 rounded-full transition-all duration-500" 
+                          style={{ 
+                            width: `${coupon.usageLimit ? 
+                              Math.min(100, (coupon.usedBy.length / coupon.usageLimit) * 100) : 
+                              0}%` 
+                          }}
+                        ></div>
+                      </div>
+                    </div>
+
+                    {/* Status */}
+                    <div className="pt-3 border-t border-gray-100">
+                      {coupon.isActive ? (
+                        <span className="inline-flex items-center px-3 py-1 bg-gradient-to-r from-green-100 to-emerald-200 text-green-700 rounded-full text-sm font-semibold">
+                          <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
+                          Active
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-sm font-semibold">
+                          <div className="w-2 h-2 bg-gray-400 rounded-full mr-2"></div>
+                          Inactive
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
               </div>
-              <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                <button
-                  type="button"
-                  onClick={handleCreateCoupon}
-                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm"
-                >
-                  Create Coupon
-                </button>
+            ))
+          ) : (
+            <div className="col-span-full">
+              <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-12 text-center">
+                <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-semibold text-gray-800 mb-2">No coupons found</h3>
+                <p className="text-gray-600">No coupons match your current search criteria.</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Create Coupon Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm">
+          <div className="flex items-center justify-center min-h-screen p-4">
+            <div className="bg-white rounded-3xl shadow-2xl border border-white/20 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+              {/* Modal Header */}
+              <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-8 text-white rounded-t-3xl">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-2xl font-bold mb-2">Create New Coupon</h3>
+                    <p className="text-indigo-100">Add a new discount coupon for your customers</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowCreateModal(false);
+                      resetForm();
+                    }}
+                    className="p-3 bg-white/20 hover:bg-white/30 rounded-xl transition-colors"
+                  >
+                    <FiX className="w-6 h-6" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-8">
+                <form onSubmit={handleCreateCoupon}>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Coupon Code */}
+                    <div className="md:col-span-1">
+                      <label htmlFor="code" className="block text-sm font-semibold text-gray-700 mb-3">Coupon Code *</label>
+                      <input
+                        type="text"
+                        name="code"
+                        id="code"
+                        value={formData.code}
+                        onChange={handleInputChange}
+                        required
+                        pattern="[A-Z0-9_]{5,20}"
+                        title="5-20 uppercase letters, numbers or underscores"
+                        className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-indigo-500 focus:outline-none transition-colors bg-gray-50 focus:bg-white"
+                        placeholder="SAVE20"
+                      />
+                      <p className="mt-2 text-xs text-gray-500">Uppercase letters, numbers and underscores only (5-20 chars)</p>
+                    </div>
+
+                    {/* Discount Type */}
+                    <div className="md:col-span-1">
+                      <label htmlFor="discountType" className="block text-sm font-semibold text-gray-700 mb-3">Discount Type *</label>
+                      <select
+                        id="discountType"
+                        name="discountType"
+                        value={formData.discountType}
+                        onChange={handleInputChange}
+                        required
+                        className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-indigo-500 focus:outline-none transition-colors bg-gray-50 focus:bg-white"
+                      >
+                        <option value="flat">Flat Amount</option>
+                        <option value="percent">Percentage</option>
+                      </select>
+                    </div>
+
+                    {/* Discount Value */}
+                    <div className="md:col-span-1">
+                      <label htmlFor="discountValue" className="block text-sm font-semibold text-gray-700 mb-3">Discount Value *</label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                          {formData.discountType === 'percent' ? (
+                            <FaPercentage className="text-gray-400" />
+                          ) : (
+                            <FaRupeeSign className="text-gray-400" />
+                          )}
+                        </div>
+                        <input
+                          type="number"
+                          name="discountValue"
+                          id="discountValue"
+                          value={formData.discountValue}
+                          onChange={handleInputChange}
+                          required
+                          min="1"
+                          max={formData.discountType === 'percent' ? '100' : undefined}
+                          className="w-full pl-12 pr-4 py-3 rounded-xl border-2 border-gray-200 focus:border-indigo-500 focus:outline-none transition-colors bg-gray-50 focus:bg-white"
+                          placeholder={formData.discountType === 'percent' ? '10' : '100'}
+                        />
+                      </div>
+                      {formData.discountType === 'percent' && (
+                        <p className="mt-2 text-xs text-gray-500">Maximum 100%</p>
+                      )}
+                    </div>
+
+                    {/* Minimum Booking Value */}
+                    <div className="md:col-span-1">
+                      <label htmlFor="minBookingValue" className="block text-sm font-semibold text-gray-700 mb-3">Minimum Booking Value</label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                          <FaRupeeSign className="text-gray-400" />
+                        </div>
+                        <input
+                          type="number"
+                          name="minBookingValue"
+                          id="minBookingValue"
+                          value={formData.minBookingValue}
+                          onChange={handleInputChange}
+                          min="0"
+                          className="w-full pl-12 pr-4 py-3 rounded-xl border-2 border-gray-200 focus:border-indigo-500 focus:outline-none transition-colors bg-gray-50 focus:bg-white"
+                          placeholder="0"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Expiry Date */}
+                    <div className="md:col-span-1">
+                      <label htmlFor="expiryDate" className="block text-sm font-semibold text-gray-700 mb-3">Expiry Date *</label>
+                      <DatePicker
+                        selected={formData.expiryDate}
+                        onChange={handleDateChange}
+                        minDate={new Date()}
+                        className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-indigo-500 focus:outline-none transition-colors bg-gray-50 focus:bg-white"
+                        required
+                      />
+                    </div>
+
+                    {/* Usage Limit */}
+                    <div className="md:col-span-1">
+                      <label htmlFor="usageLimit" className="block text-sm font-semibold text-gray-700 mb-3">Usage Limit</label>
+                      <input
+                        type="number"
+                        name="usageLimit"
+                        id="usageLimit"
+                        value={formData.usageLimit}
+                        onChange={handleInputChange}
+                        min="1"
+                        placeholder="Leave empty for unlimited"
+                        className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-indigo-500 focus:outline-none transition-colors bg-gray-50 focus:bg-white"
+                      />
+                    </div>
+
+                    {/* Assign to User */}
+                    <div className="md:col-span-2">
+                      <label htmlFor="assignedTo" className="block text-sm font-semibold text-gray-700 mb-3">Assign to User (optional)</label>
+                      <select
+                        name="assignedTo"
+                        id="assignedTo"
+                        value={formData.assignedTo}
+                        onChange={handleInputChange}
+                        disabled={formData.isGlobal || formData.isFirstBooking}
+                        className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-indigo-500 focus:outline-none transition-colors bg-gray-50 focus:bg-white disabled:bg-gray-100 disabled:text-gray-500"
+                      >
+                        <option value="">Select a user</option>
+                        {users.map(user => (
+                          <option key={user._id} value={user._id}>
+                            {user.firstName} {user.lastName} ({user.email})
+                          </option>
+                        ))}
+                      </select>
+                      <p className="mt-2 text-xs text-gray-500">
+                        {formData.isGlobal || formData.isFirstBooking 
+                          ? "Cannot assign to specific user when coupon is global or first-booking" 
+                          : "Leave empty to make available to all users"}
+                      </p>
+                    </div>
+
+                    {/* Checkboxes */}
+                    <div className="md:col-span-2 space-y-4">
+                      <div className="flex items-center p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-200">
+                        <input
+                          id="isGlobal"
+                          name="isGlobal"
+                          type="checkbox"
+                          checked={formData.isGlobal}
+                          onChange={handleInputChange}
+                          disabled={formData.isFirstBooking}
+                          className="w-5 h-5 text-green-600 border-2 border-green-300 rounded focus:ring-green-500 focus:ring-2"
+                        />
+                        <label htmlFor="isGlobal" className="ml-3 text-sm font-medium text-green-800">
+                          Global Coupon (available to all users)
+                        </label>
+                      </div>
+
+                      <div className="flex items-center p-4 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl border border-purple-200">
+                        <input
+                          id="isFirstBooking"
+                          name="isFirstBooking"
+                          type="checkbox"
+                          checked={formData.isFirstBooking}
+                          onChange={handleInputChange}
+                          disabled={formData.isGlobal}
+                          className="w-5 h-5 text-purple-600 border-2 border-purple-300 rounded focus:ring-purple-500 focus:ring-2"
+                        />
+                        <label htmlFor="isFirstBooking" className="ml-3 text-sm font-medium text-purple-800">
+                          First Booking Only (for new users)
+                        </label>
+                      </div>
+
+                      <div className="flex items-center p-4 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl border border-blue-200">
+                        <input
+                          id="isActive"
+                          name="isActive"
+                          type="checkbox"
+                          checked={formData.isActive}
+                          onChange={handleInputChange}
+                          className="w-5 h-5 text-blue-600 border-2 border-blue-300 rounded focus:ring-blue-500 focus:ring-2"
+                        />
+                        <label htmlFor="isActive" className="ml-3 text-sm font-medium text-blue-800">
+                          Active (coupon can be used)
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </form>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="bg-gray-50 px-8 py-6 rounded-b-3xl flex justify-end space-x-4">
                 <button
                   type="button"
                   onClick={() => {
                     setShowCreateModal(false);
                     resetForm();
                   }}
-                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                  className="px-8 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 focus:outline-none focus:ring-4 focus:ring-gray-200 transition-all font-semibold"
                 >
                   Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCreateCoupon}
+                  className="px-8 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 focus:outline-none focus:ring-4 focus:ring-indigo-300 transition-all font-semibold shadow-lg"
+                >
+                  Create Coupon
                 </button>
               </div>
             </div>
@@ -736,203 +803,274 @@ const AdminCoupons = () => {
 
       {/* Edit Coupon Modal */}
       {showEditModal && currentCoupon && (
-        <div className="fixed inset-0 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true" onClick={() => {
-              setShowEditModal(false);
-              resetForm();
-            }}></div>
-
-            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-
-            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
-              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                <div className="sm:flex sm:items-start">
-                  <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 sm:mx-0 sm:h-10 sm:w-10">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm">
+          <div className="flex items-center justify-center min-h-screen p-4">
+            <div className="bg-white rounded-3xl shadow-2xl border border-white/20 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+              {/* Modal Header */}
+              <div className="bg-gradient-to-r from-orange-500 to-red-500 p-8 text-white rounded-t-3xl">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-2xl font-bold mb-2">Edit Coupon: {currentCoupon.code}</h3>
+                    <p className="text-orange-100">Modify coupon details and settings</p>
                   </div>
-                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
-                    <h3 className="text-lg leading-6 font-medium text-gray-900" id="modal-title">Edit Coupon: {currentCoupon.code}</h3>
-                    <div className="mt-2">
-                      <form onSubmit={handleEditCoupon}>
-                        <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
-                          <div className="sm:col-span-3">
-                            <label htmlFor="editCode" className="block text-sm font-medium text-gray-700">Coupon Code</label>
-                            <input
-                              type="text"
-                              name="code"
-                              id="editCode"
-                              value={formData.code}
-                              onChange={handleInputChange}
-                              required
-                              pattern="[A-Z0-9_]{5,20}"
-                              title="5-20 uppercase letters, numbers or underscores"
-                              readOnly={currentCoupon.usedBy.length > 0}
-                              className={`mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md ${
-                                currentCoupon.usedBy.length > 0 ? 'bg-gray-100' : ''
-                              }`}
-                            />
-                          </div>
-
-                          <div className="sm:col-span-3">
-                            <label htmlFor="editDiscountType" className="block text-sm font-medium text-gray-700">Discount Type</label>
-                            <select
-                              id="editDiscountType"
-                              name="discountType"
-                              value={formData.discountType}
-                              onChange={handleInputChange}
-                              required
-                              disabled={currentCoupon.usedBy.length > 0}
-                              className={`mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md ${
-                                currentCoupon.usedBy.length > 0 ? 'bg-gray-100' : ''
-                              }`}
-                            >
-                              <option value="flat">Flat Amount</option>
-                              <option value="percent">Percentage</option>
-                            </select>
-                          </div>
-
-                          <div className="sm:col-span-3">
-                            <label htmlFor="editDiscountValue" className="block text-sm font-medium text-gray-700">Discount Value</label>
-                            <input
-                              type="number"
-                              name="discountValue"
-                              id="editDiscountValue"
-                              value={formData.discountValue}
-                              onChange={handleInputChange}
-                              required
-                              min="1"
-                              max={formData.discountType === 'percent' ? '100' : undefined}
-                              disabled={currentCoupon.usedBy.length > 0}
-                              className={`mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md ${
-                                currentCoupon.usedBy.length > 0 ? 'bg-gray-100' : ''
-                              }`}
-                            />
-                          </div>
-
-                          <div className="sm:col-span-3">
-                            <label htmlFor="editMinBookingValue" className="block text-sm font-medium text-gray-700">Minimum Booking Value</label>
-                            <input
-                              type="number"
-                              name="minBookingValue"
-                              id="editMinBookingValue"
-                              value={formData.minBookingValue}
-                              onChange={handleInputChange}
-                              min="0"
-                              className="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
-                            />
-                          </div>
-
-                          <div className="sm:col-span-3">
-                            <label htmlFor="editExpiryDate" className="block text-sm font-medium text-gray-700">Expiry Date</label>
-                            <DatePicker
-                              selected={formData.expiryDate}
-                              onChange={handleDateChange}
-                              minDate={new Date()}
-                              className="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
-                              required
-                            />
-                          </div>
-
-                          <div className="sm:col-span-3">
-                            <label htmlFor="editUsageLimit" className="block text-sm font-medium text-gray-700">Usage Limit</label>
-                            <input
-                              type="number"
-                              name="usageLimit"
-                              id="editUsageLimit"
-                              value={formData.usageLimit}
-                              onChange={handleInputChange}
-                              min="1"
-                              placeholder="Leave empty for unlimited"
-                              className="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
-                            />
-                          </div>
-
-                          <div className="sm:col-span-6">
-                            <div className="flex items-center">
-                              <input
-                                id="editIsGlobal"
-                                name="isGlobal"
-                                type="checkbox"
-                                checked={formData.isGlobal}
-                                onChange={handleInputChange}
-                                disabled={currentCoupon.usedBy.length > 0 || formData.isFirstBooking}
-                                className={`focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded ${
-                                  currentCoupon.usedBy.length > 0 || formData.isFirstBooking ? 'bg-gray-100' : ''
-                                }`}
-                              />
-                              <label htmlFor="editIsGlobal" className="ml-2 block text-sm text-gray-700">Global Coupon</label>
-                            </div>
-                          </div>
-
-                          <div className="sm:col-span-6">
-                            <div className="flex items-center">
-                              <input
-                                id="editIsFirstBooking"
-                                name="isFirstBooking"
-                                type="checkbox"
-                                checked={formData.isFirstBooking}
-                                onChange={handleInputChange}
-                                disabled={currentCoupon.usedBy.length > 0 || formData.isGlobal}
-                                className={`focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded ${
-                                  currentCoupon.usedBy.length > 0 || formData.isGlobal ? 'bg-gray-100' : ''
-                                }`}
-                              />
-                              <label htmlFor="editIsFirstBooking" className="ml-2 block text-sm text-gray-700">First Booking Only</label>
-                            </div>
-                          </div>
-
-                          <div className="sm:col-span-6">
-                            <div className="flex items-center">
-                              <input
-                                id="editIsActive"
-                                name="isActive"
-                                type="checkbox"
-                                checked={formData.isActive}
-                                onChange={handleInputChange}
-                                className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded"
-                              />
-                              <label htmlFor="editIsActive" className="ml-2 block text-sm text-gray-700">Active</label>
-                            </div>
-                          </div>
-
-                          <div className="sm:col-span-6">
-                            <label htmlFor="editAssignedTo" className="block text-sm font-medium text-gray-700">Assign to User (optional)</label>
-                            <input
-                              type="text"
-                              name="assignedTo"
-                              id="editAssignedTo"
-                              value={formData.assignedTo}
-                              onChange={handleInputChange}
-                              placeholder="User ID"
-                              className="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
-                            />
-                          </div>
-                        </div>
-                      </form>
-                    </div>
-                  </div>
+                  <button
+                    onClick={() => {
+                      setShowEditModal(false);
+                      resetForm();
+                    }}
+                    className="p-3 bg-white/20 hover:bg-white/30 rounded-xl transition-colors"
+                  >
+                    <FiX className="w-6 h-6" />
+                  </button>
                 </div>
               </div>
-              <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                <button
-                  type="button"
-                  onClick={handleEditCoupon}
-                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm"
-                >
-                  Save Changes
-                </button>
+
+              {/* Modal Body */}
+              <div className="p-8">
+                <form onSubmit={handleEditCoupon}>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Coupon Code */}
+                    <div className="md:col-span-1">
+                      <label htmlFor="editCode" className="block text-sm font-semibold text-gray-700 mb-3">Coupon Code</label>
+                      <input
+                        type="text"
+                        name="code"
+                        id="editCode"
+                        value={formData.code}
+                        onChange={handleInputChange}
+                        required
+                        pattern="[A-Z0-9_]{5,20}"
+                        title="5-20 uppercase letters, numbers or underscores"
+                        readOnly={currentCoupon.usedBy.length > 0}
+                        className={`w-full px-4 py-3 rounded-xl border-2 transition-colors ${
+                          currentCoupon.usedBy.length > 0 
+                            ? 'border-gray-200 bg-gray-100 text-gray-500' 
+                            : 'border-gray-200 focus:border-orange-500 focus:outline-none bg-gray-50 focus:bg-white'
+                        }`}
+                      />
+                      {currentCoupon.usedBy.length > 0 && (
+                        <p className="mt-2 text-xs text-gray-500">Cannot modify code after usage</p>
+                      )}
+                    </div>
+
+                    {/* Discount Type */}
+                    <div className="md:col-span-1">
+                      <label htmlFor="editDiscountType" className="block text-sm font-semibold text-gray-700 mb-3">Discount Type</label>
+                      <select
+                        id="editDiscountType"
+                        name="discountType"
+                        value={formData.discountType}
+                        onChange={handleInputChange}
+                        required
+                        disabled={currentCoupon.usedBy.length > 0}
+                        className={`w-full px-4 py-3 rounded-xl border-2 transition-colors ${
+                          currentCoupon.usedBy.length > 0 
+                            ? 'border-gray-200 bg-gray-100 text-gray-500' 
+                            : 'border-gray-200 focus:border-orange-500 focus:outline-none bg-gray-50 focus:bg-white'
+                        }`}
+                      >
+                        <option value="flat">Flat Amount</option>
+                        <option value="percent">Percentage</option>
+                      </select>
+                      {currentCoupon.usedBy.length > 0 && (
+                        <p className="mt-2 text-xs text-gray-500">Cannot modify type after usage</p>
+                      )}
+                    </div>
+
+                    {/* Discount Value */}
+                    <div className="md:col-span-1">
+                      <label htmlFor="editDiscountValue" className="block text-sm font-semibold text-gray-700 mb-3">Discount Value</label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                          {formData.discountType === 'percent' ? (
+                            <FaPercentage className="text-gray-400" />
+                          ) : (
+                            <FaRupeeSign className="text-gray-400" />
+                          )}
+                        </div>
+                        <input
+                          type="number"
+                          name="discountValue"
+                          id="editDiscountValue"
+                          value={formData.discountValue}
+                          onChange={handleInputChange}
+                          required
+                          min="1"
+                          max={formData.discountType === 'percent' ? '100' : undefined}
+                          disabled={currentCoupon.usedBy.length > 0}
+                          className={`w-full pl-12 pr-4 py-3 rounded-xl border-2 transition-colors ${
+                            currentCoupon.usedBy.length > 0 
+                              ? 'border-gray-200 bg-gray-100 text-gray-500' 
+                              : 'border-gray-200 focus:border-orange-500 focus:outline-none bg-gray-50 focus:bg-white'
+                          }`}
+                        />
+                      </div>
+                      {currentCoupon.usedBy.length > 0 && (
+                        <p className="mt-2 text-xs text-gray-500">Cannot modify value after usage</p>
+                      )}
+                    </div>
+
+                    {/* Minimum Booking Value */}
+                    <div className="md:col-span-1">
+                      <label htmlFor="editMinBookingValue" className="block text-sm font-semibold text-gray-700 mb-3">Minimum Booking Value</label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                          <FaRupeeSign className="text-gray-400" />
+                        </div>
+                        <input
+                          type="number"
+                          name="minBookingValue"
+                          id="editMinBookingValue"
+                          value={formData.minBookingValue}
+                          onChange={handleInputChange}
+                          min="0"
+                          className="w-full pl-12 pr-4 py-3 rounded-xl border-2 border-gray-200 focus:border-orange-500 focus:outline-none transition-colors bg-gray-50 focus:bg-white"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Expiry Date */}
+                    <div className="md:col-span-1">
+                      <label htmlFor="editExpiryDate" className="block text-sm font-semibold text-gray-700 mb-3">Expiry Date *</label>
+                      <DatePicker
+                        selected={formData.expiryDate}
+                        onChange={handleDateChange}
+                        minDate={new Date()}
+                        className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-orange-500 focus:outline-none transition-colors bg-gray-50 focus:bg-white"
+                        required
+                      />
+                    </div>
+
+                    {/* Usage Limit */}
+                    <div className="md:col-span-1">
+                      <label htmlFor="editUsageLimit" className="block text-sm font-semibold text-gray-700 mb-3">Usage Limit</label>
+                      <input
+                        type="number"
+                        name="usageLimit"
+                        id="editUsageLimit"
+                        value={formData.usageLimit}
+                        onChange={handleInputChange}
+                        min="1"
+                        placeholder="Leave empty for unlimited"
+                        className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-orange-500 focus:outline-none transition-colors bg-gray-50 focus:bg-white"
+                      />
+                    </div>
+
+                    {/* Assign to User */}
+                    <div className="md:col-span-2">
+                      <label htmlFor="editAssignedTo" className="block text-sm font-semibold text-gray-700 mb-3">Assign to User (optional)</label>
+                      <select
+                        name="assignedTo"
+                        id="editAssignedTo"
+                        value={formData.assignedTo}
+                        onChange={handleInputChange}
+                        disabled={currentCoupon.usedBy.length > 0 || formData.isGlobal || formData.isFirstBooking}
+                        className={`w-full px-4 py-3 rounded-xl border-2 transition-colors ${
+                          currentCoupon.usedBy.length > 0 || formData.isGlobal || formData.isFirstBooking
+                            ? 'border-gray-200 bg-gray-100 text-gray-500'
+                            : 'border-gray-200 focus:border-orange-500 focus:outline-none bg-gray-50 focus:bg-white'
+                        }`}
+                      >
+                        <option value="">Select a user</option>
+                        {users.map(user => (
+                          <option key={user._id} value={user._id}>
+                            {user.firstName} {user.lastName} ({user.email})
+                          </option>
+                        ))}
+                      </select>
+                      <p className="mt-2 text-xs text-gray-500">
+                        {currentCoupon.usedBy.length > 0 
+                          ? "Cannot modify after usage" 
+                          : formData.isGlobal || formData.isFirstBooking
+                            ? "Cannot assign to specific user when coupon is global or first-booking"
+                            : "Leave empty to make available to all users"}
+                      </p>
+                    </div>
+
+                    {/* Checkboxes */}
+                    <div className="md:col-span-2 space-y-4">
+                      <div className={`flex items-center p-4 rounded-xl border ${
+                        currentCoupon.usedBy.length > 0 || formData.isFirstBooking
+                          ? 'bg-gray-50 border-gray-200'
+                          : 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-200'
+                      }`}>
+                        <input
+                          id="editIsGlobal"
+                          name="isGlobal"
+                          type="checkbox"
+                          checked={formData.isGlobal}
+                          onChange={handleInputChange}
+                          disabled={currentCoupon.usedBy.length > 0 || formData.isFirstBooking}
+                          className="w-5 h-5 text-green-600 border-2 border-green-300 rounded focus:ring-green-500 focus:ring-2"
+                        />
+                        <label htmlFor="editIsGlobal" className={`ml-3 text-sm font-medium ${
+                          currentCoupon.usedBy.length > 0 || formData.isFirstBooking
+                            ? 'text-gray-500'
+                            : 'text-green-800'
+                        }`}>
+                          Global Coupon
+                        </label>
+                      </div>
+
+                      <div className={`flex items-center p-4 rounded-xl border ${
+                        currentCoupon.usedBy.length > 0 || formData.isGlobal
+                          ? 'bg-gray-50 border-gray-200'
+                          : 'bg-gradient-to-r from-purple-50 to-indigo-50 border-purple-200'
+                      }`}>
+                        <input
+                          id="editIsFirstBooking"
+                          name="isFirstBooking"
+                          type="checkbox"
+                          checked={formData.isFirstBooking}
+                          onChange={handleInputChange}
+                          disabled={currentCoupon.usedBy.length > 0 || formData.isGlobal}
+                          className="w-5 h-5 text-purple-600 border-2 border-purple-300 rounded focus:ring-purple-500 focus:ring-2"
+                        />
+                        <label htmlFor="editIsFirstBooking" className={`ml-3 text-sm font-medium ${
+                          currentCoupon.usedBy.length > 0 || formData.isGlobal
+                            ? 'text-gray-500'
+                            : 'text-purple-800'
+                        }`}>
+                          First Booking Only
+                        </label>
+                      </div>
+
+                      <div className="flex items-center p-4 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl border border-blue-200">
+                        <input
+                          id="editIsActive"
+                          name="isActive"
+                          type="checkbox"
+                          checked={formData.isActive}
+                          onChange={handleInputChange}
+                          className="w-5 h-5 text-blue-600 border-2 border-blue-300 rounded focus:ring-blue-500 focus:ring-2"
+                        />
+                        <label htmlFor="editIsActive" className="ml-3 text-sm font-medium text-blue-800">
+                          Active (coupon can be used)
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </form>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="bg-gray-50 px-8 py-6 rounded-b-3xl flex justify-end space-x-4">
                 <button
                   type="button"
                   onClick={() => {
                     setShowEditModal(false);
                     resetForm();
                   }}
-                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                  className="px-8 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 focus:outline-none focus:ring-4 focus:ring-gray-200 transition-all font-semibold"
                 >
                   Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleEditCoupon}
+                  className="px-8 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl hover:from-orange-600 hover:to-red-600 focus:outline-none focus:ring-4 focus:ring-orange-300 transition-all font-semibold shadow-lg"
+                >
+                  Save Changes
                 </button>
               </div>
             </div>

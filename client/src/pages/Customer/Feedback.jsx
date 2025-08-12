@@ -1,308 +1,535 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../store/auth';
-import { useNavigate } from 'react-router-dom';
-import { Star, Edit, Trash2, ChevronLeft, Clock, CheckCircle, XCircle } from 'lucide-react';
-import { toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { useNavigate, useParams } from 'react-router-dom';
+import { Rating } from '@mui/material';
+import StarIcon from '@mui/icons-material/Star';
+import {
+  Container,
+  Typography,
+  Box,
+  Card,
+  CardContent,
+  Grid,
+  TextField,
+  Button,
+  CircularProgress,
+  Alert,
+  Divider,
+  Chip,
+  Paper,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
+} from '@mui/material';
+import { format } from 'date-fns';
 
-const CustomerFeedbackPage = () => {
-  const { user, token, API, showToast } = useAuth();
+const FeedbackManagement = () => {
+  const { token, user, API, showToast, isAuthenticated, logoutUser } = useAuth();
   const navigate = useNavigate();
-  
+  const { feedbackId } = useParams();
+
+  // State management
   const [feedbacks, setFeedbacks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [editingFeedback, setEditingFeedback] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
-    rating: 5,
-    comment: ''
+    providerRating: 5,
+    providerComment: '',
+    serviceRating: 5,
+    serviceComment: ''
   });
-  const [activeTab, setActiveTab] = useState('all');
+  const [selectedBooking, setSelectedBooking] = useState(null);
+  const [bookingsForFeedback, setBookingsForFeedback] = useState([]);
+  const [openDialog, setOpenDialog] = useState(false);
 
-  // Fetch all feedbacks
-  useEffect(() => {
-    const fetchFeedbacks = async () => {
-      try {
-        setLoading(true);
-        const response = await fetch(`${API}/feedback/my-feedbacks`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        
-        if (!response.ok) throw new Error('Failed to fetch feedbacks');
-        
-        const data = await response.json();
-        setFeedbacks(data.feedbacks || []);
-      } catch (error) {
-        showToast(error.message, 'error');
-      } finally {
-        setLoading(false);
+  // Fetch customer's feedbacks
+  const fetchFeedbacks = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(`${API}/feedback/my-feedbacks`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          logoutUser();
+          return;
+        }
+        throw new Error('Failed to fetch feedbacks');
       }
-    };
 
-    fetchFeedbacks();
-  }, [API, token, showToast]);
+      const data = await response.json();
+      setFeedbacks(data.data);
+    } catch (err) {
+      setError(err.message);
+      showToast(err.message, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  // Handle feedback submission
+  // Fetch single feedback (when viewing/editing)
+  const fetchFeedback = async (id) => {
+    try {
+      setLoading(true);
+      const response = await fetch(`${API}/feedback/${id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          logoutUser();
+          return;
+        }
+        throw new Error('Failed to fetch feedback');
+      }
+
+      const data = await response.json();
+      setEditingFeedback(data.data);
+      
+      // Pre-fill form for editing
+      setFormData({
+        providerRating: data.data.providerFeedback.rating,
+        providerComment: data.data.providerFeedback.comment || '',
+        serviceRating: data.data.serviceFeedback.rating,
+        serviceComment: data.data.serviceFeedback.comment || ''
+      });
+    } catch (err) {
+      setError(err.message);
+      showToast(err.message, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch bookings eligible for feedback
+  const fetchEligibleBookings = async () => {
+    try {
+      const response = await fetch(`${API}/booking/{bookingId}/status?completed`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch eligible bookings');
+      }
+
+      const data = await response.json();
+      setBookingsForFeedback(data.data);
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  // Handle form input changes
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  // Handle rating changes
+  const handleRatingChange = (name, value) => {
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  // Submit new feedback
   const handleSubmitFeedback = async (e) => {
     e.preventDefault();
+    setIsSubmitting(true);
+
     try {
-      const response = await fetch(`${API}/feedback/`, {
+      const response = await fetch(`${API}/feedback`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          bookingId: editingFeedback?.booking?._id,
-          rating: formData.rating,
-          comment: formData.comment
+          bookingId: selectedBooking._id,
+          ...formData
         })
       });
 
-      if (!response.ok) throw new Error('Failed to submit feedback');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to submit feedback');
+      }
 
       const data = await response.json();
-      showToast('Feedback submitted successfully!', 'success');
-      
-      // Update local state
-      if (editingFeedback) {
-        setFeedbacks(feedbacks.map(f => 
-          f._id === editingFeedback._id ? data.feedback : f
-        ));
-      } else {
-        setFeedbacks([data.feedback, ...feedbacks]);
-      }
-      
-      resetForm();
-    } catch (error) {
-      showToast(error.message, 'error');
+      showToast('Feedback submitted successfully!');
+      setOpenDialog(false);
+      fetchFeedbacks();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  // Handle edit feedback
-  const handleEditFeedback = (feedback) => {
-    setEditingFeedback(feedback);
-    setFormData({
-      rating: feedback.rating,
-      comment: feedback.comment || ''
-    });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+  // Update existing feedback
+  const handleUpdateFeedback = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      const response = await fetch(`${API}/feedback/${editingFeedback._id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(formData)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to update feedback');
+      }
+
+      const data = await response.json();
+      showToast('Feedback updated successfully!');
+      navigate('/customer/feedbacks');
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  // Reset form
-  const resetForm = () => {
-    setEditingFeedback(null);
-    setFormData({
-      rating: 5,
-      comment: ''
-    });
-  };
+  // Initialize component
+  useEffect(() => {
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
 
-  // Filter feedbacks by status
-  const filteredFeedbacks = feedbacks.filter(feedback => {
-    if (activeTab === 'all') return true;
-    if (activeTab === 'edited') return feedback.isEdited;
-    return true;
-  });
+    if (feedbackId) {
+      fetchFeedback(feedbackId);
+    } else {
+      fetchFeedbacks();
+      fetchEligibleBookings();
+    }
+  }, [feedbackId, isAuthenticated]);
 
-  // Render star rating
-  const renderStars = (rating) => {
-    return (
-      <div className="flex items-center">
-        {[...Array(5)].map((_, i) => (
-          <Star 
-            key={i}
-            className={`w-5 h-5 ${i < rating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`}
-          />
-        ))}
-      </div>
-    );
-  };
-
+  // Render loading state
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-      </div>
+      <Container maxWidth="lg" sx={{ mt: 4, display: 'flex', justifyContent: 'center' }}>
+        <CircularProgress />
+      </Container>
+    );
+  }
+
+  // Render error state
+  if (error) {
+    return (
+      <Container maxWidth="lg" sx={{ mt: 4 }}>
+        <Alert severity="error">{error}</Alert>
+      </Container>
+    );
+  }
+
+  // Feedback form component
+  const FeedbackForm = ({ isEdit = false }) => (
+    <Box component="form" onSubmit={isEdit ? handleUpdateFeedback : handleSubmitFeedback}>
+      <Grid container spacing={3}>
+        <Grid item xs={12}>
+          <Typography variant="h6" gutterBottom>
+            Provider Feedback
+          </Typography>
+          <Box mb={2}>
+            <Typography component="legend">Rating</Typography>
+            <Rating
+              name="providerRating"
+              value={Number(formData.providerRating)}
+              precision={0.5}
+              onChange={(event, newValue) => handleRatingChange('providerRating', newValue)}
+              icon={<StarIcon fontSize="inherit" />}
+              emptyIcon={<StarIcon fontSize="inherit" style={{ opacity: 0.55 }} />}
+            />
+          </Box>
+          <TextField
+            fullWidth
+            label="Comments about the provider (optional)"
+            name="providerComment"
+            value={formData.providerComment}
+            onChange={handleInputChange}
+            multiline
+            rows={3}
+            variant="outlined"
+          />
+        </Grid>
+
+        <Grid item xs={12}>
+          <Typography variant="h6" gutterBottom>
+            Service Feedback
+          </Typography>
+          <Box mb={2}>
+            <Typography component="legend">Rating</Typography>
+            <Rating
+              name="serviceRating"
+              value={Number(formData.serviceRating)}
+              precision={0.5}
+              onChange={(event, newValue) => handleRatingChange('serviceRating', newValue)}
+              icon={<StarIcon fontSize="inherit" />}
+              emptyIcon={<StarIcon fontSize="inherit" style={{ opacity: 0.55 }} />}
+            />
+          </Box>
+          <TextField
+            fullWidth
+            label="Comments about the service (optional)"
+            name="serviceComment"
+            value={formData.serviceComment}
+            onChange={handleInputChange}
+            multiline
+            rows={3}
+            variant="outlined"
+          />
+        </Grid>
+
+        <Grid item xs={12}>
+          <Button
+            type="submit"
+            variant="contained"
+            color="primary"
+            disabled={isSubmitting}
+            sx={{ mr: 2 }}
+          >
+            {isSubmitting ? <CircularProgress size={24} /> : isEdit ? 'Update Feedback' : 'Submit Feedback'}
+          </Button>
+          <Button
+            variant="outlined"
+            onClick={() => isEdit ? navigate('/customer/feedbacks') : setOpenDialog(false)}
+          >
+            Cancel
+          </Button>
+        </Grid>
+      </Grid>
+    </Box>
+  );
+
+  // Feedback card component
+  const FeedbackCard = ({ feedback }) => (
+    <Card sx={{ mb: 3 }}>
+      <CardContent>
+        <Box display="flex" justifyContent="space-between" mb={2}>
+          <Typography variant="h6">
+            {feedback.serviceFeedback.service?.title || 'Service'}
+          </Typography>
+          <Chip
+            label={format(new Date(feedback.createdAt), 'MMM dd, yyyy')}
+            size="small"
+            variant="outlined"
+          />
+        </Box>
+
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={6}>
+            <Typography variant="subtitle2">Provider Rating</Typography>
+            <Box display="flex" alignItems="center">
+              <Rating
+                value={feedback.providerFeedback.rating}
+                precision={0.5}
+                readOnly
+                icon={<StarIcon fontSize="inherit" />}
+                emptyIcon={<StarIcon fontSize="inherit" style={{ opacity: 0.55 }} />}
+              />
+              <Typography variant="body2" sx={{ ml: 1 }}>
+                {feedback.providerFeedback.rating.toFixed(1)}
+              </Typography>
+            </Box>
+            {feedback.providerFeedback.comment && (
+              <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic' }}>
+                "{feedback.providerFeedback.comment}"
+              </Typography>
+            )}
+            {feedback.providerFeedback.isEdited && (
+              <Chip label="Edited" size="small" sx={{ mt: 1 }} />
+            )}
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <Typography variant="subtitle2">Service Rating</Typography>
+            <Box display="flex" alignItems="center">
+              <Rating
+                value={feedback.serviceFeedback.rating}
+                precision={0.5}
+                readOnly
+                icon={<StarIcon fontSize="inherit" />}
+                emptyIcon={<StarIcon fontSize="inherit" style={{ opacity: 0.55 }} />}
+              />
+              <Typography variant="body2" sx={{ ml: 1 }}>
+                {feedback.serviceFeedback.rating.toFixed(1)}
+              </Typography>
+            </Box>
+            {feedback.serviceFeedback.comment && (
+              <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic' }}>
+                "{feedback.serviceFeedback.comment}"
+              </Typography>
+            )}
+            {feedback.serviceFeedback.isEdited && (
+              <Chip label="Edited" size="small" sx={{ mt: 1 }} />
+            )}
+            {!feedback.serviceFeedback.isApproved && (
+              <Chip label="Pending Approval" color="warning" size="small" sx={{ mt: 1 }} />
+            )}
+          </Grid>
+        </Grid>
+
+        <Box mt={2} display="flex" justifyContent="flex-end">
+          <Button
+            size="small"
+            variant="outlined"
+            onClick={() => navigate(`/customer/feedbacks/${feedback._id}`)}
+          >
+            View Details
+          </Button>
+        </Box>
+      </CardContent>
+    </Card>
+  );
+
+  // Booking selection dialog
+  const BookingSelectionDialog = () => (
+    <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
+      <DialogTitle>Select Booking to Provide Feedback</DialogTitle>
+      <DialogContent>
+        {bookingsForFeedback.length === 0 ? (
+          <Typography>No completed bookings available for feedback</Typography>
+        ) : (
+          <Paper sx={{ p: 2 }}>
+            {bookingsForFeedback.map(booking => (
+              <Box 
+                key={booking._id} 
+                sx={{ 
+                  p: 2, 
+                  mb: 1, 
+                  border: '1px solid', 
+                  borderColor: selectedBooking?._id === booking._id ? 'primary.main' : 'divider',
+                  borderRadius: 1,
+                  cursor: 'pointer',
+                  '&:hover': {
+                    backgroundColor: 'action.hover'
+                  }
+                }}
+                onClick={() => setSelectedBooking(booking)}
+              >
+                <Typography variant="subtitle1">
+                  {booking.services[0]?.service?.title || 'Service'}
+                </Typography>
+                <Typography variant="body2">
+                  {format(new Date(booking.date), 'MMM dd, yyyy')} at {booking.time}
+                </Typography>
+              </Box>
+            ))}
+          </Paper>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
+        <Button 
+          variant="contained" 
+          onClick={() => setOpenDialog(false)} 
+          disabled={!selectedBooking}
+        >
+          Continue
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+
+  // Render based on route
+  if (feedbackId && editingFeedback) {
+    return (
+      <Container maxWidth="md" sx={{ mt: 4 }}>
+        <Box mb={4}>
+          <Typography variant="h4" gutterBottom>
+            Edit Feedback
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            You can update your feedback for this service
+          </Typography>
+        </Box>
+        
+        <FeedbackForm isEdit />
+      </Container>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <button 
-            onClick={() => navigate(-1)} 
-            className="flex items-center text-blue-600 hover:text-blue-800 mb-4"
+    <Container maxWidth="lg" sx={{ mt: 4 }}>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+        <Typography variant="h4">My Feedbacks</Typography>
+        <Button 
+          variant="contained" 
+          onClick={() => {
+            setSelectedBooking(null);
+            setOpenDialog(true);
+          }}
+          disabled={bookingsForFeedback.length === 0}
+        >
+          Add New Feedback
+        </Button>
+      </Box>
+
+      {feedbacks.length === 0 ? (
+        <Paper sx={{ p: 4, textAlign: 'center' }}>
+          <Typography variant="h6" gutterBottom>
+            No Feedbacks Yet
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            You haven't submitted any feedbacks for your completed bookings.
+          </Typography>
+          <Button 
+            variant="outlined" 
+            onClick={() => setOpenDialog(true)}
+            disabled={bookingsForFeedback.length === 0}
           >
-            <ChevronLeft className="w-5 h-5 mr-1" />
-            Back
-          </button>
-          <h1 className="text-3xl font-bold text-gray-900">My Feedback</h1>
-          <p className="text-gray-600 mt-2">
-            {feedbacks.length} {feedbacks.length === 1 ? 'review' : 'reviews'}
-          </p>
-        </div>
+            Submit Your First Feedback
+          </Button>
+        </Paper>
+      ) : (
+        <>
+          {feedbacks.map(feedback => (
+            <FeedbackCard key={feedback._id} feedback={feedback} />
+          ))}
+        </>
+      )}
 
-        {/* Feedback Form */}
-        <div className="bg-white rounded-xl shadow-md p-6 mb-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">
-            {editingFeedback ? 'Edit Your Feedback' : 'Submit New Feedback'}
-          </h2>
-          
-          <form onSubmit={handleSubmitFeedback}>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Rating
-              </label>
-              <div className="flex items-center space-x-1">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <button
-                    key={star}
-                    type="button"
-                    onClick={() => setFormData({...formData, rating: star})}
-                    className="focus:outline-none"
-                  >
-                    <Star
-                      className={`w-8 h-8 ${star <= formData.rating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`}
-                    />
-                  </button>
-                ))}
-              </div>
-            </div>
+      <BookingSelectionDialog />
 
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Comments
-              </label>
-              <textarea
-                value={formData.comment}
-                onChange={(e) => setFormData({...formData, comment: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                rows="4"
-                placeholder="Share your experience..."
-                maxLength="500"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                {formData.comment.length}/500 characters
-              </p>
-            </div>
-
-            <div className="flex justify-end space-x-3">
-              {editingFeedback && (
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-              )}
-              <button
-                type="submit"
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-              >
-                {editingFeedback ? 'Update Feedback' : 'Submit Feedback'}
-              </button>
-            </div>
-          </form>
-        </div>
-
-        {/* Feedback List */}
-        <div className="bg-white rounded-xl shadow-md overflow-hidden">
-          {/* Tabs */}
-          <div className="border-b border-gray-200">
-            <nav className="flex -mb-px">
-              <button
-                onClick={() => setActiveTab('all')}
-                className={`py-4 px-6 text-center border-b-2 font-medium text-sm ${activeTab === 'all' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
-              >
-                All Feedback
-              </button>
-              <button
-                onClick={() => setActiveTab('edited')}
-                className={`py-4 px-6 text-center border-b-2 font-medium text-sm ${activeTab === 'edited' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
-              >
-                Edited
-              </button>
-            </nav>
-          </div>
-
-          {/* Feedback Items */}
-          <div className="divide-y divide-gray-200">
-            {filteredFeedbacks.length === 0 ? (
-              <div className="p-8 text-center">
-                <p className="text-gray-500">
-                  {activeTab === 'all' 
-                    ? "You haven't submitted any feedback yet."
-                    : "You haven't edited any feedback yet."}
-                </p>
-              </div>
-            ) : (
-              filteredFeedbacks.map((feedback) => (
-                <div key={feedback._id} className="p-6">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="text-lg font-medium text-gray-900">
-                        {feedback.service?.title || 'Service'}
-                      </h3>
-                      <p className="text-sm text-gray-500">
-                        {new Date(feedback.createdAt).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      {feedback.isEdited && (
-                        <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                          Edited
-                        </span>
-                      )}
-                      <button
-                        onClick={() => handleEditFeedback(feedback)}
-                        className="text-blue-600 hover:text-blue-800 p-1"
-                        title="Edit feedback"
-                      >
-                        <Edit className="w-5 h-5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="mt-4">
-                    {renderStars(feedback.rating)}
-                    {feedback.comment && (
-                      <p className="mt-2 text-gray-700">
-                        {feedback.comment}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="mt-4 flex items-center text-sm text-gray-500">
-                    <div className="flex items-center mr-4">
-                      <Clock className="w-4 h-4 mr-1" />
-                      <span>
-                        {new Date(feedback.booking?.date).toLocaleDateString()}
-                      </span>
-                    </div>
-                    <div className="flex items-center">
-                      {feedback.booking?.status === 'completed' ? (
-                        <CheckCircle className="w-4 h-4 mr-1 text-green-500" />
-                      ) : (
-                        <XCircle className="w-4 h-4 mr-1 text-red-500" />
-                      )}
-                      <span className="capitalize">
-                        {feedback.booking?.status}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
+      {openDialog && selectedBooking && (
+        <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
+          <DialogTitle>Submit Feedback</DialogTitle>
+          <DialogContent>
+            <Box mb={3}>
+              <Typography variant="subtitle1">
+                Booking: {selectedBooking.services[0]?.service?.title || 'Service'}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {format(new Date(selectedBooking.date), 'MMM dd, yyyy')} at {selectedBooking.time}
+              </Typography>
+            </Box>
+            <FeedbackForm />
+          </DialogContent>
+        </Dialog>
+      )}
+    </Container>
   );
 };
 
-export default CustomerFeedbackPage;
+export default FeedbackManagement;

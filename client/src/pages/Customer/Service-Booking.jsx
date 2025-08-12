@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../store/auth';
-import { 
-  Calendar, 
-  Clock, 
-  MapPin, 
-  User, 
-  Phone, 
-  DollarSign, 
-  CheckCircle, 
-  XCircle, 
+import {
+  Calendar,
+  Clock,
+  MapPin,
+  User,
+  Phone,
+  DollarSign,
+  CheckCircle,
+  XCircle,
   AlertCircle,
   Eye,
   Filter,
@@ -51,7 +51,7 @@ const ServiceBooking = () => {
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setBookings(data.data || []);
@@ -73,7 +73,7 @@ const ServiceBooking = () => {
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setSelectedBooking(data.data);
@@ -127,7 +127,7 @@ const ServiceBooking = () => {
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (response.ok) {
         showToast('Booking cancelled successfully');
         fetchBookings();
@@ -190,11 +190,10 @@ const ServiceBooking = () => {
               {getStatusIcon(booking.status)}
             </div>
             <div>
-              <p className="text-sm text-gray-500">Booking ID: {booking._id.slice(-12)}</p>
-              <p className="font-medium text-gray-900">{formatDate(booking.date)} • {formatTime(booking.time)}</p>
+              <p className="text-sm text-gray-500">Booking ID: {booking?._id?.slice(-12)}</p>              <p className="font-medium text-gray-900">{formatDate(booking.date)} • {formatTime(booking.time)}</p>
             </div>
           </div>
-          <button 
+          <button
             onClick={() => toggleBookingExpand(booking._id)}
             className="text-gray-500 hover:text-gray-700"
           >
@@ -210,9 +209,9 @@ const ServiceBooking = () => {
           <div className="flex mb-4">
             <div className="w-16 h-16 bg-gray-100 rounded-md flex items-center justify-center mr-4">
               {booking.service?.image ? (
-                <img 
-                  src={booking.service.image} 
-                  alt={booking.service.title} 
+                <img
+                  src={booking.service.image}
+                  alt={booking.service.title}
                   className="w-full h-full object-cover rounded-md"
                 />
               ) : (
@@ -244,40 +243,35 @@ const ServiceBooking = () => {
             <div className="relative pt-1">
               <div className="flex items-center justify-between">
                 <div className="flex flex-col items-center">
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                    ['pending', 'accepted', 'completed', 'cancelled'].includes(booking.status) ? 
-                    'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'
-                  }`}>
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center ${['pending', 'accepted', 'completed', 'cancelled'].includes(booking.status) ?
+                      'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'
+                    }`}>
                     <CheckCircle className="w-4 h-4" />
                   </div>
                   <span className="text-xs mt-1 text-gray-500">Booked</span>
                 </div>
                 <div className="flex-1 h-1 mx-2 bg-gray-200">
-                  <div className={`h-1 ${
-                    ['accepted', 'completed', 'cancelled'].includes(booking.status) ? 
-                    'bg-green-500' : 'bg-gray-200'
-                  }`} style={{ width: '100%' }}></div>
+                  <div className={`h-1 ${['accepted', 'completed', 'cancelled'].includes(booking.status) ?
+                      'bg-green-500' : 'bg-gray-200'
+                    }`} style={{ width: '100%' }}></div>
                 </div>
                 <div className="flex flex-col items-center">
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                    ['accepted', 'completed', 'cancelled'].includes(booking.status) ? 
-                    'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'
-                  }`}>
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center ${['accepted', 'completed', 'cancelled'].includes(booking.status) ?
+                      'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'
+                    }`}>
                     <User className="w-4 h-4" />
                   </div>
                   <span className="text-xs mt-1 text-gray-500">Confirmed</span>
                 </div>
                 <div className="flex-1 h-1 mx-2 bg-gray-200">
-                  <div className={`h-1 ${
-                    ['completed'].includes(booking.status) ? 
-                    'bg-green-500' : 'bg-gray-200'
-                  }`} style={{ width: '100%' }}></div>
+                  <div className={`h-1 ${['completed'].includes(booking.status) ?
+                      'bg-green-500' : 'bg-gray-200'
+                    }`} style={{ width: '100%' }}></div>
                 </div>
                 <div className="flex flex-col items-center">
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                    ['completed'].includes(booking.status) ? 
-                    'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'
-                  }`}>
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center ${['completed'].includes(booking.status) ?
+                      'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'
+                    }`}>
                     <Truck className="w-4 h-4" />
                   </div>
                   <span className="text-xs mt-1 text-gray-500">Service Done</span>
@@ -344,9 +338,9 @@ const ServiceBooking = () => {
               <div className="flex mb-3">
                 <div className="w-16 h-16 bg-gray-100 rounded-md flex items-center justify-center mr-4">
                   {booking.service?.image ? (
-                    <img 
-                      src={booking.service.image} 
-                      alt={booking.service.title} 
+                    <img
+                      src={booking.service.image}
+                      alt={booking.service.title}
                       className="w-full h-full object-cover rounded-md"
                     />
                   ) : (
@@ -562,8 +556,8 @@ const ServiceBooking = () => {
               </div>
               <h3 className="text-lg font-medium text-gray-900 mb-1">No bookings found</h3>
               <p className="text-sm text-gray-500">
-                {statusFilter !== 'all' || searchTerm 
-                  ? 'Try adjusting your filters' 
+                {statusFilter !== 'all' || searchTerm
+                  ? 'Try adjusting your filters'
                   : 'You haven\'t made any bookings yet'}
               </p>
             </div>

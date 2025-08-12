@@ -14,14 +14,15 @@ import {
     AlertCircle,
     UserCheck,
     CreditCard,
-    Wallet,
-    Package,
     ChevronDown,
     ChevronUp,
     BarChart2,
     DollarSign,
     Users,
-    Briefcase
+    Briefcase,
+    Edit,
+    UserPlus,
+    RefreshCw
 } from 'lucide-react';
 
 const AdminBookingsView = () => {
@@ -30,9 +31,6 @@ const AdminBookingsView = () => {
     const [selectedBooking, setSelectedBooking] = useState(null);
     const [showModal, setShowModal] = useState(false);
     const [deleteConfirm, setDeleteConfirm] = useState(null);
-    const [groupedBookings, setGroupedBookings] = useState({});
-    const [expandedGroups, setExpandedGroups] = useState({});
-    const [providerDetails, setProviderDetails] = useState({});
     const [stats, setStats] = useState({
         total: 0,
         pending: 0,
@@ -41,6 +39,9 @@ const AdminBookingsView = () => {
         cancelled: 0,
         revenue: 0
     });
+    const [providers, setProviders] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [initialLoad, setInitialLoad] = useState(true);
 
     // Filter states
     const [filters, setFilters] = useState({
@@ -84,20 +85,10 @@ const AdminBookingsView = () => {
         }
     };
 
-    // Toggle group expansion
-    const toggleGroup = (transactionId) => {
-        setExpandedGroups(prev => ({
-            ...prev,
-            [transactionId]: !prev[transactionId]
-        }));
-    };
-
-    // Fetch provider details
-    const fetchProviderDetails = async (providerId) => {
+    // Fetch all providers
+    const fetchProviders = async () => {
         try {
-            if (!providerId || providerDetails[providerId]) return;
-
-            const response = await fetch(`${API}/admin/providers/${providerId}`, {
+            const response = await fetch(`${API}/admin/providers`, {
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
@@ -105,48 +96,15 @@ const AdminBookingsView = () => {
             });
 
             if (!response.ok) {
-                throw new Error('Failed to fetch provider details');
+                throw new Error('Failed to fetch providers');
             }
 
             const data = await response.json();
-            setProviderDetails(prev => ({
-                ...prev,
-                [providerId]: data.provider || data.data // Handle different response structures
-            }));
+            setProviders(data.providers || data.data || []);
         } catch (error) {
-            console.error('Error fetching provider details:', error);
-            showToast('Failed to fetch provider details', 'error');
+            console.error('Error fetching providers:', error);
+            showToast('Failed to fetch providers', 'error');
         }
-    };
-
-    // Group bookings by transaction
-    const groupBookingsByTransaction = (bookings) => {
-        const grouped = {};
-
-        bookings.forEach(booking => {
-            const transactionId = booking.transactionId || 'individual';
-
-            if (!grouped[transactionId]) {
-                grouped[transactionId] = {
-                    transactionId,
-                    paymentMethod: booking.paymentMethod,
-                    totalAmount: 0,
-                    bookings: [],
-                    createdAt: booking.createdAt,
-                    customer: booking.customer
-                };
-            }
-
-            grouped[transactionId].bookings.push(booking);
-            grouped[transactionId].totalAmount += booking.totalAmount || 0;
-
-            // Fetch provider details for each booking
-            if (booking.provider?._id) {
-                fetchProviderDetails(booking.provider._id);
-            }
-        });
-
-        return grouped;
     };
 
     // Calculate stats from bookings
@@ -161,8 +119,10 @@ const AdminBookingsView = () => {
         };
 
         bookings.forEach(booking => {
-            stats[booking.status] += 1;
-            if (booking.status === 'completed') {
+            if (booking.status) {
+                stats[booking.status] += 1;
+            }
+            if (booking.status === 'completed' || booking.status === 'accepted') {
                 stats.revenue += booking.totalAmount || 0;
             }
         });
@@ -173,15 +133,17 @@ const AdminBookingsView = () => {
     // Fetch bookings
     const fetchBookings = async () => {
         try {
+            setLoading(true);
             const queryParams = new URLSearchParams();
 
+            // Only add filters that have values
             Object.entries(filters).forEach(([key, value]) => {
-                if (value && key !== 'search') {
+                if (value && value.trim() !== '') {
                     queryParams.append(key, value);
                 }
             });
 
-            const response = await fetch(`${API}/booking/admin?${queryParams}`, {
+            const response = await fetch(`${API}/booking/admin/bookings?${queryParams}`, {
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
@@ -193,43 +155,47 @@ const AdminBookingsView = () => {
             }
 
             const data = await response.json();
-            let filteredBookings = data.data || data.bookings || [];
+            let filteredBookings = Array.isArray(data.data) ? data.data : 
+                                Array.isArray(data.bookings) ? data.bookings : [];
 
-            // Apply search filter
-            if (filters.search) {
+            // Apply search filter if it exists
+            if (filters.search && filters.search.trim() !== '') {
                 const searchTerm = filters.search.toLowerCase();
-                filteredBookings = filteredBookings.filter(booking =>
-                    (booking.customer?.name?.toLowerCase().includes(searchTerm)) ||
-                    (booking.provider?.name?.toLowerCase().includes(searchTerm)) ||
-                    (booking.service?.title?.toLowerCase().includes(searchTerm)) ||
-                    (booking._id.toLowerCase().includes(searchTerm)) ||
-                    (booking.customer?.email?.toLowerCase().includes(searchTerm)) ||
-                    (booking.provider?.email?.toLowerCase().includes(searchTerm)) ||
-                    (booking.transactionId && booking.transactionId.toLowerCase().includes(searchTerm))
-                );
+                filteredBookings = filteredBookings.filter(booking => {
+                    const bookingId = booking._id || '';
+                    const customerName = booking.customer?.name || '';
+                    const providerName = booking.provider?.businessName || booking.provider?.name || '';
+                    const serviceTitle = booking.service?.title || '';
+                    const customerEmail = booking.customer?.email || '';
+                    const providerEmail = booking.provider?.email || '';
+                    
+                    return (
+                        customerName.toLowerCase().includes(searchTerm) ||
+                        providerName.toLowerCase().includes(searchTerm) ||
+                        serviceTitle.toLowerCase().includes(searchTerm) ||
+                        bookingId.toLowerCase().includes(searchTerm) ||
+                        customerEmail.toLowerCase().includes(searchTerm) ||
+                        providerEmail.toLowerCase().includes(searchTerm)
+                    );
+                });
             }
 
             setBookings(filteredBookings);
             setStats(calculateStats(filteredBookings));
-            const grouped = groupBookingsByTransaction(filteredBookings);
-            setGroupedBookings(grouped);
-
-            // Initialize expanded state for all groups
-            const initialExpanded = {};
-            Object.keys(grouped).forEach(key => {
-                initialExpanded[key] = true;
-            });
-            setExpandedGroups(initialExpanded);
         } catch (error) {
             console.error('Error fetching bookings:', error);
             showToast('Failed to fetch bookings', 'error');
+        } finally {
+            setLoading(false);
+            if (initialLoad) setInitialLoad(false);
         }
     };
 
     // Fetch booking details
     const fetchBookingDetails = async (bookingId) => {
         try {
-            const response = await fetch(`${API}/booking/admin/${bookingId}`, {
+            setLoading(true);
+            const response = await fetch(`${API}/booking/bookings/${bookingId}`, {
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
@@ -243,22 +209,19 @@ const AdminBookingsView = () => {
             const data = await response.json();
             const bookingData = data.data || data.booking;
             setSelectedBooking(bookingData);
-
-            // Fetch provider details when opening modal
-            if (bookingData.provider?._id) {
-                await fetchProviderDetails(bookingData.provider._id);
-            }
-
             setShowModal(true);
         } catch (error) {
             console.error('Error fetching booking details:', error);
             showToast('Failed to fetch booking details', 'error');
+        } finally {
+            setLoading(false);
         }
     };
 
     // Delete booking
     const deleteBooking = async (bookingId) => {
         try {
+            setLoading(true);
             const response = await fetch(`${API}/booking/admin/${bookingId}`, {
                 method: 'DELETE',
                 headers: {
@@ -271,16 +234,106 @@ const AdminBookingsView = () => {
                 throw new Error('Failed to delete booking');
             }
 
-            showToast('Booking deleted successfully');
+            showToast('Booking deleted successfully', 'success');
             setDeleteConfirm(null);
             fetchBookings();
         } catch (error) {
             console.error('Error deleting booking:', error);
             showToast('Failed to delete booking', 'error');
+        } finally {
+            setLoading(false);
         }
     };
 
-    // Handle filter change
+    // Delete user booking
+    const deleteUserBooking = async (userId, bookingId) => {
+        try {
+            setLoading(true);
+            const response = await fetch(`${API}/booking/admin/user/${userId}/booking/${bookingId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to delete user booking');
+            }
+
+            showToast('User booking deleted successfully', 'success');
+            setDeleteConfirm(null);
+            fetchBookings();
+        } catch (error) {
+            console.error('Error deleting user booking:', error);
+            showToast('Failed to delete user booking', 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Assign provider to booking
+    const assignProvider = async (bookingId, providerId) => {
+        try {
+            setLoading(true);
+            const response = await fetch(`${API}/booking/admin/${bookingId}/assign`, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ providerId })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to assign provider');
+            }
+
+            showToast('Provider assigned successfully', 'success');
+            fetchBookings();
+            if (selectedBooking) {
+                fetchBookingDetails(selectedBooking._id);
+            }
+        } catch (error) {
+            console.error('Error assigning provider:', error);
+            showToast('Failed to assign provider', 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Reschedule booking
+    const rescheduleBooking = async (bookingId, newDate, newTime) => {
+        try {
+            setLoading(true);
+            const response = await fetch(`${API}/booking/admin/${bookingId}/reschedule`, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ date: newDate, time: newTime })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to reschedule booking');
+            }
+
+            showToast('Booking rescheduled successfully', 'success');
+            fetchBookings();
+            if (selectedBooking) {
+                fetchBookingDetails(selectedBooking._id);
+            }
+            setShowModal(false);
+        } catch (error) {
+            console.error('Error rescheduling booking:', error);
+            showToast('Failed to reschedule booking', 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Handle filter change with debounce
     const handleFilterChange = (key, value) => {
         setFilters(prev => ({
             ...prev,
@@ -311,10 +364,8 @@ const AdminBookingsView = () => {
             'Provider Name',
             'Provider Email',
             'Provider Phone',
-            'Provider Experience',
             'Service Title',
             'Service Category',
-            'Service Description',
             'Booking Date',
             'Booking Time',
             'Status',
@@ -323,56 +374,39 @@ const AdminBookingsView = () => {
             'Postal Code',
             'State',
             'Country',
-            'Transaction ID',
             'Payment Method',
             'Payment Status',
             'Coupon Applied',
             'Discount Amount',
             'Total Amount',
-            'Created At',
-            'Updated At'
+            'Created At'
         ];
 
-        // Helper function to format currency without symbol for CSV
-        const formatCurrencyForCSV = (amount) => {
-            if (!amount) return '0.00';
-            return new Intl.NumberFormat('en-IN', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
-            }).format(amount);
-        };
-
         const rows = bookings.map(booking => {
-            const providerExp = providerDetails[booking.provider?._id]?.experience || 'N/A';
-
             return [
-                booking._id,
+                booking._id || 'N/A',
                 booking.customer?.name || 'N/A',
                 booking.customer?.email || 'N/A',
                 booking.customer?.phone || 'N/A',
-                booking.provider?.name || 'N/A',
+                booking.provider?.businessName || booking.provider?.name || 'N/A',
                 booking.provider?.email || 'N/A',
                 booking.provider?.phone || 'N/A',
-                providerExp !== 'N/A' ? `${providerExp} ${providerExp === 1 ? 'year' : 'years'}` : 'N/A',
                 booking.service?.title || 'N/A',
                 booking.service?.category || 'N/A',
-                booking.service?.description || 'N/A',
                 formatDate(booking.date),
                 booking.time || 'N/A',
-                booking.status,
+                booking.status || 'N/A',
                 booking.address?.street || 'N/A',
                 booking.address?.city || 'N/A',
                 booking.address?.postalCode || 'N/A',
                 booking.address?.state || 'N/A',
                 booking.address?.country || 'N/A',
-                booking.transactionId || 'N/A',
                 booking.paymentMethod || 'N/A',
                 booking.paymentStatus || 'N/A',
                 booking.couponApplied || 'N/A',
-                booking.discountAmount ? formatCurrencyForCSV(booking.discountAmount) : 'N/A',
-                formatCurrencyForCSV(booking.totalAmount),
-                new Date(booking.createdAt).toLocaleString(),
-                booking.updatedAt ? new Date(booking.updatedAt).toLocaleString() : 'N/A'
+                booking.discountAmount || '0.00',
+                booking.totalAmount || '0.00',
+                booking.createdAt ? new Date(booking.createdAt).toLocaleString() : 'N/A'
             ];
         });
 
@@ -380,7 +414,6 @@ const AdminBookingsView = () => {
         const BOM = "\uFEFF";
         const csvContent = BOM + [headers, ...rows]
             .map(row => row.map(field => {
-                // Escape fields that might contain commas or quotes
                 if (typeof field === 'string') {
                     return `"${field.replace(/"/g, '""')}"`;
                 }
@@ -401,9 +434,21 @@ const AdminBookingsView = () => {
         showToast('Bookings exported successfully', 'success');
     };
 
+    // Debounce filter changes to avoid too many API calls
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (!initialLoad) {
+                fetchBookings();
+            }
+        }, 500);
+
+        return () => clearTimeout(timer);
+    }, [filters]);
+
     useEffect(() => {
         fetchBookings();
-    }, [filters]);
+        fetchProviders();
+    }, []);
 
     const formatDate = (date) => {
         if (!date) return 'N/A';
@@ -429,8 +474,9 @@ const AdminBookingsView = () => {
     const getPaymentMethodIcon = (method) => {
         switch (method?.toLowerCase()) {
             case 'credit card': return <CreditCard className="w-4 h-4 mr-1" />;
-            case 'wallet': return <Wallet className="w-4 h-4 mr-1" />;
-            case 'upi': return <Wallet className="w-4 h-4 mr-1" />;
+            case 'wallet': return <Briefcase className="w-4 h-4 mr-1" />;
+            case 'upi': return <Briefcase className="w-4 h-4 mr-1" />;
+            case 'cash': return <DollarSign className="w-4 h-4 mr-1" />;
             default: return <CreditCard className="w-4 h-4 mr-1" />;
         }
     };
@@ -442,7 +488,7 @@ const AdminBookingsView = () => {
                 <div className="bg-white rounded-xl shadow-sm border border-blue-100 p-6 mb-6">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                         <div>
-                            <h1 className="text-2xl font-bold text-blue-900">Bookings Management</h1>
+                            <h1 className="text-2xl font-bold text-blue-900">Admin Bookings Management</h1>
                             <p className="text-gray-600 mt-1">View and manage all system bookings</p>
                         </div>
                         <button
@@ -561,7 +607,12 @@ const AdminBookingsView = () => {
 
                 {/* Bookings Table */}
                 <div className="bg-white rounded-xl shadow-sm border border-blue-100 overflow-hidden">
-                    {bookings.length === 0 ? (
+                    {loading && initialLoad ? (
+                        <div className="text-center py-12">
+                            <RefreshCw className="w-8 h-8 text-blue-600 animate-spin mx-auto mb-4" />
+                            <p className="text-gray-600">Loading bookings...</p>
+                        </div>
+                    ) : bookings.length === 0 ? (
                         <div className="text-center py-12">
                             <Calendar className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                             <h3 className="text-lg font-medium text-gray-900 mb-2">No bookings found</h3>
@@ -596,140 +647,96 @@ const AdminBookingsView = () => {
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
-                                    {Object.values(groupedBookings).map((group) => (
-                                        <React.Fragment key={group.transactionId}>
-                                            {/* Group Header */}
-                                            {group.bookings.length > 1 && (
-                                                <tr
-                                                    className="bg-blue-50 cursor-pointer hover:bg-blue-100 transition-colors"
-                                                    onClick={() => toggleGroup(group.transactionId)}
-                                                >
-                                                    <td colSpan="7" className="px-4 py-3">
-                                                        <div className="flex justify-between items-center">
-                                                            <div className="flex items-center">
-                                                                {expandedGroups[group.transactionId] ? (
-                                                                    <ChevronUp className="w-4 h-4 mr-2 text-blue-600" />
-                                                                ) : (
-                                                                    <ChevronDown className="w-4 h-4 mr-2 text-blue-600" />
-                                                                )}
-                                                                <div className="flex items-center text-sm text-blue-900">
-                                                                    <Package className="w-4 h-4 mr-2" />
-                                                                    <span className="font-medium">Group Booking ({group.bookings.length} services)</span>
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex items-center space-x-4">
-                                                                <div className="flex items-center text-sm text-blue-900">
-                                                                    <CreditCard className="w-4 h-4 mr-2" />
-                                                                    <span className="font-medium">Transaction:</span>
-                                                                    <span className="ml-2 font-mono">{group.transactionId}</span>
-                                                                </div>
-                                                                <div className="flex items-center text-sm text-blue-900">
-                                                                    <span className="font-medium">Total:</span>
-                                                                    <span className="ml-2 font-bold">{formatCurrency(group.totalAmount)}</span>
-                                                                </div>
-                                                                <div className="flex items-center text-sm text-blue-900">
-                                                                    {getPaymentMethodIcon(group.paymentMethod)}
-                                                                    <span className="capitalize">{group.paymentMethod || 'N/A'}</span>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            )}
-
-                                            {/* Group Bookings */}
-                                            {expandedGroups[group.transactionId] && group.bookings.map((booking) => (
-                                                <tr key={booking._id} className="hover:bg-blue-50 transition-colors">
-                                                    <td className="px-4 py-4 whitespace-nowrap">
+                                    {bookings.map((booking) => (
+                                        <tr key={booking._id || Math.random().toString(36).substr(2, 9)} className="hover:bg-blue-50 transition-colors">
+                                            <td className="px-4 py-4 whitespace-nowrap">
+                                                <div className="text-sm font-medium text-blue-900">
+                                                    {booking._id ? booking._id.substring(booking._id.length - 8) : 'N/A'}
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-4 whitespace-nowrap">
+                                                <div className="flex items-center">
+                                                    <div className="flex-shrink-0 h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
+                                                        <User className="w-5 h-5 text-blue-600" />
+                                                    </div>
+                                                    <div className="ml-3">
                                                         <div className="text-sm font-medium text-blue-900">
-                                                            {booking._id.slice(-8)}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 py-4 whitespace-nowrap">
-                                                        <div className="flex items-center">
-                                                            <div className="flex-shrink-0 h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
-                                                                <User className="w-5 h-5 text-blue-600" />
-                                                            </div>
-                                                            <div className="ml-3">
-                                                                <div className="text-sm font-medium text-blue-900">
-                                                                    {booking.customer?.name || 'N/A'}
-                                                                </div>
-                                                                <div className="text-sm text-gray-600">
-                                                                    {booking.customer?.email || 'N/A'}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 py-4 whitespace-nowrap hidden md:table-cell">
-                                                        <div className="flex items-center">
-                                                            <div className="flex-shrink-0 h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
-                                                                <User className="w-5 h-5 text-blue-600" />
-                                                            </div>
-                                                            <div className="ml-3">
-                                                                <div className="text-sm font-medium text-blue-900">
-                                                                    {booking.provider?.name || 'N/A'}
-                                                                </div>
-                                                                <div className="text-sm text-gray-600">
-                                                                    {booking.provider?.email || 'N/A'}
-                                                                </div>
-                                                                <div className="text-xs text-gray-500 mt-1">
-                                                                    {booking.provider?.phone || 'N/A'}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 py-4 whitespace-nowrap">
-                                                        <div className="text-sm font-medium text-blue-900">
-                                                            {booking.service?.title || 'N/A'}
+                                                            {booking.customer?.name || 'N/A'}
                                                         </div>
                                                         <div className="text-sm text-gray-600">
-                                                            {booking.service?.category || 'N/A'}
+                                                            {booking.customer?.email || 'N/A'}
                                                         </div>
-                                                        <div className="text-xs text-gray-500 mt-1">
-                                                            {formatCurrency(booking.totalAmount)}
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-4 whitespace-nowrap hidden md:table-cell">
+                                                <div className="flex items-center">
+                                                    <div className="flex-shrink-0 h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
+                                                        <User className="w-5 h-5 text-blue-600" />
+                                                    </div>
+                                                    <div className="ml-3">
+                                                        <div className="text-sm font-medium text-blue-900">
+                                                            {booking.provider?.businessName || booking.provider?.name || 'Unassigned'}
                                                         </div>
-                                                    </td>
-                                                    <td className="px-4 py-4 whitespace-nowrap hidden sm:table-cell">
-                                                        <div className="flex items-center text-sm text-blue-900">
-                                                            <Calendar className="w-4 h-4 mr-1" />
-                                                            {formatDate(booking.date)}
+                                                        <div className="text-sm text-gray-600">
+                                                            {booking.provider?.email || 'N/A'}
                                                         </div>
-                                                        {booking.time && (
-                                                            <div className="flex items-center text-sm text-gray-600">
-                                                                <Clock className="w-4 h-4 mr-1" />
-                                                                {formatTime(booking.time)}
-                                                            </div>
-                                                        )}
-                                                    </td>
-                                                    <td className="px-4 py-4 whitespace-nowrap">
-                                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(booking.status)}`}>
-                                                            {getStatusIcon(booking.status)}
-                                                            <span className="ml-1 capitalize">{booking.status}</span>
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                                                        <div className="flex items-center space-x-2">
-                                                            <button
-                                                                onClick={() => fetchBookingDetails(booking._id)}
-                                                                className="p-1.5 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
-                                                                title="View Details"
-                                                            >
-                                                                <Eye className="w-4 h-4" />
-                                                            </button>
-                                                            {booking.status === 'pending' && (
-                                                                <button
-                                                                    onClick={() => setDeleteConfirm(booking._id)}
-                                                                    className="p-1.5 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
-                                                                    title="Delete Booking"
-                                                                >
-                                                                    <Trash2 className="w-4 h-4" />
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </React.Fragment>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-4 whitespace-nowrap">
+                                                <div className="text-sm font-medium text-blue-900">
+                                                    {booking.service?.title || 'N/A'}
+                                                </div>
+                                                <div className="text-sm text-gray-600">
+                                                    {booking.service?.category || 'N/A'}
+                                                </div>
+                                                <div className="text-xs text-gray-500 mt-1">
+                                                    {formatCurrency(booking.totalAmount)}
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-4 whitespace-nowrap hidden sm:table-cell">
+                                                <div className="flex items-center text-sm text-blue-900">
+                                                    <Calendar className="w-4 h-4 mr-1" />
+                                                    {formatDate(booking.date)}
+                                                </div>
+                                                {booking.time && (
+                                                    <div className="flex items-center text-sm text-gray-600">
+                                                        <Clock className="w-4 h-4 mr-1" />
+                                                        {formatTime(booking.time)}
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td className="px-4 py-4 whitespace-nowrap">
+                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(booking.status)}`}>
+                                                    {getStatusIcon(booking.status)}
+                                                    <span className="ml-1 capitalize">{booking.status || 'N/A'}</span>
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
+                                                <div className="flex items-center space-x-2">
+                                                    <button
+                                                        onClick={() => booking._id && fetchBookingDetails(booking._id)}
+                                                        className="p-1.5 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
+                                                        title="View Details"
+                                                    >
+                                                        <Eye className="w-4 h-4" />
+                                                    </button>
+                                                    {booking.status === 'pending' && booking._id && (
+                                                        <button
+                                                            onClick={() => setDeleteConfirm({
+                                                                id: booking._id,
+                                                                userId: booking.customer?._id
+                                                            })}
+                                                            className="p-1.5 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
+                                                            title="Delete Booking"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
                                     ))}
                                 </tbody>
                             </table>
@@ -760,7 +767,7 @@ const AdminBookingsView = () => {
                                             <div className="space-y-3">
                                                 <div>
                                                     <p className="text-sm text-gray-600">Booking ID</p>
-                                                    <p className="font-medium text-blue-900">{selectedBooking._id}</p>
+                                                    <p className="font-medium text-blue-900">{selectedBooking._id || 'N/A'}</p>
                                                 </div>
                                                 <div>
                                                     <p className="text-sm text-gray-600">Date</p>
@@ -774,7 +781,7 @@ const AdminBookingsView = () => {
                                                     <p className="text-sm text-gray-600">Status</p>
                                                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(selectedBooking.status)}`}>
                                                         {getStatusIcon(selectedBooking.status)}
-                                                        <span className="ml-1 capitalize">{selectedBooking.status}</span>
+                                                        <span className="ml-1 capitalize">{selectedBooking.status || 'N/A'}</span>
                                                     </span>
                                                 </div>
                                             </div>
@@ -786,15 +793,19 @@ const AdminBookingsView = () => {
                                             <div className="space-y-3">
                                                 <div>
                                                     <p className="text-sm text-gray-600">Name</p>
-                                                    <p className="font-medium text-blue-900">{selectedBooking.customer?.name}</p>
+                                                    <p className="font-medium text-blue-900">{selectedBooking.customer?.name || 'N/A'}</p>
                                                 </div>
                                                 <div>
                                                     <p className="text-sm text-gray-600">Email</p>
-                                                    <p className="font-medium text-blue-900">{selectedBooking.customer?.email}</p>
+                                                    <p className="font-medium text-blue-900">{selectedBooking.customer?.email || 'N/A'}</p>
                                                 </div>
                                                 <div>
                                                     <p className="text-sm text-gray-600">Phone</p>
-                                                    <p className="font-medium text-blue-900">{selectedBooking.customer?.phone}</p>
+                                                    <p className="font-medium text-blue-900">{selectedBooking.customer?.phone || 'N/A'}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm text-gray-600">User ID</p>
+                                                    <p className="font-medium text-blue-900">{selectedBooking.customer?._id || 'N/A'}</p>
                                                 </div>
                                             </div>
                                         </div>
@@ -808,15 +819,15 @@ const AdminBookingsView = () => {
                                             <div className="space-y-3">
                                                 <div>
                                                     <p className="text-sm text-gray-600">Service</p>
-                                                    <p className="font-medium text-blue-900">{selectedBooking.service?.title}</p>
+                                                    <p className="font-medium text-blue-900">{selectedBooking.service?.title || 'N/A'}</p>
                                                 </div>
                                                 <div>
                                                     <p className="text-sm text-gray-600">Category</p>
-                                                    <p className="font-medium text-blue-900">{selectedBooking.service?.category}</p>
+                                                    <p className="font-medium text-blue-900">{selectedBooking.service?.category || 'N/A'}</p>
                                                 </div>
                                                 <div>
                                                     <p className="text-sm text-gray-600">Description</p>
-                                                    <p className="font-medium text-blue-900">{selectedBooking.service?.description}</p>
+                                                    <p className="font-medium text-blue-900">{selectedBooking.service?.description || 'N/A'}</p>
                                                 </div>
                                                 <div>
                                                     <p className="text-sm text-gray-600">Price</p>
@@ -825,36 +836,42 @@ const AdminBookingsView = () => {
                                             </div>
                                         </div>
 
-                                        {/* Provider Info */}
+                                        {/* Provider Assignment */}
                                         <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                                            <h3 className="font-semibold text-blue-900 mb-3">Provider Information</h3>
-                                            <div className="space-y-3">
-                                                <div>
-                                                    <p className="text-sm text-gray-600">Name</p>
-                                                    <p className="font-medium text-blue-900">{selectedBooking.provider?.name}</p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-sm text-gray-600">Email</p>
-                                                    <p className="font-medium text-blue-900">{selectedBooking.provider?.email}</p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-sm text-gray-600">Phone</p>
-                                                    <p className="font-medium text-blue-900">{selectedBooking.provider?.phone}</p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-sm text-gray-600">Experience</p>
-                                                    <p className="font-medium text-blue-900">
-                                                        {providerDetails[selectedBooking.provider?._id]?.experience || 'N/A'} {providerDetails[selectedBooking.provider?._id]?.experience === 1 ? 'year' : 'years'}
-                                                    </p>
-                                                </div>
-                                                {providerDetails[selectedBooking.provider?._id]?.skills && (
+                                            <h3 className="font-semibold text-blue-900 mb-3">Provider Assignment</h3>
+                                            {selectedBooking.provider ? (
+                                                <div className="space-y-3">
                                                     <div>
-                                                        <p className="text-sm text-gray-600">Skills</p>
-                                                        <p className="font-medium text-blue-900">
-                                                            {providerDetails[selectedBooking.provider?._id]?.skills.join(', ')}
-                                                        </p>
+                                                        <p className="text-sm text-gray-600">Current Provider</p>
+                                                        <p className="font-medium text-blue-900">{selectedBooking.provider.businessName || selectedBooking.provider.name || 'N/A'}</p>
                                                     </div>
-                                                )}
+                                                    <div>
+                                                        <p className="text-sm text-gray-600">Email</p>
+                                                        <p className="font-medium text-blue-900">{selectedBooking.provider.email || 'N/A'}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm text-gray-600">Phone</p>
+                                                        <p className="font-medium text-blue-900">{selectedBooking.provider.phone || 'N/A'}</p>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <p className="text-sm text-gray-600">No provider assigned yet</p>
+                                            )}
+                                            
+                                            <div className="mt-4">
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">Assign New Provider</label>
+                                                <select
+                                                    onChange={(e) => selectedBooking._id && assignProvider(selectedBooking._id, e.target.value)}
+                                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                    defaultValue=""
+                                                >
+                                                    <option value="" disabled>Select a provider</option>
+                                                    {providers.map(provider => (
+                                                        <option key={provider._id} value={provider._id}>
+                                                            {provider.businessName || provider.name} ({provider.email})
+                                                        </option>
+                                                    ))}
+                                                </select>
                                             </div>
                                         </div>
 
@@ -864,9 +881,9 @@ const AdminBookingsView = () => {
                                             <div className="flex items-start">
                                                 <MapPin className="w-4 h-4 mt-1 mr-2 text-blue-600" />
                                                 <div>
-                                                    <p className="font-medium text-blue-900">{selectedBooking.address?.street}</p>
-                                                    <p className="font-medium text-blue-900">{selectedBooking.address?.city}, {selectedBooking.address?.postalCode}</p>
-                                                    <p className="font-medium text-blue-900">{selectedBooking.address?.state}, {selectedBooking.address?.country}</p>
+                                                    <p className="font-medium text-blue-900">{selectedBooking.address?.street || 'N/A'}</p>
+                                                    <p className="font-medium text-blue-900">{selectedBooking.address?.city || 'N/A'}, {selectedBooking.address?.postalCode || 'N/A'}</p>
+                                                    <p className="font-medium text-blue-900">{selectedBooking.address?.state || 'N/A'}, {selectedBooking.address?.country || 'N/A'}</p>
                                                 </div>
                                             </div>
                                         </div>
@@ -886,12 +903,6 @@ const AdminBookingsView = () => {
                                                     <p className="text-sm text-gray-600">Payment Status</p>
                                                     <p className="font-medium text-blue-900">{selectedBooking.paymentStatus || 'N/A'}</p>
                                                 </div>
-                                                {selectedBooking.transactionId && (
-                                                    <div>
-                                                        <p className="text-sm text-gray-600">Transaction ID</p>
-                                                        <p className="font-medium text-blue-900">{selectedBooking.transactionId}</p>
-                                                    </div>
-                                                )}
                                                 {selectedBooking.couponApplied && (
                                                     <div>
                                                         <p className="text-sm text-gray-600">Coupon Applied</p>
@@ -909,6 +920,45 @@ const AdminBookingsView = () => {
                                                     <p className="font-bold text-blue-900">{formatCurrency(selectedBooking.totalAmount)}</p>
                                                 </div>
                                             </div>
+                                        </div>
+
+                                        {/* Reschedule Booking */}
+                                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                                            <h3 className="font-semibold text-blue-900 mb-3">Reschedule Booking</h3>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1">New Date</label>
+                                                    <input
+                                                        type="date"
+                                                        id="newDate"
+                                                        min={new Date().toISOString().split('T')[0]}
+                                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1">New Time</label>
+                                                    <input
+                                                        type="time"
+                                                        id="newTime"
+                                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    const newDate = document.getElementById('newDate').value;
+                                                    const newTime = document.getElementById('newTime').value;
+                                                    if (newDate && selectedBooking._id) {
+                                                        rescheduleBooking(selectedBooking._id, newDate, newTime);
+                                                    } else {
+                                                        showToast('Please select a new date', 'error');
+                                                    }
+                                                }}
+                                                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                            >
+                                                <Edit className="w-4 h-4 mr-2 inline" />
+                                                Reschedule Booking
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -936,7 +986,13 @@ const AdminBookingsView = () => {
                                     Cancel
                                 </button>
                                 <button
-                                    onClick={() => deleteBooking(deleteConfirm)}
+                                    onClick={() => {
+                                        if (deleteConfirm.userId && deleteConfirm.id) {
+                                            deleteUserBooking(deleteConfirm.userId, deleteConfirm.id);
+                                        } else if (deleteConfirm.id) {
+                                            deleteBooking(deleteConfirm.id);
+                                        }
+                                    }}
                                     className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
                                 >
                                     Delete

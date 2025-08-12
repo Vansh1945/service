@@ -1,5 +1,4 @@
 const jwt = require('jsonwebtoken');
-
 const Provider = require('../models/Provider-model');
 
 
@@ -23,6 +22,7 @@ const providerAuthMiddleware = async (req, res, next) => {
 
         // Basic provider query without populating first
         let provider = await Provider.findById(decoded.id).select('-password');
+        // console.log("✅ Provider found in DB:", provider);
 
         if (!provider) {
             return res.status(401).json({
@@ -30,6 +30,8 @@ const providerAuthMiddleware = async (req, res, next) => {
                 message: "Provider account not found"
             });
         }
+
+
 
         // Try to populate if models exist
         try {
@@ -59,7 +61,7 @@ const providerAuthMiddleware = async (req, res, next) => {
         // Attach provider to request
         req.provider = provider;
         req.token = jwtToken;
-        req.providerID = provider._id;
+        req.providerId = provider._id;
         req.role = 'provider';
 
         next();
@@ -99,7 +101,7 @@ const providerTestPassedMiddleware = async (req, res, next) => {
         }
 
         const provider = await Provider.findById(req.provider._id);
-        
+
         if (!provider) {
             return res.status(404).json({
                 success: false,
@@ -140,7 +142,7 @@ const providerTestAccessMiddleware = async (req, res, next) => {
         }
 
         const provider = await Provider.findById(req.provider._id);
-        
+
         // Allow access to test-related routes
         if (req.path.includes('/test/')) {
             return next();

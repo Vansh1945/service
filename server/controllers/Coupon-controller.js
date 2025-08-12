@@ -297,9 +297,38 @@ const getAvailableCoupons = async (req, res) => {
   try {
     const { bookingValue } = req.query;
     const userId = req.user.id;
+    const currentDate = new Date();
 
-    const coupons = await Coupon.getAvailableCoupons(userId, Number(bookingValue) || 0);
-    
+    // First, check if user has already used first-booking coupon
+    const hasUsedFirstBookingCoupon = await Coupon.exists({
+      isFirstBooking: true,
+      'usedBy.userId': userId
+    });
+
+    // Base query for active, non-expired coupons available to user
+    const query = {
+      isActive: true,
+      expiryDate: { $gte: currentDate },
+      $or: [
+        { isGlobal: true },
+        { assignedTo: userId }
+      ]
+    };
+
+    // Only include first-booking coupon if user hasn't used it
+    if (!hasUsedFirstBookingCoupon) {
+      query.$or.push({ isFirstBooking: true });
+    }
+
+    // If bookingValue is provided, add minBookingValue filter
+    if (bookingValue !== undefined) {
+      query.minBookingValue = { $lte: Number(bookingValue) };
+    }
+
+    const coupons = await Coupon.find(query)
+      .sort({ discountValue: -1 }) // Sort by highest discount first
+      .lean();
+
     res.json({
       success: true,
       count: coupons.length,

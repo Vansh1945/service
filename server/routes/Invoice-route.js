@@ -1,42 +1,24 @@
 const express = require('express');
 const router = express.Router();
 const invoiceController = require('../controllers/Invoice-controller');
-
-const {
-  providerAuthMiddleware,
-  providerTestPassedMiddleware
-} = require('../middlewares/Provider-middleware');
+const { providerAuthMiddleware, providerTestPassedMiddleware } = require('../middlewares/Provider-middleware');
 const { userAuthMiddleware } = require('../middlewares/User-middleware');
+const adminAuthMiddleware = require('../middlewares/Admin-middleware');
 
-// Get invoice data for frontend
-router.get('/frontend/:id',
-  userAuthMiddleware,
-  invoiceController.getInvoiceForFrontend
-);
+// Admin routes
+router.get('/admin/all', adminAuthMiddleware, invoiceController.getAllInvoicesForAdmin);
+router.put('/:id', adminAuthMiddleware, invoiceController.updateInvoice);
 
-// Get single invoice (accessible by both users and providers)
-router.get('/:id', 
-  userAuthMiddleware,
-  invoiceController.getInvoice
-);
+// Provider routes
+router.get('/provider/all', providerAuthMiddleware, providerTestPassedMiddleware, invoiceController.getInvoicesForProvider);
+router.post('/:id/products', providerAuthMiddleware, providerTestPassedMiddleware, invoiceController.addProductToInvoice);
+router.put('/:id/products/:productId', providerAuthMiddleware, providerTestPassedMiddleware, invoiceController.updateProductInInvoice);
+router.delete('/:id/products/:productId', providerAuthMiddleware, providerTestPassedMiddleware, invoiceController.removeProductFromInvoice);
+router.get('/provider/:id', providerAuthMiddleware, providerTestPassedMiddleware, invoiceController.getProviderInvoiceById);
 
-// Get customer's invoices
-router.get('/user/my-invoices',
-  userAuthMiddleware,
-  invoiceController.getMyInvoices
-);
-
-// Get provider's invoices (with commission details)
-router.get('/provider/my-invoices',
-  providerAuthMiddleware,
-  providerTestPassedMiddleware,
-  invoiceController.getProviderInvoices
-);
-
-// Download invoice PDF (accessible by both users and providers)
-router.get('/:id/download',
-  userAuthMiddleware,
-  invoiceController.downloadInvoice
-);
+// Customer routes
+router.get('/customer/all', userAuthMiddleware, invoiceController.getInvoicesForCustomer);
+router.get('/customer/:id', userAuthMiddleware, invoiceController.getCustomerInvoice);
+router.get('/customer/:id/download', userAuthMiddleware, invoiceController.downloadCustomerInvoice);
 
 module.exports = router;

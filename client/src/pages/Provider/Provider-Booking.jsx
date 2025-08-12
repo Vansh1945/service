@@ -1,523 +1,1025 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../store/auth';
 import { 
-  Search, Calendar, Clock, MapPin, User, 
-  CheckCircle2, XCircle, Eye, ChevronLeft, 
-  ChevronRight, Filter, AlertCircle, BadgeCheck,
-  DollarSign, Phone, Mail, Home
+  Calendar, 
+  Clock,
+  RefreshCw, 
+  MapPin, 
+  User, 
+  Phone, 
+  Mail, 
+  DollarSign, 
+  Eye, 
+  Check, 
+  CheckCircle, 
+  X, 
+  Loader, 
+  AlertCircle, 
+  Percent, 
+  Wallet,
+  Tag,
+  FileText,
+  ChevronDown,
+  ChevronUp,
+  Filter,
+  List,
+  ClipboardList,
+  Scissors,
+  Clock4,
+  HardHat,
+  Home,
+  Sparkles,
+  Zap,
+  Plug,
+  Wrench
 } from 'lucide-react';
 
-const ProviderBookingsPage = () => {
-  const { API, logoutUser } = useAuth();
-  const [bookings, setBookings] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
+const ProviderBookingDashboard = () => {
+  const { token, API, showToast, user } = useAuth();
+  const [bookings, setBookings] = useState({
+    pending: [],
+    accepted: [],
+    completed: [],
+    cancelled: []
+  });
   const [selectedBooking, setSelectedBooking] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [loading, setLoading] = useState({
+    pending: false,
+    accepted: false,
+    completed: false,
+    cancelled: false,
+    details: false,
+    action: false
+  });
+  const [error, setError] = useState(null);
+  const [expandedSections, setExpandedSections] = useState({
+    booking: true,
+    customer: true,
+    service: true,
+    payment: true,
+    address: true
+  });
+  const [activeTab, setActiveTab] = useState('pending');
+  const [filter, setFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [pagination, setPagination] = useState({
-    page: 1,
-    limit: 10,
-    total: 0,
-    pages: 0
+    pending: { page: 1, limit: 10, total: 0 },
+    accepted: { page: 1, limit: 10, total: 0 },
+    completed: { page: 1, limit: 10, total: 0 },
+    cancelled: { page: 1, limit: 10, total: 0 }
   });
 
-  // Fetch bookings from API
-  const fetchBookings = async (page = 1, search = '') => {
+  // Calculate subtotal from services and addons
+  const calculateSubtotal = (booking) => {
+    if (!booking?.services) return 0;
+    
+    let subtotal = 0;
+    booking.services.forEach(serviceItem => {
+      subtotal += (serviceItem.price || 0) * (serviceItem.quantity || 1);
+      
+      if (serviceItem.addons && serviceItem.addons.length > 0) {
+        serviceItem.addons.forEach(addon => {
+          subtotal += addon.price || 0;
+        });
+      }
+    });
+    
+    return subtotal.toFixed(2);
+  };
+
+  // Calculate net amount after commission
+  const calculateNetAmount = (booking) => {
+    if (!booking) return 0;
+    const totalAmount = booking.totalAmount || calculateSubtotal(booking);
+    const commissionAmount = booking.commissionAmount || 0;
+    return (totalAmount - commissionAmount).toFixed(2);
+  };
+
+  // Toggle section expansion
+  const toggleSection = (section) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
+
+  // Fetch bookings based on status
+  const fetchBookings = async (status) => {
     try {
-      const response = await fetch(
-        `${API}/booking/provider?page=${page}&limit=${pagination.limit}&search=${search}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'application/json'
-          }
+      setLoading(prev => ({...prev, [status]: true}));
+      setError(null);
+      
+      const { page, limit } = pagination[status];
+      const response = await fetch(`${API}/booking/provider/status/${status}?page=${page}&limit=${limit}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         }
-      );
-
-      if (response.status === 401) {
-        logoutUser();
-        return;
-      }
-
+      });
+      
       if (!response.ok) {
-        throw new Error('Failed to fetch bookings');
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to fetch ${status} bookings`);
       }
-
+      
       const data = await response.json();
-      setBookings(data.data || []);
+      
+      setBookings(prev => ({
+        ...prev,
+        [status]: data.data || []
+      }));
+      
       setPagination(prev => ({
         ...prev,
-        page: data.page,
-        total: data.total,
-        pages: data.pages
+        [status]: {
+          ...prev[status],
+          total: data.total || 0
+        }
       }));
-    } catch (error) {
-      console.error('Error fetching bookings:', error);
+    } catch (err) {
+      setError(err.message);
+      showToast(err.message, 'error');
+    } finally {
+      setLoading(prev => ({...prev, [status]: false}));
     }
   };
 
-  // Handle booking actions
+  // Handle pagination change
+  const handlePageChange = (status, newPage) => {
+    setPagination(prev => ({
+      ...prev,
+      [status]: {
+        ...prev[status],
+        page: newPage
+      }
+    }));
+    fetchBookings(status);
+  };
+
+  useEffect(() => {
+    if (token) {
+      fetchBookings('pending');
+      fetchBookings('accepted');
+      fetchBookings('completed');
+      fetchBookings('cancelled');
+    }
+  }, [token]);
+
+  // Handle booking action (accept/complete)
   const handleBookingAction = async (bookingId, action) => {
     try {
-      const response = await fetch(`${API}/booking/provider/${bookingId}/${action}`, {
+      setLoading(prev => ({...prev, action: true}));
+      const endpoint = action === 'accept' 
+        ? `${API}/booking/provider/${bookingId}/accept`
+        : `${API}/booking/provider/${bookingId}/complete`;
+      
+      const response = await fetch(endpoint, {
         method: 'PATCH',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         }
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to ${action} booking`);
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to ${action} booking`);
       }
 
-      fetchBookings(pagination.page, searchTerm);
-    } catch (error) {
-      console.error(`Error ${action} booking:`, error);
+      const result = await response.json();
+      showToast(result.message || `Booking ${action}ed successfully`, 'success');
+      
+      // Update local state by moving the booking to the appropriate status
+      const updatedBookings = {...bookings};
+      
+      if (action === 'accept') {
+        const bookingIndex = updatedBookings.pending.findIndex(b => b._id === bookingId);
+        if (bookingIndex !== -1) {
+          const [booking] = updatedBookings.pending.splice(bookingIndex, 1);
+          updatedBookings.accepted.unshift(booking);
+        }
+      } else if (action === 'complete') {
+        const bookingIndex = updatedBookings.accepted.findIndex(b => b._id === bookingId);
+        if (bookingIndex !== -1) {
+          const [booking] = updatedBookings.accepted.splice(bookingIndex, 1);
+          // Ensure commission is calculated before moving to completed
+          if (!booking.commissionAmount && booking.totalAmount) {
+            booking.commissionAmount = (booking.totalAmount * (booking.commissionPercentage || 0) / 100).toFixed(2);
+          }
+          updatedBookings.completed.unshift(booking);
+        }
+      }
+      
+      setBookings(updatedBookings);
+      
+      if (selectedBooking && selectedBooking._id === bookingId) {
+        setSelectedBooking(null);
+      }
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setLoading(prev => ({...prev, action: false}));
+      setShowModal(false);
     }
   };
 
-  // Handle search
-  const handleSearch = (e) => {
-    const value = e.target.value;
-    setSearchTerm(value);
-    
-    // Debounce search
-    const timeoutId = setTimeout(() => {
-      fetchBookings(1, value);
-    }, 500);
-
-    return () => clearTimeout(timeoutId);
+  // Get booking details
+  const getBookingDetails = async (bookingId) => {
+    try {
+      setLoading(prev => ({...prev, details: true}));
+      const response = await fetch(`${API}/booking/provider-booking/${bookingId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to fetch booking details');
+      }
+      
+      const data = await response.json();
+      setSelectedBooking(data.data || null);
+      setShowModal(true);
+    } catch (err) {
+      showToast(err.message, 'error');
+      setShowModal(false);
+    } finally {
+      setLoading(prev => ({...prev, details: false}));
+    }
   };
 
-  // Handle page change
-  const handlePageChange = (newPage) => {
-    if (newPage >= 1 && newPage <= pagination.pages) {
-      fetchBookings(newPage, searchTerm);
+  // Format address object to string
+  const formatAddress = (address) => {
+    if (!address) return 'Address not specified';
+    if (typeof address === 'string') return address;
+    
+    const parts = [
+      address.street,
+      address.city,
+      address.state,
+      address.postalCode,
+      address.country
+    ].filter(Boolean);
+    
+    return parts.join(', ') || 'Address not specified';
+  };
+
+  // Status styling
+  const getStatusColor = (status) => {
+    switch(status?.toLowerCase()) {
+      case 'pending': return 'bg-yellow-100 text-yellow-800';
+      case 'accepted': return 'bg-blue-100 text-blue-800';
+      case 'completed': return 'bg-green-100 text-green-800';
+      case 'cancelled': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getStatusIcon = (status) => {
+    switch(status?.toLowerCase()) {
+      case 'pending': return <Clock className="w-4 h-4" />;
+      case 'accepted': return <Check className="w-4 h-4" />;
+      case 'completed': return <CheckCircle className="w-4 h-4" />;
+      case 'cancelled': return <X className="w-4 h-4" />;
+      default: return <Clock className="w-4 h-4" />;
+    }
+  };
+
+  // Get service icon based on category
+  const getServiceIcon = (category) => {
+    switch(category?.toLowerCase()) {
+      case 'salon':
+      case 'beauty':
+        return <Scissors className="w-5 h-5 text-pink-500" />;
+      case 'cleaning':
+        return <Sparkles className="w-5 h-5 text-blue-500" />;
+      case 'electrical':
+        return <Zap className="w-5 h-5 text-yellow-500" />;
+      case 'ac':
+        return <Plug className="w-5 h-5 text-blue-400" />;
+      case 'appliance repair':
+      case 'repair':
+      case 'maintenance':
+        return <Wrench className="w-5 h-5 text-orange-500" />;
+      case 'home':
+        return <Home className="w-5 h-5 text-green-500" />;
+      default:
+        return <Clock4 className="w-5 h-5 text-gray-500" />;
     }
   };
 
   // Format date
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
+    if (!dateString) return 'N/A';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Invalid date';
+      
+      return date.toLocaleDateString(undefined, { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric' 
+      });
+    } catch {
+      return 'Invalid date';
+    }
   };
 
-  // Status badge component
-  const StatusBadge = ({ status }) => {
-    const statusConfig = {
-      pending: { color: 'bg-yellow-100 text-yellow-800', icon: <AlertCircle className="h-4 w-4" /> },
-      accepted: { color: 'bg-blue-100 text-blue-800', icon: <BadgeCheck className="h-4 w-4" /> },
-      completed: { color: 'bg-green-100 text-green-800', icon: <CheckCircle2 className="h-4 w-4" /> },
-      cancelled: { color: 'bg-red-100 text-red-800', icon: <XCircle className="h-4 w-4" /> }
-    };
+  // Format time
+  const formatTime = (timeString) => {
+    if (!timeString) return '--:--';
+    return timeString;
+  };
 
+  // Format duration
+  const formatDuration = (hours) => {
+    if (!hours) return 'N/A';
+    const wholeHours = Math.floor(hours);
+    const minutes = Math.round((hours - wholeHours) * 60);
+    return `${wholeHours > 0 ? `${wholeHours} hr` : ''} ${minutes > 0 ? `${minutes} min` : ''}`.trim();
+  };
+
+  // Filter bookings based on search and filter
+  const getFilteredBookings = () => {
+    let filtered = bookings[activeTab] || [];
+    
+    // Apply search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(booking => 
+        (booking.customer?.name?.toLowerCase().includes(query)) ||
+        (booking.services?.some(service => 
+          service.service?.title?.toLowerCase().includes(query))) ||
+        (booking._id?.toLowerCase().includes(query)))
+    }
+    
+    // Apply additional filters
+    if (filter === 'today') {
+      const today = new Date().toISOString().split('T')[0];
+      filtered = filtered.filter(booking => booking.date === today);
+    } else if (filter === 'upcoming') {
+      const today = new Date().toISOString().split('T')[0];
+      filtered = filtered.filter(booking => booking.date >= today);
+    } else if (filter === 'past') {
+      const today = new Date().toISOString().split('T')[0];
+      filtered = filtered.filter(booking => booking.date < today);
+    }
+    
+    return filtered;
+  };
+
+  const currentBookings = getFilteredBookings();
+  const currentPagination = pagination[activeTab];
+
+  const isLoading = loading.pending && loading.accepted && loading.completed && loading.cancelled && currentBookings.length === 0;
+
+  if (isLoading) {
     return (
-      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusConfig[status]?.color || 'bg-gray-100 text-gray-800'}`}>
-        {statusConfig[status]?.icon}
-        <span className="ml-1 capitalize">{status}</span>
-      </span>
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader className="animate-spin w-8 h-8 text-blue-500" />
+      </div>
     );
-  };
+  }
 
-  useEffect(() => {
-    fetchBookings();
-  }, []);
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900">Error loading bookings</h3>
+          <p className="text-gray-600 mt-2">{error}</p>
+          <button
+            onClick={() => {
+              fetchBookings('pending');
+              fetchBookings('accepted');
+              fetchBookings('completed');
+              fetchBookings('cancelled');
+            }}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-blue-50 p-4 md:p-6">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gray-50 p-4 md:p-6">
+      <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="mb-6 md:mb-8">
-          <h1 className="text-2xl md:text-3xl font-bold text-blue-900 mb-2">
-            Booking Management
-          </h1>
-          <p className="text-gray-600">
-            View and manage all your service bookings
-          </p>
-        </div>
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-8">
-          <div className="bg-white rounded-lg shadow-sm p-4 md:p-6 border border-blue-100">
-            <div className="flex items-center">
-              <div className="p-2 md:p-3 bg-blue-100 rounded-full">
-                <Calendar className="h-5 w-5 md:h-6 md:w-6 text-blue-600" />
-              </div>
-              <div className="ml-3 md:ml-4">
-                <p className="text-xs md:text-sm font-medium text-gray-600">Total Bookings</p>
-                <p className="text-xl md:text-2xl font-semibold text-blue-900">{pagination.total}</p>
-              </div>
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">Service Bookings</h1>
+              <p className="text-gray-600">Manage your service requests</p>
             </div>
-          </div>
-          <div className="bg-white rounded-lg shadow-sm p-4 md:p-6 border border-yellow-100">
-            <div className="flex items-center">
-              <div className="p-2 md:p-3 bg-yellow-100 rounded-full">
-                <AlertCircle className="h-5 w-5 md:h-6 md:w-6 text-yellow-600" />
+            <div className="flex items-center space-x-3">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search bookings..."
+                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                <div className="absolute left-3 top-2.5 text-gray-400">
+                  <ClipboardList className="w-5 h-5" />
+                </div>
               </div>
-              <div className="ml-3 md:ml-4">
-                <p className="text-xs md:text-sm font-medium text-gray-600">Pending</p>
-                <p className="text-xl md:text-2xl font-semibold text-yellow-800">
-                  {bookings.filter(b => b.status === 'pending').length}
-                </p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-lg shadow-sm p-4 md:p-6 border border-blue-100">
-            <div className="flex items-center">
-              <div className="p-2 md:p-3 bg-blue-100 rounded-full">
-                <BadgeCheck className="h-5 w-5 md:h-6 md:w-6 text-blue-600" />
-              </div>
-              <div className="ml-3 md:ml-4">
-                <p className="text-xs md:text-sm font-medium text-gray-600">Accepted</p>
-                <p className="text-xl md:text-2xl font-semibold text-blue-800">
-                  {bookings.filter(b => b.status === 'accepted').length}
-                </p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-lg shadow-sm p-4 md:p-6 border border-green-100">
-            <div className="flex items-center">
-              <div className="p-2 md:p-3 bg-green-100 rounded-full">
-                <DollarSign className="h-5 w-5 md:h-6 md:w-6 text-green-600" />
-              </div>
-              <div className="ml-3 md:ml-4">
-                <p className="text-xs md:text-sm font-medium text-gray-600">Earnings</p>
-                <p className="text-xl md:text-2xl font-semibold text-green-800">
-                  ₹{bookings
-                    .filter(b => b.status === 'completed')
-                    .reduce((sum, b) => sum + (b.servicePrice - (b.discountAmount || 0)), 0)}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Search and Filter Bar */}
-        <div className="bg-white rounded-lg shadow-sm p-4 md:p-6 mb-4 md:mb-6 border border-blue-100">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4 md:h-5 md:w-5" />
-              <input
-                type="text"
-                placeholder="Search bookings by customer, service, or ID..."
-                value={searchTerm}
-                onChange={handleSearch}
-                className="w-full pl-9 md:pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm md:text-base"
-              />
-            </div>
-            <div className="flex items-center space-x-2">
-              <button className="flex items-center px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-blue-50">
-                <Filter className="h-4 w-4 mr-2 text-gray-500" />
-                Filters
+              <button
+                onClick={() => {
+                  fetchBookings('pending');
+                  fetchBookings('accepted');
+                  fetchBookings('completed');
+                  fetchBookings('cancelled');
+                }}
+                className="flex items-center text-blue-600 hover:text-blue-800 p-2 rounded-full hover:bg-blue-50"
+                title="Refresh"
+              >
+                <RefreshCw className="w-5 h-5" />
               </button>
-              <select className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option>All Status</option>
-                <option>Pending</option>
-                <option>Accepted</option>
-                <option>Completed</option>
-              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Tabs and Filters */}
+        <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex space-x-1 overflow-x-auto pb-2 md:pb-0">
+              <button
+                onClick={() => setActiveTab('pending')}
+                className={`px-4 py-2 text-sm font-medium rounded-md flex items-center ${activeTab === 'pending' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}
+              >
+                <Clock className="w-4 h-4 mr-2" />
+                Pending
+                {bookings.pending.length > 0 && (
+                  <span className="ml-2 bg-blue-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                    {bookings.pending.length}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('accepted')}
+                className={`px-4 py-2 text-sm font-medium rounded-md flex items-center ${activeTab === 'accepted' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}
+              >
+                <Check className="w-4 h-4 mr-2" />
+                Accepted
+                {bookings.accepted.length > 0 && (
+                  <span className="ml-2 bg-blue-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                    {bookings.accepted.length}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('completed')}
+                className={`px-4 py-2 text-sm font-medium rounded-md flex items-center ${activeTab === 'completed' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}
+              >
+                <CheckCircle className="w-4 h-4 mr-2" />
+                Completed
+                {bookings.completed.length > 0 && (
+                  <span className="ml-2 bg-blue-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                    {bookings.completed.length}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('cancelled')}
+                className={`px-4 py-2 text-sm font-medium rounded-md flex items-center ${activeTab === 'cancelled' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}
+              >
+                <X className="w-4 h-4 mr-2" />
+                Cancelled
+                {bookings.cancelled.length > 0 && (
+                  <span className="ml-2 bg-blue-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                    {bookings.cancelled.length}
+                  </span>
+                )}
+              </button>
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <div className="relative">
+                <select
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value)}
+                  className="appearance-none pl-3 pr-8 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                >
+                  <option value="all">All Bookings</option>
+                  <option value="today">Today</option>
+                  <option value="upcoming">Upcoming</option>
+                  <option value="past">Past</option>
+                </select>
+                <div className="absolute right-2 top-2.5 text-gray-400 pointer-events-none">
+                  <Filter className="w-4 h-4" />
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Bookings List */}
-        <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-blue-100">
-          <div className="px-4 py-3 md:px-6 md:py-4 border-b border-gray-200 bg-blue-50">
-            <h2 className="text-base md:text-lg font-medium text-blue-900">
-              All Bookings ({pagination.total})
-            </h2>
-          </div>
-
-          {bookings.length === 0 ? (
-            <div className="p-8 md:p-12 text-center">
-              <Calendar className="h-10 w-10 md:h-12 md:w-12 text-gray-400 mx-auto mb-3 md:mb-4" />
-              <p className="text-gray-500">No bookings found</p>
-              <p className="text-sm text-gray-400 mt-1">You currently have no service bookings</p>
+        <div className="space-y-4">
+          {loading[activeTab] && currentBookings.length === 0 ? (
+            <div className="bg-white rounded-lg shadow-sm p-8 text-center">
+              <Loader className="animate-spin w-8 h-8 text-blue-500 mx-auto mb-4" />
+              <p className="text-gray-500">Loading {activeTab} bookings...</p>
+            </div>
+          ) : currentBookings.length === 0 ? (
+            <div className="bg-white rounded-lg shadow-sm p-8 text-center">
+              <div className="text-gray-400 mb-4">
+                <List className="w-12 h-12 mx-auto" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                No {activeTab} bookings
+              </h3>
+              <p className="text-gray-500">
+                {activeTab === 'pending' 
+                  ? "You don't have any pending bookings at the moment." 
+                  : activeTab === 'accepted'
+                  ? "You don't have any accepted bookings at the moment."
+                  : activeTab === 'completed'
+                  ? "You haven't completed any bookings yet."
+                  : "You don't have any cancelled bookings."}
+              </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-blue-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-blue-900 uppercase tracking-wider">
-                      Booking Details
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-blue-900 uppercase tracking-wider">
-                      Customer
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-blue-900 uppercase tracking-wider hidden md:table-cell">
-                      Service
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-blue-900 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-blue-900 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {bookings.map((booking) => (
-                    <tr key={booking._id} className="hover:bg-blue-50">
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
-                            <Calendar className="h-5 w-5 text-blue-600" />
-                          </div>
-                          <div className="ml-3">
-                            <div className="text-sm font-medium text-blue-900">
-                              {formatDate(booking.date)}
-                            </div>
-                            <div className="text-xs text-gray-500 flex items-center">
-                              <Clock className="h-3 w-3 mr-1" />
-                              {booking.time || 'Flexible'}
-                            </div>
-                          </div>
+            <>
+              {currentBookings.map((booking) => (
+                <div 
+                  key={booking._id} 
+                  className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden transition-all hover:shadow-md"
+                >
+                  <div className="p-6">
+                    <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-3 flex-wrap">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(booking.status)}`}>
+                            {getStatusIcon(booking.status)}
+                            <span className="ml-1 capitalize">{booking.status || 'unknown'}</span>
+                          </span>
+                          <span className="text-sm font-medium text-gray-500">
+                            Booking ID: {booking._id}
+                          </span>
                         </div>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="h-10 w-10 bg-purple-100 rounded-full flex items-center justify-center">
-                            <User className="h-5 w-5 text-purple-600" />
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                          <div className="flex items-center text-gray-600">
+                            <User className="w-4 h-4 mr-2" />
+                            <span>{booking.customer?.name || 'Customer'}</span>
                           </div>
-                          <div className="ml-3">
-                            <div className="text-sm font-medium text-blue-900">
-                              {booking.customer?.name || 'N/A'}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              ID: {booking._id.slice(-8)}
-                            </div>
+                          <div className="flex items-center text-gray-600">
+                            <Calendar className="w-4 h-4 mr-2" />
+                            <span>{formatDate(booking.date)} at {formatTime(booking.time)}</span>
+                          </div>
+                          <div className="flex items-center text-gray-600">
+                            {getServiceIcon(booking.services?.[0]?.service?.category)}
+                            <span className="ml-2">
+                              {booking.services?.map(s => s.service?.title).join(', ') || 'Service'}
+                            </span>
+                          </div>
+                          <div className="flex items-center text-gray-600">
+                            <MapPin className="w-4 h-4 mr-2" />
+                            <span>{formatAddress(booking.address)}</span>
                           </div>
                         </div>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap hidden md:table-cell">
-                        <div className="text-sm text-gray-900">
-                          {booking.service?.title || 'N/A'}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          ₹{booking.servicePrice?.toFixed(2) || '0.00'}
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <StatusBadge status={booking.status} />
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <div className="flex space-x-2">
-                          {booking.status === 'pending' && (
+                      </div>
+                      
+                      <div className="flex flex-col space-y-2 min-w-[150px]">
+                        <button
+                          onClick={() => getBookingDetails(booking._id)}
+                          disabled={loading.details}
+                          className="inline-flex items-center justify-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                        >
+                          {loading.details ? (
+                            <Loader className="w-4 h-4 mr-2 animate-spin" />
+                          ) : (
                             <>
-                              <button
-                                onClick={() => handleBookingAction(booking._id, 'accept')}
-                                className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                              >
-                                <CheckCircle2 className="h-3 w-3 mr-1" />
-                                Accept
-                              </button>
-                              <button
-                                onClick={() => handleBookingAction(booking._id, 'cancel')}
-                                className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                              >
-                                <XCircle className="h-3 w-3 mr-1" />
-                                Decline
-                              </button>
+                              <Eye className="w-4 h-4 mr-2" />
+                              View Details
                             </>
                           )}
+                        </button>
+                        
+                        {booking.status === 'pending' && (
                           <button
-                            onClick={() => setSelectedBooking(booking)}
-                            className="inline-flex items-center px-3 py-1 border border-gray-300 text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                            onClick={() => handleBookingAction(booking._id, 'accept')}
+                            disabled={loading.action}
+                            className="inline-flex items-center justify-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
                           >
-                            <Eye className="h-3 w-3 mr-1" />
-                            View
+                            {loading.action ? (
+                              <Loader className="w-4 h-4 mr-2 animate-spin" />
+                            ) : (
+                              <>
+                                <Check className="w-4 h-4 mr-2" />
+                                Accept Booking
+                              </>
+                            )}
                           </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Pagination */}
-          {pagination.pages > 1 && (
-            <div className="bg-white px-4 py-3 md:px-6 md:py-4 border-t border-gray-200 flex items-center justify-between">
-              <div className="flex-1 flex justify-between sm:hidden">
-                <button
-                  onClick={() => handlePageChange(pagination.page - 1)}
-                  disabled={pagination.page === 1}
-                  className="relative inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-blue-50 disabled:opacity-50"
-                >
-                  Previous
-                </button>
-                <button
-                  onClick={() => handlePageChange(pagination.page + 1)}
-                  disabled={pagination.page === pagination.pages}
-                  className="ml-3 relative inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-blue-50 disabled:opacity-50"
-                >
-                  Next
-                </button>
-              </div>
-              <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm text-gray-700">
-                    Showing{' '}
-                    <span className="font-medium text-blue-900">
-                      {(pagination.page - 1) * pagination.limit + 1}
-                    </span>{' '}
-                    to{' '}
-                    <span className="font-medium text-blue-900">
-                      {Math.min(pagination.page * pagination.limit, pagination.total)}
-                    </span>{' '}
-                    of{' '}
-                    <span className="font-medium text-blue-900">{pagination.total}</span>{' '}
-                    results
-                  </p>
-                </div>
-                <div>
-                  <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
-                    <button
-                      onClick={() => handlePageChange(pagination.page - 1)}
-                      disabled={pagination.page === 1}
-                      className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-blue-50 disabled:opacity-50"
-                    >
-                      <ChevronLeft className="h-5 w-5" />
-                    </button>
-                    {[...Array(pagination.pages)].map((_, i) => {
-                      if (pagination.pages <= 7 || 
-                          i === 0 || 
-                          i === pagination.pages - 1 || 
-                          Math.abs(pagination.page - (i + 1)) <= 2) {
-                        return (
+                        )}
+                        
+                        {booking.status === 'accepted' && (
                           <button
-                            key={i + 1}
-                            onClick={() => handlePageChange(i + 1)}
-                            className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
-                              pagination.page === i + 1
-                                ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
-                                : 'bg-white border-gray-300 text-gray-500 hover:bg-blue-50'
-                            }`}
+                            onClick={() => handleBookingAction(booking._id, 'complete')}
+                            disabled={loading.action}
+                            className="inline-flex items-center justify-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
                           >
-                            {i + 1}
+                            {loading.action ? (
+                              <Loader className="w-4 h-4 mr-2 animate-spin" />
+                            ) : (
+                              <>
+                                <CheckCircle className="w-4 h-4 mr-2" />
+                                Complete
+                              </>
+                            )}
                           </button>
-                        );
-                      }
-                      if (Math.abs(pagination.page - (i + 1)) === 3) {
-                        return (
-                          <span key={i + 1} className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
-                            ...
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Financial summary */}
+                  <div className="bg-gray-50 px-6 py-3 border-t border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-gray-500">
+                        {booking.status === 'completed' ? (
+                          <span className="text-green-600">
+                            {booking.paymentStatus === 'completed' 
+                              ? 'Payment Processed to your account' 
+                              : 'Payment Processing'}
                           </span>
-                        );
-                      }
-                      return null;
-                    })}
-                    <button
-                      onClick={() => handlePageChange(pagination.page + 1)}
-                      disabled={pagination.page === pagination.pages}
-                      className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-blue-50 disabled:opacity-50"
-                    >
-                      <ChevronRight className="h-5 w-5" />
-                    </button>
-                  </nav>
+                        ) : booking.status === 'cancelled' ? (
+                          <span className="text-red-600">Payment not applicable</span>
+                        ) : (
+                          <span>Commission will be deducted from the total Service amount</span>
+                        )}
+                      </div>
+                      <div className="flex items-center text-green-600 font-medium">
+                        <Wallet className="w-4 h-4 mr-2" />
+                        <span>
+                          {booking.status === 'completed' ? 'Estimated Earned: ' : 'Estimated: '}
+                          ₹{calculateNetAmount(booking)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {/* Pagination */}
+              <div className="flex justify-between items-center bg-white rounded-lg shadow-sm p-4">
+                <div className="text-sm text-gray-600">
+                  Showing {(currentPagination.page - 1) * currentPagination.limit + 1} to{' '}
+                  {Math.min(currentPagination.page * currentPagination.limit, currentPagination.total)} of{' '}
+                  {currentPagination.total} bookings
+                </div>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => handlePageChange(activeTab, currentPagination.page - 1)}
+                    disabled={currentPagination.page === 1}
+                    className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    onClick={() => handlePageChange(activeTab, currentPagination.page + 1)}
+                    disabled={currentPagination.page * currentPagination.limit >= currentPagination.total}
+                    className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
                 </div>
               </div>
-            </div>
+            </>
           )}
         </div>
       </div>
 
       {/* Booking Details Modal */}
-      {selectedBooking && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-              <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
+      {showModal && selectedBooking && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-2/3 xl:w-1/2 shadow-lg rounded-md bg-white">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-medium text-gray-900">Booking Details</h3>
+              <button
+                onClick={() => setShowModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+                disabled={loading.action || loading.details}
+              >
+                <X className="w-6 h-6" />
+              </button>
             </div>
-            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
-              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                <div className="sm:flex sm:items-start">
-                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
-                    <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
-                      Booking Details
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-4">
+            
+            {loading.details ? (
+              <div className="flex justify-center py-8">
+                <Loader className="animate-spin w-8 h-8 text-blue-500" />
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Booking Information Section */}
+                <div className="border-b border-gray-200 pb-6">
+                  <div 
+                    className="flex items-center justify-between cursor-pointer"
+                    onClick={() => toggleSection('booking')}
+                  >
+                    <h4 className="text-md font-semibold text-gray-900 mb-4">Booking Information</h4>
+                    {expandedSections.booking ? <ChevronUp /> : <ChevronDown />}
+                  </div>
+                  
+                  {expandedSections.booking && (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                          <h4 className="text-sm font-medium text-gray-500 mb-1 flex items-center">
-                            <Calendar className="h-4 w-4 mr-2 text-blue-500" />
-                            Booking Information
-                          </h4>
-                          <div className="text-sm text-gray-900 space-y-1">
-                            <p><span className="font-medium">ID:</span> {selectedBooking._id}</p>
-                            <p><span className="font-medium">Date:</span> {formatDate(selectedBooking.date)}</p>
-                            <p><span className="font-medium">Time:</span> {selectedBooking.time || 'Flexible'}</p>
-                            <p><span className="font-medium">Status:</span> <StatusBadge status={selectedBooking.status} /></p>
-                          </div>
+                          <p className="text-sm text-gray-500">Booking ID</p>
+                          <p className="font-mono text-sm bg-gray-100 p-2 rounded break-all">{selectedBooking._id}</p>
                         </div>
                         <div>
-                          <h4 className="text-sm font-medium text-gray-500 mb-1 flex items-center">
-                            <User className="h-4 w-4 mr-2 text-blue-500" />
-                            Customer Details
-                          </h4>
-                          <div className="text-sm text-gray-900 space-y-1">
-                            <p><span className="font-medium">Name:</span> {selectedBooking.customer?.name || 'N/A'}</p>
-                            <p><span className="font-medium">Phone:</span> {selectedBooking.customer?.phone || 'N/A'}</p>
-                            <p><span className="font-medium">Email:</span> {selectedBooking.customer?.email || 'N/A'}</p>
-                          </div>
+                          <p className="text-sm text-gray-500">Status</p>
+                          <p className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(selectedBooking.status)}`}>
+                            {getStatusIcon(selectedBooking.status)}
+                            <span className="ml-1 capitalize">{selectedBooking.status || 'N/A'}</span>
+                          </p>
                         </div>
                       </div>
-                      <div className="space-y-4">
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                          <h4 className="text-sm font-medium text-gray-500 mb-1 flex items-center">
-                            <Home className="h-4 w-4 mr-2 text-blue-500" />
-                            Service Details
-                          </h4>
-                          <div className="text-sm text-gray-900 space-y-1">
-                            <p><span className="font-medium">Service:</span> {selectedBooking.service?.title || 'N/A'}</p>
-                            <p><span className="font-medium">Price:</span> ₹{selectedBooking.servicePrice?.toFixed(2) || '0.00'}</p>
-                            {selectedBooking.discountAmount > 0 && (
-                              <p><span className="font-medium">Discount:</span> ₹{selectedBooking.discountAmount.toFixed(2)}</p>
-                            )}
-                          </div>
+                          <p className="text-sm text-gray-500">Created At</p>
+                          <p className="font-medium">{formatDate(selectedBooking.createdAt)}</p>
                         </div>
                         <div>
-                          <h4 className="text-sm font-medium text-gray-500 mb-1 flex items-center">
-                            <MapPin className="h-4 w-4 mr-2 text-blue-500" />
-                            Service Location
-                          </h4>
-                          <div className="text-sm text-gray-900 space-y-1">
-                            <p>{selectedBooking.address?.street || 'N/A'}</p>
-                            <p>{selectedBooking.address?.city || 'N/A'}, {selectedBooking.address?.state || 'N/A'}</p>
-                            <p>{selectedBooking.address?.postalCode || 'N/A'}, {selectedBooking.address?.country || 'N/A'}</p>
-                          </div>
+                          <p className="text-sm text-gray-500">Updated At</p>
+                          <p className="font-medium">{formatDate(selectedBooking.updatedAt)}</p>
                         </div>
                       </div>
                     </div>
+                  )}
+                </div>
+
+                {/* Customer Information Section */}
+                <div className="border-b border-gray-200 pb-6">
+                  <div 
+                    className="flex items-center justify-between cursor-pointer"
+                    onClick={() => toggleSection('customer')}
+                  >
+                    <h4 className="text-md font-semibold text-gray-900 mb-4">Customer Information</h4>
+                    {expandedSections.customer ? <ChevronUp /> : <ChevronDown />}
                   </div>
+                  
+                  {expandedSections.customer && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="flex items-center">
+                        <User className="w-5 h-5 text-gray-400 mr-3" />
+                        <div>
+                          <p className="text-sm text-gray-500">Name</p>
+                          <p className="font-medium">{selectedBooking.customer?.name || 'N/A'}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center">
+                        <Phone className="w-5 h-5 text-gray-400 mr-3" />
+                        <div>
+                          <p className="text-sm text-gray-500">Phone</p>
+                          <p className="font-medium">{selectedBooking.customer?.phone || 'N/A'}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center md:col-span-2">
+                        <Mail className="w-5 h-5 text-gray-400 mr-3" />
+                        <div>
+                          <p className="text-sm text-gray-500">Email</p>
+                          <p className="font-medium">{selectedBooking.customer?.email || 'N/A'}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Service Information Section */}
+                <div className="border-b border-gray-200 pb-6">
+                  <div 
+                    className="flex items-center justify-between cursor-pointer"
+                    onClick={() => toggleSection('service')}
+                  >
+                    <h4 className="text-md font-semibold text-gray-900 mb-4">Service Information</h4>
+                    {expandedSections.service ? <ChevronUp /> : <ChevronDown />}
+                  </div>
+                  
+                  {expandedSections.service && (
+                    <div className="space-y-4">
+                      {selectedBooking.services?.map((serviceItem, index) => (
+                        <div key={index} className="bg-gray-50 p-4 rounded-lg">
+                          <div className="flex items-start">
+                            {getServiceIcon(serviceItem.service?.category)}
+                            <div className="ml-3 flex-1">
+                              <h5 className="font-medium text-gray-900">{serviceItem.service?.title || 'Service'}</h5>
+                              <div className="flex flex-wrap gap-2 mt-1">
+                                <span className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-full">
+                                  {serviceItem.service?.category || 'General'}
+                                </span>
+                                <span className="text-xs px-2 py-1 bg-purple-100 text-purple-800 rounded-full">
+                                  Duration: {formatDuration(serviceItem.service?.duration)}
+                                </span>
+                              </div>
+                              <p className="text-sm text-gray-500 mt-2">{serviceItem.service?.description}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-medium">₹{serviceItem.price?.toFixed(2) || '0.00'}</p>
+                              <p className="text-sm text-gray-500">Qty: {serviceItem.quantity || 1}</p>
+                            </div>
+                          </div>
+                          
+                          {serviceItem.addons?.length > 0 && (
+                            <div className="mt-3 pl-8">
+                              <h6 className="text-sm font-medium text-gray-500 mb-1">Add-ons:</h6>
+                              <ul className="space-y-2">
+                                {serviceItem.addons.map((addon, addonIndex) => (
+                                  <li key={addonIndex} className="flex justify-between text-sm">
+                                    <span>{addon.name}</span>
+                                    <span>+₹{addon.price?.toFixed(2) || '0.00'}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                        <div>
+                          <p className="text-sm text-gray-500">Scheduled Date</p>
+                          <p className="font-medium">{formatDate(selectedBooking.date)}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-500">Scheduled Time</p>
+                          <p className="font-medium">{formatTime(selectedBooking.time)}</p>
+                        </div>
+                      </div>
+                      
+                      {selectedBooking.notes && (
+                        <div>
+                          <p className="text-sm text-gray-500">Customer Notes</p>
+                          <p className="font-medium">{selectedBooking.notes}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Address Information Section */}
+                <div className="border-b border-gray-200 pb-6">
+                  <div 
+                    className="flex items-center justify-between cursor-pointer"
+                    onClick={() => toggleSection('address')}
+                  >
+                    <h4 className="text-md font-semibold text-gray-900 mb-4">Address Information</h4>
+                    {expandedSections.address ? <ChevronUp /> : <ChevronDown />}
+                  </div>
+                  
+                  {expandedSections.address && (
+                    <div>
+                      <p className="text-sm text-gray-500">Full Address</p>
+                      <p className="font-medium">
+                        {formatAddress(selectedBooking.address)}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Payment Details Section */}
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  <div 
+                    className="flex items-center justify-between cursor-pointer mb-4"
+                    onClick={() => toggleSection('payment')}
+                  >
+                    <h4 className="text-md font-semibold text-gray-900 flex items-center">
+                      <DollarSign className="w-5 h-5 mr-2 text-blue-500" />
+                      Payment Details
+                    </h4>
+                    {expandedSections.payment ? <ChevronUp /> : <ChevronDown />}
+                  </div>
+                  
+                  {expandedSections.payment && (
+                    <div className="space-y-3">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 flex items-center">
+                          <FileText className="w-4 h-4 mr-1" />
+                          Subtotal
+                        </span>
+                        <span className="font-medium">₹{calculateSubtotal(selectedBooking)}</span>
+                      </div>
+                      
+                      {selectedBooking.taxAmount > 0 && (
+                        <div className="flex justify-between text-gray-600">
+                          <span className="flex items-center">
+                            <Percent className="w-4 h-4 mr-1" />
+                            Tax
+                          </span>
+                          <span>+₹{selectedBooking.taxAmount?.toFixed(2) || '0.00'}</span>
+                        </div>
+                      )}
+                      
+                      {selectedBooking.totalDiscount > 0 && (
+                        <div className="flex justify-between text-green-600">
+                          <span className="flex items-center">
+                            <Tag className="w-4 h-4 mr-1" />
+                            Discount
+                          </span>
+                          <span>-₹{selectedBooking.totalDiscount?.toFixed(2) || '0.00'}</span>
+                        </div>
+                      )}
+                      
+                      <div className="border-t border-gray-200 pt-2">
+                        <div className="flex justify-between font-semibold">
+                          <span>Total Amount</span>
+                          <span>₹{selectedBooking.totalAmount?.toFixed(2) || calculateSubtotal(selectedBooking)}</span>
+                        </div>
+                      </div>
+                      
+                      {selectedBooking.commissionAmount > 0 && (
+                        <div className="border-t border-gray-200 pt-2">
+                          <div className="flex justify-between text-red-600">
+                            <span className="flex items-center">
+                              <Percent className="w-4 h-4 mr-1" />
+                              Platform Commission ({selectedBooking.commissionPercentage || 0}%)
+                            </span>
+                            <span>-₹{selectedBooking.commissionAmount?.toFixed(2) || '0.00'}</span>
+                          </div>
+                        </div>
+                      )}
+                      
+                      <div className="border-t border-gray-200 pt-3">
+                        <div className="flex justify-between text-lg font-bold text-green-600">
+                          <span className="flex items-center">
+                            <Wallet className="w-5 h-5 mr-2" />
+                            Your Estimated Earnings
+                          </span>
+                          <span>
+                            ₹{calculateNetAmount(selectedBooking)}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      {selectedBooking.paymentMethod && (
+                        <div className="text-sm text-gray-500 mt-2">
+                          Payment Method: {selectedBooking.paymentMethod}
+                          {selectedBooking.paymentStatus && (
+                            <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
+                              selectedBooking.paymentStatus === 'completed' 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {selectedBooking.paymentStatus}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex justify-end space-x-3 pt-6">
+                  <button
+                    onClick={() => setShowModal(false)}
+                    disabled={loading.action}
+                    className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                  >
+                    Close
+                  </button>
+                  
+                  {selectedBooking.status === 'pending' && (
+                    <button
+                      onClick={() => handleBookingAction(selectedBooking._id, 'accept')}
+                      disabled={loading.action}
+                      className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                    >
+                      {loading.action ? (
+                        <Loader className="w-4 h-4 mx-auto animate-spin" />
+                      ) : (
+                        'Accept Booking'
+                      )}
+                    </button>
+                  )}
+                  
+                  {selectedBooking.status === 'accepted' && (
+                    <button
+                      onClick={() => handleBookingAction(selectedBooking._id, 'complete')}
+                      disabled={loading.action}
+                      className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
+                    >
+                      {loading.action ? (
+                        <Loader className="w-4 h-4 mx-auto animate-spin" />
+                      ) : (
+                        'Mark as Completed'
+                      )}
+                    </button>
+                  )}
                 </div>
               </div>
-              <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                <button
-                  type="button"
-                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-                  onClick={() => setSelectedBooking(null)}
-                >
-                  Close
-                </button>
-                {selectedBooking.status === 'pending' && (
-                  <button
-                    type="button"
-                    className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm"
-                    onClick={() => {
-                      handleBookingAction(selectedBooking._id, 'accept');
-                      setSelectedBooking(null);
-                    }}
-                  >
-                    Accept Booking
-                  </button>
-                )}
-              </div>
-            </div>
+            )}
           </div>
         </div>
       )}
@@ -525,4 +1027,4 @@ const ProviderBookingsPage = () => {
   );
 };
 
-export default ProviderBookingsPage;
+export default ProviderBookingDashboard;
