@@ -526,7 +526,9 @@ exports.getInvoicesForCustomer = async (req, res) => {
     if (status) query.paymentStatus = status;
 
     const invoices = await Invoice.find(query)
-      .populate('provider', 'businessName')
+      .populate('provider', 'businessName name email phone')
+      .populate('service', 'title category description')
+      .populate('customer', 'name email phone')
       .sort({ generatedAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
@@ -545,6 +547,322 @@ exports.getInvoicesForCustomer = async (req, res) => {
     });
   } catch (error) {
     console.error('Get customer invoices error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};
+
+// @desc    Get service invoices for customer
+// @route   GET /api/invoices/user/service-invoices
+// @access  Private (Customer)
+exports.getServiceInvoicesForCustomer = async (req, res) => {
+  try {
+    const { page = 1, limit = 10, status } = req.query;
+    const skip = (page - 1) * limit;
+
+    const query = { 
+      customer: req.user._id,
+      $or: [
+        { productsUsed: { $exists: false } },
+        { productsUsed: { $size: 0 } }
+      ]
+    };
+    if (status) query.paymentStatus = status;
+
+    const invoices = await Invoice.find(query)
+      .populate('provider', 'businessName name email phone')
+      .populate('service', 'title category description')
+      .populate('customer', 'name email phone')
+      .sort({ generatedAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await Invoice.countDocuments(query);
+
+    res.status(200).json({
+      success: true,
+      data: invoices,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('Get service invoices error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};
+
+// @desc    Get product invoices for customer
+// @route   GET /api/invoices/user/product-invoices
+// @access  Private (Customer)
+exports.getProductInvoicesForCustomer = async (req, res) => {
+  try {
+    const { page = 1, limit = 10, status } = req.query;
+    const skip = (page - 1) * limit;
+
+    const query = { 
+      customer: req.user._id,
+      productsUsed: { $exists: true, $not: { $size: 0 } }
+    };
+    if (status) query.paymentStatus = status;
+
+    const invoices = await Invoice.find(query)
+      .populate('provider', 'businessName name email phone')
+      .populate('service', 'title category description')
+      .populate('customer', 'name email phone')
+      .sort({ generatedAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await Invoice.countDocuments(query);
+
+    res.status(200).json({
+      success: true,
+      data: invoices,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('Get product invoices error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};
+
+// @desc    Process product payment to provider
+// @route   POST /api/invoices/:id/product-payment
+// @access  Private (Customer)
+exports.processProductPayment = async (req, res) => {
+  try {
+    const { paymentMethod, upiId, transactionId, amount } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid invoice ID'
+      });
+    }
+
+    const invoice = await Invoice.findOne({
+      _id: req.params.id,
+      customer: req.user._id
+    })
+      .populate('provider', 'businessName name email phone')
+      .populate('customer', 'name email phone');
+
+    if (!invoice) {
+      return res.status(404).json({
+        success: false,
+        message: 'Invoice not found'
+      });
+    }
+
+    if (invoice.paymentStatus === 'paid') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invoice is already paid'
+      });
+    }
+
+    // Calculate product total
+    const productTotal = invoice.productsUsed.reduce((sum, product) => sum + product.total, 0);
+
+    if (amount && Math.abs(amount - productTotal) > 0.01) {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment amount does not match product total'
+      });
+    }
+
+    // Create payment record
+    const paymentDetail = {
+      method: paymentMethod,
+      amount: productTotal,
+      date: new Date(),
+      status: paymentMethod === 'cash' ? 'pending' : 'success'
+    };
+
+    if (paymentMethod === 'upi' && upiId) {
+      paymentDetail.transactionId = transactionId || `UPI_${Date.now()}`;
+      paymentDetail.upiId = upiId;
+    }
+
+    // Add payment to invoice
+    invoice.paymentDetails.push(paymentDetail);
+
+    // Update payment status
+    if (paymentMethod === 'upi') {
+      invoice.paymentStatus = 'paid';
+    } else if (paymentMethod === 'cash') {
+      invoice.paymentStatus = 'pending'; // Will be confirmed by provider
+    }
+
+    await invoice.save();
+
+    // Send notification to provider
+    if (paymentMethod === 'upi') {
+      await sendEmail({
+        to: invoice.provider.email,
+        subject: 'Product Payment Received',
+        text: `You have received a payment of ₹${productTotal} via UPI for invoice ${invoice.invoiceNo} from ${invoice.customer.name}.`
+      });
+    } else if (paymentMethod === 'cash') {
+      await sendEmail({
+        to: invoice.provider.email,
+        subject: 'Cash Payment Pending Confirmation',
+        text: `Customer ${invoice.customer.name} has selected cash payment of ₹${productTotal} for invoice ${invoice.invoiceNo}. Please confirm receipt when payment is made.`
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: paymentMethod === 'cash' 
+        ? 'Cash payment recorded. Provider will confirm receipt.' 
+        : 'Payment processed successfully',
+      data: {
+        invoiceNo: invoice.invoiceNo,
+        amount: productTotal,
+        paymentMethod,
+        status: invoice.paymentStatus
+      }
+    });
+
+  } catch (error) {
+    console.error('Process product payment error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};
+
+// @desc    Confirm cash payment (Provider only)
+// @route   POST /api/invoices/:id/confirm-cash-payment
+// @access  Private (Provider)
+exports.confirmCashPayment = async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid invoice ID'
+      });
+    }
+
+    const invoice = await Invoice.findOne({
+      _id: req.params.id,
+      provider: req.provider._id
+    })
+      .populate('customer', 'name email phone');
+
+    if (!invoice) {
+      return res.status(404).json({
+        success: false,
+        message: 'Invoice not found or unauthorized'
+      });
+    }
+
+    // Find pending cash payment
+    const cashPayment = invoice.paymentDetails.find(
+      payment => payment.method === 'cash' && payment.status === 'pending'
+    );
+
+    if (!cashPayment) {
+      return res.status(400).json({
+        success: false,
+        message: 'No pending cash payment found'
+      });
+    }
+
+    // Update payment status
+    cashPayment.status = 'success';
+    invoice.paymentStatus = 'paid';
+
+    await invoice.save();
+
+    // Send confirmation to customer
+    await sendEmail({
+      to: invoice.customer.email,
+      subject: 'Cash Payment Confirmed',
+      text: `Your cash payment of ₹${cashPayment.amount} for invoice ${invoice.invoiceNo} has been confirmed by the provider.`
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Cash payment confirmed successfully',
+      data: {
+        invoiceNo: invoice.invoiceNo,
+        amount: cashPayment.amount,
+        confirmedAt: new Date()
+      }
+    });
+
+  } catch (error) {
+    console.error('Confirm cash payment error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};
+
+// @desc    Get my invoices (unified endpoint for frontend)
+// @route   GET /api/invoice/user/my-invoices
+// @access  Private (Customer)
+exports.getMyInvoices = async (req, res) => {
+  try {
+    const { page = 1, limit = 10, status, type } = req.query;
+    const skip = (page - 1) * limit;
+
+    let query = { customer: req.user._id };
+    
+    if (status) query.paymentStatus = status;
+    
+    // Filter by invoice type
+    if (type === 'service') {
+      query.$or = [
+        { productsUsed: { $exists: false } },
+        { productsUsed: { $size: 0 } }
+      ];
+    } else if (type === 'product') {
+      query.productsUsed = { $exists: true, $not: { $size: 0 } };
+    }
+
+    const invoices = await Invoice.find(query)
+      .populate('provider', 'businessName name email phone')
+      .populate('service', 'title category description')
+      .populate('customer', 'name email phone')
+      .sort({ generatedAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await Invoice.countDocuments(query);
+
+    res.status(200).json({
+      success: true,
+      data: invoices,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('Get my invoices error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'

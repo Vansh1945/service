@@ -25,55 +25,62 @@ const LoginPage = () => {
     }));
   };
 
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  setError('');
-  setIsLoading(true);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setIsLoading(true);
 
-  // Basic validation
-  if (!formData.email || !formData.password) {
-    setError('Please fill in all fields');
-    toast.error('Please fill in all fields');
-    setIsLoading(false);
-    return;
-  }
-
-  try {
-    console.log("Attempting login with:", formData.email); // Debug log
-
-    const response = await fetch(`${API}/auth/login`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({
-        email: formData.email.trim().toLowerCase(),
-        password: formData.password.trim()
-      })
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error("Login failed:", data.message || 'Unknown error');
-      throw new Error(data.message || 'Login failed');
+    // Basic validation
+    if (!formData.email || !formData.password) {
+      setError('Please fill in all fields');
+      toast.error('Please fill in all fields');
+      setIsLoading(false);
+      return;
     }
 
+    try {
+      console.log("Attempting login with:", formData.email);
 
-  } catch (err) {
-    const errorMsg = err.message || 'Invalid email or password';
-    console.error("Login error:", errorMsg);
-    setError(errorMsg);
-    toast.error(errorMsg);
-  } finally {
-    setIsLoading(false);
-  }
-};
+      const response = await fetch(`${API}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          email: formData.email.trim().toLowerCase(),
+          password: formData.password.trim()
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error("Login failed:", data.message || 'Unknown error');
+        throw new Error(data.message || 'Login failed');
+      }
+
+      // ✅ CRITICAL FIX: Call loginUser to authenticate and redirect
+      if (data.token && data.user) {
+        loginUser(data.token, data.user.role || 'customer', data.user);
+      } else {
+        throw new Error('Invalid response from server');
+      }
+
+    } catch (err) {
+      const errorMsg = err.message || 'Invalid email or password';
+      console.error("Login error:", errorMsg);
+      setError(errorMsg);
+      toast.error(errorMsg);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center p-4">
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
@@ -108,7 +115,7 @@ const handleSubmit = async (e) => {
                   onChange={handleChange}
                   className="w-full pl-10 pr-4 py-3 rounded-xl border-2 border-blue-100 focus:border-yellow-400 focus:ring-2 focus:ring-yellow-200 transition-all"
                   placeholder="your@email.com"
-              
+
                 />
               </div>
             </div>
@@ -128,7 +135,7 @@ const handleSubmit = async (e) => {
                   onChange={handleChange}
                   className="w-full pl-10 pr-4 py-3 rounded-xl border-2 border-blue-100 focus:border-yellow-400 focus:ring-2 focus:ring-yellow-200 transition-all"
                   placeholder="••••••••"
-              
+
                   minLength="6"
                 />
               </div>

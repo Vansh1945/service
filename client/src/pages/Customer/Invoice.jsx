@@ -26,7 +26,8 @@ import {
   List,
   ListItem,
   ListItemText,
-  Chip
+  Chip,
+  Pagination
 } from '@mui/material';
 import { Download, Visibility, Close } from '@mui/icons-material';
 import axios from 'axios';
@@ -43,6 +44,12 @@ const UserInvoicesPage = () => {
   const [openSnackbar, setOpenSnackbar] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [snackbarSeverity, setSnackbarSeverity] = useState('info');
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    pages: 1
+  });
 
   // Check authentication on component mount
   useEffect(() => {
@@ -52,20 +59,32 @@ const UserInvoicesPage = () => {
   }, [isAuthenticated, navigate]);
 
   // Fetch user invoices
-  const fetchUserInvoices = async () => {
+  const fetchUserInvoices = async (page = 1) => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API}/invoice/user/my-invoices`, {
+      const response = await axios.get(`${API}/invoice/customer/all`, {
         headers: {
           'Authorization': `Bearer ${token}`
+        },
+        params: {
+          page,
+          limit: pagination.limit
         }
       });
+      
       setInvoices(response.data.data);
+      setPagination({
+        page: response.data.pagination.page,
+        limit: response.data.pagination.limit,
+        total: response.data.pagination.total,
+        pages: response.data.pagination.pages
+      });
       setLoading(false);
     } catch (err) {
       console.error('Failed to fetch invoices:', err);
       setError(err.response?.data?.message || 'Failed to fetch invoices');
       setLoading(false);
+      
       if (err.response?.status === 401) {
         showToast('Session expired. Please login again.', 'error');
         logoutUser();
@@ -78,6 +97,11 @@ const UserInvoicesPage = () => {
       fetchUserInvoices();
     }
   }, [isAuthenticated, token]);
+
+  // Handle page change
+  const handlePageChange = (event, newPage) => {
+    fetchUserInvoices(newPage);
+  };
 
   // View invoice details
   const handleViewInvoice = (invoice) => {
@@ -92,7 +116,7 @@ const UserInvoicesPage = () => {
       setSnackbarSeverity('info');
       setOpenSnackbar(true);
 
-      const response = await axios.get(`${API}/invoice/${invoiceId}/download`, {
+      const response = await axios.get(`${API}/invoice/customer/${invoiceId}/download`, {
         headers: {
           'Authorization': `Bearer ${token}`
         },
@@ -121,7 +145,11 @@ const UserInvoicesPage = () => {
 
   // Format date
   const formatDate = (dateString) => {
-    return format(new Date(dateString), 'dd MMM yyyy');
+    try {
+      return format(new Date(dateString), 'dd MMM yyyy');
+    } catch {
+      return 'N/A';
+    }
   };
 
   // Format currency
@@ -130,7 +158,7 @@ const UserInvoicesPage = () => {
       style: 'currency',
       currency: 'INR',
       minimumFractionDigits: 2
-    }).format(amount);
+    }).format(amount || 0);
   };
 
   // Close dialog
@@ -165,7 +193,7 @@ const UserInvoicesPage = () => {
           </Grid>
           <Grid item>
             <Chip 
-              label={invoice.paymentStatus.toUpperCase()}
+              label={invoice.paymentStatus?.toUpperCase() || 'N/A'}
               color={
                 invoice.paymentStatus === 'paid' ? 'success' : 
                 invoice.paymentStatus === 'pending' ? 'warning' : 
@@ -201,7 +229,7 @@ const UserInvoicesPage = () => {
               Provider Information
             </Typography>
             <Typography variant="body1">
-              {invoice.provider?.name || 'N/A'}
+              {invoice.provider?.businessName || invoice.provider?.name || 'N/A'}
             </Typography>
             <Typography variant="body2" color="textSecondary">
               {invoice.provider?.email || 'N/A'}
@@ -225,6 +253,9 @@ const UserInvoicesPage = () => {
           <Typography variant="body2" color="textSecondary">
             {invoice.service?.description || 'No description available'}
           </Typography>
+          <Typography variant="body2" color="textSecondary">
+            Category: {invoice.service?.category || 'N/A'}
+          </Typography>
           <Typography variant="body1" align="right" mt={2}>
             Service Amount: {formatCurrency(invoice.serviceAmount)}
           </Typography>
@@ -236,19 +267,30 @@ const UserInvoicesPage = () => {
             <Typography variant="subtitle1" gutterBottom>
               Products Used
             </Typography>
-            <List dense>
-              {invoice.productsUsed.map((product, index) => (
-                <ListItem key={index}>
-                  <ListItemText
-                    primary={product.name}
-                    secondary={`${product.quantity} x ${formatCurrency(product.rate)}`}
-                  />
-                  <Typography variant="body1">
-                    {formatCurrency(product.total)}
-                  </Typography>
-                </ListItem>
-              ))}
-            </List>
+            <TableContainer component={Paper}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Product</TableCell>
+                    <TableCell>Description</TableCell>
+                    <TableCell align="right">Qty</TableCell>
+                    <TableCell align="right">Rate</TableCell>
+                    <TableCell align="right">Total</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {invoice.productsUsed.map((product, index) => (
+                    <TableRow key={index}>
+                      <TableCell>{product.name}</TableCell>
+                      <TableCell>{product.description || '-'}</TableCell>
+                      <TableCell align="right">{product.quantity}</TableCell>
+                      <TableCell align="right">{formatCurrency(product.rate)}</TableCell>
+                      <TableCell align="right">{formatCurrency(product.total)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
           </>
         )}
 
@@ -275,6 +317,13 @@ const UserInvoicesPage = () => {
                 </ListItem>
               )}
               <ListItem>
+                <ListItemText primary="Subtotal" />
+                <Typography variant="body1">
+                  {formatCurrency(invoice.serviceAmount + 
+                    (invoice.productsUsed?.reduce((sum, p) => sum + p.total, 0) || 0))}
+                </Typography>
+              </ListItem>
+              <ListItem>
                 <ListItemText primary="Total Amount" />
                 <Typography variant="h6">
                   {formatCurrency(invoice.totalAmount)}
@@ -291,19 +340,38 @@ const UserInvoicesPage = () => {
             <Typography variant="subtitle1" gutterBottom>
               Payment Details
             </Typography>
-            <List dense>
-              {invoice.paymentDetails.map((payment, index) => (
-                <ListItem key={index}>
-                  <ListItemText
-                    primary={`${payment.method.toUpperCase()} - ${payment.status.toUpperCase()}`}
-                    secondary={formatDate(payment.date)}
-                  />
-                  <Typography variant="body1">
-                    {formatCurrency(payment.amount)}
-                  </Typography>
-                </ListItem>
-              ))}
-            </List>
+            <TableContainer component={Paper}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Method</TableCell>
+                    <TableCell>Date</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell align="right">Amount</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {invoice.paymentDetails.map((payment, index) => (
+                    <TableRow key={index}>
+                      <TableCell>{payment.method?.toUpperCase() || 'N/A'}</TableCell>
+                      <TableCell>{formatDate(payment.date)}</TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={payment.status?.toUpperCase() || 'N/A'}
+                          color={
+                            payment.status === 'success' ? 'success' : 
+                            payment.status === 'pending' ? 'warning' : 
+                            'error'
+                          }
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell align="right">{formatCurrency(payment.amount)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
           </>
         )}
       </Box>
@@ -323,6 +391,14 @@ const UserInvoicesPage = () => {
       ) : error ? (
         <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
           <Typography color="error">{error}</Typography>
+          <Button 
+            variant="contained" 
+            color="primary" 
+            onClick={() => fetchUserInvoices()}
+            sx={{ ml: 2 }}
+          >
+            Retry
+          </Button>
         </Box>
       ) : invoices.length === 0 ? (
         <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
@@ -330,7 +406,7 @@ const UserInvoicesPage = () => {
         </Box>
       ) : (
         <>
-          <TableContainer component={Paper}>
+          <TableContainer component={Paper} sx={{ mb: 2 }}>
             <Table>
               <TableHead>
                 <TableRow>
@@ -338,44 +414,46 @@ const UserInvoicesPage = () => {
                   <TableCell>Date</TableCell>
                   <TableCell>Provider</TableCell>
                   <TableCell>Service</TableCell>
-                  <TableCell>Amount</TableCell>
+                  <TableCell align="right">Amount</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell>Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {invoices.map((invoice) => (
-                  <TableRow key={invoice._id}>
+                  <TableRow key={invoice._id} hover>
                     <TableCell>{invoice.invoiceNo}</TableCell>
                     <TableCell>{formatDate(invoice.createdAt)}</TableCell>
-                    <TableCell>{invoice.provider?.name || 'N/A'}</TableCell>
+                    <TableCell>{invoice.provider?.businessName || invoice.provider?.name || 'N/A'}</TableCell>
                     <TableCell>{invoice.service?.title || 'N/A'}</TableCell>
-                    <TableCell>{formatCurrency(invoice.totalAmount)}</TableCell>
+                    <TableCell align="right">{formatCurrency(invoice.totalAmount)}</TableCell>
                     <TableCell>
-                      <Typography 
+                      <Chip 
+                        label={invoice.paymentStatus?.charAt(0).toUpperCase() + invoice.paymentStatus?.slice(1) || 'N/A'}
                         color={
-                          invoice.paymentStatus === 'paid' ? 'success.main' : 
-                          invoice.paymentStatus === 'pending' ? 'warning.main' : 
-                          'error.main'
+                          invoice.paymentStatus === 'paid' ? 'success' : 
+                          invoice.paymentStatus === 'pending' ? 'warning' : 
+                          'error'
                         }
-                      >
-                        {invoice.paymentStatus.charAt(0).toUpperCase() + invoice.paymentStatus.slice(1)}
-                      </Typography>
+                        size="small"
+                      />
                     </TableCell>
                     <TableCell>
                       <IconButton 
                         color="primary" 
                         onClick={() => handleViewInvoice(invoice)}
                         aria-label="view invoice"
+                        size="small"
                       >
-                        <Visibility />
+                        <Visibility fontSize="small" />
                       </IconButton>
                       <IconButton 
                         color="secondary" 
                         onClick={() => handleDownloadInvoice(invoice._id, invoice.invoiceNo)}
                         aria-label="download invoice"
+                        size="small"
                       >
-                        <Download />
+                        <Download fontSize="small" />
                       </IconButton>
                     </TableCell>
                   </TableRow>
@@ -384,12 +462,27 @@ const UserInvoicesPage = () => {
             </Table>
           </TableContainer>
 
+          {/* Pagination */}
+          {pagination.pages > 1 && (
+            <Box display="flex" justifyContent="center" mt={3}>
+              <Pagination
+                count={pagination.pages}
+                page={pagination.page}
+                onChange={handlePageChange}
+                color="primary"
+                showFirstButton
+                showLastButton
+              />
+            </Box>
+          )}
+
           {/* Invoice Detail Dialog */}
           <Dialog 
             open={openDialog} 
             onClose={handleCloseDialog}
             maxWidth="md"
             fullWidth
+            scroll="paper"
           >
             <DialogTitle>
               Invoice Details

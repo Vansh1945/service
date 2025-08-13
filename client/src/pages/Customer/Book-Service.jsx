@@ -101,6 +101,29 @@ const BookService = () => {
     }
   };
 
+  // Calculate discount amount
+  const calculateDiscount = () => {
+    if (!service?.basePrice || !formData.appliedCoupon) return 0;
+    
+    const baseAmount = service.basePrice * formData.quantity;
+    
+    if (formData.appliedCoupon.discountType === 'percent') {
+      return (baseAmount * formData.appliedCoupon.discountValue) / 100;
+    } else {
+      return formData.appliedCoupon.discountValue;
+    }
+  };
+
+  // Calculate total amount
+  const calculateTotal = () => {
+    if (!service?.basePrice) return 0;
+
+    const baseAmount = service.basePrice * formData.quantity;
+    const discount = calculateDiscount();
+    
+    return Math.max(baseAmount - discount, 0);
+  };
+
   // Initialize data
   useEffect(() => {
     const initializeData = async () => {
@@ -185,7 +208,7 @@ const BookService = () => {
 
   // Apply coupon
   const applyCoupon = async () => {
-    if (!formData.couponCode.trim() || !service) {
+    if (!formData.couponCode.trim() || !service?.basePrice) {
       toast.error('Please enter a coupon code');
       return;
     }
@@ -225,23 +248,6 @@ const BookService = () => {
       couponCode: '',
       appliedCoupon: null
     }));
-  };
-
-  // Calculate total amount
-  const calculateTotal = () => {
-    if (!service?.basePrice) return 0;
-
-    const baseAmount = service.basePrice * formData.quantity;
-
-    if (formData.appliedCoupon) {
-      if (formData.appliedCoupon.discountType === 'percent') {
-        return baseAmount - (baseAmount * formData.appliedCoupon.discountValue / 100);
-      } else {
-        return Math.max(baseAmount - formData.appliedCoupon.discountValue, 0);
-      }
-    }
-
-    return baseAmount;
   };
 
   // Validate form
@@ -307,21 +313,26 @@ const BookService = () => {
       const formattedDate = formData.date.toISOString().split('T')[0];
       const totalAmount = calculateTotal();
 
-      const bookingData = {
-        serviceId: service._id,
-        date: formattedDate,
-        time: formData.time,
-        address: {
-          street: addressData.street,
-          city: addressData.city,
-          state: addressData.state,
-          postalCode: addressData.postalCode,
-          country: addressData.country || 'India'
-        },
-        notes: formData.notes.trim(),
-        quantity: formData.quantity,
-        couponCode: formData.appliedCoupon?.code || undefined
-      };
+     const bookingData = {
+  serviceId: service._id,
+  date: formattedDate,
+  time: formData.time,
+  address: {
+    street: addressData.street,
+    city: addressData.city,
+    state: addressData.state,
+    postalCode: addressData.postalCode,
+    country: addressData.country || 'India'
+  },
+  notes: formData.notes.trim(),
+  quantity: formData.quantity,
+  couponCode: formData.appliedCoupon?.code || undefined,
+
+  totalDiscount: discountAmount,
+  subtotal: baseAmount,
+  totalAmount: totalAmount
+};
+
 
       // Create booking
       const response = await axios.post(
@@ -339,6 +350,12 @@ const BookService = () => {
         throw new Error(response.data.message || 'Failed to create booking');
       }
 
+      let bookingId = response.data.bookingId || response.data.data?._id || response.data.data?.id;
+      
+      if (!bookingId) {
+        throw new Error('Booking created but ID not found in response');
+      }
+
       toast.update(toastId, {
         render: 'Booking created successfully!',
         type: 'success',
@@ -347,7 +364,12 @@ const BookService = () => {
         closeButton: true
       });
 
-      navigate(`/customer/booking-confirm/${response.data.data._id}`);
+      navigate(`/customer/booking-confirm/${bookingId}`, {
+        state: {
+          booking: response.data.data || response.data.booking || response.data,
+          service: service
+        }
+      });
     } catch (err) {
       console.error('Booking error:', err);
       toast.update(toastId, {
@@ -376,6 +398,7 @@ const BookService = () => {
 
   const totalAmount = calculateTotal();
   const baseAmount = service.basePrice * formData.quantity;
+  const discountAmount = calculateDiscount();
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -409,7 +432,7 @@ const BookService = () => {
                 </div>
                 <div className="ml-4">
                   <h2 className="text-lg font-semibold text-gray-900">{service.title}</h2>
-                  <p className="text-sm text-gray-500 capitalize">{service.category.toLowerCase()}</p>
+                  <p className="text-sm text-gray-500 capitalize">{service.category?.toLowerCase()}</p>
                   <p className="text-sm text-gray-500 mt-1">{service.duration} hours</p>
                 </div>
               </div>
@@ -429,9 +452,7 @@ const BookService = () => {
                     <div className="flex justify-between">
                       <span className="text-gray-600">Discount Applied:</span>
                       <span className="font-medium text-green-600">
-                        {formData.appliedCoupon.discountType === 'percent'
-                          ? `${formData.appliedCoupon.discountValue}%`
-                          : `-₹${formData.appliedCoupon.discountValue?.toFixed(2)}`}
+                        -₹{discountAmount.toFixed(2)}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
@@ -450,9 +471,9 @@ const BookService = () => {
                   <span className="text-gray-900">Total Amount:</span>
                   <div className="flex flex-col items-end">
                     {formData.appliedCoupon && (
-                      <span className="text-sm text-gray-500 line-through">₹{baseAmount?.toFixed(2)}</span>
+                      <span className="text-sm text-gray-500 line-through">₹{baseAmount.toFixed(2)}</span>
                     )}
-                    <span className="text-blue-600 text-lg">₹{totalAmount?.toFixed(2)}</span>
+                    <span className="text-blue-600 text-lg">₹{totalAmount.toFixed(2)}</span>
                   </div>
                 </div>
               </div>

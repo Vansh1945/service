@@ -3,10 +3,12 @@ const Booking = require('../models/Booking-model');
 const Invoice = require('../models/Invoice-model');
 const User = require('../models/User-model');
 const Provider = require('../models/Provider-model');
+const Service = require('../models/Service-model');
+const CommissionRule = require('../models/CommissionRule-model');
 const mongoose = require('mongoose');
 const crypto = require('crypto');
 const Razorpay = require('razorpay');
-const { sendEmail } = require('../utils/sendEmail');
+const sendEmail = require('../utils/sendEmail');
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
@@ -14,15 +16,27 @@ const razorpay = new Razorpay({
 });
 
 const createOrder = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  
   try {
     const { bookingId, amount, paymentMethod } = req.body;
     const userId = req.user._id;
 
-    // Validate input
-    if (!bookingId || !amount) {
+    // Validate input with more detailed checks
+    if (!bookingId || !mongoose.Types.ObjectId.isValid(bookingId)) {
+      await session.abortTransaction();
       return res.status(400).json({
         success: false,
-        message: 'Booking ID and amount are required'
+        message: 'Valid booking ID is required'
+      });
+    }
+
+    if (!amount || isNaN(amount) || amount <= 0) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: 'Valid positive amount is required'
       });
     }
 
@@ -30,18 +44,28 @@ const createOrder = async (req, res) => {
     const booking = await Booking.findOne({
       _id: bookingId,
       customer: userId
-    });
+    }).session(session);
 
     if (!booking) {
+      await session.abortTransaction();
       return res.status(404).json({
         success: false,
         message: 'Booking not found or unauthorized'
       });
     }
 
-    // Create Razorpay order
+    // Validate Razorpay credentials
+    if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+      await session.abortTransaction();
+      return res.status(500).json({
+        success: false,
+        message: 'Payment gateway configuration error'
+      });
+    }
+
+    // Create Razorpay order with better error handling
     const options = {
-      amount: Math.round(amount * 100), // Convert to paise
+      amount: amount, // Convert to paise
       currency: 'INR',
       receipt: `booking_${bookingId}`,
       payment_capture: 1,
@@ -51,7 +75,18 @@ const createOrder = async (req, res) => {
       }
     };
 
-    const order = await razorpay.orders.create(options);
+    let order;
+    try {
+      order = await razorpay.orders.create(options);
+    } catch (razorpayError) {
+      console.error('Razorpay order creation failed:', razorpayError);
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: razorpayError.error?.description || 'Payment gateway error',
+        error: razorpayError
+      });
+    }
 
     // Create transaction record
     const transaction = new Transaction({
@@ -64,26 +99,41 @@ const createOrder = async (req, res) => {
       paymentStatus: 'pending'
     });
 
-    await transaction.save();
+    await transaction.save({ session });
+
+    await session.commitTransaction();
 
     res.status(200).json({
       success: true,
       message: 'Order created successfully',
       data: {
         order,
-        key: RAZORPAY_KEY_ID,
+        key: process.env.RAZORPAY_KEY_ID,
         transactionId: transaction._id
       }
     });
 
   } catch (error) {
-    console.error('Error creating order:', error);
+    await session.abortTransaction();
+    console.error('Error creating order:', {
+      message: error.message,
+      stack: error.stack,
+      requestBody: req.body
+    });
+    
     res.status(500).json({
       success: false,
-      message: error.message || 'Failed to create order'
+      message: 'Failed to create order',
+      errorDetails: process.env.NODE_ENV === 'development' ? {
+        message: error.message,
+        stack: error.stack
+      } : undefined
     });
+  } finally {
+    session.endSession();
   }
 };
+
 
 const verifyPayment = async (req, res) => {
   try {
@@ -105,7 +155,7 @@ const verifyPayment = async (req, res) => {
 
     // Verify the payment signature
     const generatedSignature = crypto
-      .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET)
+      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
       .update(`${orderId}|${paymentId}`)
       .digest('hex');
 

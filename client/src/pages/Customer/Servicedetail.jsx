@@ -96,14 +96,13 @@ const ServiceDetailPage = () => {
   }, [id, API, showToast]);
 
   const handleBookNow = () => {
-    navigate(`/customer/book-service/${id}`, {
-      state: {
-        serviceId: id,
-        price: totalPrice,
-        duration: service.duration,
-        quantity
-      }
-    });
+    if (!isAuthenticated || !user) {
+      showToast('Please login to book services', 'error');
+      navigate('/login', { state: { from: `/customer/services/${id}` } });
+      return;
+    }
+
+    navigate(`/customer/book-service/${id}`);
   };
 
   // const handleAddToCart = async () => {

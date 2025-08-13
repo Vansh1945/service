@@ -84,7 +84,7 @@ const bookingSchema = new Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'accepted', 'completed', 'cancelled'],
+    enum: ['pending', 'accepted', 'in-progress', 'completed', 'cancelled', 'confirmed', 'no-show'],
     default: 'pending'
   },
   paymentStatus: {
@@ -160,16 +160,16 @@ const bookingSchema = new Schema({
   toJSON: {
     virtuals: true,
     transform: function (doc, ret) {
-      delete ret.id;
-      delete ret._id;
+      delete ret.id; // Remove the virtual id field
+      // Keep ret._id for API responses so frontend can access booking ID
       return ret;
     }
   },
   toObject: {
     virtuals: true,
     transform: function (doc, ret) {
-      delete ret.id;
-      delete ret._id;
+      delete ret.id; // Remove the virtual id field
+      // Keep ret._id for object transformations
       return ret;
     }
   },

@@ -318,7 +318,8 @@ const createBooking = async (req, res) => {
     res.status(201).json({
       success: true,
       message: 'Booking created successfully. Please confirm payment to complete booking.',
-      data: booking
+      data: booking,
+      bookingId: booking._id // Explicitly include booking ID for frontend compatibility
     });
 
   } catch (error) {
@@ -580,7 +581,6 @@ const updateBookingStatus = async (req, res) => {
 };
 
 // Get user bookings
-
 const getUserBookings = async (req, res) => {
   try {
     const { status } = req.query;
@@ -591,13 +591,38 @@ const getUserBookings = async (req, res) => {
     }
 
     const bookings = await Booking.find(query)
-      .populate('services.service')
+      .populate('services.service', 'title description basePrice category image duration')
+      .populate('provider', 'name email phone businessName contactPerson rating')
+      .populate('customer', 'name email phone')
       .sort({ createdAt: -1 });
+
+    // Fetch transaction details for each booking
+    const Transaction = require('../models/Transaction-model ');
+    const bookingsWithTransactions = await Promise.all(
+      bookings.map(async (booking) => {
+        const bookingObj = booking.toObject();
+        
+        // Find transaction for this booking
+        const transaction = await Transaction.findOne({ 
+          booking: booking._id,
+          paymentStatus: { $in: ['completed', 'paid'] }
+        }).sort({ createdAt: -1 });
+
+        if (transaction) {
+          bookingObj.transactionId = transaction.transactionId;
+          bookingObj.razorpayPaymentId = transaction.razorpayPaymentId;
+          bookingObj.paymentMethod = transaction.paymentMethod;
+          bookingObj.paymentDate = transaction.updatedAt;
+        }
+
+        return bookingObj;
+      })
+    );
 
     res.status(200).json({
       success: true,
       message: 'Bookings retrieved successfully',
-      data: bookings
+      data: bookingsWithTransactions
     });
 
   } catch (error) {
@@ -609,14 +634,204 @@ const getUserBookings = async (req, res) => {
   }
 };
 
+// Get customer bookings (alias for getUserBookings to match frontend requirements)
+const getCustomerBookings = async (req, res) => {
+  return getUserBookings(req, res);
+};
+
+// Update booking payment method and status
+const updateBookingPayment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { paymentMethod, paymentStatus } = req.body;
+    const userId = req.user._id;
+
+    // Validate required fields
+    if (!paymentMethod || !paymentStatus) {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment method and payment status are required'
+      });
+    }
+
+    // Validate payment method
+    if (!['online', 'cash'].includes(paymentMethod)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid payment method. Must be "online" or "cash"'
+      });
+    }
+
+    // Validate payment status
+    if (!['pending', 'paid', 'failed'].includes(paymentStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid payment status. Must be "pending", "paid", or "failed"'
+      });
+    }
+
+    // Find booking
+    const booking = await Booking.findOne({
+      _id: id,
+      customer: userId
+    });
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found'
+      });
+    }
+
+    // Check if booking can be updated
+    if (booking.status === 'cancelled') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot update payment for cancelled booking'
+      });
+    }
+
+    // Update payment details
+    booking.paymentMethod = paymentMethod;
+    booking.paymentStatus = paymentStatus;
+    
+    // Keep booking status as "pending" until provider accepts
+    if (booking.status !== 'accepted' && booking.status !== 'completed') {
+      booking.status = 'pending';
+    }
+
+    await booking.save();
+
+    // Send confirmation email if payment is completed
+    if (paymentStatus === 'paid') {
+      try {
+        const user = await User.findById(userId);
+        const emailHtml = `
+          <h2>Payment Confirmed</h2>
+          <p>Your payment has been successfully processed.</p>
+          <p><strong>Booking ID:</strong> ${booking._id}</p>
+          <p><strong>Payment Method:</strong> ${paymentMethod}</p>
+          <p><strong>Amount:</strong> ₹${booking.totalAmount}</p>
+          <p>Your booking is now pending provider acceptance.</p>
+        `;
+
+        await sendEmail({
+          to: user.email,
+          subject: 'Payment Confirmed',
+          html: emailHtml
+        });
+      } catch (emailError) {
+        console.error('Failed to send payment confirmation email:', emailError);
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Payment details updated successfully',
+      data: {
+        bookingId: booking._id,
+        paymentMethod: booking.paymentMethod,
+        paymentStatus: booking.paymentStatus,
+        status: booking.status
+      }
+    });
+
+  } catch (error) {
+    console.error('Error updating booking payment:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to update payment details'
+    });
+  }
+};
+
+// Get provider details by ID
+const getProviderById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid provider ID'
+      });
+    }
+
+    const provider = await Provider.findById(id)
+      .select('name email phone businessName contactPerson rating services experience serviceArea address')
+      .lean();
+
+    if (!provider) {
+      return res.status(404).json({
+        success: false,
+        message: 'Provider not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Provider details retrieved successfully',
+      data: provider
+    });
+
+  } catch (error) {
+    console.error('Error fetching provider details:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to fetch provider details'
+    });
+  }
+};
+
+// Get service details by ID
+const getServiceById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid service ID'
+      });
+    }
+
+    const service = await Service.findById(id)
+      .select('title description basePrice category image duration isActive')
+      .lean();
+
+    if (!service) {
+      return res.status(404).json({
+        success: false,
+        message: 'Service not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Service details retrieved successfully',
+      data: service
+    });
+
+  } catch (error) {
+    console.error('Error fetching service details:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to fetch service details'
+    });
+  }
+};
+
 // Get single booking
 const getBooking = async (req, res) => {
   try {
     const { id } = req.params;
 
     const booking = await Booking.findById(id)
-      .populate('services.service')
-      .populate('customer', 'name email phone');
+      .populate('services.service', 'title description basePrice category image duration')
+      .populate('customer', 'name email phone')
+      .populate('provider', 'name email phone businessName contactPerson rating address')
+      .populate('invoice')
+      .populate('feedback');
 
     if (!booking) {
       return res.status(404).json({
@@ -633,10 +848,31 @@ const getBooking = async (req, res) => {
       });
     }
 
+    // Fetch transaction details
+    const Transaction = require('../models/Transaction-model ');
+    const transactions = await Transaction.find({ 
+      booking: booking._id 
+    }).sort({ createdAt: -1 });
+
+    const bookingObj = booking.toObject();
+    
+    if (transactions.length > 0) {
+      const completedTransaction = transactions.find(t => 
+        ['completed', 'paid'].includes(t.paymentStatus)
+      ) || transactions[0];
+      
+      bookingObj.transactionId = completedTransaction.transactionId;
+      bookingObj.razorpayPaymentId = completedTransaction.razorpayPaymentId;
+      bookingObj.razorpayOrderId = completedTransaction.razorpayOrderId;
+      bookingObj.paymentMethod = completedTransaction.paymentMethod;
+      bookingObj.paymentDate = completedTransaction.updatedAt;
+      bookingObj.transactions = transactions;
+    }
+
     res.status(200).json({
       success: true,
       message: 'Booking details retrieved successfully',
-      data: booking
+      data: bookingObj
     });
 
   } catch (error) {
@@ -1728,6 +1964,10 @@ module.exports = {
   confirmBooking,
   updateBookingStatus,
   getUserBookings,
+  getCustomerBookings,
+  updateBookingPayment,
+  getProviderById,
+  getServiceById,
   getBooking,
   cancelBooking,
   userUpdateBookingDateTime,
