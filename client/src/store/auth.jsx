@@ -9,6 +9,7 @@ const AuthContext = createContext(null);
 export const AuthProvider = ({ children }) => {
     const navigate = useNavigate();
     const API = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api';
+    const API_URL_IMAGE = import.meta.env.VITE_BACKEND_URL ? import.meta.env.VITE_BACKEND_URL.replace('/api', '') : 'http://localhost:5000';
 
     // State management
     const [token, setToken] = useState(() => localStorage.getItem("token") || null);
@@ -137,6 +138,7 @@ export const AuthProvider = ({ children }) => {
         loginUser,
         logoutUser,
         API,
+        API_URL_IMAGE,
         showToast,
         isTokenExpired
     }), [token, role, user, isAdmin, API]);

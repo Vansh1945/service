@@ -13,9 +13,10 @@ const ProviderTestPage = () => {
   const [testResults, setTestResults] = useState([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState({});
-  const [timeLeft, setTimeLeft] = useState(1800); // 30 minutes
+  const [timeLeft, setTimeLeft] = useState(600); // 10 minutes
   const [loading, setLoading] = useState(false);
   const [testHistory, setTestHistory] = useState([]);
+  const [testAttemptsLeft, setTestAttemptsLeft] = useState(3);
 
   // Timer effect
   useEffect(() => {
@@ -55,7 +56,7 @@ const ProviderTestPage = () => {
     }
   };
 
-  // Fetch test history
+  // Fetch test history and attempts left
   const fetchTestHistory = async () => {
     try {
       const response = await fetch(`${API}/test/results`, {
@@ -67,6 +68,9 @@ const ProviderTestPage = () => {
       const data = await response.json();
       if (data.success) {
         setTestHistory(data.data);
+        // Calculate attempts left (3 lifetime attempts)
+        const attemptsUsed = data.data.length;
+        setTestAttemptsLeft(Math.max(0, 3 - attemptsUsed));
       }
     } catch (error) {
       showToast('Error fetching test history', 'error');
@@ -77,6 +81,11 @@ const ProviderTestPage = () => {
   const handleStartTest = async () => {
     if (!selectedCategory && !selectedSubcategory) {
       showToast('Please select a category or subcategory', 'error');
+      return;
+    }
+
+    if (testAttemptsLeft <= 0) {
+      showToast('You have used all 3 lifetime test attempts', 'error');
       return;
     }
 
@@ -109,9 +118,9 @@ const ProviderTestPage = () => {
           setCurrentTest(testData.data);
           setCurrentQuestionIndex(0);
           setAnswers({});
-          setTimeLeft(1800);
+          setTimeLeft(600); // Reset to 10 minutes
           setActiveTab('test');
-          showToast('Test started successfully!');
+          showToast('Test started successfully! 10 minute timer has begun.');
         }
       } else {
         showToast(data.message, 'error');
@@ -160,7 +169,7 @@ const ProviderTestPage = () => {
         setCurrentTest(null);
         setActiveTab('results');
         showToast('Test submitted successfully!');
-        fetchTestHistory();
+        fetchTestHistory(); // This will update the attempts left
       } else {
         showToast(data.message, 'error');
       }
@@ -193,7 +202,7 @@ const ProviderTestPage = () => {
         {/* Header */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Provider Test Center</h1>
-          <p className="text-gray-600">Take your certification test to become a verified provider</p>
+          <p className="text-gray-600">You have {testAttemptsLeft} lifetime test attempts remaining</p>
         </div>
 
         {/* Navigation Tabs */}
@@ -203,12 +212,12 @@ const ProviderTestPage = () => {
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                disabled={tab === 'test' && !currentTest}
+                disabled={(tab === 'test' && !currentTest) || (tab === 'results' && !testResults)}
                 className={`py-4 px-2 border-b-2 font-medium text-sm capitalize ${
                   activeTab === tab
                     ? 'border-blue-500 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700'
-                } ${tab === 'test' && !currentTest ? 'opacity-50 cursor-not-allowed' : ''}`}
+                } ${(tab === 'test' && !currentTest) || (tab === 'results' && !testResults) ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 {tab === 'start' && <Play className="w-4 h-4 inline mr-2" />}
                 {tab === 'test' && <Clock className="w-4 h-4 inline mr-2" />}
@@ -267,22 +276,27 @@ const ProviderTestPage = () => {
               <h3 className="font-medium text-blue-900 mb-2">Test Information</h3>
               <ul className="text-sm text-blue-800 space-y-1">
                 <li>• Total Questions: 10</li>
-                <li>• Time Limit: 30 minutes</li>
+                <li>• Time Limit: 10 minutes</li>
                 <li>• Passing Score: 70%</li>
-                <li>• You can retake the test if you don't pass</li>
+                <li>• Lifetime Attempts: 3 (Remaining: {testAttemptsLeft})</li>
+                <li>• No retakes after 3 attempts</li>
               </ul>
             </div>
 
             <button
               onClick={handleStartTest}
-              disabled={loading}
-              className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+              disabled={loading || testAttemptsLeft <= 0}
+              className={`bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center ${
+                testAttemptsLeft <= 0 ? 'bg-red-500 hover:bg-red-600' : ''
+              }`}
             >
               {loading ? (
                 <>
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                   Starting Test...
                 </>
+              ) : testAttemptsLeft <= 0 ? (
+                'No Attempts Remaining'
               ) : (
                 <>
                   <Play className="w-4 h-4 mr-2" />
@@ -290,6 +304,13 @@ const ProviderTestPage = () => {
                 </>
               )}
             </button>
+
+            {testAttemptsLeft <= 0 && (
+              <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800">
+                <AlertCircle className="w-5 h-5 inline mr-2" />
+                You have used all 3 lifetime test attempts and cannot take more tests.
+              </div>
+            )}
           </div>
         )}
 
@@ -403,6 +424,9 @@ const ProviderTestPage = () => {
               <div className={`text-sm ${getPerformanceColor(testResults.performance)}`}>
                 Performance: {testResults.performance}
               </div>
+              <div className="mt-4 text-sm text-gray-600">
+                Attempts remaining: {testAttemptsLeft}
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
@@ -415,7 +439,7 @@ const ProviderTestPage = () => {
                 <div className="text-sm text-gray-800">Total Questions</div>
               </div>
               <div className="bg-green-50 p-4 rounded-lg text-center">
-                <div className="text-2xl font-bold text-green-600">{Math.floor(testResults.timeTaken / 60)}m</div>
+                <div className="text-2xl font-bold text-green-600">{Math.floor(testResults.timeTaken / 60)}m {testResults.timeTaken % 60}s</div>
                 <div className="text-sm text-green-800">Time Taken</div>
               </div>
             </div>
@@ -423,9 +447,12 @@ const ProviderTestPage = () => {
             <div className="text-center">
               <button
                 onClick={() => setActiveTab('start')}
-                className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700"
+                disabled={testAttemptsLeft <= 0}
+                className={`bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed ${
+                  testAttemptsLeft <= 0 ? 'bg-red-500 hover:bg-red-600' : ''
+                }`}
               >
-                Take Another Test
+                {testAttemptsLeft <= 0 ? 'No Attempts Remaining' : 'Take Another Test'}
               </button>
             </div>
           </div>
@@ -483,7 +510,3 @@ const ProviderTestPage = () => {
 };
 
 export default ProviderTestPage;
-
-
-
-

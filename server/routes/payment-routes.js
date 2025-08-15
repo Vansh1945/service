@@ -9,9 +9,11 @@ const adminAuthMiddleware = require('../middlewares/Admin-middleware');
 router.get('/summary', providerAuthMiddleware, paymentController.getEarningsSummary);
 router.post('/withdraw', providerAuthMiddleware, paymentController.requestWithdrawal);
 router.get('/history', providerAuthMiddleware, paymentController.getPaymentHistory);
+router.get('/earnings', providerAuthMiddleware, paymentController.getProviderEarnings);
 router.get('/booking/:bookingId', providerAuthMiddleware, paymentController.getEarningsByBooking);
 router.get('/download-statement', providerAuthMiddleware, paymentController.downloadStatement);
 router.get('/download-statement-excel', providerAuthMiddleware, paymentController.downloadStatementExcel);
+router.get('/earnings/statement', providerAuthMiddleware, paymentController.downloadStatement);
 
 // Admin routes
 router.get('/admin/earnings', adminAuthMiddleware, paymentController.getAllProviderEarnings);

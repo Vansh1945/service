@@ -22,7 +22,14 @@ import {
   ChevronRight,
   Edit,
   Check,
-  AlertCircle
+  AlertCircle,
+  CreditCard,
+  Smartphone,
+  Building,
+  QrCode,
+  Upload,
+  Receipt,
+  ShoppingCart
 } from 'lucide-react';
 import { useAuth } from '../../store/auth';
 import { toast } from 'react-toastify';
@@ -30,10 +37,14 @@ import logo from '../../assets/logo.png';
 
 const ProviderInvoiceSystem = () => {
   const { token, API, user } = useAuth();
-  const [invoices, setInvoices] = useState([]);
+  const [activeTab, setActiveTab] = useState('service');
+  const [serviceInvoices, setServiceInvoices] = useState([]);
+  const [productInvoices, setProductInvoices] = useState([]);
+  const [customers, setCustomers] = useState([]);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [showProductModal, setShowProductModal] = useState(false);
+  const [showPaymentDetailsModal, setShowPaymentDetailsModal] = useState(false);
   const [editingProductId, setEditingProductId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -49,23 +60,56 @@ const ProviderInvoiceSystem = () => {
   const invoicesPerPage = 5;
   const invoiceRef = useRef();
 
+  // Product Invoice Creation Form
+  const [productInvoiceForm, setProductInvoiceForm] = useState({
+    customerId: '',
+    products: [{ name: '', description: '', quantity: 1, rate: 0 }],
+    tax: 0,
+    discount: 0,
+    notes: ''
+  });
+
+  // Payment Details Form
+  const [paymentDetailsForm, setPaymentDetailsForm] = useState({
+    upiId: '',
+    qrCodeImage: null,
+    bankDetails: {
+      accountNumber: '',
+      ifscCode: '',
+      accountHolderName: '',
+      bankName: ''
+    }
+  });
+
   // Fetch invoices from backend
   useEffect(() => {
     const fetchInvoices = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`${API}/invoice/provider/all`, {
+        
+        // Fetch service invoices
+        const serviceResponse = await fetch(`${API}/invoice/provider/service`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
         });
 
-        if (!response.ok) {
+        // Fetch product invoices
+        const productResponse = await fetch(`${API}/invoice/provider/product`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (!serviceResponse.ok || !productResponse.ok) {
           throw new Error('Failed to fetch invoices');
         }
 
-        const data = await response.json();
-        setInvoices(data.data || []);
+        const serviceData = await serviceResponse.json();
+        const productData = await productResponse.json();
+        
+        setServiceInvoices(serviceData.data || []);
+        setProductInvoices(productData.data || []);
       } catch (error) {
         toast.error(error.message);
         console.error('Error fetching invoices:', error);
@@ -74,21 +118,47 @@ const ProviderInvoiceSystem = () => {
       }
     };
 
+    const fetchCustomers = async () => {
+      try {
+        const response = await fetch(`${API}/admin/users`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setCustomers(data.data || []);
+        }
+      } catch (error) {
+        console.error('Error fetching customers:', error);
+      }
+    };
+
     if (token) {
       fetchInvoices();
+      fetchCustomers();
     }
   }, [token, API]);
 
-  // Filter invoices based on search and status
-  const filteredInvoices = invoices.filter(invoice => {
-    const matchesSearch =
-      invoice.customer?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      invoice.invoiceNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      invoice.service?.title?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFilter = filterStatus === 'all' || invoice.paymentStatus === filterStatus;
-    return matchesSearch && matchesFilter;
-  });
+  // Get current invoices based on active tab
+  const getCurrentInvoices = () => {
+    const invoices = activeTab === 'service' ? serviceInvoices : productInvoices;
+    
+    const filtered = invoices.filter(invoice => {
+      const matchesSearch =
+        invoice.customer?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        invoice.invoiceNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (activeTab === 'service' && invoice.service?.title?.toLowerCase().includes(searchTerm.toLowerCase()));
+      const matchesFilter = filterStatus === 'all' || invoice.paymentStatus === filterStatus;
+      return matchesSearch && matchesFilter;
+    });
 
+    return filtered;
+  };
+
+  const filteredInvoices = getCurrentInvoices();
+  
   // Pagination logic
   const indexOfLastInvoice = currentPage * invoicesPerPage;
   const indexOfFirstInvoice = indexOfLastInvoice - invoicesPerPage;
@@ -147,9 +217,17 @@ const ProviderInvoiceSystem = () => {
 
       const updatedInvoice = await response.json();
       setSelectedInvoice(updatedInvoice.data);
-      setInvoices(prev => prev.map(inv =>
-        inv._id === updatedInvoice.data._id ? updatedInvoice.data : inv
-      ));
+      
+      // Update the correct invoice list
+      if (activeTab === 'service') {
+        setServiceInvoices(prev => prev.map(inv =>
+          inv._id === updatedInvoice.data._id ? updatedInvoice.data : inv
+        ));
+      } else {
+        setProductInvoices(prev => prev.map(inv =>
+          inv._id === updatedInvoice.data._id ? updatedInvoice.data : inv
+        ));
+      }
 
       toast.success(editingProductId ? 'Product updated successfully' : 'Product added successfully');
       setProductToAdd({ name: '', description: '', quantity: 1, rate: 0, unit: 'piece' });
@@ -179,9 +257,17 @@ const ProviderInvoiceSystem = () => {
 
       const updatedInvoice = await response.json();
       setSelectedInvoice(updatedInvoice.data);
-      setInvoices(prev => prev.map(inv =>
-        inv._id === updatedInvoice.data._id ? updatedInvoice.data : inv
-      ));
+      
+      // Update the correct invoice list
+      if (activeTab === 'service') {
+        setServiceInvoices(prev => prev.map(inv =>
+          inv._id === updatedInvoice.data._id ? updatedInvoice.data : inv
+        ));
+      } else {
+        setProductInvoices(prev => prev.map(inv =>
+          inv._id === updatedInvoice.data._id ? updatedInvoice.data : inv
+        ));
+      }
 
       toast.success('Product removed successfully');
     } catch (error) {
@@ -192,23 +278,25 @@ const ProviderInvoiceSystem = () => {
 
   const downloadInvoice = async (invoiceId) => {
     try {
-      const invoiceData = await fetchInvoiceDetails(invoiceId);
-      const invoice = invoiceData.data;
-
-      // Create a blob from the invoice data
-      const blob = new Blob([JSON.stringify(invoice, null, 2)], {
-        type: 'application/json'
+      const response = await fetch(`${API}/invoice/customer/${invoiceId}/download`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       });
 
-      // Create download link
-      const url = URL.createObjectURL(blob);
+      if (!response.ok) {
+        throw new Error('Failed to download invoice');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `invoice_${invoice.invoiceNo}.json`;
+      link.download = `invoice_${invoiceId}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      window.URL.revokeObjectURL(url);
 
       toast.success('Invoice downloaded successfully');
     } catch (error) {
@@ -279,6 +367,133 @@ const ProviderInvoiceSystem = () => {
     setShowProductModal(true);
   };
 
+  const createProductInvoice = async () => {
+    try {
+      // Validate form
+      if (!productInvoiceForm.customerId || productInvoiceForm.products.some(p => !p.name || p.rate <= 0)) {
+        toast.error('Please fill all required fields');
+        return;
+      }
+
+      const response = await fetch(`${API}/invoice/provider/product`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          customerId: productInvoiceForm.customerId,
+          products: productInvoiceForm.products,
+          tax: productInvoiceForm.tax,
+          discount: productInvoiceForm.discount,
+          notes: productInvoiceForm.notes
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create product invoice');
+      }
+
+      const newInvoice = await response.json();
+      setProductInvoices(prev => [newInvoice.data, ...prev]);
+      setProductInvoiceForm({
+        customerId: '',
+        products: [{ name: '', description: '', quantity: 1, rate: 0 }],
+        tax: 0,
+        discount: 0,
+        notes: ''
+      });
+      toast.success('Product invoice created successfully');
+    } catch (error) {
+      toast.error(error.message);
+      console.error('Error creating product invoice:', error);
+    }
+  };
+
+  const updateProductInvoice = async (invoiceId) => {
+    try {
+      const response = await fetch(`${API}/invoice/provider/product/${invoiceId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(productInvoiceForm)
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update product invoice');
+      }
+
+      const updatedInvoice = await response.json();
+      setProductInvoices(prev => prev.map(inv => 
+        inv._id === invoiceId ? updatedInvoice.data : inv
+      ));
+      toast.success('Product invoice updated successfully');
+    } catch (error) {
+      toast.error(error.message);
+      console.error('Error updating product invoice:', error);
+    }
+  };
+
+  const deleteProductInvoice = async (invoiceId) => {
+    try {
+      const response = await fetch(`${API}/invoice/provider/product/${invoiceId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete product invoice');
+      }
+
+      setProductInvoices(prev => prev.filter(inv => inv._id !== invoiceId));
+      toast.success('Product invoice deleted successfully');
+    } catch (error) {
+      toast.error(error.message);
+      console.error('Error deleting product invoice:', error);
+    }
+  };
+
+  const confirmCashPayment = async (invoiceId) => {
+    try {
+      const response = await fetch(`${API}/invoice/provider/${invoiceId}/confirm-cash`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to confirm cash payment');
+      }
+
+      const updatedInvoice = await response.json();
+      
+      // Update the correct invoice list
+      if (activeTab === 'service') {
+        setServiceInvoices(prev => prev.map(inv =>
+          inv._id === updatedInvoice.data._id ? updatedInvoice.data : inv
+        ));
+      } else {
+        setProductInvoices(prev => prev.map(inv =>
+          inv._id === updatedInvoice.data._id ? updatedInvoice.data : inv
+        ));
+      }
+
+      if (selectedInvoice?._id === invoiceId) {
+        setSelectedInvoice(updatedInvoice.data);
+      }
+
+      toast.success('Cash payment confirmed successfully');
+    } catch (error) {
+      toast.error(error.message);
+      console.error('Error confirming cash payment:', error);
+    }
+  };
+
   const getStatusColor = (status) => {
     switch (status) {
       case 'paid': return 'bg-green-100 text-green-800';
@@ -314,11 +529,37 @@ const ProviderInvoiceSystem = () => {
         {/* Header */}
         <div className="bg-white rounded-xl shadow-sm p-6 mb-6 border border-gray-200">
           <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">Invoice Management</h1>
-          <p className="text-gray-600">View, manage and download your service invoices</p>
+          <p className="text-gray-600">View, manage and download your invoices</p>
         </div>
 
-        {/* Filters */}
+        {/* Tabs */}
         <div className="bg-white rounded-xl shadow-sm p-6 mb-6 border border-gray-200">
+          <div className="flex flex-wrap gap-2 mb-6">
+            <button
+              onClick={() => setActiveTab('service')}
+              className={`px-6 py-3 rounded-xl font-medium transition-all duration-200 flex items-center space-x-2 ${
+                activeTab === 'service'
+                  ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              <Receipt className="w-4 h-4" />
+              <span>Service Invoices</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('product')}
+              className={`px-6 py-3 rounded-xl font-medium transition-all duration-200 flex items-center space-x-2 ${
+                activeTab === 'product'
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              <Package className="w-4 h-4" />
+              <span>Product Invoices</span>
+            </button>
+          </div>
+
+          {/* Filters */}
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1">
               <div className="relative">
@@ -385,13 +626,15 @@ const ProviderInvoiceSystem = () => {
                             <p className="font-medium">{formatDate(invoice.generatedAt)}</p>
                           </div>
                         </div>
-                        <div className="flex items-center text-gray-600">
-                          <FileText className="w-4 h-4 mr-2 text-indigo-600" />
-                          <div>
-                            <p className="text-sm text-gray-500">Service</p>
-                            <p className="font-medium">{invoice.service?.title || 'N/A'}</p>
+                        {activeTab === 'service' && (
+                          <div className="flex items-center text-gray-600">
+                            <FileText className="w-4 h-4 mr-2 text-indigo-600" />
+                            <div>
+                              <p className="text-sm text-gray-500">Service</p>
+                              <p className="font-medium">{invoice.service?.title || 'N/A'}</p>
+                            </div>
                           </div>
-                        </div>
+                        )}
                         <div className="flex items-center text-green-600">
                           <DollarSign className="w-4 h-4 mr-2" />
                           <div>
@@ -458,17 +701,19 @@ const ProviderInvoiceSystem = () => {
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <h3 className="text-xl font-semibold text-gray-900">Invoice Details</h3>
               <div className="flex space-x-2">
-                <button
-                  onClick={() => {
-                    setProductToAdd({ name: '', description: '', quantity: 1, rate: 0, unit: 'piece' });
-                    setEditingProductId(null);
-                    setShowProductModal(true);
-                  }}
-                  className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 transition-colors"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Product
-                </button>
+                {activeTab === 'product' && (
+                  <button
+                    onClick={() => {
+                      setProductToAdd({ name: '', description: '', quantity: 1, rate: 0, unit: 'piece' });
+                      setEditingProductId(null);
+                      setShowProductModal(true);
+                    }}
+                    className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 transition-colors"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Product
+                  </button>
+                )}
                 <button
                   onClick={() => downloadInvoice(selectedInvoice._id)}
                   className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
@@ -539,21 +784,23 @@ const ProviderInvoiceSystem = () => {
                   </p>
                 </div>
 
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
-                    <Package className="w-5 h-5 mr-2 text-indigo-600" />
-                    Service Details:
-                  </h3>
-                  <p className="font-medium text-gray-900">{selectedInvoice.service?.title}</p>
-                  <p className="text-gray-600">Category: {selectedInvoice.service?.category}</p>
-                  <p className="text-gray-600">
-                    <Calendar className="inline w-4 h-4 mr-1" />
-                    Booking Date: {formatDate(selectedInvoice.booking?.date)}
-                  </p>
-                  <p className="text-gray-600">
-                    Duration: {selectedInvoice.service?.duration} minutes
-                  </p>
-                </div>
+                {selectedInvoice.service && (
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+                      <Package className="w-5 h-5 mr-2 text-indigo-600" />
+                      Service Details:
+                    </h3>
+                    <p className="font-medium text-gray-900">{selectedInvoice.service?.title}</p>
+                    <p className="text-gray-600">Category: {selectedInvoice.service?.category}</p>
+                    <p className="text-gray-600">
+                      <Calendar className="inline w-4 h-4 mr-1" />
+                      Booking Date: {formatDate(selectedInvoice.booking?.date)}
+                    </p>
+                    <p className="text-gray-600">
+                      Duration: {selectedInvoice.service?.duration} minutes
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Items Table */}
@@ -566,22 +813,26 @@ const ProviderInvoiceSystem = () => {
                       <th className="p-3 text-center text-sm font-semibold text-gray-700">Unit</th>
                       <th className="p-3 text-right text-sm font-semibold text-gray-700">Rate (₹)</th>
                       <th className="p-3 text-right text-sm font-semibold text-gray-700">Amount (₹)</th>
-                      <th className="p-3 text-center text-sm font-semibold text-gray-700">Actions</th>
+                      {activeTab === 'product' && (
+                        <th className="p-3 text-center text-sm font-semibold text-gray-700">Actions</th>
+                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
                     {/* Service Row */}
-                    <tr>
-                      <td className="p-3 text-gray-800 font-medium">
-                        {selectedInvoice.service?.title}
-                        <p className="text-sm text-gray-500">Service Fee</p>
-                      </td>
-                      <td className="p-3 text-center text-gray-600">1</td>
-                      <td className="p-3 text-center text-gray-600">service</td>
-                      <td className="p-3 text-right text-gray-600">₹{selectedInvoice.serviceAmount?.toFixed(2)}</td>
-                      <td className="p-3 text-right text-gray-600">₹{selectedInvoice.serviceAmount?.toFixed(2)}</td>
-                      <td className="p-3 text-center">-</td>
-                    </tr>
+                    {selectedInvoice.service && (
+                      <tr>
+                        <td className="p-3 text-gray-800 font-medium">
+                          {selectedInvoice.service?.title}
+                          <p className="text-sm text-gray-500">Service Fee</p>
+                        </td>
+                        <td className="p-3 text-center text-gray-600">1</td>
+                        <td className="p-3 text-center text-gray-600">service</td>
+                        <td className="p-3 text-right text-gray-600">₹{selectedInvoice.serviceAmount?.toFixed(2)}</td>
+                        <td className="p-3 text-right text-gray-600">₹{selectedInvoice.serviceAmount?.toFixed(2)}</td>
+                        {activeTab === 'product' && <td className="p-3 text-center">-</td>}
+                      </tr>
+                    )}
 
                     {/* Products Rows */}
                     {selectedInvoice.productsUsed?.map(product => (
@@ -596,22 +847,24 @@ const ProviderInvoiceSystem = () => {
                         <td className="p-3 text-center text-gray-600">{product.unit || 'piece'}</td>
                         <td className="p-3 text-right text-gray-600">₹{product.rate?.toFixed(2)}</td>
                         <td className="p-3 text-right text-gray-600">₹{(product.quantity * product.rate).toFixed(2)}</td>
-                        <td className="p-3 text-center flex justify-center space-x-2">
-                          <button
-                            onClick={() => editProduct(product)}
-                            className="text-blue-600 hover:text-blue-800 transition-colors"
-                            title="Edit product"
-                          >
-                            <Edit className="w-5 h-5" />
-                          </button>
-                          <button
-                            onClick={() => removeProduct(product._id)}
-                            className="text-red-600 hover:text-red-800 transition-colors"
-                            title="Remove product"
-                          >
-                            <Trash2 className="w-5 h-5" />
-                          </button>
-                        </td>
+                        {activeTab === 'product' && (
+                          <td className="p-3 text-center flex justify-center space-x-2">
+                            <button
+                              onClick={() => editProduct(product)}
+                              className="text-blue-600 hover:text-blue-800 transition-colors"
+                              title="Edit product"
+                            >
+                              <Edit className="w-5 h-5" />
+                            </button>
+                            <button
+                              onClick={() => removeProduct(product._id)}
+                              className="text-red-600 hover:text-red-800 transition-colors"
+                              title="Remove product"
+                            >
+                              <Trash2 className="w-5 h-5" />
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -708,6 +961,9 @@ const ProviderInvoiceSystem = () => {
                           <th className="p-3 text-left text-sm font-semibold text-gray-700">Transaction ID</th>
                           <th className="p-3 text-right text-sm font-semibold text-gray-700">Amount (₹)</th>
                           <th className="p-3 text-center text-sm font-semibold text-gray-700">Status</th>
+                          {selectedInvoice.paymentStatus === 'pending' && (
+                            <th className="p-3 text-center text-sm font-semibold text-gray-700">Action</th>
+                          )}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
@@ -726,6 +982,16 @@ const ProviderInvoiceSystem = () => {
                                 {payment.status.charAt(0).toUpperCase() + payment.status.slice(1)}
                               </span>
                             </td>
+                            {selectedInvoice.paymentStatus === 'pending' && payment.method === 'cash' && payment.status === 'pending' && (
+                              <td className="p-3 text-center">
+                                <button
+                                  onClick={() => confirmCashPayment(selectedInvoice._id)}
+                                  className="text-sm text-white bg-green-600 hover:bg-green-700 px-3 py-1 rounded-lg transition-colors"
+                                >
+                                  Confirm
+                                </button>
+                              </td>
+                            )}
                           </tr>
                         ))}
                       </tbody>

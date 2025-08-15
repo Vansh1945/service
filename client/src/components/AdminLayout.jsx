@@ -30,9 +30,9 @@ const AdminLayout = () => {
         { name: 'Coupons', path: '/admin/coupons', icon: <FiTag /> },
         { name: 'Test', path: '/admin/add-questions', icon: <FiPlus /> },
         { name: 'Add Services', path: '/admin/add-services', icon: <FiTool /> },
-        { name: 'Complaint', path: '/admin/Complaint', icon: <FiAlertCircle /> },
+        { name: 'Complaint', path: '/admin/complaints', icon: <FiAlertCircle /> },
         { name: 'Feedback', path: '/admin/feedback', icon: <FiMessageCircle /> },
-        { name: 'Invoice', path: '/admin/invoice', icon: <FiTool /> },
+        { name: 'Invoice', path: '/admin/invoices', icon: <FiTool /> },
         { name: 'Earning', path: '/admin/earning', icon: <FiAlertCircle /> },
         // { name: 'Feedback', path: '/admin/feedback', icon: <FiMessageCircle /> },
     ];

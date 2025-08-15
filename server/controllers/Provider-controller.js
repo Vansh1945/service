@@ -283,7 +283,7 @@ exports.loginForCompletion = async (req, res) => {
  */
 exports.completeProfile = async (req, res) => {
     try {
-        const providerId = req.providerID;
+        const providerId = req.providerId;
         const {
             services,
             experience,
@@ -408,29 +408,47 @@ exports.completeProfile = async (req, res) => {
  */
 exports.getProfile = async (req, res) => {
     try {
-        const provider = await Provider.findById(req.providerID)
-            .select('-password -bankDetails.passbookImage -__v')
+        console.log('Request providerID:', req.providerId || req.providerId);
+        
+        const provider = await Provider.findById(req.providerId || req.providerId)
+            .select('-password -__v') // Remove only password and __v, keep all other fields
             .populate({
                 path: 'feedbacks',
-                select: 'rating comment createdAt',
+                select: 'rating comment createdAt customer',
+                populate: {
+                    path: 'customer',
+                    select: 'name'
+                },
                 options: { limit: 5, sort: { createdAt: -1 } }
             })
             .populate({
                 path: 'earningsHistory',
-                select: 'amount date description',
-                options: { limit: 5, sort: { date: -1 } }
+                select: 'amount date description type',
+                options: { limit: 10, sort: { date: -1 } }
             });
 
+        console.log('Found provider:', provider ? provider._id : 'null');
+        
         if (!provider) {
             return res.status(404).json({
                 success: false,
-                message: 'Provider not found'
+                message: 'Provider not found',
+                details: `No provider found with ID: ${req.providerId || req.providerId}`
             });
         }
 
+        // Add computed fields
+        const responseData = {
+            ...provider.toJSON(),
+            age: provider.age, // Virtual field
+            hasResume: !!provider.resume,
+            hasPassbookImage: !!provider.bankDetails?.passbookImage,
+            hasProfilePic: !!provider.profilePicUrl && provider.profilePicUrl !== 'default-provider.jpg'
+        };
+
         res.status(200).json({
             success: true,
-            provider
+            provider: responseData
         });
     } catch (error) {
         console.error('Get profile error:', error);
@@ -442,179 +460,228 @@ exports.getProfile = async (req, res) => {
     }
 };
 
+
+
 /**
- * @desc    Update provider profile (basic info)
+ * @desc    Unified function to update provider profile (all sections)
  * @route   PUT /api/providers/profile
  * @access  Private (Provider)
  */
-exports.updateProfile = async (req, res) => {
+exports.updateProviderProfile = async (req, res) => {
     try {
-        const { name, phone, dateOfBirth } = req.body;
+        console.log('Unified profile update request:', {
+            body: req.body,
+            providerID: req.providerId,
+            files: req.files
+        });
+
+        const {
+            // Basic info
+            name, phone, dateOfBirth,
+            // Professional info
+            services, experience, serviceArea,
+            // Address info
+            street, city, state, postalCode, country,
+            // Bank details
+            accountNo, ifsc,
+            // Update type to determine which section to update
+            updateType
+        } = req.body;
+
         const updates = {};
+        let successMessage = 'Profile updated successfully';
 
-        if (name) updates.name = name;
-        if (phone) updates.phone = phone;
-        if (dateOfBirth) updates.dateOfBirth = new Date(dateOfBirth);
-
-        const provider = await Provider.findByIdAndUpdate(
-            req.providerID,
-            updates,
-            { new: true, runValidators: true }
-        ).select('-password -bankDetails.passbookImage -__v');
-
-        if (!provider) {
+        // Get current provider
+        const currentProvider = await Provider.findById(req.providerId);
+        if (!currentProvider) {
             return res.status(404).json({
                 success: false,
                 message: 'Provider not found'
             });
         }
 
-        res.status(200).json({
-            success: true,
-            message: 'Profile updated successfully',
-            provider
-        });
-    } catch (error) {
-        console.error('Update profile error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to update profile',
-            error: process.env.NODE_ENV === 'development' ? error.message : undefined
-        });
-    }
-};
-
-/**
- * @desc    Update provider professional info
- * @route   PUT /api/providers/profile/professional
- * @access  Private (Provider)
- */
-exports.updateProfessionalInfo = async (req, res) => {
-    try {
-        const { services, experience, serviceArea } = req.body;
-        const updates = {};
-
-        if (services) updates.services = services;
-        if (experience) updates.experience = experience;
-        if (serviceArea) updates.serviceArea = serviceArea;
-
-        const provider = await Provider.findByIdAndUpdate(
-            req.providerID,
-            updates,
-            { new: true, runValidators: true }
-        ).select('-password -bankDetails.passbookImage -__v');
-
-        if (!provider) {
-            return res.status(404).json({
-                success: false,
-                message: 'Provider not found'
-            });
-        }
-
-        res.status(200).json({
-            success: true,
-            message: 'Professional info updated successfully',
-            provider
-        });
-    } catch (error) {
-        console.error('Update professional info error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to update professional info',
-            error: process.env.NODE_ENV === 'development' ? error.message : undefined
-        });
-    }
-};
-
-/**
- * @desc    Update provider address
- * @route   PUT /api/providers/profile/address
- * @access  Private (Provider)
- */
-exports.updateAddress = async (req, res) => {
-    try {
-        const { street, city, state, postalCode, country } = req.body;
-
-        if (!street || !city || !state || !postalCode) {
-            return res.status(400).json({
-                success: false,
-                message: 'All address fields are required'
-            });
-        }
-
-        const address = {
-            street,
-            city,
-            state,
-            postalCode,
-            country: country || 'India'
-        };
-
-        const provider = await Provider.findByIdAndUpdate(
-            req.providerID,
-            { address },
-            { new: true, runValidators: true }
-        ).select('-password -bankDetails.passbookImage -__v');
-
-        if (!provider) {
-            return res.status(404).json({
-                success: false,
-                message: 'Provider not found'
-            });
-        }
-
-        res.status(200).json({
-            success: true,
-            message: 'Address updated successfully',
-            provider
-        });
-    } catch (error) {
-        console.error('Update address error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to update address',
-            error: process.env.NODE_ENV === 'development' ? error.message : undefined
-        });
-    }
-};
-
-/**
- * @desc    Update provider bank details
- * @route   PUT /api/providers/profile/bank
- * @access  Private (Provider)
- */
-exports.updateBankDetails = async (req, res) => {
-    try {
-        const { accountNo, ifsc } = req.body;
-
-        if (!accountNo || !ifsc) {
-            return res.status(400).json({
-                success: false,
-                message: 'Account number and IFSC code are required'
-            });
-        }
-
-        const updates = {
-            'bankDetails.accountNo': accountNo,
-            'bankDetails.ifsc': ifsc,
-            'bankDetails.verified': false // Reset verification status when details change
-        };
-
-        // Add passbook image if uploaded
-        if (req.file) {
-            // Get provider to delete old passbook image
-            const provider = await Provider.findById(req.providerID);
-            if (provider?.bankDetails?.passbookImage) {
-                deleteFile(path.join(__dirname, '../', provider.bankDetails.passbookImage));
+        // Handle different update types or update all if no type specified
+        if (!updateType || updateType === 'basic') {
+            // Basic Information Updates
+            if (name && typeof name === 'string') {
+                updates.name = name.trim();
             }
-            updates['bankDetails.passbookImage'] = req.file.path;
+            
+            if (phone && typeof phone === 'string') {
+                if (!/^\d{10,15}$/.test(phone)) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Please enter a valid phone number (10-15 digits)'
+                    });
+                }
+                updates.phone = phone.trim();
+            }
+            
+            if (dateOfBirth) {
+                const dob = new Date(dateOfBirth);
+                if (isNaN(dob.getTime())) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Invalid date format for date of birth'
+                    });
+                }
+                
+                // Age validation (minimum 18 years)
+                const today = new Date();
+                let age = today.getFullYear() - dob.getFullYear();
+                const monthDiff = today.getMonth() - dob.getMonth();
+                
+                if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+                    age--;
+                }
+                
+                if (age < 18) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'You must be at least 18 years old'
+                    });
+                }
+                
+                updates.dateOfBirth = dob;
+            }
         }
 
+        if (!updateType || updateType === 'professional') {
+            // Professional Information Updates
+            if (services) updates.services = services;
+            if (experience !== undefined) updates.experience = experience;
+            if (serviceArea) updates.serviceArea = serviceArea;
+        }
+
+        if (!updateType || updateType === 'address') {
+            // Address Updates
+            if (street || city || state || postalCode || country) {
+                updates.address = {
+                    ...currentProvider.address,
+                    ...(street && { street }),
+                    ...(city && { city }),
+                    ...(state && { state }),
+                    ...(postalCode && { postalCode }),
+                    ...(country && { country })
+                };
+            }
+        }
+
+        if (!updateType || updateType === 'bank') {
+            // Bank Details Updates
+            if (accountNo || ifsc) {
+                // Validate IFSC if provided
+                if (ifsc && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Please enter a valid IFSC code'
+                    });
+                }
+
+                // Validate account number if provided
+                if (accountNo && !/^[0-9]{9,18}$/.test(accountNo)) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Please enter a valid account number (9-18 digits)'
+                    });
+                }
+
+                updates.bankDetails = {
+                    ...currentProvider.bankDetails,
+                    ...(accountNo && { accountNo }),
+                    ...(ifsc && { ifsc }),
+                    verified: false // Reset verification when details change
+                };
+            }
+        }
+
+        // Handle file uploads
+        if (req.files) {
+            // Profile Picture Upload
+            if (req.files['profilePic']) {
+                const profilePic = req.files['profilePic'][0];
+                
+                // Delete old profile picture
+                if (currentProvider.profilePicUrl && currentProvider.profilePicUrl !== 'default-provider.jpg') {
+                    deleteFile(path.join(__dirname, '../', currentProvider.profilePicUrl));
+                }
+                
+                updates.profilePicUrl = profilePic.path;
+                successMessage = 'Profile picture updated successfully';
+            }
+
+            // Resume Upload
+            if (req.files['resume']) {
+                const resume = req.files['resume'][0];
+                
+                // Delete old resume
+                if (currentProvider.resume) {
+                    deleteFile(path.join(__dirname, '../', currentProvider.resume));
+                }
+                
+                updates.resume = resume.path;
+                successMessage = 'Resume updated successfully';
+            }
+
+            // Passbook Image Upload
+            if (req.files['passbookImage']) {
+                const passbookImage = req.files['passbookImage'][0];
+                
+                // Delete old passbook image
+                if (currentProvider.bankDetails?.passbookImage) {
+                    deleteFile(path.join(__dirname, '../', currentProvider.bankDetails.passbookImage));
+                }
+                
+                updates.bankDetails = {
+                    ...currentProvider.bankDetails,
+                    ...updates.bankDetails,
+                    passbookImage: passbookImage.path,
+                    verified: false
+                };
+                successMessage = 'Bank details updated successfully';
+            }
+        }
+
+        // Handle single file uploads (for backward compatibility)
+        if (req.file) {
+            const fieldName = req.file.fieldname;
+            
+            if (fieldName === 'profilePic') {
+                if (currentProvider.profilePicUrl && currentProvider.profilePicUrl !== 'default-provider.jpg') {
+                    deleteFile(path.join(__dirname, '../', currentProvider.profilePicUrl));
+                }
+                updates.profilePicUrl = req.file.path;
+                successMessage = 'Profile picture updated successfully';
+            } else if (fieldName === 'resume') {
+                if (currentProvider.resume) {
+                    deleteFile(path.join(__dirname, '../', currentProvider.resume));
+                }
+                updates.resume = req.file.path;
+                successMessage = 'Resume updated successfully';
+            } else if (fieldName === 'passbookImage') {
+                if (currentProvider.bankDetails?.passbookImage) {
+                    deleteFile(path.join(__dirname, '../', currentProvider.bankDetails.passbookImage));
+                }
+                updates.bankDetails = {
+                    ...currentProvider.bankDetails,
+                    ...updates.bankDetails,
+                    passbookImage: req.file.path,
+                    verified: false
+                };
+                successMessage = 'Bank details updated successfully';
+            }
+        }
+
+        // Perform the update
         const updatedProvider = await Provider.findByIdAndUpdate(
-            req.providerID,
+            req.providerId,
             updates,
-            { new: true, runValidators: true }
-        ).select('-password -__v');
+            { 
+                new: true, 
+                runValidators: true,
+                select: '-password -__v'
+            }
+        );
 
         if (!updatedProvider) {
             return res.status(404).json({
@@ -625,130 +692,126 @@ exports.updateBankDetails = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            message: 'Bank details updated successfully. Verification will be processed.',
+            message: successMessage,
             provider: updatedProvider
         });
+
     } catch (error) {
-        console.error('Update bank details error:', error);
+        console.error('Unified profile update error:', error);
+        
+        // Clean up uploaded files if error occurred
+        if (req.files) {
+            Object.values(req.files).forEach(fileArray => {
+                fileArray.forEach(file => deleteFile(file.path));
+            });
+        }
+        if (req.file) {
+            deleteFile(req.file.path);
+        }
+        
+        // Handle specific error types
+        if (error.name === 'ValidationError') {
+            const messages = Object.values(error.errors).map(val => val.message);
+            return res.status(400).json({
+                success: false,
+                message: 'Validation error',
+                errors: messages
+            });
+        }
+        
         res.status(500).json({
             success: false,
-            message: 'Failed to update bank details',
+            message: 'Failed to update profile',
             error: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
 
 /**
- * @desc    Update provider profile picture
- * @route   PUT /api/providers/profile/picture
+ * @desc    View document (resume, passbook image, profile picture)
+ * @route   GET /api/providers/document/:type
  * @access  Private (Provider)
  */
-exports.updateProfilePicture = [
-    uploadProfilePic.single('profilePic'),
-    async (req, res) => {
-        try {
-            if (!req.file) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Profile picture is required'
-                });
-            }
+exports.viewDocument = async (req, res) => {
+    try {
+        const { type } = req.params;
+        const provider = await Provider.findById(req.providerId);
 
-            // Get provider to delete old picture
-            const provider = await Provider.findById(req.providerID);
-            if (!provider) {
-                // Delete the just uploaded file if provider not found
-                deleteFile(req.file.path);
-                return res.status(404).json({
-                    success: false,
-                    message: 'Provider not found'
-                });
-            }
-
-            // Delete old profile picture if it exists and not the default
-            if (provider.profilePicUrl && provider.profilePicUrl !== 'default-provider.jpg') {
-                deleteFile(path.join(__dirname, '../', provider.profilePicUrl));
-            }
-
-            // Update profile picture
-            provider.profilePicUrl = req.file.path;
-            await provider.save();
-
-            res.status(200).json({
-                success: true,
-                message: 'Profile picture updated successfully',
-                profilePicUrl: provider.profilePicUrl
-            });
-        } catch (error) {
-            console.error('Update profile picture error:', error);
-            // Delete the uploaded file if error occurred
-            if (req.file) {
-                deleteFile(req.file.path);
-            }
-            res.status(500).json({
+        if (!provider) {
+            return res.status(404).json({
                 success: false,
-                message: 'Failed to update profile picture',
-                error: process.env.NODE_ENV === 'development' ? error.message : undefined
+                message: 'Provider not found'
             });
         }
-    }
-];
 
-/**
- * @desc    Update provider resume
- * @route   PUT /api/providers/profile/resume
- * @access  Private (Provider)
- */
-exports.updateResume = [
-    uploadResume.single('resume'),
-    async (req, res) => {
-        try {
-            if (!req.file) {
+        let filePath;
+        let fileName;
+
+        switch (type) {
+            case 'resume':
+                filePath = provider.resume;
+                fileName = 'resume';
+                break;
+            case 'passbook':
+                filePath = provider.bankDetails?.passbookImage;
+                fileName = 'passbook';
+                break;
+            case 'profile':
+                filePath = provider.profilePicUrl;
+                fileName = 'profile-picture';
+                break;
+            default:
                 return res.status(400).json({
                     success: false,
-                    message: 'Resume file is required'
+                    message: 'Invalid document type. Use: resume, passbook, or profile'
                 });
-            }
+        }
 
-            // Get provider to delete old resume
-            const provider = await Provider.findById(req.providerID);
-            if (!provider) {
-                // Delete the just uploaded file if provider not found
-                deleteFile(req.file.path);
-                return res.status(404).json({
-                    success: false,
-                    message: 'Provider not found'
-                });
-            }
-
-            // Delete old resume if it exists
-            if (provider.resume) {
-                deleteFile(path.join(__dirname, '../', provider.resume));
-            }
-
-            // Update resume
-            provider.resume = req.file.path;
-            await provider.save();
-
-            res.status(200).json({
-                success: true,
-                message: 'Resume updated successfully',
-                resumeUrl: provider.resume
-            });
-        } catch (error) {
-            console.error('Update resume error:', error);
-            // Delete the uploaded file if error occurred
-            if (req.file) {
-                deleteFile(req.file.path);
-            }
-            res.status(500).json({
+        if (!filePath) {
+            return res.status(404).json({
                 success: false,
-                message: 'Failed to update resume',
-                error: process.env.NODE_ENV === 'development' ? error.message : undefined
+                message: `${fileName.charAt(0).toUpperCase() + fileName.slice(1)} not found`
             });
         }
+
+        const fullPath = path.join(__dirname, '../', filePath);
+
+        // Check if file exists
+        if (!fs.existsSync(fullPath)) {
+            return res.status(404).json({
+                success: false,
+                message: `${fileName.charAt(0).toUpperCase() + fileName.slice(1)} file not found on server`
+            });
+        }
+
+        // Set appropriate headers
+        const ext = path.extname(fullPath).toLowerCase();
+        let contentType = 'application/octet-stream';
+
+        if (['.jpg', '.jpeg', '.png', '.gif'].includes(ext)) {
+            contentType = `image/${ext.slice(1)}`;
+        } else if (ext === '.pdf') {
+            contentType = 'application/pdf';
+        } else if (['.doc', '.docx'].includes(ext)) {
+            contentType = 'application/msword';
+        }
+
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Content-Disposition', `inline; filename="${fileName}${ext}"`);
+        
+        // Stream the file
+        const fileStream = fs.createReadStream(fullPath);
+        fileStream.pipe(res);
+
+    } catch (error) {
+        console.error('View document error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to view document',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
-];
+};
 
 /**
  * @desc    Delete provider account (soft delete)
@@ -757,7 +820,7 @@ exports.updateResume = [
  */
 exports.deleteAccount = async (req, res) => {
     try {
-        const provider = await Provider.findById(req.providerID);
+        const provider = await Provider.findById(req.providerId);
         if (!provider) {
             return res.status(404).json({
                 success: false,

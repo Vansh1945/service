@@ -19,53 +19,146 @@ const formatDate = (date) => {
 // Provider - Get earnings summary with commission breakdown
 const getEarningsSummary = async (req, res) => {
   try {
-    const providerId = req.user.id;
-    
-    const [balance, summary, paymentHistory] = await Promise.all([
+    // Validate provider ID
+    if (!mongoose.isValidObjectId(req.provider._id)) {
+      return res.status(400).json({ success: false, error: 'Invalid provider ID format' });
+    }
+
+    const providerId = new mongoose.Types.ObjectId(req.provider._id);
+    const providerType = req.provider.type;
+
+    // Validate provider exists
+    const provider = await Provider.findById(providerId).select('_id name type');
+    if (!provider) {
+      return res.status(404).json({ success: false, error: 'Provider not found' });
+    }
+
+    // Get all data in parallel
+    const [balance, summary, paymentHistory, commissionRule] = await Promise.all([
       ProviderEarning.getAvailableBalance(providerId),
       ProviderEarning.getEarningsSummary(providerId),
-      PaymentRecord.getProviderRecords(providerId, 1, 5)
+      PaymentRecord.getProviderRecords(providerId, 1, 5),
+      CommissionRule.findOne({
+        providerType: providerType,
+        isActive: true
+      }).sort({ effectiveFrom: -1 }).select('commissionRate').lean()
     ]);
-    
+
     // Calculate totals
-    const totals = {
-      gross: 0,
-      commission: 0,
-      net: 0
-    };
-    
-    summary.forEach(item => {
-      totals.gross += item.totalGross || 0;
-      totals.commission += item.totalCommission || 0;
-      totals.net += item.totalNet || 0;
-    });
-    
+    let totalEarnings = 0;
+    let pendingEarnings = 0;
+
+    if (summary && Array.isArray(summary)) {
+      summary.forEach(item => {
+        if (item._id === 'available' || item._id === 'paid') {
+          totalEarnings += item.totalNet || 0;
+        }
+        if (item._id === 'pending') {
+          pendingEarnings += item.totalNet || 0;
+        }
+      });
+    }
+
+    // Calculate total withdrawn from payment records
+    const withdrawnRecords = await PaymentRecord.find({
+      provider: providerId,
+      status: 'completed'
+    }).select('netAmount').lean();
+
+    const totalWithdrawn = withdrawnRecords.reduce((sum, record) => sum + (record.netAmount || 0), 0);
+
     res.json({
       success: true,
-      data: {
-        availableBalance: balance,
-        earningsSummary: summary,
-        totals,
-        recentPayments: paymentHistory
-      }
+      availableBalance: balance || 0,
+      totalEarnings,
+      pendingEarnings,
+      totalWithdrawn,
+      commissionRate: commissionRule?.commissionRate || 10
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Get earnings summary error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error while fetching earnings summary',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 
 // Provider - Request withdrawal
 const requestWithdrawal = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  
   try {
-    const providerId = req.user.id;
-    const { amount, paymentMethod } = req.body;
+    const providerId = new mongoose.Types.ObjectId(req.provider._id);
+    const { amount, paymentMethod, paymentDetails } = req.body;
     
-    // Validate amount
-    const availableBalance = await ProviderEarning.getAvailableBalance(providerId);
-    if (amount > availableBalance) {
+    // Validate input
+    if (!amount || isNaN(amount) || amount <= 0) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({ 
         success: false, 
-        error: 'Requested amount exceeds available balance' 
+        error: 'Invalid amount. Amount must be a positive number.' 
+      });
+    }
+    
+    if (!paymentMethod || !['bank_transfer', 'upi'].includes(paymentMethod)) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Valid payment method is required (bank_transfer or upi)' 
+      });
+    }
+
+    // Validate payment details based on method
+    if (paymentMethod === 'bank_transfer') {
+      if (!paymentDetails?.accountNumber || !paymentDetails?.accountName || !paymentDetails?.ifscCode) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Bank transfer requires accountNumber, accountName, and ifscCode' 
+        });
+      }
+    } else if (paymentMethod === 'upi') {
+      if (!paymentDetails?.upiId) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({ 
+          success: false, 
+          error: 'UPI payment requires upiId' 
+        });
+      }
+    }
+    
+    // Get and validate available balance
+    const availableBalance = await ProviderEarning.aggregate([
+      { 
+        $match: { 
+          provider: providerId,
+          status: 'available',
+          availableAfter: { $lte: new Date() }
+        } 
+      },
+      { 
+        $group: { 
+          _id: null, 
+          total: { $sum: '$netAmount' } 
+        } 
+      }
+    ]).session(session);
+
+    const balance = availableBalance.length > 0 ? availableBalance[0].total : 0;
+    
+    if (amount > balance) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ 
+        success: false, 
+        error: `Requested amount exceeds available balance of ${balance}` 
       });
     }
     
@@ -73,186 +166,329 @@ const requestWithdrawal = async (req, res) => {
     const paymentRecord = new PaymentRecord({
       provider: providerId,
       amount,
-      netAmount: amount, // Assuming no fees for now
+      netAmount: amount,
       paymentMethod,
+      paymentDetails,
       status: 'pending',
       transactionReference: `WDR-${Date.now()}`,
       type: 'withdrawal'
     });
     
-    await paymentRecord.save();
+    await paymentRecord.save({ session });
     
-    // Mark earnings as processing
-    await ProviderEarning.updateMany(
-      { 
-        provider: providerId, 
-        status: 'available' 
-      },
-      { 
-        $set: { 
+    // Mark specific earnings as processing to cover the withdrawal amount
+    let amountToAllocate = amount;
+    const earnings = await ProviderEarning.find({
+      provider: providerId,
+      status: 'available',
+      availableAfter: { $lte: new Date() }
+    }).sort({ availableAfter: 1 }).session(session);
+
+    for (const earning of earnings) {
+      if (amountToAllocate <= 0) break;
+      
+      const allocatedAmount = Math.min(earning.netAmount, amountToAllocate);
+      
+      if (allocatedAmount === earning.netAmount) {
+        // Use entire earning
+        earning.status = 'processing';
+        earning.paymentRecord = paymentRecord._id;
+        await earning.save({ session });
+      } else {
+        // Split earning (partial allocation)
+        const remainingAmount = earning.netAmount - allocatedAmount;
+        
+        // Update original earning to remaining amount
+        earning.netAmount = remainingAmount;
+        await earning.save({ session });
+        
+        // Create new earning record for allocated amount
+        const allocatedEarning = new ProviderEarning({
+          provider: providerId,
+          booking: earning.booking,
+          grossAmount: (allocatedAmount / (allocatedAmount + remainingAmount)) * earning.grossAmount,
+          commissionRate: earning.commissionRate,
+          commissionAmount: (allocatedAmount / (allocatedAmount + remainingAmount)) * earning.commissionAmount,
+          netAmount: allocatedAmount,
           status: 'processing',
-          paymentRecord: paymentRecord._id 
-        } 
+          availableAfter: earning.availableAfter,
+          paymentRecord: paymentRecord._id
+        });
+        await allocatedEarning.save({ session });
       }
-    );
+      
+      amountToAllocate -= allocatedAmount;
+    }
+
+    if (amountToAllocate > 0) {
+      throw new Error('Failed to fully allocate withdrawal amount to earnings');
+    }
     
-    // Notify admin (in real app, this would be a more robust notification system)
+    await session.commitTransaction();
+    session.endSession();
+    
+    // Get provider details for notification
+    const provider = await Provider.findById(providerId).select('name email');
+    
+    // Notify admin
     await sendEmail({
       to: process.env.ADMIN_EMAIL,
       subject: 'New Withdrawal Request',
-      text: `Provider ${providerId} has requested a withdrawal of $${amount} via ${paymentMethod}`
+      text: `Provider ${provider.name} (${provider.email}) has requested a withdrawal of $${amount.toFixed(2)} via ${paymentMethod}`
     });
     
     res.json({ 
       success: true, 
-      message: 'Withdrawal request submitted successfully' 
+      message: 'Withdrawal request submitted successfully',
+      data: {
+        reference: paymentRecord.transactionReference,
+        amount: paymentRecord.amount,
+        status: paymentRecord.status,
+        paymentMethod: paymentRecord.paymentMethod
+      }
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    await session.abortTransaction();
+    session.endSession();
+    
+    console.error('Withdrawal request error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to process withdrawal request',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
+
+
+
 
 // Provider - Get payment history
 const getPaymentHistory = async (req, res) => {
   try {
-    const providerId = req.user.id;
+    const providerId = req.provider._id;
     const { page = 1, limit = 10 } = req.query;
-    
-    const records = await PaymentRecord.find({ provider: providerId })
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(parseInt(limit));
-    
-    const total = await PaymentRecord.countDocuments({ provider: providerId });
-    
+
+    // Validate pagination parameters
+    const pageNum = parseInt(page) || 1;
+    const limitNum = parseInt(limit) || 10;
+
+    if (pageNum < 1 || limitNum < 1 || limitNum > 100) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid pagination parameters'
+      });
+    }
+
+    const [records, total] = await Promise.all([
+      PaymentRecord.find({ provider: providerId })
+        .sort({ createdAt: -1 })
+        .skip((pageNum - 1) * limitNum)
+        .limit(limitNum)
+        .select('amount netAmount createdAt status transactionReference paymentMethod type')
+        .lean(),
+      PaymentRecord.countDocuments({ provider: providerId })
+    ]);
+
+    // Format records for frontend
+    const formattedRecords = records.map(record => ({
+      id: record._id,
+      type: record.type,
+      amount: record.amount,
+      netAmount: record.netAmount,
+      date: record.createdAt,
+      status: record.status,
+      referenceId: record.transactionReference,
+      paymentMethod: record.paymentMethod
+    }));
+
     res.json({
       success: true,
       data: {
-        records,
+        payments: formattedRecords,
         pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
+          page: pageNum,
+          limit: limitNum,
           total,
-          pages: Math.ceil(total / limit)
+          pages: Math.ceil(total / limitNum)
         }
       }
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Get payment history error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch payment history',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 
 // Provider - Get earnings by booking
 const getEarningsByBooking = async (req, res) => {
   try {
-    const providerId = req.user.id;
+    const providerId = req.provider._id;
     const { bookingId } = req.params;
-    
+
+    // Validate booking ID
+    if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+      return res.status(400).json({ success: false, error: 'Invalid booking ID' });
+    }
+
     const earning = await ProviderEarning.findOne({
       provider: providerId,
       booking: bookingId
-    }).populate('commissionRule', 'name type value');
-    
+    })
+      .populate('commissionRule', 'name type value')
+      .populate({
+        path: 'booking',
+        select: 'service date totalPrice',
+        populate: {
+          path: 'service',
+          select: 'title'
+        }
+      })
+      .select('grossAmount commissionAmount netAmount status createdAt');
+
     if (!earning) {
-      return res.status(404).json({ 
-        success: false, 
-        error: 'No earnings found for this booking' 
+      return res.status(404).json({
+        success: false,
+        error: 'No earnings found for this booking'
       });
     }
-    
+
+    // Format response
+    const response = {
+      bookingId: earning.booking._id,
+      service: earning.booking.service.title,
+      bookingDate: earning.booking.date,
+      totalPrice: earning.booking.totalPrice,
+      grossAmount: earning.grossAmount,
+      commissionAmount: earning.commissionAmount,
+      netAmount: earning.netAmount,
+      status: earning.status,
+      earnedAt: earning.createdAt,
+      commissionRule: earning.commissionRule
+    };
+
     res.json({
       success: true,
-      data: earning
+      data: response
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Get earnings by booking error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch booking earnings',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 
 // Provider - Download statement (PDF)
 const downloadStatement = async (req, res) => {
   try {
-    const providerId = req.user.id;
+    const providerId = req.provider._id;
     const { startDate, endDate } = req.query;
-    
+
+    // Validate dates if provided
+    if (startDate && isNaN(new Date(startDate).getTime())) {
+      return res.status(400).json({ success: false, error: 'Invalid start date' });
+    }
+
+    if (endDate && isNaN(new Date(endDate).getTime())) {
+      return res.status(400).json({ success: false, error: 'Invalid end date' });
+    }
+
     const match = { provider: providerId };
     if (startDate || endDate) {
       match.createdAt = {};
       if (startDate) match.createdAt.$gte = new Date(startDate);
       if (endDate) match.createdAt.$lte = new Date(endDate);
     }
-    
-    const [earnings, payments] = await Promise.all([
+
+    // Get provider details
+    const provider = await Provider.findById(providerId).select('name email phone');
+    if (!provider) {
+      return res.status(404).json({ success: false, error: 'Provider not found' });
+    }
+
+    // Get data in parallel
+    const [earnings, payments, summary] = await Promise.all([
       ProviderEarning.find(match)
         .sort({ createdAt: -1 })
         .populate('booking', 'service date')
-        .populate('commissionRule', 'name type value'),
-        
-      PaymentRecord.find({ provider: providerId, ...(startDate || endDate ? {
-        createdAt: {
-          ...(startDate ? { $gte: new Date(startDate) } : {}),
-          ...(endDate ? { $lte: new Date(endDate) } : {})
-        }
-      } : {}) })
+        .populate('commissionRule', 'name type value')
+        .select('grossAmount commissionAmount netAmount status createdAt'),
+
+      PaymentRecord.find({
+        provider: providerId,
+        ...(startDate || endDate ? {
+          createdAt: {
+            ...(startDate ? { $gte: new Date(startDate) } : {}),
+            ...(endDate ? { $lte: new Date(endDate) } : {})
+          }
+        } : {})
+      })
         .sort({ createdAt: -1 })
+        .select('amount netAmount createdAt status transactionReference paymentMethod'),
+
+      ProviderEarning.aggregate([
+        { $match: match },
+        {
+          $group: {
+            _id: null,
+            totalGross: { $sum: '$grossAmount' },
+            totalCommission: { $sum: '$commissionAmount' },
+            totalNet: { $sum: '$netAmount' }
+          }
+        }
+      ])
     ]);
-    
+
     // Create PDF document
     const doc = new PDFDocument();
     const filename = `statement-${providerId}-${Date.now()}.pdf`;
     const filePath = path.join(__dirname, '../temp', filename);
-    
+
     // Ensure temp directory exists
     if (!fs.existsSync(path.join(__dirname, '../temp'))) {
-      fs.mkdirSync(path.join(__dirname, '../temp'));
+      fs.mkdirSync(path.join(__dirname, '../temp'), { recursive: true });
     }
-    
+
     const stream = fs.createWriteStream(filePath);
     doc.pipe(stream);
-    
+
     // Add document content
     doc.fontSize(20).text('Payment Statement', { align: 'center' });
     doc.moveDown();
-    
+
     // Provider info
-    const provider = await Provider.findById(providerId);
     doc.fontSize(12).text(`Provider: ${provider.name}`);
     doc.text(`Email: ${provider.email}`);
     doc.text(`Phone: ${provider.phone}`);
     doc.text(`Statement Period: ${startDate ? formatDate(startDate) : 'All time'} - ${endDate ? formatDate(endDate) : 'Present'}`);
     doc.moveDown();
-    
+
     // Earnings summary
     doc.fontSize(14).text('Earnings Summary', { underline: true });
     doc.moveDown();
-    
-    const earningsSummary = await ProviderEarning.aggregate([
-      { $match: match },
-      {
-        $group: {
-          _id: null,
-          totalGross: { $sum: '$grossAmount' },
-          totalCommission: { $sum: '$commissionAmount' },
-          totalNet: { $sum: '$netAmount' }
-        }
-      }
-    ]);
-    
-    const summary = earningsSummary.length ? earningsSummary[0] : {
+
+    const earningsSummary = summary.length ? summary[0] : {
       totalGross: 0,
       totalCommission: 0,
       totalNet: 0
     };
-    
-    doc.text(`Total Earnings: $${summary.totalGross.toFixed(2)}`);
-    doc.text(`Total Commission: $${summary.totalCommission.toFixed(2)}`);
-    doc.text(`Net Earnings: $${summary.totalNet.toFixed(2)}`);
+
+    doc.text(`Total Earnings: $${earningsSummary.totalGross.toFixed(2)}`);
+    doc.text(`Total Commission: $${earningsSummary.totalCommission.toFixed(2)}`);
+    doc.text(`Net Earnings: $${earningsSummary.totalNet.toFixed(2)}`);
     doc.moveDown();
-    
+
     // Earnings details
     doc.fontSize(14).text('Earnings Details', { underline: true });
     doc.moveDown();
-    
+
     if (earnings.length === 0) {
       doc.text('No earnings found for this period');
     } else {
@@ -264,13 +500,13 @@ const downloadStatement = async (req, res) => {
         doc.moveDown(0.5);
       });
     }
-    
+
     doc.moveDown();
-    
+
     // Payment details
     doc.fontSize(14).text('Payment History', { underline: true });
     doc.moveDown();
-    
+
     if (payments.length === 0) {
       doc.text('No payments found for this period');
     } else {
@@ -282,9 +518,9 @@ const downloadStatement = async (req, res) => {
         doc.moveDown(0.5);
       });
     }
-    
+
     doc.end();
-    
+
     stream.on('finish', () => {
       res.download(filePath, filename, (err) => {
         if (err) console.error('Error sending file:', err);
@@ -293,126 +529,156 @@ const downloadStatement = async (req, res) => {
       });
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Download statement error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to generate statement',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 
 // Provider - Download statement (Excel)
 const downloadStatementExcel = async (req, res) => {
   try {
-    const providerId = req.user.id;
+    const providerId = req.provider._id;
     const { startDate, endDate } = req.query;
-    
+
+    // Validate dates if provided
+    if (startDate && isNaN(new Date(startDate).getTime())) {
+      return res.status(400).json({ success: false, error: 'Invalid start date' });
+    }
+
+    if (endDate && isNaN(new Date(endDate).getTime())) {
+      return res.status(400).json({ success: false, error: 'Invalid end date' });
+    }
+
     const match = { provider: providerId };
     if (startDate || endDate) {
       match.createdAt = {};
       if (startDate) match.createdAt.$gte = new Date(startDate);
       if (endDate) match.createdAt.$lte = new Date(endDate);
     }
-    
-    const [earnings, payments] = await Promise.all([
+
+    // Get provider details
+    const provider = await Provider.findById(providerId).select('name email phone');
+    if (!provider) {
+      return res.status(404).json({ success: false, error: 'Provider not found' });
+    }
+
+    // Get data in parallel
+    const [earnings, payments, summary] = await Promise.all([
       ProviderEarning.find(match)
         .sort({ createdAt: -1 })
         .populate('booking', 'service date')
-        .populate('commissionRule', 'name type value'),
-        
-      PaymentRecord.find({ provider: providerId, ...(startDate || endDate ? {
-        createdAt: {
-          ...(startDate ? { $gte: new Date(startDate) } : {}),
-          ...(endDate ? { $lte: new Date(endDate) } : {})
-        }
-      } : {}) })
+        .populate('commissionRule', 'name type value')
+        .select('grossAmount commissionAmount netAmount status createdAt'),
+
+      PaymentRecord.find({
+        provider: providerId,
+        ...(startDate || endDate ? {
+          createdAt: {
+            ...(startDate ? { $gte: new Date(startDate) } : {}),
+            ...(endDate ? { $lte: new Date(endDate) } : {})
+          }
+        } : {})
+      })
         .sort({ createdAt: -1 })
+        .select('amount netAmount createdAt status transactionReference paymentMethod'),
+
+      ProviderEarning.aggregate([
+        { $match: match },
+        {
+          $group: {
+            _id: null,
+            totalGross: { $sum: '$grossAmount' },
+            totalCommission: { $sum: '$commissionAmount' },
+            totalNet: { $sum: '$netAmount' }
+          }
+        }
+      ])
     ]);
-    
+
     // Create workbook
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Statement');
-    
+
     // Add provider info
-    const provider = await Provider.findById(providerId);
     worksheet.addRow(['Provider Statement']);
     worksheet.addRow(['Name:', provider.name]);
     worksheet.addRow(['Email:', provider.email]);
     worksheet.addRow(['Phone:', provider.phone]);
     worksheet.addRow(['Period:', `${startDate ? formatDate(startDate) : 'All time'} - ${endDate ? formatDate(endDate) : 'Present'}`]);
     worksheet.addRow([]);
-    
+
     // Add earnings summary
-    const earningsSummary = await ProviderEarning.aggregate([
-      { $match: match },
-      {
-        $group: {
-          _id: null,
-          totalGross: { $sum: '$grossAmount' },
-          totalCommission: { $sum: '$commissionAmount' },
-          totalNet: { $sum: '$netAmount' }
-        }
-      }
-    ]);
-    
-    const summary = earningsSummary.length ? earningsSummary[0] : {
+    const earningsSummary = summary.length ? summary[0] : {
       totalGross: 0,
       totalCommission: 0,
       totalNet: 0
     };
-    
+
     worksheet.addRow(['Earnings Summary']);
-    worksheet.addRow(['Total Earnings:', `$${summary.totalGross.toFixed(2)}`]);
-    worksheet.addRow(['Total Commission:', `$${summary.totalCommission.toFixed(2)}`]);
-    worksheet.addRow(['Net Earnings:', `$${summary.totalNet.toFixed(2)}`]);
+    worksheet.addRow(['Total Earnings:', `$${earningsSummary.totalGross.toFixed(2)}`]);
+    worksheet.addRow(['Total Commission:', `$${earningsSummary.totalCommission.toFixed(2)}`]);
+    worksheet.addRow(['Net Earnings:', `$${earningsSummary.totalNet.toFixed(2)}`]);
     worksheet.addRow([]);
-    
+
     // Add earnings details
     worksheet.addRow(['Earnings Details']);
     worksheet.addRow(['Date', 'Service', 'Amount', 'Commission', 'Net', 'Status']);
-    
+
     earnings.forEach(earning => {
       worksheet.addRow([
         formatDate(earning.createdAt),
         earning.booking?.service || 'N/A',
-        earning.grossAmount,
-        earning.commissionAmount,
-        earning.netAmount,
+        earning.grossAmount.toFixed(2),
+        earning.commissionAmount.toFixed(2),
+        earning.netAmount.toFixed(2),
         earning.status
       ]);
     });
-    
+
     worksheet.addRow([]);
-    
+
     // Add payment details
     worksheet.addRow(['Payment History']);
     worksheet.addRow(['Date', 'Reference', 'Amount', 'Net', 'Method', 'Status']);
-    
+
     payments.forEach(payment => {
       worksheet.addRow([
         formatDate(payment.createdAt),
         payment.transactionReference,
-        payment.amount,
-        payment.netAmount,
+        payment.amount.toFixed(2),
+        payment.netAmount.toFixed(2),
         payment.paymentMethod,
         payment.status
       ]);
     });
-    
+
     // Generate file
     const filename = `statement-${providerId}-${Date.now()}.xlsx`;
     const filePath = path.join(__dirname, '../temp', filename);
-    
+
     // Ensure temp directory exists
     if (!fs.existsSync(path.join(__dirname, '../temp'))) {
-      fs.mkdirSync(path.join(__dirname, '../temp'));
+      fs.mkdirSync(path.join(__dirname, '../temp'), { recursive: true });
     }
-    
+
     await workbook.xlsx.writeFile(filePath);
-    
+
     res.download(filePath, filename, (err) => {
       if (err) console.error('Error sending file:', err);
       // Clean up file after download
       fs.unlinkSync(filePath);
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Download Excel statement error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to generate Excel statement',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 
@@ -420,35 +686,60 @@ const downloadStatementExcel = async (req, res) => {
 const getAllProviderEarnings = async (req, res) => {
   try {
     const { page = 1, limit = 10, status, providerId } = req.query;
-    
+
+    // Validate pagination
+    const pageNum = parseInt(page) || 1;
+    const limitNum = parseInt(limit) || 10;
+
+    if (pageNum < 1 || limitNum < 1 || limitNum > 100) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid pagination parameters'
+      });
+    }
+
+    // Build filter
     const filter = {};
     if (status) filter.status = status;
-    if (providerId) filter.provider = providerId;
-    
-    const earnings = await ProviderEarning.find(filter)
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(parseInt(limit))
-      .populate('provider', 'name email')
-      .populate('booking', 'service date')
-      .populate('commissionRule', 'name type value');
-    
-    const total = await ProviderEarning.countDocuments(filter);
-    
+    if (providerId) {
+      if (!mongoose.Types.ObjectId.isValid(providerId)) {
+        return res.status(400).json({ success: false, error: 'Invalid provider ID' });
+      }
+      filter.provider = providerId;
+    }
+
+    // Get data with pagination
+    const [earnings, total] = await Promise.all([
+      ProviderEarning.find(filter)
+        .sort({ createdAt: -1 })
+        .skip((pageNum - 1) * limitNum)
+        .limit(limitNum)
+        .populate('provider', 'name email')
+        .populate('booking', 'service date')
+        .populate('commissionRule', 'name type value')
+        .select('grossAmount commissionAmount netAmount status createdAt'),
+      ProviderEarning.countDocuments(filter)
+    ]);
+
     res.json({
       success: true,
       data: {
         earnings,
         pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
+          page: pageNum,
+          limit: limitNum,
           total,
-          pages: Math.ceil(total / limit)
+          pages: Math.ceil(total / limitNum)
         }
       }
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Get all provider earnings error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch provider earnings',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 
@@ -456,31 +747,40 @@ const getAllProviderEarnings = async (req, res) => {
 const processBookingPayment = async (req, res) => {
   try {
     const { bookingId } = req.params;
-    
+
+    // Validate booking ID
+    if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+      return res.status(400).json({ success: false, error: 'Invalid booking ID' });
+    }
+
+    // Get booking with necessary details
     const booking = await Booking.findById(bookingId)
-      .populate('service')
-      .populate('provider');
-    
+      .populate('service', 'type title price')
+      .populate('provider', '_id name email type');
+
     if (!booking) {
-      return res.status(404).json({ 
-        success: false, 
-        error: 'Booking not found' 
+      return res.status(404).json({
+        success: false,
+        error: 'Booking not found'
       });
     }
-    
+
     if (booking.paymentStatus === 'paid') {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Booking already paid' 
+      return res.status(400).json({
+        success: false,
+        error: 'Booking already paid'
       });
     }
-    
+
     // Find applicable commission rule
     const commissionRule = await CommissionRule.findOne({
-      serviceType: booking.service.type,
+      $or: [
+        { serviceType: booking.service.type },
+        { providerType: booking.provider.type }
+      ],
       isActive: true
     }).sort({ priority: 1 });
-    
+
     // Calculate commission
     let commissionAmount = 0;
     if (commissionRule) {
@@ -489,8 +789,11 @@ const processBookingPayment = async (req, res) => {
       } else {
         commissionAmount = commissionRule.value; // Fixed amount
       }
+    } else {
+      // Default commission if no rule found
+      commissionAmount = booking.totalPrice * 0.1; // 10% default
     }
-    
+
     // Create provider earning record
     const providerEarning = new ProviderEarning({
       provider: booking.provider._id,
@@ -501,28 +804,33 @@ const processBookingPayment = async (req, res) => {
       status: 'pending', // Will become available after clearing period
       commissionRule: commissionRule?._id
     });
-    
+
     await providerEarning.save();
-    
+
     // Update booking payment status
     booking.paymentStatus = 'paid';
     booking.paymentDate = new Date();
     await booking.save();
-    
+
     // Notify provider
     await sendEmail({
       to: booking.provider.email,
       subject: 'New Earnings Added',
-      text: `You have earned $${providerEarning.netAmount.toFixed(2)} from booking ${booking._id}`
+      text: `You have earned $${providerEarning.netAmount.toFixed(2)} from booking ${booking._id} for service ${booking.service.title}`
     });
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       message: 'Payment processed successfully',
       data: providerEarning
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Process booking payment error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to process booking payment',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 
@@ -530,32 +838,52 @@ const processBookingPayment = async (req, res) => {
 const getAllWithdrawalRequests = async (req, res) => {
   try {
     const { page = 1, limit = 10, status } = req.query;
-    
+
+    // Validate pagination
+    const pageNum = parseInt(page) || 1;
+    const limitNum = parseInt(limit) || 10;
+
+    if (pageNum < 1 || limitNum < 1 || limitNum > 100) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid pagination parameters'
+      });
+    }
+
+    // Build filter
     const filter = { type: 'withdrawal' };
     if (status) filter.status = status;
-    
-    const requests = await PaymentRecord.find(filter)
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(parseInt(limit))
-      .populate('provider', 'name email');
-    
-    const total = await PaymentRecord.countDocuments(filter);
-    
+
+    // Get data with pagination
+    const [requests, total] = await Promise.all([
+      PaymentRecord.find(filter)
+        .sort({ createdAt: -1 })
+        .skip((pageNum - 1) * limitNum)
+        .limit(limitNum)
+        .populate('provider', 'name email')
+        .select('amount netAmount createdAt status transactionReference paymentMethod'),
+      PaymentRecord.countDocuments(filter)
+    ]);
+
     res.json({
       success: true,
       data: {
         requests,
         pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
+          page: pageNum,
+          limit: limitNum,
           total,
-          pages: Math.ceil(total / limit)
+          pages: Math.ceil(total / limitNum)
         }
       }
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Get withdrawal requests error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch withdrawal requests',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 
@@ -564,70 +892,92 @@ const processWithdrawal = async (req, res) => {
   try {
     const { recordId } = req.params;
     const { status, transactionId } = req.body;
-    
+
+    // Validate input
+    if (!['completed', 'rejected'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid status. Must be "completed" or "rejected"'
+      });
+    }
+
+    if (status === 'completed' && !transactionId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Transaction ID is required for completed withdrawals'
+      });
+    }
+
+    // Get payment record with provider details
     const paymentRecord = await PaymentRecord.findById(recordId)
       .populate('provider', 'name email');
-    
+
     if (!paymentRecord) {
-      return res.status(404).json({ 
-        success: false, 
-        error: 'Payment record not found' 
+      return res.status(404).json({
+        success: false,
+        error: 'Payment record not found'
       });
     }
-    
+
     if (paymentRecord.type !== 'withdrawal') {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Not a withdrawal record' 
+      return res.status(400).json({
+        success: false,
+        error: 'Not a withdrawal record'
       });
     }
-    
+
     if (paymentRecord.status !== 'pending') {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Withdrawal already processed' 
+      return res.status(400).json({
+        success: false,
+        error: 'Withdrawal already processed'
       });
     }
-    
+
     // Update payment record
     paymentRecord.status = status;
     if (transactionId) paymentRecord.transactionReference = transactionId;
+    paymentRecord.processedAt = new Date();
     await paymentRecord.save();
-    
-    // Update associated earnings
+
+    // Update associated earnings based on status
     if (status === 'completed') {
       await ProviderEarning.updateMany(
         { paymentRecord: recordId },
         { $set: { status: 'paid' } }
       );
-      
+
       // Notify provider
       await sendEmail({
         to: paymentRecord.provider.email,
         subject: 'Withdrawal Processed',
-        text: `Your withdrawal request of $${paymentRecord.amount.toFixed(2)} has been processed successfully.`
+        text: `Your withdrawal request of $${paymentRecord.amount.toFixed(2)} has been processed successfully. Transaction ID: ${transactionId}`
       });
     } else if (status === 'rejected') {
       await ProviderEarning.updateMany(
         { paymentRecord: recordId },
-        { $set: { status: 'available' } }
+        { $set: { status: 'available', paymentRecord: null } }
       );
-      
+
       // Notify provider
       await sendEmail({
         to: paymentRecord.provider.email,
         subject: 'Withdrawal Rejected',
-        text: `Your withdrawal request of $${paymentRecord.amount.toFixed(2)} has been rejected.`
+        text: `Your withdrawal request of $${paymentRecord.amount.toFixed(2)} has been rejected. Please contact support for more information.`
       });
     }
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       message: `Withdrawal ${status} successfully`,
       data: paymentRecord
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Process withdrawal error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to process withdrawal',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 
@@ -635,46 +985,66 @@ const processWithdrawal = async (req, res) => {
 const generateReport = async (req, res) => {
   try {
     const { providerId, startDate, endDate, reportType } = req.query;
-    
+
+    // Validate provider ID if provided
+    if (providerId && !mongoose.Types.ObjectId.isValid(providerId)) {
+      return res.status(400).json({ success: false, error: 'Invalid provider ID' });
+    }
+
+    // Validate dates if provided
+    if (startDate && isNaN(new Date(startDate).getTime())) {
+      return res.status(400).json({ success: false, error: 'Invalid start date' });
+    }
+
+    if (endDate && isNaN(new Date(endDate).getTime())) {
+      return res.status(400).json({ success: false, error: 'Invalid end date' });
+    }
+
+    // Build match query
     const match = providerId ? { provider: mongoose.Types.ObjectId(providerId) } : {};
     if (startDate || endDate) {
       match.createdAt = {};
       if (startDate) match.createdAt.$gte = new Date(startDate);
       if (endDate) match.createdAt.$lte = new Date(endDate);
     }
-    
-    let title = 'Admin Report';
+
+    // Set report title
+    let title = 'Admin Earnings Report';
+    let providerName = '';
+
     if (providerId) {
-      const provider = await Provider.findById(providerId);
-      title = `Report for ${provider.name}`;
+      const provider = await Provider.findById(providerId).select('name');
+      providerName = provider?.name || '';
+      title = `Earnings Report for ${providerName}`;
     }
-    
+
     // Create PDF document
     const doc = new PDFDocument();
-    const filename = `report-${Date.now()}.pdf`;
+    const filename = `earnings-report-${Date.now()}.pdf`;
     const filePath = path.join(__dirname, '../temp', filename);
-    
+
     // Ensure temp directory exists
     if (!fs.existsSync(path.join(__dirname, '../temp'))) {
-      fs.mkdirSync(path.join(__dirname, '../temp'));
+      fs.mkdirSync(path.join(__dirname, '../temp'), { recursive: true });
     }
-    
+
     const stream = fs.createWriteStream(filePath);
     doc.pipe(stream);
-    
+
     // Add document content
     doc.fontSize(20).text(title, { align: 'center' });
     doc.moveDown();
-    
+
     // Report info
-    doc.fontSize(12).text(`Report Type: ${reportType || 'General'}`);
+    doc.fontSize(12).text(`Report Type: ${reportType || 'General Earnings'}`);
+    if (providerName) doc.text(`Provider: ${providerName}`);
     doc.text(`Period: ${startDate ? formatDate(startDate) : 'All time'} - ${endDate ? formatDate(endDate) : 'Present'}`);
     doc.moveDown();
-    
+
     // Summary statistics
     doc.fontSize(14).text('Summary Statistics', { underline: true });
     doc.moveDown();
-    
+
     const stats = await ProviderEarning.aggregate([
       { $match: match },
       {
@@ -695,7 +1065,7 @@ const generateReport = async (req, res) => {
         }
       }
     ]);
-    
+
     const summary = stats.length ? stats[0] : {
       totalGross: 0,
       totalCommission: 0,
@@ -704,7 +1074,7 @@ const generateReport = async (req, res) => {
       availableCount: 0,
       paidCount: 0
     };
-    
+
     doc.text(`Total Earnings: $${summary.totalGross.toFixed(2)}`);
     doc.text(`Total Commission: $${summary.totalCommission.toFixed(2)}`);
     doc.text(`Net Paid to Providers: $${summary.totalNet.toFixed(2)}`);
@@ -713,12 +1083,12 @@ const generateReport = async (req, res) => {
     doc.text(`Available for Withdrawal: ${summary.availableCount}`);
     doc.text(`Paid Earnings: ${summary.paidCount}`);
     doc.moveDown();
-    
-    // Top providers
+
+    // Top providers (only if not filtered by provider)
     if (!providerId) {
-      doc.fontSize(14).text('Top Providers', { underline: true });
+      doc.fontSize(14).text('Top Providers by Earnings', { underline: true });
       doc.moveDown();
-      
+
       const topProviders = await ProviderEarning.aggregate([
         { $match: match },
         {
@@ -740,7 +1110,7 @@ const generateReport = async (req, res) => {
         },
         { $unwind: '$provider' }
       ]);
-      
+
       if (topProviders.length === 0) {
         doc.text('No provider data available');
       } else {
@@ -750,19 +1120,26 @@ const generateReport = async (req, res) => {
           doc.moveDown(0.5);
         });
       }
-      
+
       doc.moveDown();
     }
-    
+
     // Recent payments
     doc.fontSize(14).text('Recent Payments', { underline: true });
     doc.moveDown();
-    
-    const payments = await PaymentRecord.find(providerId ? { provider: providerId } : {})
+
+    const paymentFilter = providerId ? { provider: providerId } : {};
+    if (startDate || endDate) {
+      paymentFilter.createdAt = {};
+      if (startDate) paymentFilter.createdAt.$gte = new Date(startDate);
+      if (endDate) paymentFilter.createdAt.$lte = new Date(endDate);
+    }
+
+    const payments = await PaymentRecord.find(paymentFilter)
       .sort({ createdAt: -1 })
       .limit(5)
       .populate('provider', 'name');
-    
+
     if (payments.length === 0) {
       doc.text('No payment records found');
     } else {
@@ -774,9 +1151,9 @@ const generateReport = async (req, res) => {
         doc.moveDown(0.5);
       });
     }
-    
+
     doc.end();
-    
+
     stream.on('finish', () => {
       res.download(filePath, filename, (err) => {
         if (err) console.error('Error sending file:', err);
@@ -785,7 +1162,12 @@ const generateReport = async (req, res) => {
       });
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Generate report error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to generate report',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 
@@ -793,18 +1175,34 @@ const generateReport = async (req, res) => {
 const getTopProviders = async (req, res) => {
   try {
     const { limit = 5, period = 'month' } = req.query;
-    
+
+    // Validate limit
+    const limitNum = parseInt(limit) || 5;
+    if (limitNum < 1 || limitNum > 20) {
+      return res.status(400).json({
+        success: false,
+        error: 'Limit must be between 1 and 20'
+      });
+    }
+
+    // Set date filter based on period
     let dateFilter = {};
     const now = new Date();
-    
+
     if (period === 'week') {
       dateFilter.$gte = new Date(now.setDate(now.getDate() - 7));
     } else if (period === 'month') {
       dateFilter.$gte = new Date(now.setMonth(now.getMonth() - 1));
     } else if (period === 'year') {
       dateFilter.$gte = new Date(now.setFullYear(now.getFullYear() - 1));
+    } else if (period !== 'all') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid period. Must be week, month, year, or all'
+      });
     }
-    
+
+    // Get top providers
     const topProviders = await ProviderEarning.aggregate([
       { $match: { createdAt: dateFilter } },
       {
@@ -815,7 +1213,7 @@ const getTopProviders = async (req, res) => {
         }
       },
       { $sort: { totalEarnings: -1 } },
-      { $limit: parseInt(limit) },
+      { $limit: limitNum },
       {
         $lookup: {
           from: 'providers',
@@ -827,22 +1225,29 @@ const getTopProviders = async (req, res) => {
       { $unwind: '$provider' },
       {
         $project: {
-          _id: 0,
           providerId: '$_id',
           name: '$provider.name',
           email: '$provider.email',
           totalEarnings: 1,
-          bookingCount: 1
+          bookingCount: 1,
+          _id: 0
         }
       }
     ]);
-    
+
     res.json({
       success: true,
-      data: topProviders
+      data: topProviders,
+      period,
+      limit: limitNum
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Get top providers error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch top providers',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 
@@ -850,31 +1255,53 @@ const getTopProviders = async (req, res) => {
 const generateReportExcel = async (req, res) => {
   try {
     const { providerId, startDate, endDate, reportType } = req.query;
-    
+
+    // Validate provider ID if provided
+    if (providerId && !mongoose.Types.ObjectId.isValid(providerId)) {
+      return res.status(400).json({ success: false, error: 'Invalid provider ID' });
+    }
+
+    // Validate dates if provided
+    if (startDate && isNaN(new Date(startDate).getTime())) {
+      return res.status(400).json({ success: false, error: 'Invalid start date' });
+    }
+
+    if (endDate && isNaN(new Date(endDate).getTime())) {
+      return res.status(400).json({ success: false, error: 'Invalid end date' });
+    }
+
+    // Build match query
     const match = providerId ? { provider: mongoose.Types.ObjectId(providerId) } : {};
     if (startDate || endDate) {
       match.createdAt = {};
       if (startDate) match.createdAt.$gte = new Date(startDate);
       if (endDate) match.createdAt.$lte = new Date(endDate);
     }
-    
+
+    // Set report title
+    let title = 'Admin Earnings Report';
+    let providerName = '';
+
+    if (providerId) {
+      const provider = await Provider.findById(providerId).select('name');
+      providerName = provider?.name || '';
+      title = `Earnings Report for ${providerName}`;
+    }
+
     // Create workbook
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Report');
-    
+
     // Add report info
-    worksheet.addRow(['Admin Report']);
-    if (providerId) {
-      const provider = await Provider.findById(providerId);
-      worksheet.addRow(['Provider:', provider.name]);
-    }
-    worksheet.addRow(['Report Type:', reportType || 'General']);
+    worksheet.addRow([title]);
+    if (providerName) worksheet.addRow(['Provider:', providerName]);
+    worksheet.addRow(['Report Type:', reportType || 'General Earnings']);
     worksheet.addRow(['Period:', `${startDate ? formatDate(startDate) : 'All time'} - ${endDate ? formatDate(endDate) : 'Present'}`]);
     worksheet.addRow([]);
-    
+
     // Add summary statistics
     worksheet.addRow(['Summary Statistics']);
-    
+
     const stats = await ProviderEarning.aggregate([
       { $match: match },
       {
@@ -895,7 +1322,7 @@ const generateReportExcel = async (req, res) => {
         }
       }
     ]);
-    
+
     const summary = stats.length ? stats[0] : {
       totalGross: 0,
       totalCommission: 0,
@@ -904,7 +1331,7 @@ const generateReportExcel = async (req, res) => {
       availableCount: 0,
       paidCount: 0
     };
-    
+
     worksheet.addRow(['Total Earnings:', `$${summary.totalGross.toFixed(2)}`]);
     worksheet.addRow(['Total Commission:', `$${summary.totalCommission.toFixed(2)}`]);
     worksheet.addRow(['Net Paid to Providers:', `$${summary.totalNet.toFixed(2)}`]);
@@ -913,12 +1340,12 @@ const generateReportExcel = async (req, res) => {
     worksheet.addRow(['Available for Withdrawal:', summary.availableCount]);
     worksheet.addRow(['Paid Earnings:', summary.paidCount]);
     worksheet.addRow([]);
-    
-    // Add top providers
+
+    // Add top providers (only if not filtered by provider)
     if (!providerId) {
-      worksheet.addRow(['Top Providers']);
+      worksheet.addRow(['Top Providers by Earnings']);
       worksheet.addRow(['Rank', 'Name', 'Earnings', 'Bookings']);
-      
+
       const topProviders = await ProviderEarning.aggregate([
         { $match: match },
         {
@@ -940,57 +1367,156 @@ const generateReportExcel = async (req, res) => {
         },
         { $unwind: '$provider' }
       ]);
-      
+
       topProviders.forEach((provider, index) => {
         worksheet.addRow([
           index + 1,
           provider.provider.name,
-          provider.totalNet,
+          provider.totalNet.toFixed(2),
           provider.count
         ]);
       });
-      
+
       worksheet.addRow([]);
     }
-    
+
     // Add recent payments
     worksheet.addRow(['Recent Payments']);
     worksheet.addRow(['Date', 'Provider', 'Amount', 'Net', 'Method', 'Status']);
-    
-    const payments = await PaymentRecord.find(providerId ? { provider: providerId } : {})
+
+    const paymentFilter = providerId ? { provider: providerId } : {};
+    if (startDate || endDate) {
+      paymentFilter.createdAt = {};
+      if (startDate) paymentFilter.createdAt.$gte = new Date(startDate);
+      if (endDate) paymentFilter.createdAt.$lte = new Date(endDate);
+    }
+
+    const payments = await PaymentRecord.find(paymentFilter)
       .sort({ createdAt: -1 })
       .limit(5)
       .populate('provider', 'name');
-    
+
     payments.forEach(payment => {
       worksheet.addRow([
         formatDate(payment.createdAt),
         payment.provider?.name || 'N/A',
-        payment.amount,
-        payment.netAmount,
+        payment.amount.toFixed(2),
+        payment.netAmount.toFixed(2),
         payment.paymentMethod,
         payment.status
       ]);
     });
-    
+
     // Generate file
-    const filename = `report-${Date.now()}.xlsx`;
+    const filename = `earnings-report-${Date.now()}.xlsx`;
     const filePath = path.join(__dirname, '../temp', filename);
-    
+
     // Ensure temp directory exists
     if (!fs.existsSync(path.join(__dirname, '../temp'))) {
-      fs.mkdirSync(path.join(__dirname, '../temp'));
+      fs.mkdirSync(path.join(__dirname, '../temp'), { recursive: true });
     }
-    
+
     await workbook.xlsx.writeFile(filePath);
-    
+
     res.download(filePath, filename, (err) => {
       if (err) console.error('Error sending file:', err);
       // Clean up file after download
       fs.unlinkSync(filePath);
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Generate Excel report error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to generate Excel report',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// Provider - Get earnings list (for earnings tab)
+const getProviderEarnings = async (req, res) => {
+  try {
+    const providerId = req.provider._id;
+    const { from, to, page = 1, limit = 10 } = req.query;
+
+    // Validate pagination
+    const pageNum = parseInt(page) || 1;
+    const limitNum = parseInt(limit) || 10;
+
+    if (pageNum < 1 || limitNum < 1 || limitNum > 100) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid pagination parameters'
+      });
+    }
+
+    // Validate dates if provided
+    if (from && isNaN(new Date(from).getTime())) {
+      return res.status(400).json({ success: false, error: 'Invalid from date' });
+    }
+
+    if (to && isNaN(new Date(to).getTime())) {
+      return res.status(400).json({ success: false, error: 'Invalid to date' });
+    }
+
+    // Build match query
+    const match = { provider: providerId };
+    if (from || to) {
+      match.createdAt = {};
+      if (from) match.createdAt.$gte = new Date(from);
+      if (to) match.createdAt.$lte = new Date(to);
+    }
+
+    // Get earnings with pagination
+    const [earnings, total] = await Promise.all([
+      ProviderEarning.find(match)
+        .populate({
+          path: 'booking',
+          select: 'service date totalPrice',
+          populate: {
+            path: 'service',
+            select: 'title'
+          }
+        })
+        .sort({ createdAt: -1 })
+        .skip((pageNum - 1) * limitNum)
+        .limit(limitNum)
+        .select('grossAmount commissionAmount netAmount status createdAt'),
+      ProviderEarning.countDocuments(match)
+    ]);
+
+    // Format earnings for frontend
+    const formattedEarnings = earnings.map(earning => ({
+      id: earning._id,
+      bookingId: earning.booking?._id?.toString().slice(-8) || 'N/A',
+      date: earning.createdAt,
+      serviceName: earning.booking?.service?.title || 'N/A',
+      bookingDate: earning.booking?.date || null,
+      grossAmount: earning.grossAmount,
+      commission: earning.commissionAmount,
+      netAmount: earning.netAmount,
+      status: earning.status
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        earnings: formattedEarnings,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          pages: Math.ceil(total / limitNum)
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Get provider earnings error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch earnings',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 
@@ -1007,5 +1533,6 @@ module.exports = {
   processWithdrawal,
   generateReport,
   getTopProviders,
-  generateReportExcel
+  generateReportExcel,
+  getProviderEarnings
 };

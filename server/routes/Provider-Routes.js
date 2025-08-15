@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const providerController = require('../controllers/provider-controller');
+const providerController = require('../controllers/Provider-controller');
 const { providerAuthMiddleware, providerTestPassedMiddleware } = require('../middlewares/Provider-middleware');
 const adminAuthMiddleware = require('../middlewares/Admin-middleware');
 const { uploadProfilePic, uploadResume, uploadPassbookImg, upload } = require('../middlewares/upload');
@@ -23,37 +23,69 @@ router.put('/profile/complete',
 
 // Profile Routes (Protected)
 router.get('/profile', providerAuthMiddleware, providerController.getProfile);
-router.put('/profile', providerAuthMiddleware, providerController.updateProfile);
 
-// Professional Info Routes (Protected)
+// Unified Profile Update Route (Protected) - handles all profile updates
+router.put('/profile', 
+  providerAuthMiddleware, 
+  upload.fields([
+    { name: 'profilePic', maxCount: 1 },
+    { name: 'resume', maxCount: 1 },
+    { name: 'passbookImage', maxCount: 1 }
+  ]),
+  providerController.updateProviderProfile
+);
+
+// Document Viewing Route (Protected)
+router.get('/document/:type', providerAuthMiddleware, providerController.viewDocument);
+
+// Backward compatibility routes (these will redirect to the unified endpoint)
 router.put('/profile/professional', 
   providerAuthMiddleware, 
   providerTestPassedMiddleware, 
-  providerController.updateProfessionalInfo
+  (req, res, next) => {
+    req.body.updateType = 'professional';
+    next();
+  },
+  providerController.updateProviderProfile
 );
 
-// Address Routes (Protected)
-router.put('/profile/address', providerAuthMiddleware, providerController.updateAddress);
+router.put('/profile/address', 
+  providerAuthMiddleware, 
+  (req, res, next) => {
+    req.body.updateType = 'address';
+    next();
+  },
+  providerController.updateProviderProfile
+);
 
-// Bank Details Routes (Protected)
 router.put('/profile/bank', 
   providerAuthMiddleware, 
   uploadPassbookImg.single('passbookImage'), 
-  providerController.updateBankDetails
+  (req, res, next) => {
+    req.body.updateType = 'bank';
+    next();
+  },
+  providerController.updateProviderProfile
 );
 
-// Profile Picture Routes (Protected)
 router.put('/profile/picture', 
   providerAuthMiddleware, 
-  uploadProfilePic.single('profilePics'), 
-  providerController.updateProfilePicture
+  uploadProfilePic.single('profilePic'), 
+  (req, res, next) => {
+    req.body.updateType = 'basic';
+    next();
+  },
+  providerController.updateProviderProfile
 );
 
-// Resume Routes (Protected)
 router.put('/profile/resume', 
   providerAuthMiddleware, 
   uploadResume.single('resume'), 
-  providerController.updateResume
+  (req, res, next) => {
+    req.body.updateType = 'professional';
+    next();
+  },
+  providerController.updateProviderProfile
 );
 
 // Account Deletion Routes

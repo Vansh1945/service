@@ -206,6 +206,67 @@ commissionRuleSchema.statics.getActiveRules = async function(filter = {}) {
   }).sort({ applyTo: 1, performanceTier: 1, createdAt: -1 });
 };
 
+commissionRuleSchema.statics.updateCommissionRule = async function(ruleId, updates, adminId) {
+  const rule = await this.findById(ruleId);
+  if (!rule) {
+    throw new Error('Commission rule not found');
+  }
+
+  // Prevent changing critical fields if rule is active
+  if (rule.isActive) {
+    const immutableFields = ['type', 'applyTo', 'performanceTier', 'specificProvider'];
+    for (const field of immutableFields) {
+      if (updates[field] && updates[field] !== rule[field]) {
+        throw new Error(`Cannot change ${field} for an active commission rule. Deactivate first.`);
+      }
+    }
+  }
+
+  // Validate performance tier if applyTo is performanceTier
+  if (updates.applyTo === 'performanceTier' && !updates.performanceTier) {
+    throw new Error('Performance tier is required when applyTo is performanceTier');
+  }
+
+  // Validate specific provider if applyTo is specificProvider
+  if (updates.applyTo === 'specificProvider') {
+    if (!updates.specificProvider) {
+      throw new Error('Specific provider is required when applyTo is specificProvider');
+    }
+    const providerExists = await mongoose.model('Provider').exists({ _id: updates.specificProvider });
+    if (!providerExists) {
+      throw new Error('Specified provider does not exist');
+    }
+  }
+
+  // Update the rule
+  Object.assign(rule, updates);
+  rule.updatedBy = adminId;
+  return await rule.save();
+};
+
+commissionRuleSchema.statics.deleteCommissionRule = async function(ruleId) {
+  const rule = await this.findById(ruleId);
+  if (!rule) {
+    throw new Error('Commission rule not found');
+  }
+
+  // Check if rule is active
+  if (rule.isActive) {
+    throw new Error('Cannot delete an active commission rule. Deactivate first.');
+  }
+
+  // Check if rule is referenced in any invoices
+  const referencedInvoices = await mongoose.model('Invoice').countDocuments({
+    'details.appliedRule': rule._id.toString()
+  });
+
+  if (referencedInvoices > 0) {
+    throw new Error('Cannot delete commission rule as it is referenced in existing invoices');
+  }
+
+  return await rule.deleteOne();
+};
+
 // Virtuals
 commissionRuleSchema.virtual('displayValue').get(function() {
   return this.type === 'percentage' 
@@ -221,6 +282,19 @@ commissionRuleSchema.pre('save', function(next) {
 
   if (this.type === 'fixed' && this.value < 0) {
     throw new Error('Fixed commission cannot be negative');
+  }
+
+  next();
+});
+
+commissionRuleSchema.pre('deleteOne', { document: true }, async function(next) {
+  // Check if the rule is referenced in any invoices
+  const referencedInvoices = await mongoose.model('Invoice').countDocuments({
+    'details.appliedRule': this._id.toString()
+  });
+
+  if (referencedInvoices > 0) {
+    throw new Error('Cannot delete commission rule as it is referenced in existing invoices');
   }
 
   next();

@@ -39,6 +39,7 @@ const paymentDetailSchema = new Schema({
     enum: ['cod', 'online', 'wallet', 'cash', 'card', 'upi']
   },
   transactionId: String,
+  paymentGateway: String,
   amount: {
     type: Number,
     required: true,
@@ -52,6 +53,36 @@ const paymentDetailSchema = new Schema({
     type: String,
     enum: ['pending', 'success', 'failed'],
     default: 'pending'
+  }
+});
+
+// Provider Payment Details Sub-Schema
+const providerPaymentDetailsSchema = new Schema({
+  upiId: {
+    type: String,
+    trim: true
+  },
+  qrCodeImage: {
+    type: String,
+    trim: true
+  },
+  bankDetails: {
+    accountNumber: {
+      type: String,
+      trim: true
+    },
+    ifscCode: {
+      type: String,
+      trim: true
+    },
+    accountHolderName: {
+      type: String,
+      trim: true
+    },
+    bankName: {
+      type: String,
+      trim: true
+    }
   }
 });
 
@@ -85,10 +116,18 @@ const invoiceSchema = new Schema({
     required: true,
     unique: true
   },
+  invoiceType: {
+    type: String,
+    enum: ['service', 'product'],
+    required: true,
+    default: 'service'
+  },
   booking: {
     type: Schema.Types.ObjectId,
     ref: 'Booking',
-    required: [true, 'Booking reference is required']
+    required: function () {
+      return this.invoiceType === 'service';
+    }
   },
   provider: {
     type: Schema.Types.ObjectId,
@@ -103,13 +142,18 @@ const invoiceSchema = new Schema({
   service: {
     type: Schema.Types.ObjectId,
     ref: 'Service',
-    required: [true, 'Service reference is required']
+    required: function () {
+      return this.invoiceType === 'service';
+    }
   },
   serviceAmount: {
     type: Number,
-    required: [true, 'Service amount is required'],
+    required: function () {
+      return this.invoiceType === 'service';
+    },
     min: [0, 'Service amount cannot be negative'],
-    set: v => Math.round(v * 100) / 100
+    set: v => Math.round(v * 100) / 100,
+    default: 0
   },
   productsUsed: {
     type: [productSchema],
@@ -149,13 +193,14 @@ const invoiceSchema = new Schema({
     default: 'pending'
   },
   paymentDetails: [paymentDetailSchema],
+  providerPaymentDetails: providerPaymentDetailsSchema,
   generatedAt: {
     type: Date,
     default: Date.now
   },
   dueDate: {
     type: Date,
-    default: function() {
+    default: function () {
       const date = new Date(this.generatedAt);
       date.setDate(date.getDate() + 7);
       return date;
@@ -164,6 +209,11 @@ const invoiceSchema = new Schema({
   notes: {
     type: String,
     maxlength: 500
+  },
+  status: {
+    type: String,
+    enum: ['active', 'cancelled', 'refunded'],
+    default: 'active'
   }
 }, {
   timestamps: true,
@@ -181,7 +231,7 @@ invoiceSchema.index({ generatedAt: -1 });
 invoiceSchema.index({ dueDate: 1 });
 
 // Calculate totals before save
-invoiceSchema.pre('save', function(next) {
+invoiceSchema.pre('save', function (next) {
   // Calculate product totals
   this.productsUsed.forEach(product => {
     product.total = Math.round((product.quantity * product.rate) * 100) / 100;
@@ -217,8 +267,8 @@ invoiceSchema.pre('save', function(next) {
   next();
 });
 
-// Virtuals for formatted dates
-invoiceSchema.virtual('formattedDate').get(function() {
+// Virtuals
+invoiceSchema.virtual('formattedDate').get(function () {
   return this.generatedAt.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
@@ -226,7 +276,7 @@ invoiceSchema.virtual('formattedDate').get(function() {
   });
 });
 
-invoiceSchema.virtual('formattedDueDate').get(function() {
+invoiceSchema.virtual('formattedDueDate').get(function () {
   return this.dueDate.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
@@ -234,34 +284,32 @@ invoiceSchema.virtual('formattedDueDate').get(function() {
   });
 });
 
-// Virtual for total paid amount
-invoiceSchema.virtual('totalPaid').get(function() {
+invoiceSchema.virtual('totalPaid').get(function () {
   return this.paymentDetails.reduce(
     (sum, payment) => sum + (payment.status === 'success' ? payment.amount : 0), 0
   );
 });
 
-// Virtual for balance due
-invoiceSchema.virtual('balanceDue').get(function() {
+invoiceSchema.virtual('balanceDue').get(function () {
   return Math.max(0, this.totalAmount - this.totalPaid);
 });
 
 // Static Methods
-invoiceSchema.statics.generateInvoiceNumber = async function() {
+invoiceSchema.statics.generateInvoiceNumber = async function () {
   const date = new Date();
   const prefix = 'INV-' +
     date.getFullYear().toString().slice(-2) +
     (date.getMonth() + 1).toString().padStart(2, '0') +
     date.getDate().toString().padStart(2, '0') + '-';
-  
+
   const lastInvoice = await this.findOne({}, {}, { sort: { createdAt: -1 } });
   const lastSeq = lastInvoice ? parseInt(lastInvoice.invoiceNo.slice(-4)) : 0;
   return prefix + (lastSeq + 1).toString().padStart(4, '0');
 };
 
-invoiceSchema.statics.createFromBooking = async function(booking, options = {}) {
+invoiceSchema.statics.createFromBooking = async function (booking, options = {}) {
   const Service = mongoose.model('Service');
-  
+
   const service = await Service.findById(booking.services[0].service);
   if (!service) throw new Error('Service not found');
 
@@ -282,9 +330,9 @@ invoiceSchema.statics.createFromBooking = async function(booking, options = {}) 
       rule: booking.commissionRule,
       type: booking.commissionRule?.type || 'percentage',
       value: booking.commissionRule?.value || 0,
-      description: booking.commissionRule 
-        ? `Commission (${booking.commissionRule.type === 'percentage' ? 
-          booking.commissionRule.value + '%' : 
+      description: booking.commissionRule
+        ? `Commission (${booking.commissionRule.type === 'percentage' ?
+          booking.commissionRule.value + '%' :
           '₹' + booking.commissionRule.value})`
         : 'No commission applied'
     },
@@ -295,7 +343,9 @@ invoiceSchema.statics.createFromBooking = async function(booking, options = {}) 
     invoiceData.paymentDetails = [{
       method: booking.paymentMethod || 'online',
       amount: booking.totalAmount,
-      status: 'success'
+      status: 'success',
+      transactionId: booking.transactionId,
+      paymentGateway: booking.paymentGateway
     }];
   }
 
@@ -303,18 +353,18 @@ invoiceSchema.statics.createFromBooking = async function(booking, options = {}) 
   if (options.session) {
     return this.create([invoiceData], { session: options.session }).then(invoices => invoices[0]);
   }
-  
+
   return this.create(invoiceData);
 };
 
 // Instance Methods
-invoiceSchema.methods.addPayment = async function(paymentData) {
+invoiceSchema.methods.addPayment = async function (paymentData) {
   this.paymentDetails.push(paymentData);
   await this.save();
   return this;
 };
 
-invoiceSchema.methods.addProduct = async function(productData) {
+invoiceSchema.methods.addProduct = async function (productData) {
   this.productsUsed.push(productData);
   await this.save();
   return this;

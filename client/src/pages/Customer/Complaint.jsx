@@ -47,7 +47,7 @@ const StyledBadge = styled(Badge)(({ theme }) => ({
 }));
 
 const ComplaintsPage = () => {
-  const { token, user, logoutUser, isAuthenticated, showToast, API } = useAuth();
+  const { token, user, logoutUser, isAuthenticated, showToast, API, API_URL_IMAGE } = useAuth();
   const navigate = useNavigate();
   const [complaints, setComplaints] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -92,7 +92,7 @@ const ComplaintsPage = () => {
       const complaintsWithFullUrls = response.data.complaints.map(complaint => ({
         ...complaint,
         imageUrl: complaint.imageProof 
-          ? `${API}/${complaint.imageProof.replace(/\\/g, '/')}`
+          ? `${API_URL_IMAGE}/${complaint.imageProof.replace(/\\/g, '/')}`
           : null
       }));
       setComplaints(complaintsWithFullUrls);
@@ -249,7 +249,7 @@ const ComplaintsPage = () => {
       const complaintWithFullUrl = {
         ...response.data.complaint,
         imageUrl: response.data.complaint.imageProof 
-          ? `${API}/${response.data.complaint.imageProof.replace(/\\/g, '/')}`
+          ? `${API_URL_IMAGE}/${response.data.complaint.imageProof.replace(/\\/g, '/')}`
           : null
       };
       setSelectedComplaint(complaintWithFullUrl);

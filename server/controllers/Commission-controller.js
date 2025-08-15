@@ -249,3 +249,124 @@ exports.toggleCommissionRuleStatus = async (req, res) => {
     });
   }
 };
+
+
+// Update commission rule
+exports.updateCommissionRule = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+
+    // Find the rule
+    const rule = await CommissionRule.findById(id);
+    if (!rule) {
+      return res.status(404).json({
+        success: false,
+        message: 'Commission rule not found'
+      });
+    }
+
+    // Prevent changing critical fields if rule is active
+    if (rule.isActive) {
+      const immutableFields = ['type', 'applyTo', 'performanceTier', 'specificProvider'];
+      for (const field of immutableFields) {
+        if (updates[field] && updates[field] !== rule[field]) {
+          return res.status(400).json({
+            success: false,
+            message: `Cannot change ${field} for an active commission rule. Deactivate first.`
+          });
+        }
+      }
+    }
+
+    // Validate performance tier if applyTo is performanceTier
+    if (updates.applyTo === 'performanceTier' && !updates.performanceTier) {
+      return res.status(400).json({
+        success: false,
+        message: 'Performance tier is required when applyTo is performanceTier'
+      });
+    }
+
+    // Validate specific provider if applyTo is specificProvider
+    if (updates.applyTo === 'specificProvider') {
+      if (!updates.specificProvider) {
+        return res.status(400).json({
+          success: false,
+          message: 'Specific provider is required when applyTo is specificProvider'
+        });
+      }
+      const providerExists = await Provider.exists({ _id: updates.specificProvider });
+      if (!providerExists) {
+        return res.status(400).json({
+          success: false,
+          message: 'Specified provider does not exist'
+        });
+      }
+    }
+
+    // Update the rule
+    Object.assign(rule, updates);
+    rule.updatedBy = req.admin._id;
+    await rule.save();
+
+    res.status(200).json({
+      success: true,
+      data: rule,
+      message: 'Commission rule updated successfully'
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// Delete commission rule
+exports.deleteCommissionRule = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if rule exists
+    const rule = await CommissionRule.findById(id);
+    if (!rule) {
+      return res.status(404).json({
+        success: false,
+        message: 'Commission rule not found'
+      });
+    }
+
+    // Check if rule is active
+    if (rule.isActive) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot delete an active commission rule. Deactivate first.'
+      });
+    }
+
+    // Check if rule is referenced in any invoices
+    const referencedInvoices = await Invoice.countDocuments({
+      'details.appliedRule': rule._id.toString()
+    });
+
+    if (referencedInvoices > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot delete commission rule as it is referenced in existing invoices'
+      });
+    }
+
+    // Delete the rule
+    await rule.deleteOne();
+
+    res.status(200).json({
+      success: true,
+      message: 'Commission rule deleted successfully'
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message
+    });
+  }
+};

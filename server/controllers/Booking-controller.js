@@ -6,15 +6,12 @@ const User = require('../models/User-model');
 const Invoice = require('../models/Invoice-model');
 const CommissionRule = require('../models/CommissionRule-model');
 const Coupon = require('../models/Coupon-model');
+const Transaction = require('../models/Transaction-model ');
+const ProviderEarning = require('../models/ProviderEarning-model');
 const Cart = require('../models/Cart-model');
 const sendEmail = require('../utils/sendEmail');
 const { autoGenerateInvoice } = require('./Invoice-controller');
 
-
-
-// Debugging - remove after fixing
-console.log('Service model:', Service); // Should show the Mongoose model function
-console.log('Service model path:', require.resolve('../models/Service-model')); 
 
 
 
@@ -1309,7 +1306,7 @@ const getBookingsByStatus = async (req, res) => {
 
 /**
  * @desc    Accept a booking
- * @route   PUT /api/providers/bookings/:id/accept
+ * @route   PUT /api/bookings/:id/accept
  * @access  Private/Provider
  */
 const acceptBooking = async (req, res) => {
@@ -1318,13 +1315,15 @@ const acceptBooking = async (req, res) => {
     const providerId = req.provider._id;
     const { time } = req.body;
 
+    // Validate booking ID format
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid booking ID'
+        message: 'Invalid booking ID format'
       });
     }
 
+    // Check if provider exists and get their services
     const provider = await Provider.findById(providerId).select('services');
     if (!provider) {
       return res.status(404).json({
@@ -1333,29 +1332,40 @@ const acceptBooking = async (req, res) => {
       });
     }
 
-    const servicesInCategory = await Service.find({
-      category: { $in: provider.services }
-    }).select('_id');
-
-    const serviceIds = servicesInCategory.map(s => s._id);
-
+    // Find the booking that matches:
+    // 1. The booking ID
+    // 2. Has services the provider offers
+    // 3. Is either unassigned or assigned to this provider
+    // 4. Is in pending status
     const booking = await Booking.findOne({
       _id: id,
-      'services.service': { $in: serviceIds },
+      status: 'pending',
       $or: [
         { provider: { $exists: false } },
         { provider: providerId }
-      ],
-      status: 'pending'
-    });
+      ]
+    }).populate('services.service', 'category');
 
     if (!booking) {
       return res.status(404).json({
         success: false,
-        message: 'Booking not found, already assigned to another provider, or not available for acceptance'
+        message: 'Booking not found or not available for acceptance'
       });
     }
 
+    // Verify provider can service this booking
+    const canService = booking.services.every(serviceItem => 
+      provider.services.includes(serviceItem.service.category)
+    );
+
+    if (!canService) {
+      return res.status(403).json({
+        success: false,
+        message: 'Provider is not qualified for all services in this booking'
+      });
+    }
+
+    // Validate time format if provided
     if (time && !/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(time)) {
       return res.status(400).json({
         success: false,
@@ -1363,6 +1373,7 @@ const acceptBooking = async (req, res) => {
       });
     }
 
+    // Update booking
     booking.status = 'accepted';
     booking.provider = providerId;
     if (time) booking.time = time;
@@ -1370,18 +1381,21 @@ const acceptBooking = async (req, res) => {
 
     await booking.save();
 
+    // Populate booking details for response
     const populatedBooking = await Booking.findById(booking._id)
       .populate('customer', 'name email phone')
-      .populate('services.service', 'title  description');
+      .populate('services.service', 'title description price');
 
+    // Send notification email (async - don't wait for it)
     try {
       const emailHtml = `
         <h2>Booking Accepted</h2>
         <p>Your booking has been accepted by the service provider.</p>
         <p><strong>Booking ID:</strong> ${booking._id}</p>
         <p><strong>Service:</strong> ${populatedBooking.services[0].service.title}</p>
-        <p><strong>Date:</strong> ${booking.date.toDateString()}</p>
+        <p><strong>Date:</strong> ${new Date(booking.date).toDateString()}</p>
         <p><strong>Time:</strong> ${booking.time || 'To be confirmed'}</p>
+        <p><strong>Provider:</strong> ${provider.name}</p>
       `;
 
       await sendEmail({
@@ -1391,9 +1405,10 @@ const acceptBooking = async (req, res) => {
       });
     } catch (emailError) {
       console.error('Failed to send acceptance email:', emailError);
+      // Don't fail the request if email fails
     }
 
-    res.json({
+    res.status(200).json({
       success: true,
       message: 'Booking accepted successfully',
       data: populatedBooking
@@ -1403,7 +1418,8 @@ const acceptBooking = async (req, res) => {
     console.error('Error accepting booking:', error);
     res.status(500).json({
       success: false,
-      message: error.message || 'Failed to accept booking'
+      message: 'Internal server error while accepting booking',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -1454,7 +1470,7 @@ const completeBooking = async (req, res) => {
       status: 'accepted'
     })
     .populate('customer', 'name email phone')
-    .populate('services.service', 'title  basePrice')
+    .populate('services.service', 'title basePrice')
     .session(session);
 
     if (!booking) {
@@ -1466,17 +1482,34 @@ const completeBooking = async (req, res) => {
       });
     }
 
+    // Calculate commission and net amount
     const { commission, netAmount } = CommissionRule.calculateCommission(
       booking.totalAmount,
       commissionRule
     );
 
+    // Update booking status
     booking.status = 'completed';
     booking.completedAt = new Date();
     await booking.save({ session });
 
+    // Generate invoice
     const invoice = await Invoice.createFromBooking(booking, { session });
 
+    // Create provider earning record
+    const providerEarning = new ProviderEarning({
+      provider: providerId,
+      booking: booking._id,
+      grossAmount: booking.totalAmount,
+      commissionRate: commissionRule ? commissionRule.value : 0,
+      commissionAmount: commission,
+      netAmount: netAmount,
+      status: 'available',
+      availableAfter: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // Available after 7 days
+    });
+    await providerEarning.save({ session });
+
+    // Update provider stats
     await Provider.findByIdAndUpdate(
       providerId,
       {
@@ -1489,8 +1522,8 @@ const completeBooking = async (req, res) => {
       { session }
     );
 
+    // Send confirmation emails
     try {
-      // Prepare services list for email
       const servicesList = booking.services.map(item => 
         `<li>${item.service.title} (Qty: ${item.quantity}) - ₹${item.price.toFixed(2)}</li>`
       ).join('');
@@ -1513,7 +1546,7 @@ const completeBooking = async (req, res) => {
           `Pending - Please make payment by ${new Date(invoice.dueDate).toLocaleDateString()}`}</p>
           
         <p>Thank you for using our service!</p>
-        `;
+      `;
 
       await sendEmail({
         to: booking.customer.email,
@@ -1545,6 +1578,12 @@ const completeBooking = async (req, res) => {
         totalAmount: invoice.totalAmount,
         commission: invoice.commission.amount,
         netAmount: invoice.netAmount,
+        providerEarning: {
+          grossAmount: providerEarning.grossAmount,
+          commission: providerEarning.commissionAmount,
+          netAmount: providerEarning.netAmount,
+          availableAfter: providerEarning.availableAfter
+        }
       }
     });
 
@@ -1560,9 +1599,6 @@ const completeBooking = async (req, res) => {
     });
   }
 };
-
-
-
 
 
 
@@ -1654,17 +1690,29 @@ const getAllBookings = async (req, res) => {
 };
 
 
-// Get booking details
+
+ // Get booking details with service and payment information
 const getBookingDetails = async (req, res) => {
   try {
     const { id } = req.params;
 
     const booking = await Booking.findById(id)
-      .populate('customer', 'name email phone address')
-      .populate('provider', 'name email phone address')
-      .populate('invoice')
+      .populate('customer', 'name email phone')
+      .populate('provider', 'name email phone businessName')
+      .populate({
+        path: 'services.service',
+        select: 'title category description basePrice duration image'
+      })
+      .populate({
+        path: 'invoice',
+        populate: {
+          path: 'transactions',
+          model: 'Transaction'
+        }
+      })
       .populate('feedback')
-      .populate('complaint');
+      .populate('complaint')
+      .populate('commissionRule', 'name rate type');
 
     if (!booking) {
       return res.status(404).json({
@@ -1673,9 +1721,79 @@ const getBookingDetails = async (req, res) => {
       });
     }
 
+    // Format services with service details
+    const formattedServices = booking.services.map(item => ({
+      _id: item._id,
+      service: {
+        _id: item.service?._id,
+        title: item.service?.title,
+        category: item.service?.category,
+        description: item.service?.description,
+        basePrice: item.service?.basePrice,
+        duration: item.service?.duration,
+        image: item.service?.image
+      },
+      quantity: item.quantity,
+      price: item.price,
+      discountAmount: item.discountAmount
+    }));
+
+    // Get payment details if payment was online
+    let paymentDetails = null;
+    if (booking.paymentMethod === 'online' && booking.invoice?.transactions?.length > 0) {
+      const transaction = booking.invoice.transactions[0];
+      paymentDetails = {
+        transactionId: transaction.transactionId,
+        amount: transaction.amount,
+        paymentStatus: transaction.paymentStatus,
+        paymentMethod: transaction.paymentMethod,
+        currency: transaction.currency,
+        razorpayOrderId: transaction.razorpayOrderId,
+        razorpayPaymentId: transaction.razorpayPaymentId,
+        createdAt: transaction.createdAt
+      };
+    }
+
+    // Format the response
+    const response = {
+      booking: {
+        _id: booking._id,
+        date: booking.date,
+        time: booking.time,
+        status: booking.status,
+        address: booking.address,
+        specialInstructions: booking.specialInstructions,
+        createdAt: booking.createdAt,
+        updatedAt: booking.updatedAt,
+        bookingDateTime: booking.bookingDateTime,
+        isUpcoming: booking.isUpcoming,
+        confirmedBooking: booking.confirmedBooking
+      },
+      customer: booking.customer,
+      provider: booking.provider,
+      services: formattedServices,
+      payment: {
+        method: booking.paymentMethod,
+        status: booking.paymentStatus,
+        subtotal: booking.subtotal,
+        totalDiscount: booking.totalDiscount,
+        totalAmount: booking.totalAmount,
+        couponApplied: booking.couponApplied,
+        details: paymentDetails
+      },
+      commission: {
+        amount: booking.commissionAmount,
+        rule: booking.commissionRule
+      },
+      invoice: booking.invoice,
+      feedback: booking.feedback,
+      complaint: booking.complaint,
+      adminRemark: booking.adminRemark
+    };
+
     res.json({
       success: true,
-      data: booking
+      data: response
     });
   } catch (error) {
     res.status(500).json({

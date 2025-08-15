@@ -71,7 +71,7 @@ providerEarningSchema.statics.getAvailableBalance = async function(providerId) {
   const result = await this.aggregate([
     { 
       $match: { 
-        provider: mongoose.Types.ObjectId(providerId),
+        provider: new mongoose.Types.ObjectId(providerId),
         status: 'available',
         availableAfter: { $lte: new Date() }
       } 
@@ -86,7 +86,7 @@ providerEarningSchema.statics.getEarningsSummary = async function(providerId) {
   const result = await this.aggregate([
     { 
       $match: { 
-        provider: mongoose.Types.ObjectId(providerId)
+        provider: new mongoose.Types.ObjectId(providerId)
       } 
     },
     { 
@@ -102,6 +102,7 @@ providerEarningSchema.statics.getEarningsSummary = async function(providerId) {
   
   return result;
 };
+
 
 providerEarningSchema.statics.getEarningsByBooking = async function(bookingId) {
   return this.find({ booking: bookingId })

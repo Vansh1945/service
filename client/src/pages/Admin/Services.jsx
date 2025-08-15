@@ -1,869 +1,680 @@
-import { useState, useEffect } from 'react'
-import { useAuth } from '../../store/auth'
-import { Plus, Edit, Trash2, Upload, Download, X, Check, Clock, DollarSign, Image as ImageIcon } from 'lucide-react'
-import { motion } from 'framer-motion'
-import * as XLSX from 'xlsx'
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../store/auth';
+import { 
+  Receipt, 
+  Download, 
+  Edit, 
+  Save, 
+  X, 
+  Search, 
+  Filter,
+  FileText,
+  User,
+  Building,
+  Calendar,
+  DollarSign,
+  CheckCircle,
+  Clock,
+  AlertCircle,
+  XCircle,
+  Eye,
+  RefreshCw,
+  TrendingUp,
+  TrendingDown
+} from 'lucide-react';
 
-const AdminServices = () => {
-  const { API, isAdmin, logoutUser, showToast } = useAuth()
-  const [services, setServices] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const [isPriceModalOpen, setIsPriceModalOpen] = useState(false)
-  const [isBulkImportModalOpen, setIsBulkImportModalOpen] = useState(false)
-  const [currentService, setCurrentService] = useState(null)
-  const [selectedFile, setSelectedFile] = useState(null)
-  const [previewImage, setPreviewImage] = useState('')
+const AdminInvoice = () => {
+  const { token, API, logoutUser, showToast, isAdmin } = useAuth();
+  const [invoices, setInvoices] = useState([]);
+  const [filteredInvoices, setFilteredInvoices] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [viewModalOpen, setViewModalOpen] = useState(false);
+  const [editForm, setEditForm] = useState({});
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+  const [totalAmount, setTotalAmount] = useState(0);
+  const [stats, setStats] = useState({
+    total: 0,
+    paid: 0,
+    pending: 0,
+    failed: 0,
+    totalAmount: 0
+  });
 
-  // Form states
-  const [formData, setFormData] = useState({
-    title: '',
-    category: 'Electrical',
-    description: '',
-    basePrice: '',
-    duration: '',
-    image: null,
-    isActive: true
-  })
-
-  const categories = ['Electrical', 'AC', 'Appliance Repair', 'Other']
-
+  // Check admin access
   useEffect(() => {
-    if (isAdmin) {
-      fetchServices()
-    } else {
-      logoutUser()
+    if (!isAdmin) {
+      logoutUser();
+      return;
     }
-  }, [isAdmin])
+    fetchInvoices();
+  }, [isAdmin]);
 
-  const fetchServices = async () => {
+  // Filter and search invoices
+  useEffect(() => {
+    let filtered = [...invoices];
+    
+    // Apply search filter
+    if (searchTerm) {
+      filtered = filtered.filter(invoice =>
+        invoice.invoiceNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        invoice.customer?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        invoice.provider?.businessName?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+    
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(invoice => invoice.paymentStatus === statusFilter);
+    }
+    
+    setFilteredInvoices(filtered);
+    
+    // Calculate total amount
+    const total = filtered.reduce((sum, invoice) => sum + (invoice.totalAmount || 0), 0);
+    setTotalAmount(total);
+  }, [invoices, searchTerm, statusFilter]);
+
+  // Calculate stats whenever invoices change
+  useEffect(() => {
+    const newStats = {
+      total: invoices.length,
+      paid: invoices.filter(inv => inv.paymentStatus === 'paid').length,
+      pending: invoices.filter(inv => inv.paymentStatus === 'pending').length,
+      failed: invoices.filter(inv => inv.paymentStatus === 'failed').length,
+      totalAmount: invoices.reduce((sum, invoice) => sum + (invoice.totalAmount || 0), 0)
+    };
+    setStats(newStats);
+  }, [invoices]);
+
+  const fetchInvoices = async () => {
     try {
-      setLoading(true)
-      const response = await fetch(`${API}/service/admin/services`, {
+      setLoading(true);
+      const response = await fetch(`${API}/invoice/admin/all`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         }
-      })
-      const data = await response.json()
-      if (data.success) {
-        setServices(data.data)
-      } else {
-        showToast('Failed to fetch services', 'error')
+      });
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          logoutUser();
+          return;
+        }
+        throw new Error('Failed to fetch invoices');
       }
+      
+      const data = await response.json();
+      setInvoices(data.data || []);
     } catch (error) {
-      showToast('Error fetching services', 'error')
-      } finally {
-        setLoading(false)
-      }
-  }
-
-  const handleCreateService = async (e) => {
-    e.preventDefault()
-    try {
-      setLoading(true)
-      const formPayload = new FormData()
-      formPayload.append('title', formData.title)
-      formPayload.append('category', formData.category)
-      formPayload.append('description', formData.description)
-      formPayload.append('basePrice', formData.basePrice)
-      formPayload.append('duration', formData.duration)
-      formPayload.append('isActive', formData.isActive)
-      if (formData.image) {
-        formPayload.append('image', formData.image)
-      }
-
-      const response = await fetch(`${API}/service/admin/services`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: formPayload
-      })
-
-      const data = await response.json()
-      if (data.success) {
-        showToast('Service created successfully')
-        setIsCreateModalOpen(false)
-        resetForm()
-        fetchServices()
-      } else {
-        showToast(data.message || 'Failed to create service', 'error')
-      }
-    } catch (error) {
-      showToast('Error creating service', 'error')
-      console.error('Error:', error)
+      console.error('Fetch invoices error:', error);
+      showToast(error.message, 'error');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
-  const handleUpdateService = async (e) => {
-    e.preventDefault()
+  const handleEditClick = (invoice) => {
+    setSelectedInvoice(invoice);
+    setEditForm({
+      serviceAmount: invoice.serviceAmount || 0,
+      tax: invoice.tax || 0,
+      discount: invoice.discount || 0,
+      notes: invoice.notes || ''
+    });
+    setEditModalOpen(true);
+  };
+
+  const handleViewClick = (invoice) => {
+    setSelectedInvoice(invoice);
+    setViewModalOpen(true);
+  };
+
+  const handleFormChange = (e) => {
+    const { name, value } = e.target;
+    setEditForm(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleSave = async () => {
     try {
-      setLoading(true)
-      const formPayload = new FormData()
-      formPayload.append('title', formData.title)
-      formPayload.append('category', formData.category)
-      formPayload.append('description', formData.description)
-      formPayload.append('duration', formData.duration)
-      formPayload.append('isActive', formData.isActive)
-      if (formData.image) {
-        formPayload.append('image', formData.image)
-      }
-
-      const response = await fetch(`${API}/service/admin/service/${currentService._id}`, {
+      const response = await fetch(`${API}/invoice/${selectedInvoice._id}`, {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
-        body: formPayload
-      })
-
-      const data = await response.json()
-      if (data.success) {
-        showToast('Service updated successfully')
-        setIsEditModalOpen(false)
-        resetForm()
-        fetchServices()
-      } else {
-        showToast(data.message || 'Failed to update service', 'error')
+        body: JSON.stringify(editForm)
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update invoice');
       }
+      
+      const updatedInvoice = await response.json();
+      
+      setInvoices(prev => prev.map(inv => 
+        inv._id === updatedInvoice.data._id ? updatedInvoice.data : inv
+      ));
+      
+      showToast('Invoice updated successfully!', 'success');
+      setEditModalOpen(false);
     } catch (error) {
-      showToast('Error updating service', 'error')
-      console.error('Error:', error)
-    } finally {
-      setLoading(false)
+      console.error('Update invoice error:', error);
+      showToast(error.message, 'error');
     }
-  }
+  };
 
-  const handleUpdatePrice = async (e) => {
-    e.preventDefault()
+  const handleDownload = async (invoiceId) => {
     try {
-      setLoading(true)
-      const response = await fetch(`${API}/service/admin/services/${currentService._id}/price`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ basePrice: formData.basePrice })
-      })
-
-      const data = await response.json()
-      if (data.success) {
-        showToast('Base price updated successfully')
-        setIsPriceModalOpen(false)
-        resetForm()
-        fetchServices()
-      } else {
-        showToast(data.message || 'Failed to update price', 'error')
-      }
+      window.open(`${API}/invoice/customer/${invoiceId}/download`, '_blank');
     } catch (error) {
-      showToast('Error updating price', 'error')
-      console.error('Error:', error)
-    } finally {
-      setLoading(false)
+      showToast('Failed to download invoice', 'error');
     }
-  }
+  };
 
-  const handleDeleteService = async (id) => {
-    if (!window.confirm('Are you sure you want to deactivate this service?')) return
-    
-    try {
-      setLoading(true)
-      const response = await fetch(`${API}/service/admin/services/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      })
-
-      const data = await response.json()
-      if (data.success) {
-        showToast('Service deactivated successfully')
-        fetchServices()
-      } else {
-        showToast(data.message || 'Failed to deactivate service', 'error')
-      }
-    } catch (error) {
-      showToast('Error deactivating service', 'error')
-      console.error('Error:', error)
-    } finally {
-      setLoading(false)
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case 'paid':
+        return <CheckCircle className="w-4 h-4 text-green-500" />;
+      case 'pending':
+        return <Clock className="w-4 h-4 text-yellow-500" />;
+      case 'failed':
+        return <XCircle className="w-4 h-4 text-red-500" />;
+      case 'partially_paid':
+        return <AlertCircle className="w-4 h-4 text-blue-500" />;
+      default:
+        return <AlertCircle className="w-4 h-4 text-gray-500" />;
     }
-  }
+  };
 
-  const handleBulkImport = async (e) => {
-    e.preventDefault()
-    try {
-      if (!selectedFile) {
-        showToast('Please select a file', 'error')
-        return
-      }
-
-      setLoading(true)
-      const formPayload = new FormData()
-      formPayload.append('servicesFile', selectedFile)
-
-      const response = await fetch(`${API}/service/admin/bulk-import`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: formPayload
-      })
-
-      const data = await response.json()
-      if (data.success) {
-        showToast(`Successfully imported ${data.importedCount} services`)
-        setIsBulkImportModalOpen(false)
-        setSelectedFile(null)
-        fetchServices()
-      } else {
-        showToast(data.message || 'Bulk import failed', 'error')
-      }
-    } catch (error) {
-      showToast('Error during bulk import', 'error')
-      console.error('Error:', error)
-    } finally {
-      setLoading(false)
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'paid':
+        return 'bg-green-100 text-green-800 border-green-200';
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'failed':
+        return 'bg-red-100 text-red-800 border-red-200';
+      case 'partially_paid':
+        return 'bg-blue-100 text-blue-800 border-blue-200';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-200';
     }
-  }
+  };
 
-  const downloadTemplate = () => {
-    const templateData = [
-      ['title', 'category', 'description', 'basePrice', 'duration'],
-      ['LED Light Installation', 'Electrical', 'Professional LED light installation', '500', '1'],
-      ['AC Servicing', 'AC', 'Complete AC maintenance service', '800', '2']
-    ]
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('en-IN', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
 
-    const ws = XLSX.utils.aoa_to_sheet(templateData)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Services')
-    XLSX.writeFile(wb, 'services_template.xlsx')
-  }
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 0
+    }).format(amount || 0);
+  };
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0]
-    setSelectedFile(file)
-  }
-
-  const handleImageChange = (e) => {
-    const file = e.target.files[0]
-    if (file) {
-      setFormData({ ...formData, image: file })
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setPreviewImage(reader.result)
-      }
-      reader.readAsDataURL(file)
-    }
-  }
-
-  const resetForm = () => {
-    setFormData({
-      title: '',
-      category: 'Electrical',
-      description: '',
-      basePrice: '',
-      duration: '',
-      image: null,
-      isActive: true
-    })
-    setPreviewImage('')
-  }
-
-  const openEditModal = (service) => {
-    setCurrentService(service)
-    setFormData({
-      title: service.title,
-      category: service.category,
-      description: service.description,
-      basePrice: service.basePrice,
-      duration: service.duration,
-      image: null,
-      isActive: service.isActive
-    })
-    setPreviewImage(service.image ? `${API}/uploads/services/${service.image}` : '')
-    setIsEditModalOpen(true)
-  }
-
-  const openPriceModal = (service) => {
-    setCurrentService(service)
-    setFormData({
-      ...formData,
-      basePrice: service.basePrice
-    })
-    setIsPriceModalOpen(true)
-  }
-
-  const getCategoryColor = (category) => {
-    switch (category) {
-      case 'Electrical': return 'bg-blue-600 text-white'
-      case 'AC': return 'bg-cyan-600 text-white'
-      case 'Appliance Repair': return 'bg-purple-600 text-white'
-      default: return 'bg-gray-600 text-white'
-    }
-  }
-
-  const formatDuration = (duration) => {
-    const hours = Math.floor(duration)
-    const minutes = Math.round((duration - hours) * 60)
-    return `${hours > 0 ? `${hours}h` : ''} ${minutes > 0 ? `${minutes}m` : ''}`.trim()
-  }
+  // Pagination
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentInvoices = filteredInvoices.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredInvoices.length / itemsPerPage);
 
   return (
     <div className="min-h-screen bg-blue-50 p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-blue-900">Services Management</h1>
-          <div className="flex space-x-4">
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="flex items-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow-md"
-              onClick={() => setIsCreateModalOpen(true)}
-            >
-              <Plus className="mr-2" size={18} />
-              Add Service
-            </motion.button>
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="flex items-center bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg shadow-md"
-              onClick={() => setIsBulkImportModalOpen(true)}
-            >
-              <Upload className="mr-2" size={18} />
-              Bulk Import
-            </motion.button>
+          <div>
+            <h1 className="text-3xl font-bold text-blue-900">Invoice Management</h1>
+            <p className="text-blue-600 mt-1">Manage and track all invoices</p>
+          </div>
+          <button
+            onClick={fetchInvoices}
+            disabled={loading}
+            className="flex items-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow-md hover:shadow-lg transform hover:scale-105 transition-all duration-300 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-5 h-5 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-blue-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Total Invoices</p>
+                <p className="text-3xl font-bold text-blue-900">{stats.total}</p>
+              </div>
+              <div className="p-3 bg-blue-100 rounded-full">
+                <FileText className="w-6 h-6 text-blue-600" />
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-green-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Total Amount</p>
+                <p className="text-3xl font-bold text-green-900">{formatCurrency(stats.totalAmount)}</p>
+              </div>
+              <div className="p-3 bg-green-100 rounded-full">
+                <DollarSign className="w-6 h-6 text-green-600" />
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-emerald-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Paid</p>
+                <p className="text-3xl font-bold text-emerald-900">{stats.paid}</p>
+              </div>
+              <div className="p-3 bg-emerald-100 rounded-full">
+                <CheckCircle className="w-6 h-6 text-emerald-600" />
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-yellow-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Pending</p>
+                <p className="text-3xl font-bold text-yellow-900">{stats.pending}</p>
+              </div>
+              <div className="p-3 bg-yellow-100 rounded-full">
+                <Clock className="w-6 h-6 text-yellow-600" />
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Services Table */}
-        <div className="bg-white rounded-xl shadow-md overflow-hidden">
-          {loading && services.length === 0 ? (
-            <div className="p-8 text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-4 text-gray-600">Loading services...</p>
-            </div>
-          ) : services.length === 0 ? (
-            <div className="p-8 text-center">
-              <p className="text-gray-600">No services found. Create your first service!</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-blue-900 text-white">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Service</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Category</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Price</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Duration</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {services.map((service) => (
-                    <tr key={service._id} className="hover:bg-blue-50 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0 h-10 w-10">
-                            {service.image ? (
-                              <img
-                                className="h-10 w-10 rounded-full object-cover"
-                                src={`${API}/uploads/services/${service.image}`}
-                                alt={service.title}
-                                onError={(e) => {
-                                  e.target.onerror = null
-                                  e.target.src = `${API}/uploads/${service.image}`
-                                }}
-                              />
-                            ) : (
-                              <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
-                                <ImageIcon className="text-gray-400" size={20} />
-                              </div>
-                            )}
-                          </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900">{service.title}</div>
-                            <div className="text-sm text-gray-500 line-clamp-1">{service.description}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs rounded-full ${getCategoryColor(service.category)}`}>
-                          {service.category}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <div className="flex items-center">
-                          <span className="mr-1">₹</span>
-                          {service.basePrice.toFixed(2)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <div className="flex items-center">
-                          <Clock className="text-gray-500 mr-1" size={14} />
-                          {formatDuration(service.duration)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {service.isActive ? (
-                          <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800 flex items-center">
-                            <Check className="mr-1" size={12} />
-                            Active
-                          </span>
-                        ) : (
-                          <span className="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800 flex items-center">
-                            <X className="mr-1" size={12} />
-                            Inactive
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() => openEditModal(service)}
-                            className="text-blue-600 hover:text-blue-900"
-                            title="Edit"
-                          >
-                            <Edit size={18} />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteService(service._id)}
-                            className="text-red-600 hover:text-red-900"
-                            title="Deactivate"
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                          <button
-                            onClick={() => openPriceModal(service)}
-                            className="text-yellow-500 hover:text-yellow-700"
-                            title="Update Price"
-                          >
-                            <DollarSign size={18} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Create Service Modal */}
-      <Modal
-        isOpen={isCreateModalOpen}
-        onClose={() => {
-          setIsCreateModalOpen(false)
-          resetForm()
-        }}
-        title="Create New Service"
-      >
-        <form onSubmit={handleCreateService}>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+        {/* Filters and Search */}
+        <div className="bg-white rounded-xl shadow-md p-6 mb-8">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
                   type="text"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                <select
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  required
-                >
-                  {categories.map((category) => (
-                    <option key={category} value={category}>{category}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-              <textarea
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                required
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Base Price (₹)</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  value={formData.basePrice}
-                  onChange={(e) => setFormData({ ...formData, basePrice: e.target.value })}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Duration (hours)</label>
-                <input
-                  type="number"
-                  min="0.25"
-                  step="0.25"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  value={formData.duration}
-                  onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
-                  required
+                  placeholder="Search by invoice number, customer, or provider..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Service Image</label>
-              <div className="mt-1 flex items-center">
-                {previewImage ? (
-                  <img
-                    src={previewImage}
-                    alt="Preview"
-                    className="h-16 w-16 rounded-md object-cover mr-4"
-                  />
-                ) : (
-                  <div className="h-16 w-16 rounded-md bg-gray-200 flex items-center justify-center mr-4">
-                    <ImageIcon className="text-gray-400" size={24} />
-                  </div>
-                )}
-                <label className="cursor-pointer">
-                  <span className="px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm leading-4 font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600">
-                    Upload
-                  </span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="sr-only"
-                    onChange={handleImageChange}
-                  />
-                </label>
-              </div>
+            <div className="flex items-center space-x-3">
+              <Filter className="text-gray-400 w-5 h-5" />
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="all">All Status</option>
+                <option value="paid">Paid</option>
+                <option value="pending">Pending</option>
+                <option value="failed">Failed</option>
+                <option value="partially_paid">Partially Paid</option>
+              </select>
             </div>
           </div>
+        </div>
 
-          <div className="mt-6 flex justify-end space-x-3">
-            <button
-              type="button"
-              className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600"
-              onClick={() => {
-                setIsCreateModalOpen(false)
-                resetForm()
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600"
-              disabled={loading}
-            >
-              {loading ? 'Creating...' : 'Create Service'}
-            </button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Edit Service Modal */}
-      <Modal
-        isOpen={isEditModalOpen}
-        onClose={() => {
-          setIsEditModalOpen(false)
-          resetForm()
-        }}
-        title={`Edit ${currentService?.title || 'Service'}`}
-      >
-        {currentService && (
-          <form onSubmit={handleUpdateService}>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
-                  <input
-                    type="text"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                  <select
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
-                    value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    required
-                  >
-                    {categories.map((category) => (
-                      <option key={category} value={category}>{category}</option>
+        {/* Invoices Table */}
+        <div className="bg-white rounded-xl shadow-md overflow-hidden">
+          {loading ? (
+            <div className="flex items-center justify-center py-16">
+              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
+              <p className="mt-4 text-gray-600">Loading invoices...</p>
+            </div>
+          ) : currentInvoices.length === 0 ? (
+            <div className="text-center py-16">
+              <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-500 text-lg">No invoices found</p>
+              <p className="text-gray-400 text-sm mt-2">
+                {searchTerm || statusFilter !== 'all' 
+                  ? 'Try adjusting your search or filters' 
+                  : 'Invoices will appear here once created'}
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-blue-900 text-white">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Invoice #</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Customer</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Provider</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Amount</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Date</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {currentInvoices.map((invoice) => (
+                      <tr key={invoice._id} className="hover:bg-blue-50 transition-colors duration-200">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <Receipt className="w-4 h-4 text-blue-500 mr-2" />
+                            <span className="font-medium text-gray-900">{invoice.invoiceNo || 'N/A'}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <User className="w-4 h-4 text-gray-400 mr-2" />
+                            <span className="text-gray-900">{invoice.customer?.name || 'N/A'}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <Building className="w-4 h-4 text-gray-400 mr-2" />
+                            <span className="text-gray-900">{invoice.provider?.businessName || 'N/A'}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="font-semibold text-green-600">
+                            {formatCurrency(invoice.totalAmount)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(invoice.paymentStatus)}`}>
+                            {getStatusIcon(invoice.paymentStatus)}
+                            <span className="ml-2 capitalize">
+                              {invoice.paymentStatus?.replace('_', ' ') || 'Unknown'}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <Calendar className="w-4 h-4 text-gray-400 mr-2" />
+                            <span className="text-gray-900">{formatDate(invoice.generatedAt)}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center space-x-2">
+                            <button
+                              onClick={() => handleViewClick(invoice)}
+                              className="text-blue-600 hover:text-blue-900 p-1 rounded transition-colors duration-200"
+                              title="View Invoice"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleEditClick(invoice)}
+                              className="text-indigo-600 hover:text-indigo-900 p-1 rounded transition-colors duration-200"
+                              title="Edit Invoice"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDownload(invoice._id)}
+                              className="text-green-600 hover:text-green-900 p-1 rounded transition-colors duration-200"
+                              title="Download Invoice"
+                            >
+                              <Download className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
                     ))}
-                  </select>
-                </div>
+                  </tbody>
+                </table>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                <textarea
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Duration (hours)</label>
-                  <input
-                    type="number"
-                    min="0.25"
-                    step="0.25"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
-                    value={formData.duration}
-                    onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
-                    required
-                  />
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between bg-gray-50">
+                  <div className="text-sm text-gray-700">
+                    Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredInvoices.length)} of {filteredInvoices.length} results
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      disabled={currentPage === 1}
+                      className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Previous
+                    </button>
+                    {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                      const page = i + 1;
+                      if (totalPages <= 5) {
+                        return (
+                          <button
+                            key={page}
+                            onClick={() => setCurrentPage(page)}
+                            className={`px-3 py-2 text-sm rounded-lg ${
+                              currentPage === page
+                                ? 'bg-blue-600 text-white'
+                                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                            }`}
+                          >
+                            {page}
+                          </button>
+                        );
+                      }
+                      return null;
+                    })}
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                      disabled={currentPage === totalPages}
+                      className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Next
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                  <select
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
-                    value={formData.isActive}
-                    onChange={(e) => setFormData({ ...formData, isActive: e.target.value === 'true' })}
-                  >
-                    <option value="true">Active</option>
-                    <option value="false">Inactive</option>
-                  </select>
-                </div>
-              </div>
+              )}
+            </>
+          )}
+        </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Service Image</label>
-                <div className="mt-1 flex items-center">
-                  {previewImage ? (
-                    <img
-                      src={previewImage}
-                      alt="Preview"
-                      className="h-16 w-16 rounded-md object-cover mr-4"
-                    />
-                  ) : (
-                    <div className="h-16 w-16 rounded-md bg-gray-200 flex items-center justify-center mr-4">
-                      <ImageIcon className="text-gray-400" size={24} />
-                    </div>
-                  )}
-                  <label className="cursor-pointer">
-                    <span className="px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm leading-4 font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600">
-                      Change
-                    </span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="sr-only"
-                      onChange={handleImageChange}
-                    />
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-6 flex justify-end space-x-3">
-              <button
-                type="button"
-                className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600"
-                onClick={() => {
-                  setIsEditModalOpen(false)
-                  resetForm()
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600"
-                disabled={loading}
-              >
-                {loading ? 'Updating...' : 'Update Service'}
-              </button>
-            </div>
-          </form>
-        )}
-      </Modal>
-
-      {/* Update Price Modal */}
-      <Modal
-        isOpen={isPriceModalOpen}
-        onClose={() => {
-          setIsPriceModalOpen(false)
-          resetForm()
-        }}
-        title={`Update Price for ${currentService?.title || 'Service'}`}
-      >
-        {currentService && (
-          <form onSubmit={handleUpdatePrice}>
+        {/* Edit Modal */}
+        {editModalOpen && selectedInvoice && (
+          <Modal
+            isOpen={editModalOpen}
+            onClose={() => setEditModalOpen(false)}
+            title="Edit Invoice"
+          >
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">New Base Price (₹)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Service Amount
+                </label>
                 <input
                   type="number"
-                  min="0"
+                  name="serviceAmount"
+                  value={editForm.serviceAmount}
+                  onChange={handleFormChange}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   step="0.01"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  value={formData.basePrice}
-                  onChange={(e) => setFormData({ ...formData, basePrice: e.target.value })}
-                  required
+                  min="0"
                 />
               </div>
-
-              <div className="bg-blue-50 p-4 rounded-md">
-                <h3 className="text-sm font-medium text-blue-800 mb-2">Provider Price Range</h3>
-                <p className="text-sm text-gray-600">
-                  Providers will be able to set prices between:
-                  <br />
-                  <span className="font-semibold">
-                    ₹{(formData.basePrice * 0.9).toFixed(2)} to ₹{(formData.basePrice * 1.1).toFixed(2)}
-                  </span>
-                </p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Tax
+                </label>
+                <input
+                  type="number"
+                  name="tax"
+                  value={editForm.tax}
+                  onChange={handleFormChange}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  step="0.01"
+                  min="0"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Discount
+                </label>
+                <input
+                  type="number"
+                  name="discount"
+                  value={editForm.discount}
+                  onChange={handleFormChange}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  step="0.01"
+                  min="0"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Notes
+                </label>
+                <textarea
+                  name="notes"
+                  value={editForm.notes}
+                  onChange={handleFormChange}
+                  rows={3}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  placeholder="Add any notes..."
+                />
               </div>
             </div>
-
             <div className="mt-6 flex justify-end space-x-3">
               <button
-                type="button"
-                className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600"
-                onClick={() => {
-                  setIsPriceModalOpen(false)
-                  resetForm()
-                }}
+                onClick={() => setEditModalOpen(false)}
+                className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200"
               >
                 Cancel
               </button>
               <button
-                type="submit"
-                className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600"
-                disabled={loading}
+                onClick={handleSave}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center"
               >
-                {loading ? 'Updating...' : 'Update Price'}
+                <Save className="w-4 h-4 mr-2" />
+                Save Changes
               </button>
             </div>
-          </form>
+          </Modal>
         )}
-      </Modal>
 
-      {/* Bulk Import Modal */}
-      <Modal
-        isOpen={isBulkImportModalOpen}
-        onClose={() => {
-          setIsBulkImportModalOpen(false)
-          setSelectedFile(null)
-        }}
-        title="Bulk Import Services"
-      >
-        <form onSubmit={handleBulkImport}>
-          <div className="space-y-4">
-            <div>
-              <button
-                type="button"
-                onClick={downloadTemplate}
-                className="flex items-center text-blue-600 hover:text-blue-800 text-sm font-medium"
-              >
-                <Download className="mr-2" size={16} />
-                Download Template
-              </button>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Excel File</label>
-              <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
-                <div className="space-y-1 text-center">
-                  <div className="flex text-sm text-gray-600">
-                    <label
-                      htmlFor="file-upload"
-                      className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500"
-                    >
-                      <span>Upload a file</span>
-                      <input
-                        id="file-upload"
-                        name="file-upload"
-                        type="file"
-                        accept=".xlsx,.xls"
-                        className="sr-only"
-                        onChange={handleFileChange}
-                      />
-                    </label>
-                    <p className="pl-1">or drag and drop</p>
-                  </div>
-                  <p className="text-xs text-gray-500">
-                    Excel files only (.xlsx, .xls)
-                  </p>
-                  {selectedFile && (
-                    <p className="text-sm text-gray-900 mt-2">
-                      Selected: {selectedFile.name}
-                    </p>
+        {/* View Modal */}
+        {viewModalOpen && selectedInvoice && (
+          <Modal
+            isOpen={viewModalOpen}
+            onClose={() => setViewModalOpen(false)}
+            title="Invoice Details"
+            size="large"
+          >
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-500 mb-1">Invoice Number</label>
+                  <p className="text-gray-900 font-semibold">{selectedInvoice.invoiceNo || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-500 mb-1">Date</label>
+                  <p className="text-gray-900">{formatDate(selectedInvoice.generatedAt)}</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-500 mb-1">Customer</label>
+                  <p className="text-gray-900">{selectedInvoice.customer?.name || 'N/A'}</p>
+                  {selectedInvoice.customer?.email && (
+                    <p className="text-sm text-gray-600">{selectedInvoice.customer.email}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-500 mb-1">Provider</label>
+                  <p className="text-gray-900">{selectedInvoice.provider?.businessName || 'N/A'}</p>
+                  {selectedInvoice.provider?.email && (
+                    <p className="text-sm text-gray-600">{selectedInvoice.provider.email}</p>
                   )}
                 </div>
               </div>
-            </div>
 
-            <div className="bg-yellow-50 p-4 rounded-md">
-              <h3 className="text-sm font-medium text-yellow-800 mb-2">Instructions</h3>
-              <ul className="text-xs text-yellow-700 list-disc pl-5 space-y-1">
-                <li>Use the template to ensure proper formatting</li>
-                <li>Required fields: Title, Category, Description, Base Price, Duration</li>
-                <li>Category must be one of: {categories.join(', ')}</li>
-                <li>Duration should be in hours (e.g., 1.5 for 1 hour 30 minutes)</li>
-              </ul>
-            </div>
-          </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-500 mb-1">Service</label>
+                <p className="text-gray-900">{selectedInvoice.service?.title || 'N/A'}</p>
+                {selectedInvoice.service?.description && (
+                  <p className="text-sm text-gray-600 mt-1">{selectedInvoice.service.description}</p>
+                )}
+              </div>
 
-          <div className="mt-6 flex justify-end space-x-3">
-            <button
-              type="button"
-              className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600"
-              onClick={() => {
-                setIsBulkImportModalOpen(false)
-                setSelectedFile(null)
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-yellow-500 hover:bg-yellow-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
-              disabled={!selectedFile || loading}
-            >
-              {loading ? 'Importing...' : 'Import Services'}
-            </button>
-          </div>
-        </form>
-      </Modal>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-500 mb-1">Service Amount</label>
+                  <p className="text-green-600 font-semibold">{formatCurrency(selectedInvoice.serviceAmount)}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-500 mb-1">Tax</label>
+                  <p className="text-gray-900">{formatCurrency(selectedInvoice.tax)}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-500 mb-1">Discount</label>
+                  <p className="text-gray-900">{formatCurrency(selectedInvoice.discount)}</p>
+                </div>
+              </div>
+
+              <div className="border-t border-gray-200 pt-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-lg font-semibold text-gray-700">Total Amount:</span>
+                  <span className="text-2xl font-bold text-green-600">{formatCurrency(selectedInvoice.totalAmount)}</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-500 mb-1">Payment Status</label>
+                <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(selectedInvoice.paymentStatus)}`}>
+                  {getStatusIcon(selectedInvoice.paymentStatus)}
+                  <span className="ml-2 capitalize">
+                    {selectedInvoice.paymentStatus?.replace('_', ' ') || 'Unknown'}
+                  </span>
+                </div>
+              </div>
+
+              {selectedInvoice.notes && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-500 mb-1">Notes</label>
+                  <p className="text-gray-900 bg-gray-50 p-3 rounded-lg">{selectedInvoice.notes}</p>
+                </div>
+              )}
+            </div>
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => handleDownload(selectedInvoice._id)}
+                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200 flex items-center"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Download PDF
+              </button>
+            </div>
+          </Modal>
+        )}
+      </div>
     </div>
-  )
-}
+  );
+};
 
 // Reusable Modal Component
-const Modal = ({ isOpen, onClose, title, children }) => {
-  if (!isOpen) return null
+const Modal = ({ isOpen, onClose, title, children, size = 'medium' }) => {
+  if (!isOpen) return null;
+
+  const sizeClasses = {
+    medium: 'sm:max-w-lg',
+    large: 'sm:max-w-2xl',
+    xlarge: 'sm:max-w-4xl'
+  };
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -874,11 +685,19 @@ const Modal = ({ isOpen, onClose, title, children }) => {
 
         <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
 
-        <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+        <div className={`inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle ${sizeClasses[size]} sm:w-full`}>
           <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
             <div className="sm:flex sm:items-start">
               <div className="mt-3 text-center sm:mt-0 sm:text-left w-full">
-                <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">{title}</h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg leading-6 font-medium text-gray-900">{title}</h3>
+                  <button
+                    onClick={onClose}
+                    className="text-gray-400 hover:text-gray-600 transition-colors duration-200"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
                 {children}
               </div>
             </div>
@@ -886,7 +705,7 @@ const Modal = ({ isOpen, onClose, title, children }) => {
         </div>
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default AdminServices
+export default AdminInvoice;

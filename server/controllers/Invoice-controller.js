@@ -22,20 +22,6 @@ const populateInvoiceData = async (query) => {
     .exec();
 };
 
-// Generate PDF and save to disk
-const generateAndSavePDF = async (invoiceData) => {
-  const pdfBuffer = await generatePDF(invoiceData);
-  const fileName = `invoice_${invoiceData.invoiceNo}.pdf`;
-  const filePath = path.join(__dirname, '../public/invoices', fileName);
-
-  fs.writeFileSync(filePath, pdfBuffer);
-  return {
-    filePath,
-    fileName,
-    url: `/invoices/${fileName}`
-  };
-};
-
 // @desc    Get invoice for customer (without commission)
 // @route   GET /api/invoices/customer/:id
 // @access  Private (Customer)
@@ -56,7 +42,7 @@ exports.getCustomerInvoice = async (req, res) => {
       .populate('provider', 'businessName contactPerson phone address')
       .populate('service', 'title category basePrice duration description')
       .populate('booking', 'date time status paymentStatus')
-      .select('-commission -commissionAmount -commissionRule') // Exclude commission fields
+      .select('-commission -commissionAmount -commissionRule')
       .lean();
 
     if (!invoice) {
@@ -99,7 +85,7 @@ exports.downloadCustomerInvoice = async (req, res) => {
       .populate('provider', 'businessName contactPerson phone address')
       .populate('service', 'title category basePrice duration description')
       .populate('booking', 'date time status paymentStatus')
-      .select('-commission -commissionAmount -commissionRule') // Exclude commission fields
+      .select('-commission -commissionAmount -commissionRule')
       .lean();
 
     if (!invoice) {
@@ -131,7 +117,7 @@ exports.getProviderInvoiceById = async (req, res) => {
   try {
     const invoice = await Invoice.findOne({
       _id: req.params.id,
-      provider: req.provider._id // Ensure the invoice belongs to this provider
+      provider: req.provider._id
     })
     .populate('customer', 'name email phone')
     .populate('service', 'name basePrice')
@@ -145,7 +131,6 @@ exports.getProviderInvoiceById = async (req, res) => {
       });
     }
 
-    // Format the response with provider-specific details
     const response = {
       success: true,
       data: {
@@ -196,197 +181,6 @@ exports.getProviderInvoiceById = async (req, res) => {
   }
 };
 
-// @desc    Add product to invoice (Admin, Provider)
-// @route   POST /api/invoices/:id/products
-// @access  Private
-exports.addProductToInvoice = async (req, res) => {
-  try {
-    // Check if body exists and is an object
-    if (!req.body || typeof req.body !== 'object') {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid request body'
-      });
-    }
-
-    const { name, description, quantity, rate } = req.body;
-
-    if (!name || !quantity || !rate) {
-      return res.status(400).json({
-        success: false,
-        message: 'Name, quantity and rate are required',
-        requiredFields: ['name', 'quantity', 'rate']
-      });
-    }
-
-    // Validate quantity and rate are numbers
-    if (isNaN(quantity) || isNaN(rate)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Quantity and rate must be numbers'
-      });
-    }
-
-    let invoice;
-
-    if (req.role === 'admin') {
-      invoice = await Invoice.findById(req.params.id);
-    } else if (req.role === 'provider') {
-      invoice = await Invoice.findById({
-        _id: req.params.id,
-        provider: req.provider._id
-      });
-    } else {
-      return res.status(403).json({
-        success: false,
-        message: 'Unauthorized'
-      });
-    }
-
-    if (!invoice) {
-      return res.status(404).json({
-        success: false,
-        message: 'Invoice not found or unauthorized'
-      });
-    }
-
-    const newProduct = {
-      name: name.trim(),
-      description: description ? description.trim() : '',
-      quantity: Number(quantity),
-      rate: Number(rate),
-      total: Number(quantity) * Number(rate)
-    };
-
-    invoice.productsUsed.push(newProduct);
-    await invoice.save();
-
-    res.status(200).json({
-      success: true,
-      data: invoice
-    });
-  } catch (error) {
-    console.error('Add product error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-};
-
-// @desc    Update product in invoice (Admin, Provider)
-// @route   PUT /api/invoices/:id/products/:productId
-// @access  Private
-exports.updateProductInInvoice = async (req, res) => {
-  try {
-    const { name, description, quantity, rate } = req.body;
-
-    let invoice;
-
-    if (req.role === 'admin') {
-      invoice = await Invoice.findById(req.params.id);
-    } else if (req.role === 'provider') {
-      invoice = await Invoice.findById({
-        _id: req.params.id,
-        provider: req.provider._id
-      });
-    } else {
-      return res.status(403).json({
-        success: false,
-        message: 'Unauthorized'
-      });
-    }
-
-    if (!invoice) {
-      return res.status(404).json({
-        success: false,
-        message: 'Invoice not found or unauthorized'
-      });
-    }
-
-    const productIndex = invoice.productsUsed.findIndex(
-      p => p._id.toString() === req.params.productId
-    );
-
-    if (productIndex === -1) {
-      return res.status(404).json({
-        success: false,
-        message: 'Product not found in invoice'
-      });
-    }
-
-    const product = invoice.productsUsed[productIndex];
-
-    if (name) product.name = name;
-    if (description) product.description = description;
-    if (quantity) product.quantity = quantity;
-    if (rate) product.rate = rate;
-
-    product.total = product.quantity * product.rate;
-
-    await invoice.save();
-
-    res.status(200).json({
-      success: true,
-      data: invoice
-    });
-  } catch (error) {
-    console.error('Update product error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
-  }
-};
-
-// @desc    Remove product from invoice (Admin, Provider)
-// @route   DELETE /api/invoices/:id/products/:productId
-// @access  Private
-exports.removeProductFromInvoice = async (req, res) => {
-  try {
-    let invoice;
-
-    if (req.role === 'admin') {
-      invoice = await Invoice.findById(req.params.id);
-    } else if (req.role === 'provider') {
-      invoice = await Invoice.findById({
-        _id: req.params.id,
-        provider: req.provider._id
-      });
-    } else {
-      return res.status(403).json({
-        success: false,
-        message: 'Unauthorized'
-      });
-    }
-
-    if (!invoice) {
-      return res.status(404).json({
-        success: false,
-        message: 'Invoice not found or unauthorized'
-      });
-    }
-
-    invoice.productsUsed = invoice.productsUsed.filter(
-      p => p._id.toString() !== req.params.productId
-    );
-
-    await invoice.save();
-
-    res.status(200).json({
-      success: true,
-      data: invoice
-    });
-  } catch (error) {
-    console.error('Remove product error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
-  }
-};
-
 // @desc    Update invoice details (Admin only)
 // @route   PUT /api/invoices/:id
 // @access  Private (Admin)
@@ -408,12 +202,15 @@ exports.updateInvoice = async (req, res) => {
       });
     }
 
-    const { serviceAmount, tax, discount, notes } = req.body;
+    const { serviceAmount, tax, discount, notes, status } = req.body;
 
     if (serviceAmount !== undefined) invoice.serviceAmount = serviceAmount;
     if (tax !== undefined) invoice.tax = tax;
     if (discount !== undefined) invoice.discount = discount;
     if (notes !== undefined) invoice.notes = notes;
+    if (status && ['active', 'cancelled', 'refunded'].includes(status)) {
+      invoice.status = status;
+    }
 
     await invoice.save();
 
@@ -442,15 +239,18 @@ exports.getAllInvoicesForAdmin = async (req, res) => {
       });
     }
 
-    const { page = 1, limit = 10, status } = req.query;
+    const { page = 1, limit = 10, status, type, paymentStatus } = req.query;
     const skip = (page - 1) * limit;
 
     const query = {};
-    if (status) query.paymentStatus = status;
+    if (status) query.status = status;
+    if (type) query.invoiceType = type;
+    if (paymentStatus) query.paymentStatus = paymentStatus;
 
     const invoices = await Invoice.find(query)
       .populate('customer', 'name email')
       .populate('provider', 'businessName')
+      .populate('service', 'title')
       .sort({ generatedAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
@@ -481,14 +281,16 @@ exports.getAllInvoicesForAdmin = async (req, res) => {
 // @access  Private (Provider)
 exports.getInvoicesForProvider = async (req, res) => {
   try {
-    const { page = 1, limit = 10, status } = req.query;
+    const { page = 1, limit = 10, status, type } = req.query;
     const skip = (page - 1) * limit;
 
     const query = { provider: req.provider._id };
-    if (status) query.paymentStatus = status;
+    if (status) query.status = status;
+    if (type) query.invoiceType = type;
 
     const invoices = await Invoice.find(query)
       .populate('customer', 'name email')
+      .populate('service', 'title')
       .sort({ generatedAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
@@ -519,11 +321,12 @@ exports.getInvoicesForProvider = async (req, res) => {
 // @access  Private (Customer)
 exports.getInvoicesForCustomer = async (req, res) => {
   try {
-    const { page = 1, limit = 10, status } = req.query;
+    const { page = 1, limit = 10, status, type } = req.query;
     const skip = (page - 1) * limit;
 
     const query = { customer: req.user._id };
-    if (status) query.paymentStatus = status;
+    if (status) query.status = status;
+    if (type) query.invoiceType = type;
 
     const invoices = await Invoice.find(query)
       .populate('provider', 'businessName name email phone')
@@ -555,7 +358,7 @@ exports.getInvoicesForCustomer = async (req, res) => {
 };
 
 // @desc    Get service invoices for customer
-// @route   GET /api/invoices/user/service-invoices
+// @route   GET /api/invoices/customer/service
 // @access  Private (Customer)
 exports.getServiceInvoicesForCustomer = async (req, res) => {
   try {
@@ -564,12 +367,9 @@ exports.getServiceInvoicesForCustomer = async (req, res) => {
 
     const query = { 
       customer: req.user._id,
-      $or: [
-        { productsUsed: { $exists: false } },
-        { productsUsed: { $size: 0 } }
-      ]
+      invoiceType: 'service'
     };
-    if (status) query.paymentStatus = status;
+    if (status) query.status = status;
 
     const invoices = await Invoice.find(query)
       .populate('provider', 'businessName name email phone')
@@ -601,7 +401,7 @@ exports.getServiceInvoicesForCustomer = async (req, res) => {
 };
 
 // @desc    Get product invoices for customer
-// @route   GET /api/invoices/user/product-invoices
+// @route   GET /api/invoices/customer/product
 // @access  Private (Customer)
 exports.getProductInvoicesForCustomer = async (req, res) => {
   try {
@@ -610,13 +410,12 @@ exports.getProductInvoicesForCustomer = async (req, res) => {
 
     const query = { 
       customer: req.user._id,
-      productsUsed: { $exists: true, $not: { $size: 0 } }
+      invoiceType: 'product'
     };
-    if (status) query.paymentStatus = status;
+    if (status) query.status = status;
 
     const invoices = await Invoice.find(query)
       .populate('provider', 'businessName name email phone')
-      .populate('service', 'title category description')
       .populate('customer', 'name email phone')
       .sort({ generatedAt: -1 })
       .skip(skip)
@@ -643,12 +442,281 @@ exports.getProductInvoicesForCustomer = async (req, res) => {
   }
 };
 
-// @desc    Process product payment to provider
-// @route   POST /api/invoices/:id/product-payment
-// @access  Private (Customer)
-exports.processProductPayment = async (req, res) => {
+// @desc    Get service invoices for provider
+// @route   GET /api/invoices/provider/service
+// @access  Private (Provider)
+exports.getServiceInvoicesForProvider = async (req, res) => {
   try {
-    const { paymentMethod, upiId, transactionId, amount } = req.body;
+    const { page = 1, limit = 10, status } = req.query;
+    const skip = (page - 1) * limit;
+
+    const query = { 
+      provider: req.provider._id,
+      invoiceType: 'service'
+    };
+    if (status) query.status = status;
+
+    const invoices = await Invoice.find(query)
+      .populate('customer', 'name email phone')
+      .populate('service', 'title category basePrice')
+      .populate('booking', 'date time status')
+      .sort({ generatedAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await Invoice.countDocuments(query);
+
+    res.status(200).json({
+      success: true,
+      data: invoices,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('Get provider service invoices error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};
+
+// @desc    Get product invoices for provider
+// @route   GET /api/invoices/provider/product
+// @access  Private (Provider)
+exports.getProductInvoicesForProvider = async (req, res) => {
+  try {
+    const { page = 1, limit = 10, status } = req.query;
+    const skip = (page - 1) * limit;
+
+    const query = { 
+      provider: req.provider._id,
+      invoiceType: 'product'
+    };
+    if (status) query.status = status;
+
+    const invoices = await Invoice.find(query)
+      .populate('customer', 'name email phone')
+      .sort({ generatedAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await Invoice.countDocuments(query);
+
+    res.status(200).json({
+      success: true,
+      data: invoices,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('Get provider product invoices error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};
+
+// @desc    Create product invoice by provider
+// @route   POST /api/invoices/provider/product
+// @access  Private (Provider)
+exports.createProductInvoice = async (req, res) => {
+  try {
+    const { 
+      customerId, 
+      products, 
+      tax = 0, 
+      discount = 0, 
+      notes,
+      providerPaymentDetails 
+    } = req.body;
+
+    if (!customerId || !products || !Array.isArray(products) || products.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Customer ID and products are required'
+      });
+    }
+
+    // Validate products
+    for (const product of products) {
+      if (!product.name || !product.quantity || !product.rate) {
+        return res.status(400).json({
+          success: false,
+          message: 'Each product must have name, quantity, and rate'
+        });
+      }
+    }
+
+    // Generate invoice number
+    const invoiceNo = await Invoice.generateInvoiceNumber();
+
+    // Calculate totals
+    const productsTotal = products.reduce((sum, product) => {
+      return sum + (product.quantity * product.rate);
+    }, 0);
+
+    const subtotal = productsTotal;
+    const totalAmount = subtotal + tax - discount;
+
+    const invoiceData = {
+      invoiceNo,
+      invoiceType: 'product',
+      provider: req.provider._id,
+      customer: customerId,
+      serviceAmount: 0,
+      productsUsed: products.map(product => ({
+        name: product.name,
+        description: product.description || '',
+        quantity: product.quantity,
+        rate: product.rate,
+        total: product.quantity * product.rate
+      })),
+      tax,
+      discount,
+      totalAmount,
+      netAmount: totalAmount,
+      commission: {
+        amount: 0,
+        type: 'fixed',
+        value: 0,
+        description: 'No commission for product invoices'
+      },
+      paymentStatus: 'pending',
+      notes,
+      providerPaymentDetails
+    };
+
+    const invoice = await Invoice.create(invoiceData);
+
+    const populatedInvoice = await Invoice.findById(invoice._id)
+      .populate('provider', 'businessName name email phone')
+      .populate('customer', 'name email phone');
+
+    res.status(201).json({
+      success: true,
+      message: 'Product invoice created successfully',
+      data: populatedInvoice
+    });
+
+  } catch (error) {
+    console.error('Create product invoice error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// @desc    Update product invoice (only if pending)
+// @route   PUT /api/invoices/provider/product/:id
+// @access  Private (Provider)
+exports.updateProductInvoice = async (req, res) => {
+  try {
+    const { products, tax, discount, notes, providerPaymentDetails } = req.body;
+
+    const invoice = await Invoice.findOne({
+      _id: req.params.id,
+      provider: req.provider._id,
+      invoiceType: 'product',
+      paymentStatus: 'pending'
+    });
+
+    if (!invoice) {
+      return res.status(404).json({
+        success: false,
+        message: 'Invoice not found or cannot be modified (payment already processed)'
+      });
+    }
+
+    // Update fields if provided
+    if (products && Array.isArray(products)) {
+      invoice.productsUsed = products.map(product => ({
+        name: product.name,
+        description: product.description || '',
+        quantity: product.quantity,
+        rate: product.rate,
+        total: product.quantity * product.rate
+      }));
+    }
+
+    if (tax !== undefined) invoice.tax = tax;
+    if (discount !== undefined) invoice.discount = discount;
+    if (notes !== undefined) invoice.notes = notes;
+    if (providerPaymentDetails) invoice.providerPaymentDetails = providerPaymentDetails;
+
+    await invoice.save();
+
+    const updatedInvoice = await Invoice.findById(invoice._id)
+      .populate('customer', 'name email phone')
+      .populate('provider', 'businessName name email phone');
+
+    res.status(200).json({
+      success: true,
+      message: 'Product invoice updated successfully',
+      data: updatedInvoice
+    });
+
+  } catch (error) {
+    console.error('Update product invoice error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};
+
+// @desc    Delete product invoice (only if pending)
+// @route   DELETE /api/invoices/provider/product/:id
+// @access  Private (Provider)
+exports.deleteProductInvoice = async (req, res) => {
+  try {
+    const invoice = await Invoice.findOne({
+      _id: req.params.id,
+      provider: req.provider._id,
+      invoiceType: 'product',
+      paymentStatus: 'pending'
+    });
+
+    if (!invoice) {
+      return res.status(404).json({
+        success: false,
+        message: 'Invoice not found or cannot be deleted (payment already processed)'
+      });
+    }
+
+    await Invoice.findByIdAndDelete(req.params.id);
+
+    res.status(200).json({
+      success: true,
+      message: 'Product invoice deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('Delete product invoice error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};
+
+// @desc    Customer pay product invoice directly
+// @route   POST /api/invoices/customer/product/:id/pay
+// @access  Private (Customer)
+exports.payProductInvoiceDirectly = async (req, res) => {
+  try {
+    const { paymentMethod, transactionId, paymentGateway } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({
@@ -659,10 +727,9 @@ exports.processProductPayment = async (req, res) => {
 
     const invoice = await Invoice.findOne({
       _id: req.params.id,
-      customer: req.user._id
-    })
-      .populate('provider', 'businessName name email phone')
-      .populate('customer', 'name email phone');
+      customer: req.user._id,
+      invoiceType: 'product'
+    }).populate('provider', 'businessName name email phone');
 
     if (!invoice) {
       return res.status(404).json({
@@ -678,71 +745,45 @@ exports.processProductPayment = async (req, res) => {
       });
     }
 
-    // Calculate product total
-    const productTotal = invoice.productsUsed.reduce((sum, product) => sum + product.total, 0);
-
-    if (amount && Math.abs(amount - productTotal) > 0.01) {
-      return res.status(400).json({
-        success: false,
-        message: 'Payment amount does not match product total'
-      });
-    }
-
     // Create payment record
     const paymentDetail = {
       method: paymentMethod,
-      amount: productTotal,
+      amount: invoice.totalAmount,
       date: new Date(),
-      status: paymentMethod === 'cash' ? 'pending' : 'success'
+      status: 'success',
+      transactionId,
+      paymentGateway
     };
-
-    if (paymentMethod === 'upi' && upiId) {
-      paymentDetail.transactionId = transactionId || `UPI_${Date.now()}`;
-      paymentDetail.upiId = upiId;
-    }
 
     // Add payment to invoice
     invoice.paymentDetails.push(paymentDetail);
-
-    // Update payment status
-    if (paymentMethod === 'upi') {
-      invoice.paymentStatus = 'paid';
-    } else if (paymentMethod === 'cash') {
-      invoice.paymentStatus = 'pending'; // Will be confirmed by provider
-    }
+    invoice.paymentStatus = 'paid';
 
     await invoice.save();
 
     // Send notification to provider
-    if (paymentMethod === 'upi') {
+    if (invoice.provider.email) {
       await sendEmail({
         to: invoice.provider.email,
         subject: 'Product Payment Received',
-        text: `You have received a payment of ₹${productTotal} via UPI for invoice ${invoice.invoiceNo} from ${invoice.customer.name}.`
-      });
-    } else if (paymentMethod === 'cash') {
-      await sendEmail({
-        to: invoice.provider.email,
-        subject: 'Cash Payment Pending Confirmation',
-        text: `Customer ${invoice.customer.name} has selected cash payment of ₹${productTotal} for invoice ${invoice.invoiceNo}. Please confirm receipt when payment is made.`
+        text: `You have received a payment of ₹${invoice.totalAmount} for product invoice ${invoice.invoiceNo} from ${req.user.name}.`
       });
     }
 
     res.status(200).json({
       success: true,
-      message: paymentMethod === 'cash' 
-        ? 'Cash payment recorded. Provider will confirm receipt.' 
-        : 'Payment processed successfully',
+      message: 'Payment processed successfully',
       data: {
         invoiceNo: invoice.invoiceNo,
-        amount: productTotal,
+        amount: invoice.totalAmount,
         paymentMethod,
-        status: invoice.paymentStatus
+        transactionId,
+        status: 'paid'
       }
     });
 
   } catch (error) {
-    console.error('Process product payment error:', error);
+    console.error('Pay product invoice directly error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'
@@ -751,7 +792,7 @@ exports.processProductPayment = async (req, res) => {
 };
 
 // @desc    Confirm cash payment (Provider only)
-// @route   POST /api/invoices/:id/confirm-cash-payment
+// @route   POST /api/invoices/provider/:id/confirm-cash
 // @access  Private (Provider)
 exports.confirmCashPayment = async (req, res) => {
   try {
@@ -812,57 +853,6 @@ exports.confirmCashPayment = async (req, res) => {
 
   } catch (error) {
     console.error('Confirm cash payment error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
-  }
-};
-
-// @desc    Get my invoices (unified endpoint for frontend)
-// @route   GET /api/invoice/user/my-invoices
-// @access  Private (Customer)
-exports.getMyInvoices = async (req, res) => {
-  try {
-    const { page = 1, limit = 10, status, type } = req.query;
-    const skip = (page - 1) * limit;
-
-    let query = { customer: req.user._id };
-    
-    if (status) query.paymentStatus = status;
-    
-    // Filter by invoice type
-    if (type === 'service') {
-      query.$or = [
-        { productsUsed: { $exists: false } },
-        { productsUsed: { $size: 0 } }
-      ];
-    } else if (type === 'product') {
-      query.productsUsed = { $exists: true, $not: { $size: 0 } };
-    }
-
-    const invoices = await Invoice.find(query)
-      .populate('provider', 'businessName name email phone')
-      .populate('service', 'title category description')
-      .populate('customer', 'name email phone')
-      .sort({ generatedAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit));
-
-    const total = await Invoice.countDocuments(query);
-
-    res.status(200).json({
-      success: true,
-      data: invoices,
-      pagination: {
-        total,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        pages: Math.ceil(total / limit)
-      }
-    });
-  } catch (error) {
-    console.error('Get my invoices error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'

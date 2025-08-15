@@ -22,7 +22,6 @@ import ProviderList from "./pages/Admin/Approved-Provider";
 import AdminProvidersPage from "./pages/Admin/Providers";
 import AdminCustomersView from "./pages/Admin/Customer";
 import AdminBookingsView from "./pages/Admin/Bookings";
-import AdminBookingsPage from "./pages/Admin/AssignBooking";
 import AdminCommissionPage from "./pages/Admin/Commision";
 import AdminCoupons from "./pages/Admin/Coupon";
 import AdminQuestions from "./pages/Admin/Question";
@@ -89,7 +88,6 @@ const App = () => {
             <Route path="providers" element={<AdminProvidersPage />} />
             <Route path="customers" element={<AdminCustomersView />} />
             <Route path="bookings" element={<AdminBookingsView />} />
-            <Route path="assign-booking" element={<AdminBookingsPage />} />
             <Route path="commission" element={<AdminCommissionPage />} />
             <Route path="coupons" element={<AdminCoupons />} />
             <Route path="add-questions" element={<AdminQuestions />} />

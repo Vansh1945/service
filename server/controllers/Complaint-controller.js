@@ -20,10 +20,14 @@ const submitComplaint = async (req, res) => {
       });
     }
 
+    // Populate booking details including services and customer info
     const booking = await Booking.findOne({
       _id: bookingId,
       customer: customerId
-    }).populate('provider');
+    })
+    .populate('provider', 'name email phone')
+    .populate('customer', 'name email phone')
+    .populate('services.service', 'title description');
 
     if (!booking) {
       if (req.file) {
@@ -59,10 +63,31 @@ const submitComplaint = async (req, res) => {
     }
 
     const complaint = await Complaint.create(complaintData);
+    
+    // Update booking with complaint reference
     booking.complaint = complaint._id;
     await booking.save();
 
-    const responseComplaint = complaint.toObject();
+    // Prepare response with all necessary populated data
+    const responseComplaint = await Complaint.findById(complaint._id)
+      .populate('customer', 'name email phone')
+      .populate('provider', 'name email phone')
+      .lean();
+
+    responseComplaint.bookingDetails = {
+      _id: booking._id,
+      date: booking.date,
+      time: booking.time,
+      status: booking.status,
+      services: booking.services.map(service => ({
+        title: service.service?.title || 'Service not found',
+        description: service.service?.description || '',
+        quantity: service.quantity,
+        price: service.price
+      })),
+      totalAmount: booking.totalAmount
+    };
+
     if (complaint.imageProof) {
       responseComplaint.imageProof = `${req.protocol}://${req.get('host')}/${complaint.imageProof}`;
     }
@@ -78,7 +103,6 @@ const submitComplaint = async (req, res) => {
     
     console.error('Error submitting complaint:', error);
     
-    // Handle validation errors specifically
     if (error.name === 'ValidationError') {
       const messages = Object.values(error.errors).map(val => val.message);
       return res.status(400).json({
@@ -106,11 +130,39 @@ const getAllComplaints = async (req, res) => {
         path: 'provider',
         select: 'name phone email'
       })
-      .populate('booking')
+      .populate({
+        path: 'booking',
+        select: 'date time status totalAmount services serviceType address',
+        populate: {
+          path: 'services.service',
+          model: 'Service',
+          select: 'name description price'
+        }
+      })
       .sort({ createdAt: -1 });
 
-    const complaintsWithImageUrl = complaints.map(complaint => {
+    const complaintsWithDetails = complaints.map(complaint => {
       const complaintObj = complaint.toObject();
+      
+      // Format booking details
+      if (complaint.booking) {
+        complaintObj.bookingDetails = {
+          _id: complaint.booking._id,
+          date: complaint.booking.date,
+          time: complaint.booking.time,
+          status: complaint.booking.status,
+          serviceType: complaint.booking.serviceType,
+          address: complaint.booking.address,
+          services: complaint.booking.services?.map(serviceItem => ({
+            name: serviceItem.service?.name || 'Service not found',
+            description: serviceItem.service?.description || '',
+            quantity: serviceItem.quantity,
+            price: serviceItem.price
+          })) || [],
+          totalAmount: complaint.booking.totalAmount
+        };
+      }
+
       if (complaint.imageProof) {
         complaintObj.imageProof = `${req.protocol}://${req.get('host')}/${complaint.imageProof}`;
       }
@@ -120,7 +172,7 @@ const getAllComplaints = async (req, res) => {
     return res.json({
       success: true,
       count: complaints.length,
-      complaints: complaintsWithImageUrl
+      complaints: complaintsWithDetails
     });
   } catch (error) {
     console.error('Error getting all complaints:', error);
@@ -148,11 +200,36 @@ const getMyComplaints = async (req, res) => {
         path: userRole === 'customer' ? 'provider' : 'customer',
         select: 'name phone email'
       })
-      .populate('booking')
+      .populate({
+        path: 'booking',
+        select: 'date time status totalAmount',
+        populate: {
+          path: 'services.service',
+          select: 'title description'
+        }
+      })
       .sort({ createdAt: -1 });
 
-    const complaintsWithImageUrl = complaints.map(complaint => {
+    const complaintsWithDetails = complaints.map(complaint => {
       const complaintObj = complaint.toObject();
+      
+      // Add formatted booking details
+      if (complaint.booking) {
+        complaintObj.bookingDetails = {
+          _id: complaint.booking._id,
+          date: complaint.booking.date,
+          time: complaint.booking.time,
+          status: complaint.booking.status,
+          services: complaint.booking.services.map(service => ({
+            title: service.service?.title || 'Service not found',
+            description: service.service?.description || '',
+            quantity: service.quantity,
+            price: service.price
+          })),
+          totalAmount: complaint.booking.totalAmount
+        };
+      }
+
       if (complaint.imageProof) {
         complaintObj.imageProof = `${req.protocol}://${req.get('host')}/${complaint.imageProof}`;
       }
@@ -162,7 +239,7 @@ const getMyComplaints = async (req, res) => {
     return res.json({
       success: true,
       count: complaints.length,
-      complaints: complaintsWithImageUrl
+      complaints: complaintsWithDetails
     });
   } catch (error) {
     console.error('Error getting user complaints:', error);
@@ -184,7 +261,14 @@ const getComplaint = async (req, res) => {
         path: 'provider',
         select: 'name phone email'
       })
-      .populate('booking');
+      .populate({
+        path: 'booking',
+        select: 'date time status totalAmount paymentStatus',
+        populate: {
+          path: 'services.service',
+          select: 'title description'
+        }
+      });
 
     if (!complaint) {
       return res.status(404).json({
@@ -204,14 +288,33 @@ const getComplaint = async (req, res) => {
       });
     }
 
-    const complaintWithImageUrl = complaint.toObject();
+    const complaintWithDetails = complaint.toObject();
+    
+    // Add detailed booking information
+    if (complaint.booking) {
+      complaintWithDetails.bookingDetails = {
+        _id: complaint.booking._id,
+        date: complaint.booking.date,
+        time: complaint.booking.time,
+        status: complaint.booking.status,
+        paymentStatus: complaint.booking.paymentStatus,
+        services: complaint.booking.services.map(service => ({
+          title: service.service?.title || 'Service not found',
+          description: service.service?.description || '',
+          quantity: service.quantity,
+          price: service.price
+        })),
+        totalAmount: complaint.booking.totalAmount
+      };
+    }
+
     if (complaint.imageProof) {
-      complaintWithImageUrl.imageProof = `${req.protocol}://${req.get('host')}/${complaint.imageProof}`;
+      complaintWithDetails.imageProof = `${req.protocol}://${req.get('host')}/${complaint.imageProof}`;
     }
 
     return res.json({
       success: true,
-      complaint: complaintWithImageUrl
+      complaint: complaintWithDetails
     });
   } catch (error) {
     console.error('Error getting complaint:', error);
@@ -227,7 +330,11 @@ const resolveComplaint = async (req, res) => {
     const { response } = req.body;
     const complaint = await Complaint.findById(req.params.id)
       .populate('customer', 'email name')
-      .populate('provider', 'email name');
+      .populate('provider', 'email name')
+      .populate({
+        path: 'booking',
+        select: '_id date time totalAmount'
+      });
 
     if (!complaint) {
       return res.status(404).json({
@@ -248,6 +355,21 @@ const resolveComplaint = async (req, res) => {
     complaint.resolvedAt = new Date();
     await complaint.save();
 
+    // Prepare response with booking details
+    const responseComplaint = complaint.toObject();
+    if (complaint.booking) {
+      responseComplaint.bookingDetails = {
+        _id: complaint.booking._id,
+        date: complaint.booking.date,
+        time: complaint.booking.time,
+        totalAmount: complaint.booking.totalAmount
+      };
+    }
+
+    if (complaint.imageProof) {
+      responseComplaint.imageProof = `${req.protocol}://${req.get('host')}/${complaint.imageProof}`;
+    }
+
     // Send email to customer
     try {
       await sendEmail({
@@ -255,45 +377,41 @@ const resolveComplaint = async (req, res) => {
         subject: 'Your Complaint Has Been Resolved',
         html: `
           <h2>Dear ${complaint.customer.name},</h2>
-          <p>Your complaint regarding booking ${complaint.booking} has been resolved by our team.</p>
+          <p>Your complaint regarding booking ${complaint.booking._id} has been resolved by our team.</p>
+          <p><strong>Booking Date:</strong> ${new Date(complaint.booking.date).toLocaleDateString()}</p>
           <p><strong>Admin Response:</strong> ${response}</p>
           <p>If you have any further questions, please don't hesitate to contact us.</p>
           <p>Best regards,</p>
-          <p>Raj Electrical Service Team</p>
+          <p>Customer Support Team</p>
         `
       });
     } catch (emailError) {
       console.error('Failed to send resolution email to customer:', emailError);
-      // Don't fail the whole request if email fails
     }
 
-    // Send email to provider (if applicable)
+    // Send email to provider
     try {
       await sendEmail({
         to: complaint.provider.email,
         subject: 'Complaint Resolution Notification',
         html: `
           <h2>Dear ${complaint.provider.name},</h2>
-          <p>A complaint against your service (Booking ${complaint.booking}) has been resolved by our admin team.</p>
+          <p>A complaint against your service (Booking ${complaint.booking._id}) has been resolved by our admin team.</p>
+          <p><strong>Booking Date:</strong> ${new Date(complaint.booking.date).toLocaleDateString()}</p>
           <p><strong>Admin Response:</strong> ${response}</p>
           <p>Please review this resolution and ensure better service quality in future.</p>
           <p>Best regards,</p>
-          <p>Raj Electrical Service Team</p>
+          <p>Customer Support Team</p>
         `
       });
     } catch (emailError) {
       console.error('Failed to send resolution email to provider:', emailError);
     }
 
-    const complaintWithImageUrl = complaint.toObject();
-    if (complaint.imageProof) {
-      complaintWithImageUrl.imageProof = `${req.protocol}://${req.get('host')}/${complaint.imageProof}`;
-    }
-
     return res.json({
       success: true,
       message: 'Complaint resolved successfully and notifications sent',
-      complaint: complaintWithImageUrl
+      complaint: responseComplaint
     });
   } catch (error) {
     console.error('Error resolving complaint:', error);
@@ -317,7 +435,11 @@ const reopenComplaint = async (req, res) => {
 
     const complaint = await Complaint.findById(req.params.id)
       .populate('customer', 'email name')
-      .populate('provider', 'email name');
+      .populate('provider', 'email name')
+      .populate({
+        path: 'booking',
+        select: '_id date time'
+      });
 
     if (!complaint) {
       return res.status(404).json({
@@ -340,7 +462,24 @@ const reopenComplaint = async (req, res) => {
       });
     }
 
-    await complaint.reopenComplaint(reason, req.user._id);
+    complaint.status = 'open';
+    complaint.reopenReason = reason;
+    complaint.reopenedAt = new Date();
+    await complaint.save();
+
+    // Prepare response with booking details
+    const responseComplaint = complaint.toObject();
+    if (complaint.booking) {
+      responseComplaint.bookingDetails = {
+        _id: complaint.booking._id,
+        date: complaint.booking.date,
+        time: complaint.booking.time
+      };
+    }
+
+    if (complaint.imageProof) {
+      responseComplaint.imageProof = `${req.protocol}://${req.get('host')}/${complaint.imageProof}`;
+    }
 
     // Send email notification about reopening
     try {
@@ -349,26 +488,22 @@ const reopenComplaint = async (req, res) => {
         subject: 'Complaint Reopened Notification',
         html: `
           <h2>Dear ${complaint.provider.name},</h2>
-          <p>The complaint regarding booking ${complaint.booking} has been reopened by the customer.</p>
+          <p>The complaint regarding booking ${complaint.booking._id} has been reopened by the customer.</p>
+          <p><strong>Booking Date:</strong> ${new Date(complaint.booking.date).toLocaleDateString()}</p>
           <p><strong>Reason:</strong> ${reason}</p>
           <p>Please review this matter and contact support if needed.</p>
           <p>Best regards,</p>
-          <p>Raj Electrical Service Team</p>
+          <p>Customer Support Team</p>
         `
       });
     } catch (emailError) {
       console.error('Failed to send reopening email:', emailError);
     }
 
-    const complaintWithImageUrl = complaint.toObject();
-    if (complaint.imageProof) {
-      complaintWithImageUrl.imageProof = `${req.protocol}://${req.get('host')}/${complaint.imageProof}`;
-    }
-
     return res.json({
       success: true,
       message: 'Complaint reopened successfully',
-      complaint: complaintWithImageUrl
+      complaint: responseComplaint
     });
   } catch (error) {
     console.error('Error reopening complaint:', error);

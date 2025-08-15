@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../store/auth';
 import {
@@ -46,9 +47,6 @@ const AdminBookingsView = () => {
     // Filter states
     const [filters, setFilters] = useState({
         status: '',
-        customer: '',
-        provider: '',
-        service: '',
         from: '',
         to: '',
         search: ''
@@ -120,7 +118,7 @@ const AdminBookingsView = () => {
 
         bookings.forEach(booking => {
             if (booking.status) {
-                stats[booking.status] += 1;
+                stats[booking.status] = (stats[booking.status] || 0) + 1;
             }
             if (booking.status === 'completed' || booking.status === 'accepted') {
                 stats.revenue += booking.totalAmount || 0;
@@ -136,12 +134,19 @@ const AdminBookingsView = () => {
             setLoading(true);
             const queryParams = new URLSearchParams();
 
-            // Only add filters that have values
-            Object.entries(filters).forEach(([key, value]) => {
-                if (value && value.trim() !== '') {
-                    queryParams.append(key, value);
-                }
-            });
+            // Map filters to backend expected params
+            if (filters.status && filters.status.trim() !== '') {
+                queryParams.append('status', filters.status);
+            }
+            if (filters.from && filters.from.trim() !== '') {
+                queryParams.append('startDate', filters.from);
+            }
+            if (filters.to && filters.to.trim() !== '') {
+                queryParams.append('endDate', filters.to);
+            }
+            if (filters.search && filters.search.trim() !== '') {
+                queryParams.append('search', filters.search);
+            }
 
             const response = await fetch(`${API}/booking/admin/bookings?${queryParams}`, {
                 headers: {
@@ -155,33 +160,11 @@ const AdminBookingsView = () => {
             }
 
             const data = await response.json();
-            let filteredBookings = Array.isArray(data.data) ? data.data : 
-                                Array.isArray(data.bookings) ? data.bookings : [];
+            const fetchedBookings = Array.isArray(data.data) ? data.data : 
+                                   Array.isArray(data.bookings) ? data.bookings : [];
 
-            // Apply search filter if it exists
-            if (filters.search && filters.search.trim() !== '') {
-                const searchTerm = filters.search.toLowerCase();
-                filteredBookings = filteredBookings.filter(booking => {
-                    const bookingId = booking._id || '';
-                    const customerName = booking.customer?.name || '';
-                    const providerName = booking.provider?.businessName || booking.provider?.name || '';
-                    const serviceTitle = booking.service?.title || '';
-                    const customerEmail = booking.customer?.email || '';
-                    const providerEmail = booking.provider?.email || '';
-                    
-                    return (
-                        customerName.toLowerCase().includes(searchTerm) ||
-                        providerName.toLowerCase().includes(searchTerm) ||
-                        serviceTitle.toLowerCase().includes(searchTerm) ||
-                        bookingId.toLowerCase().includes(searchTerm) ||
-                        customerEmail.toLowerCase().includes(searchTerm) ||
-                        providerEmail.toLowerCase().includes(searchTerm)
-                    );
-                });
-            }
-
-            setBookings(filteredBookings);
-            setStats(calculateStats(filteredBookings));
+            setBookings(fetchedBookings);
+            setStats(calculateStats(fetchedBookings));
         } catch (error) {
             console.error('Error fetching bookings:', error);
             showToast('Failed to fetch bookings', 'error');
@@ -306,13 +289,21 @@ const AdminBookingsView = () => {
     const rescheduleBooking = async (bookingId, newDate, newTime) => {
         try {
             setLoading(true);
+            const body = {};
+            if (newDate) body.date = newDate;
+            if (newTime) body.time = newTime;
+            
+            if (Object.keys(body).length === 0) {
+                throw new Error('Please provide date or time to reschedule');
+            }
+
             const response = await fetch(`${API}/booking/admin/${bookingId}/reschedule`, {
                 method: 'PATCH',
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ date: newDate, time: newTime })
+                body: JSON.stringify(body)
             });
 
             if (!response.ok) {
@@ -345,9 +336,6 @@ const AdminBookingsView = () => {
     const clearFilters = () => {
         setFilters({
             status: '',
-            customer: '',
-            provider: '',
-            service: '',
             from: '',
             to: '',
             search: ''
@@ -364,8 +352,7 @@ const AdminBookingsView = () => {
             'Provider Name',
             'Provider Email',
             'Provider Phone',
-            'Service Title',
-            'Service Category',
+            'Services',
             'Booking Date',
             'Booking Time',
             'Status',
@@ -377,12 +364,16 @@ const AdminBookingsView = () => {
             'Payment Method',
             'Payment Status',
             'Coupon Applied',
-            'Discount Amount',
+            'Total Discount',
             'Total Amount',
             'Created At'
         ];
 
         const rows = bookings.map(booking => {
+            const servicesList = booking.services?.map(s => 
+                `${s.service?.title || 'N/A'} (Qty: ${s.quantity || 1})`
+            ).join('; ') || 'N/A';
+
             return [
                 booking._id || 'N/A',
                 booking.customer?.name || 'N/A',
@@ -391,8 +382,7 @@ const AdminBookingsView = () => {
                 booking.provider?.businessName || booking.provider?.name || 'N/A',
                 booking.provider?.email || 'N/A',
                 booking.provider?.phone || 'N/A',
-                booking.service?.title || 'N/A',
-                booking.service?.category || 'N/A',
+                servicesList,
                 formatDate(booking.date),
                 booking.time || 'N/A',
                 booking.status || 'N/A',
@@ -404,7 +394,7 @@ const AdminBookingsView = () => {
                 booking.paymentMethod || 'N/A',
                 booking.paymentStatus || 'N/A',
                 booking.couponApplied || 'N/A',
-                booking.discountAmount || '0.00',
+                booking.totalDiscount || '0.00',
                 booking.totalAmount || '0.00',
                 booking.createdAt ? new Date(booking.createdAt).toLocaleString() : 'N/A'
             ];
@@ -434,7 +424,7 @@ const AdminBookingsView = () => {
         showToast('Bookings exported successfully', 'success');
     };
 
-    // Debounce filter changes to avoid too many API calls
+    // Debounce filter changes
     useEffect(() => {
         const timer = setTimeout(() => {
             if (!initialLoad) {
@@ -473,9 +463,8 @@ const AdminBookingsView = () => {
 
     const getPaymentMethodIcon = (method) => {
         switch (method?.toLowerCase()) {
-            case 'credit card': return <CreditCard className="w-4 h-4 mr-1" />;
+            case 'credit_card': return <CreditCard className="w-4 h-4 mr-1" />;
             case 'wallet': return <Briefcase className="w-4 h-4 mr-1" />;
-            case 'upi': return <Briefcase className="w-4 h-4 mr-1" />;
             case 'cash': return <DollarSign className="w-4 h-4 mr-1" />;
             default: return <CreditCard className="w-4 h-4 mr-1" />;
         }
@@ -633,7 +622,7 @@ const AdminBookingsView = () => {
                                             Provider
                                         </th>
                                         <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">
-                                            Service
+                                            Services
                                         </th>
                                         <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider hidden sm:table-cell">
                                             Date & Time
@@ -686,10 +675,10 @@ const AdminBookingsView = () => {
                                             </td>
                                             <td className="px-4 py-4 whitespace-nowrap">
                                                 <div className="text-sm font-medium text-blue-900">
-                                                    {booking.service?.title || 'N/A'}
+                                                    {booking.services?.[0]?.service?.title || 'N/A'}
                                                 </div>
                                                 <div className="text-sm text-gray-600">
-                                                    {booking.service?.category || 'N/A'}
+                                                    {booking.services?.[0]?.service?.category || 'N/A'} {booking.services?.length > 1 ? `(+${booking.services.length - 1} more)` : ''}
                                                 </div>
                                                 <div className="text-xs text-gray-500 mt-1">
                                                     {formatCurrency(booking.totalAmount)}
@@ -815,65 +804,80 @@ const AdminBookingsView = () => {
                                     <div className="space-y-4">
                                         {/* Service Info */}
                                         <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                                            <h3 className="font-semibold text-blue-900 mb-3">Service Information</h3>
-                                            <div className="space-y-3">
-                                                <div>
-                                                    <p className="text-sm text-gray-600">Service</p>
-                                                    <p className="font-medium text-blue-900">{selectedBooking.service?.title || 'N/A'}</p>
+                                            <h3 className="font-semibold text-blue-900 mb-3">Services Information</h3>
+                                            {selectedBooking.services?.map((serviceItem, index) => (
+                                                <div key={index} className="space-y-3 mb-4 last:mb-0">
+                                                    <div>
+                                                        <p className="text-sm text-gray-600">Service #{index + 1}</p>
+                                                        <p className="font-medium text-blue-900">{serviceItem.service?.title || 'N/A'}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm text-gray-600">Category</p>
+                                                        <p className="font-medium text-blue-900">{serviceItem.service?.category || 'N/A'}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm text-gray-600">Description</p>
+                                                        <p className="font-medium text-blue-900">{serviceItem.service?.description || 'N/A'}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm text-gray-600">Quantity</p>
+                                                        <p className="font-medium text-blue-900">{serviceItem.quantity || 1}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm text-gray-600">Price</p>
+                                                        <p className="font-medium text-blue-900">{formatCurrency(serviceItem.price)}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm text-gray-600">Discount</p>
+                                                        <p className="font-medium text-blue-900">{formatCurrency(serviceItem.discountAmount)}</p>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <p className="text-sm text-gray-600">Category</p>
-                                                    <p className="font-medium text-blue-900">{selectedBooking.service?.category || 'N/A'}</p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-sm text-gray-600">Description</p>
-                                                    <p className="font-medium text-blue-900">{selectedBooking.service?.description || 'N/A'}</p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-sm text-gray-600">Price</p>
-                                                    <p className="font-medium text-blue-900">{formatCurrency(selectedBooking.totalAmount)}</p>
-                                                </div>
-                                            </div>
+                                            ))}
+                                            {!selectedBooking.services?.length && (
+                                                <p className="text-sm text-gray-600">No services found</p>
+                                            )}
                                         </div>
 
-                                        {/* Provider Assignment */}
-                                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                                            <h3 className="font-semibold text-blue-900 mb-3">Provider Assignment</h3>
-                                            {selectedBooking.provider ? (
-                                                <div className="space-y-3">
-                                                    <div>
-                                                        <p className="text-sm text-gray-600">Current Provider</p>
-                                                        <p className="font-medium text-blue-900">{selectedBooking.provider.businessName || selectedBooking.provider.name || 'N/A'}</p>
+                                        {/* Provider Assignment - Only show for pending bookings */}
+                                        {selectedBooking.status === 'pending' && (
+                                            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                                                <h3 className="font-semibold text-blue-900 mb-3">Provider Assignment</h3>
+                                                {selectedBooking.provider ? (
+                                                    <div className="space-y-3">
+                                                        <div>
+                                                            <p className="text-sm text-gray-600">Current Provider</p>
+                                                            <p className="font-medium text-blue-900">{selectedBooking.provider.businessName || selectedBooking.provider.name || 'N/A'}</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-sm text-gray-600">Email</p>
+                                                            <p className="font-medium text-blue-900">{selectedBooking.provider.email || 'N/A'}</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-sm text-gray-600">Phone</p>
+                                                            <p className="font-medium text-blue-900">{selectedBooking.provider.phone || 'N/A'}</p>
+                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        <p className="text-sm text-gray-600">Email</p>
-                                                        <p className="font-medium text-blue-900">{selectedBooking.provider.email || 'N/A'}</p>
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-sm text-gray-600">Phone</p>
-                                                        <p className="font-medium text-blue-900">{selectedBooking.provider.phone || 'N/A'}</p>
-                                                    </div>
+                                                ) : (
+                                                    <p className="text-sm text-gray-600">No provider assigned yet</p>
+                                                )}
+                                                
+                                                <div className="mt-4">
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">Assign New Provider</label>
+                                                    <select
+                                                        onChange={(e) => selectedBooking._id && assignProvider(selectedBooking._id, e.target.value)}
+                                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                        defaultValue=""
+                                                    >
+                                                        <option value="" disabled>Select a provider</option>
+                                                        {providers.map(provider => (
+                                                            <option key={provider._id} value={provider._id}>
+                                                                {provider.businessName || provider.name} ({provider.email})
+                                                            </option>
+                                                        ))}
+                                                    </select>
                                                 </div>
-                                            ) : (
-                                                <p className="text-sm text-gray-600">No provider assigned yet</p>
-                                            )}
-                                            
-                                            <div className="mt-4">
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">Assign New Provider</label>
-                                                <select
-                                                    onChange={(e) => selectedBooking._id && assignProvider(selectedBooking._id, e.target.value)}
-                                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                                    defaultValue=""
-                                                >
-                                                    <option value="" disabled>Select a provider</option>
-                                                    {providers.map(provider => (
-                                                        <option key={provider._id} value={provider._id}>
-                                                            {provider.businessName || provider.name} ({provider.email})
-                                                        </option>
-                                                    ))}
-                                                </select>
                                             </div>
-                                        </div>
+                                        )}
 
                                         {/* Address */}
                                         <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
@@ -909,10 +913,10 @@ const AdminBookingsView = () => {
                                                         <p className="font-medium text-blue-900">{selectedBooking.couponApplied}</p>
                                                     </div>
                                                 )}
-                                                {selectedBooking.discountAmount > 0 && (
+                                                {selectedBooking.totalDiscount > 0 && (
                                                     <div>
-                                                        <p className="text-sm text-gray-600">Discount</p>
-                                                        <p className="font-medium text-blue-900">{formatCurrency(selectedBooking.discountAmount)}</p>
+                                                        <p className="text-sm text-gray-600">Total Discount</p>
+                                                        <p className="font-medium text-blue-900">{formatCurrency(selectedBooking.totalDiscount)}</p>
                                                     </div>
                                                 )}
                                                 <div>
@@ -922,44 +926,42 @@ const AdminBookingsView = () => {
                                             </div>
                                         </div>
 
-                                        {/* Reschedule Booking */}
-                                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                                            <h3 className="font-semibold text-blue-900 mb-3">Reschedule Booking</h3>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-1">New Date</label>
-                                                    <input
-                                                        type="date"
-                                                        id="newDate"
-                                                        min={new Date().toISOString().split('T')[0]}
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                                    />
+                                        {/* Reschedule Booking - Only show for pending bookings */}
+                                        {selectedBooking.status === 'pending' && (
+                                            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                                                <h3 className="font-semibold text-blue-900 mb-3">Reschedule Booking</h3>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-1">New Date</label>
+                                                        <input
+                                                            type="date"
+                                                            id="newDate"
+                                                            min={new Date().toISOString().split('T')[0]}
+                                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-1">New Time</label>
+                                                        <input
+                                                            type="time"
+                                                            id="newTime"
+                                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                        />
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-1">New Time</label>
-                                                    <input
-                                                        type="time"
-                                                        id="newTime"
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                                    />
-                                                </div>
-                                            </div>
-                                            <button
-                                                onClick={() => {
-                                                    const newDate = document.getElementById('newDate').value;
-                                                    const newTime = document.getElementById('newTime').value;
-                                                    if (newDate && selectedBooking._id) {
+                                                <button
+                                                    onClick={() => {
+                                                        const newDate = document.getElementById('newDate').value;
+                                                        const newTime = document.getElementById('newTime').value;
                                                         rescheduleBooking(selectedBooking._id, newDate, newTime);
-                                                    } else {
-                                                        showToast('Please select a new date', 'error');
-                                                    }
-                                                }}
-                                                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                                            >
-                                                <Edit className="w-4 h-4 mr-2 inline" />
-                                                Reschedule Booking
-                                            </button>
-                                        </div>
+                                                    }}
+                                                    className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                                >
+                                                    <Edit className="w-4 h-4 mr-2 inline" />
+                                                    Reschedule Booking
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>

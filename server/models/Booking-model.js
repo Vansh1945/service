@@ -195,17 +195,20 @@ bookingSchema.pre('save', async function (next) {
       const commissionRule = await CommissionRule.getCommissionForProvider(this.provider);
       
       if (commissionRule) {
-        const { commission } = CommissionRule.calculateCommission(this.totalAmount, commissionRule);
+        const { commission, providerEarnings } = CommissionRule.calculateCommission(this.totalAmount, commissionRule);
         this.commissionAmount = commission;
+        this.providerEarnings = providerEarnings; // Add this field to store provider's earnings after commission
         this.commissionRule = commissionRule._id;
       } else {
         // No commission rule found - set to 0
         this.commissionAmount = 0;
+        this.providerEarnings = this.totalAmount; // Provider gets full amount if no commission
         this.commissionRule = null;
       }
     } catch (error) {
       console.error('Error calculating commission:', error);
       this.commissionAmount = 0;
+      this.providerEarnings = this.totalAmount;
       this.commissionRule = null;
     }
   }
@@ -218,47 +221,14 @@ bookingSchema.pre('save', async function (next) {
   next();
 });
 
-// Virtual for booking datetime
-bookingSchema.virtual('bookingDateTime').get(function () {
-  if (!this.date || !this.time) return null;
-  const dateStr = this.date.toISOString().split('T')[0];
-  return new Date(`${dateStr}T${this.time}`);
-});
-
-// Virtual for isUpcoming
-bookingSchema.virtual('isUpcoming').get(function () {
-  if (!this.bookingDateTime || !this.status) return false;
-  return this.status === 'accepted' && this.bookingDateTime > new Date();
-});
-
-// Static method to find upcoming bookings
-bookingSchema.statics.findUpcoming = function (userId, userType) {
-  const query = {};
-  query[userType] = userId;
-  query.status = 'accepted';
-
-  return this.find(query)
-    .where('bookingDateTime').gt(new Date())
-    .sort({ date: 1, time: 1 });
-};
-
-// Instance method to cancel booking
-bookingSchema.methods.cancel = function (reason) {
-  if (this.status === 'completed') {
-    throw new Error('Cannot cancel a completed booking');
+// Add providerEarnings field to the schema
+bookingSchema.add({
+  providerEarnings: {
+    type: Number,
+    default: 0,
+    min: [0, 'Provider earnings cannot be negative']
   }
-  this.status = 'cancelled';
-  return this.save();
-};
-
-// Instance method to complete booking
-bookingSchema.methods.complete = function () {
-  if (this.status !== 'accepted') {
-    throw new Error('Only accepted bookings can be marked completed');
-  }
-  this.status = 'completed';
-  return this.save();
-};
+});
 
 // Instance method to confirm payment and booking
 bookingSchema.methods.confirmPayment = async function (paymentMethod) {
@@ -271,9 +241,14 @@ bookingSchema.methods.confirmPayment = async function (paymentMethod) {
   const commissionRule = await CommissionRule.getCommissionForProvider(this.provider);
   
   if (commissionRule) {
-    const { commission } = CommissionRule.calculateCommission(this.totalAmount, commissionRule);
+    const { commission, providerEarnings } = CommissionRule.calculateCommission(this.totalAmount, commissionRule);
     this.commissionAmount = commission;
+    this.providerEarnings = providerEarnings;
     this.commissionRule = commissionRule._id;
+  } else {
+    this.commissionAmount = 0;
+    this.providerEarnings = this.totalAmount;
+    this.commissionRule = null;
   }
 
   this.paymentStatus = 'paid';

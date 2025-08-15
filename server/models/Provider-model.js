@@ -123,8 +123,16 @@ const providerSchema = new mongoose.Schema({
     },
     wallet: {
         type: Number,
-        default: 0
+        default: 0,
+        min: [0, 'Wallet balance cannot be negative']
     },
+    walletHistory: [{
+        amount: { type: Number, required: true },
+        type: { type: String, enum: ['credit', 'debit'], required: true },
+        description: { type: String, required: true },
+        reference: { type: mongoose.Schema.Types.ObjectId },
+        createdAt: { type: Date, default: Date.now }
+    }],
     completedBookings: {
         type: Number,
         default: 0
@@ -161,11 +169,20 @@ const providerSchema = new mongoose.Schema({
         default: false
     },
     registrationDate: {
-        type: Date
-    }
+        type: Date,
+        default: Date.now
+    },
 }, {
     timestamps: true,
-    toJSON: { virtuals: true }
+    toJSON: { 
+        virtuals: true,
+        transform: function(doc, ret) {
+            // Remove sensitive information when converting to JSON
+            delete ret.password;
+            delete ret.isDeleted;
+            return ret;
+        }
+    }
 });
 
 // Password hashing middleware
@@ -199,7 +216,45 @@ providerSchema.methods.generateJWT = function () {
     );
 };
 
-// Method to handle KYC rejection
+// Wallet management methods
+providerSchema.methods.addToWallet = async function(amount, description, reference) {
+    if (amount <= 0) {
+        throw new Error('Amount must be positive');
+    }
+    
+    this.wallet += amount;
+    this.walletHistory.push({
+        amount,
+        type: 'credit',
+        description,
+        reference
+    });
+    
+    await this.save();
+    return this.wallet;
+};
+
+providerSchema.methods.deductFromWallet = async function(amount, description, reference) {
+    if (amount <= 0) {
+        throw new Error('Amount must be positive');
+    }
+    if (this.wallet < amount) {
+        throw new Error('Insufficient funds in wallet');
+    }
+    
+    this.wallet -= amount;
+    this.walletHistory.push({
+        amount,
+        type: 'debit',
+        description,
+        reference
+    });
+    
+    await this.save();
+    return this.wallet;
+};
+
+// KYC methods
 providerSchema.methods.rejectKYC = function (reason) {
     this.kycStatus = 'rejected';
     this.rejectionReason = reason;
@@ -207,7 +262,6 @@ providerSchema.methods.rejectKYC = function (reason) {
     return this.save();
 };
 
-// Method to approve KYC
 providerSchema.methods.approveKYC = function () {
     this.kycStatus = 'approved';
     this.approved = true;
@@ -215,14 +269,13 @@ providerSchema.methods.approveKYC = function () {
     return this.save();
 };
 
-// Method to reset KYC for resubmission
 providerSchema.methods.resetKYC = function () {
     this.kycStatus = 'pending';
     this.rejectionReason = '';
     return this.save();
 };
 
-// Virtual for age calculation
+// Virtuals
 providerSchema.virtual('age').get(function () {
     const today = new Date();
     const birthDate = new Date(this.dateOfBirth);
@@ -235,5 +288,25 @@ providerSchema.virtual('age').get(function () {
 
     return age;
 });
+
+providerSchema.virtual('totalEarnings').get(function() {
+    if (!this.populated('earningsHistory')) {
+        throw new Error('You must populate earningsHistory to calculate total earnings');
+    }
+    
+    return this.earningsHistory.reduce((total, transaction) => {
+        return total + (transaction.amount || 0);
+    }, 0);
+});
+
+// Query helper for active providers
+providerSchema.query.active = function() {
+    return this.where({ isDeleted: false, blockedTill: { $lte: new Date() } });
+};
+
+// Static method to find by email
+providerSchema.statics.findByEmail = function(email) {
+    return this.findOne({ email }).select('+password');
+};
 
 module.exports = mongoose.model('Provider', providerSchema);

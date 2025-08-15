@@ -4,8 +4,7 @@ import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { FaEdit, FaTrash, FaDownload, FaUpload, FaPlus, FaTimes, FaCheck } from 'react-icons/fa';
-import { FileText, PlusCircle, Trash2, Edit2, Download, Upload } from 'lucide-react';
+import { FileText, PlusCircle, Trash2, Edit2, Download, Upload, X, Check } from 'lucide-react';
 
 const AdminQuestions = () => {
   const { token, isAdmin, API, showToast, logoutUser } = useAuth();
@@ -395,7 +394,7 @@ const AdminQuestions = () => {
   };
 
   return (
-    <div className="min-h-screen bg-blue-50 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-gray-100 to-blue-100 p-4 md:p-8">
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -403,12 +402,12 @@ const AdminQuestions = () => {
         className="max-w-7xl mx-auto"
       >
         {/* Header */}
-        <div className="bg-blue-900 rounded-xl p-6 mb-6 shadow-lg">
-          <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-            <FileText className="text-yellow-400" size={32} />
+        <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 transform transition-all hover:shadow-2xl">
+          <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
+            <FileText className="text-blue-500" size={32} />
             Question Bank Management
           </h1>
-          <p className="text-blue-200 mt-2">Manage all test questions in one place</p>
+          <p className="text-gray-600 mt-2">Efficiently manage and organize your test questions</p>
         </div>
 
         {/* Main Content */}
@@ -417,18 +416,18 @@ const AdminQuestions = () => {
           <div className="lg:col-span-1 space-y-6">
             {/* Question Form */}
             <motion.div
-              whileHover={{ scale: 1.01 }}
-              className="bg-white rounded-xl shadow-md p-6 border border-blue-200"
+              whileHover={{ scale: 1.02, transition: { duration: 0.2 } }}
+              className="bg-white rounded-2xl shadow-xl p-6 border border-gray-200 transform transition-all hover:shadow-2xl"
             >
-              <h2 className="text-xl font-semibold mb-4 text-blue-900 flex items-center gap-2">
+              <h2 className="text-xl font-semibold mb-4 text-gray-800 flex items-center gap-2">
                 {editingId ? (
                   <>
-                    <Edit2 className="text-blue-600" size={20} />
+                    <Edit2 className="text-blue-500" size={20} />
                     Edit Question
                   </>
                 ) : (
                   <>
-                    <PlusCircle className="text-blue-600" size={20} />
+                    <PlusCircle className="text-blue-500" size={20} />
                     Add New Question
                   </>
                 )}
@@ -438,8 +437,8 @@ const AdminQuestions = () => {
                 <div>
                   <label className="block text-gray-700 mb-2 font-medium">Question Text *</label>
                   <textarea
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-                    rows="3"
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-blue-300"
+                    rows="4"
                     value={formData.questionText}
                     onChange={(e) => handleChange({ target: { name: 'questionText', value: e.target.value } })}
                     required
@@ -449,20 +448,20 @@ const AdminQuestions = () => {
 
                 <div>
                   <label className="block text-gray-700 mb-2 font-medium">Options *</label>
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {formData.options.map((option, index) => (
-                      <div key={index} className="flex items-center gap-2">
+                      <div key={index} className="flex items-center gap-3 group">
                         <input
                           type="radio"
                           name="correctAnswer"
                           checked={formData.correctAnswer === index}
                           onChange={() => setFormData(prev => ({ ...prev, correctAnswer: index }))}
-                          className="h-5 w-5 text-blue-600 focus:ring-blue-500"
+                          className="h-5 w-5 text-blue-500 focus:ring-blue-400 transition-all duration-200"
                           required
                         />
                         <input
                           type="text"
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                          className="flex-1 px-4 py-2 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-blue-300"
                           value={option}
                           onChange={(e) => handleOptionChange(index, e.target.value)}
                           required
@@ -472,7 +471,7 @@ const AdminQuestions = () => {
                           <button
                             type="button"
                             onClick={() => removeOption(index)}
-                            className="p-2 text-red-600 hover:text-red-800 rounded-full hover:bg-red-50"
+                            className="p-2 text-red-500 hover:text-red-600 rounded-full hover:bg-red-100 opacity-0 group-hover:opacity-100 transition-all duration-200"
                           >
                             <Trash2 size={18} />
                           </button>
@@ -485,12 +484,12 @@ const AdminQuestions = () => {
                     <button
                       type="button"
                       onClick={addOption}
-                      className="mt-2 flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm font-medium"
+                      className="mt-3 flex items-center gap-2 text-blue-500 hover:text-blue-600 text-sm font-medium transition-colors duration-200"
                     >
-                      <FaPlus size={14} /> Add Option
+                      <PlusCircle size={16} /> Add Option
                     </button>
                   )}
-                  <p className="text-xs text-gray-500 mt-1">Minimum 2 options, maximum 5 options</p>
+                  <p className="text-xs text-gray-500 mt-2">Minimum 2 options, maximum 5 options</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -498,7 +497,7 @@ const AdminQuestions = () => {
                     <label className="block text-gray-700 mb-2 font-medium">Category *</label>
                     <select
                       name="category"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                      className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-blue-300"
                       value={formData.category}
                       onChange={handleChange}
                       required
@@ -512,7 +511,7 @@ const AdminQuestions = () => {
                     <label className="block text-gray-700 mb-2 font-medium">Subcategory *</label>
                     <select
                       name="subcategory"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                      className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-blue-300"
                       value={formData.subcategory}
                       onChange={handleChange}
                       required
@@ -529,54 +528,60 @@ const AdminQuestions = () => {
                   <input
                     type="checkbox"
                     name="isActive"
-                    className="h-5 w-5 text-blue-600 focus:ring-blue-500 rounded"
+                    className="h-5 w-5 text-blue-500 focus:ring-blue-400 rounded transition-all duration-200"
                     checked={formData.isActive}
                     onChange={(e) => handleChange({ target: { name: 'isActive', value: e.target.checked } })}
                   />
-                  <label className="ml-2 text-gray-700">Active Question</label>
+                  <label className="ml-2 text-gray-700 font-medium">Active Question</label>
                 </div>
 
-                <div className="flex flex-wrap gap-3 pt-2">
-                  <button
+                <div className="flex flex-wrap gap-3 pt-4">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                     type="submit"
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+                    className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-all duration-200 shadow-md hover:shadow-lg"
                   >
                     {editingId ? (
                       <>
-                        <FaEdit /> Update
+                        <Edit2 size={16} /> Update
                       </>
                     ) : (
                       <>
-                        <FaPlus /> Add
+                        <PlusCircle size={16} /> Add
                       </>
                     )}
-                  </button>
+                  </motion.button>
 
                   {editingId && (
-                    <button
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
                       type="button"
                       onClick={resetForm}
-                      className="flex items-center gap-2 px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors"
+                      className="flex items-center gap-2 px-5 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-xl font-medium transition-all duration-200 shadow-md hover:shadow-lg"
                     >
-                      <FaTimes /> Cancel
-                    </button>
+                      <X size={16} /> Cancel
+                    </motion.button>
                   )}
 
-                  <button
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                     type="button"
                     onClick={() => setShowBulkUpload(!showBulkUpload)}
-                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors"
+                    className="flex items-center gap-2 px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-medium transition-all duration-200 shadow-md hover:shadow-lg"
                   >
                     {showBulkUpload ? (
                       <>
-                        <FaTimes /> Hide Bulk
+                        <X size={16} /> Hide Bulk
                       </>
                     ) : (
                       <>
-                        <FaUpload /> Bulk Upload
+                        <Upload size={16} /> Bulk Upload
                       </>
                     )}
-                  </button>
+                  </motion.button>
                 </div>
               </form>
             </motion.div>
@@ -587,17 +592,17 @@ const AdminQuestions = () => {
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
-                className="bg-white rounded-xl shadow-md p-6 border border-blue-200"
+                className="bg-white rounded-2xl shadow-xl p-6 border border-gray-200 transform transition-all hover:shadow-2xl"
               >
-                <h2 className="text-xl font-semibold mb-4 text-blue-900 flex items-center gap-2">
-                  <Upload className="text-blue-600" size={20} />
+                <h2 className="text-xl font-semibold mb-4 text-gray-800 flex items-center gap-2">
+                  <Upload className="text-blue-500" size={20} />
                   Bulk Upload Questions
                 </h2>
 
                 <div className="space-y-4">
                   <div>
-                    <p className="text-sm text-gray-700 mb-2">Format example:</p>
-                    <pre className="bg-blue-50 p-3 rounded-lg text-xs overflow-x-auto">
+                    <p className="text-sm text-gray-600 mb-2 font-medium">Format example:</p>
+                    <pre className="bg-gray-50 p-4 rounded-xl text-xs font-mono text-gray-700 overflow-x-auto shadow-inner">
                       {`1. What is the color of live wire in electrical wiring?
 a) Red
 b) Black
@@ -613,7 +618,7 @@ Correct Answer: a`}
                   </div>
 
                   <textarea
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-blue-300"
                     rows="8"
                     value={bulkQuestions}
                     onChange={(e) => setBulkQuestions(e.target.value)}
@@ -621,19 +626,23 @@ Correct Answer: a`}
                   />
 
                   <div className="flex gap-3">
-                    <button
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
                       onClick={handleBulkUpload}
-                      className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors flex-1"
+                      className="flex items-center gap-2 px-5 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl font-medium transition-all duration-200 shadow-md hover:shadow-lg flex-1"
                     >
-                      <FaUpload /> Upload
-                    </button>
+                      <Upload size={16} /> Upload
+                    </motion.button>
 
-                    <button
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
                       onClick={() => setBulkQuestions('')}
-                      className="flex items-center gap-2 px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors"
+                      className="flex items-center gap-2 px-5 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-xl font-medium transition-all duration-200 shadow-md hover:shadow-lg"
                     >
-                      <FaTimes /> Clear
-                    </button>
+                      <X size={16} /> Clear
+                    </motion.button>
                   </div>
                 </div>
               </motion.div>
@@ -644,17 +653,17 @@ Correct Answer: a`}
           <div className="lg:col-span-2 space-y-6">
             {/* Filters */}
             <motion.div
-              whileHover={{ scale: 1.01 }}
-              className="bg-white rounded-xl shadow-md p-6 border border-blue-200"
+              whileHover={{ scale: 1.02, transition: { duration: 0.2 } }}
+              className="bg-white rounded-2xl shadow-xl p-6 border border-gray-200 transform transition-all hover:shadow-2xl"
             >
-              <h2 className="text-xl font-semibold mb-4 text-blue-900">Filters</h2>
+              <h2 className="text-xl font-semibold mb-4 text-gray-800">Filters</h2>
 
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-gray-700 mb-2 text-sm font-medium">Search</label>
                   <input
                     type="text"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                    className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-blue-300"
                     value={filters.search}
                     onChange={(e) => setFilters({ ...filters, search: e.target.value })}
                     placeholder="Search questions..."
@@ -664,7 +673,7 @@ Correct Answer: a`}
                 <div>
                   <label className="block text-gray-700 mb-2 text-sm font-medium">Category</label>
                   <select
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                    className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-blue-300"
                     value={filters.category}
                     onChange={(e) => setFilters({ ...filters, category: e.target.value })}
                   >
@@ -677,7 +686,7 @@ Correct Answer: a`}
                 <div>
                   <label className="block text-gray-700 mb-2 text-sm font-medium">Subcategory</label>
                   <select
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                    className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-blue-300"
                     value={filters.subcategory}
                     onChange={(e) => setFilters({ ...filters, subcategory: e.target.value })}
                   >
@@ -692,7 +701,7 @@ Correct Answer: a`}
                 <div>
                   <label className="block text-gray-700 mb-2 text-sm font-medium">Status</label>
                   <select
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                    className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-blue-300"
                     value={filters.isActive}
                     onChange={(e) => setFilters({ ...filters, isActive: e.target.value })}
                   >
@@ -704,12 +713,14 @@ Correct Answer: a`}
               </div>
 
               <div className="mt-4 flex justify-end">
-                <button
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                   onClick={handleDownloadPDF}
-                  className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
+                  className="flex items-center gap-2 px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition-all duration-200 shadow-md hover:shadow-lg"
                 >
-                  <FaDownload /> Download PDF
-                </button>
+                  <Download size={16} /> Download PDF
+                </motion.button>
               </div>
             </motion.div>
 
@@ -717,10 +728,10 @@ Correct Answer: a`}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="bg-white rounded-xl shadow-md p-6 border border-blue-200"
+              className="bg-white rounded-2xl shadow-xl p-6 border border-gray-200 transform transition-all hover:shadow-2xl"
             >
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-semibold text-blue-900">Questions List</h2>
+                <h2 className="text-xl font-semibold text-gray-800">Questions List</h2>
                 <div className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
                   {questions.length} questions found
                 </div>
@@ -728,14 +739,16 @@ Correct Answer: a`}
 
               {loading ? (
                 <div className="flex flex-col items-center justify-center py-12">
-                  <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600 mb-4"></div>
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                    className="h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mb-4"
+                  />
                   <p className="text-gray-600">Loading questions...</p>
                 </div>
               ) : questions.length === 0 ? (
                 <div className="text-center py-12">
-                  <div className="text-gray-400 mb-4">
-                    <FileText size={48} className="mx-auto" />
-                  </div>
+                  <FileText size={48} className="mx-auto text-gray-400 mb-4" />
                   <h3 className="text-lg font-medium text-gray-700">No questions found</h3>
                   <p className="text-gray-500 mt-1">Add some questions to get started</p>
                 </div>
@@ -744,17 +757,17 @@ Correct Answer: a`}
                   {questions.map((question) => (
                     <motion.div
                       key={question._id}
-                      whileHover={{ scale: 1.005 }}
-                      className="bg-blue-50 rounded-lg p-4 border border-blue-200"
+                      whileHover={{ scale: 1.01, transition: { duration: 0.2 } }}
+                      className="bg-gray-50 rounded-xl p-5 border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200"
                     >
                       <div className="flex justify-between items-start">
                         <div>
-                          <h3 className="font-medium text-blue-900">{question.questionText}</h3>
-                          <div className="mt-2 space-y-1">
+                          <h3 className="font-medium text-gray-800">{question.questionText}</h3>
+                          <div className="mt-2 space-y-2">
                             {question.options.map((opt, idx) => (
                               <div
                                 key={idx}
-                                className={`flex items-center text-sm ${idx === question.correctAnswer ? 'font-bold text-green-600' : 'text-gray-600'}`}
+                                className={`flex items-center text-sm ${idx === question.correctAnswer ? 'font-semibold text-green-600' : 'text-gray-600'}`}
                               >
                                 <span className="w-6">{String.fromCharCode(97 + idx)}.</span>
                                 <span>{opt}</span>
@@ -765,45 +778,46 @@ Correct Answer: a`}
 
                         <div className="flex flex-col items-end space-y-2">
                           <div className="flex gap-2">
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${question.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                              }`}>
+                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${question.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                               {question.isActive ? 'Active' : 'Inactive'}
                             </span>
-                            <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium capitalize">
+                            <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium capitalize">
                               {question.category}
                             </span>
                           </div>
 
                           <div className="flex gap-2">
-                            <button
+                            <motion.button
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
                               onClick={() => openEditDialog(question)}
-                              className="p-2 text-blue-600 hover:text-blue-800 rounded-lg hover:bg-blue-100"
+                              className="p-2 text-blue-500 hover:text-blue-600 rounded-full hover:bg-blue-100 transition-all duration-200"
                               title="Edit"
                             >
-                              <FaEdit size={16} />
-                            </button>
-                            <button
+                              <Edit2 size={18} />
+                            </motion.button>
+                            <motion.button
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
                               onClick={() => handleDelete(question._id)}
-                              className="p-2 text-red-600 hover:text-red-800 rounded-lg hover:bg-red-100"
+                              className="p-2 text-red-500 hover:text-red-600 rounded-full hover:bg-red-100 transition-all duration-200"
                               title="Delete"
                             >
-                              <FaTrash size={16} />
-                            </button>
-                            <button
+                              <Trash2 size={18} />
+                            </motion.button>
+                            <motion.button
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
                               onClick={() => toggleStatus(question._id, question.isActive)}
-                              className={`p-2 rounded-lg ${question.isActive ? 'text-yellow-600 hover:text-yellow-800 hover:bg-yellow-100' : 'text-green-600 hover:text-green-800 hover:bg-green-100'}`}
+                              className={`p-2 rounded-full ${question.isActive ? 'text-yellow-500 hover:text-yellow-600 hover:bg-yellow-100' : 'text-green-500 hover:text-green-600 hover:bg-green-100'} transition-all duration-200`}
                               title={question.isActive ? 'Deactivate' : 'Activate'}
                             >
                               {question.isActive ? (
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM7 9a1 1 0 000 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
-                                </svg>
+                                <X size={18} />
                               ) : (
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clipRule="evenodd" />
-                                </svg>
+                                <Check size={18} />
                               )}
-                            </button>
+                            </motion.button>
                           </div>
                         </div>
                       </div>
@@ -818,29 +832,32 @@ Correct Answer: a`}
 
       {/* Edit Dialog */}
       {showEditDialog && currentQuestion && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
-          >
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.95 }}
+          className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50"
+        >
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto transform transition-all">
             <div className="p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-semibold text-blue-900">Edit Question</h2>
-                <button
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-semibold text-gray-800">Edit Question</h2>
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
                   onClick={closeEditDialog}
                   className="text-gray-500 hover:text-gray-700"
                 >
-                  <FaTimes size={20} />
-                </button>
+                  <X size={24} />
+                </motion.button>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="block text-gray-700 mb-2 font-medium">Question Text</label>
                   <textarea
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-                    rows="3"
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-blue-300"
+                    rows="4"
                     value={formData.questionText}
                     onChange={(e) => handleChange({ target: { name: 'questionText', value: e.target.value } })}
                     required
@@ -849,20 +866,20 @@ Correct Answer: a`}
 
                 <div>
                   <label className="block text-gray-700 mb-2 font-medium">Options</label>
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {formData.options.map((option, index) => (
-                      <div key={index} className="flex items-center gap-2">
+                      <div key={index} className="flex items-center gap-3 group">
                         <input
                           type="radio"
                           name="correctAnswer"
                           checked={formData.correctAnswer === index}
                           onChange={() => setFormData(prev => ({ ...prev, correctAnswer: index }))}
-                          className="h-5 w-5 text-blue-600 focus:ring-blue-500"
+                          className="h-5 w-5 text-blue-500 focus:ring-blue-400 transition-all duration-200"
                           required
                         />
                         <input
                           type="text"
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                          className="flex-1 px-4 py-2 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-blue-300"
                           value={option}
                           onChange={(e) => handleOptionChange(index, e.target.value)}
                           required
@@ -871,9 +888,9 @@ Correct Answer: a`}
                           <button
                             type="button"
                             onClick={() => removeOption(index)}
-                            className="p-2 text-red-600 hover:text-red-800 rounded-full hover:bg-red-50"
+                            className="p-2 text-red-500 hover:text-red-600 rounded-full hover:bg-red-100 opacity-0 group-hover:opacity-100 transition-all duration-200"
                           >
-                            <Trash2 size={18} />
+                            <Trash2 size= {18} />
                           </button>
                         )}
                       </div>
@@ -884,9 +901,9 @@ Correct Answer: a`}
                     <button
                       type="button"
                       onClick={addOption}
-                      className="mt-2 flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm font-medium"
+                      className="mt-3 flex items-center gap-2 text-blue-500 hover:text-blue-600 text-sm font-medium transition-colors duration-200"
                     >
-                      <FaPlus size={14} /> Add Option
+                      <PlusCircle size={16} /> Add Option
                     </button>
                   )}
                 </div>
@@ -896,7 +913,7 @@ Correct Answer: a`}
                     <label className="block text-gray-700 mb-2 font-medium">Category</label>
                     <select
                       name="category"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                      className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-blue-300"
                       value={formData.category}
                       onChange={handleChange}
                       required
@@ -910,7 +927,7 @@ Correct Answer: a`}
                     <label className="block text-gray-700 mb-2 font-medium">Subcategory</label>
                     <select
                       name="subcategory"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                      className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-blue-300"
                       value={formData.subcategory}
                       onChange={handleChange}
                       required
@@ -927,32 +944,36 @@ Correct Answer: a`}
                   <input
                     type="checkbox"
                     name="isActive"
-                    className="h-5 w-5 text-blue-600 focus:ring-blue-500 rounded"
+                    className="h-5 w-5 text-blue-500 focus:ring-blue-400 rounded transition-all duration-200"
                     checked={formData.isActive}
                     onChange={(e) => handleChange({ target: { name: 'isActive', value: e.target.checked } })}
                   />
-                  <label className="ml-2 text-gray-700">Active Question</label>
+                  <label className="ml-2 text-gray-700 font-medium">Active Question</label>
                 </div>
 
                 <div className="flex justify-end gap-3 pt-4">
-                  <button
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                     type="button"
                     onClick={closeEditDialog}
-                    className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-medium"
+                    className="px-5 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-xl font-medium transition-all duration-200 shadow-md hover:shadow-lg"
                   >
                     Cancel
-                  </button>
-                  <button
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                     type="submit"
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium"
+                    className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-all duration-200 shadow-md hover:shadow-lg"
                   >
                     Save Changes
-                  </button>
+                  </motion.button>
                 </div>
               </form>
             </div>
-          </motion.div>
-        </div>
+          </div>
+        </motion.div>
       )}
     </div>
   );
