@@ -1,4 +1,5 @@
 const Provider = require('../models/Provider-model');
+const ProviderEarning = require('../models/ProviderEarning-model');
 const { sendOTP, verifyOTP, clearOTP } = require('../utils/otpSend');
 const { uploadProfilePic, uploadResume, uploadPassbookImg } = require('../middlewares/upload');
 const bcrypt = require('bcryptjs');
@@ -402,16 +403,14 @@ exports.completeProfile = async (req, res) => {
 
 
 /**
- * @desc    Get provider profile
+ * @desc    Get provider profile with earnings data
  * @route   GET /api/providers/profile
  * @access  Private (Provider)
  */
 exports.getProfile = async (req, res) => {
     try {
-        console.log('Request providerID:', req.providerId || req.providerId);
-        
-        const provider = await Provider.findById(req.providerId || req.providerId)
-            .select('-password -__v') // Remove only password and __v, keep all other fields
+        const provider = await Provider.findById(req.providerId)
+            .select('-password -__v')
             .populate({
                 path: 'feedbacks',
                 select: 'rating comment createdAt customer',
@@ -420,27 +419,39 @@ exports.getProfile = async (req, res) => {
                     select: 'name'
                 },
                 options: { limit: 5, sort: { createdAt: -1 } }
-            })
-            .populate({
-                path: 'earningsHistory',
-                select: 'amount date description type',
-                options: { limit: 10, sort: { date: -1 } }
             });
 
-        console.log('Found provider:', provider ? provider._id : 'null');
-        
         if (!provider) {
             return res.status(404).json({
                 success: false,
-                message: 'Provider not found',
-                details: `No provider found with ID: ${req.providerId || req.providerId}`
+                message: 'Provider not found'
             });
         }
+
+        // Get earnings summary
+        const earningsSummary = await ProviderEarning.getEarningsSummary(req.providerId);
+        const availableBalance = await ProviderEarning.getAvailableBalance(req.providerId);
+
+        // Format earnings data
+        const earningsData = {
+            availableBalance,
+            summary: earningsSummary.reduce((acc, item) => {
+                acc[item._id] = {
+                    totalGross: item.totalGross,
+                    totalCommission: item.totalCommission,
+                    totalNet: item.totalNet,
+                    count: item.count
+                };
+                return acc;
+            }, {})
+        };
 
         // Add computed fields
         const responseData = {
             ...provider.toJSON(),
             age: provider.age, // Virtual field
+            averageRating: provider.averageRating, // Virtual field
+            earnings: earningsData,
             hasResume: !!provider.resume,
             hasPassbookImage: !!provider.bankDetails?.passbookImage,
             hasProfilePic: !!provider.profilePicUrl && provider.profilePicUrl !== 'default-provider.jpg'

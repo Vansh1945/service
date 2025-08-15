@@ -1,3 +1,4 @@
+// models/Provider-model.js
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -121,18 +122,6 @@ const providerSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
-    wallet: {
-        type: Number,
-        default: 0,
-        min: [0, 'Wallet balance cannot be negative']
-    },
-    walletHistory: [{
-        amount: { type: Number, required: true },
-        type: { type: String, enum: ['credit', 'debit'], required: true },
-        description: { type: String, required: true },
-        reference: { type: mongoose.Schema.Types.ObjectId },
-        createdAt: { type: Date, default: Date.now }
-    }],
     completedBookings: {
         type: Number,
         default: 0
@@ -146,10 +135,6 @@ const providerSchema = new mongoose.Schema({
     feedbacks: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Feedback'
-    }],
-    earningsHistory: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Transaction'
     }],
 
     // Status
@@ -216,44 +201,6 @@ providerSchema.methods.generateJWT = function () {
     );
 };
 
-// Wallet management methods
-providerSchema.methods.addToWallet = async function(amount, description, reference) {
-    if (amount <= 0) {
-        throw new Error('Amount must be positive');
-    }
-    
-    this.wallet += amount;
-    this.walletHistory.push({
-        amount,
-        type: 'credit',
-        description,
-        reference
-    });
-    
-    await this.save();
-    return this.wallet;
-};
-
-providerSchema.methods.deductFromWallet = async function(amount, description, reference) {
-    if (amount <= 0) {
-        throw new Error('Amount must be positive');
-    }
-    if (this.wallet < amount) {
-        throw new Error('Insufficient funds in wallet');
-    }
-    
-    this.wallet -= amount;
-    this.walletHistory.push({
-        amount,
-        type: 'debit',
-        description,
-        reference
-    });
-    
-    await this.save();
-    return this.wallet;
-};
-
 // KYC methods
 providerSchema.methods.rejectKYC = function (reason) {
     this.kycStatus = 'rejected';
@@ -289,14 +236,21 @@ providerSchema.virtual('age').get(function () {
     return age;
 });
 
-providerSchema.virtual('totalEarnings').get(function() {
-    if (!this.populated('earningsHistory')) {
-        throw new Error('You must populate earningsHistory to calculate total earnings');
+// Virtual for average rating
+providerSchema.virtual('averageRating').get(function() {
+    if (!this.populated('feedbacks')) {
+        return 0;
     }
     
-    return this.earningsHistory.reduce((total, transaction) => {
-        return total + (transaction.amount || 0);
+    if (this.feedbacks.length === 0) {
+        return 0;
+    }
+    
+    const sum = this.feedbacks.reduce((total, feedback) => {
+        return total + (feedback.rating || 0);
     }, 0);
+    
+    return (sum / this.feedbacks.length).toFixed(1);
 });
 
 // Query helper for active providers

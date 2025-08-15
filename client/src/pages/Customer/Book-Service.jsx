@@ -11,11 +11,16 @@ const BookService = () => {
   const { serviceId } = useParams();
   const { user, token, API } = useAuth();
   const navigate = useNavigate();
-
-  // Form state
+  
+  // State declarations
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isFetchingCoupons, setIsFetchingCoupons] = useState(false);
   const [service, setService] = useState(null);
   const [addresses, setAddresses] = useState([]);
   const [coupons, setCoupons] = useState([]);
+  
+  // Form state with proper initial values
   const [formData, setFormData] = useState({
     date: new Date(),
     time: '',
@@ -34,20 +39,23 @@ const BookService = () => {
     appliedCoupon: null
   });
 
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isFetchingCoupons, setIsFetchingCoupons] = useState(false);
-
-  // Generate time slots from 8 AM to 8 PM
+  // Generate time slots from current hour to 8 PM for today, or 8 AM to 8 PM for future dates
   const generateTimeSlots = () => {
     const slots = [];
-    for (let hour = 8; hour <= 20; hour++) {
+    const now = new Date();
+    const isToday = formData.date.toDateString() === now.toDateString();
+    const currentHour = now.getHours();
+
+    const startHour = isToday ? Math.max(currentHour + 1, 8) : 8; // Start from next hour if today, or 8 AM for future dates
+    const endHour = 20; // 8 PM
+
+    for (let hour = startHour; hour <= endHour; hour++) {
       const period = hour >= 12 ? 'PM' : 'AM';
       const displayHour = hour > 12 ? hour - 12 : hour;
       const timeString = `${displayHour.toString().padStart(2, '0')}:00 ${period}`;
       slots.push({
         display: timeString,
-        value: `${hour.toString().padStart(2, '0')}:00`
+        value: `${hour.toString().padStart(2, '0')}:00:00`
       });
     }
     return slots;
@@ -104,13 +112,14 @@ const BookService = () => {
   // Calculate discount amount
   const calculateDiscount = () => {
     if (!service?.basePrice || !formData.appliedCoupon) return 0;
-    
-    const baseAmount = service.basePrice * formData.quantity;
-    
+
+    const baseAmount = service.basePrice * (formData.quantity || 1);
+    const discountValue = Number(formData.appliedCoupon.discountValue) || 0;
+
     if (formData.appliedCoupon.discountType === 'percent') {
-      return (baseAmount * formData.appliedCoupon.discountValue) / 100;
+      return (baseAmount * discountValue) / 100;
     } else {
-      return formData.appliedCoupon.discountValue;
+      return Math.min(discountValue, baseAmount);
     }
   };
 
@@ -118,10 +127,10 @@ const BookService = () => {
   const calculateTotal = () => {
     if (!service?.basePrice) return 0;
 
-    const baseAmount = service.basePrice * formData.quantity;
+    const baseAmount = service.basePrice * (formData.quantity || 1);
     const discount = calculateDiscount();
-    
-    return Math.max(baseAmount - discount, 0);
+
+    return baseAmount - discount;
   };
 
   // Initialize data
@@ -184,7 +193,8 @@ const BookService = () => {
       return {
         ...prev,
         quantity: newQuantity,
-        appliedCoupon: null // Reset coupon when quantity changes
+        appliedCoupon: null, // Reset coupon when quantity changes
+        couponCode: prev.appliedCoupon ? '' : prev.couponCode // Clear coupon code if a coupon was applied
       };
     });
   };
@@ -203,13 +213,23 @@ const BookService = () => {
 
   // Handle date change
   const handleDateChange = (date) => {
-    setFormData(prev => ({ ...prev, date, appliedCoupon: null }));
+    setFormData(prev => ({ 
+      ...prev, 
+      date, 
+      appliedCoupon: null,
+      time: '' // Reset time when date changes
+    }));
   };
 
   // Apply coupon
   const applyCoupon = async () => {
-    if (!formData.couponCode.trim() || !service?.basePrice) {
+    if (!formData.couponCode.trim()) {
       toast.error('Please enter a coupon code');
+      return;
+    }
+
+    if (!service?.basePrice) {
+      toast.error('Service price not loaded yet');
       return;
     }
 
@@ -231,7 +251,8 @@ const BookService = () => {
 
       setFormData(prev => ({
         ...prev,
-        appliedCoupon: response.data.data
+        appliedCoupon: response.data.data,
+        couponCode: response.data.data.code // Update with the validated code
       }));
 
       toast.success('Coupon applied successfully!');
@@ -311,28 +332,28 @@ const BookService = () => {
 
       // Format the date correctly (YYYY-MM-DD)
       const formattedDate = formData.date.toISOString().split('T')[0];
+      const baseAmount = service.basePrice * formData.quantity;
+      const discountAmount = calculateDiscount();
       const totalAmount = calculateTotal();
 
-     const bookingData = {
-  serviceId: service._id,
-  date: formattedDate,
-  time: formData.time,
-  address: {
-    street: addressData.street,
-    city: addressData.city,
-    state: addressData.state,
-    postalCode: addressData.postalCode,
-    country: addressData.country || 'India'
-  },
-  notes: formData.notes.trim(),
-  quantity: formData.quantity,
-  couponCode: formData.appliedCoupon?.code || undefined,
-
-  totalDiscount: discountAmount,
-  subtotal: baseAmount,
-  totalAmount: totalAmount
-};
-
+      const bookingData = {
+        serviceId: service._id,
+        date: formattedDate,
+        time: formData.time,
+        address: {
+          street: addressData.street,
+          city: addressData.city,
+          state: addressData.state,
+          postalCode: addressData.postalCode,
+          country: addressData.country || 'India'
+        },
+        notes: formData.notes.trim(),
+        quantity: formData.quantity,
+        couponCode: formData.appliedCoupon?.code || undefined,
+        totalDiscount: discountAmount,
+        subtotal: baseAmount,
+        totalAmount: totalAmount
+      };
 
       // Create booking
       const response = await axios.post(
@@ -351,7 +372,7 @@ const BookService = () => {
       }
 
       let bookingId = response.data.bookingId || response.data.data?._id || response.data.data?.id;
-      
+
       if (!bookingId) {
         throw new Error('Booking created but ID not found in response');
       }
@@ -397,7 +418,7 @@ const BookService = () => {
   }
 
   const totalAmount = calculateTotal();
-  const baseAmount = service.basePrice * formData.quantity;
+  const baseAmount = service.basePrice * (formData.quantity || 1);
   const discountAmount = calculateDiscount();
 
   return (
@@ -440,7 +461,9 @@ const BookService = () => {
               <div className="space-y-4 border-t border-gray-200 pt-4">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Service Price:</span>
-                  <span className="font-medium">₹{service.basePrice?.toFixed(2)}</span>
+                  <span className="font-medium">
+                    ₹{(service.basePrice || 0).toFixed(2)}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Quantity:</span>
@@ -488,8 +511,8 @@ const BookService = () => {
                   <input
                     type="text"
                     placeholder="Enter coupon code"
-                    value={formData.couponCode}
-                    onChange={(e) => setFormData({ ...formData, couponCode: e.target.value })}
+                    value={formData.couponCode || ''}
+                    onChange={(e) => setFormData(prev => ({ ...prev, couponCode: e.target.value }))}
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                     disabled={!!formData.appliedCoupon || isFetchingCoupons}
                   />
@@ -569,15 +592,19 @@ const BookService = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Time Slot *</label>
                     <select
                       name="time"
-                      value={formData.time}
+                      value={formData.time || ''}
                       onChange={handleChange}
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       required
                     >
                       <option value="">Select a time slot</option>
-                      {timeSlots.map((time, index) => (
-                        <option key={`time-${index}`} value={time.value}>{time.display}</option>
-                      ))}
+                      {timeSlots.length > 0 ? (
+                        timeSlots.map((time, index) => (
+                          <option key={`time-${index}`} value={time.value}>{time.display}</option>
+                        ))
+                      ) : (
+                        <option disabled>No available time slots for today</option>
+                      )}
                     </select>
                   </div>
                 </div>
@@ -599,7 +626,7 @@ const BookService = () => {
                       name="quantity"
                       min="1"
                       max="10"
-                      value={formData.quantity}
+                      value={formData.quantity || 1}
                       onChange={(e) => {
                         const value = parseInt(e.target.value);
                         if (!isNaN(value)) {
@@ -683,7 +710,7 @@ const BookService = () => {
                             id="street"
                             name="street"
                             placeholder="House no., Building, Street"
-                            value={formData.customAddress.street}
+                            value={formData.customAddress.street || ''}
                             onChange={handleAddressChange}
                             className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                             required
@@ -697,7 +724,7 @@ const BookService = () => {
                               id="city"
                               name="city"
                               placeholder="City"
-                              value={formData.customAddress.city}
+                              value={formData.customAddress.city || ''}
                               onChange={handleAddressChange}
                               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                               required
@@ -710,7 +737,7 @@ const BookService = () => {
                               id="state"
                               name="state"
                               placeholder="State"
-                              value={formData.customAddress.state}
+                              value={formData.customAddress.state || ''}
                               onChange={handleAddressChange}
                               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                               required
@@ -725,7 +752,7 @@ const BookService = () => {
                               id="postalCode"
                               name="postalCode"
                               placeholder="6-digit postal code"
-                              value={formData.customAddress.postalCode}
+                              value={formData.customAddress.postalCode || ''}
                               onChange={handleAddressChange}
                               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                               pattern="\d{6}"
@@ -738,7 +765,7 @@ const BookService = () => {
                               type="text"
                               id="country"
                               name="country"
-                              value={formData.customAddress.country}
+                              value={formData.customAddress.country || 'India'}
                               onChange={handleAddressChange}
                               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg bg-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                               disabled
@@ -756,7 +783,7 @@ const BookService = () => {
                   <textarea
                     id="notes"
                     name="notes"
-                    value={formData.notes}
+                    value={formData.notes || ''}
                     onChange={handleChange}
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     rows="3"

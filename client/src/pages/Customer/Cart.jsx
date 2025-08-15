@@ -1,10 +1,22 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../store/auth';
 import { toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { useNavigate } from 'react-router-dom';
+import { 
+  ShoppingBagIcon, 
+  TrashIcon, 
+  ArrowRightIcon,
+  ShoppingCartIcon,
+  SparklesIcon,
+  CheckCircleIcon,
+  TruckIcon,
+  ShieldCheckIcon
+} from '@heroicons/react/24/outline';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const CartPage = () => {
-  const { token, API, isAuthenticated, logoutUser } = useAuth();
+  const { user, token, API, logout } = useAuth();
+  const navigate = useNavigate();
   const [cart, setCart] = useState(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
@@ -22,15 +34,15 @@ const CartPage = () => {
 
       if (!response.ok) {
         if (response.status === 401) {
-          logoutUser();
+          logout();
+          navigate('/login');
           return;
         }
         throw new Error('Failed to fetch cart');
       }
 
       const data = await response.json();
-      console.log('Cart data:', data); // Debug log
-      setCart(data.data?.cart || { items: [] });
+      setCart(data);
     } catch (error) {
       toast.error(error.message);
       console.error('Fetch cart error:', error);
@@ -58,7 +70,7 @@ const CartPage = () => {
       }
 
       const data = await response.json();
-      setCart(data.data.cart);
+      setCart(data.cart);
       toast.success('Item added to cart');
     } catch (error) {
       toast.error(error.message);
@@ -68,29 +80,12 @@ const CartPage = () => {
     }
   };
 
-  // Update cart item quantity
-  const handleUpdateQuantity = async (item, quantity) => {
+  // Update item quantity
+  const handleUpdateQuantity = async (serviceId, quantity) => {
     try {
-      // Validate inputs
-      if (!item || quantity < 1) {
-        toast.error('Invalid quantity');
-        return;
-      }
-
-      // Use the cart item's _id (not the service _id)
-      const itemId = item._id;
-      
-      if (!itemId) {
-        console.error('No valid item ID found:', item);
-        toast.error('Cannot update item: Invalid item ID');
-        return;
-      }
-
-      console.log('Updating item with ID:', itemId, 'to quantity:', quantity);
-      
       setUpdating(true);
-      const response = await fetch(`${API}/cart/update/${itemId}`, {
-        method: 'PATCH',
+      const response = await fetch(`${API}/cart/update/${serviceId}`, {
+        method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -100,36 +95,25 @@ const CartPage = () => {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to update cart item');
+        throw new Error(errorData.message || 'Failed to update quantity');
       }
 
       const data = await response.json();
-      setCart(data.data.cart);
-      toast.success('Cart updated');
+      setCart(data);
+      toast.success('Quantity updated');
     } catch (error) {
       toast.error(error.message);
-      console.error('Update cart error:', error);
+      console.error('Update quantity error:', error);
     } finally {
       setUpdating(false);
     }
   };
 
   // Remove item from cart
-  const handleRemoveItem = async (item) => {
+  const handleRemoveItem = async (serviceId) => {
     try {
-      // Use the cart item's _id (not the service _id)
-      const itemId = item._id;
-      
-      if (!itemId) {
-        console.error('No valid item ID found:', item);
-        toast.error('Cannot remove item: Invalid item ID');
-        return;
-      }
-
-      console.log('Removing item with ID:', itemId);
-      
       setUpdating(true);
-      const response = await fetch(`${API}/cart/remove/${itemId}`, {
+      const response = await fetch(`${API}/cart/remove/${serviceId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -143,12 +127,7 @@ const CartPage = () => {
       }
 
       const data = await response.json();
-      // Handle case where cart is cleared completely
-      if (data.data === null) {
-        setCart({ items: [] });
-      } else {
-        setCart(data.data.cart || { items: [] });
-      }
+      setCart(data.cart || { items: [] });
       toast.success('Item removed from cart');
     } catch (error) {
       toast.error(error.message);
@@ -185,14 +164,9 @@ const CartPage = () => {
     }
   };
 
-  // Calculate total using virtual field or manual calculation
+  // Calculate total
   const calculateTotal = () => {
     if (!cart || !cart.items || cart.items.length === 0) return 0;
-    
-    // Use virtual field if available, otherwise calculate manually
-    if (cart.totalPrice !== undefined) {
-      return cart.totalPrice;
-    }
     
     return cart.items.reduce((total, item) => {
       return total + (item.priceAtAddition * item.quantity);
@@ -203,11 +177,6 @@ const CartPage = () => {
   const calculateItemCount = () => {
     if (!cart || !cart.items || cart.items.length === 0) return 0;
     
-    // Use virtual field if available, otherwise calculate manually
-    if (cart.itemCount !== undefined) {
-      return cart.itemCount;
-    }
-    
     return cart.items.reduce((count, item) => {
       return count + item.quantity;
     }, 0);
@@ -215,168 +184,291 @@ const CartPage = () => {
 
   // Fetch cart on component mount
   useEffect(() => {
-    if (isAuthenticated) {
+    if (token) {
       fetchCart();
     }
-  }, [isAuthenticated]);
+  }, [token]);
 
-  if (!isAuthenticated) {
+  if (!token) {
     return (
-      <div className="container mx-auto p-4">
-        <h2 className="text-2xl font-bold mb-4">Your Cart</h2>
-        <p>Please log in to view your cart.</p>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center bg-white rounded-2xl shadow-xl p-8 max-w-md w-full"
+        >
+          <ShoppingCartIcon className="w-16 h-16 text-blue-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Sign In Required</h2>
+          <p className="text-gray-600 mb-6">Please log in to view your cart and continue shopping.</p>
+          <button 
+            onClick={() => navigate('/login')}
+            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold py-3 px-6 rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-300 transform hover:scale-105"
+          >
+            Sign In
+          </button>
+        </motion.div>
       </div>
     );
   }
 
   if (loading) {
     return (
-      <div className="container mx-auto p-4">
-        <h2 className="text-2xl font-bold mb-4">Your Cart</h2>
-        <div className="flex items-center justify-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-          <span className="ml-3">Loading your cart...</span>
-        </div>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center">
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="text-center"
+        >
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
+            <SparklesIcon className="w-6 h-6 text-blue-600 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
+          </div>
+          <p className="text-lg font-medium text-gray-700">Loading your cart...</p>
+        </motion.div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold">Your Cart</h2>
-        {cart && cart.items && cart.items.length > 0 && (
-          <span className="text-gray-600">
-            {calculateItemCount()} item{calculateItemCount() !== 1 ? 's' : ''}
-          </span>
-        )}
-      </div>
-      
-      {(!cart || !cart.items || cart.items.length === 0) ? (
-        <div className="bg-gray-100 p-6 rounded-lg text-center">
-          <div className="text-gray-400 mb-4">
-            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-1.68 5.18a2 2 0 00.86 2.74l6.92 3.46a2 2 0 001.8 0l6.92-3.46a2 2 0 00.86-2.74L19 13" />
-            </svg>
-          </div>
-          <p className="text-lg mb-4">Your cart is empty</p>
-          <button 
-            onClick={() => window.location.href = '/services'}
-            className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 transition-colors"
-          >
-            Browse Services
-          </button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-lg shadow overflow-hidden">
-              <div className="divide-y divide-gray-200">
-                {cart.items.map((item, index) => {
-                  // Use the cart item's _id as the key
-                  const itemKey = item._id || `item-${index}`;
-                  
-                  return (
-                    <div key={itemKey} className="p-4 flex flex-col sm:flex-row gap-4">
-                      <div className="flex-shrink-0">
-                        {item.service?.image ? (
-                          <img 
-                            src={item.service.image} 
-                            alt={item.service.title || 'Service'} 
-                            className="w-20 h-20 object-cover rounded"
-                            onError={(e) => {
-                              e.target.style.display = 'none';
-                              e.target.nextSibling.style.display = 'flex';
-                            }}
-                          />
-                        ) : null}
-                        <div className="w-20 h-20 bg-gray-200 rounded flex items-center justify-center" style={{ display: item.service?.image ? 'none' : 'flex' }}>
-                          <span className="text-gray-400 text-xs">No Image</span>
-                        </div>
-                      </div>
-                      <div className="flex-grow">
-                        <h3 className="font-medium text-lg">{item.service?.title || 'Service'}</h3>
-                        <p className="text-gray-600">{item.service?.category || ''}</p>
-                        {item.service?.duration && (
-                          <p className="text-sm text-gray-500">Duration: {item.service.duration}</p>
-                        )}
-                        <p className="text-gray-800 font-medium mt-1">
-                          ₹{(item.priceAtAddition || 0).toFixed(2)} × {item.quantity} = ₹{((item.priceAtAddition || 0) * item.quantity).toFixed(2)}
-                        </p>
-                      </div>
-                      <div className="flex flex-col sm:flex-row gap-2 items-center">
-                        <div className="flex items-center border rounded">
-                          <button
-                            onClick={() => handleUpdateQuantity(item, Math.max(1, item.quantity - 1))}
-                            disabled={updating || item.quantity <= 1}
-                            className="px-3 py-1 disabled:opacity-50 hover:bg-gray-100 disabled:cursor-not-allowed"
-                          >
-                            -
-                          </button>
-                          <span className="px-3 py-1 min-w-[50px] text-center">{item.quantity}</span>
-                          <button
-                            onClick={() => handleUpdateQuantity(item, item.quantity + 1)}
-                            disabled={updating}
-                            className="px-3 py-1 disabled:opacity-50 hover:bg-gray-100 disabled:cursor-not-allowed"
-                          >
-                            +
-                          </button>
-                        </div>
-                        <button
-                          onClick={() => handleRemoveItem(item)}
-                          disabled={updating}
-                          className="text-red-600 hover:text-red-800 disabled:opacity-50 disabled:cursor-not-allowed px-2 py-1"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="p-4 border-t bg-gray-50">
-                <button
-                  onClick={handleClearCart}
-                  disabled={updating}
-                  className="text-red-600 hover:text-red-800 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-                >
-                  Clear Entire Cart
-                </button>
-              </div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Header */}
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex items-center justify-between mb-8"
+        >
+          <div className="flex items-center space-x-3">
+            <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-3 rounded-2xl">
+              <ShoppingBagIcon className="w-8 h-8 text-white" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-800">My Cart</h1>
+              {cart?.items?.length > 0 && (
+                <p className="text-gray-600">
+                  {calculateItemCount()} item{calculateItemCount() !== 1 ? 's' : ''} in your cart
+                </p>
+              )}
             </div>
           </div>
-          
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow p-6 sticky top-4">
-              <h3 className="text-lg font-medium mb-4">Order Summary</h3>
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span>Subtotal ({calculateItemCount()} items)</span>
-                  <span>₹{calculateTotal().toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Estimated Tax</span>
-                  <span>₹0.00</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Shipping</span>
-                  <span>Free</span>
-                </div>
-                <div className="flex justify-between font-medium text-lg pt-3 border-t">
-                  <span>Total</span>
-                  <span>₹{calculateTotal().toFixed(2)}</span>
-                </div>
+        </motion.div>
+        
+        {(!cart?.items || cart.items.length === 0) ? (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="text-center py-16"
+          >
+            <div className="bg-white rounded-3xl shadow-xl p-12 max-w-md mx-auto">
+              <div className="bg-gradient-to-r from-blue-100 to-purple-100 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6">
+                <ShoppingCartIcon className="w-12 h-12 text-blue-600" />
               </div>
-              <button
-                className="w-full mt-6 bg-green-600 text-white py-3 rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-                disabled={updating || !cart.items || cart.items.length === 0}
+              <h3 className="text-2xl font-bold text-gray-800 mb-4">Your cart is empty</h3>
+              <p className="text-gray-600 mb-8">Discover amazing services and add them to your cart!</p>
+              <button 
+                onClick={() => navigate('/services')}
+                className="bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold py-4 px-8 rounded-2xl hover:from-blue-700 hover:to-purple-700 transition-all duration-300 transform hover:scale-105 shadow-lg"
               >
-                {updating ? 'Processing...' : 'Proceed to Checkout'}
+                Explore Services
               </button>
             </div>
+          </motion.div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Cart Items */}
+            <div className="lg:col-span-2 space-y-4">
+              <AnimatePresence>
+                {cart.items.map((item, index) => (
+                  <motion.div
+                    key={item.service._id || index}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 20 }}
+                    transition={{ delay: index * 0.1 }}
+                    className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-100"
+                  >
+                    <div className="p-6">
+                      <div className="flex flex-col sm:flex-row gap-6">
+                        {/* Service Image */}
+                        <div className="flex-shrink-0">
+                          <div className="relative w-full sm:w-24 h-48 sm:h-24 rounded-xl overflow-hidden bg-gradient-to-br from-blue-100 to-purple-100">
+                            {item.service.image ? (
+                              <img 
+                                src={item.service.image} 
+                                alt={item.service.title} 
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  e.target.style.display = 'none';
+                                  e.target.nextSibling.style.display = 'flex';
+                                }}
+                              />
+                            ) : null}
+                            <div className="w-full h-full bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center" style={{ display: item.service.image ? 'none' : 'flex' }}>
+                              <ShoppingBagIcon className="w-8 h-8 text-blue-500" />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Service Details */}
+                        <div className="flex-grow">
+                          <div className="flex justify-between items-start mb-3">
+                            <div>
+                              <h3 className="text-xl font-bold text-gray-800 mb-1">
+                                {item.service.title}
+                              </h3>
+                              <div className="flex items-center space-x-2 mb-2">
+                                <span className="bg-blue-100 text-blue-800 text-xs font-semibold px-3 py-1 rounded-full">
+                                  {item.service.category || 'Service'}
+                                </span>
+                                {item.service.duration && (
+                                  <span className="text-sm text-gray-500 flex items-center">
+                                    <CheckCircleIcon className="w-4 h-4 mr-1" />
+                                    {item.service.duration} hrs
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => handleRemoveItem(item.service._id)}
+                              disabled={updating}
+                              className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <TrashIcon className="w-5 h-5" />
+                            </button>
+                          </div>
+
+                          {/* Price and Quantity */}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-4">
+                              <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden">
+                                <button
+                                  onClick={() => handleUpdateQuantity(item.service._id, item.quantity - 1)}
+                                  disabled={item.quantity <= 1 || updating}
+                                  className="px-3 py-1 bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  -
+                                </button>
+                                <span className="px-4 py-1 text-center min-w-[40px]">
+                                  {item.quantity}
+                                </span>
+                                <button
+                                  onClick={() => handleUpdateQuantity(item.service._id, item.quantity + 1)}
+                                  disabled={updating}
+                                  className="px-3 py-1 bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-2xl font-bold text-gray-800">
+                                ₹{(item.priceAtAddition * item.quantity).toFixed(2)}
+                              </div>
+                              <div className="text-sm text-gray-500">
+                                ₹{item.priceAtAddition.toFixed(2)} each
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+
+              {/* Clear Cart Button */}
+              {cart.items.length > 0 && (
+                <motion.div 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="pt-4"
+                >
+                  <button
+                    onClick={handleClearCart}
+                    disabled={updating}
+                    className="text-red-600 hover:text-red-800 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm flex items-center space-x-2 hover:bg-red-50 px-4 py-2 rounded-xl transition-all duration-200"
+                  >
+                    <TrashIcon className="w-4 h-4" />
+                    <span>Clear entire cart</span>
+                  </button>
+                </motion.div>
+              )}
+            </div>
+            
+            {/* Order Summary */}
+            <div className="lg:col-span-1">
+              <motion.div 
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="bg-white rounded-2xl shadow-xl p-6 sticky top-6"
+              >
+                <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center">
+                  <SparklesIcon className="w-6 h-6 text-purple-600 mr-2" />
+                  Order Summary
+                </h3>
+                
+                <div className="space-y-4 mb-6">
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-gray-600">Subtotal ({calculateItemCount()} items)</span>
+                    <span className="font-semibold text-gray-800">₹{calculateTotal().toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-gray-600">Service Fee</span>
+                    <span className="font-semibold text-green-600">Free</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-gray-600">Taxes & Charges</span>
+                    <span className="font-semibold text-gray-800">₹0.00</span>
+                  </div>
+                  <div className="border-t border-gray-200 pt-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-lg font-bold text-gray-800">Total Amount</span>
+                      <span className="text-2xl font-bold text-gray-800">₹{calculateTotal().toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Service Highlights */}
+                <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 mb-6">
+                  <div className="space-y-3">
+                    <div className="flex items-center text-sm text-gray-700">
+                      <TruckIcon className="w-4 h-4 text-blue-600 mr-2" />
+                      <span>Same day service available</span>
+                    </div>
+                    <div className="flex items-center text-sm text-gray-700">
+                      <ShieldCheckIcon className="w-4 h-4 text-green-600 mr-2" />
+                      <span>30-day service warranty</span>
+                    </div>
+                    <div className="flex items-center text-sm text-gray-700">
+                      <CheckCircleIcon className="w-4 h-4 text-purple-600 mr-2" />
+                      <span>Certified professionals</span>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => navigate('/checkout')}
+                  className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold py-4 px-6 rounded-2xl hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-105 shadow-lg flex items-center justify-center space-x-2"
+                  disabled={updating || !cart.items || cart.items.length === 0}
+                >
+                  {updating ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <>
+                      <span>Proceed to Checkout</span>
+                      <ArrowRightIcon className="w-5 h-5" />
+                    </>
+                  )}
+                </button>
+
+                <p className="text-xs text-gray-500 text-center mt-4">
+                  By proceeding, you agree to our Terms & Conditions
+                </p>
+              </motion.div>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };

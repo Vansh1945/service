@@ -18,6 +18,13 @@ const userAuthMiddleware = async (req, res, next) => {
 
     const jwtToken = token.replace("Bearer ", "").trim();
 
+    if (!jwtToken || jwtToken === 'null' || jwtToken === 'undefined') {
+        return res.status(401).json({
+            success: false,
+            message: "Unauthorized. Token is missing or invalid."
+        });
+    }
+
     try {
         // Verify token
         const decoded = jwt.verify(jwtToken, process.env.JWT_SECRET);

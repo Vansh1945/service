@@ -68,7 +68,9 @@ const updateService = async (req, res) => {
 
         // Update fields
         Object.keys(updates).forEach(key => {
-            service[key] = updates[key];
+            if (key in service) {
+                service[key] = updates[key];
+            }
         });
 
         await service.save();
@@ -149,13 +151,33 @@ const deleteService = async (req, res) => {
 // Get all services (Admin view)
 const getAllServices = async (req, res) => {
     try {
-        const services = await Service.find({ createdBy: req.adminID })
+        const { page = 1, limit = 10, search, category } = req.query;
+        const skip = (page - 1) * limit;
+
+        let query = { createdBy: req.adminID };
+        
+        if (search) {
+            query.$text = { $search: search };
+        }
+        
+        if (category) {
+            query.category = category;
+        }
+
+        const services = await Service.find(query)
             .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(parseInt(limit))
             .populate('createdBy', 'name email');
+
+        const total = await Service.countDocuments(query);
 
         res.json({
             success: true,
             count: services.length,
+            total,
+            page: parseInt(page),
+            pages: Math.ceil(total / limit),
             data: services
         });
     } catch (error) {
@@ -173,7 +195,8 @@ const getServiceById = async (req, res) => {
         const { id } = req.params;
 
         const service = await Service.findById(id)
-            .populate('createdBy', 'name email');
+            .populate('createdBy', 'name email')
+            .populate('feedback.customer', 'name email');
 
         if (!service) {
             return res.status(404).json({
@@ -210,11 +233,33 @@ const getServiceById = async (req, res) => {
 // Get services for provider
 const getServicesForProvider = async (req, res) => {
     try {
-        const services = await Service.findForProvider();
+        const { page = 1, limit = 10, search, category } = req.query;
+        const skip = (page - 1) * limit;
+
+        let query = { isActive: true };
+        
+        if (search) {
+            query.$text = { $search: search };
+        }
+        
+        if (category) {
+            query.category = category;
+        }
+
+        const services = await Service.find(query)
+            .select('title category description image basePrice duration feedback averageRating')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(parseInt(limit));
+
+        const total = await Service.countDocuments(query);
 
         res.json({
             success: true,
             count: services.length,
+            total,
+            page: parseInt(page),
+            pages: Math.ceil(total / limit),
             data: services
         });
     } catch (error) {
@@ -232,7 +277,8 @@ const getServiceDetailsForProvider = async (req, res) => {
         const { id } = req.params;
 
         const service = await Service.findById(id)
-            .select('title category description image basePrice duration durationFormatted');
+            .select('title category description image basePrice duration durationFormatted feedback averageRating')
+            .populate('feedback.customer', 'name');
 
         if (!service || !service.isActive) {
             return res.status(404).json({
@@ -261,20 +307,65 @@ const getServiceDetailsForProvider = async (req, res) => {
 // Get all active services (public)
 const getActiveServices = async (req, res) => {
     try {
-        const services = await Service.find({ isActive: true })
-            .select('title category description image basePrice duration durationFormatted')
-            .sort({ createdAt: -1 });
+        const { page = 1, limit = 10, search, category } = req.query;
+        const skip = (page - 1) * limit;
+
+        let query = { isActive: true };
+        
+        if (search) {
+            query.$text = { $search: search };
+        }
+        
+        if (category) {
+            query.category = category;
+        }
+
+        // First get the services without virtuals to avoid issues
+        const services = await Service.find(query)
+            .select('title category description image basePrice duration feedback averageRating ratingCount')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(parseInt(limit))
+            .lean(); // Convert to plain JavaScript objects
+
+        // Manually calculate durationFormatted and ensure averageRating is correct
+        const enhancedServices = services.map(service => {
+            // Calculate duration formatted
+            const hours = Math.floor(service.duration);
+            const minutes = Math.round((service.duration - hours) * 60);
+            const durationFormatted = `${hours > 0 ? `${hours} hr` : ''} ${minutes > 0 ? `${minutes} min` : ''}`.trim();
+
+            // Calculate average rating if not already calculated
+            let averageRating = service.averageRating;
+            if ((!averageRating || averageRating === 0) && service.feedback && service.feedback.length > 0) {
+                const sum = service.feedback.reduce((acc, curr) => acc + curr.rating, 0);
+                averageRating = parseFloat((sum / service.feedback.length).toFixed(1));
+            }
+
+            return {
+                ...service,
+                durationFormatted,
+                averageRating,
+                ratingCount: service.feedback ? service.feedback.length : 0
+            };
+        });
+
+        const total = await Service.countDocuments(query);
 
         res.json({
             success: true,
-            count: services.length,
-            data: services
+            count: enhancedServices.length,
+            total,
+            page: parseInt(page),
+            pages: Math.ceil(total / limit),
+            data: enhancedServices
         });
     } catch (error) {
         console.error('Error fetching active services:', error);
         res.status(500).json({
             success: false,
-            message: 'Failed to fetch services'
+            message: 'Failed to fetch services',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -292,8 +383,10 @@ const getPublicServiceById = async (req, res) => {
             });
         }
 
+        // First get the service with basic info
         const service = await Service.findById(id)
-            .select('title category description image basePrice duration durationFormatted isActive');
+            .select('title category description image basePrice duration isActive averageRating ratingCount')
+            .lean();
 
         if (!service) {
             return res.status(404).json({
@@ -309,9 +402,61 @@ const getPublicServiceById = async (req, res) => {
             });
         }
 
+        // Get feedback from the Feedback collection for better data structure
+        const Feedback = require('../models/Feedback-model');
+        const feedbacks = await Feedback.find({
+            'serviceFeedback.service': id
+        })
+        .populate('customer', 'name profilePicUrl')
+        .select('serviceFeedback customer createdAt updatedAt')
+        .sort({ createdAt: -1 })
+        .lean();
+
+        // Transform feedback data to match expected structure
+        const transformedFeedback = feedbacks.map(feedback => ({
+            _id: feedback._id,
+            rating: feedback.serviceFeedback.rating,
+            comment: feedback.serviceFeedback.comment || '',
+            customer: feedback.customer,
+            createdAt: feedback.createdAt,
+            updatedAt: feedback.updatedAt || feedback.createdAt,
+            isEdited: feedback.serviceFeedback.isEdited || false
+        }));
+
+        // Calculate average rating and count from actual feedback
+        let averageRating = 0;
+        let ratingCount = transformedFeedback.length;
+
+        if (ratingCount > 0) {
+            const sum = transformedFeedback.reduce((acc, curr) => acc + curr.rating, 0);
+            averageRating = parseFloat((sum / ratingCount).toFixed(1));
+        }
+
+        // Calculate durationFormatted
+        const hours = Math.floor(service.duration);
+        const minutes = Math.round((service.duration - hours) * 60);
+        const durationFormatted = `${hours > 0 ? `${hours} hr` : ''} ${minutes > 0 ? `${minutes} min` : ''}`.trim();
+
+        // Update service with calculated values if they differ
+        if (service.averageRating !== averageRating || service.ratingCount !== ratingCount) {
+            await Service.findByIdAndUpdate(id, {
+                averageRating,
+                ratingCount
+            });
+        }
+
+        // Prepare final response
+        const responseData = {
+            ...service,
+            durationFormatted,
+            averageRating,
+            ratingCount,
+            feedback: transformedFeedback
+        };
+
         res.json({
             success: true,
-            data: service
+            data: responseData
         });
     } catch (error) {
         console.error('Error fetching service:', error);
@@ -326,13 +471,23 @@ const getPublicServiceById = async (req, res) => {
 const getServicesByCategory = async (req, res) => {
     try {
         const { category } = req.params;
+        const { page = 1, limit = 10 } = req.query;
+        const skip = (page - 1) * limit;
 
         const services = await Service.findActiveByCategory(category)
-            .select('title category description image basePrice duration durationFormatted');
+            .select('title category description image basePrice duration durationFormatted averageRating')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(parseInt(limit));
+
+        const total = await Service.countDocuments({ category, isActive: true });
 
         res.json({
             success: true,
             count: services.length,
+            total,
+            page: parseInt(page),
+            pages: Math.ceil(total / limit),
             data: services
         });
     } catch (error) {
@@ -386,6 +541,11 @@ const bulkImportServices = async (req, res) => {
                     throw new Error('Missing required fields');
                 }
 
+                // Validate category
+                if (!['Electrical', 'AC', 'Appliance Repair', 'Other'].includes(serviceData.category)) {
+                    throw new Error('Invalid category');
+                }
+
                 // Create service
                 const service = await Service.create(serviceData);
                 services.push(service);
@@ -419,6 +579,62 @@ const bulkImportServices = async (req, res) => {
     }
 };
 
+// Export services to Excel (Admin only)
+const exportServicesToExcel = async (req, res) => {
+    try {
+        const services = await Service.find({ createdBy: req.adminID })
+            .sort({ createdAt: -1 });
+
+        const workbook = new excelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Services');
+
+        // Add headers
+        worksheet.columns = [
+            { header: 'Title', key: 'title', width: 30 },
+            { header: 'Category', key: 'category', width: 20 },
+            { header: 'Description', key: 'description', width: 50 },
+            { header: 'Base Price', key: 'basePrice', width: 15 },
+            { header: 'Duration (hours)', key: 'duration', width: 15 },
+            { header: 'Status', key: 'status', width: 15 },
+            { header: 'Created At', key: 'createdAt', width: 20 }
+        ];
+
+        // Add data rows
+        services.forEach(service => {
+            worksheet.addRow({
+                title: service.title,
+                category: service.category,
+                description: service.description,
+                basePrice: service.basePrice,
+                duration: service.duration,
+                status: service.isActive ? 'Active' : 'Inactive',
+                createdAt: service.createdAt.toISOString().split('T')[0]
+            });
+        });
+
+        // Set response headers
+        res.setHeader(
+            'Content-Type',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        );
+        res.setHeader(
+            'Content-Disposition',
+            'attachment; filename=services.xlsx'
+        );
+
+        // Send the Excel file
+        await workbook.xlsx.write(res);
+        res.end();
+
+    } catch (error) {
+        console.error('Error exporting services:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to export services'
+        });
+    }
+};
+
 module.exports = {
     // Admin controllers
     createService,
@@ -428,6 +644,7 @@ module.exports = {
     getAllServices,
     getServiceById,
     bulkImportServices,
+    exportServicesToExcel,
 
     // Provider controllers
     getServicesForProvider,

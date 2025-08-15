@@ -25,7 +25,7 @@ const feedbackSchema = new Schema({
     type: Date
   },
   
-  // Provider-specific feedback (private)
+  // Provider-specific feedback (private to provider and admin)
   providerFeedback: {
     provider: {
       type: Schema.Types.ObjectId,
@@ -36,12 +36,14 @@ const feedbackSchema = new Schema({
     rating: {
       type: Number,
       min: 1,
-      max: 5
+      max: 5,
+      required: true
     },
     comment: {
       type: String,
       maxlength: 500,
-      trim: true
+      trim: true,
+      default: ''
     },
     isEdited: {
       type: Boolean,
@@ -60,20 +62,18 @@ const feedbackSchema = new Schema({
     rating: {
       type: Number,
       min: 1,
-      max: 5
+      max: 5,
+      required: true
     },
     comment: {
       type: String,
       maxlength: 500,
-      trim: true
+      trim: true,
+      default: ''
     },
     isEdited: {
       type: Boolean,
       default: false
-    },
-    isApproved: {
-      type: Boolean,
-      default: true // Admin must approve before showing publicly
     }
   }
 }, {
@@ -98,6 +98,26 @@ feedbackSchema.pre('save', function(next) {
     this.updatedAt = new Date();
   }
   next();
+});
+
+// Middleware to update service feedback when service feedback is saved
+feedbackSchema.post('save', async function(doc) {
+  if (doc.serviceFeedback) {
+    const Service = mongoose.model('Service');
+    await Service.findByIdAndUpdate(
+      doc.serviceFeedback.service,
+      {
+        $push: {
+          feedback: {
+            rating: doc.serviceFeedback.rating,
+            comment: doc.serviceFeedback.comment,
+            customer: doc.customer,
+            createdAt: doc.createdAt
+          }
+        }
+      }
+    );
+  }
 });
 
 const Feedback = mongoose.model('Feedback', feedbackSchema);

@@ -19,7 +19,7 @@ const addToCart = async (req, res) => {
   try {
     const { serviceId, quantity } = req.body;
     
-    // Verify service exists
+    // Verify service exists and get its price
     const service = await Service.findById(serviceId);
     if (!service) {
       return res.status(404).json({ 
@@ -34,8 +34,8 @@ const addToCart = async (req, res) => {
       cart = new Cart({ user: req.user._id, items: [] });
     }
 
-    // Add item to cart
-    await cart.addItem(serviceId, quantity);
+    // Add item to cart with priceAtAddition
+    await cart.addItem(serviceId, quantity, service.basePrice);
     
     res.json({
       success: true,

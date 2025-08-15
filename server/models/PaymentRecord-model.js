@@ -52,8 +52,7 @@ const paymentRecordSchema = new Schema({
   },
   transactionReference: {
     type: String,
-    required: true,
-    unique: true
+    required: true
   },
   status: {
     type: String,

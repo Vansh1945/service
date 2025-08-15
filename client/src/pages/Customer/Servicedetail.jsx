@@ -9,161 +9,370 @@ import {
   CheckBadgeIcon,
   ShieldCheckIcon,
   UserIcon,
-  WrenchScrewdriverIcon,
   ChevronDownIcon,
   CheckIcon,
   XMarkIcon,
   CurrencyRupeeIcon,
-  ChevronRightIcon
+  ChevronRightIcon,
+  ExclamationTriangleIcon,
+  ChatBubbleLeftEllipsisIcon,
+  TruckIcon,
+  CreditCardIcon,
+  ArrowPathIcon,
+  ShareIcon,
+  HeartIcon,
+  MapPinIcon,
+  CalendarIcon,
+  CogIcon,
+  WrenchIcon,
+  BoltIcon
 } from '@heroicons/react/24/outline';
+import { StarIcon as StarIconSolid, HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid';
+import Rating from 'react-rating';
+import FeedbackModal from '../Customer/Feedback';
 
 const ServiceDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { API, showToast, user, setCartCount, isAuthenticated, logoutUser } = useAuth();
+  const { API, showToast, user, setCartCount, isAuthenticated, logoutUser, token } = useAuth();
+
+  // State management
   const [service, setService] = useState(null);
   const [relatedServices, setRelatedServices] = useState([]);
-  const [quantity, setQuantity] = useState(1);
-  const [activeImage, setActiveImage] = useState(0);
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   const [openAccordion, setOpenAccordion] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [feedbackData, setFeedbackData] = useState(null);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [hasCompletedBooking, setHasCompletedBooking] = useState(false);
+  const [averageRating, setAverageRating] = useState(0);
+  const [ratingCount, setRatingCount] = useState(0);
+  const [allFeedbacks, setAllFeedbacks] = useState([]);
+  const [isWishlisted, setIsWishlisted] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [zoomImage, setZoomImage] = useState(false);
 
-  // FAQ data
-  const faqs = [
+  const serviceHighlights = [
     {
-      question: "Does the cost include spare parts?",
-      answer: "Yes, our service cost includes all necessary spare parts unless specified otherwise in the exclusions.",
-      included: true
+      icon: <ShieldCheckIcon className="w-6 h-6 text-blue-600" />,
+      title: "30-Day Warranty",
+      description: "Free service if issue reoccurs within warranty period"
     },
     {
-      question: "What if the same issue occurs again?",
-      answer: "We provide a 30-day warranty on all services. If the same issue reoccurs within this period, we'll fix it at no additional cost.",
-      included: true
+      icon: <TruckIcon className="w-6 h-6 text-blue-600" />,
+      title: "Same Day Service",
+      description: "Available in most locations"
     },
     {
-      question: "What if anything gets damaged during service?",
-      answer: "Our professionals are fully insured. Any accidental damage caused during service will be covered by us.",
-      included: true
+      icon: <UserIcon className="w-6 h-6 text-blue-600" />,
+      title: "Certified Experts",
+      description: "Trained professionals"
     },
     {
-      question: "Are spare parts covered under warranty?",
-      answer: "Yes, all replacement parts come with a 90-day manufacturer warranty unless otherwise specified.",
-      included: true
-    },
-    {
-      question: "What is excluded from the service?",
-      answer: "Wiring beyond 2 meters is not included. Extra charges apply for additional materials or complex installations.",
-      included: false
+      icon: <CreditCardIcon className="w-6 h-6 text-blue-600" />,
+      title: "Secure Payments",
+      description: "100% payment protection"
     }
   ];
 
-  const totalPrice = service ? (service.basePrice * quantity) : 0;
+  const fetchServiceFeedbacks = async () => {
+    try {
+      const response = await fetch(`${API}/feedback/service/${id}`);
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setAllFeedbacks(data.data || []);
+
+        if (data.data && data.data.length > 0) {
+          const sum = data.data.reduce((acc, curr) => acc + curr.rating, 0);
+          const avgRating = parseFloat((sum / data.data.length).toFixed(1));
+          setAverageRating(avgRating);
+          setRatingCount(data.data.length);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching service feedbacks:', error);
+    }
+  };
+
+  const fetchServiceData = async () => {
+    try {
+      setLoading(true);
+
+      const serviceResponse = await fetch(`${API}/service/services/${id}`);
+      const serviceData = await serviceResponse.json();
+
+      if (!serviceResponse.ok) {
+        throw new Error(serviceData.message || 'Failed to fetch service');
+      }
+
+      if (!serviceData.success || !serviceData.data) {
+        throw new Error('Service data not available');
+      }
+
+      setService(serviceData.data);
+
+      const relatedResponse = await fetch(
+        `${API}/service/services/category/${serviceData.data.category}?limit=4`
+      );
+      const relatedData = await relatedResponse.json();
+
+      if (relatedResponse.ok && relatedData.success) {
+        const filteredRelated = relatedData.data.filter(
+          s => s._id !== serviceData.data._id
+        );
+        setRelatedServices(filteredRelated);
+      }
+
+      if (isAuthenticated && token) {
+        try {
+          const bookingsResponse = await fetch(`${API}/booking/customer`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+
+          if (bookingsResponse.status === 401) {
+            logoutUser();
+            showToast('Session expired. Please login again.', 'error');
+            return;
+          }
+
+          if (bookingsResponse.ok) {
+            const bookingsData = await bookingsResponse.json();
+            const completedBooking = bookingsData.data?.find(
+              booking => booking.services.some(s => s.service._id === id) &&
+                booking.status === 'completed'
+            );
+            setHasCompletedBooking(!!completedBooking);
+          }
+
+          // Check if service is in wishlist
+          const wishlistResponse = await fetch(`${API}/wishlist/check/${id}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          if (wishlistResponse.ok) {
+            const wishlistData = await wishlistResponse.json();
+            setIsWishlisted(wishlistData.isInWishlist);
+          }
+
+          const userFeedbacks = allFeedbacks.filter(feedback =>
+            feedback.customer && feedback.customer._id === user._id
+          );
+          if (userFeedbacks.length > 0) {
+            setFeedbackData(userFeedbacks[0]);
+          }
+        } catch (err) {
+          console.error('Error fetching user-specific data:', err);
+        }
+      }
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchServiceData = async () => {
-      try {
-        const serviceResponse = await fetch(`${API}/service/services/${id}`);
-        const serviceData = await serviceResponse.json();
-
-        if (!serviceResponse.ok) {
-          throw new Error(serviceData.message || 'Failed to fetch service');
-        }
-
-        if (!serviceData.success || !serviceData.data) {
-          throw new Error('Service data not available');
-        }
-
-        setService(serviceData.data);
-
-        // Fetch related services
-        const relatedResponse = await fetch(
-          `${API}/service/services/category/${serviceData.data.category}`
-        );
-        const relatedData = await relatedResponse.json();
-
-        if (relatedResponse.ok && relatedData.success) {
-          const filteredRelated = relatedData.data.filter(
-            s => s._id !== serviceData.data._id
-          );
-          setRelatedServices(filteredRelated.slice(0, 4));
-        }
-      } catch (err) {
-        showToast(err.message, 'error');
-      }
-    };
-
-    fetchServiceData();
-  }, [id, API, showToast]);
+    if (id) {
+      fetchServiceFeedbacks();
+      fetchServiceData();
+    }
+  }, [id, isAuthenticated]);
 
   const handleBookNow = () => {
     if (!isAuthenticated || !user) {
       showToast('Please login to book services', 'error');
-      navigate('/login', { state: { from: `/customer/services/${id}` } });
+      navigate('/login', { state: { from: `/customer/service/${id}` } });
       return;
     }
 
-    navigate(`/customer/book-service/${id}`);
+    navigate(`/customer/book-service/${id}`, {
+      state: {
+        serviceDetails: service
+      }
+    });
   };
-
-  // const handleAddToCart = async () => {
-  //   // First check authentication
-  //   if (!isAuthenticated || !user?.token) {
-  //     showToast('Please login to add services to cart', 'error');
-  //     navigate('/login', { state: { from: `/customer/services/${id}` } });
-  //     return;
-  //   }
-
-  //   setIsAddingToCart(true);
-
-  //   try {
-  //     const response = await fetch(`${API}/cart/add`, {
-  //       method: 'POST',
-  //       headers: {
-  //         'Content-Type': 'application/json',
-  //         'Authorization': `Bearer ${user.token}`
-  //       },
-  //       body: JSON.stringify({
-  //         serviceId: id,
-  //         quantity: quantity
-  //       }),
-  //       credentials: 'include' // Important for cookies if using them
-  //     });
-
-  //     const data = await response.json();
-
-  //     if (!response.ok) {
-  //       // Handle specific error cases
-  //       if (response.status === 401) {
-  //         // Token expired or invalid
-  //         showToast('Session expired. Please login again.', 'error');
-  //         logoutUser();
-  //         navigate('/login', { state: { from: `/customer/services/${id}` } });
-  //         return;
-  //       }
-  //       throw new Error(data.message || 'Failed to add to cart');
-  //     }
-
-  //     // Success case
-  //     showToast('Service added to cart successfully', 'success');
-
-  //     // Update cart count - make sure setCartCount is passed in props or context
-  //     if (setCartCount && typeof setCartCount === 'function') {
-  //       setCartCount(prev => (prev || 0) + quantity);
-  //     }
-
-  //   } catch (err) {
-  //     console.error('Add to cart error:', err);
-  //     showToast(err.message || 'Failed to add to cart', 'error');
-  //   } finally {
-  //     setIsAddingToCart(false);
-  //   }
-  // };
-
 
   const handleAddToCart = async () => {
-    showToast('Add to cart feature is coming soon!', 'info');
+    if (!isAuthenticated || !token) {
+      showToast('Please login to add services to cart', 'error');
+      navigate('/login', { state: { from: `/customer/service/${id}` } });
+      return;
+    }
+
+    setIsAddingToCart(true);
+
+    try {
+      const response = await fetch(`${API}/cart/add`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          serviceId: id,
+          quantity: 1,
+          priceAtAddition: service.basePrice
+        })
+      });
+
+      if (response.status === 401) {
+        logoutUser();
+        showToast('Session expired. Please login again.', 'error');
+        navigate('/login', { state: { from: `/service/${id}` } });
+        return;
+      }
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to add to cart');
+      }
+
+      showToast('Service added to cart successfully!', 'success');
+
+      // Update cart count
+      const cartResponse = await fetch(`${API}/cart`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (cartResponse.ok) {
+        const cartData = await cartResponse.json();
+        const totalItems = cartData.items?.reduce((sum, item) => sum + item.quantity, 0) || 0;
+        if (setCartCount) {
+          setCartCount(totalItems);
+        }
+      }
+    } catch (err) {
+      console.error('Add to cart error:', err);
+      showToast(err.message || 'Failed to add to cart', 'error');
+    } finally {
+      setIsAddingToCart(false);
+    }
   };
 
+  const handleToggleWishlist = async () => {
+    if (!isAuthenticated || !token) {
+      showToast('Please login to manage wishlist', 'error');
+      navigate('/login', { state: { from: `/customer/service/${id}` } });
+      return;
+    }
+
+    try {
+      const method = isWishlisted ? 'DELETE' : 'POST';
+      const response = await fetch(`${API}/wishlist/${isWishlisted ? 'remove' : 'add'}`, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ serviceId: id })
+      });
+
+      if (response.status === 401) {
+        logoutUser();
+        showToast('Session expired. Please login again.', 'error');
+        return;
+      }
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to update wishlist');
+      }
+
+      setIsWishlisted(!isWishlisted);
+      showToast(
+        isWishlisted ? 'Removed from wishlist' : 'Added to wishlist',
+        isWishlisted ? 'info' : 'success'
+      );
+    } catch (error) {
+      console.error('Wishlist error:', error);
+      showToast(error.message || 'Failed to update wishlist', 'error');
+    }
+  };
+
+  const handleShare = () => {
+    if (navigator.share) {
+      navigator.share({
+        title: service?.title,
+        text: `Check out this ${service?.title} service`,
+        url: window.location.href
+      }).catch(console.error);
+    } else {
+      navigator.clipboard.writeText(window.location.href);
+      showToast('Link copied to clipboard!', 'success');
+    }
+  };
+
+  const handleSubmitFeedback = async (feedback) => {
+    try {
+      const bookingsResponse = await fetch(`${API}/booking/customer`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (bookingsResponse.status === 401) {
+        logoutUser();
+        showToast('Session expired. Please login again.', 'error');
+        return;
+      }
+
+      if (!bookingsResponse.ok) {
+        throw new Error('Failed to fetch bookings');
+      }
+
+      const bookingsData = await bookingsResponse.json();
+      const completedBooking = bookingsData.data?.find(
+        booking => booking.services.some(s => s.service._id === id) &&
+          booking.status === 'completed'
+      );
+
+      if (!completedBooking) {
+        throw new Error('No completed booking found for this service');
+      }
+
+      const response = await fetch(`${API}/feedback`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          service: id,
+          booking: completedBooking._id,
+          rating: feedback.rating,
+          comment: feedback.comment
+        })
+      });
+
+      if (response.status === 401) {
+        logoutUser();
+        showToast('Session expired. Please login again.', 'error');
+        return;
+      }
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to submit feedback');
+      }
+
+      showToast('Feedback submitted successfully!', 'success');
+      setFeedbackData(data.data);
+      setShowFeedbackModal(false);
+      await fetchServiceFeedbacks();
+    } catch (error) {
+      console.error('Feedback submission error:', error);
+      showToast(error.message || 'Failed to submit feedback', 'error');
+    }
+  };
 
   const toggleAccordion = (index) => {
     setOpenAccordion(openAccordion === index ? null : index);
@@ -175,9 +384,23 @@ const ServiceDetailPage = () => {
     return `${hrs > 0 ? `${hrs} hr` : ''} ${mins > 0 ? `${mins} min` : ''}`.trim();
   };
 
-  if (!service) {
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  const getCustomerInitials = (customerName) => {
+    if (!customerName) return 'U';
+    return customerName.split(' ').map(name => name[0]).join('').toUpperCase().slice(0, 2);
+  };
+
+  if (loading) {
     return (
-      <div className="min-h-screen bg-blue-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-flex items-center space-x-2">
             <div className="w-4 h-4 bg-blue-600 rounded-full animate-pulse" style={{ animationDelay: '0ms' }}></div>
@@ -190,16 +413,36 @@ const ServiceDetailPage = () => {
     );
   }
 
+  if (!service) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center max-w-md p-6 bg-white rounded-lg shadow-md">
+          <ExclamationTriangleIcon className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Service Not Found</h3>
+          <p className="text-gray-600 mb-4">
+            The service you're looking for doesn't exist or may have been removed.
+          </p>
+          <button
+            onClick={() => navigate('/services')}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+          >
+            Browse Services
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="bg-blue-50 min-h-screen">
+    <div className="bg-gray-50 min-h-screen">
       {/* Breadcrumb Navigation */}
       <div className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
           <nav className="flex" aria-label="Breadcrumb">
             <ol className="inline-flex items-center space-x-1 md:space-x-3">
               <li className="inline-flex items-center">
                 <button
-                  onClick={() => navigate('/customer/services')}
+                  onClick={() => navigate('/services')}
                   className="inline-flex items-center text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors"
                 >
                   <ArrowLeftIcon className="w-4 h-4 mr-2" />
@@ -210,7 +453,7 @@ const ServiceDetailPage = () => {
                 <div className="flex items-center">
                   <ChevronRightIcon className="w-4 h-4 mx-1 text-gray-400" />
                   <button
-                    onClick={() => navigate(`/customer/services?category=${service.category}`)}
+                    onClick={() => navigate(`/services?category=${service.category}`)}
                     className="text-sm font-medium text-gray-500 hover:text-blue-600 transition-colors"
                   >
                     {service.category}
@@ -229,199 +472,58 @@ const ServiceDetailPage = () => {
       </div>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-white rounded-xl shadow-md overflow-hidden">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200">
           <div className="md:flex">
-            {/* Service Image and Description */}
-            <div className="md:w-1/2 p-6">
-              {/* Main Image with Thumbnails */}
-              <div className="relative h-96 rounded-xl overflow-hidden bg-gray-100 mb-4">
-                <img
-                  src={`${API}/service/uploads/services/${service.images?.[activeImage] || service.image || 'default-service.jpg'}`}
-                  alt={service.title}
-                  className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
-                  onError={(e) => {
-                    e.target.onerror = null;
-                    e.target.src = '/placeholder-service.jpg';
-                  }}
-                />
-              </div>
-
-              {/* Image Thumbnails */}
-              {service.images?.length > 1 && (
-                <div className="flex space-x-2 mb-6 overflow-x-auto py-2">
-                  {service.images.map((img, index) => (
-                    <button
-                      key={index}
-                      onClick={() => setActiveImage(index)}
-                      className={`flex-shrink-0 w-16 h-16 rounded-md overflow-hidden border-2 ${activeImage === index ? 'border-blue-600' : 'border-transparent'}`}
-                    >
-                      <img
-                        src={`${API}/service/uploads/services/${img}`}
-                        alt={`Thumbnail ${index + 1}`}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          e.target.onerror = null;
-                          e.target.src = '/placeholder-service.jpg';
-                        }}
-                      />
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* Service Highlights */}
-              <div className="bg-blue-50 p-6 rounded-lg border border-blue-200 mb-6">
-                <h3 className="text-lg font-semibold text-blue-900 mb-4">Service Highlights</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex items-center">
-                    <ClockIcon className="w-5 h-5 text-blue-600 mr-2" />
-                    <div>
-                      <p className="text-xs text-gray-500">Duration</p>
-                      <p className="text-sm font-medium">{formatDuration(service.duration)}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center">
-                    <ShieldCheckIcon className="w-5 h-5 text-green-600 mr-2" />
-                    <div>
-                      <p className="text-xs text-gray-500">Guarantee</p>
-                      <p className="text-sm font-medium">30 days warranty</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center">
-                    <UserIcon className="w-5 h-5 text-purple-600 mr-2" />
-                    <div>
-                      <p className="text-xs text-gray-500">Expertise</p>
-                      <p className="text-sm font-medium">Certified professionals</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center">
-                    <WrenchScrewdriverIcon className="w-5 h-5 text-amber-600 mr-2" />
-                    <div>
-                      <p className="text-xs text-gray-500">Equipment</p>
-                      <p className="text-sm font-medium">Professional tools</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Description Section */}
-              <div className="mb-6">
-                <h2 className="text-xl font-semibold text-blue-900 mb-4">Service Description</h2>
-                <div className="prose prose-sm text-gray-700">
-                  <p>{service.description}</p>
-                  <p className="mt-3">Our certified technicians will provide a complete solution for your {service.title.toLowerCase()} needs, using only high-quality parts and materials that meet industry standards.</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Service Details and Booking */}
-            <div className="md:w-1/2 p-6 border-l border-gray-200">
+            {/* Service Image Gallery */}
+            <div className="md:w-2/5 p-6">
               <div className="sticky top-6">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h1 className="text-3xl font-bold text-blue-900 mb-1">{service.title}</h1>
-                    <div className="flex items-center">
-                      <div className="flex items-center mr-4">
-                        {[...Array(5)].map((_, i) => (
-                          <StarIcon
-                            key={i}
-                            className={`w-5 h-5 ${i < 4 ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`}
-                          />
-                        ))}
-                        <span className="text-gray-600 ml-1 text-sm">(0 reviews)</span>
-                      </div>
-                      <span className="text-green-600 text-sm font-medium flex items-center bg-green-50 px-2 py-1 rounded-full">
-                        <CheckBadgeIcon className="w-4 h-4 mr-1" />
-                        Verified Service
-                      </span>
+                <div 
+                  className={`relative h-96 rounded-xl overflow-hidden bg-gray-100 mb-4 cursor-${zoomImage ? 'zoom-out' : 'zoom-in'}`}
+                  onClick={() => setZoomImage(!zoomImage)}
+                >
+                  <img
+                    src={`${API}/uploads/services/${service.image || 'default-service.jpg'}`}
+                    alt={service.title}
+                    className={`w-full h-full object-contain transition-transform duration-300 ${zoomImage ? 'scale-150' : 'scale-100'}`}
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src = '/placeholder-service.jpg';
+                    }}
+                  />
+                  {zoomImage && (
+                    <div className="absolute bottom-2 right-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded">
+                      Click to zoom out
                     </div>
-                  </div>
+                  )}
                 </div>
 
-                {/* Price and Duration Section */}
-                <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                  <div className="flex justify-between items-center mb-2">
-                    <div>
-                      <span className="text-sm text-blue-900">Service Price</span>
-                      <div className="flex items-baseline">
-                        <CurrencyRupeeIcon className="w-5 h-5 text-blue-900" />
-                        <span className="text-3xl font-bold text-blue-900 ml-1">
-                          {service.basePrice?.toFixed(2) || '0.00'}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-sm text-blue-900">Duration</span>
-                      <div className="flex items-center justify-end">
-                        <ClockIcon className="w-5 h-5 text-blue-900 mr-1" />
-                        <span className="text-lg font-medium text-blue-900">
-                          {formatDuration(service.duration)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <p className="text-sm text-blue-700">Inclusive of all taxes</p>
-                </div>
-
-                {/* Quantity Selector */}
-                <div className="mb-6">
-                  <label htmlFor="quantity" className="block text-sm font-medium text-blue-900 mb-2">
-                    Quantity
-                  </label>
-                  <div className="flex items-center max-w-[120px]">
-                    <button
-                      onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                      className="px-3 py-2 border border-gray-300 rounded-l-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
-                    >
-                      -
-                    </button>
-                    <span className="px-4 py-2 border-t border-b border-gray-300 bg-white text-gray-900 text-center flex-1">
-                      {quantity}
-                    </span>
-                    <button
-                      onClick={() => setQuantity(quantity + 1)}
-                      className="px-3 py-2 border border-gray-300 rounded-r-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-
-                {/* Total Price Calculation */}
-                <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-blue-900">Price per service</span>
-                    <span className="font-medium text-blue-900">
-                      ₹{service.basePrice?.toFixed(2) || '0.00'}
-                    </span>
-                  </div>
-                  <div className="border-t border-blue-200 my-2"></div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-blue-900 font-semibold">Total</span>
-                    <span className="text-xl font-bold text-blue-600">
-                      ₹{totalPrice?.toFixed(2) || '0.00'}
-                    </span>
-                  </div>
+                {/* Service Tags */}
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    <CheckBadgeIcon className="w-3 h-3 mr-1" />
+                    Verified
+                  </span>
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                    <BoltIcon className="w-3 h-3 mr-1" />
+                    Popular
+                  </span>
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                    <WrenchIcon className="w-3 h-3 mr-1" />
+                    Expert Service
+                  </span>
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex flex-col sm:flex-row gap-3 mb-8">
-                  <button
-                    onClick={handleBookNow}
-                    className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium py-3 px-6 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center justify-center"
-                  >
-                    Book Now
-                    <ChevronRightIcon className="w-5 h-5 ml-2" />
-                  </button>
+                <div className="flex space-x-3 mt-4">
                   <button
                     onClick={handleAddToCart}
                     disabled={isAddingToCart}
-                    className={`flex-1 flex items-center justify-center border-2 border-blue-600 text-blue-600 hover:bg-blue-50 font-medium py-3 px-6 rounded-lg shadow-sm hover:shadow-md transition-all ${isAddingToCart ? 'opacity-70 cursor-not-allowed' : ''}`}
+                    className={`flex-1 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-lg transition-all shadow-md hover:shadow-lg ${isAddingToCart ? 'opacity-70 cursor-not-allowed' : ''}`}
                   >
                     {isAddingToCart ? (
                       <>
-                        <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
@@ -434,83 +536,237 @@ const ServiceDetailPage = () => {
                       </>
                     )}
                   </button>
+                  <button
+                    onClick={handleToggleWishlist}
+                    className={`p-2.5 rounded-lg border ${isWishlisted ? 'border-red-300 bg-red-50 text-red-600' : 'border-gray-300 hover:bg-gray-100'} transition-colors`}
+                  >
+                    {isWishlisted ? (
+                      <HeartIconSolid className="w-5 h-5" />
+                    ) : (
+                      <HeartIcon className="w-5 h-5 text-gray-600" />
+                    )}
+                  </button>
+                  <button
+                    onClick={handleShare}
+                    className="p-2.5 rounded-lg border border-gray-300 hover:bg-gray-100 transition-colors"
+                  >
+                    <ShareIcon className="w-5 h-5 text-gray-600" />
+                  </button>
                 </div>
 
-                {/* Service Benefits */}
-                <div className="border-t border-blue-200 pt-6">
-                  <h3 className="text-lg font-medium text-blue-900 mb-4">Why Choose Us?</h3>
-                  <ul className="space-y-3">
-                    <li className="flex items-start">
-                      <div className="bg-blue-100 p-1 rounded-full mr-3">
-                        <CheckBadgeIcon className="w-4 h-4 text-blue-600" />
-                      </div>
-                      <span className="text-gray-700">Certified professionals with 5+ years experience</span>
-                    </li>
-                    <li className="flex items-start">
-                      <div className="bg-blue-100 p-1 rounded-full mr-3">
-                        <CheckBadgeIcon className="w-4 h-4 text-blue-600" />
-                      </div>
-                      <span className="text-gray-700">Same-day service available</span>
-                    </li>
-                    <li className="flex items-start">
-                      <div className="bg-blue-100 p-1 rounded-full mr-3">
-                        <CheckBadgeIcon className="w-4 h-4 text-blue-600" />
-                      </div>
-                      <span className="text-gray-700">100% satisfaction guarantee</span>
-                    </li>
-                    <li className="flex items-start">
-                      <div className="bg-blue-100 p-1 rounded-full mr-3">
-                        <CheckBadgeIcon className="w-4 h-4 text-blue-600" />
-                      </div>
-                      <span className="text-gray-700">Transparent pricing with no hidden charges</span>
-                    </li>
-                  </ul>
+                {/* Delivery Info */}
+                <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex items-start">
+                    <MapPinIcon className="w-5 h-5 text-blue-600 mt-0.5 mr-3 flex-shrink-0" />
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-900 mb-1">Delivery & Service Availability</h4>
+                      <p className="text-xs text-gray-600">
+                        Available in most areas. Enter your location during booking to check exact availability.
+                      </p>
+                    </div>
+                  </div>
                 </div>
+              </div>
+            </div>
+
+            {/* Service Details */}
+            <div className="md:w-3/5 p-6 border-l border-gray-200">
+              <div className="sticky top-6">
+                <div className="flex justify-between items-start mb-2">
+                  <h1 className="text-2xl font-bold text-gray-900">{service.title}</h1>
+                  <div className="flex items-center bg-blue-100 px-3 py-1 rounded-full">
+                    <Rating
+                      initialRating={averageRating}
+                      readonly
+                      emptySymbol={<StarIcon className="w-4 h-4 text-gray-300" />}
+                      fullSymbol={<StarIconSolid className="w-4 h-4 text-yellow-400" />}
+                    />
+                    <span className="text-xs text-gray-700 ml-1">
+                      {ratingCount} {ratingCount === 1 ? 'Rating' : 'Ratings'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center mb-4">
+                  <span className="text-green-600 text-sm font-medium flex items-center bg-green-50 px-2.5 py-1 rounded-full">
+                    <CheckBadgeIcon className="w-4 h-4 mr-1" />
+                    Verified Service
+                  </span>
+                  <span className="ml-2 text-sm text-gray-500">| {service.category}</span>
+                </div>
+
+                {/* Price Section */}
+                <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
+                  <div className="flex items-baseline">
+                    <CurrencyRupeeIcon className="w-6 h-6 text-gray-900" />
+                    <span className="text-3xl font-bold text-gray-900 ml-1">
+                      {service.basePrice?.toFixed(2) || '0.00'}
+                    </span>
+                    <span className="ml-2 text-sm text-green-600 font-medium">Inclusive of all taxes</span>
+                  </div>
+                  <div className="flex items-center mt-2">
+                    <ClockIcon className="w-5 h-5 text-gray-500 mr-1" />
+                    <span className="text-sm text-gray-700">
+                      {formatDuration(service.duration)} service duration
+                    </span>
+                  </div>
+                </div>
+
+                {/* Service Highlights */}
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-3">Why Choose Us?</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    {serviceHighlights.map((highlight, index) => (
+                      <div key={index} className="flex items-start p-3 bg-gray-50 rounded-lg border border-gray-100 hover:bg-white transition-colors">
+                        <div className="flex-shrink-0 mt-1">
+                          {highlight.icon}
+                        </div>
+                        <div className="ml-3">
+                          <h4 className="text-sm font-medium text-gray-900">{highlight.title}</h4>
+                          <p className="text-xs text-gray-500 mt-1">{highlight.description}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Book Now Button */}
+                <button
+                  onClick={handleBookNow}
+                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white font-medium py-3 px-6 rounded-lg shadow-md hover:shadow-lg transition-all mb-6 flex items-center justify-center"
+                >
+                  <CalendarIcon className="w-5 h-5 mr-2" />
+                  Book Now
+                </button>
+
+                {/* Description Section */}
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+                    <CogIcon className="w-5 h-5 text-blue-600 mr-2" />
+                    Service Details
+                  </h3>
+                  <div className="prose prose-sm text-gray-700 max-w-none">
+                    {service.description}
+                  </div>
+                </div>
+
+                {/* User's Feedback Section */}
+                {feedbackData ? (
+                  <div className="border-t border-gray-200 pt-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Your Feedback</h3>
+                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                      <div className="flex items-start">
+                        <div className="flex-shrink-0">
+                          <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                            <UserIcon className="h-6 w-6" />
+                          </div>
+                        </div>
+                        <div className="ml-4">
+                          <div className="flex items-center">
+                            <Rating
+                              initialRating={feedbackData.rating}
+                              readonly
+                              emptySymbol={<StarIcon className="w-5 h-5 text-gray-300" />}
+                              fullSymbol={<StarIconSolid className="w-5 h-5 text-yellow-400" />}
+                            />
+                            <span className="ml-2 text-sm text-gray-500">
+                              {formatDate(feedbackData.createdAt)}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-sm text-gray-700">
+                            {feedbackData.comment || 'No additional comments'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : hasCompletedBooking ? (
+                  <div className="border-t border-gray-200 pt-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Share Your Experience</h3>
+                    <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                      <p className="text-gray-700 mb-3">How was your experience with this service?</p>
+                      <button
+                        onClick={() => setShowFeedbackModal(true)}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm font-medium flex items-center"
+                      >
+                        <ChatBubbleLeftEllipsisIcon className="w-4 h-4 mr-2" />
+                        Submit Feedback
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
 
           {/* Detailed Information Section */}
-          <div className="border-t border-blue-200 p-6">
+          <div className="border-t border-gray-200 p-6 bg-gray-50">
             <div className="grid md:grid-cols-2 gap-8">
               <div>
-                <h3 className="text-xl font-semibold text-blue-900 mb-4">Service Inclusions</h3>
-                <div className="prose prose-sm text-gray-600">
-                  <ul className="list-disc pl-5 space-y-2">
-                    <li>Professional diagnosis of the issue</li>
-                    <li>High-quality replacement parts (if needed)</li>
-                    <li>Complete service as per industry standards</li>
-                    <li>Testing and verification of the solution</li>
-                    <li>30-day service warranty</li>
-                    <li>Detailed service report</li>
-                  </ul>
+                <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+                  <CheckIcon className="w-5 h-5 text-green-500 mr-2" />
+                  Service Inclusions
+                </h3>
+                <div className="space-y-3">
+                  {[
+                    "Professional diagnosis of the issue",
+                    "High-quality replacement parts (if needed)",
+                    "Complete service as per industry standards",
+                    "Testing and verification of the solution",
+                    "30-day service warranty",
+                    "Detailed service report",
+                    "Expert consultation",
+                    "Cleanup after service"
+                  ].map((item, index) => (
+                    <div key={index} className="flex items-start">
+                      <CheckIcon className="w-5 h-5 text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                      <p className="text-gray-700">{item}</p>
+                    </div>
+                  ))}
                 </div>
               </div>
 
-              {/* FAQ Accordion Section */}
+              {/* FAQ Section */}
               <div>
-                <h3 className="text-xl font-semibold text-blue-900 mb-4">Frequently Asked Questions</h3>
+                <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+                  <ChatBubbleLeftEllipsisIcon className="w-5 h-5 text-blue-500 mr-2" />
+                  Frequently Asked Questions
+                </h3>
                 <div className="space-y-3">
-                  {faqs.map((faq, index) => (
-                    <div key={index} className="border border-blue-200 rounded-lg overflow-hidden">
+                  {[
+                    {
+                      question: "Does the cost include spare parts?",
+                      answer: "Yes, our service cost includes all necessary spare parts unless specified otherwise in the exclusions."
+                    },
+                    {
+                      question: "What if the same issue occurs again?",
+                      answer: "We provide a 30-day warranty on all services. If the same issue reoccurs within this period, we'll fix it at no additional cost."
+                    },
+                    {
+                      question: "What if anything gets damaged during service?",
+                      answer: "Our professionals are fully insured. Any accidental damage caused during service will be covered by us."
+                    },
+                    {
+                      question: "Are spare parts covered under warranty?",
+                      answer: "Yes, all replacement parts come with a 90-day manufacturer warranty unless otherwise specified."
+                    },
+                    {
+                      question: "What is excluded from the service?",
+                      answer: "Wiring beyond 2 meters is not included. Extra charges apply for additional materials or complex installations."
+                    }
+                  ].map((faq, index) => (
+                    <div key={index} className="border border-gray-200 rounded-lg overflow-hidden bg-white">
                       <button
                         className={`flex items-center justify-between w-full p-4 text-left ${openAccordion === index ? 'bg-blue-50' : 'bg-white'}`}
                         onClick={() => toggleAccordion(index)}
                       >
-                        <span className="font-medium text-blue-900">{faq.question}</span>
-                        <div className="flex items-center">
-                          {faq.included ? (
-                            <CheckIcon className="w-5 h-5 text-green-500 mr-2" />
-                          ) : (
-                            <XMarkIcon className="w-5 h-5 text-red-500 mr-2" />
-                          )}
-                          <ChevronDownIcon
-                            className={`w-5 h-5 text-blue-600 transition-transform ${openAccordion === index ? 'transform rotate-180' : ''}`}
-                          />
-                        </div>
+                        <span className="font-medium text-gray-900">{faq.question}</span>
+                        <ChevronDownIcon
+                          className={`w-5 h-5 text-blue-600 transition-transform ${openAccordion === index ? 'transform rotate-180' : ''}`}
+                        />
                       </button>
                       {openAccordion === index && (
-                        <div className="p-4 bg-white border-t border-blue-100">
+                        <div className="p-4 bg-white border-t border-gray-100">
                           <p className="text-gray-700">{faq.answer}</p>
                         </div>
                       )}
@@ -520,29 +776,119 @@ const ServiceDetailPage = () => {
               </div>
             </div>
           </div>
+
+          {/* Customer Reviews Section */}
+          <div className="border-t border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-semibold text-gray-900 flex items-center">
+                <ChatBubbleLeftEllipsisIcon className="w-5 h-5 text-blue-500 mr-2" />
+                Customer Reviews
+              </h3>
+              <div className="flex items-center bg-blue-50 px-3 py-1 rounded-full">
+                <Rating
+                  initialRating={averageRating}
+                  readonly
+                  emptySymbol={<StarIcon className="w-4 h-4 text-gray-300" />}
+                  fullSymbol={<StarIconSolid className="w-4 h-4 text-yellow-400" />}
+                />
+                <span className="ml-2 text-sm text-gray-700">
+                  {averageRating} out of 5 ({ratingCount} {ratingCount === 1 ? 'review' : 'reviews'})
+                </span>
+              </div>
+            </div>
+
+            {allFeedbacks.length > 0 ? (
+              <div className="space-y-4">
+                {allFeedbacks.map((feedback, index) => (
+                  <div key={index} className="bg-gray-50 p-4 rounded-lg border border-gray-200 hover:border-blue-200 transition-colors">
+                    <div className="flex items-start">
+                      <div className="flex-shrink-0">
+                        <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-medium text-sm">
+                          {getCustomerInitials(feedback.customer?.name || 'Unknown User')}
+                        </div>
+                      </div>
+                      <div className="ml-4 flex-1">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center">
+                            <h4 className="font-medium text-gray-900">
+                              {feedback.customer?.name || 'Anonymous User'}
+                            </h4>
+                            <div className="ml-3 flex items-center">
+                              <Rating
+                                initialRating={feedback.rating}
+                                readonly
+                                emptySymbol={<StarIcon className="w-4 h-4 text-gray-300" />}
+                                fullSymbol={<StarIconSolid className="w-4 h-4 text-yellow-400" />}
+                              />
+                            </div>
+                          </div>
+                          <span className="text-sm text-gray-500">
+                            {formatDate(feedback.createdAt)}
+                          </span>
+                        </div>
+                        {feedback.comment && (
+                          <p className="text-gray-700 text-sm leading-relaxed">
+                            "{feedback.comment}"
+                          </p>
+                        )}
+                        {feedback.booking && (
+                          <div className="mt-2">
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-100 text-green-800">
+                              <CheckBadgeIcon className="w-3 h-3 mr-1" />
+                              Verified Purchase
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 bg-gray-50 rounded-lg border border-gray-200">
+                <ChatBubbleLeftEllipsisIcon className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                <p className="text-gray-600 font-medium">No reviews yet</p>
+                <p className="text-sm text-gray-500 mt-1">Be the first to review this service!</p>
+                {isAuthenticated && hasCompletedBooking && (
+                  <button
+                    onClick={() => setShowFeedbackModal(true)}
+                    className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm font-medium"
+                  >
+                    Write a Review
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Related Services Section */}
-        <div className="mt-12">
-          <h2 className="text-2xl font-bold text-blue-900 mb-6">Related Services</h2>
-          {relatedServices.length > 0 ? (
+        {relatedServices.length > 0 && (
+          <div className="mt-12">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
+              <ArrowPathIcon className="w-6 h-6 text-blue-600 mr-2" />
+              Similar Services You Might Like
+            </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {relatedServices.map((relatedService) => (
                 <div
                   key={relatedService._id}
-                  className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-all cursor-pointer border border-gray-100"
-                  onClick={() => navigate(`/customer/services/${relatedService._id}`)}
+                  className="bg-white rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-all cursor-pointer border border-gray-200 group"
+                  onClick={() => navigate(`/service/${relatedService._id}`)}
                 >
                   <div className="relative h-48 bg-gray-100">
                     <img
-                      src={`${API}/service/uploads/services/${relatedService.images?.[0] || relatedService.image || 'default-service.jpg'}`}
+                      src={`${API}/uploads/services/${relatedService.image || 'default-service.jpg'}`}
                       alt={relatedService.title}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover group-hover:opacity-90 transition-opacity"
                       onError={(e) => {
                         e.target.onerror = null;
                         e.target.src = '/placeholder-service.jpg';
                       }}
                     />
+                    <div className="absolute top-2 right-2 bg-white rounded-full p-1.5 shadow-sm">
+                      <HeartIcon className="w-4 h-4 text-gray-400 hover:text-red-500" />
+                    </div>
                   </div>
                   <div className="p-4">
                     <div className="flex items-center gap-2 mb-2">
@@ -551,15 +897,15 @@ const ServiceDetailPage = () => {
                         {formatDuration(relatedService.duration)}
                       </span>
                     </div>
-                    <h3 className="font-semibold text-gray-900 mb-2 line-clamp-1">{relatedService.title}</h3>
+                    <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2">{relatedService.title}</h3>
                     <div className="flex items-center mb-3">
-                      {[...Array(5)].map((_, i) => (
-                        <StarIcon
-                          key={i}
-                          className={`w-4 h-4 ${i < 4 ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`}
-                        />
-                      ))}
-                      <span className="text-xs text-gray-500 ml-1">(0)</span>
+                      <Rating
+                        initialRating={relatedService.averageRating || 0}
+                        readonly
+                        emptySymbol={<StarIcon className="w-4 h-4 text-gray-300" />}
+                        fullSymbol={<StarIconSolid className="w-4 h-4 text-yellow-400" />}
+                      />
+                      <span className="text-xs text-gray-500 ml-1">({relatedService.feedback?.length || 0})</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <div className="flex items-baseline">
@@ -568,27 +914,28 @@ const ServiceDetailPage = () => {
                           {relatedService.basePrice?.toFixed(2) || '0.00'}
                         </span>
                       </div>
-                      <button className="text-blue-600 text-sm font-medium hover:underline">
+                      <button className="text-blue-600 text-sm font-medium hover:underline flex items-center">
                         View Details
+                        <ChevronRightIcon className="w-4 h-4 ml-1" />
                       </button>
                     </div>
                   </div>
                 </div>
               ))}
             </div>
-          ) : (
-            <div className="bg-blue-50 p-8 rounded-xl border border-blue-200 text-center">
-              <p className="text-gray-600">No related services found in this category.</p>
-              <button
-                onClick={() => navigate('/customer/services')}
-                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Browse All Services
-              </button>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
+
+      {/* Feedback Modal */}
+      {showFeedbackModal && (
+        <FeedbackModal
+          serviceId={id}
+          serviceTitle={service.title}
+          onClose={() => setShowFeedbackModal(false)}
+          onSubmit={handleSubmitFeedback}
+        />
+      )}
     </div>
   );
 };

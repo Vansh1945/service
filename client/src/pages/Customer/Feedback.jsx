@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../store/auth';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Rating } from '@mui/material';
-import StarIcon from '@mui/icons-material/Star';
 import {
   Container,
   Typography,
@@ -26,9 +24,67 @@ import {
   ListItem,
   ListItemAvatar,
   ListItemText,
-  ListItemButton
+  IconButton,
+  Rating,
+  Badge,
+  Tabs,
+  Tab,
+  Snackbar,
+  Fab,
+  Modal
 } from '@mui/material';
-import { format } from 'date-fns';
+import {
+  Star as StarIcon,
+  Edit as EditIcon,
+  CheckCircle as CheckCircleIcon,
+  Add as AddIcon,
+  ArrowBack as ArrowBackIcon,
+  Close as CloseIcon,
+  ThumbUp as ThumbUpIcon,
+  ThumbDown as ThumbDownIcon,
+  CalendarToday as CalendarIcon,
+  Person as PersonIcon,
+  Work as WorkIcon
+} from '@mui/icons-material';
+import { format, subDays } from 'date-fns';
+import { styled } from '@mui/material/styles';
+
+// Custom styled components
+const StyledRating = styled(Rating)({
+  '& .MuiRating-iconFilled': {
+    color: '#facc15',
+  },
+  '& .MuiRating-iconHover': {
+    color: '#eab308',
+  },
+});
+
+const PrimaryButton = styled(Button)({
+  backgroundColor: '#2563eb',
+  color: 'white',
+  fontWeight: 600,
+  padding: '8px 24px',
+  borderRadius: '12px',
+  textTransform: 'none',
+  '&:hover': {
+    backgroundColor: '#1e40af',
+    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+  },
+  '&:disabled': {
+    backgroundColor: '#bfdbfe'
+  }
+});
+
+const FeedbackCardWrapper = styled(Card)({
+  border: 'none',
+  borderRadius: '16px',
+  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
+  transition: 'all 0.3s ease',
+  '&:hover': {
+    transform: 'translateY(-4px)',
+    boxShadow: '0 8px 25px rgba(0, 0, 0, 0.12)'
+  }
+});
 
 const FeedbackManagement = () => {
   const { token, user, API, showToast, isAuthenticated, logoutUser } = useAuth();
@@ -51,6 +107,11 @@ const FeedbackManagement = () => {
   const [bookingsForFeedback, setBookingsForFeedback] = useState([]);
   const [openDialog, setOpenDialog] = useState(false);
   const [openBookingDialog, setOpenBookingDialog] = useState(false);
+  const [openEditModal, setOpenEditModal] = useState(false);
+  const [activeTab, setActiveTab] = useState(0);
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [snackbarSeverity, setSnackbarSeverity] = useState('success');
 
   // Fetch customer's feedbacks
   const fetchFeedbacks = async () => {
@@ -74,7 +135,7 @@ const FeedbackManagement = () => {
       setFeedbacks(data.data || []);
     } catch (err) {
       setError(err.message);
-      showToast(err.message, 'error');
+      showSnackbar(err.message, 'error');
     } finally {
       setLoading(false);
     }
@@ -110,16 +171,16 @@ const FeedbackManagement = () => {
       });
     } catch (err) {
       setError(err.message);
-      showToast(err.message, 'error');
+      showSnackbar(err.message, 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  // Fetch bookings eligible for feedback
+  // Fetch bookings eligible for feedback (completed bookings without feedback)
   const fetchEligibleBookings = async () => {
     try {
-      const response = await fetch(`${API}/booking/my-bookings?status=completed`, {
+      const response = await fetch(`${API}/booking/customer?status=completed`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -131,10 +192,12 @@ const FeedbackManagement = () => {
 
       const data = await response.json();
       
+      // Get booking IDs that already have feedback
+      const feedbackBookingIds = feedbacks.map(f => f.booking._id);
+      
       // Filter out bookings that already have feedback
-      const existingFeedbackBookingIds = feedbacks.map(f => f.booking._id);
       const eligibleBookings = data.data.filter(
-        booking => !existingFeedbackBookingIds.includes(booking._id)
+        booking => !feedbackBookingIds.includes(booking._id)
       );
       
       setBookingsForFeedback(eligibleBookings || []);
@@ -166,7 +229,7 @@ const FeedbackManagement = () => {
     e.preventDefault();
     
     if (!selectedBooking) {
-      showToast('Please select a booking first', 'error');
+      showSnackbar('Please select a booking first', 'error');
       return;
     }
 
@@ -181,7 +244,10 @@ const FeedbackManagement = () => {
         },
         body: JSON.stringify({
           bookingId: selectedBooking._id,
-          ...formData
+          providerRating: formData.providerRating,
+          providerComment: formData.providerComment,
+          serviceRating: formData.serviceRating,
+          serviceComment: formData.serviceComment
         })
       });
 
@@ -190,7 +256,7 @@ const FeedbackManagement = () => {
         throw new Error(errorData.message || 'Failed to submit feedback');
       }
 
-      showToast('Feedback submitted successfully!', 'success');
+      showSnackbar('Feedback submitted successfully!', 'success');
       setOpenDialog(false);
       setSelectedBooking(null);
       setFormData({
@@ -200,9 +266,8 @@ const FeedbackManagement = () => {
         serviceComment: ''
       });
       fetchFeedbacks();
-      fetchEligibleBookings();
     } catch (err) {
-      showToast(err.message, 'error');
+      showSnackbar(err.message, 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -214,13 +279,18 @@ const FeedbackManagement = () => {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch(`${API}/feedback/${editingFeedback._id}`, {
+      const response = await fetch(`${API}/feedback/edit/${editingFeedback._id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({
+          providerRating: formData.providerRating,
+          providerComment: formData.providerComment,
+          serviceRating: formData.serviceRating,
+          serviceComment: formData.serviceComment
+        })
       });
 
       if (!response.ok) {
@@ -228,19 +298,45 @@ const FeedbackManagement = () => {
         throw new Error(errorData.message || 'Failed to update feedback');
       }
 
-      showToast('Feedback updated successfully!', 'success');
-      navigate('/customer/feedbacks');
+      showSnackbar('Feedback updated successfully!', 'success');
+      setOpenEditModal(false);
+      fetchFeedbacks();
     } catch (err) {
-      showToast(err.message, 'error');
+      showSnackbar(err.message, 'error');
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  // Open edit modal
+  const handleOpenEditModal = (feedback) => {
+    setEditingFeedback(feedback);
+    setFormData({
+      providerRating: feedback.providerFeedback.rating,
+      providerComment: feedback.providerFeedback.comment || '',
+      serviceRating: feedback.serviceFeedback.rating,
+      serviceComment: feedback.serviceFeedback.comment || ''
+    });
+    setOpenEditModal(true);
+  };
+
   // Check if feedback can be edited (within 7 days)
   const canEditFeedback = (feedback) => {
-    const daysOld = (Date.now() - new Date(feedback.createdAt)) / (1000 * 60 * 60 * 24);
-    return daysOld <= 7;
+    const feedbackDate = new Date(feedback.createdAt);
+    const sevenDaysAgo = subDays(new Date(), 7);
+    return feedbackDate > sevenDaysAgo;
+  };
+
+  // Show snackbar notification
+  const showSnackbar = (message, severity) => {
+    setSnackbarMessage(message);
+    setSnackbarSeverity(severity);
+    setSnackbarOpen(true);
+  };
+
+  // Close snackbar
+  const handleSnackbarClose = () => {
+    setSnackbarOpen(false);
   };
 
   // Initialize component
@@ -250,15 +346,12 @@ const FeedbackManagement = () => {
       return;
     }
 
-    if (feedbackId) {
-      fetchFeedback(feedbackId);
-    } else {
-      fetchFeedbacks();
-    }
-  }, [feedbackId, isAuthenticated]);
+    fetchFeedbacks();
+  }, [isAuthenticated]);
 
+  // Fetch eligible bookings whenever feedbacks change
   useEffect(() => {
-    if (feedbacks.length > 0) {
+    if (feedbacks.length >= 0) {
       fetchEligibleBookings();
     }
   }, [feedbacks]);
@@ -270,78 +363,22 @@ const FeedbackManagement = () => {
     setOpenDialog(true);
   };
 
-  // Render loading state
-  if (loading) {
-    return (
-      <Container maxWidth="lg" sx={{ mt: 4, display: 'flex', justifyContent: 'center' }}>
-        <CircularProgress />
-      </Container>
-    );
-  }
-
-  // Render error state
-  if (error) {
-    return (
-      <Container maxWidth="lg" sx={{ mt: 4 }}>
-        <Alert severity="error">{error}</Alert>
-      </Container>
-    );
-  }
-
   // Feedback form component
   const FeedbackForm = ({ isEdit = false }) => (
     <Box component="form" onSubmit={isEdit ? handleUpdateFeedback : handleSubmitFeedback}>
       <Grid container spacing={3}>
-        {/* Provider Feedback Section */}
-        <Grid item xs={12}>
-          <Typography variant="h6" gutterBottom color="primary">
-            Rate the Service Provider
-          </Typography>
-          <Paper sx={{ p: 2, backgroundColor: 'grey.50' }}>
-            <Box mb={2}>
-              <Typography component="legend" variant="body2" gutterBottom>
-                How would you rate the provider's professionalism and service quality?
-              </Typography>
-              <Rating
-                name="providerRating"
-                value={Number(formData.providerRating) || 5}
-                precision={0.5}
-                onChange={(event, newValue) => handleRatingChange('providerRating', newValue || 5)}
-                icon={<StarIcon fontSize="inherit" />}
-                emptyIcon={<StarIcon fontSize="inherit" style={{ opacity: 0.3 }} />}
-                size="large"
-              />
-              <Typography variant="body2" sx={{ mt: 0.5, color: 'text.secondary' }}>
-                {formData.providerRating} out of 5 stars
-              </Typography>
-            </Box>
-            <TextField
-              fullWidth
-              label="Tell us about your experience with the provider (optional)"
-              name="providerComment"
-              value={formData.providerComment}
-              onChange={handleInputChange}
-              multiline
-              rows={3}
-              variant="outlined"
-              placeholder="Was the provider punctual? Professional? Friendly? Any specific feedback..."
-              inputProps={{ maxLength: 500 }}
-              helperText={`${formData.providerComment.length}/500 characters`}
-            />
-          </Paper>
-        </Grid>
-
         {/* Service Feedback Section */}
         <Grid item xs={12}>
-          <Typography variant="h6" gutterBottom color="primary">
+          <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, color: '#1e3a8a' }}>
+            <WorkIcon sx={{ verticalAlign: 'middle', mr: 1, color: '#2563eb' }} />
             Rate the Service
           </Typography>
-          <Paper sx={{ p: 2, backgroundColor: 'grey.50' }}>
-            <Box mb={2}>
-              <Typography component="legend" variant="body2" gutterBottom>
-                How satisfied are you with the overall service provided?
+          <Paper sx={{ p: 3, backgroundColor: '#ffffff', borderRadius: '12px' }}>
+            <Box mb={3}>
+              <Typography component="legend" variant="body1" gutterBottom sx={{ fontWeight: 500 }}>
+                How satisfied are you with the service?
               </Typography>
-              <Rating
+              <StyledRating
                 name="serviceRating"
                 value={Number(formData.serviceRating) || 5}
                 precision={0.5}
@@ -350,22 +387,65 @@ const FeedbackManagement = () => {
                 emptyIcon={<StarIcon fontSize="inherit" style={{ opacity: 0.3 }} />}
                 size="large"
               />
-              <Typography variant="body2" sx={{ mt: 0.5, color: 'text.secondary' }}>
+              <Typography variant="body2" sx={{ mt: 1 }}>
                 {formData.serviceRating} out of 5 stars
               </Typography>
             </Box>
+            
             <TextField
               fullWidth
-              label="Share your thoughts about the service (optional)"
+              label="Share your experience (optional)"
               name="serviceComment"
               value={formData.serviceComment}
               onChange={handleInputChange}
               multiline
               rows={3}
               variant="outlined"
-              placeholder="Quality of work, value for money, would you recommend this service..."
+              placeholder="Tell us what you liked or didn't like about the service..."
               inputProps={{ maxLength: 500 }}
               helperText={`${formData.serviceComment.length}/500 characters`}
+              sx={{ mb: 2 }}
+            />
+          </Paper>
+        </Grid>
+
+        {/* Provider Feedback Section */}
+        <Grid item xs={12}>
+          <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, color: '#1e3a8a' }}>
+            <PersonIcon sx={{ verticalAlign: 'middle', mr: 1, color: '#2563eb' }} />
+            Rate the Service Provider
+          </Typography>
+          <Paper sx={{ p: 3, backgroundColor: '#ffffff', borderRadius: '12px' }}>
+            <Box mb={3}>
+              <Typography component="legend" variant="body1" gutterBottom sx={{ fontWeight: 500 }}>
+                How would you rate the provider's service?
+              </Typography>
+              <StyledRating
+                name="providerRating"
+                value={Number(formData.providerRating) || 5}
+                precision={0.5}
+                onChange={(event, newValue) => handleRatingChange('providerRating', newValue || 5)}
+                icon={<StarIcon fontSize="inherit" />}
+                emptyIcon={<StarIcon fontSize="inherit" style={{ opacity: 0.3 }} />}
+                size="large"
+              />
+              <Typography variant="body2" sx={{ mt: 1 }}>
+                {formData.providerRating} out of 5 stars
+              </Typography>
+            </Box>
+            
+            <TextField
+              fullWidth
+              label="Tell us about the provider (optional)"
+              name="providerComment"
+              value={formData.providerComment}
+              onChange={handleInputChange}
+              multiline
+              rows={3}
+              variant="outlined"
+              placeholder="Was the provider professional, punctual, and helpful?"
+              inputProps={{ maxLength: 500 }}
+              helperText={`${formData.providerComment.length}/500 characters`}
             />
           </Paper>
         </Grid>
@@ -375,20 +455,19 @@ const FeedbackManagement = () => {
           <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
             <Button
               variant="outlined"
-              onClick={() => isEdit ? navigate('/customer/feedbacks') : setOpenDialog(false)}
+              onClick={() => isEdit ? setOpenEditModal(false) : setOpenDialog(false)}
               disabled={isSubmitting}
+              sx={{ borderRadius: '12px' }}
             >
               Cancel
             </Button>
-            <Button
+            <PrimaryButton
               type="submit"
-              variant="contained"
-              color="primary"
               disabled={isSubmitting}
-              startIcon={isSubmitting ? <CircularProgress size={16} /> : null}
+              startIcon={isSubmitting ? <CircularProgress size={20} color="inherit" /> : null}
             >
-              {isSubmitting ? 'Submitting...' : isEdit ? 'Update Feedback' : 'Submit Feedback'}
-            </Button>
+              {isSubmitting ? 'Submitting...' : isEdit ? 'Update Review' : 'Submit Review'}
+            </PrimaryButton>
           </Box>
         </Grid>
       </Grid>
@@ -397,16 +476,19 @@ const FeedbackManagement = () => {
 
   // Feedback card component
   const FeedbackCard = ({ feedback }) => (
-    <Card sx={{ mb: 3, boxShadow: 2 }}>
+    <FeedbackCardWrapper sx={{ mb: 3 }}>
       <CardContent>
         <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
           <Box>
-            <Typography variant="h6" gutterBottom>
+            <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
               {feedback.serviceFeedback?.service?.title || 'Service'}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Booking Date: {format(new Date(feedback.booking?.date || feedback.createdAt), 'MMM dd, yyyy')}
-            </Typography>
+            <Box display="flex" alignItems="center" gap={1}>
+              <CalendarIcon sx={{ fontSize: '1rem' }} />
+              <Typography variant="body2">
+                {format(new Date(feedback.booking?.date || feedback.createdAt), 'MMM dd, yyyy')}
+              </Typography>
+            </Box>
           </Box>
           <Box display="flex" gap={1}>
             <Chip
@@ -419,7 +501,6 @@ const FeedbackManagement = () => {
                 label="Editable"
                 size="small"
                 color="success"
-                variant="outlined"
               />
             )}
           </Box>
@@ -428,190 +509,149 @@ const FeedbackManagement = () => {
         <Divider sx={{ my: 2 }} />
 
         <Grid container spacing={3}>
-          {/* Provider Rating */}
-          <Grid item xs={12} md={6}>
-            <Typography variant="subtitle2" gutterBottom color="primary">
-              Provider Rating
-            </Typography>
-            <Box display="flex" alignItems="center" mb={1}>
-              <Rating
-                value={feedback.providerFeedback?.rating || 0}
-                precision={0.5}
-                readOnly
-                icon={<StarIcon fontSize="inherit" />}
-                emptyIcon={<StarIcon fontSize="inherit" style={{ opacity: 0.3 }} />}
-              />
-              <Typography variant="body2" sx={{ ml: 1 }}>
-                ({feedback.providerFeedback?.rating?.toFixed(1) || 'N/A'})
-              </Typography>
-            </Box>
-            {feedback.providerFeedback?.comment && (
-              <Typography 
-                variant="body2" 
-                sx={{ 
-                  mt: 1, 
-                  fontStyle: 'italic', 
-                  backgroundColor: 'grey.100', 
-                  p: 1, 
-                  borderRadius: 1 
-                }}
-              >
-                "{feedback.providerFeedback.comment}"
-              </Typography>
-            )}
-            {feedback.providerFeedback?.isEdited && (
-              <Chip label="Edited" size="small" color="info" sx={{ mt: 1 }} />
-            )}
-          </Grid>
-
           {/* Service Rating */}
           <Grid item xs={12} md={6}>
-            <Typography variant="subtitle2" gutterBottom color="primary">
-              Service Rating
+            <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 600 }}>
+              Service Review
             </Typography>
             <Box display="flex" alignItems="center" mb={1}>
-              <Rating
+              <StyledRating
                 value={feedback.serviceFeedback?.rating || 0}
                 precision={0.5}
                 readOnly
                 icon={<StarIcon fontSize="inherit" />}
                 emptyIcon={<StarIcon fontSize="inherit" style={{ opacity: 0.3 }} />}
               />
-              <Typography variant="body2" sx={{ ml: 1 }}>
-                ({feedback.serviceFeedback?.rating?.toFixed(1) || 'N/A'})
+              <Typography variant="body1" sx={{ ml: 1, fontWeight: 500 }}>
+                {feedback.serviceFeedback?.rating?.toFixed(1) || 'N/A'}
               </Typography>
             </Box>
+            
             {feedback.serviceFeedback?.comment && (
-              <Typography 
-                variant="body2" 
-                sx={{ 
-                  mt: 1, 
-                  fontStyle: 'italic', 
-                  backgroundColor: 'grey.100', 
-                  p: 1, 
-                  borderRadius: 1 
-                }}
-              >
+              <Typography variant="body2" sx={{ mt: 1, backgroundColor: '#f5f5f5', p: 2, borderRadius: '8px' }}>
                 "{feedback.serviceFeedback.comment}"
               </Typography>
             )}
-            <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
-              {feedback.serviceFeedback?.isEdited && (
-                <Chip label="Edited" size="small" color="info" />
-              )}
-              {feedback.serviceFeedback?.isApproved === false && (
-                <Chip label="Pending Approval" color="warning" size="small" />
-              )}
-              {feedback.serviceFeedback?.isApproved && (
-                <Chip label="Approved" color="success" size="small" />
-              )}
+          </Grid>
+
+          {/* Provider Rating */}
+          <Grid item xs={12} md={6}>
+            <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 600 }}>
+              Provider Review
+            </Typography>
+            <Box display="flex" alignItems="center" mb={1}>
+              <StyledRating
+                value={feedback.providerFeedback?.rating || 0}
+                precision={0.5}
+                readOnly
+                icon={<StarIcon fontSize="inherit" />}
+                emptyIcon={<StarIcon fontSize="inherit" style={{ opacity: 0.3 }} />}
+              />
+              <Typography variant="body1" sx={{ ml: 1, fontWeight: 500 }}>
+                {feedback.providerFeedback?.rating?.toFixed(1) || 'N/A'}
+              </Typography>
             </Box>
+            
+            {feedback.providerFeedback?.comment && (
+              <Typography variant="body2" sx={{ mt: 1, backgroundColor: '#f5f5f5', p: 2, borderRadius: '8px' }}>
+                "{feedback.providerFeedback.comment}"
+              </Typography>
+            )}
           </Grid>
         </Grid>
 
         {/* Action Buttons */}
         <Box mt={3} display="flex" justifyContent="flex-end" gap={1}>
-          <Button
-            size="small"
-            variant="outlined"
-            onClick={() => navigate(`/customer/feedbacks/${feedback._id}`)}
-          >
-            View Details
-          </Button>
           {canEditFeedback(feedback) && (
-            <Button
-              size="small"
-              variant="contained"
-              onClick={() => navigate(`/customer/feedbacks/${feedback._id}`)}
+            <PrimaryButton
+              size="medium"
+              startIcon={<EditIcon />}
+              onClick={() => handleOpenEditModal(feedback)}
             >
-              Edit Feedback
-            </Button>
+              Edit
+            </PrimaryButton>
           )}
         </Box>
       </CardContent>
-    </Card>
+    </FeedbackCardWrapper>
   );
 
   // Booking selection dialog
   const BookingSelectionDialog = () => (
-    <Dialog 
-      open={openBookingDialog} 
-      onClose={() => setOpenBookingDialog(false)} 
-      maxWidth="sm" 
-      fullWidth
-    >
-      <DialogTitle>Select a Booking to Review</DialogTitle>
+    <Dialog open={openBookingDialog} onClose={() => setOpenBookingDialog(false)} maxWidth="sm" fullWidth>
+      <DialogTitle sx={{ fontWeight: 600 }}>
+        Select Booking to Review
+      </DialogTitle>
       <DialogContent>
         {bookingsForFeedback.length === 0 ? (
           <Box sx={{ p: 3, textAlign: 'center' }}>
             <Typography variant="h6" gutterBottom>
-              No Bookings Available
+              No Bookings Available for Review
             </Typography>
-            <Typography variant="body2" color="text.secondary">
-              You don't have any completed bookings that need feedback, or you've already provided feedback for all your bookings.
+            <Typography variant="body2" sx={{ mb: 3 }}>
+              You've either reviewed all your completed bookings or don't have any bookings ready for review yet.
             </Typography>
           </Box>
         ) : (
           <List>
             {bookingsForFeedback.map(booking => (
-              <ListItemButton 
+              <Card 
                 key={booking._id}
                 onClick={() => handleBookingSelect(booking)}
-                sx={{ 
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  borderRadius: 1,
-                  mb: 1,
-                  '&:hover': {
-                    borderColor: 'primary.main'
-                  }
-                }}
+                sx={{ mb: 2, cursor: 'pointer' }}
               >
-                <ListItemAvatar>
-                  <Avatar>
-                    {booking.service?.title?.charAt(0) || 'S'}
-                  </Avatar>
-                </ListItemAvatar>
-                <ListItemText
-                  primary={booking.service?.title || 'Service'}
-                  secondary={
+                <CardContent>
+                  <Box display="flex" alignItems="center" gap={2}>
+                    <Avatar
+                      src={booking.services?.[0]?.service?.image || ''}
+                      sx={{ width: 56, height: 56 }}
+                    >
+                      {booking.services?.[0]?.service?.title?.charAt(0) || 'S'}
+                    </Avatar>
                     <Box>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                        {booking.services?.[0]?.service?.title || 'Service'}
+                      </Typography>
                       <Typography variant="body2">
-                        Date: {format(new Date(booking.date), 'MMM dd, yyyy')}
+                        {format(new Date(booking.date), 'MMM dd, yyyy')}
                       </Typography>
                       <Typography variant="body2">
                         Provider: {booking.provider?.name || 'Unknown'}
                       </Typography>
                     </Box>
-                  }
-                />
-              </ListItemButton>
+                  </Box>
+                </CardContent>
+              </Card>
             ))}
           </List>
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={() => setOpenBookingDialog(false)}>Cancel</Button>
+        <Button onClick={() => setOpenBookingDialog(false)}>
+          Close
+        </Button>
       </DialogActions>
     </Dialog>
   );
 
   // Feedback submission dialog
   const FeedbackSubmissionDialog = () => (
-    <Dialog 
-      open={openDialog} 
-      onClose={() => setOpenDialog(false)} 
-      maxWidth="md" 
-      fullWidth
-      PaperProps={{
-        sx: { minHeight: '70vh' }
-      }}
-    >
-      <DialogTitle>
-        <Typography variant="h6">Submit Your Feedback</Typography>
+    <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
+      <DialogTitle sx={{ fontWeight: 600 }}>
+        <Box display="flex" alignItems="center">
+          {selectedBooking && (
+            <IconButton edge="start" onClick={() => {
+              setOpenDialog(false);
+              setOpenBookingDialog(true);
+            }}>
+              <ArrowBackIcon />
+            </IconButton>
+          )}
+          {selectedBooking ? `Review for ${selectedBooking.services?.[0]?.service?.title}` : 'Submit Feedback'}
+        </Box>
         {selectedBooking && (
-          <Typography variant="body2" color="text.secondary">
-            For: {selectedBooking.service?.title} - {format(new Date(selectedBooking.date), 'MMM dd, yyyy')}
+          <Typography variant="body2">
+            Booking Date: {format(new Date(selectedBooking.date), 'MMM dd, yyyy')}
           </Typography>
         )}
       </DialogTitle>
@@ -621,75 +661,161 @@ const FeedbackManagement = () => {
     </Dialog>
   );
 
-  // Render based on route
-  if (feedbackId && editingFeedback) {
-    return (
-      <Container maxWidth="md" sx={{ mt: 4 }}>
-        <Box mb={4}>
-          <Typography variant="h4" gutterBottom>
-            Edit Your Feedback
+  // Edit feedback modal
+  const EditFeedbackModal = () => (
+    <Modal
+      open={openEditModal}
+      onClose={() => setOpenEditModal(false)}
+      aria-labelledby="edit-feedback-modal"
+      aria-describedby="edit-feedback-form"
+    >
+      <Box sx={{
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        width: '80%',
+        maxWidth: 900,
+        bgcolor: 'background.paper',
+        boxShadow: 24,
+        p: 4,
+        borderRadius: '16px',
+        maxHeight: '90vh',
+        overflowY: 'auto'
+      }}>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+          <Typography id="edit-feedback-modal" variant="h5" component="h2" sx={{ fontWeight: 600 }}>
+            Edit Your Review
           </Typography>
-          <Typography variant="body1" color="text.secondary">
-            You can update your feedback within 7 days of submission. After editing, service feedback will need admin re-approval.
-          </Typography>
+          <IconButton onClick={() => setOpenEditModal(false)}>
+            <CloseIcon />
+          </IconButton>
         </Box>
         
-        <Paper sx={{ p: 3 }}>
+        <Typography variant="body1" sx={{ mb: 3 }}>
+          You can update your review within 7 days of submission.
+        </Typography>
+        
+        <Paper sx={{ p: 4, borderRadius: '12px' }}>
           <FeedbackForm isEdit />
         </Paper>
-      </Container>
-    );
-  }
+      </Box>
+    </Modal>
+  );
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4 }}>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
-        <Box>
-          <Typography variant="h4" gutterBottom>
-            My Feedbacks
-          </Typography>
-          <Typography variant="body1" color="text.secondary">
-            Manage your service and provider reviews
-          </Typography>
-        </Box>
-        <Button 
-          variant="contained" 
-          onClick={() => setOpenBookingDialog(true)}
-          size="large"
-        >
-          Add New Feedback
-        </Button>
+    <Container maxWidth="lg" sx={{ mt: 4, mb: 6 }}>
+      <Box mb={4}>
+        <Typography variant="h4" gutterBottom sx={{ fontWeight: 700 }}>
+          My Reviews
+        </Typography>
+        <Typography variant="body1">
+          Manage your service and provider reviews
+        </Typography>
       </Box>
 
-      {feedbacks.length === 0 ? (
-        <Paper sx={{ p: 4, textAlign: 'center' }}>
-          <Typography variant="h6" gutterBottom>
-            No Feedbacks Yet
-          </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-            You haven't submitted any feedbacks for your completed bookings. Share your experience to help other customers and improve our services.
-          </Typography>
-          <Button 
-            variant="contained" 
-            onClick={() => setOpenBookingDialog(true)}
-            size="large"
-          >
-            Submit Your First Feedback
-          </Button>
-        </Paper>
-      ) : (
-        <Box>
-          <Typography variant="h6" gutterBottom>
-            Your Reviews ({feedbacks.length})
-          </Typography>
-          {feedbacks.map(feedback => (
-            <FeedbackCard key={feedback._id} feedback={feedback} />
-          ))}
+      <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)} sx={{ mb: 3 }}>
+        <Tab label="All Reviews" sx={{ textTransform: 'none', fontWeight: 600 }} />
+        <Tab label="Editable" sx={{ textTransform: 'none', fontWeight: 600 }} />
+      </Tabs>
+
+      {loading ? (
+        <Box display="flex" justifyContent="center" my={4}>
+          <CircularProgress />
         </Box>
+      ) : error ? (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {error}
+        </Alert>
+      ) : (
+        <>
+          {activeTab === 0 && feedbacks.length === 0 && (
+            <Paper sx={{ p: 4, textAlign: 'center' }}>
+              <Typography variant="h6" gutterBottom>
+                No Reviews Yet
+              </Typography>
+              <Typography variant="body1" sx={{ mb: 3 }}>
+                You haven't reviewed any of your completed bookings. Share your experience to help others.
+              </Typography>
+              <PrimaryButton 
+                onClick={() => setOpenBookingDialog(true)}
+                startIcon={<EditIcon />}
+              >
+                Write Your First Review
+              </PrimaryButton>
+            </Paper>
+          )}
+
+          {activeTab === 1 && feedbacks.filter(f => canEditFeedback(f)).length === 0 && (
+            <Paper sx={{ p: 4, textAlign: 'center' }}>
+              <Typography variant="h6" gutterBottom>
+                No Editable Reviews
+              </Typography>
+              <Typography variant="body1" sx={{ mb: 3 }}>
+                You don't have any reviews that can be edited. Reviews can only be edited within 7 days of submission.
+              </Typography>
+            </Paper>
+          )}
+
+          {(activeTab === 0 && feedbacks.length > 0) && (
+            <Box>
+              <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
+                All Reviews ({feedbacks.length})
+              </Typography>
+              {feedbacks.map(feedback => (
+                <FeedbackCard key={feedback._id} feedback={feedback} />
+              ))}
+            </Box>
+          )}
+
+          {(activeTab === 1 && feedbacks.filter(f => canEditFeedback(f)).length > 0) && (
+            <Box>
+              <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
+                Editable Reviews ({feedbacks.filter(f => canEditFeedback(f)).length})
+              </Typography>
+              {feedbacks
+                .filter(f => canEditFeedback(f))
+                .map(feedback => (
+                  <FeedbackCard key={feedback._id} feedback={feedback} />
+                ))}
+            </Box>
+          )}
+        </>
       )}
 
       <BookingSelectionDialog />
       <FeedbackSubmissionDialog />
+      <EditFeedbackModal />
+
+      <Fab
+        color="primary"
+        aria-label="add review"
+        sx={{ position: 'fixed', bottom: 32, right: 32, display: { xs: 'flex', md: 'none' } }}
+        onClick={() => setOpenBookingDialog(true)}
+      >
+        <AddIcon />
+      </Fab>
+
+      <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+        <PrimaryButton
+          startIcon={<EditIcon />}
+          onClick={() => setOpenBookingDialog(true)}
+          sx={{ position: 'fixed', bottom: 32, right: 32 }}
+        >
+          Write Review
+        </PrimaryButton>
+      </Box>
+
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={6000}
+        onClose={handleSnackbarClose}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={handleSnackbarClose} severity={snackbarSeverity}>
+          {snackbarMessage}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 };

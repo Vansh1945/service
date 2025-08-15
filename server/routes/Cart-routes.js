@@ -6,10 +6,8 @@ const {
   updateCartItem,
   removeFromCart,
   clearCart
-} = require('../controllers/cart-controller');
-const {userAuthMiddleware} = require('../middlewares/User-middleware');
-
-
+} = require('../controllers/Cart-controller');
+const { userAuthMiddleware } = require('../middlewares/User-middleware');
 
 // Get user's cart
 router.get('/', userAuthMiddleware, getCart);
@@ -19,9 +17,10 @@ router.post('/add', userAuthMiddleware, addToCart);
 
 // Update item quantity
 router.put('/update/:serviceId', userAuthMiddleware, updateCartItem);
+router.patch('/update/:serviceId', userAuthMiddleware, updateCartItem);
 
 // Remove item from cart
-router.delete('/delete/:serviceId', userAuthMiddleware, removeFromCart);
+router.delete('/remove/:serviceId', userAuthMiddleware, removeFromCart);
 
 // Clear cart
 router.delete('/clear', userAuthMiddleware, clearCart);

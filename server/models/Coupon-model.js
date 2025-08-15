@@ -8,7 +8,6 @@ const couponSchema = new Schema({
     unique: true,
     trim: true,
     uppercase: true,
-    index: true,
     match: [/^[A-Z0-9_]{5,20}$/, 'Coupon code must be 5-20 alphanumeric characters']
   },
   discountType: {

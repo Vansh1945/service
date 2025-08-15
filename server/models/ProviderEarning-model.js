@@ -103,7 +103,6 @@ providerEarningSchema.statics.getEarningsSummary = async function(providerId) {
   return result;
 };
 
-
 providerEarningSchema.statics.getEarningsByBooking = async function(bookingId) {
   return this.find({ booking: bookingId })
     .populate('provider', 'name email')

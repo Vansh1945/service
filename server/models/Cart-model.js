@@ -1,4 +1,3 @@
-// models/Cart-model.js
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
@@ -12,6 +11,10 @@ const cartItemSchema = new Schema({
     type: Number,
     default: 1,
     min: [1, 'Quantity must be at least 1']
+  },
+  priceAtAddition: {
+    type: Number,
+    required: true
   }
 }, { _id: false });
 
@@ -37,13 +40,17 @@ cartSchema.pre('save', function(next) {
   next();
 });
 
-cartSchema.methods.addItem = async function(serviceId, quantity = 1) {
+cartSchema.methods.addItem = async function(serviceId, quantity = 1, currentPrice) {
   const existingItem = this.items.find(item => item.service.equals(serviceId));
   
   if (existingItem) {
     existingItem.quantity += quantity;
   } else {
-    this.items.push({ service: serviceId, quantity });
+    this.items.push({ 
+      service: serviceId, 
+      quantity,
+      priceAtAddition: currentPrice
+    });
   }
   
   return this.save();
@@ -69,6 +76,15 @@ cartSchema.methods.clearCart = async function() {
   this.items = [];
   return this.save();
 };
+
+cartSchema.virtual('totalAmount').get(function() {
+  return this.items.reduce((total, item) => {
+    return total + (item.priceAtAddition * item.quantity);
+  }, 0);
+});
+
+cartSchema.set('toJSON', { virtuals: true });
+cartSchema.set('toObject', { virtuals: true });
 
 const Cart = mongoose.model('Cart', cartSchema);
 
