@@ -6,7 +6,7 @@ import 'react-toastify/dist/ReactToastify.css';
 const ProviderProfile = () => {
   const { token, API, showToast, logoutUser } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
-  
+
   // Profile Data State
   const [profileData, setProfileData] = useState({
     name: '',
@@ -54,7 +54,7 @@ const ProviderProfile = () => {
     address: false,
     bank: false
   });
-  
+
   const [fileUploads, setFileUploads] = useState({
     profilePic: null,
     resume: null,
@@ -290,7 +290,7 @@ const ProviderProfile = () => {
       profileData.resume,
       profileData.bankDetails.passbookImage
     ];
-    
+
     const completedFields = fields.filter(field => field && field !== '').length;
     return Math.round((completedFields / fields.length) * 100);
   };
@@ -312,7 +312,7 @@ const ProviderProfile = () => {
               <span className="text-2xl font-bold text-primary">{calculateProfileCompletion()}%</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-3">
-              <div 
+              <div
                 className="bg-primary h-3 rounded-full transition-all duration-300"
                 style={{ width: `${calculateProfileCompletion()}%` }}
               ></div>
@@ -335,11 +335,10 @@ const ProviderProfile = () => {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === tab.id
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === tab.id
                       ? 'border-primary text-primary'
                       : 'border-transparent text-secondary hover:text-gray-700 hover:border-gray-300'
-                  }`}
+                    }`}
                 >
                   <span className="mr-2">{tab.icon}</span>
                   {tab.name}
@@ -391,10 +390,9 @@ const ProviderProfile = () => {
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-secondary">KYC Status:</span>
-                      <span className={`text-sm font-medium ${
-                        profileData.kycStatus === 'approved' ? 'text-green-600' : 
-                        profileData.kycStatus === 'rejected' ? 'text-red-600' : 'text-yellow-500'
-                      }`}>
+                      <span className={`text-sm font-medium ${profileData.kycStatus === 'approved' ? 'text-green-600' :
+                          profileData.kycStatus === 'rejected' ? 'text-red-600' : 'text-yellow-500'
+                        }`}>
                         {profileData.kycStatus.charAt(0).toUpperCase() + profileData.kycStatus.slice(1)}
                       </span>
                     </div>
@@ -421,8 +419,8 @@ const ProviderProfile = () => {
                   <div>
                     <h3 className="text-sm font-medium text-secondary">Registration Date</h3>
                     <p className="mt-1 text-sm text-secondary">
-                      {profileData.registrationDate ? 
-                        new Date(profileData.registrationDate).toLocaleDateString() : 
+                      {profileData.registrationDate ?
+                        new Date(profileData.registrationDate).toLocaleDateString() :
                         'Not available'}
                     </p>
                   </div>
@@ -435,16 +433,16 @@ const ProviderProfile = () => {
                   <div>
                     <h3 className="text-sm font-medium text-secondary">Last Updated</h3>
                     <p className="mt-1 text-sm text-secondary">
-                      {profileData.updatedAt ? 
-                        new Date(profileData.updatedAt).toLocaleDateString() : 
+                      {profileData.updatedAt ?
+                        new Date(profileData.updatedAt).toLocaleDateString() :
                         'Not available'}
                     </p>
                   </div>
                   <div>
                     <h3 className="text-sm font-medium text-secondary">Member Since</h3>
                     <p className="mt-1 text-sm text-secondary">
-                      {profileData.createdAt ? 
-                        new Date(profileData.createdAt).toLocaleDateString() : 
+                      {profileData.createdAt ?
+                        new Date(profileData.createdAt).toLocaleDateString() :
                         'Not available'}
                     </p>
                   </div>
@@ -527,9 +525,8 @@ const ProviderProfile = () => {
                       <h3 className="text-lg font-medium text-secondary mb-2">Profile Picture</h3>
                       <div className="space-y-2">
                         <div className="flex items-center justify-center">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            profileData.providerProfile ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                          }`}>
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${profileData.providerProfile ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                            }`}>
                             {profileData.providerProfile ? 'Uploaded' : 'Default'}
                           </span>
                         </div>
@@ -573,9 +570,8 @@ const ProviderProfile = () => {
                       <h3 className="text-lg font-medium text-secondary mb-2">Resume</h3>
                       <div className="space-y-2">
                         <div className="flex items-center justify-center">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            profileData.resume ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                          }`}>
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${profileData.resume ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                            }`}>
                             {profileData.resume ? 'Uploaded' : 'Not Uploaded'}
                           </span>
                         </div>
@@ -627,16 +623,14 @@ const ProviderProfile = () => {
                       <h3 className="text-lg font-medium text-secondary mb-2">Bank Passbook</h3>
                       <div className="space-y-2">
                         <div className="flex items-center justify-center">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            profileData.bankDetails.passbookImage ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                          }`}>
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${profileData.bankDetails.passbookImage ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                            }`}>
                             {profileData.bankDetails.passbookImage ? 'Uploaded' : 'Not Uploaded'}
                           </span>
                         </div>
                         <div className="flex items-center justify-center">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            profileData.bankDetails.verified ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                          }`}>
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${profileData.bankDetails.verified ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                            }`}>
                             {profileData.bankDetails.verified ? 'Verified' : 'Pending Verification'}
                           </span>
                         </div>
@@ -723,10 +717,9 @@ const ProviderProfile = () => {
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-secondary">KYC Status:</span>
-                      <span className={`text-sm font-medium ${
-                        profileData.kycStatus === 'approved' ? 'text-green-600' : 
-                        profileData.kycStatus === 'rejected' ? 'text-red-600' : 'text-yellow-500'
-                      }`}>
+                      <span className={`text-sm font-medium ${profileData.kycStatus === 'approved' ? 'text-green-600' :
+                          profileData.kycStatus === 'rejected' ? 'text-red-600' : 'text-yellow-500'
+                        }`}>
                         {profileData.kycStatus.charAt(0).toUpperCase() + profileData.kycStatus.slice(1)}
                       </span>
                     </div>
@@ -753,9 +746,8 @@ const ProviderProfile = () => {
                 <h2 className="text-xl font-semibold text-white">Basic Information</h2>
                 <button
                   onClick={() => setEditMode({ ...editMode, basic: !editMode.basic })}
-                  className={`px-4 py-2 rounded-md text-sm font-medium ${
-                    editMode.basic ? 'bg-white text-primary' : 'bg-accent text-white hover:bg-orange-500'
-                  }`}
+                  className={`px-4 py-2 rounded-md text-sm font-medium ${editMode.basic ? 'bg-white text-primary' : 'bg-accent text-white hover:bg-orange-500'
+                    }`}
                 >
                   {editMode.basic ? 'Cancel' : 'Edit'}
                 </button>
@@ -861,9 +853,8 @@ const ProviderProfile = () => {
                 <h2 className="text-xl font-semibold text-white">Professional Information</h2>
                 <button
                   onClick={() => setEditMode({ ...editMode, professional: !editMode.professional })}
-                  className={`px-4 py-2 rounded-md text-sm font-medium ${
-                    editMode.professional ? 'bg-white text-primary' : 'bg-accent text-white hover:bg-orange-500'
-                  }`}
+                  className={`px-4 py-2 rounded-md text-sm font-medium ${editMode.professional ? 'bg-white text-primary' : 'bg-accent text-white hover:bg-orange-500'
+                    }`}
                 >
                   {editMode.professional ? 'Cancel' : 'Edit'}
                 </button>
@@ -959,9 +950,8 @@ const ProviderProfile = () => {
                 <h2 className="text-xl font-semibold text-white">Address Information</h2>
                 <button
                   onClick={() => setEditMode({ ...editMode, address: !editMode.address })}
-                  className={`px-4 py-2 rounded-md text-sm font-medium ${
-                    editMode.address ? 'bg-white text-primary' : 'bg-accent text-white hover:bg-orange-500'
-                  }`}
+                  className={`px-4 py-2 rounded-md text-sm font-medium ${editMode.address ? 'bg-white text-primary' : 'bg-accent text-white hover:bg-orange-500'
+                    }`}
                 >
                   {editMode.address ? 'Cancel' : 'Edit'}
                 </button>
@@ -1080,9 +1070,8 @@ const ProviderProfile = () => {
                 <h2 className="text-xl font-semibold text-white">Bank Information</h2>
                 <button
                   onClick={() => setEditMode({ ...editMode, bank: !editMode.bank })}
-                  className={`px-4 py-2 rounded-md text-sm font-medium ${
-                    editMode.bank ? 'bg-white text-primary' : 'bg-accent text-white hover:bg-orange-500'
-                  }`}
+                  className={`px-4 py-2 rounded-md text-sm font-medium ${editMode.bank ? 'bg-white text-primary' : 'bg-accent text-white hover:bg-orange-500'
+                    }`}
                 >
                   {editMode.bank ? 'Cancel' : 'Edit'}
                 </button>
@@ -1136,8 +1125,8 @@ const ProviderProfile = () => {
                     <div>
                       <h3 className="text-sm font-medium text-secondary">Account Number</h3>
                       <p className="mt-1 text-sm text-secondary">
-                        {profileData.bankDetails.accountNo ? 
-                          `****${profileData.bankDetails.accountNo.slice(-4)}` : 
+                        {profileData.bankDetails.accountNo ?
+                          `****${profileData.bankDetails.accountNo.slice(-4)}` :
                           'Not provided'}
                       </p>
                     </div>
@@ -1149,9 +1138,8 @@ const ProviderProfile = () => {
 
                     <div className="md:col-span-2">
                       <h3 className="text-sm font-medium text-secondary">Verification Status</h3>
-                      <p className={`mt-1 text-sm font-medium ${
-                        profileData.bankDetails.verified ? 'text-green-600' : 'text-yellow-500'
-                      }`}>
+                      <p className={`mt-1 text-sm font-medium ${profileData.bankDetails.verified ? 'text-green-600' : 'text-yellow-500'
+                        }`}>
                         {profileData.bankDetails.verified ? 'Verified' : 'Pending Verification'}
                       </p>
                     </div>
@@ -1188,5 +1176,7 @@ const ProviderProfile = () => {
     </div>
   );
 };
+
+
 
 export default ProviderProfile;
