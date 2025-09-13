@@ -613,7 +613,7 @@ const ProviderEarningsDashboard = () => {
           <div className="bg-background rounded-xl shadow-sm p-4 sm:p-6 border border-gray-200 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Commission Pending</p>
+                <p className="text-sm font-medium text-gray-600">Commission (Cash Booking)</p>
                 <p className="text-lg sm:text-xl font-bold text-yellow-600">
                   {formatCurrency(summary.commissionPending)}
                 </p>
