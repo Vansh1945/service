@@ -262,12 +262,8 @@ const downloadEarningsReport = async (req, res) => {
     let filter = { provider: new mongoose.Types.ObjectId(providerId) };
 
     if (download === "true") {
-      // Validate startDate and endDate only when downloading
       if (!startDate || !endDate) {
-        return res.status(400).json({
-          success: false,
-          error: "Start date and End date are required for download",
-        });
+        return res.status(400).json({ success: false, error: "Start date and End date are required for download" });
       }
 
       const start = new Date(startDate);
@@ -275,20 +271,15 @@ const downloadEarningsReport = async (req, res) => {
 
       const diffDays = Math.floor((end - start) / (1000 * 60 * 60 * 24));
       if (diffDays < 7) {
-        return res
-          .status(400)
-          .json({ success: false, error: "Minimum range is 7 days" });
+        return res.status(400).json({ success: false, error: "Minimum range is 7 days" });
       }
       if (diffDays > 62) {
-        return res
-          .status(400)
-          .json({ success: false, error: "Maximum range is 2 months" });
+        return res.status(400).json({ success: false, error: "Maximum range is 2 months" });
       }
 
       filter.createdAt = { $gte: start, $lte: end };
     }
 
-    // Fetch earnings with payment info
     const earnings = await ProviderEarning.aggregate([
       { $match: filter },
       {
@@ -299,12 +290,7 @@ const downloadEarningsReport = async (req, res) => {
           as: "paymentInfo",
         },
       },
-      {
-        $unwind: {
-          path: "$paymentInfo",
-          preserveNullAndEmptyArrays: true,
-        },
-      },
+      { $unwind: { path: "$paymentInfo", preserveNullAndEmptyArrays: true } },
       {
         $project: {
           booking: 1,
@@ -338,10 +324,7 @@ const downloadEarningsReport = async (req, res) => {
     ]);
 
     if (!earnings.length) {
-      return res.json({
-        success: true,
-        message: "No earnings found",
-      });
+      return res.status(200).json({ success: false, message: "No earnings found" });
     }
 
     if (download === "true") {
@@ -366,7 +349,7 @@ const downloadEarningsReport = async (req, res) => {
           commissionAmount: earning.commissionAmount,
           netAmount: earning.netAmount,
           status: earning.status,
-          createdAt: earning.createdAt.toISOString().slice(0, 19).replace("T", " "),
+          createdAt: new Date(earning.createdAt).toISOString().slice(0, 19).replace("T", " "),
         });
       });
 
@@ -374,35 +357,24 @@ const downloadEarningsReport = async (req, res) => {
         cell.font = { bold: true };
       });
 
-      res.setHeader(
-        "Content-Disposition",
-        `attachment; filename=earnings_report_${startDate}_to_${endDate}.xlsx`
-      );
-      res.setHeader(
-        "Content-Type",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-      );
+      // Set headers BEFORE sending the response
+      res.setHeader("Content-Disposition", `attachment; filename=earnings_report_${startDate}_to_${endDate}.xlsx`);
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 
-      await workbook.xlsx.write(res);
-      res.end();
+      const buffer = await workbook.xlsx.writeBuffer();
+      res.send(buffer);
+
+      // Send success message after sending buffer
+      console.log("Earnings report generated and sent successfully");
+      return;
     } else {
-      // Just show data in JSON for view
-      res.json({
-        success: true,
-        earnings,
-      });
+      res.json({ success: true, earnings });
     }
-
   } catch (error) {
-    console.error("Error fetching earnings report:", error);
-    res.status(500).json({
-      success: false,
-      error: "Failed to generate earnings report",
-    });
+    console.error("Error generating earnings report:", error);
+    res.status(500).json({ success: false, error: "Failed to generate earnings report" });
   }
 };
-
-
 
 // Provider - Withdrawal Report (View or Download Excel)
 const downloadWithdrawalReport = async (req, res) => {
@@ -410,14 +382,11 @@ const downloadWithdrawalReport = async (req, res) => {
     const providerId = req.provider._id;
     const { startDate, endDate, download } = req.query;
 
-    let filter = { provider: providerId };
+    let filter = { provider: new mongoose.Types.ObjectId(providerId) };
 
     if (download === "true") {
       if (!startDate || !endDate) {
-        return res.status(400).json({
-          success: false,
-          message: "Please provide both startDate and endDate for download",
-        });
+        return res.status(400).json({ success: false, message: "StartDate and EndDate are required for download" });
       }
 
       const start = new Date(startDate);
@@ -425,16 +394,10 @@ const downloadWithdrawalReport = async (req, res) => {
 
       const diffDays = Math.floor((end - start) / (1000 * 60 * 60 * 24));
       if (diffDays < 7) {
-        return res.status(400).json({
-          success: false,
-          message: "Minimum range is 7 days",
-        });
+        return res.status(400).json({ success: false, message: "Minimum range is 7 days" });
       }
       if (diffDays > 62) {
-        return res.status(400).json({
-          success: false,
-          message: "Maximum range is 2 months",
-        });
+        return res.status(400).json({ success: false, message: "Maximum range is 2 months" });
       }
 
       filter.createdAt = { $gte: start, $lte: end };
@@ -443,11 +406,7 @@ const downloadWithdrawalReport = async (req, res) => {
     const records = await PaymentRecord.find(filter).sort({ createdAt: -1 });
 
     if (!records.length) {
-      return res.json({
-        success: true,
-        message: "No withdrawal records found",
-        records: [],
-      });
+      return res.status(200).json({ success: true, message: "No withdrawal records found", records: [] });
     }
 
     if (download === "true") {
@@ -455,17 +414,17 @@ const downloadWithdrawalReport = async (req, res) => {
       const worksheet = workbook.addWorksheet("Withdrawal Report");
 
       worksheet.columns = [
-        { header: "Withdrawal Reference ID", key: "reference", width: 30 },
-        { header: "Requested Amount", key: "amount", width: 20 },
-        { header: "Net Amount Paid", key: "netAmount", width: 20 },
+        { header: "Reference ID", key: "reference", width: 30 },
+        { header: "Requested Amount (₹)", key: "amount", width: 20 },
+        { header: "Net Amount Paid (₹)", key: "netAmount", width: 20 },
         { header: "Payment Method", key: "paymentMethod", width: 20 },
         { header: "Account Number", key: "accountNumber", width: 25 },
         { header: "IFSC Code", key: "ifscCode", width: 20 },
         { header: "Bank Name", key: "bankName", width: 25 },
         { header: "Status", key: "status", width: 15 },
         { header: "Requested Date", key: "requestedDate", width: 20 },
-        { header: "Processed/Completed Date", key: "processedDate", width: 25 },
-        { header: "Admin Remark / Rejection Reason", key: "remark", width: 40 },
+        { header: "Processed Date", key: "processedDate", width: 25 },
+        { header: "Admin Remark / Rejection", key: "remark", width: 40 },
       ];
 
       records.forEach((record) => {
@@ -478,47 +437,32 @@ const downloadWithdrawalReport = async (req, res) => {
           ifscCode: record.paymentDetails?.ifscCode || "N/A",
           bankName: record.paymentDetails?.bankName || "N/A",
           status: record.status,
-          requestedDate: record.createdAt.toISOString().split("T")[0],
-          processedDate:
-            record.completedAt?.toISOString().split("T")[0] ||
-            record.processedAt?.toISOString().split("T")[0] ||
-            "N/A",
+          requestedDate: record.createdAt.toISOString().slice(0, 19).replace("T", " "),
+          processedDate: record.completedAt?.toISOString().slice(0, 19).replace("T", " ") || "N/A",
           remark: record.adminRemark || record.rejectionReason || "N/A",
         });
       });
 
-      const fileName = `Withdrawal_Report_${startDate}_to_${endDate}.xlsx`;
-
-      res.setHeader(
-        "Content-Type",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-      );
-      res.setHeader("Content-Disposition", `attachment; filename=${fileName}`);
-
-      await workbook.xlsx.write(res);
-      res.end();
-    } else {
-      // Return JSON view without date restrictions
-      res.json({
-        success: true,
-        records,
+      worksheet.getRow(1).eachCell((cell) => {
+        cell.font = { bold: true };
       });
-    }
 
+      res.setHeader("Content-Disposition", `attachment; filename=withdrawal_report_${startDate}_to_${endDate}.xlsx`);
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      res.send(buffer);
+
+      console.log("Withdrawal report generated and sent successfully");
+      return;
+    } else {
+      res.json({ success: true, records });
+    }
   } catch (error) {
-    console.error("Error fetching withdrawal report:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch withdrawal report",
-      error: error.message,
-    });
+    console.error("Error generating withdrawal report:", error);
+    res.status(500).json({ success: false, message: "Failed to generate withdrawal report", error: error.message });
   }
 };
-
-
-
-
-
 
 
 // Admin - Get All withdrawal requests

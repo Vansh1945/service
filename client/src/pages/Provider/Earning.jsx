@@ -13,10 +13,7 @@ import {
   Calendar,
   Filter,
   RefreshCw,
-  ArrowUpRight,
   ArrowDownLeft,
-  User,
-  Building,
   ChevronDown,
   ChevronUp,
   BarChart3,
@@ -47,8 +44,8 @@ const ProviderEarningsDashboard = () => {
   const [withdrawalForm, setWithdrawalForm] = useState({
     amount: ''
   });
+  const [downloading, setDownloading] = useState({ earnings: false, withdrawals: false });
   const [providerBankDetails, setProviderBankDetails] = useState(null);
-  const [loadingBankDetails, setLoadingBankDetails] = useState(false);
   const [dateFilter, setDateFilter] = useState({
     startDate: '',
     endDate: ''
@@ -101,9 +98,9 @@ const ProviderEarningsDashboard = () => {
       const currentDate = new Date();
       const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
       const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-      
+
       const weeklyResponse = await fetch(
-        `${API}/payment/earnings-report?startDate=${startOfMonth.toISOString().split('T')[0]}&endDate=${endOfMonth.toISOString().split('T')[0]}`, 
+        `${API}/payment/earnings-report?startDate=${startOfMonth.toISOString().split('T')[0]}&endDate=${endOfMonth.toISOString().split('T')[0]}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -122,9 +119,9 @@ const ProviderEarningsDashboard = () => {
       // Generate monthly data for current year
       const startOfYear = new Date(currentDate.getFullYear(), 0, 1);
       const endOfYear = new Date(currentDate.getFullYear(), 11, 31);
-      
+
       const monthlyResponse = await fetch(
-        `${API}/payment/earnings-report?startDate=${startOfYear.toISOString().split('T')[0]}&endDate=${endOfYear.toISOString().split('T')[0]}`, 
+        `${API}/payment/earnings-report?startDate=${startOfYear.toISOString().split('T')[0]}&endDate=${endOfYear.toISOString().split('T')[0]}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -150,19 +147,19 @@ const ProviderEarningsDashboard = () => {
     const weeks = [];
     const currentDate = new Date();
     const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-    
+
     // Generate 4 weeks for current month
     for (let i = 0; i < 4; i++) {
       const weekStart = new Date(startOfMonth);
       weekStart.setDate(startOfMonth.getDate() + (i * 7));
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekStart.getDate() + 6);
-      
+
       const weekEarnings = earnings.filter(earning => {
         const earningDate = new Date(earning.createdAt);
         return earningDate >= weekStart && earningDate <= weekEnd;
       });
-      
+
       weeks.push({
         week: `Week ${i + 1}`,
         startDate: weekStart,
@@ -171,7 +168,7 @@ const ProviderEarningsDashboard = () => {
         count: weekEarnings.length
       });
     }
-    
+
     setWeeklyData(weeks);
   };
 
@@ -181,13 +178,13 @@ const ProviderEarningsDashboard = () => {
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
     ];
-    
+
     const monthlyEarnings = months.map((month, index) => {
       const monthEarnings = earnings.filter(earning => {
         const earningDate = new Date(earning.createdAt);
         return earningDate.getMonth() === index;
       });
-      
+
       return {
         month,
         earnings: monthEarnings.reduce((sum, e) => sum + (e.netAmount || 0), 0),
@@ -195,7 +192,7 @@ const ProviderEarningsDashboard = () => {
         commission: monthEarnings.reduce((sum, e) => sum + (e.commissionAmount || 0), 0)
       };
     });
-    
+
     setMonthlyData(monthlyEarnings);
   };
 
@@ -276,7 +273,6 @@ const ProviderEarningsDashboard = () => {
   // Fetch provider profile for bank details
   const fetchProviderProfile = async () => {
     try {
-      setLoadingBankDetails(true);
       const response = await fetch(`${API}/provider/profile`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -300,16 +296,14 @@ const ProviderEarningsDashboard = () => {
       console.error('Error fetching provider profile:', error);
       showToast(error.message, 'error');
       return null;
-    } finally {
-      setLoadingBankDetails(false);
     }
   };
 
-  // Handle withdrawal request - FIXED FUNCTION
+  // Handle withdrawal request
   const handleWithdrawal = async () => {
     try {
       setProcessingWithdrawal(true);
-      
+
       if (!withdrawalForm.amount || withdrawalForm.amount < 500) {
         showToast('Minimum withdrawal amount is ₹500', 'error');
         return;
@@ -334,17 +328,7 @@ const ProviderEarningsDashboard = () => {
       const data = await response.json();
 
       if (!response.ok) {
-        // Handle error response more gracefully
-        const errorMessage = data?.error || data?.message || 'Failed to process withdrawal';
-        
-        // Check if the error response has availableBalance property
-        if (data?.availableBalance !== undefined) {
-          showToast(`${errorMessage}. Available balance: ₹${data.availableBalance}`, 'error');
-        } else {
-          showToast(errorMessage, 'error');
-        }
-        
-        return;
+        throw new Error(data?.error || data?.message || 'Failed to process withdrawal');
       }
 
       if (data.success) {
@@ -353,111 +337,89 @@ const ProviderEarningsDashboard = () => {
         setWithdrawalForm({ amount: '' });
         fetchSummary(); // Refresh data
       } else {
-        // Handle success=false but with error message
-        const errorMessage = data.error || data.message || 'Failed to process withdrawal';
-        
-        if (data.availableBalance !== undefined) {
-          showToast(`${errorMessage}. Available balance: ₹${data.availableBalance}`, 'error');
-        } else {
-          showToast(errorMessage, 'error');
-        }
+        throw new Error(data.error || data.message || 'Failed to process withdrawal');
       }
     } catch (error) {
       console.error('Error processing withdrawal:', error);
-      
-      // Handle network errors or other unexpected errors
-      if (error.name === 'TypeError' && error.message.includes('availableBalance')) {
-        showToast('Withdrawal failed. Please check your available balance and try again.', 'error');
-      } else {
-        showToast(error.message || 'An unexpected error occurred', 'error');
-      }
+      showToast(error.message, 'error');
     } finally {
       setProcessingWithdrawal(false);
     }
   };
 
-  // Download earnings report
-  const downloadEarningsReport = async () => {
+  // Download Report function
+  const downloadReport = async (type) => {
     try {
-      let url = `${API}/payment/earnings-report?download=true`;
-      const params = new URLSearchParams();
+      setDownloading(prev => ({ ...prev, [type]: true }));
 
-      if (dateFilter.startDate) params.append('startDate', dateFilter.startDate);
-      if (dateFilter.endDate) params.append('endDate', dateFilter.endDate);
-
-      if (dateFilter.startDate || dateFilter.endDate) {
-        url += `&${params.toString()}`;
+      if (!dateFilter.startDate || !dateFilter.endDate) {
+        showToast('Please select a start and end date to download the report', 'error');
+        return;
       }
 
-      const response = await fetch(url, {
+      // First, check if there is data to download
+      const checkParams = new URLSearchParams();
+      checkParams.append('startDate', dateFilter.startDate);
+      checkParams.append('endDate', dateFilter.endDate);
+
+      const endpoint = type === 'earnings' ? 'earnings-report' : 'withdrawal-report';
+      const checkResponse = await fetch(`${API}/payment/${endpoint}?${checkParams.toString()}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!checkResponse.ok) {
+        const errorData = await checkResponse.json();
+        throw new Error(errorData?.error || errorData?.message || `Failed to check for ${type} report data`);
+      }
+
+      const checkData = await checkResponse.json();
+      const records = type === 'earnings' ? checkData.earnings : checkData.records;
+
+      if (!records || records.length === 0) {
+        showToast(`No ${type} data found for the selected period.`, 'info');
+        return;
+      }
+
+      // If data exists, proceed with download
+      const downloadParams = new URLSearchParams();
+      downloadParams.append('startDate', dateFilter.startDate);
+      downloadParams.append('endDate', dateFilter.endDate);
+      downloadParams.append('download', 'true');
+
+      const downloadResponse = await fetch(`${API}/payment/${endpoint}?${downloadParams.toString()}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData?.error || errorData?.message || 'Failed to download earnings report');
+      if (!downloadResponse.ok) {
+        const errorData = await downloadResponse.json();
+        throw new Error(errorData?.error || errorData?.message || `Failed to download ${type} report`);
       }
 
-      const blob = await response.blob();
-      const downloadUrl = window.URL.createObjectURL(blob);
+      // Handle file download
+      const blob = await downloadResponse.blob();
+      const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = downloadUrl;
-      a.download = `earnings_report_${new Date().toISOString().split('T')[0]}.xlsx`;
+      a.href = url;
+      a.download = `${type}_report_${dateFilter.startDate}_to_${dateFilter.endDate}.xlsx`;
       document.body.appendChild(a);
       a.click();
+      window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      window.URL.revokeObjectURL(downloadUrl);
 
-      showToast('Earnings report downloaded successfully!', 'success');
+      showToast(`${type.charAt(0).toUpperCase() + type.slice(1)} report downloaded successfully!`, 'success');
     } catch (error) {
-      console.error('Error downloading earnings report:', error);
+      console.error(`Error downloading ${type} report:`, error);
       showToast(error.message, 'error');
+    } finally {
+      setDownloading(prev => ({ ...prev, [type]: false }));
     }
   };
-
-  // Download withdrawal report
-  const downloadWithdrawalReport = async () => {
-    try {
-      let url = `${API}/payment/withdrawal-report?download=true`;
-      const params = new URLSearchParams();
-
-      if (dateFilter.startDate) params.append('startDate', dateFilter.startDate);
-      if (dateFilter.endDate) params.append('endDate', dateFilter.endDate);
-
-      if (dateFilter.startDate || dateFilter.endDate) {
-        url += `&${params.toString()}`;
-      }
-
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData?.error || errorData?.message || 'Failed to download withdrawal report');
-      }
-
-      const blob = await response.blob();
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = downloadUrl;
-      a.download = `withdrawal_report_${new Date().toISOString().split('T')[0]}.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(downloadUrl);
-
-      showToast('Withdrawal report downloaded successfully!', 'success');
-    } catch (error) {
-      console.error('Error downloading withdrawal report:', error);
-      showToast(error.message, 'error');
-    }
-  };
-
+  
   // Refresh all data
   const refreshData = async () => {
     try {
@@ -572,7 +534,7 @@ const ProviderEarningsDashboard = () => {
         <div className="mb-6 sm:mb-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center">
-              <button 
+              <button
                 className="md:hidden mr-2 p-2 rounded-md text-gray-700"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               >
@@ -583,14 +545,6 @@ const ProviderEarningsDashboard = () => {
                 <p className="text-gray-600 mt-1 sm:mt-2 text-sm sm:text-base">Track your earnings and manage withdrawals</p>
               </div>
             </div>
-            <button
-              onClick={refreshData}
-              disabled={loading}
-              className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-background border border-gray-300 rounded-md shadow-sm text-sm font-medium text-secondary hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">Refresh</span>
-            </button>
           </div>
         </div>
 
@@ -680,8 +634,8 @@ const ProviderEarningsDashboard = () => {
                   onClick={() => toggleCardExpansion('weekly')}
                   className="p-1 sm:p-2 hover:bg-gray-100 rounded-full transition-colors"
                 >
-                  {expandedCards.weekly ? 
-                    <ChevronUp className="w-4 sm:w-5 h-4 sm:h-5 text-gray-500" /> : 
+                  {expandedCards.weekly ?
+                    <ChevronUp className="w-4 sm:w-5 h-4 sm:h-5 text-gray-500" /> :
                     <ChevronDown className="w-4 sm:w-5 h-4 sm:h-5 text-gray-500" />
                   }
                 </button>
@@ -733,8 +687,8 @@ const ProviderEarningsDashboard = () => {
                   onClick={() => toggleCardExpansion('monthly')}
                   className="p-1 sm:p-2 hover:bg-gray-100 rounded-full transition-colors"
                 >
-                  {expandedCards.monthly ? 
-                    <ChevronUp className="w-4 sm:w-5 h-4 sm:h-5 text-gray-500" /> : 
+                  {expandedCards.monthly ?
+                    <ChevronUp className="w-4 sm:w-5 h-4 sm:h-5 text-gray-500" /> :
                     <ChevronDown className="w-4 sm:w-5 h-4 sm:h-5 text-gray-500" />
                   }
                 </button>
@@ -744,15 +698,15 @@ const ProviderEarningsDashboard = () => {
                 {monthlyData.slice(0, 6).map((month, index) => {
                   const prevMonth = index > 0 ? monthlyData[index - 1] : null;
                   const trend = prevMonth ? getTrend(month.earnings, prevMonth.earnings) : { trend: 'neutral', percentage: 0 };
-                  
+
                   return (
                     <div key={month.month} className="bg-gray-50 p-2 rounded-lg">
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-xs font-medium text-gray-600">{month.month}</span>
                         {trend.trend !== 'neutral' && (
                           <div className={`flex items-center gap-1 ${trend.trend === 'up' ? 'text-primary' : 'text-red-600'}`}>
-                            {trend.trend === 'up' ? 
-                              <TrendingUp className="w-3 h-3" /> : 
+                            {trend.trend === 'up' ?
+                              <TrendingUp className="w-3 h-3" /> :
                               <TrendingDown className="w-3 h-3" />
                             }
                           </div>
@@ -882,8 +836,8 @@ const ProviderEarningsDashboard = () => {
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 ${activeTab === tab.id
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-gray-500 hover:text-secondary'
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-gray-500 hover:text-secondary'
                     }`}
                 >
                   <tab.icon className="w-4 h-4" />
@@ -1028,7 +982,7 @@ const ProviderEarningsDashboard = () => {
                       <option value="requested">Requested</option>
                       <option value="processing">Processing</option>
                       <option value="completed">Completed</option>
-                      <option value="rejected">Rejected</option>
+                      <option value='rejected'>Rejected</option>
                     </select>
                   </div>
                 </div>
@@ -1073,7 +1027,7 @@ const ProviderEarningsDashboard = () => {
             {activeTab === 'reports' && (
               <div>
                 <h3 className="text-lg font-semibold mb-4 text-secondary">Download Reports</h3>
-                
+
                 <div className="mb-6">
                   <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
                     <div className="flex items-center gap-2">
@@ -1108,9 +1062,6 @@ const ProviderEarningsDashboard = () => {
                       Clear
                     </button>
                   </div>
-                  <p className="text-xs text-gray-500">
-                    Note: Date range must be between 7 days and 2 months for downloads
-                  </p>
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 sm:gap-6 sm:grid-cols-2">
@@ -1125,12 +1076,16 @@ const ProviderEarningsDashboard = () => {
                       </div>
                     </div>
                     <button
-                      onClick={downloadEarningsReport}
-                      disabled={!dateFilter.startDate || !dateFilter.endDate}
+                      onClick={() => downloadReport('earnings')}
+                      disabled={!dateFilter.startDate || !dateFilter.endDate || downloading.earnings}
                       className="w-full bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-md text-sm flex items-center justify-center gap-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
                     >
-                      <Download className="w-4 h-4" />
-                      Download Excel
+                      {downloading.earnings ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Download className="w-4 h-4" />
+                      )}
+                      {downloading.earnings ? 'Downloading...' : 'Download Excel'}
                     </button>
                   </div>
 
@@ -1145,12 +1100,16 @@ const ProviderEarningsDashboard = () => {
                       </div>
                     </div>
                     <button
-                      onClick={downloadWithdrawalReport}
-                      disabled={!dateFilter.startDate || !dateFilter.endDate}
+                      onClick={() => downloadReport('withdrawals')}
+                      disabled={!dateFilter.startDate || !dateFilter.endDate || downloading.withdrawals}
                       className="w-full bg-accent hover:bg-accent/90 text-white px-4 py-2 rounded-md text-sm flex items-center justify-center gap-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
                     >
-                      <Download className="w-4 h-4" />
-                      Download Excel
+                      {downloading.withdrawals ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Download className="w-4 h-4" />
+                      )}
+                      {downloading.withdrawals ? 'Downloading...' : 'Download Excel'}
                     </button>
                   </div>
                 </div>
