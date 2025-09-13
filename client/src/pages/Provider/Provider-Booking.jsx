@@ -549,6 +549,11 @@ const ProviderBooking = () => {
         const errorData = await response.json();
         let errorMessage = errorData.message || `Failed to ${action} booking`;
 
+        if (response.status === 409) {
+          showToast(errorMessage, 'warning');
+          throw new Error(errorMessage);
+        }
+
         if (response.status === 404) {
           errorMessage = action === 'complete'
             ? 'Booking Not Available for Completion'

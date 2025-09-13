@@ -1406,8 +1406,7 @@ const acceptBooking = async (req, res) => {
   try {
     const { id } = req.params;
     const providerId = req.provider._id;
-    const { time } = req.body || {}; // Fix: Add null check for req.body
-
+    const { time } = req.body || {}; 
     // Validate booking ID format
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
@@ -1425,11 +1424,7 @@ const acceptBooking = async (req, res) => {
       });
     }
 
-    // Find the booking that matches:
-    // 1. The booking ID
-    // 2. Has services the provider offers
-    // 3. Is either unassigned or assigned to this provider
-    // 4. Is in pending status (regardless of payment status)
+    // Find the booking that matches
     const booking = await Booking.findOne({
       _id: id,
       status: 'pending',
@@ -1465,10 +1460,6 @@ const acceptBooking = async (req, res) => {
         message: 'Invalid time format (use HH:MM)'
       });
     }
-
-    // IMPORTANT: Provider can accept booking regardless of payment status
-    // This allows the workflow: Booking Created -> Payment -> Pending -> Provider Accepts -> Accepted
-    // OR: Booking Created -> Pending -> Provider Accepts -> Accepted -> Payment (for cash payments)
 
     // Update booking status to accepted
     booking.status = 'accepted';
@@ -1715,7 +1706,6 @@ const completeBooking = async (req, res) => {
   const { id } = req.params;
   const providerId = req.provider._id;
 
-  // Start a session for the transaction
   const session = await mongoose.startSession();
   session.startTransaction();
 
@@ -1724,9 +1714,7 @@ const completeBooking = async (req, res) => {
       .select('name email performanceTier wallet services')
       .session(session);
 
-    if (!provider) {
-      throw new Error('Provider not found');
-    }
+    if (!provider) throw new Error('Provider not found');
 
     const commissionRule = await CommissionRule.getCommissionForProvider(
       providerId,
@@ -1743,32 +1731,33 @@ const completeBooking = async (req, res) => {
         $set: {
           status: 'completed',
           completedAt: new Date(),
-          paymentStatus: 'paid' // Mark as paid on completion
+          paymentStatus: 'paid'
         }
       },
-      { new: false, session: session } 
-    ).populate('customer', 'name email phone').populate('services.service', 'title basePrice category');
+      { new: false, session }
+    )
+    .populate('customer', 'name email phone')
+    .populate('services.service', 'title basePrice category');
 
     if (!booking) {
       const currentBooking = await Booking.findById(id).select('status').lean();
       if (currentBooking && currentBooking.status === 'completed') {
-        await session.commitTransaction(); // Commit the transaction as we've done a read.
+        await session.commitTransaction();
         session.endSession();
         return res.json({
           success: true,
-          message: 'Booking has already been completed.',
+          message: 'Booking already completed.'
         });
       }
-      throw new Error('Booking not found or not in a state that can be completed.');
+      throw new Error('Booking not found or cannot be completed.');
     }
-
 
     const { commission, netAmount } = CommissionRule.calculateCommission(
       booking.totalAmount,
       commissionRule
     );
 
-    // Handle cash payment transaction if necessary
+    // Cash transaction record (if applicable)
     if (booking.paymentMethod === 'cash' && booking.paymentStatus === 'pending') {
       const Transaction = require('../models/Transaction-model ');
       const cashTransaction = new Transaction({
@@ -1785,7 +1774,21 @@ const completeBooking = async (req, res) => {
       await cashTransaction.save({ session });
     }
 
-    // Create the ProviderEarning record. We are sure it doesn't exist yet.
+    // Prevent duplicate earnings record
+    const existingEarning = await ProviderEarning.findOne({
+      booking: booking._id,
+      provider: providerId
+    }).session(session);
+
+    if (existingEarning) {
+      await session.commitTransaction();
+      session.endSession();
+      return res.status(409).json({
+        success: false,
+        message: 'Earning already recorded for this booking.'
+      });
+    }
+
     const isCashPayment = booking.paymentMethod === 'cash';
     const earningStatus = isCashPayment ? 'paid' : 'available';
     const availableAfter = isCashPayment
@@ -1804,21 +1807,22 @@ const completeBooking = async (req, res) => {
     });
     await providerEarning.save({ session });
 
-    // Increment provider's stats
+    // --- Crucial Fix: Update Provider Wallet Available Balance ---
+    if (!provider.wallet) {
+      provider.wallet = { availableBalance: 0, totalWithdrawn: 0, lastUpdated: new Date() };
+    }
+    provider.wallet.availableBalance += netAmount;
+    provider.wallet.lastUpdated = new Date();
+
+    await provider.save({ session });
+
     await Provider.findByIdAndUpdate(
       providerId,
-      {
-        $inc: {
-          completedBookings: 1,
-          totalEarnings: netAmount,
-          totalCommissionPaid: commission
-        }
-      },
+      { $inc: { completedBookings: 1, totalEarnings: netAmount, totalCommissionPaid: commission } },
       { session }
     );
 
-    // --- Notifications and Response ---
-    // Send emails asynchronously
+    // Notifications (as before)
     setImmediate(async () => {
       try {
         const servicesList = booking.services.map(item =>
@@ -1827,66 +1831,54 @@ const completeBooking = async (req, res) => {
 
         const paymentStatusText = booking.paymentMethod === 'cash'
           ? 'Cash Payment Received - Thank you!'
-          : (booking.paymentStatus === 'paid' ? 'Paid - Thank you!' : 'Pending - Please make payment soon');
+          : (booking.paymentStatus === 'paid' ? 'Paid - Thank you!' : 'Pending');
 
         const emailHtml = `
           <h2>Service Completed</h2>
-          <p>Your service has been successfully completed.</p>
-          <p><strong>Booking ID:</strong> ${booking._id}</p>
-          
-          <h3>Services:</h3>
+          <p>Booking ID: ${booking._id}</p>
           <ul>${servicesList}</ul>
-          
           <p><strong>Total Amount:</strong> ₹${booking.totalAmount.toFixed(2)}</p>
           <p><strong>Commission:</strong> ₹${commission.toFixed(2)}</p>
           <p><strong>Provider Earnings:</strong> ₹${netAmount.toFixed(2)}</p>
-          
           <p><strong>Payment Status:</strong> ${paymentStatusText}</p>
-          ${booking.paymentMethod === 'cash' ? '<p><strong>Payment Method:</strong> Cash payment received.</p>' : ''}
-            
-          <p>Thank you for using our service.</p>
         `;
 
         await Promise.all([
           sendEmail({ to: booking.customer.email, subject: 'Service Completed', html: emailHtml }),
-          sendEmail({ to: provider.email, subject: 'Service Completed - Provider Copy', html: emailHtml.replace('Service Completed', 'Service Completed - Provider Copy') })
+          sendEmail({ to: provider.email, subject: 'Service Completed - Provider Copy', html: emailHtml })
         ]);
-      } catch (emailError) {
-        console.error(`[COMPLETE BOOKING] Email send failed:`, emailError);
+      } catch (err) {
+        console.error('Email error:', err);
       }
     });
 
-    // Commit the transaction
     await session.commitTransaction();
     session.endSession();
 
-    // Send final success response
     res.json({
       success: true,
-      message: 'Booking completed successfully',
+      message: 'Booking completed and provider wallet updated successfully.',
       data: {
         bookingId: booking._id,
         status: 'completed',
         paymentStatus: 'paid',
         totalAmount: booking.totalAmount,
-        commission: commission,
-        netAmount: netAmount
+        commission,
+        netAmount
       }
     });
 
   } catch (error) {
-    // If any error occurs, abort the transaction
     await session.abortTransaction();
     session.endSession();
-
-    console.error(`[COMPLETE BOOKING] Error completing booking ${id}:`, error);
+    console.error('Complete Booking Error:', error);
     res.status(500).json({
       success: false,
-      message: error.message || 'Failed to complete booking',
-      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      message: error.message || 'Failed to complete booking'
     });
   }
 };
+
 
 
 

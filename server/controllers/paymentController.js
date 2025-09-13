@@ -17,7 +17,7 @@ const getEarningsSummary = async (req, res) => {
 
     const providerId = new mongoose.Types.ObjectId(req.provider._id);
 
-    // 1️⃣ Aggregate earnings grouped by paymentMethod
+    // Get all completed earnings
     const earnings = await ProviderEarning.aggregate([
       {
         $match: {
@@ -37,21 +37,28 @@ const getEarningsSummary = async (req, res) => {
       { $match: { 'booking.status': 'completed' } },
       {
         $group: {
-          _id: '$booking.paymentMethod',
-          totalGross: { $sum: '$grossAmount' },
-          totalNet: { $sum: '$netAmount' },
-          totalCommission: { $sum: '$commissionAmount' }
+          _id: null,
+          totalEarnings: { $sum: '$netAmount' },
+          cashReceived: {
+            $sum: {
+              $cond: [{ $eq: ['$booking.paymentMethod', 'cash'] }, '$grossAmount', 0]
+            }
+          },
+          commissionPending: {
+            $sum: {
+              $cond: [{ $eq: ['$booking.paymentMethod', 'cash'] }, '$commissionAmount', 0]
+            }
+          }
         }
       }
     ]);
 
-    // 2️⃣ Available Balance = Online Net Earnings - Commission Pending
-    const availableEarningsSum = await ProviderEarning.aggregate([
+    // Get available balance (online earnings minus cash commissions)
+    const availableBalanceResult = await ProviderEarning.aggregate([
       {
         $match: {
           provider: providerId,
-          isVisibleToProvider: true,
-          paymentRecord: { $exists: false }
+          isVisibleToProvider: true
         }
       },
       {
@@ -73,37 +80,58 @@ const getEarningsSummary = async (req, res) => {
       }
     ]);
 
-    let onlineNet = 0;
+    let availableBalance = 0;
     let commissionPending = 0;
 
-    availableEarningsSum.forEach(item => {
+    availableBalanceResult.forEach(item => {
       if (item._id === 'online') {
-        onlineNet += item.totalNet;
+        availableBalance += item.totalNet;
       } else if (item._id === 'cash') {
         commissionPending += item.totalCommission;
+        // For cash payments, provider keeps the full amount but owes commission
+        availableBalance -= item.totalCommission;
       }
     });
 
-    const availableBalance = onlineNet - commissionPending;
+    // Ensure available balance doesn't go negative
+    availableBalance = Math.max(0, availableBalance);
 
-    // 3️⃣ Process overall earnings data
-    let totalEarnings = 0;
-    let cashReceived = 0;
-
-    earnings.forEach(item => {
-      totalEarnings += item.totalNet;
-
-      if (item._id === 'cash') {
-        cashReceived += item.totalGross;  // Cash received should be gross amount (total service amount)
+    // Get total requested/processing withdrawals that should be deducted from available balance
+    const pendingWithdrawals = await PaymentRecord.aggregate([
+      {
+        $match: {
+          provider: providerId,
+          status: { $in: ['requested', 'processing'] }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalPendingWithdrawals: { $sum: '$amount' }
+        }
       }
-    });
+    ]);
+
+    const totalPendingWithdrawals = pendingWithdrawals.length > 0
+      ? pendingWithdrawals[0].totalPendingWithdrawals
+      : 0;
+
+    // Subtract pending withdrawals from available balance
+    availableBalance = Math.max(0, availableBalance - totalPendingWithdrawals);
+
+    const result = earnings[0] || {
+      totalEarnings: 0,
+      cashReceived: 0,
+      commissionPending: 0
+    };
 
     res.json({
       success: true,
-      totalEarnings,       // Online + Cash Net Earnings
-      cashReceived,        // Total cash service amounts
-      commissionPending,   // Cash commission amount pending
-      availableBalance     // Online Net - Commission Pending
+      totalEarnings: result.totalEarnings || 0,
+      cashReceived: result.cashReceived || 0,
+      commissionPending: result.commissionPending || 0,
+      availableBalance,
+      pendingWithdrawals: totalPendingWithdrawals
     });
 
   } catch (err) {
@@ -111,9 +139,6 @@ const getEarningsSummary = async (req, res) => {
     res.status(500).json({ success: false, error: 'Server error', details: err.message });
   }
 };
-
-
-
 
 // Provider - Request withdrawal (Only Bank Transfer)
 const requestWithdrawal = async (req, res) => {
@@ -124,133 +149,119 @@ const requestWithdrawal = async (req, res) => {
       const providerId = req.provider._id;
       const { amount } = req.body;
 
-      // 🔹 Validate amount
       if (!amount || isNaN(amount) || amount < 500) {
         throw new Error("Invalid amount. Minimum withdrawal is ₹500.");
       }
 
-      // 🔹 Get available balance
-      const availableBalance = await ProviderEarning.getAvailableBalance(providerId);
-      if (amount > availableBalance) {
-        throw new Error(
-          `Requested ₹${amount} exceeds available balance ₹${availableBalance}`
-        );
+      // First, get the current available balance (without deducting pending withdrawals)
+      const availableBalanceResult = await ProviderEarning.aggregate([
+        {
+          $match: {
+            provider: new mongoose.Types.ObjectId(providerId),
+            isVisibleToProvider: true
+          }
+        },
+        {
+          $lookup: {
+            from: 'bookings',
+            localField: 'booking',
+            foreignField: '_id',
+            as: 'booking'
+          }
+        },
+        { $unwind: '$booking' },
+        { $match: { 'booking.status': 'completed' } },
+        {
+          $group: {
+            _id: '$booking.paymentMethod',
+            totalNet: { $sum: '$netAmount' },
+            totalCommission: { $sum: '$commissionAmount' }
+          }
+        }
+      ]);
+
+      let baseAvailableBalance = 0;
+      availableBalanceResult.forEach(item => {
+        if (item._id === 'online') {
+          baseAvailableBalance += item.totalNet;
+        } else if (item._id === 'cash') {
+          baseAvailableBalance -= item.totalCommission;
+        }
+      });
+
+      baseAvailableBalance = Math.max(0, baseAvailableBalance);
+
+      // Get total pending withdrawals
+      const pendingWithdrawals = await PaymentRecord.aggregate([
+        {
+          $match: {
+            provider: new mongoose.Types.ObjectId(providerId),
+            status: { $in: ['requested', 'processing'] }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalPendingWithdrawals: { $sum: '$amount' }
+          }
+        }
+      ]);
+
+      const totalPendingWithdrawals = pendingWithdrawals.length > 0
+        ? pendingWithdrawals[0].totalPendingWithdrawals
+        : 0;
+
+      // Calculate actual available balance after deducting pending withdrawals
+      const actualAvailableBalance = Math.max(0, baseAvailableBalance - totalPendingWithdrawals);
+
+      if (amount > actualAvailableBalance) {
+        throw new Error(`Requested ₹${amount} exceeds available balance ₹${actualAvailableBalance}`);
       }
 
-      // 🔹 Get provider bank details
-      const provider = await Provider.findById(providerId).select("bankDetails name wallet");
-      if (!provider || !provider.bankDetails?.accountNo) {
-        throw new Error("No bank details found in provider profile.");
-      }
+      const provider = await Provider.findById(providerId)
+        .select("bankDetails name")
+        .session(session);
 
-      const paymentMethod = "bank_transfer";
-      const paymentDetails = {
-        accountNumber: provider.bankDetails.accountNo,
-        accountName: provider.bankDetails.accountName,
-        ifscCode: provider.bankDetails.ifsc,
-        bankName: provider.bankDetails.bankName,
-      };
+      if (!provider) throw new Error("Provider not found.");
+      if (!provider.bankDetails?.accountNo) throw new Error("Bank details missing.");
 
-      // 🔹 Create Payment Record
       const paymentRecord = new PaymentRecord({
         provider: providerId,
         amount,
         netAmount: amount,
-        paymentMethod,
-        paymentDetails,
+        paymentMethod: "bank_transfer",
+        paymentDetails: {
+          accountNumber: provider.bankDetails.accountNo,
+          accountName: provider.bankDetails.accountName,
+          ifscCode: provider.bankDetails.ifsc,
+          bankName: provider.bankDetails.bankName,
+        },
         status: "requested",
-        transactionReference: `WDL-${Date.now()}-${Math.floor(
-          1000 + Math.random() * 9000
-        )}`,
+        transactionReference: `WDL-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
       });
 
       await paymentRecord.save({ session });
 
-      // 🔹 Link existing available ProviderEarning records
-      const availableEarnings = await ProviderEarning.find({
-        provider: providerId,
-        isVisibleToProvider: true,
-        paymentRecord: { $exists: false },
-      }).session(session);
-
-      let amountToAllocate = amount;
-      const allocatedEarningIds = [];
-
-      for (const earning of availableEarnings) {
-        if (amountToAllocate <= 0) break;
-
-        const allocateAmount = Math.min(earning.netAmount, amountToAllocate);
-
-        // Link earning to this payment record
-        earning.paymentRecord = paymentRecord._id;
-        await earning.save({ session });
-
-        allocatedEarningIds.push(earning._id);
-        amountToAllocate -= allocateAmount;
-      }
-
-      if (amountToAllocate > 0) {
-        throw new Error(
-          `Could not allocate full withdrawal amount. Remaining: ₹${amountToAllocate}`
-        );
-      }
-
-      // 🔹 Save linked earnings in payment record
-      paymentRecord.earnings = allocatedEarningIds;
-      await paymentRecord.save({ session });
-      // 🔹 Update provider wallet immediately
-      if (!provider.wallet) {
-        provider.wallet = {
-          availableBalance: 0,
-          totalWithdrawn: 0,
-          lastUpdated: new Date()
-        };
-      }
-
-      provider.wallet.availableBalance = Math.max(
-        0,
-        (provider.wallet.availableBalance || 0) - amount
-      );
-      provider.wallet.totalWithdrawn = (provider.wallet.totalWithdrawn || 0) + amount;
-      provider.wallet.lastUpdated = new Date();
-      await provider.save({ session });
-
-
-      // 🔹 Schedule auto status update to "processing" after 3 hours
-      setTimeout(async () => {
-        try {
-          const record = await PaymentRecord.findById(paymentRecord._id);
-          if (record && record.status === "requested") {
-            record.status = "processing";
-            record.processedAt = new Date();
-            await record.save();
-          }
-        } catch (err) {
-          console.error("Error auto-updating withdrawal to processing:", err);
-        }
-      }, 3 * 60 * 60 * 1000); // 3 hours
-
       res.json({
         success: true,
-        message: "Withdrawal request submitted successfully",
+        message: "Withdrawal requested successfully",
         data: {
           reference: paymentRecord.transactionReference,
           amount: paymentRecord.amount,
           status: paymentRecord.status,
           method: paymentRecord.paymentMethod,
+          availableBalance: actualAvailableBalance - amount, // Return updated balance
           createdAt: paymentRecord.createdAt,
-        },
+        }
       });
     });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      error: error.message,
-    });
+    res.status(400).json({ success: false, error: error.message });
   } finally {
     await session.endSession();
   }
 };
+
 
 
 // Provider - Earnings Report (View or Download Excel)
@@ -268,6 +279,7 @@ const downloadEarningsReport = async (req, res) => {
 
       const start = new Date(startDate);
       const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999); // Include the entire end date
 
       const diffDays = Math.floor((end - start) / (1000 * 60 * 60 * 24));
       if (diffDays < 7) {
@@ -280,6 +292,14 @@ const downloadEarningsReport = async (req, res) => {
       filter.createdAt = { $gte: start, $lte: end };
     }
 
+    // First, let's debug by checking what data exists
+    console.log("Filter:", JSON.stringify(filter, null, 2));
+
+    // Simple find first to debug
+    const simpleEarnings = await ProviderEarning.find(filter).limit(5);
+    console.log("Simple find result:", simpleEarnings.length);
+
+    // Modified aggregation with simpler approach
     const earnings = await ProviderEarning.aggregate([
       { $match: filter },
       {
@@ -292,6 +312,26 @@ const downloadEarningsReport = async (req, res) => {
       },
       { $unwind: { path: "$paymentInfo", preserveNullAndEmptyArrays: true } },
       {
+        $addFields: {
+          status: {
+            $cond: {
+              if: { $ifNull: ["$paymentInfo", false] },
+              then: {
+                $switch: {
+                  branches: [
+                    { case: { $eq: ["$paymentInfo.status", "completed"] }, then: "paid" },
+                    { case: { $in: ["$paymentInfo.status", ["pending", "processing"]] }, then: "processing" },
+                    { case: { $in: ["$paymentInfo.status", ["failed", "rejected"]] }, then: "failed" },
+                  ],
+                  default: "unknown",
+                },
+              },
+              else: "available",
+            },
+          },
+        },
+      },
+      {
         $project: {
           booking: 1,
           grossAmount: 1,
@@ -299,29 +339,12 @@ const downloadEarningsReport = async (req, res) => {
           commissionAmount: 1,
           netAmount: 1,
           createdAt: 1,
-          status: {
-            $switch: {
-              branches: [
-                {
-                  case: { $ifNull: ["$paymentInfo", false] },
-                  then: {
-                    $switch: {
-                      branches: [
-                        { case: { $eq: ["$paymentInfo.status", "completed"] }, then: "paid" },
-                        { case: { $in: ["$paymentInfo.status", ["pending", "processing"]] }, then: "processing" },
-                        { case: { $in: ["$paymentInfo.status", ["failed", "rejected"]] }, then: "failed" },
-                      ],
-                      default: "unknown",
-                    },
-                  },
-                },
-              ],
-              default: "available",
-            },
-          },
+          status: 1,
         },
       },
     ]);
+
+    console.log("Aggregation result count:", earnings.length);
 
     if (!earnings.length) {
       return res.status(200).json({ success: false, message: "No earnings found" });
@@ -343,13 +366,15 @@ const downloadEarningsReport = async (req, res) => {
 
       earnings.forEach((earning) => {
         worksheet.addRow({
-          booking: earning.booking.toString(),
-          grossAmount: earning.grossAmount,
-          commissionRate: earning.commissionRate,
-          commissionAmount: earning.commissionAmount,
-          netAmount: earning.netAmount,
-          status: earning.status,
-          createdAt: new Date(earning.createdAt).toISOString().slice(0, 19).replace("T", " "),
+          booking: earning.booking?.toString() || "N/A",
+          grossAmount: earning.grossAmount || 0,
+          commissionRate: earning.commissionRate || 0,
+          commissionAmount: earning.commissionAmount || 0,
+          netAmount: earning.netAmount || 0,
+          status: earning.status || "unknown",
+          createdAt: earning.createdAt
+            ? new Date(earning.createdAt).toISOString().slice(0, 19).replace("T", " ")
+            : "N/A",
         });
       });
 
@@ -357,14 +382,12 @@ const downloadEarningsReport = async (req, res) => {
         cell.font = { bold: true };
       });
 
-      // Set headers BEFORE sending the response
       res.setHeader("Content-Disposition", `attachment; filename=earnings_report_${startDate}_to_${endDate}.xlsx`);
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 
       const buffer = await workbook.xlsx.writeBuffer();
       res.send(buffer);
 
-      // Send success message after sending buffer
       console.log("Earnings report generated and sent successfully");
       return;
     } else {
@@ -376,13 +399,13 @@ const downloadEarningsReport = async (req, res) => {
   }
 };
 
-// Provider - Withdrawal Report (View or Download Excel)
+// Provider - Withdrawal Report (View or Download Excel) 
 const downloadWithdrawalReport = async (req, res) => {
   try {
     const providerId = req.provider._id;
     const { startDate, endDate, download } = req.query;
 
-    let filter = { provider: new mongoose.Types.ObjectId(providerId) };
+    let filter = { provider: providerId };
 
     if (download === "true") {
       if (!startDate || !endDate) {
@@ -390,7 +413,10 @@ const downloadWithdrawalReport = async (req, res) => {
       }
 
       const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+
       const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
 
       const diffDays = Math.floor((end - start) / (1000 * 60 * 60 * 24));
       if (diffDays < 7) {
@@ -410,9 +436,11 @@ const downloadWithdrawalReport = async (req, res) => {
     }
 
     if (download === "true") {
+      // Create workbook and worksheet
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("Withdrawal Report");
 
+      // Define columns
       worksheet.columns = [
         { header: "Reference ID", key: "reference", width: 30 },
         { header: "Requested Amount (₹)", key: "amount", width: 20 },
@@ -427,31 +455,38 @@ const downloadWithdrawalReport = async (req, res) => {
         { header: "Admin Remark / Rejection", key: "remark", width: 40 },
       ];
 
+      // Add header row
+      const headerRow = worksheet.getRow(1);
+      headerRow.eachCell((cell) => {
+        cell.font = { bold: true };
+      });
+
+      // Add data rows
       records.forEach((record) => {
         worksheet.addRow({
           reference: record.transactionReference || "N/A",
           amount: record.amount,
-          netAmount: record.netAmount,
+          netAmount: record.netAmount || record.amount,
           paymentMethod: record.paymentMethod === "bank_transfer" ? "Bank Transfer" : record.paymentMethod,
           accountNumber: record.paymentDetails?.accountNumber || "N/A",
           ifscCode: record.paymentDetails?.ifscCode || "N/A",
           bankName: record.paymentDetails?.bankName || "N/A",
           status: record.status,
-          requestedDate: record.createdAt.toISOString().slice(0, 19).replace("T", " "),
-          processedDate: record.completedAt?.toISOString().slice(0, 19).replace("T", " ") || "N/A",
+          requestedDate: record.createdAt.toLocaleString('en-IN'),
+          processedDate: record.completedAt ? record.completedAt.toLocaleString('en-IN') : "N/A",
           remark: record.adminRemark || record.rejectionReason || "N/A",
         });
       });
 
-      worksheet.getRow(1).eachCell((cell) => {
-        cell.font = { bold: true };
-      });
-
+      // Set headers
       res.setHeader("Content-Disposition", `attachment; filename=withdrawal_report_${startDate}_to_${endDate}.xlsx`);
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 
-      const buffer = await workbook.xlsx.writeBuffer();
-      res.send(buffer);
+      // Use write instead of writeBuffer for better compatibility
+      await workbook.xlsx.write(res);
+
+      // End the response after writing
+      res.end();
 
       console.log("Withdrawal report generated and sent successfully");
       return;
@@ -464,6 +499,7 @@ const downloadWithdrawalReport = async (req, res) => {
   }
 };
 
+// Admin  Related Code
 
 // Admin - Get All withdrawal requests
 const getAllWithdrawalRequests = async (req, res) => {
@@ -627,6 +663,11 @@ const rejectWithdrawalRequest = async (req, res) => {
       return res.status(400).json({ success: false, message: `Cannot reject a request with status: ${paymentRecord.status}` });
     }
 
+    const provider = paymentRecord.provider;
+    if (!provider) {
+      throw new Error('Provider not found for this payment record.');
+    }
+
     // Update payment record
     paymentRecord.status = "rejected";
     paymentRecord.rejectionReason = rejectionReason || "No reason provided";
@@ -634,11 +675,23 @@ const rejectWithdrawalRequest = async (req, res) => {
     paymentRecord.completedAt = new Date();
     await paymentRecord.save({ session });
 
+    // Release associated earnings
+    await ProviderEarning.updateMany(
+      { paymentRecord: paymentRecord._id },
+      { $unset: { paymentRecord: "" } },
+      { session }
+    );
+
+    // Refund amount to provider's wallet
+    provider.wallet.availableBalance += paymentRecord.amount;
+    provider.wallet.totalWithdrawn -= paymentRecord.amount;
+    provider.wallet.lastUpdated = new Date();
+    await provider.save({ session });
+
     await session.commitTransaction();
     session.endSession();
 
     // Send email to provider (outside transaction)
-    const provider = paymentRecord.provider;
     const emailHtml = `
       <h3>Withdrawal Request Rejected ❌</h3>
       <p>Dear ${provider.name},</p>

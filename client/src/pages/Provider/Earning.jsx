@@ -309,6 +309,9 @@ const ProviderEarningsDashboard = () => {
         return;
       }
 
+      // Refresh balance to ensure we have the latest data
+      await fetchSummary();
+
       if (withdrawalForm.amount > summary.availableBalance) {
         showToast(`Insufficient balance. Available: ₹${summary.availableBalance}`, 'error');
         return;
@@ -328,14 +331,22 @@ const ProviderEarningsDashboard = () => {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data?.error || data?.message || 'Failed to process withdrawal');
+        // If backend provides actual balance, use it
+        const actualBalance = data.availableBalance !== undefined ? data.availableBalance : summary.availableBalance;
+
+        if (data.error?.includes('exceeds available balance')) {
+          showToast(`Insufficient balance. Available: ₹${actualBalance}`, 'error');
+        } else {
+          throw new Error(data?.error || data?.message || 'Failed to process withdrawal');
+        }
+        return;
       }
 
       if (data.success) {
         showToast('Withdrawal request submitted successfully!', 'success');
         setShowWithdrawal(false);
         setWithdrawalForm({ amount: '' });
-        fetchSummary(); // Refresh data
+        await refreshData(); // Refresh all data
       } else {
         throw new Error(data.error || data.message || 'Failed to process withdrawal');
       }
@@ -419,7 +430,7 @@ const ProviderEarningsDashboard = () => {
       setDownloading(prev => ({ ...prev, [type]: false }));
     }
   };
-  
+
   // Refresh all data
   const refreshData = async () => {
     try {

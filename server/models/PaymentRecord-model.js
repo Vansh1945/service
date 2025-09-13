@@ -16,11 +16,6 @@ const paymentRecordSchema = new Schema({
     type: Schema.Types.ObjectId,
     ref: 'Booking'
   },
-  earnings: [{
-    type: Schema.Types.ObjectId,
-    ref: 'ProviderEarning'
-  }],
-
   // Withdraw amount
   amount: {
     type: Number,
