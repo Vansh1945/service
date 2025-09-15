@@ -10,13 +10,13 @@ const { uploadServiceImage, uploadServicesFile, upload} = require('../middleware
  */
 router.post('/admin/services',
     adminAuthMiddleware,
-    uploadServiceImage.single('image'),
+    uploadServiceImage,
     serviceController.createService
 );
 
 router.put('/admin/service/:id',
     adminAuthMiddleware,
-    uploadServiceImage.single('image'),
+    uploadServiceImage,
     serviceController.updateService
 );
 

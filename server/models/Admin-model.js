@@ -16,6 +16,10 @@ const adminSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  profilePicUrl: {
+    type: String,
+    default: 'default-admin.jpg'
+  },
   isAdmin: {
     type: Boolean,
     default: true,

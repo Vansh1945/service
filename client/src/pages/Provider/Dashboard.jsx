@@ -41,70 +41,58 @@ const Dashboard = () => {
     }, []);
 
     // Fetch dashboard data
-    const fetchDashboardData = async () => {
+    const fetchDashboardData = useCallback(async () => {
         try {
             setLoading(true);
-            
-            // Fetch provider profile with earnings
-            const profileResponse = await fetch(`${API}/provider/profile`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            });
 
-            if (!profileResponse.ok) {
-                throw new Error('Failed to fetch profile data');
-            }
-
-            const profileData = await profileResponse.json();
-            
-            // Fetch recent bookings (pending and accepted)
-            const [pendingResponse, acceptedResponse, completedResponse] = await Promise.all([
+            // Fetch profile, earnings, and bookings in parallel
+            const [profileResponse, summaryResponse, pendingResponse, acceptedResponse, completedResponse] = await Promise.all([
+                fetch(`${API}/provider/profile`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }),
+                fetch(`${API}/payment/summary`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }),
                 fetch(`${API}/booking/provider/status/pending?limit=5`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
+                    headers: { 'Authorization': `Bearer ${token}` }
                 }),
                 fetch(`${API}/booking/provider/status/accepted?limit=3`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
+                    headers: { 'Authorization': `Bearer ${token}` }
                 }),
                 fetch(`${API}/booking/provider/status/completed?limit=3`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
+                    headers: { 'Authorization': `Bearer ${token}` }
                 })
             ]);
 
-            const [pendingData, acceptedData, completedData] = await Promise.all([
-                pendingResponse.ok ? pendingResponse.json() : { data: [] },
-                acceptedResponse.ok ? acceptedResponse.json() : { data: [] },
-                completedResponse.ok ? completedResponse.json() : { data: [] }
-            ]);
+            // Process responses
+            const profileData = profileResponse.ok ? await profileResponse.json() : { provider: null };
+            const summaryData = summaryResponse.ok ? await summaryResponse.json() : { data: { totalEarnings: 0, availableBalance: 0 } };
+            const pendingData = pendingResponse.ok ? await pendingResponse.json() : { data: [] };
+            const acceptedData = acceptedResponse.ok ? await acceptedResponse.json() : { data: [] };
+            const completedData = completedResponse.ok ? await completedResponse.json() : { data: [] };
+
+            if (!profileResponse.ok) {
+                console.error('Failed to fetch profile data');
+            }
+            if (!summaryResponse.ok) {
+                console.error('Failed to fetch earnings summary');
+            }
 
             // Combine recent bookings
             const recentBookings = [
-                ...pendingData.data || [],
-                ...acceptedData.data || [],
-                ...completedData.data || []
+                ...(pendingData.data || []),
+                ...(acceptedData.data || []),
+                ...(completedData.data || [])
             ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 8);
 
-            // Calculate stats with improved data access
+            // Calculate stats
             const stats = {
-                totalEarnings: profileData.provider?.earnings?.totalEarnings || 0,
-                availableBalance: profileData.provider?.earnings?.availableBalance || 0,
+                totalEarnings: summaryData.data?.totalEarnings || 0,
+                availableBalance: summaryData.data?.availableBalance || 0,
                 completedBookings: profileData.provider?.completedBookings || 0,
                 pendingBookings: pendingData.data?.length || 0,
                 averageRating: parseFloat(profileData.provider?.averageRating || 0)
             };
-
-            console.log('[DASHBOARD] Calculated stats:', stats);
-            console.log('[DASHBOARD] Profile earnings data:', profileData.provider?.earnings);
 
             setDashboardData({
                 profile: profileData.provider,
@@ -118,7 +106,8 @@ const Dashboard = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [API, token, showToast]);
+
 
     // Handle booking actions
     const handleBookingAction = async (bookingId, action, additionalData = {}) => {
@@ -156,7 +145,7 @@ const Dashboard = () => {
 
     useEffect(() => {
         fetchDashboardData();
-    }, []);
+    }, [fetchDashboardData]);
 
     if (loading) {
         return (
@@ -181,13 +170,7 @@ const Dashboard = () => {
                             Here's what's happening with your services today.
                         </p>
                     </div>
-                    <button
-                        onClick={fetchDashboardData}
-                        className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                        <FiRefreshCw className="mr-2" />
-                        Refresh
-                    </button>
+                    
                 </div>
             </div>
 

@@ -1,7 +1,5 @@
-// models/Provider-model.js
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
 
 const walletSchema = new mongoose.Schema({
     availableBalance: {
@@ -37,7 +35,7 @@ const providerSchema = new mongoose.Schema({
         type: String,
         required: [true, 'Mobile number is required'],
         maxlength: [10, 'Mobile number cannot exceed 10 characters'],
-        match: [/^\+?[0-9]{7,15}$/, 'Please enter a valid mobile number'],
+        match: [/^[0-9]{10}$/, 'Please enter a valid 10-digit mobile number'],
     },
     password: {
         type: String,
@@ -100,6 +98,7 @@ const providerSchema = new mongoose.Schema({
         bankName: String,
         accountName: String,
         passbookImage: String,
+        passbookImagePublicId: String,
         verified: {
             type: Boolean,
             default: false
@@ -121,7 +120,9 @@ const providerSchema = new mongoose.Schema({
         type: String,
         default: 'default-provider.jpg'
     },
+    profilePicPublicId: String,
     resume: String,
+    resumePublicId: String,
 
     // Service Stats
     approved: {
@@ -214,12 +215,14 @@ providerSchema.methods.rejectKYC = function (reason) {
     this.approved = false;
     return this.save();
 };
+
 providerSchema.methods.approveKYC = function () {
     this.kycStatus = 'approved';
     this.approved = true;
     this.rejectionReason = '';
     return this.save();
 };
+
 providerSchema.methods.resetKYC = function () {
     this.kycStatus = 'pending';
     this.rejectionReason = '';
@@ -239,9 +242,13 @@ providerSchema.virtual('age').get(function () {
 });
 
 providerSchema.virtual('averageRating').get(function() {
-    if (!this.populated('feedbacks') || this.feedbacks.length === 0) return 0;
-    const sum = this.feedbacks.reduce((total, feedback) => total + (feedback.rating || 0), 0);
-    return (sum / this.feedbacks.length).toFixed(1);
+    if (!this.feedbacks || this.feedbacks.length === 0) return 0;
+    const validFeedbacks = this.feedbacks.filter(fb => fb && fb.providerFeedback && fb.providerFeedback.rating);
+    if (validFeedbacks.length === 0) return 0;
+    
+    const sum = validFeedbacks.reduce((total, feedback) => 
+        total + feedback.providerFeedback.rating, 0);
+    return parseFloat((sum / validFeedbacks.length).toFixed(1));
 });
 
 providerSchema.query.active = function() {
@@ -249,7 +256,7 @@ providerSchema.query.active = function() {
 };
 
 providerSchema.statics.findByEmail = function(email) {
-    return this.findOne({ email }).select('+password');
+    return this.findOne({ email: new RegExp(`^${email}$`, 'i') }).select('+password');
 };
 
 module.exports = mongoose.model('Provider', providerSchema);

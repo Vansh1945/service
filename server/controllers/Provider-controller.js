@@ -6,14 +6,18 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
+const cloudinary = require('../services/cloudinary');
 
-// Helper function to delete file
-const deleteFile = (filePath) => {
-    if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
+// Helper function to delete file from Cloudinary
+const deleteFile = async (publicId) => {
+    try {
+        if (publicId) {
+            await cloudinary.uploader.destroy(publicId);
+        }
+    } catch (error) {
+        console.error('Failed to delete file from Cloudinary:', error);
     }
 };
-
 
 /**
  * @desc    Register provider with email verification (step 1: send OTP)
@@ -41,18 +45,18 @@ exports.initiateRegistration = async (req, res) => {
         }
 
         // Check if provider already exists (either fully registered or in progress)
-        const existingProvider = await Provider.findOne({ 
-            email: { $regex: new RegExp(`^${email}$`, 'i') }, 
-            isDeleted: false 
+        const existingProvider = await Provider.findOne({
+            email: { $regex: new RegExp(`^${email}$`, 'i') },
+            isDeleted: false
         });
-        
+
         if (existingProvider) {
             if (existingProvider.profileComplete) {
                 return res.status(400).json({
                     success: false,
                     message: 'Provider with this email already exists'
                 });
-            } 
+            }
         }
 
         // Send OTP to email
@@ -98,12 +102,13 @@ exports.completeRegistration = async (req, res) => {
             });
         }
 
-        // Validate phone number format (simple validation - at least 10 digits)
-        const phoneRegex = /^\d{10,10}$/; // Allows 10-10 digits
-        if (!phoneRegex.test(phone.replace(/\D/g, ''))) { // Remove non-digits before validation
+        // Validate phone number format (10 digits)
+        const phoneRegex = /^\d{10}$/;
+        const cleanedPhone = phone.replace(/\D/g, '');
+        if (!phoneRegex.test(cleanedPhone)) {
             return res.status(400).json({
                 success: false,
-                message: 'Please enter a valid phone number (10-15 digits)'
+                message: 'Please enter a valid 10-digit phone number'
             });
         }
 
@@ -121,7 +126,7 @@ exports.completeRegistration = async (req, res) => {
         clearOTP(email);
 
         // Check if provider already exists and profile is complete
-        const existingCompleteProvider = await Provider.findOne({ 
+        const existingCompleteProvider = await Provider.findOne({
             email: { $regex: new RegExp(`^${email}$`, 'i') },
             isDeleted: false,
             profileComplete: true
@@ -138,7 +143,7 @@ exports.completeRegistration = async (req, res) => {
         const today = new Date();
         let age = today.getFullYear() - dob.getFullYear();
         const monthDiff = today.getMonth() - dob.getMonth();
-        
+
         if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
             age--;
         }
@@ -152,19 +157,19 @@ exports.completeRegistration = async (req, res) => {
         }
 
         // Check if provider exists but profile is incomplete (update instead of create)
-        const existingIncompleteProvider = await Provider.findOne({ 
+        const existingIncompleteProvider = await Provider.findOne({
             email: { $regex: new RegExp(`^${email}$`, 'i') },
             isDeleted: false,
             profileComplete: false
         });
 
         let provider;
-        
+
         if (existingIncompleteProvider) {
             // Update existing incomplete provider
             existingIncompleteProvider.password = password;
             existingIncompleteProvider.name = name;
-            existingIncompleteProvider.phone = phone.replace(/\D/g, ''); // Store only digits
+            existingIncompleteProvider.phone = cleanedPhone;
             existingIncompleteProvider.dateOfBirth = dob;
             provider = await existingIncompleteProvider.save();
         } else {
@@ -173,7 +178,7 @@ exports.completeRegistration = async (req, res) => {
                 email,
                 password,
                 name,
-                phone: phone.replace(/\D/g, ''), // Store only digits
+                phone: cleanedPhone,
                 dateOfBirth: dob,
                 profileComplete: false // Mark as incomplete
             });
@@ -197,8 +202,16 @@ exports.completeRegistration = async (req, res) => {
         });
     } catch (error) {
         console.error('Complete registration error:', error);
-        
-        
+
+        // Handle validation errors
+        if (error.name === 'ValidationError') {
+            const messages = Object.values(error.errors).map(val => val.message);
+            return res.status(400).json({
+                success: false,
+                message: messages[0] || 'Validation failed'
+            });
+        }
+
         res.status(500).json({
             success: false,
             message: 'Failed to complete registration',
@@ -225,7 +238,7 @@ exports.loginForCompletion = async (req, res) => {
         }
 
         // Find provider (case insensitive email search)
-        const provider = await Provider.findOne({ 
+        const provider = await Provider.findOne({
             email: { $regex: new RegExp(`^${email}$`, 'i') }
         }).select('+password +profileComplete');
 
@@ -283,6 +296,7 @@ exports.loginForCompletion = async (req, res) => {
  * @access  Private (requires authentication)
  */
 exports.completeProfile = async (req, res) => {
+    console.log('req.files:', req.files);
     try {
         const providerId = req.providerId;
         const {
@@ -299,7 +313,7 @@ exports.completeProfile = async (req, res) => {
         } = req.body;
 
         // Validate required fields
-        if (!services || !experience || !serviceArea || !street || !city || 
+        if (!services || !experience || !serviceArea || !street || !city ||
             !state || !postalCode || !accountNo || !ifsc) {
             return res.status(400).json({
                 success: false,
@@ -360,18 +374,21 @@ exports.completeProfile = async (req, res) => {
         provider.bankDetails = {
             accountNo,
             ifsc,
-            passbookImage: req.files['passbookImage'] ? req.files['passbookImage'][0].path : undefined,
+            passbookImage: req.files && req.files['passbookImage'] ? req.files['passbookImage'][0].path : undefined,
+            passbookImagePublicId: req.files && req.files['passbookImage'] ? req.files['passbookImage'][0].filename : undefined,
             verified: false
         };
 
         // Update profile picture if uploaded
-        if (req.files['profilePic']) {
+        if (req.files && req.files['profilePic']) {
             provider.profilePicUrl = req.files['profilePic'][0].path;
+            provider.profilePicPublicId = req.files['profilePic'][0].filename;
         }
 
         // Update resume if uploaded
-        if (req.files['resume']) {
+        if (req.files && req.files['resume']) {
             provider.resume = req.files['resume'][0].path;
+            provider.resumePublicId = req.files['resume'][0].filename;
         }
 
         // Mark profile as complete
@@ -393,19 +410,19 @@ exports.completeProfile = async (req, res) => {
         });
     } catch (error) {
         console.error('Complete profile error:', error);
-        
+
         // Handle mongoose validation errors
         if (error.name === 'ValidationError') {
             const validationErrors = {};
             const errorMessages = [];
-            
+
             // Extract specific field errors
             for (let field in error.errors) {
                 const fieldError = error.errors[field];
                 validationErrors[field] = fieldError.message;
                 errorMessages.push(fieldError.message);
             }
-            
+
             return res.status(400).json({
                 success: false,
                 message: errorMessages.length === 1 ? errorMessages[0] : 'Please fix the following errors',
@@ -413,7 +430,7 @@ exports.completeProfile = async (req, res) => {
                 fieldErrors: errorMessages
             });
         }
-        
+
         // Handle duplicate key errors
         if (error.code === 11000) {
             const field = Object.keys(error.keyPattern)[0];
@@ -422,7 +439,7 @@ exports.completeProfile = async (req, res) => {
                 message: `${field.charAt(0).toUpperCase() + field.slice(1)} already exists`
             });
         }
-        
+
         res.status(500).json({
             success: false,
             message: 'Failed to complete profile',
@@ -431,7 +448,6 @@ exports.completeProfile = async (req, res) => {
     }
 };
 
-
 /**
  * @desc    Get provider profile without earnings data
  * @route   GET /api/providers/profile
@@ -439,8 +455,7 @@ exports.completeProfile = async (req, res) => {
  */
 exports.getProfile = async (req, res) => {
     try {
-        console.log(`[PROFILE] Fetching profile for provider: ${req.providerId}`);
-        
+
         const provider = await Provider.findById(req.providerId)
             .select('-password -__v')
             .populate({
@@ -450,24 +465,22 @@ exports.getProfile = async (req, res) => {
             });
 
         if (!provider) {
-            console.log(`[PROFILE] Provider not found: ${req.providerId}`);
             return res.status(404).json({
                 success: false,
                 message: 'Provider not found'
             });
         }
 
-        console.log(`[PROFILE] Provider found: ${provider.name}`);
 
         // Calculate average rating from populated feedbacks
         let averageRating = 0;
         let ratingCount = 0;
-        
+
         if (provider.feedbacks && provider.feedbacks.length > 0) {
             const validRatings = provider.feedbacks
                 .filter(feedback => feedback.providerFeedback && feedback.providerFeedback.rating)
                 .map(feedback => feedback.providerFeedback.rating);
-            
+
             if (validRatings.length > 0) {
                 const sum = validRatings.reduce((acc, rating) => acc + rating, 0);
                 averageRating = parseFloat((sum / validRatings.length).toFixed(1));
@@ -475,7 +488,6 @@ exports.getProfile = async (req, res) => {
             }
         }
 
-        console.log(`[PROFILE] Calculated average rating: ${averageRating} from ${ratingCount} ratings`);
 
         // Add computed fields (without earnings)
         const responseData = {
@@ -488,10 +500,6 @@ exports.getProfile = async (req, res) => {
             hasProfilePic: !!provider.profilePicUrl && provider.profilePicUrl !== 'default-provider.jpg'
         };
 
-        console.log(`[PROFILE] Response data structure:`, {
-            averageRating: responseData.averageRating,
-            ratingCount: responseData.ratingCount
-        });
 
         res.status(200).json({
             success: true,
@@ -507,15 +515,13 @@ exports.getProfile = async (req, res) => {
     }
 };
 
-
-
-
 /**
  * @desc    Unified function to update provider profile (all sections)
  * @route   PUT /api/providers/profile
  * @access  Private (Provider)
  */
 exports.updateProviderProfile = async (req, res) => {
+    console.log('req.files:', req.files);
     try {
         console.log('Unified profile update request:', {
             body: req.body,
@@ -531,7 +537,7 @@ exports.updateProviderProfile = async (req, res) => {
             // Address info
             street, city, state, postalCode, country,
             // Bank details
-            accountNo, ifsc,
+            accountNo, ifsc, bankName, accountName,
             // Update type to determine which section to update
             updateType
         } = req.body;
@@ -554,17 +560,18 @@ exports.updateProviderProfile = async (req, res) => {
             if (name && typeof name === 'string') {
                 updates.name = name.trim();
             }
-            
+
             if (phone && typeof phone === 'string') {
-                if (!/^\d{10,15}$/.test(phone)) {
+                const cleanedPhone = phone.replace(/\D/g, '');
+                if (!/^\d{10}$/.test(cleanedPhone)) {
                     return res.status(400).json({
                         success: false,
-                        message: 'Please enter a valid phone number (10-15 digits)'
+                        message: 'Please enter a valid 10-digit phone number'
                     });
                 }
-                updates.phone = phone.trim();
+                updates.phone = cleanedPhone;
             }
-            
+
             if (dateOfBirth) {
                 const dob = new Date(dateOfBirth);
                 if (isNaN(dob.getTime())) {
@@ -573,23 +580,23 @@ exports.updateProviderProfile = async (req, res) => {
                         message: 'Invalid date format for date of birth'
                     });
                 }
-                
+
                 // Age validation (minimum 18 years)
                 const today = new Date();
                 let age = today.getFullYear() - dob.getFullYear();
                 const monthDiff = today.getMonth() - dob.getMonth();
-                
+
                 if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
                     age--;
                 }
-                
+
                 if (age < 18) {
                     return res.status(400).json({
                         success: false,
                         message: 'You must be at least 18 years old'
                     });
                 }
-                
+
                 updates.dateOfBirth = dob;
             }
         }
@@ -638,6 +645,8 @@ exports.updateProviderProfile = async (req, res) => {
                     ...currentProvider.bankDetails,
                     ...(accountNo && { accountNo }),
                     ...(ifsc && { ifsc }),
+                    ...(bankName && { bankName }),
+                    ...(accountName && { accountName }),
                     verified: false // Reset verification when details change
                 };
             }
@@ -648,42 +657,45 @@ exports.updateProviderProfile = async (req, res) => {
             // Profile Picture Upload
             if (req.files['profilePic']) {
                 const profilePic = req.files['profilePic'][0];
-                
+
                 // Delete old profile picture
-                if (currentProvider.profilePicUrl && currentProvider.profilePicUrl !== 'default-provider.jpg') {
-                    deleteFile(path.join(__dirname, '../', currentProvider.profilePicUrl));
+                if (currentProvider.profilePicPublicId) {
+                    await deleteFile(currentProvider.profilePicPublicId);
                 }
-                
+
                 updates.profilePicUrl = profilePic.path;
+                updates.profilePicPublicId = profilePic.filename;
                 successMessage = 'Profile picture updated successfully';
             }
 
             // Resume Upload
             if (req.files['resume']) {
-                const resume = req.files['resume'][0];
-                
+                const resumeFile = req.files['resume'][0];
+
                 // Delete old resume
-                if (currentProvider.resume) {
-                    deleteFile(path.join(__dirname, '../', currentProvider.resume));
+                if (currentProvider.resumePublicId) {
+                    await deleteFile(currentProvider.resumePublicId);
                 }
-                
-                updates.resume = resume.path;
+
+                updates.resume = resumeFile.path;
+                updates.resumePublicId = resumeFile.filename;
                 successMessage = 'Resume updated successfully';
             }
 
             // Passbook Image Upload
             if (req.files['passbookImage']) {
                 const passbookImage = req.files['passbookImage'][0];
-                
+
                 // Delete old passbook image
-                if (currentProvider.bankDetails?.passbookImage) {
-                    deleteFile(path.join(__dirname, '../', currentProvider.bankDetails.passbookImage));
+                if (currentProvider.bankDetails?.passbookImagePublicId) {
+                    await deleteFile(currentProvider.bankDetails.passbookImagePublicId);
                 }
-                
+
                 updates.bankDetails = {
                     ...currentProvider.bankDetails,
                     ...updates.bankDetails,
                     passbookImage: passbookImage.path,
+                    passbookImagePublicId: passbookImage.filename,
                     verified: false
                 };
                 successMessage = 'Bank details updated successfully';
@@ -693,27 +705,30 @@ exports.updateProviderProfile = async (req, res) => {
         // Handle single file uploads (for backward compatibility)
         if (req.file) {
             const fieldName = req.file.fieldname;
-            
+
             if (fieldName === 'profilePic') {
-                if (currentProvider.profilePicUrl && currentProvider.profilePicUrl !== 'default-provider.jpg') {
-                    deleteFile(path.join(__dirname, '../', currentProvider.profilePicUrl));
+                if (currentProvider.profilePicPublicId) {
+                    await deleteFile(currentProvider.profilePicPublicId);
                 }
                 updates.profilePicUrl = req.file.path;
+                updates.profilePicPublicId = req.file.filename;
                 successMessage = 'Profile picture updated successfully';
             } else if (fieldName === 'resume') {
-                if (currentProvider.resume) {
-                    deleteFile(path.join(__dirname, '../', currentProvider.resume));
+                if (currentProvider.resumePublicId) {
+                    await deleteFile(currentProvider.resumePublicId);
                 }
                 updates.resume = req.file.path;
+                updates.resumePublicId = req.file.filename;
                 successMessage = 'Resume updated successfully';
             } else if (fieldName === 'passbookImage') {
-                if (currentProvider.bankDetails?.passbookImage) {
-                    deleteFile(path.join(__dirname, '../', currentProvider.bankDetails.passbookImage));
+                if (currentProvider.bankDetails?.passbookImagePublicId) {
+                    await deleteFile(currentProvider.bankDetails.passbookImagePublicId);
                 }
                 updates.bankDetails = {
                     ...currentProvider.bankDetails,
                     ...updates.bankDetails,
                     passbookImage: req.file.path,
+                    passbookImagePublicId: req.file.filename,
                     verified: false
                 };
                 successMessage = 'Bank details updated successfully';
@@ -724,8 +739,8 @@ exports.updateProviderProfile = async (req, res) => {
         const updatedProvider = await Provider.findByIdAndUpdate(
             req.providerId,
             updates,
-            { 
-                new: true, 
+            {
+                new: true,
                 runValidators: true,
                 select: '-password -__v'
             }
@@ -746,17 +761,17 @@ exports.updateProviderProfile = async (req, res) => {
 
     } catch (error) {
         console.error('Unified profile update error:', error);
-        
+
         // Clean up uploaded files if error occurred
         if (req.files) {
             Object.values(req.files).forEach(fileArray => {
-                fileArray.forEach(file => deleteFile(file.path));
+                fileArray.forEach(file => deleteFile(file.filename));
             });
         }
         if (req.file) {
-            deleteFile(req.file.path);
+            deleteFile(req.file.filename);
         }
-        
+
         // Handle specific error types
         if (error.name === 'ValidationError') {
             const messages = Object.values(error.errors).map(val => val.message);
@@ -766,7 +781,7 @@ exports.updateProviderProfile = async (req, res) => {
                 errors: messages
             });
         }
-        
+
         res.status(500).json({
             success: false,
             message: 'Failed to update profile',
@@ -792,20 +807,24 @@ exports.viewDocument = async (req, res) => {
             });
         }
 
-        let filePath;
+        let fileUrl;
         let fileName;
+        let publicId;
 
         switch (type) {
             case 'resume':
-                filePath = provider.resume;
+                fileUrl = provider.resume;
+                publicId = provider.resumePublicId;
                 fileName = 'resume';
                 break;
             case 'passbook':
-                filePath = provider.bankDetails?.passbookImage;
+                fileUrl = provider.bankDetails?.passbookImage;
+                publicId = provider.bankDetails?.passbookImagePublicId;
                 fileName = 'passbook';
                 break;
             case 'profile':
-                filePath = provider.profilePicUrl;
+                fileUrl = provider.profilePicUrl;
+                publicId = provider.profilePicPublicId;
                 fileName = 'profile-picture';
                 break;
             default:
@@ -815,41 +834,27 @@ exports.viewDocument = async (req, res) => {
                 });
         }
 
-        if (!filePath) {
+        if (!fileUrl || !publicId) {
             return res.status(404).json({
                 success: false,
                 message: `${fileName.charAt(0).toUpperCase() + fileName.slice(1)} not found`
             });
         }
 
-        const fullPath = path.join(__dirname, '../', filePath);
+        // Generate a signed URL for the private resource
+        const signedUrl = cloudinary.url(publicId, {
+            secure: true,
+            private_cdn: false,
+            sign_url: true,
+            resource_type: 'image',
+            expires_at: Math.floor(Date.now() / 1000) + 3600
+        });
 
-        // Check if file exists
-        if (!fs.existsSync(fullPath)) {
-            return res.status(404).json({
-                success: false,
-                message: `${fileName.charAt(0).toUpperCase() + fileName.slice(1)} file not found on server`
-            });
-        }
-
-        // Set appropriate headers
-        const ext = path.extname(fullPath).toLowerCase();
-        let contentType = 'application/octet-stream';
-
-        if (['.jpg', '.jpeg', '.png', '.gif'].includes(ext)) {
-            contentType = `image/${ext.slice(1)}`;
-        } else if (ext === '.pdf') {
-            contentType = 'application/pdf';
-        } else if (['.doc', '.docx'].includes(ext)) {
-            contentType = 'application/msword';
-        }
-
-        res.setHeader('Content-Type', contentType);
-        res.setHeader('Content-Disposition', `inline; filename="${fileName}${ext}"`);
-        
-        // Stream the file
-        const fileStream = fs.createReadStream(fullPath);
-        fileStream.pipe(res);
+        return res.status(200).json({
+            success: true,
+            message: `${fileName} document URL generated successfully`,
+            fileUrl: signedUrl
+        });
 
     } catch (error) {
         console.error('View document error:', error);
@@ -903,8 +908,15 @@ exports.deleteAccount = async (req, res) => {
 exports.getServiceCategories = async (req, res) => {
     try {
         // Get the service enum values from the Provider schema
-        const serviceEnum = Provider.schema.paths.services.enumValues;
-        
+        const serviceEnum = Provider.schema.path('services').enumValues;
+
+        if (!serviceEnum) {
+            return res.status(500).json({
+                success: false,
+                message: 'Service categories not defined in schema'
+            });
+        }
+
         // Format the response to match frontend expectations
         const serviceCategories = serviceEnum.map(service => ({
             _id: service.toLowerCase().replace(/\s+/g, '-'),
@@ -950,15 +962,15 @@ exports.permanentDeleteAccount = async (req, res) => {
             });
         }
 
-        // Delete files
-        if (provider.profilePicUrl && provider.profilePicUrl !== 'default-provider.jpg') {
-            deleteFile(path.join(__dirname, '../', provider.profilePicUrl));
+        // Delete files from Cloudinary
+        if (provider.profilePicPublicId) {
+            await deleteFile(provider.profilePicPublicId);
         }
-        if (provider.resume) {
-            deleteFile(path.join(__dirname, '../', provider.resume));
+        if (provider.resumePublicId) {
+            await deleteFile(provider.resumePublicId);
         }
-        if (provider.bankDetails.passbookImage) {
-            deleteFile(path.join(__dirname, '../', provider.bankDetails.passbookImage));
+        if (provider.bankDetails?.passbookImagePublicId) {
+            await deleteFile(provider.bankDetails.passbookImagePublicId);
         }
 
         // Permanent delete
@@ -977,5 +989,3 @@ exports.permanentDeleteAccount = async (req, res) => {
         });
     }
 };
-
-
