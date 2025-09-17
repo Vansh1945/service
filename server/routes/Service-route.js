@@ -3,20 +3,22 @@ const router = express.Router();
 const serviceController = require('../controllers/Services-controller');
 const adminAuthMiddleware = require('../middlewares/Admin-middleware');
 const providerAuthMiddleware = require('../middlewares/Provider-middleware');
-const { uploadServiceImage, uploadServicesFile, upload} = require('../middlewares/upload');
+const { uploadServiceImage, uploadServicesFile, handleUploadErrors } = require('../middlewares/upload');
 
 /**
  * ADMIN ROUTES
  */
 router.post('/admin/services',
     adminAuthMiddleware,
-    uploadServiceImage,
+    uploadServiceImage.array('image', 3),
+    handleUploadErrors,
     serviceController.createService
 );
 
 router.put('/admin/service/:id',
     adminAuthMiddleware,
-    uploadServiceImage,
+    uploadServiceImage.array('image', 3),
+    handleUploadErrors,
     serviceController.updateService
 );
 
@@ -43,7 +45,13 @@ router.get('/admin/services/:id',
 router.post('/admin/bulk-import', 
     adminAuthMiddleware,
     uploadServicesFile.single('servicesFile'), 
+    handleUploadErrors,
     serviceController.bulkImportServices
+);
+
+router.get('/admin/services-export',
+    adminAuthMiddleware,
+    serviceController.exportServicesToExcel
 );
 
 /**

@@ -48,7 +48,7 @@ const uploadResume = multer({
 const uploadServiceImage = multer({
   storage: createCloudinaryStorage('serviceImage', 'image', ['jpg', 'jpeg', 'png']),
   limits: { fileSize: 3 * 1024 * 1024 }, // 3MB
-}).array('image', 3);
+});
 
 const uploadComplaintImage = multer({
   storage: createCloudinaryStorage('complaintImage', 'image', ['jpg', 'jpeg', 'png']),

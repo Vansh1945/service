@@ -5,7 +5,7 @@ const Provider = require('../models/Provider-model');
 const excelJS = require('exceljs');
 const fs = require('fs');
 const path = require('path');
-
+const cloudinary = require('../services/cloudinary');
 /**
  * ADMIN CONTROLLERS
  */
@@ -13,8 +13,30 @@ const path = require('path');
 // Create a new service (Admin only)
 const createService = async (req, res) => {
     try {
-        const { title, category, description, basePrice, duration } = req.body;
-        const image = req.file ? req.file.filename : 'default-service.jpg';
+        const { title, category, description, basePrice, duration, specialNotes, materialsUsed } = req.body;
+        
+        let imageUrls;
+        if (req.files && req.files.length > 0) {
+            const uploadPromises = req.files.map(file => cloudinary.uploader.upload(file.path));
+            const uploadResults = await Promise.all(uploadPromises);
+            imageUrls = uploadResults.map(result => result.secure_url);
+
+            // Optional: delete local files after upload
+            req.files.forEach(file => fs.unlinkSync(file.path));
+        } else {
+            // Upload default image to Cloudinary if no image is provided
+            try {
+                const defaultImagePath = path.resolve(__dirname, '..', 'assets', 'Service.png');
+                const uploadResult = await cloudinary.uploader.upload(defaultImagePath, {
+                    folder: 'services' // Optional: organize in a folder
+                });
+                imageUrls = [uploadResult.secure_url];
+            } catch (uploadError) {
+                console.error('Error uploading default image:', uploadError);
+                // Fallback to a placeholder or handle error
+                imageUrls = ['https://res.cloudinary.com/demo/image/upload/v1625126928/placeholder.jpg'];
+            }
+        }
 
         const service = await Service.createService(req.adminID, {
             title,
@@ -22,7 +44,9 @@ const createService = async (req, res) => {
             description,
             basePrice,
             duration,
-            image
+            specialNotes: specialNotes ? JSON.parse(specialNotes) : [],
+            materialsUsed: materialsUsed ? JSON.parse(materialsUsed) : [],
+            images: imageUrls
         });
 
         res.status(201).json({
@@ -45,8 +69,32 @@ const updateService = async (req, res) => {
         const { id } = req.params;
         const updates = req.body;
 
-        if (req.file) {
-            updates.image = req.file.filename;
+        let finalImages = [];
+        if (updates.existingImages) {
+            try {
+                finalImages = JSON.parse(updates.existingImages);
+            } catch (e) {
+                finalImages = Array.isArray(updates.existingImages) ? updates.existingImages : [updates.existingImages];
+            }
+        }
+
+        if (req.files && req.files.length > 0) {
+            const uploadPromises = req.files.map(file => cloudinary.uploader.upload(file.path));
+            const uploadResults = await Promise.all(uploadPromises);
+            const newImageUrls = uploadResults.map(result => result.secure_url);
+            finalImages = [...finalImages, ...newImageUrls];
+        }
+
+        updates.images = finalImages;
+        delete updates.existingImages;
+
+        // Handle array fields
+        if (updates.specialNotes && typeof updates.specialNotes === 'string') {
+            updates.specialNotes = JSON.parse(updates.specialNotes);
+        }
+        
+        if (updates.materialsUsed && typeof updates.materialsUsed === 'string') {
+            updates.materialsUsed = JSON.parse(updates.materialsUsed);
         }
 
         // Find and update service
@@ -247,7 +295,7 @@ const getServicesForProvider = async (req, res) => {
         }
 
         const services = await Service.find(query)
-            .select('title category description image basePrice duration feedback averageRating')
+            .select('title category description images basePrice duration feedback averageRating')
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(parseInt(limit));
@@ -277,7 +325,7 @@ const getServiceDetailsForProvider = async (req, res) => {
         const { id } = req.params;
 
         const service = await Service.findById(id)
-            .select('title category description image basePrice duration durationFormatted feedback averageRating')
+            .select('title category description images basePrice duration durationFormatted feedback averageRating')
             .populate('feedback.customer', 'name');
 
         if (!service || !service.isActive) {
@@ -579,7 +627,7 @@ const bulkImportServices = async (req, res) => {
     }
 };
 
-// Export services to Excel (Admin only)
+ // Export services to Excel (Admin only) - Including Images
 const exportServicesToExcel = async (req, res) => {
     try {
         const services = await Service.find({ createdBy: req.adminID })
@@ -593,10 +641,16 @@ const exportServicesToExcel = async (req, res) => {
             { header: 'Title', key: 'title', width: 30 },
             { header: 'Category', key: 'category', width: 20 },
             { header: 'Description', key: 'description', width: 50 },
+            { header: 'Images', key: 'images', width: 50 },
             { header: 'Base Price', key: 'basePrice', width: 15 },
             { header: 'Duration (hours)', key: 'duration', width: 15 },
+            { header: 'Special Notes', key: 'specialNotes', width: 30 },
+            { header: 'Materials Used', key: 'materialsUsed', width: 30 },
             { header: 'Status', key: 'status', width: 15 },
-            { header: 'Created At', key: 'createdAt', width: 20 }
+            { header: 'Average Rating', key: 'averageRating', width: 15 },
+            { header: 'Rating Count', key: 'ratingCount', width: 15 },
+            { header: 'Created At', key: 'createdAt', width: 20 },
+            { header: 'Updated At', key: 'updatedAt', width: 20 }
         ];
 
         // Add data rows
@@ -605,10 +659,16 @@ const exportServicesToExcel = async (req, res) => {
                 title: service.title,
                 category: service.category,
                 description: service.description,
+                images: service.images.join(', '), // Multiple images as comma-separated
                 basePrice: service.basePrice,
                 duration: service.duration,
+                specialNotes: service.specialNotes ? service.specialNotes.join(', ') : '',
+                materialsUsed: service.materialsUsed ? service.materialsUsed.join(', ') : '',
                 status: service.isActive ? 'Active' : 'Inactive',
-                createdAt: service.createdAt.toISOString().split('T')[0]
+                averageRating: service.averageRating,
+                ratingCount: service.ratingCount,
+                createdAt: service.createdAt.toISOString().split('T')[0],
+                updatedAt: service.updatedAt ? service.updatedAt.toISOString().split('T')[0] : ''
             });
         });
 
@@ -634,6 +694,7 @@ const exportServicesToExcel = async (req, res) => {
         });
     }
 };
+
 
 module.exports = {
     // Admin controllers

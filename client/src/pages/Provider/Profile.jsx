@@ -783,7 +783,6 @@ const ProviderProfile = () => {
                   </h4>
                   <ul className="text-sm text-blue-700 space-y-1">
                     <li>• Profile picture should be clear and professional</li>
-                    <li>• Resume should be in PDF, DOC, or DOCX format</li>
                     <li>• Bank passbook image should clearly show account details</li>
                     <li>• All documents will be verified by our team</li>
                   </ul>

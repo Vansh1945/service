@@ -1,6 +1,7 @@
-// models/Service-model.js
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
+
+const ServiceImages = "/assets/Services.png"; 
 
 // Service Schema
 const serviceSchema = new Schema({
@@ -22,14 +23,23 @@ const serviceSchema = new Schema({
     trim: true,
     maxlength: 500,
   },
-  image: {
-    type: String,
-    default: 'default-service.jpg'
+  // save the multiple images 
+  images: {
+    type: [String],
+    default: [ServiceImages]
   },
+  // Example: ₹500 per hour or ₹1500 per setup
   basePrice: {
     type: Number,
     required: true,
     min: 0,
+  },
+  // multiple ho sakta hai 
+  specialNotes: {
+    type: [String]
+  },
+  materialsUsed: {
+    type: [String]
   },
   isActive: {
     type: Boolean,
@@ -40,6 +50,8 @@ const serviceSchema = new Schema({
     ref: 'Admin',
     required: true
   },
+  // Expected completion time
+  // Example: "1 to 2 Hours", "Within same day", etc.
   duration: {
     type: Number,
     required: true,

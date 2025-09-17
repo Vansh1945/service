@@ -28,6 +28,7 @@ app.get('/api/test-route', (req, res) => {
 
 app.use(express.urlencoded({ extended: true }));
 app.use("/uploads", express.static("uploads"));
+app.use("/assets", express.static("assets"));
 
 
 
