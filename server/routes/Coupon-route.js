@@ -5,11 +5,11 @@ const { userAuthMiddleware } = require('../middlewares/User-middleware');
 const adminAuthMiddleware = require('../middlewares/Admin-middleware');
 
 // ADMIN ROUTES
-router.post('/add-coupons', adminAuthMiddleware, couponController.createCoupon);
-router.get('/all-coupons', adminAuthMiddleware, couponController.getAllCoupons);
-router.put('/update-coupons/:id', adminAuthMiddleware, couponController.updateCoupon);
-router.delete('/delete-coupons/:id', adminAuthMiddleware, couponController.deleteCoupon);
-router.delete('/delete-coupons/:id/hard', adminAuthMiddleware, couponController.hardDeleteCoupon);
+router.post('/admin/coupons', adminAuthMiddleware, couponController.createCoupon);
+router.get('/admin/coupons', adminAuthMiddleware, couponController.getAllCoupons);
+router.put('/admin/coupon/:id', adminAuthMiddleware, couponController.updateCoupon);
+router.delete('/admin/coupons/:id', adminAuthMiddleware, couponController.deleteCoupon);
+router.delete('/admin/coupons/:id/hard', adminAuthMiddleware, couponController.hardDeleteCoupon);
 
 // USER ROUTES
 router.post('/coupons/apply', userAuthMiddleware, couponController.applyCoupon);

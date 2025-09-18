@@ -5,25 +5,33 @@ const jwt = require('jsonwebtoken');
 const adminSchema = new mongoose.Schema({
   name: {
     type: String,
-    required: true
+    required: true,
+    trim: true
   },
   email: {
     type: String,
     required: true,
-    unique: true
+    unique: true,
+    lowercase: true,
+    trim: true
   },
   password: {
     type: String,
-    required: true
+    required: true,
+    minlength: 6
   },
   profilePicUrl: {
     type: String,
-    default: 'default-admin.jpg'
+    default: ''
   },
   isAdmin: {
     type: Boolean,
     default: true,
     required: true
+  },
+  isActive: {
+    type: Boolean,
+    default: true
   }
 }, {
   timestamps: true
@@ -58,6 +66,14 @@ adminSchema.methods.generateJWT = function () {
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   );
+};
+
+// Remove password from JSON output
+adminSchema.methods.toJSON = function () {
+  const admin = this.toObject();
+  delete admin.password;
+  delete admin.__v;
+  return admin;
 };
 
 const Admin = mongoose.model('Admin', adminSchema);

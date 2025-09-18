@@ -3,7 +3,7 @@ import { useAuth } from '../../store/auth';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { 
   FileText, PlusCircle, Trash2, Edit2, Download, Upload, X, Check, 
   Search, Filter, BarChart3, Eye, CheckSquare, Square, 
@@ -45,7 +45,6 @@ const AdminQuestions = () => {
   // New enhanced states
   const [selectedQuestions, setSelectedQuestions] = useState(new Set());
   const [showStats, setShowStats] = useState(true);
-  const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
   const [sortBy, setSortBy] = useState('newest');
   const [showPreview, setShowPreview] = useState(false);
   const [previewQuestion, setPreviewQuestion] = useState(null);
@@ -406,67 +405,6 @@ const AdminQuestions = () => {
     }
   };
 
-  // Enhanced functions for new features
-  const toggleQuestionSelection = useCallback((questionId) => {
-    setSelectedQuestions(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(questionId)) {
-        newSet.delete(questionId);
-      } else {
-        newSet.add(questionId);
-      }
-      return newSet;
-    });
-  }, []);
-
-  const selectAllQuestions = useCallback(() => {
-    if (selectedQuestions.size === questions.length) {
-      setSelectedQuestions(new Set());
-    } else {
-      setSelectedQuestions(new Set(questions.map(q => q._id)));
-    }
-  }, [questions, selectedQuestions.size]);
-
-  const handleBulkDelete = useCallback(async () => {
-    if (selectedQuestions.size === 0) {
-      showToast('Please select questions to delete', 'error');
-      return;
-    }
-
-    if (!window.confirm(`Are you sure you want to delete ${selectedQuestions.size} selected questions?`)) {
-      return;
-    }
-
-    try {
-      const deletePromises = Array.from(selectedQuestions).map(id =>
-        fetch(`${API}/question/${id}`, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        })
-      );
-
-      await Promise.all(deletePromises);
-      showToast(`${selectedQuestions.size} questions deleted successfully`);
-      setSelectedQuestions(new Set());
-      fetchQuestions();
-    } catch (error) {
-      showToast('Failed to delete some questions', 'error');
-    }
-  }, [selectedQuestions, API, token, showToast, fetchQuestions]);
-
-  const openPreview = useCallback((question) => {
-    setPreviewQuestion(question);
-    setShowPreview(true);
-  }, []);
-
-  const closePreview = useCallback(() => {
-    setShowPreview(false);
-    setPreviewQuestion(null);
-  }, []);
-
   // Statistics calculations
   const statistics = useMemo(() => {
     const total = questions.length;
@@ -516,203 +454,168 @@ const AdminQuestions = () => {
   }, [questions, sortBy]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-100 to-blue-100 p-4 md:p-8">
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="max-w-7xl mx-auto"
-      >
+    <div className="min-h-screen  p-4 md:p-8">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 transform transition-all hover:shadow-2xl">
+        <div className="bg-white rounded-xl shadow-md p-6 mb-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
-                <FileText className="text-blue-500" size={32} />
+              <h1 className="text-2xl md:text-3xl font-bold text-secondary flex items-center gap-3">
+                <FileText className="text-primary" size={32} />
                 Question Bank Management
               </h1>
               <p className="text-gray-600 mt-2">Efficiently manage and organize your test questions</p>
             </div>
             <div className="mt-4 md:mt-0 flex items-center gap-3">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
+              <button
                 onClick={() => setShowStats(!showStats)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
                   showStats 
-                    ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    ? 'bg-primary bg-opacity-10 text-primary' 
+                    : 'bg-gray-100 text-gray-700'
                 }`}
               >
                 <BarChart3 size={18} />
                 {showStats ? 'Hide Stats' : 'Show Stats'}
-              </motion.button>
+              </button>
             </div>
           </div>
         </div>
 
         {/* Statistics Dashboard */}
-        <AnimatePresence>
-          {showStats && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="mb-8"
-            >
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-                {/* Total Questions */}
-                <motion.div
-                  whileHover={{ scale: 1.05, transition: { duration: 0.2 } }}
-                  className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-6 text-white shadow-xl"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-blue-100 text-sm font-medium">Total Questions</p>
-                      <p className="text-3xl font-bold mt-1">{statistics.total}</p>
-                    </div>
-                    <div className="bg-blue-400 bg-opacity-30 p-3 rounded-xl">
-                      <BookOpen size={24} />
-                    </div>
+        {showStats && (
+          <div className="mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+              {/* Total Questions */}
+              <div className="bg-white rounded-xl p-4 shadow-md border border-gray-100">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-500 text-sm font-medium">Total Questions</p>
+                    <p className="text-2xl font-bold text-secondary mt-1">{statistics.total}</p>
                   </div>
-                </motion.div>
-
-                {/* Active Questions */}
-                <motion.div
-                  whileHover={{ scale: 1.05, transition: { duration: 0.2 } }}
-                  className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-6 text-white shadow-xl"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-green-100 text-sm font-medium">Active Questions</p>
-                      <p className="text-3xl font-bold mt-1">{statistics.active}</p>
-                      <p className="text-green-200 text-xs mt-1">{statistics.activePercentage}% of total</p>
-                    </div>
-                    <div className="bg-green-400 bg-opacity-30 p-3 rounded-xl">
-                      <Check size={24} />
-                    </div>
+                  <div className="bg-primary bg-opacity-10 p-2 rounded-lg">
+                    <BookOpen className="text-primary" size={20} />
                   </div>
-                </motion.div>
-
-                {/* Inactive Questions */}
-                <motion.div
-                  whileHover={{ scale: 1.05, transition: { duration: 0.2 } }}
-                  className="bg-gradient-to-br from-red-500 to-red-600 rounded-2xl p-6 text-white shadow-xl"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-red-100 text-sm font-medium">Inactive Questions</p>
-                      <p className="text-3xl font-bold mt-1">{statistics.inactive}</p>
-                      <p className="text-red-200 text-xs mt-1">{100 - statistics.activePercentage}% of total</p>
-                    </div>
-                    <div className="bg-red-400 bg-opacity-30 p-3 rounded-xl">
-                      <X size={24} />
-                    </div>
-                  </div>
-                </motion.div>
-
-                {/* Categories */}
-                <motion.div
-                  whileHover={{ scale: 1.05, transition: { duration: 0.2 } }}
-                  className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-6 text-white shadow-xl"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-purple-100 text-sm font-medium">Categories</p>
-                      <p className="text-3xl font-bold mt-1">{Object.keys(statistics.byCategory).length}</p>
-                      <p className="text-purple-200 text-xs mt-1">Different categories</p>
-                    </div>
-                    <div className="bg-purple-400 bg-opacity-30 p-3 rounded-xl">
-                      <TrendingUp size={24} />
-                    </div>
-                  </div>
-                </motion.div>
+                </div>
               </div>
 
-              {/* Category and Subcategory Breakdown */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Category Breakdown */}
-                <motion.div
-                  whileHover={{ scale: 1.02, transition: { duration: 0.2 } }}
-                  className="bg-white rounded-2xl shadow-xl p-6 border border-gray-200"
-                >
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                    <BarChart3 className="text-blue-500" size={20} />
-                    Questions by Category
-                  </h3>
-                  <div className="space-y-3">
-                    {Object.entries(statistics.byCategory).map(([category, count]) => (
-                      <div key={category} className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-3 h-3 rounded-full ${
-                            category === 'electrical' ? 'bg-blue-500' : 'bg-green-500'
-                          }`}></div>
-                          <span className="text-gray-700 capitalize font-medium">{category}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-gray-900 font-semibold">{count}</span>
-                          <span className="text-gray-500 text-sm">
-                            ({Math.round((count / statistics.total) * 100)}%)
-                          </span>
-                        </div>
-                      </div>
-                    ))}
+              {/* Active Questions */}
+              <div className="bg-white rounded-xl p-4 shadow-md border border-gray-100">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-500 text-sm font-medium">Active Questions</p>
+                    <p className="text-2xl font-bold text-secondary mt-1">{statistics.active}</p>
+                    <p className="text-gray-500 text-xs mt-1">{statistics.activePercentage}% of total</p>
                   </div>
-                </motion.div>
-
-                {/* Subcategory Breakdown */}
-                <motion.div
-                  whileHover={{ scale: 1.02, transition: { duration: 0.2 } }}
-                  className="bg-white rounded-2xl shadow-xl p-6 border border-gray-200"
-                >
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                    <Activity className="text-purple-500" size={20} />
-                    Questions by Subcategory
-                  </h3>
-                  <div className="space-y-3">
-                    {Object.entries(statistics.bySubcategory).map(([subcategory, count]) => (
-                      <div key={subcategory} className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-3 h-3 rounded-full ${
-                            subcategory === 'wiring' ? 'bg-yellow-500' : 
-                            subcategory === 'ac' ? 'bg-cyan-500' : 
-                            subcategory === 'repair' ? 'bg-orange-500' : 'bg-gray-500'
-                          }`}></div>
-                          <span className="text-gray-700 capitalize font-medium">{subcategory}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-gray-900 font-semibold">{count}</span>
-                          <span className="text-gray-500 text-sm">
-                            ({Math.round((count / statistics.total) * 100)}%)
-                          </span>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="bg-green-500 bg-opacity-10 p-2 rounded-lg">
+                    <Check className="text-green-500" size={20} />
                   </div>
-                </motion.div>
+                </div>
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+
+              {/* Inactive Questions */}
+              <div className="bg-white rounded-xl p-4 shadow-md border border-gray-100">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-500 text-sm font-medium">Inactive Questions</p>
+                    <p className="text-2xl font-bold text-secondary mt-1">{statistics.inactive}</p>
+                    <p className="text-gray-500 text-xs mt-1">{100 - statistics.activePercentage}% of total</p>
+                  </div>
+                  <div className="bg-red-500 bg-opacity-10 p-2 rounded-lg">
+                    <X className="text-red-500" size={20} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Categories */}
+              <div className="bg-white rounded-xl p-4 shadow-md border border-gray-100">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-500 text-sm font-medium">Categories</p>
+                    <p className="text-2xl font-bold text-secondary mt-1">{Object.keys(statistics.byCategory).length}</p>
+                    <p className="text-gray-500 text-xs mt-1">Different categories</p>
+                  </div>
+                  <div className="bg-purple-500 bg-opacity-10 p-2 rounded-lg">
+                    <TrendingUp className="text-purple-500" size={20} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Category and Subcategory Breakdown */}
+            <div className="grid grid-cols-2 lg:grid-cols-2 gap-4">
+              {/* Category Breakdown */}
+              <div className="bg-white rounded-xl shadow-md p-4 border border-gray-100">
+                <h3 className="text-lg font-semibold text-secondary mb-3 flex items-center gap-2">
+                  <BarChart3 className="text-primary" size={20} />
+                  Questions by Category
+                </h3>
+                <div className="space-y-2">
+                  {Object.entries(statistics.byCategory).map(([category, count]) => (
+                    <div key={category} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${
+                          category === 'electrical' ? 'bg-primary' : 'bg-accent'
+                        }`}></div>
+                        <span className="text-secondary text-sm capitalize font-medium">{category}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-secondary font-semibold">{count}</span>
+                        <span className="text-gray-500 text-xs">
+                          ({Math.round((count / statistics.total) * 100)}%)
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Subcategory Breakdown */}
+              <div className="bg-white rounded-xl shadow-md p-4 border border-gray-100">
+                <h3 className="text-lg font-semibold text-secondary mb-3 flex items-center gap-2">
+                  <Activity className="text-primary" size={20} />
+                  Questions by Subcategory
+                </h3>
+                <div className="space-y-2">
+                  {Object.entries(statistics.bySubcategory).map(([subcategory, count]) => (
+                    <div key={subcategory} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${
+                          subcategory === 'wiring' ? 'bg-primary' : 
+                          subcategory === 'ac' ? 'bg-accent' : 
+                          subcategory === 'repair' ? 'bg-secondary' : 'bg-gray-500'
+                        }`}></div>
+                        <span className="text-secondary text-sm capitalize font-medium">{subcategory}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-secondary font-semibold">{count}</span>
+                        <span className="text-gray-500 text-xs">
+                          ({Math.round((count / statistics.total) * 100)}%)
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column - Form */}
-          <div className="lg:col-span-1 space-y-6">
+          <div className="lg:col-span-1 space-y-4">
             {/* Question Form */}
-            <motion.div
-              whileHover={{ scale: 1.02, transition: { duration: 0.2 } }}
-              className="bg-white rounded-2xl shadow-xl p-6 border border-gray-200 transform transition-all hover:shadow-2xl"
-            >
-              <h2 className="text-xl font-semibold mb-4 text-gray-800 flex items-center gap-2">
+            <div className="bg-white rounded-xl shadow-md p-5 border border-gray-100">
+              <h2 className="text-xl font-semibold mb-4 text-secondary flex items-center gap-2">
                 {editingId ? (
                   <>
-                    <Edit2 className="text-blue-500" size={20} />
+                    <Edit2 className="text-primary" size={20} />
                     Edit Question
                   </>
                 ) : (
                   <>
-                    <PlusCircle className="text-blue-500" size={20} />
+                    <PlusCircle className="text-primary" size={20} />
                     Add New Question
                   </>
                 )}
@@ -720,9 +623,9 @@ const AdminQuestions = () => {
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-gray-700 mb-2 font-medium">Question Text *</label>
+                  <label className="block text-secondary mb-2 font-medium">Question Text *</label>
                   <textarea
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-blue-300"
+                    className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                     rows="4"
                     value={formData.questionText}
                     onChange={(e) => handleChange({ target: { name: 'questionText', value: e.target.value } })}
@@ -732,21 +635,21 @@ const AdminQuestions = () => {
                 </div>
 
                 <div>
-                  <label className="block text-gray-700 mb-2 font-medium">Options *</label>
-                  <div className="space-y-3">
+                  <label className="block text-secondary mb-2 font-medium">Options *</label>
+                  <div className="space-y-2">
                     {formData.options.map((option, index) => (
-                      <div key={index} className="flex items-center gap-3 group">
+                      <div key={index} className="flex items-center gap-2 group">
                         <input
                           type="radio"
                           name="correctAnswer"
                           checked={formData.correctAnswer === index}
                           onChange={() => setFormData(prev => ({ ...prev, correctAnswer: index }))}
-                          className="h-5 w-5 text-blue-500 focus:ring-blue-400 transition-all duration-200"
+                          className="h-4 w-4 text-primary focus:ring-primary"
                           required
                         />
                         <input
                           type="text"
-                          className="flex-1 px-4 py-2 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-blue-300"
+                          className="flex-1 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                           value={option}
                           onChange={(e) => handleOptionChange(index, e.target.value)}
                           required
@@ -756,9 +659,9 @@ const AdminQuestions = () => {
                           <button
                             type="button"
                             onClick={() => removeOption(index)}
-                            className="p-2 text-red-500 hover:text-red-600 rounded-full hover:bg-red-100 opacity-0 group-hover:opacity-100 transition-all duration-200"
+                            className="p-1.5 text-red-500 hover:text-red-600 rounded-lg hover:bg-red-50 opacity-70 group-hover:opacity-100 transition-opacity"
                           >
-                            <Trash2 size={18} />
+                            <Trash2 size={16} />
                           </button>
                         )}
                       </div>
@@ -769,20 +672,20 @@ const AdminQuestions = () => {
                     <button
                       type="button"
                       onClick={addOption}
-                      className="mt-3 flex items-center gap-2 text-blue-500 hover:text-blue-600 text-sm font-medium transition-colors duration-200"
+                      className="mt-2 flex items-center gap-1 text-primary hover:text-primary-dark text-sm font-medium"
                     >
-                      <PlusCircle size={16} /> Add Option
+                      <PlusCircle size={14} /> Add Option
                     </button>
                   )}
-                  <p className="text-xs text-gray-500 mt-2">Minimum 2 options, maximum 5 options</p>
+                  <p className="text-xs text-gray-500 mt-1">Minimum 2 options, maximum 5 options</p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-gray-700 mb-2 font-medium">Category *</label>
+                    <label className="block text-secondary mb-2 font-medium">Category *</label>
                     <select
                       name="category"
-                      className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-blue-300"
+                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                       value={formData.category}
                       onChange={handleChange}
                       required
@@ -793,10 +696,10 @@ const AdminQuestions = () => {
                   </div>
 
                   <div>
-                    <label className="block text-gray-700 mb-2 font-medium">Subcategory *</label>
+                    <label className="block text-secondary mb-2 font-medium">Subcategory *</label>
                     <select
                       name="subcategory"
-                      className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-blue-300"
+                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                       value={formData.subcategory}
                       onChange={handleChange}
                       required
@@ -813,81 +716,70 @@ const AdminQuestions = () => {
                   <input
                     type="checkbox"
                     name="isActive"
-                    className="h-5 w-5 text-blue-500 focus:ring-blue-400 rounded transition-all duration-200"
+                    className="h-4 w-4 text-primary focus:ring-primary rounded"
                     checked={formData.isActive}
                     onChange={(e) => handleChange({ target: { name: 'isActive', value: e.target.checked } })}
                   />
-                  <label className="ml-2 text-gray-700 font-medium">Active Question</label>
+                  <label className="ml-2 text-secondary text-sm font-medium">Active Question</label>
                 </div>
 
-                <div className="flex flex-wrap gap-3 pt-4">
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
+                <div className="flex flex-wrap gap-2 pt-3">
+                  <button
                     type="submit"
-                    className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-all duration-200 shadow-md hover:shadow-lg"
+                    className="flex items-center gap-1 px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg font-medium shadow-sm hover:shadow-md"
                   >
                     {editingId ? (
                       <>
-                        <Edit2 size={16} /> Update
+                        <Edit2 size={14} /> Update
                       </>
                     ) : (
                       <>
-                        <PlusCircle size={16} /> Add
+                        <PlusCircle size={14} /> Add
                       </>
                     )}
-                  </motion.button>
+                  </button>
 
                   {editingId && (
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
+                    <button
                       type="button"
                       onClick={resetForm}
-                      className="flex items-center gap-2 px-5 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-xl font-medium transition-all duration-200 shadow-md hover:shadow-lg"
+                      className="flex items-center gap-1 px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-medium"
                     >
-                      <X size={16} /> Cancel
-                    </motion.button>
+                      <X size={14} /> Cancel
+                    </button>
                   )}
 
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
+                  <button
                     type="button"
                     onClick={() => setShowBulkUpload(!showBulkUpload)}
-                    className="flex items-center gap-2 px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-medium transition-all duration-200 shadow-md hover:shadow-lg"
+                    className="flex items-center gap-1 px-4 py-2 bg-accent hover:bg-accent-dark text-white rounded-lg font-medium"
                   >
                     {showBulkUpload ? (
                       <>
-                        <X size={16} /> Hide Bulk
+                        <X size={14} /> Hide Bulk
                       </>
                     ) : (
                       <>
-                        <Upload size={16} /> Bulk Upload
+                        <Upload size={14} /> Bulk Upload
                       </>
                     )}
-                  </motion.button>
+                  </button>
                 </div>
               </form>
-            </motion.div>
+            </div>
 
             {/* Bulk Upload Section */}
             {showBulkUpload && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="bg-white rounded-2xl shadow-xl p-6 border border-gray-200 transform transition-all hover:shadow-2xl"
-              >
-                <h2 className="text-xl font-semibold mb-4 text-gray-800 flex items-center gap-2">
-                  <Upload className="text-blue-500" size={20} />
+              <div className="bg-white rounded-xl shadow-md p-5 border border-gray-100">
+                <h2 className="text-xl font-semibold mb-3 text-secondary flex items-center gap-2">
+                  <Upload className="text-primary" size={20} />
                   Bulk Upload Questions
                 </h2>
 
-                <div className="space-y-4">
+                <div className="space-y-3">
                   <div>
                     <p className="text-sm text-gray-600 mb-2 font-medium">Format example:</p>
-                    <pre className="bg-gray-50 p-4 rounded-xl text-xs font-mono text-gray-700 overflow-x-auto shadow-inner">
+                    <pre className="bg-gray-50 p-3 rounded-lg text-xs font-mono text-gray-700 overflow-x-auto border border-gray-200">
                       {`1. What is the color of live wire in electrical wiring?
 a) Red
 b) Black
@@ -903,52 +795,45 @@ Correct Answer: a`}
                   </div>
 
                   <textarea
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-blue-300"
-                    rows="8"
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                    rows="6"
                     value={bulkQuestions}
                     onChange={(e) => setBulkQuestions(e.target.value)}
                     placeholder="Paste questions here in the specified format..."
                   />
 
-                  <div className="flex gap-3">
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
+                  <div className="flex gap-2">
+                    <button
                       onClick={handleBulkUpload}
-                      className="flex items-center gap-2 px-5 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl font-medium transition-all duration-200 shadow-md hover:shadow-lg flex-1"
+                      className="flex items-center gap-1 px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg font-medium flex-1"
                     >
-                      <Upload size={16} /> Upload
-                    </motion.button>
+                      <Upload size={14} /> Upload
+                    </button>
 
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
+                    <button
                       onClick={() => setBulkQuestions('')}
-                      className="flex items-center gap-2 px-5 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-xl font-medium transition-all duration-200 shadow-md hover:shadow-lg"
+                      className="flex items-center gap-1 px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-medium"
                     >
-                      <X size={16} /> Clear
-                    </motion.button>
+                      <X size={14} /> Clear
+                    </button>
                   </div>
                 </div>
-              </motion.div>
+              </div>
             )}
           </div>
 
           {/* Right Column - Questions List */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-4">
             {/* Filters */}
-            <motion.div
-              whileHover={{ scale: 1.02, transition: { duration: 0.2 } }}
-              className="bg-white rounded-2xl shadow-xl p-6 border border-gray-200 transform transition-all hover:shadow-2xl"
-            >
-              <h2 className="text-xl font-semibold mb-4 text-gray-800">Filters</h2>
+            <div className="bg-white rounded-xl shadow-md p-5 border border-gray-100">
+              <h2 className="text-xl font-semibold mb-3 text-secondary">Filters</h2>
 
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                 <div>
-                  <label className="block text-gray-700 mb-2 text-sm font-medium">Search</label>
+                  <label className="block text-secondary mb-1 text-sm font-medium">Search</label>
                   <input
                     type="text"
-                    className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-blue-300"
+                    className="w-full px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                     value={filters.search}
                     onChange={(e) => setFilters({ ...filters, search: e.target.value })}
                     placeholder="Search questions..."
@@ -956,9 +841,9 @@ Correct Answer: a`}
                 </div>
 
                 <div>
-                  <label className="block text-gray-700 mb-2 text-sm font-medium">Category</label>
+                  <label className="block text-secondary mb-1 text-sm font-medium">Category</label>
                   <select
-                    className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-blue-300"
+                    className="w-full px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                     value={filters.category}
                     onChange={(e) => setFilters({ ...filters, category: e.target.value })}
                   >
@@ -969,9 +854,9 @@ Correct Answer: a`}
                 </div>
 
                 <div>
-                  <label className="block text-gray-700 mb-2 text-sm font-medium">Subcategory</label>
+                  <label className="block text-secondary mb-1 text-sm font-medium">Subcategory</label>
                   <select
-                    className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-blue-300"
+                    className="w-full px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                     value={filters.subcategory}
                     onChange={(e) => setFilters({ ...filters, subcategory: e.target.value })}
                   >
@@ -984,9 +869,9 @@ Correct Answer: a`}
                 </div>
 
                 <div>
-                  <label className="block text-gray-700 mb-2 text-sm font-medium">Status</label>
+                  <label className="block text-secondary mb-1 text-sm font-medium">Status</label>
                   <select
-                    className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-blue-300"
+                    className="w-full px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                     value={filters.isActive}
                     onChange={(e) => setFilters({ ...filters, isActive: e.target.value })}
                   >
@@ -998,150 +883,128 @@ Correct Answer: a`}
               </div>
 
               <div className="mt-4 flex justify-end">
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
+                <button
                   onClick={handleDownloadPDF}
-                  className="flex items-center gap-2 px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition-all duration-200 shadow-md hover:shadow-lg"
+                  className="flex items-center gap-1 px-4 py-2 bg-accent hover:bg-accent-dark text-white rounded-lg font-medium"
                 >
-                  <Download size={16} /> Download PDF
-                </motion.button>
+                  <Download size={14} /> Download PDF
+                </button>
               </div>
-            </motion.div>
+            </div>
 
             {/* Questions List */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="bg-white rounded-2xl shadow-xl p-6 border border-gray-200 transform transition-all hover:shadow-2xl"
-            >
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-semibold text-gray-800">Questions List</h2>
-                <div className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+            <div className="bg-white rounded-xl shadow-md p-5 border border-gray-100">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold text-secondary">Questions List</h2>
+                <div className="bg-primary bg-opacity-10 text-primary px-3 py-1 rounded-full text-sm font-medium">
                   {questions.length} questions found
                 </div>
               </div>
 
               {loading ? (
-                <div className="flex flex-col items-center justify-center py-12">
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                    className="h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mb-4"
-                  />
+                <div className="flex flex-col items-center justify-center py-8">
+                  <div className="h-10 w-10 border-4 border-primary border-t-transparent rounded-full mb-3 animate-spin" />
                   <p className="text-gray-600">Loading questions...</p>
                 </div>
               ) : questions.length === 0 ? (
-                <div className="text-center py-12">
-                  <FileText size={48} className="mx-auto text-gray-400 mb-4" />
-                  <h3 className="text-lg font-medium text-gray-700">No questions found</h3>
+                <div className="text-center py-8">
+                  <FileText size={40} className="mx-auto text-gray-400 mb-3" />
+                  <h3 className="text-lg font-medium text-secondary">No questions found</h3>
                   <p className="text-gray-500 mt-1">Add some questions to get started</p>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {questions.map((question) => (
-                    <motion.div
+                    <div
                       key={question._id}
-                      whileHover={{ scale: 1.01, transition: { duration: 0.2 } }}
-                      className="bg-gray-50 rounded-xl p-5 border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200"
+                      className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:border-primary transition-colors"
                     >
                       <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="font-medium text-gray-800">{question.questionText}</h3>
-                          <div className="mt-2 space-y-2">
+                        <div className="flex-1">
+                          <h3 className="font-medium text-secondary">{question.questionText}</h3>
+                          <div className="mt-2 space-y-1">
                             {question.options.map((opt, idx) => (
                               <div
                                 key={idx}
                                 className={`flex items-center text-sm ${idx === question.correctAnswer ? 'font-semibold text-green-600' : 'text-gray-600'}`}
                               >
-                                <span className="w-6">{String.fromCharCode(97 + idx)}.</span>
+                                <span className="w-5">{String.fromCharCode(97 + idx)}.</span>
                                 <span>{opt}</span>
                               </div>
                             ))}
                           </div>
-                        </div>
-
-                        <div className="flex flex-col items-end space-y-2">
-                          <div className="flex gap-2">
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${question.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                          <div className="flex gap-2 mt-3">
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${question.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                               {question.isActive ? 'Active' : 'Inactive'}
                             </span>
-                            <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium capitalize">
+                            <span className="px-2 py-0.5 bg-primary bg-opacity-10 text-primary rounded-full text-xs font-medium capitalize">
                               {question.category}
                             </span>
+                            <span className="px-2 py-0.5 bg-secondary bg-opacity-10 text-secondary rounded-full text-xs font-medium capitalize">
+                              {question.subcategory}
+                            </span>
                           </div>
+                        </div>
 
-                          <div className="flex gap-2">
-                            <motion.button
-                              whileHover={{ scale: 1.1 }}
-                              whileTap={{ scale: 0.9 }}
+                        <div className="flex flex-col items-end ml-3 gap-2">
+                          <div className="flex gap-1">
+                            <button
                               onClick={() => openEditDialog(question)}
-                              className="p-2 text-blue-500 hover:text-blue-600 rounded-full hover:bg-blue-100 transition-all duration-200"
+                              className="p-1.5 text-primary hover:text-primary-dark hover:bg-primary hover:bg-opacity-10 rounded-lg transition-colors"
                               title="Edit"
                             >
-                              <Edit2 size={18} />
-                            </motion.button>
-                            <motion.button
-                              whileHover={{ scale: 1.1 }}
-                              whileTap={{ scale: 0.9 }}
+                              <Edit2 size={16} />
+                            </button>
+                            <button
                               onClick={() => handleDelete(question._id)}
-                              className="p-2 text-red-500 hover:text-red-600 rounded-full hover:bg-red-100 transition-all duration-200"
+                              className="p-1.5 text-red-500 hover:text-red-600 hover:bg-red-100 rounded-lg transition-colors"
                               title="Delete"
                             >
-                              <Trash2 size={18} />
-                            </motion.button>
-                            <motion.button
-                              whileHover={{ scale: 1.1 }}
-                              whileTap={{ scale: 0.9 }}
+                              <Trash2 size={16} />
+                            </button>
+                            <button
                               onClick={() => toggleStatus(question._id, question.isActive)}
-                              className={`p-2 rounded-full ${question.isActive ? 'text-yellow-500 hover:text-yellow-600 hover:bg-yellow-100' : 'text-green-500 hover:text-green-600 hover:bg-green-100'} transition-all duration-200`}
+                              className={`p-1.5 rounded-lg ${question.isActive ? 'text-yellow-500 hover:text-yellow-600 hover:bg-yellow-100' : 'text-green-500 hover:text-green-600 hover:bg-green-100'} transition-colors`}
                               title={question.isActive ? 'Deactivate' : 'Activate'}
                             >
                               {question.isActive ? (
-                                <X size={18} />
+                                <X size={16} />
                               ) : (
-                                <Check size={18} />
+                                <Check size={16} />
                               )}
-                            </motion.button>
+                            </button>
                           </div>
                         </div>
                       </div>
-                    </motion.div>
+                    </div>
                   ))}
                 </div>
               )}
-            </motion.div>
+            </div>
           </div>
         </div>
-      </motion.div>
+      </div>
 
       {/* Edit Dialog */}
       {showEditDialog && currentQuestion && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.95 }}
-          className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50"
-        >
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto transform transition-all">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-semibold text-gray-800">Edit Question</h2>
-                <motion.button
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-5">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold text-secondary">Edit Question</h2>
+                <button
                   onClick={closeEditDialog}
                   className="text-gray-500 hover:text-gray-700"
                 >
                   <X size={24} />
-                </motion.button>
+                </button>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-gray-700 mb-2 font-medium">Question Text</label>
+                  <label className="block text-secondary mb-2 font-medium">Question Text</label>
                   <textarea
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-blue-300"
+                    className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                     rows="4"
                     value={formData.questionText}
                     onChange={(e) => handleChange({ target: { name: 'questionText', value: e.target.value } })}
@@ -1150,21 +1013,21 @@ Correct Answer: a`}
                 </div>
 
                 <div>
-                  <label className="block text-gray-700 mb-2 font-medium">Options</label>
-                  <div className="space-y-3">
+                  <label className="block text-secondary mb-2 font-medium">Options</label>
+                  <div className="space-y-2">
                     {formData.options.map((option, index) => (
-                      <div key={index} className="flex items-center gap-3 group">
+                      <div key={index} className="flex items-center gap-2 group">
                         <input
                           type="radio"
                           name="correctAnswer"
                           checked={formData.correctAnswer === index}
                           onChange={() => setFormData(prev => ({ ...prev, correctAnswer: index }))}
-                          className="h-5 w-5 text-blue-500 focus:ring-blue-400 transition-all duration-200"
+                          className="h-4 w-4 text-primary focus:ring-primary"
                           required
                         />
                         <input
                           type="text"
-                          className="flex-1 px-4 py-2 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-blue-300"
+                          className="flex-1 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                           value={option}
                           onChange={(e) => handleOptionChange(index, e.target.value)}
                           required
@@ -1173,9 +1036,9 @@ Correct Answer: a`}
                           <button
                             type="button"
                             onClick={() => removeOption(index)}
-                            className="p-2 text-red-500 hover:text-red-600 rounded-full hover:bg-red-100 opacity-0 group-hover:opacity-100 transition-all duration-200"
+                            className="p-1.5 text-red-500 hover:text-red-600 rounded-lg hover:bg-red-50 opacity-70 group-hover:opacity-100 transition-opacity"
                           >
-                            <Trash2 size= {18} />
+                            <Trash2 size={16} />
                           </button>
                         )}
                       </div>
@@ -1186,19 +1049,19 @@ Correct Answer: a`}
                     <button
                       type="button"
                       onClick={addOption}
-                      className="mt-3 flex items-center gap-2 text-blue-500 hover:text-blue-600 text-sm font-medium transition-colors duration-200"
+                      className="mt-2 flex items-center gap-1 text-primary hover:text-primary-dark text-sm font-medium"
                     >
-                      <PlusCircle size={16} /> Add Option
+                      <PlusCircle size={14} /> Add Option
                     </button>
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-gray-700 mb-2 font-medium">Category</label>
+                    <label className="block text-secondary mb-2 font-medium">Category</label>
                     <select
                       name="category"
-                      className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-blue-300"
+                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                       value={formData.category}
                       onChange={handleChange}
                       required
@@ -1209,10 +1072,10 @@ Correct Answer: a`}
                   </div>
 
                   <div>
-                    <label className="block text-gray-700 mb-2 font-medium">Subcategory</label>
+                    <label className="block text-secondary mb-2 font-medium">Subcategory</label>
                     <select
                       name="subcategory"
-                      className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-blue-300"
+                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                       value={formData.subcategory}
                       onChange={handleChange}
                       required
@@ -1229,36 +1092,32 @@ Correct Answer: a`}
                   <input
                     type="checkbox"
                     name="isActive"
-                    className="h-5 w-5 text-blue-500 focus:ring-blue-400 rounded transition-all duration-200"
+                    className="h-4 w-4 text-primary focus:ring-primary rounded"
                     checked={formData.isActive}
                     onChange={(e) => handleChange({ target: { name: 'isActive', value: e.target.checked } })}
                   />
-                  <label className="ml-2 text-gray-700 font-medium">Active Question</label>
+                  <label className="ml-2 text-secondary text-sm font-medium">Active Question</label>
                 </div>
 
-                <div className="flex justify-end gap-3 pt-4">
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
+                <div className="flex justify-end gap-2 pt-4">
+                  <button
                     type="button"
                     onClick={closeEditDialog}
-                    className="px-5 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-xl font-medium transition-all duration-200 shadow-md hover:shadow-lg"
+                    className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-medium"
                   >
                     Cancel
-                  </motion.button>
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
+                  </button>
+                  <button
                     type="submit"
-                    className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-all duration-200 shadow-md hover:shadow-lg"
+                    className="px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg font-medium"
                   >
                     Save Changes
-                  </motion.button>
+                  </button>
                 </div>
               </form>
             </div>
           </div>
-        </motion.div>
+        </div>
       )}
     </div>
   );

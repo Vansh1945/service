@@ -2,165 +2,268 @@ import React, { useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   FiMenu, FiX, FiHome, FiCheckCircle, FiUsers, FiCalendar, FiMessageCircle,
-  FiDollarSign, FiTag, FiPlus, FiTool,
-  FiAlertCircle, FiChevronDown, FiLogOut, FiUser, FiBell
+  FiDollarSign, FiTag, FiPlus, FiTool, FiAlertCircle, FiChevronDown, 
+  FiLogOut, FiUser, FiBell, FiSettings, FiCreditCard, FiActivity, FiFileText
 } from 'react-icons/fi';
-import { useAuth } from '../store/auth'; // Adjust the import path as needed
+import { useAuth } from '../store/auth';
 import Logo from './Logo';
 
 const AdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const location = useLocation();
-  const { logoutUser } = useAuth();
   const navigate = useNavigate();
+  const { user, logoutUser } = useAuth();
+
+  const menuItems = [
+    { name: 'Dashboard', path: '/admin/dashboard', icon: <FiHome className="w-5 h-5" /> },
+    { name: 'Approve Providers', path: '/admin/approve-providers', icon: <FiCheckCircle className="w-5 h-5" /> },
+    { name: 'All Providers', path: '/admin/providers', icon: <FiUsers className="w-5 h-5" /> },
+    { name: 'All Customers', path: '/admin/customers', icon: <FiUsers className="w-5 h-5" /> },
+    { name: 'Bookings', path: '/admin/bookings', icon: <FiCalendar className="w-5 h-5" /> },
+    { name: 'Commission Settings', path: '/admin/commission', icon: <FiDollarSign className="w-5 h-5" /> },
+    { name: 'Coupons', path: '/admin/coupons', icon: <FiTag className="w-5 h-5" /> },
+    { name: 'Test', path: '/admin/add-questions', icon: <FiPlus className="w-5 h-5" /> },
+    { name: 'Add Services', path: '/admin/add-services', icon: <FiTool className="w-5 h-5" /> },
+    { name: 'Complaint', path: '/admin/complaints', icon: <FiAlertCircle className="w-5 h-5" /> },
+    { name: 'Feedback', path: '/admin/feedback', icon: <FiMessageCircle className="w-5 h-5" /> },
+    { name: 'Earning', path: '/admin/earning', icon: <FiActivity className="w-5 h-5" /> },
+  ];
+
+  const isDashboardActive = location.pathname === '/admin' || location.pathname === '/admin/dashboard';
 
   const handleLogout = () => {
     logoutUser();
+    setProfileDropdownOpen(false);
     navigate('/login');
   };
 
-  const menuItems = [
-    { name: 'Dashboard', path: '/admin/dashboard', icon: <FiHome /> },
-    { name: 'Approve Providers', path: '/admin/approve-providers', icon: <FiCheckCircle /> },
-    { name: 'All Providers', path: '/admin/providers', icon: <FiUsers /> },
-    { name: 'All Customers', path: '/admin/customers', icon: <FiUsers /> },
-    { name: 'Bookings', path: '/admin/bookings', icon: <FiCalendar /> },
-    { name: 'Commission Settings', path: '/admin/commission', icon: <FiDollarSign /> },
-    { name: 'Coupons', path: '/admin/coupons', icon: <FiTag /> },
-    { name: 'Test', path: '/admin/add-questions', icon: <FiPlus /> },
-    { name: 'Add Services', path: '/admin/add-services', icon: <FiTool /> },
-    { name: 'Complaint', path: '/admin/complaints', icon: <FiAlertCircle /> },
-    { name: 'Feedback', path: '/admin/feedback', icon: <FiMessageCircle /> },
-    { name: 'Earning', path: '/admin/earning', icon: <FiAlertCircle /> },
-  ];
-
-  // Set Dashboard as active if no other path is matched
-  const isDashboardActive = location.pathname === '/admin' || location.pathname === '/admin/dashboard';
+  const getUserInitials = () => {
+    if (!user?.name) return 'A';
+    const names = user.name.split(' ');
+    return names.map(name => name[0]).join('').toUpperCase();
+  };
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
-      {/* Mobile sidebar */}
-      <div className={`fixed inset-0 z-40 lg:hidden ${sidebarOpen ? 'block' : 'hidden'}`}>
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-75" onClick={() => setSidebarOpen(false)}></div>
-        <div className="relative flex flex-col w-72 max-w-xs h-full bg-primary">
-          <div className="flex items-center justify-between px-4 py-5 border-b border-teal-700">
-            <Logo />
+      {/* Mobile sidebar overlay */}
+      <div 
+        className={`fixed inset-0 z-40 lg:hidden transition-opacity duration-300 ${
+          sidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+      >
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm" 
+          onClick={() => setSidebarOpen(false)}
+        />
+        
+        {/* Mobile sidebar */}
+        <div className={`relative flex flex-col w-80 max-w-xs h-full bg-white shadow-2xl transform transition-transform duration-300 ease-in-out ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}>
+          {/* Mobile header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+            <Logo className="h-8 w-auto text-primary" />
             <button
               onClick={() => setSidebarOpen(false)}
-              className="text-white hover:text-gray-200"
+              className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-secondary transition-colors"
             >
-              <FiX size={24} />
+              <FiX className="w-5 h-5" />
             </button>
           </div>
-          <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
-            {menuItems.map((item) => (
-              <Link
-                key={item.name}
-                to={item.path}
-                onClick={() => setSidebarOpen(false)}
-                className={`flex items-center px-4 py-3 text-sm font-medium rounded-md ${location.pathname === item.path || (item.name === 'Dashboard' && isDashboardActive)
-                  ? 'bg-teal-700 text-white'
-                  : 'text-white hover:bg-teal-700 hover:text-white'
+
+          {/* Mobile navigation */}
+          <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
+            {menuItems.map((item) => {
+              const isActive = location.pathname === item.path || (item.name === 'Dashboard' && isDashboardActive);
+              return (
+                <Link
+                  key={item.name}
+                  to={item.path}
+                  className={`flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
+                    isActive
+                      ? 'bg-primary text-white shadow-lg shadow-primary/25'
+                      : 'text-secondary hover:bg-primary/10 hover:text-primary'
                   }`}
-              >
-                <span className="mr-3">{item.icon}</span>
-                {item.name}
-                {item.active && (
-                  <span className="ml-auto w-2 h-2 bg-accent rounded-full"></span>
-                )}
-              </Link>
-            ))}
+                  onClick={() => setSidebarOpen(false)}
+                >
+                  <span className="mr-3">{item.icon}</span>
+                  {item.name}
+                </Link>
+              );
+            })}
           </nav>
         </div>
       </div>
 
       {/* Desktop sidebar */}
       <div className="hidden lg:flex lg:flex-shrink-0">
-        <div className="flex flex-col w-64 border-r border-gray-200 bg-primary">
-          <div className="flex items-center justify-between px-4 py-5 border-b border-teal-700">
-            <Logo />
+        <div className="flex flex-col w-72 bg-white border-r border-gray-200 shadow-sm">
+          {/* Desktop header */}
+          <div className="flex items-center px-6 py-6 border-b border-gray-200">
+            <Logo className="h-10 w-auto text-primary" />
           </div>
-          <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
-            {menuItems.map((item) => (
-              <Link
-                key={item.name}
-                to={item.path}
-                className={`flex items-center px-4 py-3 text-sm font-medium rounded-md ${location.pathname === item.path || (item.name === 'Dashboard' && isDashboardActive)
-                  ? 'bg-teal-700 text-white'
-                  : 'text-white hover:bg-teal-700 hover:text-white'
+
+          {/* Desktop navigation */}
+          <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
+            {menuItems.map((item) => {
+              const isActive = location.pathname === item.path || (item.name === 'Dashboard' && isDashboardActive);
+              return (
+                <Link
+                  key={item.name}
+                  to={item.path}
+                  className={`flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 group ${
+                    isActive
+                      ? 'bg-primary text-white shadow-lg shadow-primary/25'
+                      : 'text-secondary hover:bg-primary/10 hover:text-primary'
                   }`}
-              >
-                <span className="mr-3">{item.icon}</span>
-                {item.name}
-                {item.active && (
-                  <span className="ml-auto w-2 h-2 bg-accent rounded-full"></span>
-                )}
-              </Link>
-            ))}
+                >
+                  <span className="mr-3">{item.icon}</span>
+                  {item.name}
+                </Link>
+              );
+            })}
           </nav>
+
+          {/* Desktop sidebar footer */}
+          <div className="px-4 py-4 border-t border-gray-200">
+            <Link
+              to="/admin/settings"
+              className="flex items-center px-4 py-3 text-sm font-medium text-secondary hover:bg-primary/10 hover:text-primary rounded-xl transition-all duration-200"
+            >
+              <FiSettings className="w-5 h-5 mr-3" />
+              Settings
+            </Link>
+          </div>
         </div>
       </div>
 
-      {/* Main content */}
-      <div className="flex-1 overflow-auto">
-        <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 bg-white border-b border-gray-200 shadow-sm lg:px-6">
-          {/* Left side - Mobile menu button */}
-          <div className="flex items-center">
-            <button
-              type="button"
-              className="p-2 text-gray-600 rounded-md lg:hidden hover:bg-teal-100 hover:text-primary"
-              onClick={() => setSidebarOpen(true)}
-            >
-              <FiMenu size={20} />
-            </button>
-          </div>
-
-          {/* Right side - Profile dropdown and notifications */}
-          <div className="flex items-center space-x-4">
-            {/* Notifications */}
-            <button className="p-1 text-gray-600 rounded-full hover:bg-teal-100 hover:text-primary relative">
-              <span className="sr-only">Notifications</span>
-              <div className="absolute top-0 right-0 w-2 h-2 bg-accent rounded-full"></div>
-              <FiBell className="w-5 h-5" />
-            </button>
-
-            {/* Profile dropdown */}
-            <div className="relative">
+      {/* Main content area */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Top navigation bar */}
+        <header className="bg-white border-b border-gray-200 shadow-sm z-10">
+          <div className="flex items-center justify-between px-4 py-4 lg:px-6">
+            {/* Left side - Mobile menu button */}
+            <div className="flex items-center">
               <button
-                className="flex items-center space-x-2 focus:outline-none"
-                onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+                type="button"
+                className="p-2 rounded-lg text-secondary lg:hidden hover:bg-primary/10 hover:text-primary transition-colors"
+                onClick={() => setSidebarOpen(true)}
               >
-                <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white font-semibold">
-                  A
-                </div>
-                <span className="hidden md:inline text-sm font-medium text-secondary">Admin User</span>
-                <FiChevronDown className={`text-gray-500 transition-transform ${profileDropdownOpen ? 'transform rotate-180' : ''}`} />
+                <FiMenu className="w-6 h-6" />
               </button>
+              
+              {/* Page title on mobile */}
+              <h1 className="ml-3 text-xl font-semibold text-secondary lg:hidden">
+                {menuItems.find(item => item.path === location.pathname)?.name || 'Dashboard'}
+              </h1>
+            </div>
 
-              {profileDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20 border border-gray-200">
-                  <Link
-                    to="/admin/profile"
-                    className="block px-4 py-2 text-sm text-secondary hover:bg-teal-50 flex items-center"
-                    onClick={() => setProfileDropdownOpen(false)}
-                  >
-                    <FiUser className="mr-2" /> Profile
-                  </Link>
-                  <button
-                    onClick={handleLogout}
-                    className="w-full text-left block px-4 py-2 text-sm text-secondary hover:bg-teal-50 flex items-center"
-                  >
-                    <FiLogOut className="mr-2" /> Logout
-                  </button>
-                </div>
-              )}
+            {/* Right side - Actions and profile */}
+            <div className="flex items-center space-x-3">
+              {/* Messages */}
+              <Link
+                to="/admin/messages"
+                className="relative p-2 rounded-lg text-secondary hover:bg-primary/10 hover:text-primary transition-colors"
+              >
+                <span className="sr-only">Messages</span>
+                <FiMessageCircle className="w-5 h-5" />
+                <span className="absolute -top-1 -right-1 w-3 h-3 bg-accent rounded-full"></span>
+              </Link>
+
+              {/* Notifications */}
+              <Link
+                to="/admin/notifications"
+                className="relative p-2 rounded-lg text-secondary hover:bg-primary/10 hover:text-primary transition-colors"
+              >
+                <span className="sr-only">Notifications</span>
+                <FiBell className="w-5 h-5" />
+                <span className="absolute -top-1 -right-1 w-3 h-3 bg-accent rounded-full"></span>
+              </Link>
+
+              {/* Profile dropdown */}
+              <div className="relative">
+                <button
+                  className="flex items-center space-x-3 p-2 rounded-lg hover:bg-primary/10 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+                >
+                  {user?.profilePicUrl ? (
+                    <img
+                      src={user.profilePicUrl}
+                      alt="Profile"
+                      className="w-8 h-8 rounded-full object-cover ring-2 ring-primary/20"
+                    />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white font-semibold text-sm">
+                      {getUserInitials()}
+                    </div>
+                  )}
+                  <div className="hidden md:block text-left">
+                    <p className="text-sm font-medium text-secondary">
+                      {user?.name || 'Admin'}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {user?.email || 'admin@example.com'}
+                    </p>
+                  </div>
+                  <FiChevronDown 
+                    className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${
+                      profileDropdownOpen ? 'transform rotate-180' : ''
+                    }`} 
+                  />
+                </button>
+
+                {/* Dropdown menu */}
+                {profileDropdownOpen && (
+                  <div className="absolute right-0 mt-3 w-56 bg-white rounded-xl shadow-lg py-2 z-20 border border-gray-200 animate-in slide-in-from-top-2 duration-200">
+                    <div className="px-4 py-3 border-b border-gray-100">
+                      <p className="text-sm font-medium text-secondary">
+                        {user?.name || 'Admin'}
+                      </p>
+                      <p className="text-xs text-gray-500 truncate">
+                        {user?.email || 'admin@example.com'}
+                      </p>
+                    </div>
+                    
+                    <Link
+                      to="/admin/profile"
+                      className="flex items-center px-4 py-3 text-sm text-secondary hover:bg-primary/10 hover:text-primary transition-colors"
+                      onClick={() => setProfileDropdownOpen(false)}
+                    >
+                      <FiUser className="w-4 h-4 mr-3" />
+                      Profile Settings
+                    </Link>
+                    
+                    <Link
+                      to="/admin/settings"
+                      className="flex items-center px-4 py-3 text-sm text-secondary hover:bg-primary/10 hover:text-primary transition-colors"
+                      onClick={() => setProfileDropdownOpen(false)}
+                    >
+                      <FiSettings className="w-4 h-4 mr-3" />
+                      Account Settings
+                    </Link>
+                    
+                    <hr className="my-2 border-gray-100" />
+                    
+                    <button
+                      onClick={handleLogout}
+                      className="w-full flex items-center px-4 py-3 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                    >
+                      <FiLogOut className="w-4 h-4 mr-3" />
+                      Sign Out
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        </header>
 
-        <main className="p-4 md:p-6">
-          <Outlet />
+        {/* Main content */}
+        <main className="flex-1 overflow-auto bg-gray-50">
+          <div className="p-4 lg:p-6 xl:p-8">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>

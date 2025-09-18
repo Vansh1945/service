@@ -28,13 +28,11 @@ const createService = async (req, res) => {
             try {
                 const defaultImagePath = path.resolve(__dirname, '..', 'assets', 'Service.png');
                 const uploadResult = await cloudinary.uploader.upload(defaultImagePath, {
-                    folder: 'services' // Optional: organize in a folder
+                    folder: 'serviceImage' // Optional: organize in a folder
                 });
                 imageUrls = [uploadResult.secure_url];
             } catch (uploadError) {
                 console.error('Error uploading default image:', uploadError);
-                // Fallback to a placeholder or handle error
-                imageUrls = ['https://res.cloudinary.com/demo/image/upload/v1625126928/placeholder.jpg'];
             }
         }
 

@@ -26,14 +26,23 @@ const AdminDashboard = () => {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
           }
         });
-        const statsData = await statsResponse.json();
-        if (!statsResponse.ok) throw new Error(statsData.message || 'Failed to fetch stats');
         
-        setDashboardData(statsData.data);
+        if (!statsResponse.ok) {
+          throw new Error(`Failed to fetch stats: ${statsResponse.status}`);
+        }
+        
+        const statsData = await statsResponse.json();
+        
+        if (!statsData.success) {
+          throw new Error(statsData.message || 'Failed to fetch dashboard data');
+        }
+        
+        setDashboardData(statsData.data || {});
         setLoading(false);
         
       } catch (error) {
-        toast.error(error.message);
+        console.error('Error fetching dashboard data:', error);
+        toast.error(error.message || 'Failed to load dashboard data');
         setLoading(false);
       }
     };
@@ -41,7 +50,7 @@ const AdminDashboard = () => {
     fetchData();
   }, [API]);
 
-  if (loading || !dashboardData) {
+  if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
@@ -49,17 +58,39 @@ const AdminDashboard = () => {
     );
   }
 
-  // Chart data
+  if (!dashboardData) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="text-center">
+          <p className="text-red-500 text-lg">Failed to load dashboard data</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Safely access nested properties with fallbacks
+  const overview = dashboardData.overview || {};
+  const usersData = dashboardData.users || {};
+  const providersData = dashboardData.providers || {};
+  const recentBookings = dashboardData.recentBookings || [];
+
+  // Chart data with proper fallbacks
   const revenueChartData = {
     labels: ['Today', 'This Week', 'This Month', 'Total'],
     datasets: [
       {
         label: 'Revenue',
         data: [
-          dashboardData.overview.todayRevenue,
-          dashboardData.overview.weeklyRevenue,
-          dashboardData.overview.monthlyRevenue,
-          dashboardData.overview.totalRevenue
+          overview.todayRevenue || 0,
+          overview.weeklyRevenue || 0,
+          overview.monthlyRevenue || 0,
+          overview.totalRevenue || 0
         ],
         backgroundColor: [
           'rgba(59, 130, 246, 0.6)',
@@ -79,10 +110,10 @@ const AdminDashboard = () => {
   };
 
   const bookingStatusData = {
-    labels: Object.keys(dashboardData.overview.bookingStatus),
+    labels: overview.bookingStatus ? Object.keys(overview.bookingStatus) : ['Completed', 'Confirmed', 'Pending', 'Cancelled'],
     datasets: [
       {
-        data: Object.values(dashboardData.overview.bookingStatus),
+        data: overview.bookingStatus ? Object.values(overview.bookingStatus) : [0, 0, 0, 0],
         backgroundColor: [
           'rgba(16, 185, 129, 0.6)', // completed - green
           'rgba(59, 130, 246, 0.6)',  // confirmed - blue
@@ -101,11 +132,15 @@ const AdminDashboard = () => {
   };
 
   const userGrowthData = {
-    labels: dashboardData.users.dailySignups.map(day => day._id).reverse(),
+    labels: usersData.dailySignups ? 
+      usersData.dailySignups.map(day => day._id || 'Unknown').reverse() : 
+      ['Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5', 'Day 6', 'Day 7'],
     datasets: [
       {
         label: 'New Users',
-        data: dashboardData.users.dailySignups.map(day => day.count).reverse(),
+        data: usersData.dailySignups ? 
+          usersData.dailySignups.map(day => day.count || 0).reverse() : 
+          [0, 0, 0, 0, 0, 0, 0],
         fill: false,
         backgroundColor: 'rgba(59, 130, 246, 0.6)',
         borderColor: 'rgba(59, 130, 246, 1)',
@@ -115,8 +150,14 @@ const AdminDashboard = () => {
   };
 
   return (
-    <div className="p-6 bg-gray-100">
+    <div className="p-6 bg-gray-50 min-h-screen">
       <ToastContainer />
+      
+      {/* Welcome Header */}
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+        <p className="text-gray-600">Welcome back, {user?.name || 'Admin'}!</p>
+      </div>
       
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
@@ -127,7 +168,7 @@ const AdminDashboard = () => {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-500">Total Bookings</p>
-              <p className="text-2xl font-semibold text-gray-900">{dashboardData.overview.totalBookings}</p>
+              <p className="text-2xl font-semibold text-gray-900">{overview.totalBookings || 0}</p>
             </div>
           </div>
         </div>
@@ -139,7 +180,7 @@ const AdminDashboard = () => {
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-500">Total Revenue</p>
               <p className="text-2xl font-semibold text-gray-900">
-                ₹{dashboardData.overview.totalRevenue.toLocaleString()}
+                ₹{(overview.totalRevenue || 0).toLocaleString()}
               </p>
             </div>
           </div>
@@ -151,7 +192,7 @@ const AdminDashboard = () => {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-500">Total Providers</p>
-              <p className="text-2xl font-semibold text-gray-900">{dashboardData.providers.total}</p>
+              <p className="text-2xl font-semibold text-gray-900">{providersData.total || 0}</p>
             </div>
           </div>
         </div>
@@ -162,7 +203,7 @@ const AdminDashboard = () => {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-500">Total Customers</p>
-              <p className="text-2xl font-semibold text-gray-900">{dashboardData.users.total}</p>
+              <p className="text-2xl font-semibold text-gray-900">{usersData.total || 0}</p>
             </div>
           </div>
         </div>
@@ -214,7 +255,10 @@ const AdminDashboard = () => {
             },
             scales: {
               y: {
-                beginAtZero: true
+                beginAtZero: true,
+                ticks: {
+                  stepSize: 1
+                }
               }
             }
           }} 
@@ -238,41 +282,55 @@ const AdminDashboard = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {dashboardData.recentBookings.map((booking, index) => (
-                <tr key={index}>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
-                        <span className="text-gray-600">
-                          {booking.customer?.name?.charAt(0).toUpperCase()}
-                        </span>
+              {recentBookings.length > 0 ? (
+                recentBookings.map((booking, index) => (
+                  <tr key={index}>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
+                          <span className="text-gray-600">
+                            {booking.customer?.name?.charAt(0)?.toUpperCase() || 'C'}
+                          </span>
+                        </div>
+                        <div className="ml-4">
+                          <div className="text-sm font-medium text-gray-900">
+                            {booking.customer?.name || 'Unknown Customer'}
+                          </div>
+                        </div>
                       </div>
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">{booking.customer?.name}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        {booking.provider?.name || 'Unknown Provider'}
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{booking.provider?.name}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{booking.service?.title}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      booking.status === 'completed' ? 'bg-green-100 text-green-800' :
-                      booking.status === 'confirmed' ? 'bg-blue-100 text-blue-800' :
-                      booking.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-red-100 text-red-800'
-                    }`}>
-                      {booking.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    ₹{booking.totalAmount}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        {booking.service?.title || 'Unknown Service'}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        booking.status === 'completed' ? 'bg-green-100 text-green-800' :
+                        booking.status === 'confirmed' ? 'bg-blue-100 text-blue-800' :
+                        booking.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-red-100 text-red-800'
+                      }`}>
+                        {booking.status || 'unknown'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      ₹{booking.totalAmount || 0}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="5" className="px-6 py-4 text-center text-gray-500">
+                    No recent bookings found
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>

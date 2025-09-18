@@ -37,7 +37,7 @@ const createCoupon = async (req, res) => {
       isGlobal,
       isFirstBooking,
       assignedTo,
-      usageLimit: usageLimit || null // Set to null for unlimited usage
+      usageLimit: usageLimit || null
     });
 
     res.status(201).json({
@@ -46,6 +46,12 @@ const createCoupon = async (req, res) => {
       data: coupon
     });
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Coupon code already exists'
+      });
+    }
     res.status(500).json({
       success: false,
       message: error.message
@@ -57,7 +63,7 @@ const createCoupon = async (req, res) => {
 const getAllCoupons = async (req, res) => {
   try {
     const { status, type } = req.query;
-    const filters = {};
+    const filters = { createdBy: req.adminID };
 
     if (status === 'active') {
       filters.isActive = true;
@@ -77,7 +83,7 @@ const getAllCoupons = async (req, res) => {
       filters.assignedTo = { $ne: null };
     }
 
-    const coupons = await Coupon.listAllCoupons(req.adminID, filters);
+    const coupons = await Coupon.find(filters).sort({ createdAt: -1 });
     
     res.json({
       success: true,
@@ -95,14 +101,16 @@ const getAllCoupons = async (req, res) => {
 // Update coupon
 const updateCoupon = async (req, res) => {
   try {
-
     const { id } = req.params;
     const updateData = req.body;
 
-    // Check if coupon exists
-    const existingCoupon = await Coupon.findById(id);
+    // Check if coupon exists and belongs to admin
+    const existingCoupon = await Coupon.findOne({ _id: id, createdBy: req.adminID });
     if (!existingCoupon) {
-      return res.status(404).json({ message: 'Coupon not found' });
+      return res.status(404).json({ 
+        success: false,
+        message: 'Coupon not found' 
+      });
     }
 
     // Prevent modifying certain fields if coupon has been used
@@ -132,9 +140,6 @@ const updateCoupon = async (req, res) => {
       data: updatedCoupon
     });
   } catch (error) {
-    console.error('Error updating coupon:', error);
-
-    // Handle specific error types
     let errorMessage = 'Failed to update coupon';
     let statusCode = 500;
 
@@ -148,31 +153,21 @@ const updateCoupon = async (req, res) => {
 
     res.status(statusCode).json({
       success: false,
-      message: errorMessage,
-      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      message: errorMessage
     });
   }
 };
-
 
 // Delete coupon (soft delete)
 const deleteCoupon = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const coupon = await Coupon.findById(id);
+    const coupon = await Coupon.findOne({ _id: id, createdBy: req.adminID });
     if (!coupon) {
       return res.status(404).json({
         success: false,
         message: 'Coupon not found'
-      });
-    }
-
-    // Check admin ownership
-    if (!coupon.createdBy.equals(req.adminID)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to delete this coupon'
       });
     }
 
@@ -197,7 +192,7 @@ const hardDeleteCoupon = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const coupon = await Coupon.findById(id);
+    const coupon = await Coupon.findOne({ _id: id, createdBy: req.adminID });
     if (!coupon) {
       return res.status(404).json({
         success: false,
@@ -205,11 +200,11 @@ const hardDeleteCoupon = async (req, res) => {
       });
     }
 
-    // Check admin ownership
-    if (!coupon.createdBy.equals(req.adminID)) {
-      return res.status(403).json({
+    // Check if coupon has been used
+    if (coupon.usedBy.length > 0) {
+      return res.status(400).json({
         success: false,
-        message: 'Not authorized to delete this coupon'
+        message: 'Cannot delete coupon that has been used'
       });
     }
 
@@ -292,37 +287,8 @@ const getAvailableCoupons = async (req, res) => {
   try {
     const { bookingValue } = req.query;
     const userId = req.user.id;
-    const currentDate = new Date();
 
-    // First, check if user has already used first-booking coupon
-    const hasUsedFirstBookingCoupon = await Coupon.exists({
-      isFirstBooking: true,
-      'usedBy.userId': userId
-    });
-
-    // Base query for active, non-expired coupons available to user
-    const query = {
-      isActive: true,
-      expiryDate: { $gte: currentDate },
-      $or: [
-        { isGlobal: true },
-        { assignedTo: userId }
-      ]
-    };
-
-    // Only include first-booking coupon if user hasn't used it
-    if (!hasUsedFirstBookingCoupon) {
-      query.$or.push({ isFirstBooking: true });
-    }
-
-    // If bookingValue is provided, add minBookingValue filter
-    if (bookingValue !== undefined) {
-      query.minBookingValue = { $lte: Number(bookingValue) };
-    }
-
-    const coupons = await Coupon.find(query)
-      .sort({ discountValue: -1 }) // Sort by highest discount first
-      .lean();
+    const coupons = await Coupon.getAvailableCoupons(userId, Number(bookingValue) || 0);
 
     res.json({
       success: true,
@@ -336,7 +302,6 @@ const getAvailableCoupons = async (req, res) => {
     });
   }
 };
-
 
 module.exports = {
   createCoupon,

@@ -2,7 +2,7 @@ const Admin = require('../models/Admin-model');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const Provider = require('../models/Provider-model');
-const User = require('../models/User-model')
+const User = require('../models/User-model');
 const sendEmail = require('../utils/sendEmail');
 const Booking = require('../models/Booking-model');
 const Service = require('../models/Service-model');
@@ -13,6 +13,7 @@ const ProviderEarning = require('../models/ProviderEarning-model');
 const moment = require('moment');
 const path = require('path');
 const fs = require('fs');
+const cloudinary = require('../services/cloudinary');
 
 /**
  * Register a new admin
@@ -29,6 +30,13 @@ const registerAdmin = async (req, res) => {
             });
         }
 
+        if (password.length < 6) {
+            return res.status(400).json({
+                success: false,
+                message: 'Password must be at least 6 characters long'
+            });
+        }
+
         // Check if admin exists
         const adminExists = await Admin.findOne({ email });
         if (adminExists) {
@@ -38,30 +46,40 @@ const registerAdmin = async (req, res) => {
             });
         }
 
+        let profilePicUrl = '';
+        
+        // Try to upload default profile pic to Cloudinary
+        try {
+            const defaultImagePath = path.join(__dirname, '../assets/Profile.png');
+            if (fs.existsSync(defaultImagePath)) {
+                const uploadedImage = await cloudinary.uploader.upload(defaultImagePath, {
+                    folder: 'admin-profiles',
+                    use_filename: true,
+                    unique_filename: false
+                });
+                profilePicUrl = uploadedImage.secure_url;
+            }
+        } catch (uploadError) {
+            console.warn('Could not upload default profile image:', uploadError.message);
+            // Continue without profile picture
+        }
+
         // Create new admin
         const admin = await Admin.create({
             name,
             email,
-            password
+            password,
+            profilePicUrl
         });
 
         // Generate JWT token
         const token = admin.generateJWT();
 
-        // Prepare response data (excluding password)
-        const adminData = {
-            _id: admin._id,
-            name: admin.name,
-            email: admin.email,
-            isAdmin: admin.isAdmin,
-            createdAt: admin.createdAt
-        };
-
         res.status(201).json({
             success: true,
             message: 'Admin registered successfully',
             token,
-            admin: adminData
+            admin: admin.toJSON()
         });
 
     } catch (error) {
@@ -74,30 +92,22 @@ const registerAdmin = async (req, res) => {
     }
 };
 
-
-
-
 /**
- * Get admin profile (protected route)
+ * Get admin profile
  */
 const getAdminProfile = async (req, res) => {
     try {
-        // Admin data is already attached to req by the auth middleware
-        const admin = req.admin;
-
-        // Prepare response data
-        const adminData = {
-            _id: admin._id,
-            name: admin.name,
-            email: admin.email,
-            isAdmin: admin.isAdmin,
-            createdAt: admin.createdAt,
-            updatedAt: admin.updatedAt
-        };
+        const admin = await Admin.findById(req.admin._id);
+        if (!admin) {
+            return res.status(404).json({
+                success: false,
+                message: 'Admin not found'
+            });
+        }
 
         res.status(200).json({
             success: true,
-            admin: adminData
+            admin: admin.toJSON()
         });
 
     } catch (error) {
@@ -109,16 +119,16 @@ const getAdminProfile = async (req, res) => {
     }
 };
 
-// Get all Customers
+/**
+ * Get all Customers
+ */
 const getAllCustomers = async (req, res) => {
     try {
-        // Pagination
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const skip = (page - 1) * limit;
-
-        // Search and filter
         const search = req.query.search || '';
+
         const filter = {
             role: 'customer',
             ...(search && {
@@ -156,19 +166,14 @@ const getAllCustomers = async (req, res) => {
     }
 };
 
-
-
 /**
- * @desc    Approve or reject provider account with remarks
- * @route   PUT /api/admin/providers/:id/status
- * @access  Private (Admin)
+ * Approve or reject provider account
  */
 const approveProvider = async (req, res) => {
     try {
         const providerId = req.params.id;
         const { status, remarks } = req.body;
 
-        // Validate input
         if (!['approved', 'rejected'].includes(status)) {
             return res.status(400).json({
                 success: false,
@@ -176,10 +181,7 @@ const approveProvider = async (req, res) => {
             });
         }
 
-        // Find provider with all required fields
-        const provider = await Provider.findById(providerId)
-            .select('+password +bankDetails.passbookImage +bankDetails.accountNo +bankDetails.ifsc');
-        
+        const provider = await Provider.findById(providerId);
         if (!provider) {
             return res.status(404).json({
                 success: false,
@@ -187,39 +189,12 @@ const approveProvider = async (req, res) => {
             });
         }
 
-        // Handle approval
         if (status === 'approved') {
-            // Verify all required fields are present
-            const requiredFields = [
-                provider.name,
-                provider.email,
-                provider.phone,
-                provider.dateOfBirth,
-                provider.services,
-                provider.experience,
-                provider.profilePicUrl,
-                provider.resume,
-                provider.bankDetails?.accountNo,
-                provider.bankDetails?.ifsc,
-                provider.bankDetails?.passbookImage
-            ];
-
-            if (requiredFields.some(field => !field)) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Cannot approve provider with missing required fields'
-                });
-            }
-
-            // Update provider status
-            provider.bankDetails.verified = true;
             provider.approved = true;
             provider.kycStatus = 'approved';
             provider.rejectionReason = '';
             provider.isActive = true;
-            provider.profileComplete = true;
 
-            // Save with validation (since all required fields exist)
             await provider.save();
 
             // Send approval email
@@ -231,12 +206,6 @@ const approveProvider = async (req, res) => {
                         <p>Congratulations! Your provider account has been approved.</p>
                         ${remarks ? `<p><strong>Admin Remarks:</strong> ${remarks}</p>` : ''}
                         <p>You can now login and start accepting service requests.</p>
-                        <p style="margin-top: 30px;">
-                            <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/provider/dashboard" 
-                               style="background: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;">
-                                Go to Dashboard
-                            </a>
-                        </p>
                     </div>
                 `;
 
@@ -245,35 +214,24 @@ const approveProvider = async (req, res) => {
                     subject: 'Your Provider Account Has Been Approved',
                     html: emailTemplate
                 });
-
-                return res.status(200).json({
-                    success: true,
-                    message: 'Provider approved successfully. Notification email sent.',
-                    provider: provider.toObject({ getters: true, virtuals: true })
-                });
-
             } catch (emailError) {
                 console.error('Failed to send approval email:', emailError);
-                return res.status(200).json({
-                    success: true,
-                    message: 'Provider approved but failed to send email',
-                    provider: provider.toObject({ getters: true, virtuals: true })
-                });
             }
+
+            return res.status(200).json({
+                success: true,
+                message: 'Provider approved successfully',
+                provider: provider.toJSON()
+            });
         }
 
-        // Handle rejection
         if (status === 'rejected') {
-            provider.bankDetails.verified = false;
             provider.approved = false;
             provider.kycStatus = 'rejected';
             provider.rejectionReason = remarks || 'No reason provided';
             provider.isActive = false;
-            provider.testPassed = false;
-            provider.isDeleted = true;
 
-            // Save with validation disabled (since we're rejecting)
-            await provider.save({ validateBeforeSave: false });
+            await provider.save();
 
             // Send rejection email
             try {
@@ -283,14 +241,6 @@ const approveProvider = async (req, res) => {
                         <p>Dear ${provider.name},</p>
                         <p>We regret to inform you that your provider account has been rejected.</p>
                         <p><strong>Reason:</strong> ${provider.rejectionReason}</p>
-                        <p>All your data will be permanently deleted from our systems.</p>
-                        <p>If you believe this is an error, please contact our support team.</p>
-                        <p style="margin-top: 30px;">
-                            <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/contact" 
-                               style="background: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;">
-                                Contact Support
-                            </a>
-                        </p>
                     </div>
                 `;
 
@@ -303,26 +253,16 @@ const approveProvider = async (req, res) => {
                 console.error('Failed to send rejection email:', emailError);
             }
 
-            // Schedule actual deletion
-            setTimeout(async () => {
-                try {
-                    await Provider.findByIdAndDelete(providerId);
-                    console.log(`Provider ${providerId} deleted after rejection`);
-                } catch (deleteError) {
-                    console.error('Error deleting rejected provider:', deleteError);
-                }
-            }, 1000);
-
             return res.status(200).json({
                 success: true,
-                message: 'Provider rejected and marked for deletion',
-                provider: provider.toObject({ getters: true, virtuals: true })
+                message: 'Provider rejected successfully',
+                provider: provider.toJSON()
             });
         }
 
     } catch (error) {
         console.error('Update provider status error:', error);
-        return res.status(500).json({
+        res.status(500).json({
             success: false,
             message: 'Server error while updating provider status',
             error: error.message
@@ -331,18 +271,13 @@ const approveProvider = async (req, res) => {
 };
 
 /**
- * @desc    Get pending providers
- * @route   GET /api/admin/providers/pending
- * @access  Private (Admin)
+ * Get pending providers
  */
 const getPendingProviders = async (req, res) => {
     try {
-        // Pagination
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const skip = (page - 1) * limit;
-
-        // Search filter
         const search = req.query.search || '';
 
         const query = {
@@ -351,9 +286,7 @@ const getPendingProviders = async (req, res) => {
             ...(search && {
                 $or: [
                     { name: { $regex: search, $options: 'i' } },
-                    { email: { $regex: search, $options: 'i' } },
-                    { phone: { $regex: search, $options: 'i' } },
-                    { serviceArea: { $regex: search, $options: 'i' } }
+                    { email: { $regex: search, $options: 'i' } }
                 ]
             })
         };
@@ -384,34 +317,25 @@ const getPendingProviders = async (req, res) => {
 };
 
 /**
- * @desc    Get all providers
- * @route   GET /api/admin/providers
- * @access  Private (Admin)
+ * Get all providers
  */
 const getAllProviders = async (req, res) => {
     try {
-        // Pagination
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const skip = (page - 1) * limit;
-
-        // Search and filter
         const search = req.query.search || '';
-        const status = req.query.status || 'all'; // all, approved, pending, rejected
-        const service = req.query.service || '';
+        const status = req.query.status || 'all';
 
         const filter = {
             isDeleted: false,
-            ...(status === 'approved' && { approved: true, kycStatus: 'approved' }),
-            ...(status === 'pending' && { approved: false, kycStatus: 'pending' }),
+            ...(status === 'approved' && { approved: true }),
+            ...(status === 'pending' && { approved: false }),
             ...(status === 'rejected' && { kycStatus: 'rejected' }),
-            ...(service && { services: service }),
             ...(search && {
                 $or: [
                     { name: { $regex: search, $options: 'i' } },
-                    { email: { $regex: search, $options: 'i' } },
-                    { phone: { $regex: search, $options: 'i' } },
-                    { serviceArea: { $regex: search, $options: 'i' } }
+                    { email: { $regex: search, $options: 'i' } }
                 ]
             })
         };
@@ -443,17 +367,12 @@ const getAllProviders = async (req, res) => {
 };
 
 /**
- * @desc    Get single provider details with all documents
- * @route   GET /api/admin/providers/:id
- * @access  Private (Admin)
+ * Get provider details
  */
 const getProviderDetails = async (req, res) => {
     try {
         const providerId = req.params.id;
-
-        // Find provider with all details except password
-        const provider = await Provider.findById(providerId)
-            .select('-password -__v');
+        const provider = await Provider.findById(providerId).select('-password -__v');
 
         if (!provider) {
             return res.status(404).json({
@@ -462,35 +381,13 @@ const getProviderDetails = async (req, res) => {
             });
         }
 
-        // Prepare response with document URLs
-        const response = {
-            ...provider.toObject(),
-            documents: {
-                profilePicUrl: provider.profilePicUrl 
-                    ? `${req.protocol}://${req.get('host')}/${provider.profilePicUrl}`
-                    : null,
-                resume: provider.resume 
-                    ? `${req.protocol}://${req.get('host')}/${provider.resume}`
-                    : null,
-                passbookImage: provider.bankDetails.passbookImage 
-                    ? `${req.protocol}://${req.get('host')}/${provider.bankDetails.passbookImage}`
-                    : null
-            }
-        };
-
         res.status(200).json({
             success: true,
-            provider: response
+            provider
         });
 
     } catch (error) {
         console.error('Get provider details error:', error);
-        if (error.kind === 'ObjectId') {
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid provider ID format'
-            });
-        }
         res.status(500).json({
             success: false,
             message: 'Server error while fetching provider details'
@@ -499,415 +396,81 @@ const getProviderDetails = async (req, res) => {
 };
 
 /**
- * @desc    Get provider document (resume/profile/passbook)
- * @route   GET /api/admin/providers/:id/documents/:type
- * @access  Private (Admin)
+ * Get dashboard stats
  */
-const getProviderDocument = async (req, res) => {
+const getDashboardStats = async (req, res) => {
     try {
-        const providerId = req.params.id;
-        const documentType = req.params.type; // 'resume', 'profile', or 'passbook'
+        const today = moment().startOf('day');
+        const currentWeek = moment().startOf('week');
+        const currentMonth = moment().startOf('month');
 
-        // Validate document type
-        if (!['resume', 'profile', 'passbook'].includes(documentType)) {
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid document type. Must be "resume", "profile", or "passbook"'
-            });
-        }
+        const [
+            totalUsers,
+            totalProviders,
+            totalBookings,
+            totalServices,
+            todayBookings,
+            weeklyBookings,
+            monthlyBookings,
+            pendingProviders
+        ] = await Promise.all([
+            User.countDocuments(),
+            Provider.countDocuments({ approved: true }),
+            Booking.countDocuments(),
+            Service.countDocuments({ isActive: true }),
+            Booking.countDocuments({ createdAt: { $gte: today.toDate() } }),
+            Booking.countDocuments({ createdAt: { $gte: currentWeek.toDate() } }),
+            Booking.countDocuments({ createdAt: { $gte: currentMonth.toDate() } }),
+            Provider.countDocuments({ approved: false })
+        ]);
 
-        // Find provider
-        const provider = await Provider.findById(providerId);
-        if (!provider) {
-            return res.status(404).json({
-                success: false,
-                message: 'Provider not found'
-            });
-        }
+        // Calculate revenue from completed bookings
+        const revenueStats = await Booking.aggregate([
+            { $match: { status: 'completed' } },
+            { $group: { _id: null, totalRevenue: { $sum: '$totalAmount' } } }
+        ]);
 
-        // Determine file path based on document type
-        let filePath;
-        let fileName;
-        
-        switch (documentType) {
-            case 'resume':
-                if (!provider.resume) {
-                    return res.status(404).json({
-                        success: false,
-                        message: 'Resume not found for this provider'
-                    });
-                }
-                filePath = path.join(__dirname, '..', provider.resume);
-                fileName = `${provider.name.replace(/\s+/g, '_')}_resume${path.extname(provider.resume)}`;
-                break;
-                
-            case 'profile':
-                if (!provider.profilePicUrl || provider.profilePicUrl === 'default-provider.jpg') {
-                    return res.status(404).json({
-                        success: false,
-                        message: 'Profile picture not found for this provider'
-                    });
-                }
-                filePath = path.join(__dirname, '..', provider.profilePicUrl);
-                fileName = `${provider.name.replace(/\s+/g, '_')}_profile${path.extname(provider.profilePicUrl)}`;
-                break;
-                
-            case 'passbook':
-                if (!provider.bankDetails.passbookImage) {
-                    return res.status(404).json({
-                        success: false,
-                        message: 'Passbook image not found for this provider'
-                    });
-                }
-                filePath = path.join(__dirname, '..', provider.bankDetails.passbookImage);
-                fileName = `${provider.name.replace(/\s+/g, '_')}_passbook${path.extname(provider.bankDetails.passbookImage)}`;
-                break;
-        }
+        const totalRevenue = revenueStats[0]?.totalRevenue || 0;
 
-        // Check if file exists
-        if (!fs.existsSync(filePath)) {
-            return res.status(404).json({
-                success: false,
-                message: 'Document file not found on server'
-            });
-        }
+        const dashboardStats = {
+            overview: {
+                totalUsers,
+                totalProviders,
+                totalBookings,
+                totalServices,
+                todayBookings,
+                weeklyBookings,
+                monthlyBookings,
+                pendingProviders,
+                totalRevenue
+            }
+        };
 
-        // Determine content type based on file extension
-        const ext = path.extname(filePath).toLowerCase();
-        let contentType = 'application/octet-stream';
-        
-        if (ext === '.jpg' || ext === '.jpeg') {
-            contentType = 'image/jpeg';
-        } else if (ext === '.png') {
-            contentType = 'image/png';
-        } else if (ext === '.pdf') {
-            contentType = 'application/pdf';
-        }
-
-        // Set headers and send file
-        res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
-        res.setHeader('Content-Type', contentType);
-        
-        const fileStream = fs.createReadStream(filePath);
-        fileStream.pipe(res);
+        res.json({
+            success: true,
+            data: dashboardStats
+        });
 
     } catch (error) {
-        console.error('Get provider document error:', error);
+        console.error('Error fetching dashboard stats:', error);
         res.status(500).json({
             success: false,
-            message: 'Server error while fetching document'
+            message: 'Failed to fetch dashboard statistics',
+            error: error.message
         });
     }
 };
 
-
-
-
-
-
 /**
- * @desc    Get admin dashboard stats
- * @route   GET /api/admin/dashboard/stats
- * @access  Private (Admin)
- */
-const getDashboardStats = async (req, res) => {
-  try {
-    // Set date ranges
-    const today = moment().startOf('day');
-    const currentWeek = moment().startOf('week');
-    const currentMonth = moment().startOf('month');
-    const currentYear = moment().startOf('year');
-
-    // Parallelize all database queries for better performance
-    const [
-      totalBookings,
-      todayBookings,
-      weeklyBookings,
-      monthlyBookings,
-      yearlyBookings,
-      bookingStatusStats,
-      revenueStats,
-      userStats,
-      providerStats,
-      serviceStats,
-      complaintStats,
-      recentBookings,
-      topServices,
-      topProviders,
-      transactionStats,
-      couponStats
-    ] = await Promise.all([
-      // Booking counts
-      Booking.countDocuments(),
-      Booking.countDocuments({ createdAt: { $gte: today.toDate() } }),
-      Booking.countDocuments({ createdAt: { $gte: currentWeek.toDate() } }),
-      Booking.countDocuments({ createdAt: { $gte: currentMonth.toDate() } }),
-      Booking.countDocuments({ createdAt: { $gte: currentYear.toDate() } }),
-
-      // Booking status distribution
-      Booking.aggregate([
-        { $group: { _id: '$status', count: { $sum: 1 } } }
-      ]),
-
-      // Revenue calculations (using Transaction model for accurate financial data)
-      Transaction.aggregate([
-        { $match: { paymentStatus: 'completed' } },
-        { 
-          $group: { 
-            _id: null,
-            totalRevenue: { $sum: '$amount' },
-            todayRevenue: { 
-              $sum: { 
-                $cond: [
-                  { $gte: ['$createdAt', today.toDate()] },
-                  '$amount',
-                  0
-                ]
-              }
-            },
-            weeklyRevenue: { 
-              $sum: { 
-                $cond: [
-                  { $gte: ['$createdAt', currentWeek.toDate()] },
-                  '$amount',
-                  0
-                ]
-              }
-            },
-            monthlyRevenue: { 
-              $sum: { 
-                $cond: [
-                  { $gte: ['$createdAt', currentMonth.toDate()] },
-                  '$amount',
-                  0
-                ]
-              }
-            },
-            yearlyRevenue: {
-              $sum: {
-                $cond: [
-                  { $gte: ['$createdAt', currentYear.toDate()] },
-                  '$amount',
-                  0
-                ]
-              }
-            }
-          } 
-        }
-      ]),
-
-      // User statistics
-      Promise.all([
-        User.countDocuments(),
-        User.countDocuments({ createdAt: { $gte: currentMonth.toDate() } }),
-        User.aggregate([
-          { 
-            $group: { 
-              _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }, 
-              count: { $sum: 1 } 
-            } 
-          },
-          { $sort: { _id: -1 } },
-          { $limit: 7 }
-        ])
-      ]),
-
-      // Provider statistics
-      Promise.all([
-        Provider.countDocuments(),
-        Provider.countDocuments({ approved: true }),
-        Provider.countDocuments({ approved: false }),
-        Provider.countDocuments({ testPassed: true }),
-        Provider.countDocuments({ createdAt: { $gte: currentMonth.toDate() } }),
-        Provider.countDocuments({ kycStatus: 'approved' }),
-        Provider.countDocuments({ kycStatus: 'pending' }),
-        Provider.countDocuments({ kycStatus: 'rejected' })
-      ]),
-
-      // Service statistics
-      Promise.all([
-        Service.countDocuments(),
-        Service.countDocuments({ isActive: true }),
-        Service.countDocuments({ isActive: false }),
-        Service.aggregate([
-          { $group: { _id: '$category', count: { $sum: 1 } } }
-        ])
-      ]),
-
-      // Complaint statistics
-      Complaint.aggregate([
-        { $group: { _id: '$status', count: { $sum: 1 } } }
-      ]),
-
-      // Recent bookings (last 5)
-      Booking.find()
-        .sort({ createdAt: -1 })
-        .limit(5)
-        .populate('customer', 'name email')
-        .populate('provider', 'name email')
-        .populate('services.service', 'title'),
-
-      // Top 5 services by bookings
-      Booking.aggregate([
-        { $unwind: '$services' },
-        { $group: { _id: '$services.service', count: { $sum: 1 } } },
-        { $sort: { count: -1 } },
-        { $limit: 5 },
-        { $lookup: { from: 'services', localField: '_id', foreignField: '_id', as: 'service' } },
-        { $unwind: '$service' },
-        { $project: { _id: 0, service: '$service.title', count: 1 } }
-      ]),
-
-      // Top 5 providers by earnings
-      ProviderEarning.aggregate([
-        { $match: { status: 'paid' } },
-        { $group: { _id: '$provider', totalEarnings: { $sum: '$netAmount' } } },
-        { $sort: { totalEarnings: -1 } },
-        { $limit: 5 },
-        { $lookup: { from: 'providers', localField: '_id', foreignField: '_id', as: 'provider' } },
-        { $unwind: '$provider' },
-        { $project: { _id: 0, provider: '$provider.name', totalEarnings: 1, phone: '$provider.phone' } }
-      ]),
-
-      // Transaction statistics
-      Transaction.aggregate([
-        { 
-          $group: { 
-            _id: '$paymentStatus', 
-            count: { $sum: 1 },
-            totalAmount: { $sum: '$amount' }
-          } 
-        }
-      ]),
-
-      // Coupon statistics
-      Coupon.aggregate([
-        { 
-          $group: { 
-            _id: { isActive: '$isActive', isGlobal: '$isGlobal' }, 
-            count: { $sum: 1 },
-            totalDiscount: { $sum: { $size: '$usedBy' } }
-          } 
-        }
-      ])
-    ]);
-
-    // Process the results
-    const revenue = revenueStats[0] || {
-      totalRevenue: 0,
-      todayRevenue: 0,
-      weeklyRevenue: 0,
-      monthlyRevenue: 0,
-      yearlyRevenue: 0
-    };
-
-    const bookingStatusCounts = bookingStatusStats.reduce((acc, curr) => {
-      acc[curr._id] = curr.count;
-      return acc;
-    }, { pending: 0, accepted: 0, completed: 0, cancelled: 0 });
-
-    const complaintStatusCounts = complaintStats.reduce((acc, curr) => {
-      acc[curr._id] = curr.count;
-      return acc;
-    }, { open: 0, resolved: 0 });
-
-    const transactionStatusCounts = transactionStats.reduce((acc, curr) => {
-      acc[curr._id] = {
-        count: curr.count,
-        amount: curr.totalAmount
-      };
-      return acc;
-    }, {});
-
-    const couponStatsCounts = couponStats.reduce((acc, curr) => {
-      const key = curr._id.isGlobal ? 'global' : 'assigned';
-      if (curr._id.isActive) {
-        acc.active[key] = curr.count;
-        acc.active.totalDiscounts += curr.totalDiscount;
-      } else {
-        acc.inactive[key] = curr.count;
-        acc.inactive.totalDiscounts += curr.totalDiscount;
-      }
-      return acc;
-    }, { 
-      active: { global: 0, assigned: 0, totalDiscounts: 0 },
-      inactive: { global: 0, assigned: 0, totalDiscounts: 0 }
-    });
-
-    // Prepare the response
-    const dashboardStats = {
-      overview: {
-        totalBookings,
-        todayBookings,
-        weeklyBookings,
-        monthlyBookings,
-        yearlyBookings,
-        bookingStatus: bookingStatusCounts,
-        totalRevenue: revenue.totalRevenue,
-        todayRevenue: revenue.todayRevenue,
-        weeklyRevenue: revenue.weeklyRevenue,
-        monthlyRevenue: revenue.monthlyRevenue,
-        yearlyRevenue: revenue.yearlyRevenue
-      },
-      users: {
-        total: userStats[0],
-        newThisMonth: userStats[1],
-        dailySignups: userStats[2]
-      },
-      providers: {
-        total: providerStats[0],
-        approved: providerStats[1],
-        pendingApproval: providerStats[2],
-        testPassed: providerStats[3],
-        newThisMonth: providerStats[4],
-        kycApproved: providerStats[5],
-        kycPending: providerStats[6],
-        kycRejected: providerStats[7]
-      },
-      services: {
-        total: serviceStats[0],
-        active: serviceStats[1],
-        inactive: serviceStats[2],
-        byCategory: serviceStats[3]
-      },
-      complaints: complaintStatusCounts,
-      transactions: transactionStatusCounts,
-      coupons: couponStatsCounts,
-      recentBookings,
-      topServices,
-      topProviders
-    };
-
-    res.json({
-      success: true,
-      data: dashboardStats
-    });
-
-  } catch (error) {
-    console.error('Error fetching dashboard stats:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch dashboard statistics',
-      error: error.message
-    });
-  }
-};
-
-
-
-
-/**
- * Get all admins (protected route)
+ * Get all admins
  */
 const getAllAdmins = async (req, res) => {
     try {
-        // Pagination
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const skip = (page - 1) * limit;
-
-        // Search filter
         const search = req.query.search || '';
+
         const filter = {
             ...(search && {
                 $or: [
@@ -917,33 +480,20 @@ const getAllAdmins = async (req, res) => {
             })
         };
 
-        // Get admins with pagination
         const admins = await Admin.find(filter)
-            .select('-password -__v') // Exclude password and version key
             .skip(skip)
             .limit(limit)
-            .sort({ createdAt: -1 }); // Sort by newest first
+            .sort({ createdAt: -1 });
 
-        // Get total count for pagination
         const total = await Admin.countDocuments(filter);
-
-        // Prepare response data
-        const adminData = admins.map(admin => ({
-            _id: admin._id,
-            name: admin.name,
-            email: admin.email,
-            isAdmin: admin.isAdmin,
-            createdAt: admin.createdAt,
-            updatedAt: admin.updatedAt
-        }));
 
         res.status(200).json({
             success: true,
-            count: adminData.length,
+            count: admins.length,
             total,
             page,
             pages: Math.ceil(total / limit),
-            admins: adminData
+            admins: admins.map(admin => admin.toJSON())
         });
 
     } catch (error) {
@@ -955,15 +505,113 @@ const getAllAdmins = async (req, res) => {
     }
 };
 
+/**
+ * Update admin profile
+ */
+const updateAdminProfile = async (req, res) => {
+    try {
+        const { name, email } = req.body;
+        const admin = await Admin.findById(req.admin._id);
+
+        if (!admin) {
+            return res.status(404).json({
+                success: false,
+                message: 'Admin not found'
+            });
+        }
+
+        admin.name = name || admin.name;
+        
+        if (email && email !== admin.email) {
+            const emailExists = await Admin.findOne({ email });
+            if (emailExists) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Email already exists'
+                });
+            }
+            admin.email = email;
+        }
+
+        if (req.file) {
+            try {
+                const uploadedImage = await cloudinary.uploader.upload(req.file.path, {
+                    folder: 'admin-profiles'
+                });
+                admin.profilePicUrl = uploadedImage.secure_url;
+            } catch (uploadError) {
+                console.error('Image upload error:', uploadError);
+                return res.status(500).json({
+                    success: false,
+                    message: 'Failed to upload profile image'
+                });
+            }
+        }
+
+        await admin.save();
+
+        res.status(200).json({
+            success: true,
+            message: 'Admin profile updated successfully',
+            admin: admin.toJSON()
+        });
+
+    } catch (error) {
+        console.error('Update admin profile error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error while updating profile'
+        });
+    }
+};
+
+/**
+ * Delete admin
+ */
+const deleteAdmin = async (req, res) => {
+    try {
+        const adminId = req.params.id;
+        
+        // Prevent self-deletion
+        if (adminId === req.admin._id.toString()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Cannot delete your own account'
+            });
+        }
+
+        const admin = await Admin.findByIdAndDelete(adminId);
+        if (!admin) {
+            return res.status(404).json({
+                success: false,
+                message: 'Admin not found'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: 'Admin deleted successfully'
+        });
+
+    } catch (error) {
+        console.error('Delete admin error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error while deleting admin'
+        });
+    }
+};
+
 module.exports = {
     registerAdmin,
     getAdminProfile,
+    updateAdminProfile,
+    deleteAdmin,
     getAllAdmins,
     getAllCustomers,
     approveProvider,
     getPendingProviders,
     getAllProviders,
     getProviderDetails,
-    getProviderDocument,
     getDashboardStats
 };

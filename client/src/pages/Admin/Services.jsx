@@ -35,11 +35,10 @@ import 'react-toastify/dist/ReactToastify.css';
 const AdminServices = () => {
   const API = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api';
   const token = localStorage.getItem("token");
-  
+
   // State management
   const [services, setServices] = useState([]);
   const [filteredServices, setFilteredServices] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [selectedService, setSelectedService] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -77,7 +76,6 @@ const AdminServices = () => {
   const [newMaterial, setNewMaterial] = useState('');
   const [editNewSpecialNote, setEditNewSpecialNote] = useState('');
   const [editNewMaterial, setEditNewMaterial] = useState('');
-  const [uploading, setUploading] = useState(false);
 
   // Refs
   const fileInputRef = useRef(null);
@@ -134,7 +132,7 @@ const AdminServices = () => {
   // Fetch all services
   const fetchServices = async () => {
     try {
-      setLoading(true);
+      const toastId = toast.loading('Fetching services...');
       const response = await fetch(`${API}/service/admin/services`, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -152,11 +150,15 @@ const AdminServices = () => {
 
       const data = await response.json();
       setServices(data.data || []);
+      toast.update(toastId, {
+        render: 'Services loaded successfully!',
+        type: 'success',
+        isLoading: false,
+        autoClose: 2000
+      });
     } catch (error) {
       console.error('Fetch services error:', error);
       toast.error(error.message || 'Failed to fetch services');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -290,7 +292,7 @@ const AdminServices = () => {
   const handleCreateService = async (e) => {
     e.preventDefault();
     try {
-      setUploading(true);
+      const toastId = toast.loading('Creating service...');
       const formData = new FormData();
       formData.append('title', createForm.title);
       formData.append('category', createForm.category);
@@ -320,14 +322,17 @@ const AdminServices = () => {
 
       const data = await response.json();
       setServices(prev => [data.data, ...prev]);
-      toast.success('Service created successfully!');
+      toast.update(toastId, {
+        render: 'Service created successfully!',
+        type: 'success',
+        isLoading: false,
+        autoClose: 2000
+      });
       resetCreateForm();
       setShowCreateModal(false);
     } catch (error) {
       console.error('Create service error:', error);
       toast.error(error.message || 'Failed to create service');
-    } finally {
-      setUploading(false);
     }
   };
 
@@ -335,7 +340,7 @@ const AdminServices = () => {
   const handleUpdateService = async (e) => {
     e.preventDefault();
     try {
-      setUploading(true);
+      const toastId = toast.loading('Updating service...');
       const formData = new FormData();
       Object.keys(editForm).forEach(key => {
         if (key !== 'images' && key !== 'existingImages' && key !== 'specialNotes' && key !== 'materialsUsed' && editForm[key] !== undefined) {
@@ -377,19 +382,23 @@ const AdminServices = () => {
 
       const data = await response.json();
       setServices(prev => prev.map(s => s._id === data.data._id ? data.data : s));
-      toast.success('Service updated successfully!');
+      toast.update(toastId, {
+        render: 'Service updated successfully!',
+        type: 'success',
+        isLoading: false,
+        autoClose: 2000
+      });
       setShowEditModal(false);
     } catch (error) {
       console.error('Update service error:', error);
       toast.error(error.message || 'Failed to update service');
-    } finally {
-      setUploading(false);
     }
   };
 
   // Update service price
   const handleUpdatePrice = async (serviceId, newPrice) => {
     try {
+      const toastId = toast.loading('Updating price...');
       const response = await fetch(`${API}/service/admin/services/${serviceId}/price`, {
         method: 'PATCH',
         headers: {
@@ -406,7 +415,12 @@ const AdminServices = () => {
 
       const data = await response.json();
       setServices(prev => prev.map(s => s._id === data.data._id ? data.data : s));
-      toast.success('Price updated successfully!');
+      toast.update(toastId, {
+        render: 'Price updated successfully!',
+        type: 'success',
+        isLoading: false,
+        autoClose: 2000
+      });
     } catch (error) {
       console.error('Update price error:', error);
       toast.error(error.message || 'Failed to update price');
@@ -416,7 +430,7 @@ const AdminServices = () => {
   // Toggle service status
   const handleToggleStatus = async (service) => {
     try {
-      setLoading(true);
+      const toastId = toast.loading(service.isActive ? 'Deactivating service...' : 'Activating service...');
       let response;
 
       if (service.isActive) {
@@ -446,12 +460,15 @@ const AdminServices = () => {
 
       // Refetch services to get updated status
       await fetchServices();
-      toast.success(`Service ${service.isActive ? 'deactivated' : 'activated'} successfully!`);
+      toast.update(toastId, {
+        render: `Service ${service.isActive ? 'deactivated' : 'activated'} successfully!`,
+        type: 'success',
+        isLoading: false,
+        autoClose: 2000
+      });
     } catch (error) {
       console.error('Toggle status error:', error);
       toast.error(error.message || 'Failed to update service status');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -464,7 +481,7 @@ const AdminServices = () => {
     }
 
     try {
-      setUploading(true);
+      const toastId = toast.loading('Importing services...');
       const formData = new FormData();
       formData.append('servicesFile', bulkFile);
 
@@ -482,7 +499,13 @@ const AdminServices = () => {
       }
 
       const data = await response.json();
-      toast.success(`Successfully imported ${data.importedCount} services!`);
+      toast.update(toastId, {
+        render: `Successfully imported ${data.importedCount} services!`,
+        type: 'success',
+        isLoading: false,
+        autoClose: 3000
+      });
+
       if (data.errorCount > 0) {
         toast.warning(`${data.errorCount} services had errors`);
       }
@@ -493,15 +516,13 @@ const AdminServices = () => {
     } catch (error) {
       console.error('Bulk import error:', error);
       toast.error(error.message || 'Failed to import services');
-    } finally {
-      setUploading(false);
     }
   };
 
   // Export services to Excel
   const handleExportServices = async () => {
     try {
-      setLoading(true);
+      const toastId = toast.loading('Exporting services...');
       const response = await fetch(`${API}/service/admin/services-export`, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -525,12 +546,15 @@ const AdminServices = () => {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
 
-      toast.success('Services exported successfully!');
+      toast.update(toastId, {
+        render: 'Services exported successfully!',
+        type: 'success',
+        isLoading: false,
+        autoClose: 2000
+      });
     } catch (error) {
       console.error('Export services error:', error);
       toast.error(error.message || 'Failed to export services');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -619,23 +643,23 @@ const AdminServices = () => {
 
   const parseArrayField = (field) => {
     if (!field) {
-        return [];
+      return [];
     }
     if (Array.isArray(field)) {
-        return field.flatMap(item => parseArrayField(item)).filter(Boolean);
+      return field.flatMap(item => parseArrayField(item)).filter(Boolean);
     }
     if (typeof field === 'string') {
-        try {
-            const parsed = JSON.parse(field);
-            return parseArrayField(parsed);
-        } catch (e) {
-            return field
-                .replace(/[[\]"\\]/g, ' ')
-                .trim()
-                .split(',')
-                .map(s => s.trim())
-                .filter(Boolean);
-        }
+      try {
+        const parsed = JSON.parse(field);
+        return parseArrayField(parsed);
+      } catch (e) {
+        return field
+          .replace(/[[\]"\\]/g, ' ')
+          .trim()
+          .split(',')
+          .map(s => s.trim())
+          .filter(Boolean);
+      }
     }
     return [String(field)];
   };
@@ -647,7 +671,7 @@ const AdminServices = () => {
   const totalPages = Math.ceil(filteredServices.length / itemsPerPage);
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-6">
+    <div className="min-h-screen p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
@@ -665,14 +689,9 @@ const AdminServices = () => {
             </button>
             <button
               onClick={handleExportServices}
-              disabled={loading}
-              className="flex items-center bg-accent hover:bg-orange-700 text-white px-3 py-2 md:px-4 md:py-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center bg-accent hover:bg-orange-700 text-white px-3 py-2 md:px-4 md:py-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 text-sm"
             >
-              {loading ? (
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-              ) : (
-                <Download className="w-4 h-4 md:w-5 md:h-5 mr-1 md:mr-2" />
-              )}
+              <Download className="w-4 h-4 md:w-5 md:h-5 mr-1 md:mr-2" />
               Export
             </button>
             <button
@@ -686,7 +705,7 @@ const AdminServices = () => {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-8">
           <div className="bg-white rounded-xl shadow-md p-4 md:p-6 border-l-4 border-primary">
             <div className="flex items-center justify-between">
               <div>
@@ -778,12 +797,7 @@ const AdminServices = () => {
 
         {/* Services Table */}
         <div className="bg-white rounded-xl shadow-md overflow-hidden">
-          {loading ? (
-            <div className="flex items-center justify-center py-12 md:py-16">
-              <div className="animate-spin rounded-full h-10 w-10 md:h-12 md:w-12 border-t-2 border-b-2 border-primary"></div>
-              <p className="ml-3 text-gray-600">Loading services...</p>
-            </div>
-          ) : currentServices.length === 0 ? (
+          {currentServices.length === 0 ? (
             <div className="text-center py-12 md:py-16">
               <Package className="w-12 h-12 md:w-16 md:h-16 text-gray-400 mx-auto mb-3 md:mb-4" />
               <p className="text-gray-600 text-md md:text-lg">No services found</p>
@@ -865,8 +879,8 @@ const AdminServices = () => {
                         </td>
                         <td className="px-4 md:px-6 py-4 whitespace-nowrap">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${service.isActive
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-red-100 text-red-800'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-red-100 text-red-800'
                             }`}>
                             {service.isActive ? (
                               <>
@@ -899,16 +913,13 @@ const AdminServices = () => {
                             </button>
                             <button
                               onClick={() => handleToggleStatus(service)}
-                              disabled={loading}
                               className={`p-1 rounded transition-colors duration-200 ${service.isActive
-                                  ? 'text-red-600 hover:text-red-800'
-                                  : 'text-green-600 hover:text-green-800'
-                                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                                ? 'text-red-600 hover:text-red-800'
+                                : 'text-green-600 hover:text-green-800'
+                                }`}
                               title={service.isActive ? 'Deactivate Service' : 'Activate Service'}
                             >
-                              {loading ? (
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
-                              ) : service.isActive ? (
+                              {service.isActive ? (
                                 <XCircle className="w-4 h-4" />
                               ) : (
                                 <CheckCircle className="w-4 h-4" />
@@ -943,8 +954,8 @@ const AdminServices = () => {
                           key={page}
                           onClick={() => setCurrentPage(page)}
                           className={`px-2 py-1 md:px-3 md:py-2 text-sm rounded-lg ${currentPage === page
-                              ? 'bg-primary text-white'
-                              : 'text-gray-600 hover:text-primary hover:bg-gray-100'
+                            ? 'bg-primary text-white'
+                            : 'text-gray-600 hover:text-primary hover:bg-gray-100'
                             }`}
                         >
                           {page}
@@ -1195,20 +1206,10 @@ const AdminServices = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={uploading}
-                  className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-800 transition-colors duration-200 flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-800 transition-colors duration-200 flex items-center"
                 >
-                  {uploading ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      Creating...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="w-4 h-4 mr-2" />
-                      Create Service
-                    </>
-                  )}
+                  <Save className="w-4 h-4 mr-2" />
+                  Create Service
                 </button>
               </div>
             </form>
@@ -1455,20 +1456,10 @@ const AdminServices = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={uploading}
-                  className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-800 transition-colors duration-200 flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-800 transition-colors duration-200 flex items-center"
                 >
-                  {uploading ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      Updating...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="w-4 h-4 mr-2" />
-                      Update Service
-                    </>
-                  )}
+                  <Save className="w-4 h-4 mr-2" />
+                  Update Service
                 </button>
               </div>
             </form>
@@ -1483,12 +1474,13 @@ const AdminServices = () => {
             title="Service Details"
             size="large"
           >
-            <div className="space-y-4 md:space-y-6">
-              <div className="flex flex-col md:flex-row items-start md:items-center gap-4 md:gap-6">
+            <div className="space-y-6">
+              {/* Header Section */}
+              <div className="flex flex-col md:flex-row items-start gap-6">
                 {selectedService.images && selectedService.images.length > 0 ? (
                   <div className="flex-shrink-0">
                     <img
-                      className="h-24 w-24 md:h-32 md:w-32 rounded-lg object-cover"
+                      className="h-28 w-28 md:h-36 md:w-36 rounded-xl object-cover shadow-md"
                       src={selectedService.images[0]}
                       alt={selectedService.title}
                       onError={(e) => {
@@ -1497,99 +1489,179 @@ const AdminServices = () => {
                     />
                   </div>
                 ) : (
-                  <div className="h-24 w-24 md:h-32 md:w-32 rounded-lg bg-gray-200 flex items-center justify-center">
-                    <ImageIcon className="w-12 h-12 md:w-16 md:h-16 text-gray-400" />
+                  <div className="h-28 w-28 md:h-36 md:w-36 rounded-xl bg-gradient-to-br from-teal-50 to-teal-100 flex items-center justify-center shadow-md">
+                    <ImageIcon className="w-12 h-12 md:w-16 md:h-16 text-teal-300" />
                   </div>
                 )}
                 <div className="flex-1">
-                  <h3 className="text-xl md:text-2xl font-bold text-secondary mb-2">{selectedService.title}</h3>
-                  <div className="flex flex-wrap gap-2 mb-3 md:mb-4">
-                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-teal-100 text-teal-800">
-                      {selectedService.category}
-                    </span>
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${selectedService.isActive
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-red-100 text-red-800'
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-3">
+                    <h3 className="text-2xl md:text-3xl font-bold text-secondary">{selectedService.title}</h3>
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${selectedService.isActive
+                      ? 'bg-green-100 text-green-800'
+                      : 'bg-red-100 text-red-800'
                       }`}>
-                      {selectedService.isActive ? 'Active' : 'Inactive'}
+                      {selectedService.isActive ? (
+                        <>
+                          <CheckCircle className="w-4 h-4 mr-1" />
+                          Active
+                        </>
+                      ) : (
+                        <>
+                          <XCircle className="w-4 h-4 mr-1" />
+                          Inactive
+                        </>
+                      )}
                     </span>
                   </div>
-                  <p className="text-gray-600 text-sm md:text-base">
+
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-teal-100 text-teal-800">
+                      {selectedService.category}
+                    </span>
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      <Clock className="w-3 h-3 mr-1" />
+                      {formatDuration(selectedService.duration)}
+                    </span>
+                  </div>
+
+                  <p className="text-gray-600 bg-gray-50 p-4 rounded-lg border border-gray-100">
                     {selectedService.description}
                   </p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-6">
-                <div className="bg-green-50 p-3 md:p-4 rounded-lg">
-                  <div className="flex items-center">
-                    <DollarSign className="w-4 h-4 md:w-5 md:h-5 text-green-600 mr-2" />
-                    <span className="text-sm font-medium text-green-600">Base Price</span>
+              {/* Stats Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-gradient-to-br from-teal-50 to-teal-100 p-4 rounded-xl border border-teal-100 shadow-sm">
+                  <div className="flex items-center mb-2">
+                    <DollarSign className="w-5 h-5 text-teal-600 mr-2" />
+                    <span className="text-sm font-medium text-teal-700">Base Price</span>
                   </div>
-                  <p className="text-xl md:text-2xl font-bold text-green-900 mt-1">
+                  <p className="text-2xl font-bold text-teal-900">
                     {formatCurrency(selectedService.basePrice)}
                   </p>
                 </div>
-                <div className="bg-blue-50 p-3 md:p-4 rounded-lg">
-                  <div className="flex items-center">
-                    <Clock className="w-4 h-4 md:w-5 md:h-5 text-blue-600 mr-2" />
-                    <span className="text-sm font-medium text-blue-600">Duration</span>
+
+                <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-xl border border-blue-100 shadow-sm">
+                  <div className="flex items-center mb-2">
+                    <Clock className="w-5 h-5 text-blue-600 mr-2" />
+                    <span className="text-sm font-medium text-blue-700">Duration</span>
                   </div>
-                  <p className="text-xl md:text-2xl font-bold text-blue-900 mt-1">
+                  <p className="text-2xl font-bold text-blue-900">
                     {formatDuration(selectedService.duration)}
                   </p>
                 </div>
-                <div className="bg-yellow-50 p-3 md:p-4 rounded-lg">
-                  <div className="flex items-center">
-                    <Star className="w-4 h-4 md:w-5 md:h-5 text-yellow-600 mr-2" />
-                    <span className="text-sm font-medium text-yellow-600">Rating</span>
+
+                <div className="bg-gradient-to-br from-amber-50 to-amber-100 p-4 rounded-xl border border-amber-100 shadow-sm">
+                  <div className="flex items-center mb-2">
+                    <Star className="w-5 h-5 text-amber-600 mr-2" />
+                    <span className="text-sm font-medium text-amber-700">Rating</span>
                   </div>
-                  <p className="text-xl md:text-2xl font-bold text-yellow-900 mt-1">
-                    {selectedService.averageRating || 0} ({selectedService.ratingCount || 0})
+                  <p className="text-2xl font-bold text-amber-900">
+                    {selectedService.averageRating || 0}/5
+                  </p>
+                  <p className="text-xs text-amber-700 mt-1">
+                    ({selectedService.ratingCount || 0} reviews)
+                  </p>
+                </div>
+
+                <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-xl border border-purple-100 shadow-sm">
+                  <div className="flex items-center mb-2">
+                    <Users className="w-5 h-5 text-purple-600 mr-2" />
+                    <span className="text-sm font-medium text-purple-700">Popularity</span>
+                  </div>
+                  <p className="text-2xl font-bold text-purple-900">
+                    {selectedService.ratingCount || 0}
+                  </p>
+                  <p className="text-xs text-purple-700 mt-1">
+                    Total ratings
                   </p>
                 </div>
               </div>
 
+              {/* Images Section */}
               {selectedService.images && selectedService.images.length > 0 && (
-                <div>
-                  <h4 className="text-md md:text-lg font-semibold text-secondary mb-3 md:mb-4">Service Images</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                <div className="bg-gray-50 p-5 rounded-xl border border-gray-100">
+                  <h4 className="text-lg font-semibold text-secondary mb-4 flex items-center">
+                    <ImageIcon className="w-5 h-5 mr-2 text-teal-600" />
+                    Service Images
+                  </h4>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                     {selectedService.images.map((img, index) => (
-                      <img
-                        key={index}
-                        src={img}
-                        alt={`Service image ${index + 1}`}
-                        className="h-20 w-full object-cover rounded-lg"
-                        onError={(e) => {
-                          e.target.src = '/default-service-placeholder.jpg';
-                        }}
-                      />
+                      <div key={index} className="relative group">
+                        <img
+                          src={img}
+                          alt={`Service image ${index + 1}`}
+                          className="h-28 w-full object-cover rounded-lg shadow-md transition-transform duration-300 group-hover:scale-105"
+                          onError={(e) => {
+                            e.target.src = '/default-service-placeholder.jpg';
+                          }}
+                        />
+                        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 rounded-lg transition-all duration-300 flex items-center justify-center">
+                          <Eye className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>
               )}
 
+              {/* Special Notes Section */}
               {selectedService.specialNotes && parseArrayField(selectedService.specialNotes).length > 0 && (
-                <div>
-                  <h4 className="text-md md:text-lg font-semibold text-secondary mb-3 md:mb-4">Special Notes</h4>
-                  <ul className="list-disc list-inside space-y-1 pl-5">
+                <div className="bg-teal-50 p-5 rounded-xl border border-teal-100">
+                  <h4 className="text-lg font-semibold text-secondary mb-4 flex items-center">
+                    <AlertCircle className="w-5 h-5 mr-2 text-teal-600" />
+                    Special Notes
+                  </h4>
+                  <ul className="space-y-3">
                     {parseArrayField(selectedService.specialNotes).map((note, index) => (
-                      <li key={index} className="text-gray-700">{note}</li>
+                      <li key={index} className="flex items-start">
+                        <div className="flex-shrink-0 mt-1">
+                          <div className="w-2 h-2 bg-teal-500 rounded-full"></div>
+                        </div>
+                        <p className="ml-3 text-gray-700">{note}</p>
+                      </li>
                     ))}
                   </ul>
                 </div>
               )}
 
+              {/* Materials Used Section */}
               {selectedService.materialsUsed && parseArrayField(selectedService.materialsUsed).length > 0 && (
-                <div>
-                  <h4 className="text-md md:text-lg font-semibold text-secondary mb-3 md:mb-4">Materials Used</h4>
-                  <ul className="list-disc list-inside space-y-1 pl-5">
+                <div className="bg-orange-50 p-5 rounded-xl border border-orange-100">
+                  <h4 className="text-lg font-semibold text-secondary mb-4 flex items-center">
+                    <Package className="w-5 h-5 mr-2 text-orange-600" />
+                    Materials Used
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
                     {parseArrayField(selectedService.materialsUsed).map((material, index) => (
-                      <li key={index} className="text-gray-700">{material}</li>
+                      <span key={index} className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-white text-orange-800 border border-orange-200 shadow-sm">
+                        {material}
+                      </span>
                     ))}
-                  </ul>
+                  </div>
                 </div>
               )}
+
+              {/* Action Buttons */}
+              <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+                <button
+                  onClick={() => setShowViewModal(false)}
+                  className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => {
+                    setShowViewModal(false);
+                    handleEditClick(selectedService);
+                  }}
+                  className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-800 transition-colors duration-200 flex items-center"
+                >
+                  <Edit className="w-4 h-4 mr-2" />
+                  Edit Service
+                </button>
+              </div>
             </div>
           </Modal>
         )}
@@ -1653,20 +1725,11 @@ const AdminServices = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={!bulkFile || uploading}
+                  disabled={!bulkFile}
                   className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-800 transition-colors duration-200 flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {uploading ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      Importing...
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="w-4 h-4 mr-2" />
-                      Import Services
-                    </>
-                  )}
+                  <Upload className="w-4 h-4 mr-2" />
+                  Import Services
                 </button>
               </div>
             </form>
