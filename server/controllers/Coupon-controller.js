@@ -84,7 +84,7 @@ const getAllCoupons = async (req, res) => {
     }
 
     const coupons = await Coupon.find(filters).sort({ createdAt: -1 });
-    
+
     res.json({
       success: true,
       count: coupons.length,
@@ -102,19 +102,24 @@ const getAllCoupons = async (req, res) => {
 const updateCoupon = async (req, res) => {
   try {
     const { id } = req.params;
-    const updateData = req.body;
+    const updateData = { ...req.body };
 
-    // Check if coupon exists and belongs to admin
-    const existingCoupon = await Coupon.findOne({ _id: id, createdBy: req.adminID });
+    // Clean up assignedTo if empty string
+    if (updateData.assignedTo === "" || updateData.assignedTo === undefined) {
+      updateData.assignedTo = null;
+    }
+
+    // Check if coupon exists
+    const existingCoupon = await Coupon.findById(id);
     if (!existingCoupon) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: 'Coupon not found' 
+        message: 'Coupon not found'
       });
     }
 
-    // Prevent modifying certain fields if coupon has been used
-    if (existingCoupon.usedBy.length > 0) {
+    // Restrict modifications if used
+    if (existingCoupon.usedBy && existingCoupon.usedBy.length > 0) {
       const restrictedFields = ['code', 'discountType', 'discountValue', 'isGlobal', 'isFirstBooking'];
       restrictedFields.forEach(field => {
         if (field in updateData) {
@@ -123,16 +128,26 @@ const updateCoupon = async (req, res) => {
       });
     }
 
-    // Handle date conversion if needed
+    // Convert fields
     if (updateData.expiryDate) {
       updateData.expiryDate = new Date(updateData.expiryDate);
     }
+    if (updateData.discountValue) {
+      updateData.discountValue = Number(updateData.discountValue);
+    }
+    if (updateData.minBookingValue) {
+      updateData.minBookingValue = Number(updateData.minBookingValue);
+    }
+    if (updateData.usageLimit) {
+      updateData.usageLimit = Number(updateData.usageLimit);
+    }
 
+    // Perform update
     const updatedCoupon = await Coupon.findByIdAndUpdate(
       id,
       updateData,
       { new: true, runValidators: true }
-    );
+    ).populate('assignedTo', 'name email totalBookings');
 
     res.status(200).json({
       success: true,
@@ -140,6 +155,8 @@ const updateCoupon = async (req, res) => {
       data: updatedCoupon
     });
   } catch (error) {
+    console.error('Update coupon error:', error);
+
     let errorMessage = 'Failed to update coupon';
     let statusCode = 500;
 
@@ -149,6 +166,8 @@ const updateCoupon = async (req, res) => {
     } else if (error.code === 11000) {
       statusCode = 409;
       errorMessage = 'Coupon code already exists';
+    } else if (error.message) {
+      errorMessage = error.message;
     }
 
     res.status(statusCode).json({
@@ -157,6 +176,7 @@ const updateCoupon = async (req, res) => {
     });
   }
 };
+
 
 // Delete coupon (soft delete)
 const deleteCoupon = async (req, res) => {

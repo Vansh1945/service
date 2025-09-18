@@ -40,12 +40,7 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  couponsUsed: [String],
   totalBookings: {
-    type: Number,
-    default: 0
-  },
-  totalSpent: {
     type: Number,
     default: 0
   },

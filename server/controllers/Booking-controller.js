@@ -338,6 +338,9 @@ const confirmBooking = async (req, res) => {
 
     await booking.save({ session });
 
+    // Increment user's total bookings
+    await User.findByIdAndUpdate(userId, { $inc: { totalBookings: 1 } }, { session });
+
     // Send confirmation emails
     try {
       const user = await User.findById(userId).session(session);
@@ -1721,23 +1724,11 @@ const completeBooking = async (req, res) => {
       provider.performanceTier
     );
 
-    const booking = await Booking.findOneAndUpdate(
-      {
-        _id: id,
-        provider: providerId,
-        status: { $in: ['accepted', 'in-progress'] }
-      },
-      {
-        $set: {
-          status: 'completed',
-          completedAt: new Date(),
-          paymentStatus: 'paid'
-        }
-      },
-      { new: false, session }
-    )
-    .populate('customer', 'name email phone')
-    .populate('services.service', 'title basePrice category');
+    const booking = await Booking.findOne({
+      _id: id,
+      provider: providerId,
+      status: { $in: ['accepted', 'in-progress'] }
+    }).session(session);
 
     if (!booking) {
       const currentBooking = await Booking.findById(id).select('status').lean();
@@ -1751,6 +1742,17 @@ const completeBooking = async (req, res) => {
       }
       throw new Error('Booking not found or cannot be completed.');
     }
+
+    booking.status = 'completed';
+    booking.completedAt = new Date();
+    booking.paymentStatus = 'paid';
+
+    await booking.save({ session });
+
+    const populatedBooking = await Booking.findById(booking._id)
+      .populate('customer', 'name email phone')
+      .populate('services.service', 'title basePrice category')
+      .session(session);
 
     const { commission, netAmount } = CommissionRule.calculateCommission(
       booking.totalAmount,

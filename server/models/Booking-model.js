@@ -314,6 +314,8 @@ bookingSchema.pre('save', async function (next) {
 
   // 🚀 Create ProviderEarning only when booking is completed
   if (this.isModified('status') && this.status === 'completed') {
+    const User = mongoose.model('User');
+    await User.findByIdAndUpdate(this.customer, { $inc: { totalBookings: 1 } });
     try {
       const ProviderEarning = mongoose.model('ProviderEarning');
       // Avoid duplicate record

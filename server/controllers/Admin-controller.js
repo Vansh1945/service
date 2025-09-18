@@ -141,7 +141,7 @@ const getAllCustomers = async (req, res) => {
         };
 
         const customers = await User.find(filter)
-            .select('-password -__v')
+            .select('name email phone address totalBookings')
             .skip(skip)
             .limit(limit)
             .sort({ createdAt: -1 });
@@ -154,7 +154,7 @@ const getAllCustomers = async (req, res) => {
             total,
             page,
             pages: Math.ceil(total / limit),
-            customers
+            users: customers,
         });
 
     } catch (error) {

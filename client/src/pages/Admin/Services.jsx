@@ -31,10 +31,11 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { useAuth } from '../../store/auth';
+
 
 const AdminServices = () => {
-  const API = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api';
-  const token = localStorage.getItem("token");
+  const { token, API } = useAuth();
 
   // State management
   const [services, setServices] = useState([]);
