@@ -27,7 +27,7 @@ const commissionRuleSchema = new Schema({
     required: [true, 'Commission value is required'],
     min: [0, 'Commission value cannot be negative'],
     validate: {
-      validator: function(v) {
+      validator: function (v) {
         if (this.type === 'percentage') {
           return v <= 100;
         }
@@ -51,18 +51,19 @@ const commissionRuleSchema = new Schema({
       values: ['basic', 'standard', 'premium'],
       message: 'Performance tier must be one of: basic, standard, premium'
     },
-    required: function() {
+    required: function () {
       return this.applyTo === 'performanceTier';
     }
   },
   specificProvider: {
     type: Schema.Types.ObjectId,
     ref: 'Provider',
-    required: function() {
+    required: function () {
       return this.applyTo === 'specificProvider';
     },
     validate: {
-      validator: async function(v) {
+      validator: async function (v) {
+        if (!v) return true; // avoid error when not required
         const provider = await mongoose.model('Provider').findById(v);
         return !!provider;
       },
@@ -89,7 +90,7 @@ const commissionRuleSchema = new Schema({
   effectiveUntil: {
     type: Date,
     validate: {
-      validator: function(v) {
+      validator: function (v) {
         return !v || v > this.effectiveFrom;
       },
       message: 'End date must be after start date'
@@ -109,19 +110,25 @@ commissionRuleSchema.index({ specificProvider: 1 });
 commissionRuleSchema.index({ effectiveFrom: 1 });
 commissionRuleSchema.index({ effectiveUntil: 1 });
 
-// Static Methods
-commissionRuleSchema.statics.getCommissionForProvider = async function(providerId, providerPerformanceTier = 'standard') {
+/**
+ * 🔹 Static Methods
+ */
+
+// Get applicable commission rule for a provider
+commissionRuleSchema.statics.getCommissionForProvider = async function (providerId, providerPerformanceTier = 'standard') {
   const now = new Date();
-  
+
   try {
-    let provider;
+    // If tier not provided, fetch from provider
     if (!providerPerformanceTier) {
-      provider = await mongoose.model('Provider').findById(providerId)
+      const provider = await mongoose.model('Provider')
+        .findById(providerId)
         .select('performanceTier')
         .lean();
       providerPerformanceTier = provider?.performanceTier || 'standard';
     }
 
+    // 1. Check specific provider rule
     const providerSpecificRule = await this.findOne({
       isActive: true,
       applyTo: 'specificProvider',
@@ -135,6 +142,7 @@ commissionRuleSchema.statics.getCommissionForProvider = async function(providerI
 
     if (providerSpecificRule) return providerSpecificRule;
 
+    // 2. Check performance tier rule
     const tierRule = await this.findOne({
       isActive: true,
       applyTo: 'performanceTier',
@@ -148,6 +156,7 @@ commissionRuleSchema.statics.getCommissionForProvider = async function(providerI
 
     if (tierRule) return tierRule;
 
+    // 3. Default rule for all providers
     const allProvidersRule = await this.findOne({
       isActive: true,
       applyTo: 'all',
@@ -166,7 +175,8 @@ commissionRuleSchema.statics.getCommissionForProvider = async function(providerI
   }
 };
 
-commissionRuleSchema.statics.calculateCommission = function(amount, rule) {
+// Calculate commission amount
+commissionRuleSchema.statics.calculateCommission = function (amount, rule) {
   if (!rule || typeof amount !== 'number' || amount < 0) {
     return {
       commission: 0,
@@ -176,7 +186,6 @@ commissionRuleSchema.statics.calculateCommission = function(amount, rule) {
   }
 
   let commission;
-  
   if (rule.type === 'percentage') {
     commission = (amount * rule.value) / 100;
   } else {
@@ -193,7 +202,8 @@ commissionRuleSchema.statics.calculateCommission = function(amount, rule) {
   };
 };
 
-commissionRuleSchema.statics.getActiveRules = async function(filter = {}) {
+// Get all active rules
+commissionRuleSchema.statics.getActiveRules = async function (filter = {}) {
   const now = new Date();
   return this.find({
     ...filter,
@@ -206,13 +216,12 @@ commissionRuleSchema.statics.getActiveRules = async function(filter = {}) {
   }).sort({ applyTo: 1, performanceTier: 1, createdAt: -1 });
 };
 
-commissionRuleSchema.statics.updateCommissionRule = async function(ruleId, updates, adminId) {
+// Update a commission rule
+commissionRuleSchema.statics.updateCommissionRule = async function (ruleId, updates, adminId) {
   const rule = await this.findById(ruleId);
-  if (!rule) {
-    throw new Error('Commission rule not found');
-  }
+  if (!rule) throw new Error('Commission rule not found');
 
-  // Prevent changing critical fields if rule is active
+  // Prevent changing critical fields if active
   if (rule.isActive) {
     const immutableFields = ['type', 'applyTo', 'performanceTier', 'specificProvider'];
     for (const field of immutableFields) {
@@ -222,42 +231,36 @@ commissionRuleSchema.statics.updateCommissionRule = async function(ruleId, updat
     }
   }
 
-  // Validate performance tier if applyTo is performanceTier
+  // Validate performance tier
   if (updates.applyTo === 'performanceTier' && !updates.performanceTier) {
     throw new Error('Performance tier is required when applyTo is performanceTier');
   }
 
-  // Validate specific provider if applyTo is specificProvider
+  // Validate specific provider
   if (updates.applyTo === 'specificProvider') {
     if (!updates.specificProvider) {
       throw new Error('Specific provider is required when applyTo is specificProvider');
     }
     const providerExists = await mongoose.model('Provider').exists({ _id: updates.specificProvider });
-    if (!providerExists) {
-      throw new Error('Specified provider does not exist');
-    }
+    if (!providerExists) throw new Error('Specified provider does not exist');
   }
 
-  // Update the rule
   Object.assign(rule, updates);
   rule.updatedBy = adminId;
   return await rule.save();
 };
 
-commissionRuleSchema.statics.deleteCommissionRule = async function(ruleId) {
+// Delete a commission rule
+commissionRuleSchema.statics.deleteCommissionRule = async function (ruleId) {
   const rule = await this.findById(ruleId);
-  if (!rule) {
-    throw new Error('Commission rule not found');
-  }
+  if (!rule) throw new Error('Commission rule not found');
 
-  // Check if rule is active
   if (rule.isActive) {
     throw new Error('Cannot delete an active commission rule. Deactivate first.');
   }
 
-  // Check if rule is referenced in any transactions
   const referencedTransactions = await mongoose.model('Transaction').countDocuments({
-    'commissionRule': rule._id
+    commissionRule: rule._id
   });
 
   if (referencedTransactions > 0) {
@@ -267,36 +270,36 @@ commissionRuleSchema.statics.deleteCommissionRule = async function(ruleId) {
   return await rule.deleteOne();
 };
 
-// Virtuals
-commissionRuleSchema.virtual('displayValue').get(function() {
-  return this.type === 'percentage' 
-    ? `${this.value}%` 
+/**
+ * 🔹 Virtuals
+ */
+commissionRuleSchema.virtual('displayValue').get(function () {
+  return this.type === 'percentage'
+    ? `${this.value}%`
     : `₹${this.value.toFixed(2)}`;
 });
 
-// Hooks
-commissionRuleSchema.pre('save', function(next) {
+/**
+ * 🔹 Hooks
+ */
+commissionRuleSchema.pre('save', function (next) {
   if (this.type === 'percentage' && (this.value < 0 || this.value > 100)) {
-    throw new Error('Percentage commission must be between 0 and 100');
+    return next(new Error('Percentage commission must be between 0 and 100'));
   }
-
   if (this.type === 'fixed' && this.value < 0) {
-    throw new Error('Fixed commission cannot be negative');
+    return next(new Error('Fixed commission cannot be negative'));
   }
-
   next();
 });
 
-commissionRuleSchema.pre('deleteOne', { document: true }, async function(next) {
-  // Check if the rule is referenced in any transactions
+commissionRuleSchema.pre('deleteOne', { document: true }, async function (next) {
   const referencedTransactions = await mongoose.model('Transaction').countDocuments({
-    'commissionRule': this._id
+    commissionRule: this._id
   });
 
   if (referencedTransactions > 0) {
-    throw new Error('Cannot delete commission rule as it is referenced in existing transactions');
+    return next(new Error('Cannot delete commission rule as it is referenced in existing transactions'));
   }
-
   next();
 });
 
