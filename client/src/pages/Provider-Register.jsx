@@ -62,7 +62,7 @@ const ProviderRegistration = () => {
     dateOfBirth: '',
 
     // Step 4: Professional Details
-    services: '',
+    services: '', // Changed to string
     experience: '',
     serviceArea: '',
     resume: null,
@@ -83,6 +83,7 @@ const ProviderRegistration = () => {
   const [resendCountdown, setResendCountdown] = useState(60);
   const [otpExpiryTime, setOtpExpiryTime] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedServices, setSelectedServices] = useState([]); // For UI selection
 
   // Fetch provider service categories when component mounts
   useEffect(() => {
@@ -116,6 +117,18 @@ const ProviderRegistration = () => {
     }
     return () => clearInterval(timer);
   }, [otpSentTime, otpExpiryTime]);
+
+  const handleServiceChange = (service) => {
+    setSelectedServices(prev => {
+      if (prev.includes(service)) {
+        // If the service is already selected, deselect it
+        return [];
+      } else {
+        // If a new service is selected, make it the only selected service
+        return [service];
+      }
+    });
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -271,11 +284,17 @@ const ProviderRegistration = () => {
     e.preventDefault();
     setIsSubmitting(true);
 
+    // Convert selected services array to a comma-separated string
+    const formDataWithServices = {
+      ...formData,
+      services: selectedServices.join(',')
+    };
+
     const promise = new Promise(async (resolve, reject) => {
       try {
         const formDataToSend = new FormData();
 
-        Object.entries(formData).forEach(([key, value]) => {
+        Object.entries(formDataWithServices).forEach(([key, value]) => {
           if (value !== null && value !== undefined && value !== '') {
             if (key === 'resume' || key === 'passbookImage' || key === 'profilePic') {
               if (value) formDataToSend.append(key, value);
@@ -472,7 +491,7 @@ const ProviderRegistration = () => {
           <p className="text-sm text-secondary/70">Complete verification process increases customer trust and booking rates by up to 300%.</p>
         </div>
 
-        {/* <div className="group bg-gradient-to-br from-primary/5 to-primary/10 rounded-2xl p-6 border border-primary/20 hover:border-primary/40 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10">
+        <div className="group bg-gradient-to-br from-primary/5 to-primary/10 rounded-2xl p-6 border border-primary/20 hover:border-primary/40 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10">
           <div className="flex items-center mb-4">
             <div className="w-12 h-12 bg-primary/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
               <Zap className="w-6 h-6 text-primary" />
@@ -496,7 +515,7 @@ const ProviderRegistration = () => {
             </div>
           </div>
           <p className="text-sm text-secondary/70">Choose your working hours and service areas. Perfect for full-time professionals or side income.</p>
-        </div> */}
+        </div>
       </div>
 
       {/* How It Works */}
@@ -537,10 +556,10 @@ const ProviderRegistration = () => {
           Why Providers Trust SafeVolt
         </h3>
         <div className="space-y-3">
-          {/* <div className="flex items-center">
+          <div className="flex items-center">
             <CheckCircle className="w-5 h-5 text-primary mr-3 flex-shrink-0" />
             <span className="text-sm text-secondary/80">Secure payments with instant transfer to your account</span>
-          </div> */}
+          </div>
           <div className="flex items-center">
             <CheckCircle className="w-5 h-5 text-primary mr-3 flex-shrink-0" />
             <span className="text-sm text-secondary/80">24/7 customer support and provider assistance</span>
@@ -582,7 +601,7 @@ const ProviderRegistration = () => {
                   onChange={handleChange}
                   className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                   placeholder="your@email.com"
-                  
+                  required
                 />
               </div>
             </div>
@@ -643,7 +662,7 @@ const ProviderRegistration = () => {
                   className="flex-1 px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 text-center tracking-widest text-secondary bg-gradient-to-r from-primary/5 to-transparent placeholder-secondary/50 text-xl font-semibold hover:border-primary/50 hover:shadow-md focus:shadow-lg"
                   placeholder="123456"
                   maxLength="6"
-                  
+                  required
                 />
                 <button
                   type="button"
@@ -673,7 +692,7 @@ const ProviderRegistration = () => {
                     onChange={handleChange}
                     className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                     placeholder="John Doe"
-                    
+                    required
                   />
                 </div>
               </div>
@@ -695,6 +714,7 @@ const ProviderRegistration = () => {
                     className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                     placeholder="9876543210"
                     maxLength="10"
+                    required
                   />
                 </div>
               </div>
@@ -715,7 +735,7 @@ const ProviderRegistration = () => {
                   value={formData.dateOfBirth}
                   onChange={handleChange}
                   className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
-                  
+                  required
                 />
               </div>
             </div>
@@ -738,7 +758,7 @@ const ProviderRegistration = () => {
                     className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                     placeholder="At least 8 characters"
                     minLength="8"
-                    
+                    required
                   />
                 </div>
               </div>
@@ -759,7 +779,7 @@ const ProviderRegistration = () => {
                     onChange={handleChange}
                     className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                     placeholder="Confirm your password"
-                    
+                    required
                   />
                 </div>
               </div>
@@ -792,7 +812,7 @@ const ProviderRegistration = () => {
                   onChange={handleChange}
                   className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                   placeholder="your@email.com"
-                  
+                  required
                 />
               </div>
             </div>
@@ -813,9 +833,9 @@ const ProviderRegistration = () => {
                   onChange={handleChange}
                   className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                   placeholder="Enter your password"
-                  
+                  required
                 />
-              </div>
+                </div>
             </div>
           </div>
         );
@@ -832,69 +852,46 @@ const ProviderRegistration = () => {
             {/* Professional Details */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="group">
-                <label htmlFor="services" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                  Service Category *
+                <label className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
+                  Service Categories (Select only 1) *
                 </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                    <Briefcase className="text-primary w-5 h-5 group-focus-within:scale-110 transition-transform duration-200" />
-                  </div>
-                  <select
-                    id="services"
-                    name="services"
-                    value={formData.services}
-                    onChange={handleChange}
-                    className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
-                    required
-                    disabled={providerServicesLoading}
-                  >
-                    <option value="">
-                      {providerServicesLoading ? 'Loading service categories...' : 'Select service category'}
-                    </option>
-                    
-                    {/* Show provider service categories from backend */}
-                    {!providerServicesLoading && providerServices.length > 0 ? (
-                      // Simple list of provider service categories
-                      providerServices.map(service => (
-                        <option key={service._id} value={service.category}>
+                <div className="grid grid-cols-2 gap-3">
+                  {providerServicesLoading ? (
+                    <div className="col-span-2 flex items-center text-secondary/70">
+                      <Loader2 className="w-5 h-5 text-primary animate-spin mr-2" />
+                      Loading service categories...
+                    </div>
+                  ) : providerServicesError ? (
+                    <div className="col-span-2 text-sm text-red-600 flex items-center">
+                      <AlertCircle className="w-4 h-4 mr-1" />
+                      Failed to load service categories. Using fallback options.
+                    </div>
+                  ) : (
+                    (providerServices.length > 0 ? providerServices : [
+                      { _id: 'electrical', title: 'Electrical', category: 'Electrical' },
+                      { _id: 'ac', title: 'AC', category: 'AC' },
+                      { _id: 'appliance-repair', title: 'Appliance Repair', category: 'Appliance Repair' },
+                      { _id: 'other', title: 'Other', category: 'Other' },
+                    ]).map(service => (
+                      <div key={service._id} className="flex items-center">
+                        <input
+                          type="checkbox"
+                          id={`service-${service._id}`}
+                          name="services"
+                          value={service.category}
+                          checked={selectedServices.includes(service.category)}
+                          onChange={() => handleServiceChange(service.category)}
+                          className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                          disabled={selectedServices.length >= 1 && !selectedServices.includes(service.category)}
+                        />
+                        <label htmlFor={`service-${service._id}`} className="ml-2 text-sm text-secondary">
                           {service.title}
-                        </option>
-                      ))
-                    ) : (
-                      // Fallback options if provider services fail to load
-                      !providerServicesLoading && (
-                        <>
-                          <option value="Electrical">Electrical</option>
-                          <option value="AC">AC</option>
-                          <option value="Appliance Repair">Appliance Repair</option>
-                          <option value="Other">Other</option>
-                        </>
-                      )
-                    )}
-                  </select>
-                  
-                  {/* Loading indicator */}
-                  {providerServicesLoading && (
-                    <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
-                      <Loader2 className="w-5 h-5 text-primary animate-spin" />
-                    </div>
-                  )}
-                  
-                  {/* Error indicator */}
-                  {providerServicesError && !providerServicesLoading && (
-                    <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
-                      <AlertCircle className="w-5 h-5 text-red-500" />
-                    </div>
+                        </label>
+                      </div>
+                    ))
                   )}
                 </div>
                 
-                {/* Error message */}
-                {providerServicesError && !providerServicesLoading && (
-                  <p className="mt-2 text-sm text-red-600 flex items-center">
-                    <AlertCircle className="w-4 h-4 mr-1" />
-                    Failed to load service categories. Using fallback options.
-                  </p>
-                )}
               </div>
 
               <div className="group">
@@ -915,7 +912,7 @@ const ProviderRegistration = () => {
                     max="40"
                     className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                     placeholder="Years of experience"
-                    
+                    required
                   />
                 </div>
               </div>
@@ -937,7 +934,7 @@ const ProviderRegistration = () => {
                   onChange={handleChange}
                   className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                   placeholder="Cities or pincodes you serve (e.g., Mumbai, 400001, 400002)"
-                  
+                  required
                 />
               </div>
             </div>
@@ -956,7 +953,7 @@ const ProviderRegistration = () => {
                     onChange={handleFileChange('resume')}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                     accept=".pdf"
-                    
+                    required
                   />
                   <div className="flex items-center justify-between px-4 py-4 bg-gradient-to-r from-primary/5 to-transparent border-2 border-gray-200 rounded-2xl hover:border-primary/50 transition-all duration-300 hover:shadow-md">
                     <span className="text-secondary/70 truncate">
@@ -980,7 +977,7 @@ const ProviderRegistration = () => {
                     onChange={handleFileChange('profilePic')}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                     accept="image/*"
-                    
+                    required
                   />
                   <div className="flex items-center justify-between px-4 py-4 bg-gradient-to-r from-primary/5 to-transparent border-2 border-gray-200 rounded-2xl hover:border-primary/50 transition-all duration-300 hover:shadow-md">
                     <span className="text-secondary/70 truncate">
@@ -1013,7 +1010,7 @@ const ProviderRegistration = () => {
                     onChange={handleChange}
                     className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                     placeholder="123 Main Street"
-                    
+                    required
                   />
                 </div>
 
@@ -1029,7 +1026,7 @@ const ProviderRegistration = () => {
                     onChange={handleChange}
                     className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                     placeholder="Your city"
-                    
+                    required
                   />
                 </div>
               </div>
@@ -1047,7 +1044,7 @@ const ProviderRegistration = () => {
                     onChange={handleChange}
                     className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                     placeholder="Your state"
-                    
+                    required
                   />
                 </div>
 
@@ -1063,7 +1060,7 @@ const ProviderRegistration = () => {
                     onChange={handleChange}
                     className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                     placeholder="123456"
-                    
+                    required
                   />
                 </div>
               </div>
@@ -1089,7 +1086,7 @@ const ProviderRegistration = () => {
                     onChange={handleChange}
                     className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                     placeholder="1234567890"
-                    
+                    required
                   />
                 </div>
 
@@ -1105,7 +1102,7 @@ const ProviderRegistration = () => {
                     onChange={handleChange}
                     className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                     placeholder="ABCD0123456"
-                    
+                    required
                   />
                 </div>
               </div>
@@ -1122,7 +1119,7 @@ const ProviderRegistration = () => {
                     onChange={handleFileChange('passbookImage')}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                     accept="image/*"
-                    
+                    required
                   />
                   <div className="flex items-center justify-between px-4 py-4 bg-gradient-to-r from-primary/5 to-transparent border-2 border-gray-200 rounded-2xl hover:border-primary/50 transition-all duration-300 hover:shadow-md">
                     <span className="text-secondary/70 truncate">

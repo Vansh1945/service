@@ -44,20 +44,34 @@ exports.initiateRegistration = async (req, res) => {
             });
         }
 
-        // Check if provider already exists (either fully registered or in progress)
+        // Check if provider already exists (any status, not deleted)
         const existingProvider = await Provider.findOne({
             email: { $regex: new RegExp(`^${email}$`, 'i') },
             isDeleted: false
         });
 
         if (existingProvider) {
-            if (existingProvider.profileComplete) {
+            if (existingProvider.approved && existingProvider.profileComplete) {
+                // Fully registered & approved
                 return res.status(400).json({
                     success: false,
                     message: 'Provider with this email already exists'
                 });
+            } else if (!existingProvider.approved) {
+                // Pending approval
+                return res.status(400).json({
+                    success: false,
+                    message: 'Provider registration with this email is pending approval'
+                });
+            } else if (!existingProvider.profileComplete) {
+                // Profile incomplete
+                return res.status(400).json({
+                    success: false,
+                    message: 'Provider profile is incomplete. Please login complete it to continue.'
+                });
             }
         }
+
 
         // Send OTP to email
         await sendOTP(email);
@@ -938,6 +952,8 @@ exports.getServiceCategories = async (req, res) => {
         });
     }
 };
+
+
 
 /**
  * @desc    Permanently delete provider account (admin only)

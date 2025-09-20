@@ -2,92 +2,9 @@ const CommissionRule = require('../models/CommissionRule-model');
 const Booking = require('../models/Booking-model');
 const Provider = require('../models/Provider-model');
 const Transaction = require('../models/Transaction-model ');
+const Admin = require('../models/Admin-model');
 
-// Process commission for a completed booking
-exports.processBookingCommission = async (req, res) => {
-  try {
-    const bookingId = req.params.id;
-    const booking = await Booking.findById(bookingId)
-      .populate('provider service');
-    
-    if (!booking) {
-      return res.status(404).json({
-        success: false,
-        message: 'Booking not found'
-      });
-    }
-    
-    if (booking.status !== 'completed') {
-      return res.status(400).json({
-        success: false,
-        message: 'Commission can only be processed for completed bookings'
-      });
-    }
-    
-    const provider = await Provider.findById(booking.provider._id);
-    if (!provider) {
-      return res.status(404).json({
-        success: false,
-        message: 'Provider not found'
-      });
-    }
 
-    const performanceTier = provider.performanceTier || 'standard';
-    
-    // Get applicable commission rule
-    const commissionRule = await CommissionRule.getCommissionForProvider(
-      booking.provider._id,
-      performanceTier
-    );
-    
-    if (!commissionRule) {
-      return res.status(404).json({
-        success: false,
-        message: 'No applicable commission rule found'
-      });
-    }
-    
-    // Calculate commission
-    const commissionResult = CommissionRule.calculateCommission(booking.totalAmount, commissionRule);
-    
-    // Update provider's wallet
-    provider.wallet += commissionResult.netAmount;
-    await provider.save();
-    
-    // Create transaction record
-    const transaction = new Transaction({
-      booking: booking._id,
-      provider: provider._id,
-      amount: booking.totalAmount,
-      commission: commissionResult.commission,
-      netAmount: commissionResult.netAmount,
-      commissionRule: commissionRule._id,
-      type: 'commission',
-      status: 'completed'
-    });
-    await transaction.save();
-    
-    res.status(200).json({
-      success: true,
-      data: {
-        booking: booking._id,
-        totalAmount: booking.totalAmount,
-        commissionRate: commissionRule.displayValue,
-        commissionAmount: commissionResult.commission,
-        providerEarning: commissionResult.netAmount,
-        appliedRule: commissionRule.name,
-        transactionId: transaction._id
-      }
-    });
-    
-  } catch (error) {
-    console.error('Commission processing error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
-};
 
 // Get commission details for a provider
 exports.getProviderCommissionDetails = async (req, res) => {
@@ -110,6 +27,11 @@ exports.getProviderCommissionDetails = async (req, res) => {
       performanceTier
     );
 
+    const totalCompletedBookings = await Booking.countDocuments({
+      provider: providerId,
+      status: 'completed'
+    });
+
     // Get all active rules for reference
     const allRules = await CommissionRule.getActiveRules();
 
@@ -120,7 +42,8 @@ exports.getProviderCommissionDetails = async (req, res) => {
           id: provider._id,
           name: provider.name,
           performanceTier,
-          wallet: provider.wallet
+          wallet: provider.wallet,
+          totalCompletedBookings
         },
         currentCommission: currentRule,
         allActiveRules: allRules

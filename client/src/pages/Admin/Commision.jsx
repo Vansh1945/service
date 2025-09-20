@@ -14,15 +14,7 @@ import {
   XCircle,
   ChevronLeft,
   ChevronRight,
-  Calendar,
-  Target,
-  Award,
-  BarChart2,
   Percent,
-  Crown,
-  User,
-  Eye,
-  Filter,
   Info
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -37,7 +29,6 @@ const AdminCommissionPage = () => {
   const [providers, setProviders] = useState([]);
   const [selectedProvider, setSelectedProvider] = useState(null);
   const [providerCommission, setProviderCommission] = useState(null);
-  const [bookings, setBookings] = useState([]);
   
   // Stats
   const [stats, setStats] = useState({
@@ -79,8 +70,7 @@ const AdminCommissionPage = () => {
   const [filters, setFilters] = useState({
     search: '',
     isActive: '',
-    applyTo: '',
-    bookingSearch: ''
+    applyTo: ''
   });
 
   // Available options matching backend enum
@@ -334,50 +324,6 @@ const AdminCommissionPage = () => {
     }
   };
 
-  // Process commission for booking
-  const processBookingCommission = async (bookingId) => {
-    setLoading(true);
-    try {
-      const response = await fetch(`${API}/commission/process-booking/${bookingId}`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await response.json();
-      if (data.success) {
-        showToast('Commission processed successfully');
-        fetchBookings();
-      } else {
-        showToast(data.message || 'Failed to process commission', 'error');
-      }
-    } catch (error) {
-      showToast('Failed to process commission', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Fetch bookings with commission status
-  const fetchBookings = async () => {
-    try {
-      const queryParams = new URLSearchParams({
-        status: 'completed',
-        limit: 50,
-        ...(filters.bookingSearch && { search: filters.bookingSearch })
-      });
-
-      const response = await fetch(`${API}/admin/bookings?${queryParams}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await response.json();
-      if (data.success) {
-        setBookings(data.data || []);
-      }
-    } catch (error) {
-      console.error('Failed to fetch bookings:', error);
-      setBookings([]);
-    }
-  };
-
   // Reset form
   const resetRuleForm = () => {
     setRuleForm({
@@ -425,29 +371,16 @@ const AdminCommissionPage = () => {
     return matchesSearch && matchesActive && matchesApplyTo;
   });
 
-  // Filter bookings
-  const filteredBookings = bookings.filter(booking => {
-    const matchesSearch = filters.bookingSearch === '' || 
-      booking._id.toLowerCase().includes(filters.bookingSearch.toLowerCase()) ||
-      booking.provider?.name.toLowerCase().includes(filters.bookingSearch.toLowerCase());
-    return matchesSearch;
-  });
-
   // Initial data fetch
   useEffect(() => {
     fetchCommissionRules();
     fetchProviders();
-    fetchBookings();
   }, []);
 
   // Refetch when filters change
   useEffect(() => {
     fetchCommissionRules(1, pagination.limit);
   }, [filters.isActive, filters.applyTo]);
-
-  useEffect(() => {
-    fetchBookings();
-  }, [filters.bookingSearch]);
 
   return (
     <div className="p-4 md:p-8 bg-background min-h-screen">
@@ -464,7 +397,6 @@ const AdminCommissionPage = () => {
                 onClick={() => {
                   fetchCommissionRules();
                   fetchProviders();
-                  fetchBookings();
                 }}
                 disabled={loading}
                 className="flex items-center px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-50"
@@ -562,17 +494,6 @@ const AdminCommissionPage = () => {
             >
               <Users className="w-4 h-4 inline mr-2" />
               Provider Commissions
-            </button>
-            <button
-              onClick={() => setActiveTab('processing')}
-              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                activeTab === 'processing'
-                  ? 'bg-primary text-white shadow'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <DollarSign className="w-4 h-4 inline mr-2" />
-              Commission Processing
             </button>
           </div>
         </div>
@@ -894,7 +815,7 @@ const AdminCommissionPage = () => {
                     <option value="">Select a provider</option>
                     {providers.map(provider => (
                       <option key={provider._id} value={provider._id}>
-                        {provider.name} - {provider.email}
+                        {provider.name} ({provider.totalCompletedBookings} completed)
                       </option>
                     ))}
                   </select>
@@ -902,7 +823,7 @@ const AdminCommissionPage = () => {
               </div>
 
               {providerCommission && (
-                <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-6">
                   <div className="bg-blue-50 rounded-lg p-4">
                     <div className="flex items-center">
                       <div className="p-2 rounded-full bg-blue-100">
@@ -944,111 +865,22 @@ const AdminCommissionPage = () => {
                       </div>
                     </div>
                   </div>
+
+                  <div className="bg-yellow-50 rounded-lg p-4">
+                    <div className="flex items-center">
+                      <div className="p-2 rounded-full bg-yellow-100">
+                        <CheckCircle className="w-5 h-5 text-yellow-600" />
+                      </div>
+                      <div className="ml-3">
+                        <p className="text-sm font-medium text-yellow-900">Completed Bookings</p>
+                        <p className="text-lg font-bold text-yellow-900">
+                          {providerCommission.provider?.totalCompletedBookings || 0}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
-            </div>
-          </div>
-        )}
-
-        {/* Commission Processing Tab */}
-        {activeTab === 'processing' && (
-          <div className="space-y-6">
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-medium text-gray-900">Process Commission for Completed Bookings</h3>
-                <button
-                  onClick={fetchBookings}
-                  className="bg-primary text-white px-4 py-2 rounded-md flex items-center gap-2 hover:bg-teal-700 transition-colors"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                  Refresh
-                </button>
-              </div>
-
-              <div className="mb-4">
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Search className="h-4 w-4 text-gray-400" />
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="Search bookings..."
-                    value={filters.bookingSearch}
-                    onChange={(e) => setFilters({...filters, bookingSearch: e.target.value})}
-                    className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-                  />
-                </div>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Booking ID
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Provider
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Amount
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredBookings.length > 0 ? (
-                      filteredBookings.map((booking) => (
-                        <tr key={booking._id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {booking._id.substring(0, 8)}...
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">
-                              {booking.provider?.name || 'N/A'}
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              {booking.provider?.email || 'N/A'}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            ₹{booking.totalAmount?.toLocaleString('en-IN') || 0}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                              booking.status === 'completed' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                            }`}>
-                              {booking.status}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            {booking.status === 'completed' && (
-                              <button
-                                onClick={() => processBookingCommission(booking._id)}
-                                disabled={loading}
-                                className="text-accent hover:text-orange-700 disabled:opacity-50"
-                              >
-                                Process Commission
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan="5" className="px-6 py-4 text-center text-sm text-gray-500">
-                          No bookings found
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
             </div>
           </div>
         )}

@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
 const walletSchema = new mongoose.Schema({
     availableBalance: {
@@ -53,10 +54,10 @@ const providerSchema = new mongoose.Schema({
         type: String,
         default: 'provider'
     },
-    services: {
+    services: [{
         type: String,
         enum: ['Electrical', 'AC', 'Appliance Repair', 'Other'],
-    },
+    }],
     experience: {
         type: Number,
         min: [0, 'Experience cannot be negative'],
@@ -168,14 +169,28 @@ const providerSchema = new mongoose.Schema({
     },
 }, {
     timestamps: true,
-    toJSON: { 
+    toJSON: {
         virtuals: true,
-        transform: function(doc, ret) {
+        transform: function (doc, ret) {
             delete ret.password;
             delete ret.isDeleted;
             return ret;
         }
     }
+});
+
+providerSchema.pre('save', async function (next) {
+    if (this.isNew) {
+        const existingProvider = await this.constructor.findOne({
+            email: this.email,
+            isActive: true,
+            approved: true
+        });
+        if (existingProvider) {
+            return next(new Error('A fully active and approved provider with this email already exists.'));
+        }
+    }
+    next();
 });
 
 // Password hashing middleware
@@ -241,21 +256,21 @@ providerSchema.virtual('age').get(function () {
     return age;
 });
 
-providerSchema.virtual('averageRating').get(function() {
+providerSchema.virtual('averageRating').get(function () {
     if (!this.feedbacks || this.feedbacks.length === 0) return 0;
     const validFeedbacks = this.feedbacks.filter(fb => fb && fb.providerFeedback && fb.providerFeedback.rating);
     if (validFeedbacks.length === 0) return 0;
-    
-    const sum = validFeedbacks.reduce((total, feedback) => 
+
+    const sum = validFeedbacks.reduce((total, feedback) =>
         total + feedback.providerFeedback.rating, 0);
     return parseFloat((sum / validFeedbacks.length).toFixed(1));
 });
 
-providerSchema.query.active = function() {
+providerSchema.query.active = function () {
     return this.where({ isDeleted: false, blockedTill: { $lte: new Date() } });
 };
 
-providerSchema.statics.findByEmail = function(email) {
+providerSchema.statics.findByEmail = function (email) {
     return this.findOne({ email: new RegExp(`^${email}$`, 'i') }).select('+password');
 };
 

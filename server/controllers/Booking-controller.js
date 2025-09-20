@@ -928,6 +928,7 @@ const cancelBooking = async (req, res) => {
       await Provider.findByIdAndUpdate(booking.provider, {
         $inc: { canceledBookings: 1 }
       }, { session });
+      await Provider.calculatePerformance(booking.provider);
     }
 
     let refundDetails = null;
@@ -1472,6 +1473,11 @@ const acceptBooking = async (req, res) => {
 
     await booking.save();
 
+    // Recalculate provider performance after accepting a booking
+    if (booking.provider) {
+      await Provider.calculatePerformance(booking.provider);
+    }
+
     // Populate booking details for response
     const populatedBooking = await Booking.findById(booking._id)
       .populate('customer', 'name email phone')
@@ -1731,7 +1737,7 @@ const completeBooking = async (req, res) => {
     }).session(session);
 
     if (!booking) {
-      const currentBooking = await Booking.findById(id).select('status').lean();
+      const currentBooking = await Booking.findById(id).select('status commissionProcessed').lean();
       if (currentBooking && currentBooking.status === 'completed') {
         await session.commitTransaction();
         session.endSession();
@@ -1743,9 +1749,20 @@ const completeBooking = async (req, res) => {
       throw new Error('Booking not found or cannot be completed.');
     }
 
+    // Prevent duplicate commission processing
+    if (booking.commissionProcessed) {
+      await session.commitTransaction();
+      session.endSession();
+      return res.status(409).json({
+        success: false,
+        message: 'Commission has already been processed for this booking.'
+      });
+    }
+
     booking.status = 'completed';
     booking.completedAt = new Date();
     booking.paymentStatus = 'paid';
+    booking.commissionProcessed = true; // Mark commission as processed
 
     await booking.save({ session });
 
@@ -1823,6 +1840,9 @@ const completeBooking = async (req, res) => {
       { $inc: { completedBookings: 1, totalEarnings: netAmount, totalCommissionPaid: commission } },
       { session }
     );
+
+    // Recalculate provider performance after completing a booking
+    await Provider.calculatePerformance(providerId);
 
     // Notifications (as before)
     setImmediate(async () => {

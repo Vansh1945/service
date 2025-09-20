@@ -12,9 +12,6 @@ router.patch('/rules/:id/toggle-status', adminAuthMiddleware, commissionControll
 router.put('/rules/:id', adminAuthMiddleware, commissionController.updateCommissionRule);
 router.delete('/rules/:id', adminAuthMiddleware, commissionController.deleteCommissionRule);
 
-// Booking commission processing
-router.post('/process-booking/:id', adminAuthMiddleware, commissionController.processBookingCommission);
-
 // Provider commission details
 router.get('/provider/:providerId', adminAuthMiddleware, commissionController.getProviderCommissionDetails);
 

@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../store/auth';
+import useServices from '../../hooks/useServices';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { Loader2, AlertCircle } from 'lucide-react';
 
 const ProviderProfile = () => {
   const { token, API, showToast, logoutUser } = useAuth();
@@ -16,7 +18,7 @@ const ProviderProfile = () => {
     phone: '',
     dateOfBirth: '',
     role: '',
-    services: '',
+    services: [],
     experience: '',
     serviceArea: '',
     address: {
@@ -77,6 +79,13 @@ const ProviderProfile = () => {
     passbookImage: null
   });
 
+  const { 
+    providerServices, 
+    providerServicesLoading, 
+    providerServicesError, 
+    fetchProviderServiceCategories,
+  } = useServices();
+
   // Fetch provider profile data
   useEffect(() => {
     const fetchProfile = async () => {
@@ -122,13 +131,40 @@ const ProviderProfile = () => {
     };
 
     fetchProfile();
-  }, [token, API, showToast]);
+    fetchProviderServiceCategories(); // Fetch service categories
+  }, [token, API, showToast, fetchProviderServiceCategories]);
+
+  // Handle service changes (for multi-select)
+  const handleServiceChange = (service) => {
+    setProfileData(prev => {
+      const currentServices = Array.isArray(prev.services) ? prev.services : [];
+      if (currentServices.includes(service)) {
+        // Remove service if already selected
+        return { ...prev, services: currentServices.filter(s => s !== service) };
+      } else {
+        // Add service if not selected, but only if limit not reached
+        if (currentServices.length < 3) {
+          return { ...prev, services: [...currentServices, service] };
+        } else {
+          toast.error('You can select a maximum of 3 services.');
+          return prev; // Do not update if limit exceeded
+        }
+      }
+    });
+  };
 
   // Handle input changes
   const handleChange = (e, section) => {
     const { name, value } = e.target;
 
-    if (section === 'address') {
+    if (name === 'services') { // Handle services separately
+      // This case should ideally be handled by handleServiceChange directly
+      // but keeping it here for completeness if a select element is still used elsewhere
+      setProfileData(prev => ({
+        ...prev,
+        services: Array.isArray(value) ? value : [value] // Ensure it's an array
+      }));
+    } else if (section === 'address') {
       setProfileData(prev => ({
         ...prev,
         address: {
@@ -1008,19 +1044,48 @@ const ProviderProfile = () => {
                   <form onSubmit={(e) => { e.preventDefault(); updateProfile('professional'); }}>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Service Type</label>
-                        <select
-                          name="services"
-                          value={profileData.services}
-                          onChange={(e) => handleChange(e)}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-colors"
-                        >
-                          <option value="">Select Service</option>
-                          <option value="Electrical">Electrical</option>
-                          <option value="AC">AC</option>
-                          <option value="Appliance Repair">Appliance Repair</option>
-                          <option value="Other">Other</option>
-                        </select>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Service Type (Select up to 3)</label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {providerServicesLoading ? (
+                            <div className="col-span-full flex items-center text-gray-500">
+                              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                              Loading services...
+                            </div>
+                          ) : providerServicesError ? (
+                            <div className="col-span-full text-sm text-red-600 flex items-center">
+                              <AlertCircle className="w-4 h-4 mr-1" />
+                              Failed to load services. Using fallback.
+                            </div>
+                          ) : (
+                            (providerServices.length > 0 ? providerServices : [
+                              { _id: 'electrical', title: 'Electrical', category: 'Electrical' },
+                              { _id: 'ac', title: 'AC', category: 'AC' },
+                              { _id: 'appliance-repair', title: 'Appliance Repair', category: 'Appliance Repair' },
+                              { _id: 'other', title: 'Other', category: 'Other' },
+                            ]).map(service => (
+                              <div key={service._id} className="flex items-center">
+                                <input
+                                  type="checkbox"
+                                  id={`service-${service._id}`}
+                                  value={service.category}
+                                  checked={profileData.services.includes(service.category)}
+                                  onChange={() => handleServiceChange(service.category)}
+                                  className="h-4 w-4 text-teal-600 focus:ring-teal-500 border-gray-300 rounded"
+                                  disabled={profileData.services.length >= 3 && !profileData.services.includes(service.category)}
+                                />
+                                <label htmlFor={`service-${service._id}`} className="ml-2 text-sm text-gray-700">
+                                  {service.title}
+                                </label>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                        {profileData.services.length > 3 && (
+                          <p className="mt-2 text-sm text-red-600 flex items-center">
+                            <AlertCircle className="w-4 h-4 mr-1" />
+                            You can select a maximum of 3 services.
+                          </p>
+                        )}
                       </div>
 
                       <div>

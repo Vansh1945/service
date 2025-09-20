@@ -85,8 +85,24 @@ const bookingSchema = new Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'accepted', 'in-progress', 'completed', 'cancelled', 'confirmed', 'no-show'],
+    enum: ['pending', 'accepted', 'in-progress', 'completed', 'cancelled', 'confirmed', 'no-show', 'assigned'],
     default: 'pending'
+  },
+  rating: {
+    type: Number,
+    min: 1,
+    max: 5,
+    required: false
+  },
+  hasComplaint: {
+    type: Boolean,
+    default: false
+  },
+  deadline: {
+    type: Date
+  },
+  completedAt: {
+    type: Date
   },
 
   // Payment method and status tracking
@@ -229,6 +245,10 @@ const bookingSchema = new Schema({
     type: Date
   },
   confirmedBooking: {
+    type: Boolean,
+    default: false
+  },
+  commissionProcessed: {
     type: Boolean,
     default: false
   }
