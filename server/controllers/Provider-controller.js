@@ -7,6 +7,7 @@ const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
 const cloudinary = require('../services/cloudinary');
+const Service = require('../models/Service-model');
 
 // Helper function to delete file from Cloudinary
 const deleteFile = async (publicId) => {
@@ -914,45 +915,6 @@ exports.deleteAccount = async (req, res) => {
     }
 };
 
-/**
- * @desc    Get service categories from Provider model enum
- * @route   GET /api/providers/service-categories
- * @access  Public
- */
-exports.getServiceCategories = async (req, res) => {
-    try {
-        // Get the service enum values from the Provider schema
-        const serviceEnum = Provider.schema.path('services').enumValues;
-
-        if (!serviceEnum) {
-            return res.status(500).json({
-                success: false,
-                message: 'Service categories not defined in schema'
-            });
-        }
-
-        // Format the response to match frontend expectations
-        const serviceCategories = serviceEnum.map(service => ({
-            _id: service.toLowerCase().replace(/\s+/g, '-'),
-            title: service,
-            category: service
-        }));
-
-        res.status(200).json({
-            success: true,
-            message: 'Service categories retrieved successfully',
-            data: serviceCategories
-        });
-    } catch (error) {
-        console.error('Get service categories error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to get service categories',
-            error: process.env.NODE_ENV === 'development' ? error.message : undefined
-        });
-    }
-};
-
 
 
 /**
@@ -1001,6 +963,45 @@ exports.permanentDeleteAccount = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Failed to permanently delete account',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
+
+/**
+ * @desc    Get all available service categories
+ * @route   GET /api/providers/service-categories
+ * @access  Public
+ */
+exports.getServiceCategories = async (req, res) => {
+    try {
+        const categories = Service.schema.path('category').enumValues;
+
+        if (!categories) {
+            return res.status(500).json({
+                success: false,
+                message: 'Service categories not defined in schema'
+            });
+        }
+
+        // Format the response to match frontend expectations
+        const serviceCategories = categories.map(service => ({
+            _id: service.toLowerCase().replace(/\s+/g, '-'), // Create a slug-like ID
+            title: service,
+            category: service
+        }));
+
+        res.status(200).json({
+            success: true,
+            message: 'Service categories retrieved successfully',
+            data: serviceCategories
+        });
+    } catch (error) {
+        console.error('Error fetching service categories:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch service categories',
             error: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }

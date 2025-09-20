@@ -32,7 +32,7 @@ import {
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/auth';
-import useServices from '../hooks/useServices';
+import useServices from '../hooks/';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -943,7 +943,7 @@ const ProviderRegistration = () => {
             <div className="space-y-6">
               <div className="group">
                 <label htmlFor="resume" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                  Professional Resume (PDF) *
+                  Professional Resume *
                 </label>
                 <div className="relative">
                   <input
@@ -952,7 +952,7 @@ const ProviderRegistration = () => {
                     name="resume"
                     onChange={handleFileChange('resume')}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    accept=".pdf"
+                    accept="image/*"
                     required
                   />
                   <div className="flex items-center justify-between px-4 py-4 bg-gradient-to-r from-primary/5 to-transparent border-2 border-gray-200 rounded-2xl hover:border-primary/50 transition-all duration-300 hover:shadow-md">
