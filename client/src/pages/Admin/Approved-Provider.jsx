@@ -1,746 +1,781 @@
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../store/auth';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  Users,
   Search,
+  Filter,
   Eye,
+  CheckCircle,
   XCircle,
-  Phone,
+  Clock,
+  Users,
+  UserCheck,
+  UserX,
   Mail,
+  Phone,
   MapPin,
+  Calendar,
   Briefcase,
   Star,
-  Award,
-  FileText,
-  Calendar,
-  Wallet,
-  AlertCircle,
   ChevronLeft,
   ChevronRight,
   Download,
-  User,
-  Home,
-  File,
-  Image,
-  FileImage
+  Shield,
+  FileText,
+  Banknote,
+  Wallet,
+  TrendingUp,
+  AlertCircle
 } from 'lucide-react';
+import { toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
-const ProviderList = () => {
-  const { API, isAdmin } = useAuth();
+const AdminProviders = () => {
+  const API = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api';
+  const token = localStorage.getItem("adminToken") || localStorage.getItem("token");
+
+  // State management
   const [providers, setProviders] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  const [filteredProviders, setFilteredProviders] = useState([]);
   const [selectedProvider, setSelectedProvider] = useState(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [documents, setDocuments] = useState({
-    profilePic: null,
-    resume: null,
-    passbook: null
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('approved'); // Default to approved
+  const [serviceFilter, setServiceFilter] = useState('all');
+  const [ratingFilter, setRatingFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+  const [loading, setLoading] = useState(false);
+  const [stats, setStats] = useState({
+    total: 0,
+    approved: 0,
+    pending: 0,
+    rejected: 0,
+    active: 0
   });
-  const [loadingDocuments, setLoadingDocuments] = useState(false);
 
+  // Check admin access
+  useEffect(() => {
+    fetchProviders();
+  }, []);
+
+  // Filter and search providers
+  useEffect(() => {
+    let filtered = [...providers];
+
+    // Apply status filter - default to approved only
+    if (statusFilter === 'approved') {
+      filtered = filtered.filter(provider => provider.approved);
+    } else if (statusFilter === 'pending') {
+      filtered = filtered.filter(provider => !provider.approved && provider.kycStatus === 'pending');
+    } else if (statusFilter === 'rejected') {
+      filtered = filtered.filter(provider => provider.kycStatus === 'rejected');
+    } else if (statusFilter === 'active') {
+      filtered = filtered.filter(provider => provider.isActive);
+    }
+    // If statusFilter is 'all', show all providers
+
+    // Apply search filter
+    if (searchTerm) {
+      filtered = filtered.filter(provider =>
+        provider.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        provider.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        provider.phone?.includes(searchTerm)
+      );
+    }
+
+    // Apply service filter
+    if (serviceFilter !== 'all') {
+      filtered = filtered.filter(provider => 
+        provider.services && provider.services.includes(serviceFilter)
+      );
+    }
+
+    // Apply rating filter
+    if (ratingFilter !== 'all') {
+      const minRating = parseInt(ratingFilter);
+      filtered = filtered.filter(provider => 
+        provider.averageRating >= minRating && provider.averageRating < minRating + 1
+      );
+    }
+
+    setFilteredProviders(filtered);
+  }, [providers, searchTerm, statusFilter, serviceFilter, ratingFilter]);
+
+  // Calculate stats whenever providers change
+  useEffect(() => {
+    const newStats = {
+      total: providers.length,
+      approved: providers.filter(p => p.approved).length,
+      pending: providers.filter(p => !p.approved && p.kycStatus === 'pending').length,
+      rejected: providers.filter(p => p.kycStatus === 'rejected').length,
+      active: providers.filter(p => p.isActive).length
+    };
+    setStats(newStats);
+  }, [providers]);
+
+  // Fetch all providers
   const fetchProviders = async () => {
     try {
-      const response = await fetch(
-        `${API}/admin/providers?status=approved&page=${page}&search=${searchTerm}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        }
-      );
-
-      // Add this debug log
-      const data = await response.json();
-      console.log("API Response:", data);
-
-      if (data.success) {
-        setProviders(data.providers || []);
-        setTotalPages(data.pages || 1);
-      }
-    } catch (error) {
-      console.error('Error fetching providers:', error);
-    }
-  };
-
-  const fetchProviderDetails = async (providerId) => {
-    try {
-      const response = await fetch(`${API}/admin/providers/${providerId}`, {
+      setLoading(true);
+      const response = await fetch(`${API}/admin/providers`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         }
       });
 
-      const data = await response.json();
-      if (data.success) {
-        setSelectedProvider(data.provider || data.data?.provider);
-        fetchProviderDocuments(providerId);
-        setDialogOpen(true);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch providers: ${response.status}`);
       }
-    } catch (error) {
-      console.error('Error fetching provider details:', error);
-    }
-  };
 
-  const fetchProviderDocuments = async (providerId) => {
-    setLoadingDocuments(true);
-    try {
-      // Fetch all document URLs in parallel
-      const [profilePicUrl, resumeUrl, passbookUrl] = await Promise.all([
-        fetchDocument(providerId, 'profile'),
-        fetchDocument(providerId, 'resume'),
-        fetchDocument(providerId, 'passbook')
-      ]);
-
-      setDocuments({
-        profilePic: profilePicUrl,
-        resume: resumeUrl,
-        passbook: passbookUrl
-      });
+      const data = await response.json();
+      setProviders(data.providers || []);
     } catch (error) {
-      console.error('Error fetching documents:', error);
+      console.error('Fetch providers error:', error);
+      toast.error(error.message || 'Failed to fetch providers');
     } finally {
-      setLoadingDocuments(false);
+      setLoading(false);
     }
   };
 
-  const fetchDocument = async (providerId, type) => {
-    try {
-      const response = await fetch(`${API}/admin/providers/${providerId}/documents/${type}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      if (response.ok) {
-        // For images, we can use the URL directly
-        if (type === 'profile' || type === 'passbook') {
-          const blob = await response.blob();
-          return URL.createObjectURL(blob);
-        }
-        // For PDFs, we can download them
-        if (type === 'resume') {
-          const blob = await response.blob();
-          return URL.createObjectURL(blob);
-        }
-      }
-      return null;
-    } catch (error) {
-      console.error(`Error fetching ${type} document:`, error);
-      return null;
-    }
+  // Handle view click
+  const handleViewClick = (provider) => {
+    setSelectedProvider(provider);
+    setShowViewModal(true);
   };
 
-  const handleViewDetails = (provider) => {
-    if (provider._id) {
-      fetchProviderDetails(provider._id);
-    } else {
-      setSelectedProvider(provider);
-      setDialogOpen(true);
-    }
-  };
-
-  const handlePageChange = (newPage) => {
-    setPage(newPage);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleSearch = (e) => {
-    if (e.key === 'Enter') {
-      setPage(1);
-      fetchProviders();
-    }
-  };
-
+  // Format date
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
-    const options = { year: 'numeric', month: 'short', day: 'numeric' };
-    return new Date(dateString).toLocaleDateString('en-US', options);
+    return new Date(dateString).toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
   };
 
-  const getDocumentIcon = (type) => {
-    switch (type) {
-      case 'profile':
-        return <Image className="w-4 h-4 mr-2" />;
-      case 'resume':
-        return <File className="w-4 h-4 mr-2" />;
-      case 'passbook':
-        return <FileImage className="w-4 h-4 mr-2" />;
-      default:
-        return <File className="w-4 h-4 mr-2" />;
+  // Format address
+  const formatAddress = (address) => {
+    if (!address) return 'N/A';
+    const { street, city, state, postalCode, country } = address;
+    return [street, city, state, postalCode, country].filter(Boolean).join(', ');
+  };
+
+  // Get service badges
+  const getServiceBadges = (services) => {
+    if (!services || services.length === 0) return null;
+    
+    return services.map(service => (
+      <span
+        key={service}
+        className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-800 mr-1 mb-1"
+      >
+        {service}
+      </span>
+    ));
+  };
+
+  // Get status badge
+  const getStatusBadge = (provider) => {
+    if (provider.kycStatus === 'rejected') {
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+          <XCircle className="w-3 h-3 mr-1" />
+          Rejected
+        </span>
+      );
     }
-  };
-
-  const getDocumentName = (type) => {
-    switch (type) {
-      case 'profile':
-        return 'Profile Picture';
-      case 'resume':
-        return 'Resume/CV';
-      case 'passbook':
-        return 'Bank Passbook';
-      default:
-        return type;
+    
+    if (provider.approved) {
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+          <CheckCircle className="w-3 h-3 mr-1" />
+          Approved
+        </span>
+      );
     }
-  };
-
-  if (!isAdmin) {
+    
+    if (provider.kycStatus === 'pending') {
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+          <Clock className="w-3 h-3 mr-1" />
+          Pending
+        </span>
+      );
+    }
+    
     return (
-      <div className="flex items-center justify-center min-h-[80vh]">
-        <div className="max-w-md p-8 bg-white rounded-xl shadow-lg border border-blue-100 text-center">
-          <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <AlertCircle className="w-12 h-12 text-red-600" />
-          </div>
-          <h2 className="text-2xl font-bold text-blue-900 mb-3">Access Restricted</h2>
-          <p className="text-gray-600 mb-6">
-            Administrator privileges required to view this content
-          </p>
-          <button className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-900 transition-colors">
-            Return to Dashboard
-          </button>
-        </div>
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+        <UserX className="w-3 h-3 mr-1" />
+        Inactive
+      </span>
+    );
+  };
+
+  // Get rating stars
+  const getRatingStars = (rating) => {
+    if (!rating || rating === 0) return 'No ratings yet';
+    
+    const fullStars = Math.floor(rating);
+    const hasHalfStar = rating % 1 >= 0.5;
+    
+    return (
+      <div className="flex items-center">
+        {[...Array(5)].map((_, i) => (
+          <Star
+            key={i}
+            className={`w-4 h-4 ${i < fullStars ? 'text-yellow-400 fill-yellow-400' : (i === fullStars && hasHalfStar ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300')}`}
+          />
+        ))}
+        <span className="ml-1 text-sm text-gray-600">({rating.toFixed(1)})</span>
       </div>
     );
-  }
+  };
+
+  // Pagination
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentProviders = filteredProviders.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredProviders.length / itemsPerPage);
 
   return (
-    <div className="p-4 md:p-8 bg-blue-50 min-h-screen">
-      {/* Header Card */}
-      <div className="bg-gradient-to-r from-blue-900 to-indigo-900 rounded-xl shadow-lg p-6 mb-8 text-white">
-        <div className="mb-6">
-          <h1 className="text-2xl md:text-3xl font-bold mb-2">Approved Service Providers</h1>
-          <p className="text-blue-200">Manage and view all approved service providers</p>
-        </div>
-
-        <div className="relative flex-1 w-full max-w-2xl">
-          <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-blue-200 w-5 h-5" />
-          <input
-            type="text"
-            placeholder="Search providers by name, email, or service..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            onKeyDown={handleSearch}
-            className="w-full pl-12 pr-4 py-2 md:py-3 bg-blue-800 bg-opacity-30 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-blue-200 text-sm md:text-base"
-          />
-        </div>
-      </div>
-
-      {/* Providers Table */}
-      <div className="bg-white rounded-xl shadow-lg border border-blue-100 overflow-hidden mb-8">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white">
-                <th className="py-3 px-4 md:px-6 text-left font-bold text-sm md:text-base">Provider</th>
-                <th className="py-3 px-2 md:px-4 text-left font-bold text-sm md:text-base hidden sm:table-cell">Contact</th>
-                <th className="py-3 px-2 md:px-4 text-left font-bold text-sm md:text-base">Service</th>
-                <th className="py-3 px-2 md:px-4 text-left font-bold text-sm md:text-base hidden md:table-cell">Area</th>
-                <th className="py-3 px-2 md:px-4 text-left font-bold text-sm md:text-base hidden lg:table-cell">Experience</th>
-                <th className="py-3 px-2 md:px-4 text-left font-bold text-sm md:text-base hidden lg:table-cell">Performance</th>
-                <th className="py-3 px-4 md:px-6 text-left font-bold text-sm md:text-base">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {providers.length > 0 ? (
-                providers.map((provider) => (
-                  <tr
-                    key={provider._id}
-                    className="hover:bg-blue-50 transition-colors border-b border-blue-100 last:border-0"
-                  >
-                    <td className="py-3 px-4 md:px-6">
-                      <div className="flex items-center">
-                        <div className="w-10 h-10 md:w-14 md:h-14 bg-blue-100 rounded-full flex items-center justify-center mr-3 md:mr-4 border-2 border-blue-200">
-                          <User className="w-4 h-4 md:w-6 md:h-6 text-blue-600" />
-                        </div>
-                        <div>
-                          <p className="font-bold text-blue-900 text-sm md:text-base">{provider.name}</p>
-                          <div className="flex gap-1 md:gap-2 mt-1">
-                            <span className={`px-1.5 py-0.5 md:px-2 md:py-1 rounded-full text-xs font-medium ${provider.approved ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                              }`}>
-                              {provider.approved ? 'Approved' : 'Pending'}
-                            </span>
-                            {provider.testPassed && (
-                              <span className="px-1.5 py-0.5 md:px-2 md:py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
-                                Test Passed
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="py-3 px-2 md:px-4 hidden sm:table-cell">
-                      <div>
-                        <div className="flex items-center text-gray-600 mb-1">
-                          <Mail className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2 text-blue-600" />
-                          <span className="text-xs md:text-sm truncate max-w-[120px] md:max-w-none">{provider.email}</span>
-                        </div>
-                        <div className="flex items-center text-gray-600">
-                          <Phone className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2 text-blue-600" />
-                          <span className="text-xs md:text-sm">{provider.phone}</span>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="py-3 px-2 md:px-4">
-                      <p className="font-medium text-blue-900 text-sm md:text-base truncate max-w-[100px] md:max-w-none">
-                        {provider.services}
-                      </p>
-                    </td>
-                    <td className="py-3 px-2 md:px-4 hidden md:table-cell">
-                      <div className="flex items-center text-gray-600">
-                        <MapPin className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2 text-blue-600" />
-                        <span className="text-xs md:text-sm">{provider.serviceArea}</span>
-                      </div>
-                    </td>
-                    <td className="py-3 px-2 md:px-4 hidden lg:table-cell">
-                      <div className="flex items-center">
-                        <Briefcase className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2 text-blue-600" />
-                        <span className="font-medium text-blue-900 text-sm md:text-base">
-                          {provider.experience} years
-                        </span>
-                      </div>
-                    </td>
-                    <td className="py-3 px-2 md:px-4 hidden lg:table-cell">
-                      <div>
-                        <p className="text-green-600 font-medium text-sm md:text-base">
-                          {provider.completedBookings || 0} completed
-                        </p>
-                        {provider.rating && (
-                          <div className="flex items-center mt-1">
-                            <Star className="w-3 h-3 md:w-4 md:h-4 text-yellow-500 mr-0.5 md:mr-1" />
-                            <span className="font-medium text-xs md:text-sm">{provider.rating}/5</span>
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 md:px-6">
-                      <button
-                        onClick={() => handleViewDetails(provider)}
-                        className="p-1.5 md:p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
-                        aria-label="View details"
-                      >
-                        <Eye className="w-4 h-4 md:w-5 md:h-5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={7} className="py-12 text-center">
-                    <div className="w-20 h-20 md:w-24 md:h-24 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 md:mb-6">
-                      <Search className="w-6 h-6 md:w-8 md:h-8 text-blue-600" />
-                    </div>
-                    <h3 className="text-lg md:text-xl font-bold text-blue-900 mb-2">No Providers Found</h3>
-                    <p className="text-gray-600 text-sm md:text-base mb-4 md:mb-6">
-                      {searchTerm ? 'Try adjusting your search terms' : 'No approved providers available'}
-                    </p>
-                    <button
-                      onClick={() => {
-                        setSearchTerm('');
-                        setPage(1);
-                        fetchProviders();
-                      }}
-                      className="px-4 py-1.5 md:px-6 md:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-900 transition-colors text-sm md:text-base"
-                    >
-                      Reset Search
-                    </button>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Pagination */}
-      {providers.length > 0 && (
-        <div className="flex justify-center mt-6 md:mt-8">
-          <div className="flex items-center gap-1 md:gap-2">
-            <button
-              onClick={() => handlePageChange(page - 1)}
-              disabled={page === 1}
-              className="p-1.5 md:p-2 bg-white border border-blue-200 text-blue-600 rounded-lg hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              aria-label="Previous page"
-            >
-              <ChevronLeft className="w-4 h-4 md:w-5 md:h-5" />
-            </button>
-
-            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-              const pageNum = page <= 3 ? i + 1 :
-                page >= totalPages - 2 ? totalPages - 4 + i :
-                  page - 2 + i;
-              return pageNum > 0 && pageNum <= totalPages && (
-                <button
-                  key={pageNum}
-                  onClick={() => handlePageChange(pageNum)}
-                  className={`w-8 h-8 md:w-10 md:h-10 rounded-lg transition-colors text-sm md:text-base ${page === pageNum
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-white border border-blue-200 text-blue-600 hover:bg-blue-50'
-                    }`}
-                >
-                  {pageNum}
-                </button>
-              );
-            })}
-
-            <button
-              onClick={() => handlePageChange(page + 1)}
-              disabled={page === totalPages}
-              className="p-1.5 md:p-2 bg-white border border-blue-200 text-blue-600 rounded-lg hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              aria-label="Next page"
-            >
-              <ChevronRight className="w-4 h-4 md:w-5 md:h-5" />
-            </button>
+    <div className="min-h-screen p-4 md:p-6">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-secondary">Providers Management</h1>
+            <p className="text-gray-600 mt-1">Manage service providers and their accounts</p>
           </div>
         </div>
-      )}
 
-      {/* Provider Details Dialog */}
-      {selectedProvider && (
-        <div className={`fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 ${dialogOpen ? 'block' : 'hidden'}`}>
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            {/* Dialog Header */}
-            <div className="bg-gradient-to-r from-blue-900 to-indigo-900 p-4 md:p-6 text-white rounded-t-xl">
-              <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-                <div className="flex items-center">
-                  <div className="w-16 h-16 md:w-20 md:h-20 bg-white rounded-full flex items-center justify-center mr-4 md:mr-6 border-4 border-yellow-400">
-                    {documents.profilePic ? (
-                      <img
-                        src={documents.profilePic}
-                        alt="Profile"
-                        className="w-full h-full rounded-full object-cover"
-                      />
-                    ) : (
-                      <User className="w-6 h-6 md:w-8 md:h-8 text-blue-600" />
+        {/* Stats Cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6 mb-6 md:mb-8">
+          <div className="bg-white rounded-xl shadow-md p-4 md:p-6 border-l-4 border-primary">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Total Providers</p>
+                <p className="text-2xl md:text-3xl font-bold text-secondary">{stats.total}</p>
+              </div>
+              <div className="p-2 md:p-3 bg-teal-100 rounded-full">
+                <Users className="w-5 h-5 md:w-6 md:h-6 text-primary" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-md p-4 md:p-6 border-l-4 border-green-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Approved</p>
+                <p className="text-2xl md:text-3xl font-bold text-secondary">{stats.approved}</p>
+              </div>
+              <div className="p-2 md:p-3 bg-green-100 rounded-full">
+                <UserCheck className="w-5 h-5 md:w-6 md:h-6 text-green-600" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-md p-4 md:p-6 border-l-4 border-yellow-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Pending</p>
+                <p className="text-2xl md:text-3xl font-bold text-secondary">{stats.pending}</p>
+              </div>
+              <div className="p-2 md:p-3 bg-yellow-100 rounded-full">
+                <Clock className="w-5 h-5 md:w-6 md:h-6 text-yellow-600" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-md p-4 md:p-6 border-l-4 border-red-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Rejected</p>
+                <p className="text-2xl md:text-3xl font-bold text-secondary">{stats.rejected}</p>
+              </div>
+              <div className="p-2 md:p-3 bg-red-100 rounded-full">
+                <UserX className="w-5 h-5 md:w-6 md:h-6 text-red-600" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-md p-4 md:p-6 border-l-4 border-blue-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Active</p>
+                <p className="text-2xl md:text-3xl font-bold text-secondary">{stats.active}</p>
+              </div>
+              <div className="p-2 md:p-3 bg-blue-100 rounded-full">
+                <TrendingUp className="w-5 h-5 md:w-6 md:h-6 text-blue-600" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Filters and Search */}
+        <div className="bg-white rounded-xl shadow-md p-4 md:p-6 mb-6 md:mb-8">
+          <div className="flex flex-col md:flex-row gap-3 md:gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 md:w-5 md:h-5" />
+                <input
+                  type="text"
+                  placeholder="Search providers by name, email or phone..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2 md:gap-3">
+              <Filter className="text-gray-400 w-4 h-4 md:w-5 md:h-5" />
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+              >
+                <option value="approved">Approved</option>
+                <option value="all">All Providers</option>
+                <option value="pending">Pending</option>
+                <option value="rejected">Rejected</option>
+                <option value="active">Active</option>
+              </select>
+              <select
+                value={serviceFilter}
+                onChange={(e) => setServiceFilter(e.target.value)}
+                className="px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+              >
+                <option value="all">All Services</option>
+                <option value="Electrical">Electrical</option>
+                <option value="AC">AC</option>
+                <option value="Appliance Repair">Appliance Repair</option>
+                <option value="Other">Other</option>
+              </select>
+              <select
+                value={ratingFilter}
+                onChange={(e) => setRatingFilter(e.target.value)}
+                className="px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+              >
+                <option value="all">All Ratings</option>
+                <option value="5">5 Stars</option>
+                <option value="4">4+ Stars</option>
+                <option value="3">3+ Stars</option>
+                <option value="2">2+ Stars</option>
+                <option value="1">1+ Stars</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Loading State */}
+        {loading && (
+          <div className="bg-white rounded-xl shadow-md p-8 mb-6 text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+            <p className="mt-4 text-gray-600">Loading providers...</p>
+          </div>
+        )}
+
+        {/* Providers Table */}
+        {!loading && (
+          <div className="bg-white rounded-xl shadow-md overflow-hidden">
+            {currentProviders.length === 0 ? (
+              <div className="text-center py-12 md:py-16">
+                <Users className="w-12 h-12 md:w-16 md:h-16 text-gray-400 mx-auto mb-3 md:mb-4" />
+                <p className="text-gray-600 text-md md:text-lg">No providers found</p>
+                <p className="text-gray-400 text-sm mt-1 md:mt-2">
+                  {searchTerm || statusFilter !== 'approved' || serviceFilter !== 'all' || ratingFilter !== 'all'
+                    ? 'Try adjusting your search or filters'
+                    : 'No approved providers found'
+                  }
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Provider</th>
+                        <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
+                        <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Services</th>
+                        <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Experience</th>
+                        <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bookings</th>
+                        <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rating</th>
+                        <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {currentProviders.map((provider) => (
+                        <tr key={provider._id} className="hover:bg-gray-50 transition-colors duration-200">
+                          <td className="px-4 md:px-6 py-4">
+                            <div className="flex items-center">
+                              <div className="flex-shrink-0 h-10 w-10">
+                                <img
+                                  className="h-10 w-10 rounded-full object-cover"
+                                  src={provider.profilePicUrl || '/default-avatar.png'}
+                                  alt={provider.name}
+                                  onError={(e) => {
+                                    e.target.src = '/default-avatar.png';
+                                  }}
+                                />
+                              </div>
+                              <div className="ml-4">
+                                <div className="text-sm font-medium text-secondary">{provider.name}</div>
+                                <div className="text-sm text-gray-500">
+                                  Joined {formatDate(provider.registrationDate || provider.createdAt)}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 md:px-6 py-4">
+                            <div className="text-sm text-gray-900">{provider.email}</div>
+                            <div className="text-sm text-gray-500">{provider.phone}</div>
+                          </td>
+                          <td className="px-4 md:px-6 py-4">
+                            <div className="flex flex-wrap">
+                              {getServiceBadges(provider.services)}
+                            </div>
+                          </td>
+                          <td className="px-4 md:px-6 py-4 whitespace-nowrap">
+                            <span className="text-sm text-gray-600">
+                              {provider.experience || 0} {provider.experience === 1 ? 'year' : 'years'}
+                            </span>
+                          </td>
+                          <td className="px-4 md:px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">
+                              {provider.completedBookings || 0} completed
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              {provider.canceledBookings || 0} canceled
+                            </div>
+                          </td>
+                          <td className="px-4 md:px-6 py-4 whitespace-nowrap">
+                            {getRatingStars(provider.averageRating)}
+                          </td>
+                          <td className="px-4 md:px-6 py-4 whitespace-nowrap">
+                            {getStatusBadge(provider)}
+                          </td>
+                          <td className="px-4 md:px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center space-x-2">
+                              <button
+                                onClick={() => handleViewClick(provider)}
+                                className="text-primary hover:text-teal-800 p-1 rounded transition-colors duration-200"
+                                title="View Details"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="px-4 md:px-6 py-4 border-t border-gray-200 flex flex-col md:flex-row items-center justify-between bg-gray-50 gap-3">
+                    <div className="text-sm text-gray-600">
+                      Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredProviders.length)} of {filteredProviders.length} results
+                    </div>
+                    <div className="flex items-center space-x-1 md:space-x-2">
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={currentPage === 1}
+                        className="px-2 py-1 md:px-3 md:py-2 text-sm text-gray-600 hover:text-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Previous
+                      </button>
+                      {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                        const page = i + 1;
+                        return (
+                          <button
+                            key={page}
+                            onClick={() => setCurrentPage(page)}
+                            className={`px-2 py-1 md:px-3 md:py-2 text-sm rounded-lg ${currentPage === page
+                              ? 'bg-primary text-white'
+                              : 'text-gray-600 hover:text-primary hover:bg-gray-100'
+                              }`}
+                          >
+                            {page}
+                          </button>
+                        );
+                      })}
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                        disabled={currentPage === totalPages}
+                        className="px-2 py-1 md:px-3 md:py-2 text-sm text-gray-600 hover:text-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* View Provider Modal */}
+        {showViewModal && selectedProvider && (
+          <Modal
+            isOpen={showViewModal}
+            onClose={() => setShowViewModal(false)}
+            title="Provider Details"
+            size="xlarge"
+          >
+            <div className="space-y-6">
+              {/* Header Section */}
+              <div className="bg-gradient-to-br from-teal-50 to-teal-100 p-6 rounded-xl border border-teal-200">
+                <div className="flex flex-col md:flex-row items-start gap-6">
+                  <div className="flex-shrink-0">
+                    <img
+                      className="h-24 w-24 rounded-full object-cover border-4 border-white shadow-md"
+                      src={selectedProvider.profilePicUrl || '/default-avatar.png'}
+                      alt={selectedProvider.name}
+                      onError={(e) => {
+                        e.target.src = '/default-avatar.png';
+                      }}
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                      <div>
+                        <h3 className="text-2xl md:text-3xl font-bold text-secondary">{selectedProvider.name}</h3>
+                        <div className="flex items-center mt-2">
+                          {getStatusBadge(selectedProvider)}
+                          {selectedProvider.averageRating > 0 && (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 ml-2">
+                              <Star className="w-3 h-3 mr-1 fill-yellow-400" />
+                              {selectedProvider.averageRating.toFixed(1)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm text-gray-600">Member since</p>
+                        <p className="font-medium text-gray-900">{formatDate(selectedProvider.registrationDate || selectedProvider.createdAt)}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Stats Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                  <div className="flex items-center mb-2">
+                    <Briefcase className="w-5 h-5 text-gray-600 mr-2" />
+                    <span className="text-sm font-medium text-gray-700">Experience</span>
+                  </div>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {selectedProvider.experience || 0} years
+                  </p>
+                </div>
+
+                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                  <div className="flex items-center mb-2">
+                    <CheckCircle className="w-5 h-5 text-gray-600 mr-2" />
+                    <span className="text-sm font-medium text-gray-700">Completed Jobs</span>
+                  </div>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {selectedProvider.completedBookings || 0}
+                  </p>
+                </div>
+
+                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                  <div className="flex items-center mb-2">
+                    <XCircle className="w-5 h-5 text-gray-600 mr-2" />
+                    <span className="text-sm font-medium text-gray-700">Canceled Jobs</span>
+                  </div>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {selectedProvider.canceledBookings || 0}
+                  </p>
+                </div>
+
+                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                  <div className="flex items-center mb-2">
+                    <Star className="w-5 h-5 text-gray-600 mr-2" />
+                    <span className="text-sm font-medium text-gray-700">Rating</span>
+                  </div>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {selectedProvider.averageRating > 0 ? selectedProvider.averageRating.toFixed(1) : 'No ratings yet'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Contact Information */}
+              <div className="bg-white p-5 rounded-xl border border-gray-200">
+                <h4 className="text-lg font-semibold text-secondary mb-4">Contact Information</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex items-center">
+                    <Mail className="w-5 h-5 text-gray-600 mr-3" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-700">Email</p>
+                      <p className="text-sm text-gray-900">{selectedProvider.email}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center">
+                    <Phone className="w-5 h-5 text-gray-600 mr-3" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-700">Phone</p>
+                      <p className="text-sm text-gray-900">{selectedProvider.phone || 'N/A'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center">
+                    <MapPin className="w-5 h-5 text-gray-600 mr-3" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-700">Address</p>
+                      <p className="text-sm text-gray-900">{formatAddress(selectedProvider.address)}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center">
+                    <Calendar className="w-5 h-5 text-gray-600 mr-3" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-700">Date of Birth</p>
+                      <p className="text-sm text-gray-900">{formatDate(selectedProvider.dateOfBirth)}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Professional Information */}
+              <div className="bg-white p-5 rounded-xl border border-gray-200">
+                <h4 className="text-lg font-semibold text-secondary mb-4">Professional Information</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 mb-2">Services Offered</p>
+                    <div className="flex flex-wrap gap-2">
+                      {getServiceBadges(selectedProvider.services)}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 mb-2">Service Area</p>
+                    <p className="text-sm text-gray-900">{selectedProvider.serviceArea || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 mb-2">KYC Status</p>
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      selectedProvider.kycStatus === 'approved' 
+                        ? 'bg-green-100 text-green-800' 
+                        : selectedProvider.kycStatus === 'pending'
+                        ? 'bg-yellow-100 text-yellow-800'
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      {selectedProvider.kycStatus?.charAt(0).toUpperCase() + selectedProvider.kycStatus?.slice(1) || 'N/A'}
+                    </span>
+                    {selectedProvider.rejectionReason && (
+                      <p className="text-sm text-red-600 mt-1">
+                        Reason: {selectedProvider.rejectionReason}
+                      </p>
                     )}
                   </div>
                   <div>
-                    <h2 className="text-xl md:text-2xl font-bold flex items-center">
-                      {selectedProvider.name}
-                      {selectedProvider.testPassed && (
-                        <Award className="w-5 h-5 md:w-6 md:h-6 ml-2 text-yellow-400" />
-                      )}
-                    </h2>
-                    <p className="text-blue-200 mt-1 text-sm md:text-base">
-                      {selectedProvider.services} • {selectedProvider.serviceArea}
-                    </p>
-                    <div className="flex flex-wrap gap-1 md:gap-2 mt-2">
-                      <span className={`px-2 py-0.5 md:px-3 md:py-1 rounded-full text-xs md:text-sm font-medium ${selectedProvider.approved ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                        }`}>
-                        {selectedProvider.approved ? 'Approved' : 'Pending'}
+                    <p className="text-sm font-medium text-gray-700 mb-2">Test Status</p>
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      selectedProvider.testPassed 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {selectedProvider.testPassed ? 'Passed' : 'Not Passed'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bank Details */}
+              {selectedProvider.bankDetails && (
+                <div className="bg-white p-5 rounded-xl border border-gray-200">
+                  <h4 className="text-lg font-semibold text-secondary mb-4">Bank Details</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-gray-700">Account Name</p>
+                      <p className="text-sm text-gray-900">{selectedProvider.bankDetails.accountName || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-700">Account Number</p>
+                      <p className="text-sm text-gray-900 font-mono">{selectedProvider.bankDetails.accountNo || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-700">Bank Name</p>
+                      <p className="text-sm text-gray-900">{selectedProvider.bankDetails.bankName || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-700">IFSC Code</p>
+                      <p className="text-sm text-gray-900 font-mono">{selectedProvider.bankDetails.ifsc || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-700">Verification Status</p>
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        selectedProvider.bankDetails.verified 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {selectedProvider.bankDetails.verified ? 'Verified' : 'Pending Verification'}
                       </span>
-                      {selectedProvider.testPassed && (
-                        <span className="px-2 py-0.5 md:px-3 md:py-1 bg-blue-100 text-blue-800 rounded-full text-xs md:text-sm font-medium">
-                          Test Passed
-                        </span>
-                      )}
-                      {selectedProvider.rating >= 4.5 && (
-                        <span className="px-2 py-0.5 md:px-3 md:py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs md:text-sm font-medium flex items-center">
-                          <Star className="w-3 h-3 md:w-4 md:h-4 mr-1 text-yellow-600" />
-                          Top Rated
-                        </span>
-                      )}
                     </div>
                   </div>
                 </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
                 <button
-                  onClick={() => {
-                    setDialogOpen(false);
-                    // Clean up object URLs when dialog closes
-                    Object.values(documents).forEach(url => {
-                      if (url) URL.revokeObjectURL(url);
-                    });
-                    setDocuments({
-                      profilePic: null,
-                      resume: null,
-                      passbook: null
-                    });
-                  }}
-                  className="p-1 md:p-2 text-blue-200 hover:text-white self-start md:self-center"
-                  aria-label="Close dialog"
+                  onClick={() => setShowViewModal(false)}
+                  className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200"
                 >
-                  <XCircle className="w-5 h-5 md:w-6 md:h-6" />
+                  Close
                 </button>
               </div>
             </div>
-
-            {/* Dialog Content */}
-            <div className="p-4 md:p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                {/* Contact Information */}
-                <div className="bg-blue-50 p-3 md:p-4 rounded-xl border border-blue-100">
-                  <div className="flex items-center mb-3 md:mb-4">
-                    <Mail className="w-5 h-5 md:w-6 md:h-6 text-blue-900 mr-2 md:mr-3" />
-                    <h3 className="text-base md:text-lg font-bold text-blue-900">Contact Information</h3>
-                  </div>
-                  <div className="space-y-3 md:space-y-4">
-                    <div>
-                      <p className="text-xs md:text-sm text-gray-600 flex items-center">
-                        <Mail className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2 text-blue-600" />
-                        Email
-                      </p>
-                      <p className="font-medium text-blue-900 mt-1 text-sm md:text-base">
-                        {selectedProvider.email}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs md:text-sm text-gray-600 flex items-center">
-                        <Phone className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2 text-blue-600" />
-                        Phone
-                      </p>
-                      <p className="font-medium text-blue-900 mt-1 text-sm md:text-base">
-                        {selectedProvider.phone || 'Not provided'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs md:text-sm text-gray-600 flex items-center">
-                        <Home className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2 text-blue-600" />
-                        Address
-                      </p>
-                      <div className="font-medium text-blue-900 mt-1 text-sm md:text-base">
-                        {selectedProvider.address ? (
-                          <div>
-                            <p>{selectedProvider.address.street}</p>
-                            <p>{selectedProvider.address.city}, {selectedProvider.address.state}</p>
-                            <p>{selectedProvider.address.postalCode}, {selectedProvider.address.country || 'India'}</p>
-                          </div>
-                        ) : (
-                          'Not specified'
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Professional Details */}
-                <div className="bg-blue-50 p-3 md:p-4 rounded-xl border border-blue-100">
-                  <div className="flex items-center mb-3 md:mb-4">
-                    <Briefcase className="w-5 h-5 md:w-6 md:h-6 text-blue-900 mr-2 md:mr-3" />
-                    <h3 className="text-base md:text-lg font-bold text-blue-900">Professional Details</h3>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 md:gap-4">
-                    <div>
-                      <p className="text-xs md:text-sm text-gray-600">Experience</p>
-                      <p className="font-bold text-blue-900 mt-1 text-sm md:text-base">
-                        {selectedProvider.experience || '0'} years
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs md:text-sm text-gray-600">Service Area</p>
-                      <p className="font-bold text-blue-900 mt-1 text-sm md:text-base">
-                        {selectedProvider.serviceArea || 'Not specified'}
-                      </p>
-                    </div>
-                    <div className="col-span-2">
-                      <p className="text-xs md:text-sm text-gray-600">Services</p>
-                      <p className="font-bold text-blue-900 mt-1 text-sm md:text-base">
-                        {selectedProvider.services || 'Not specified'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs md:text-sm text-gray-600">Rating</p>
-                      <div className="flex items-center mt-1">
-                        <Star className="w-3 h-3 md:w-4 md:h-4 text-yellow-500 mr-1" />
-                        <span className="font-bold text-blue-900 text-sm md:text-base">
-                          {selectedProvider.rating || 'No rating yet'}
-                        </span>
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-xs md:text-sm text-gray-600">Wallet Balance</p>
-                      <div className="flex items-center mt-1">
-                        <Wallet className="w-3 h-3 md:w-4 md:h-4 text-green-600 mr-1" />
-                        <span className="font-bold text-green-600 text-sm md:text-base">
-                          ₹{selectedProvider.wallet || 0}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Statistics */}
-                <div className="col-span-2 bg-blue-50 p-3 md:p-4 rounded-xl border border-blue-100">
-                  <div className="flex items-center mb-3 md:mb-4">
-                    <Star className="w-5 h-5 md:w-6 md:h-6 text-blue-900 mr-2 md:mr-3" />
-                    <h3 className="text-base md:text-lg font-bold text-blue-900">Performance Statistics</h3>
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-                    <div className="bg-blue-600 p-3 md:p-4 rounded-lg text-white text-center">
-                      <p className="text-xl md:text-2xl font-bold">
-                        ₹{selectedProvider.totalEarnings || 0}
-                      </p>
-                      <p className="text-xs md:text-sm opacity-90 mt-1">Total Earnings</p>
-                    </div>
-                    <div className="bg-green-600 p-3 md:p-4 rounded-lg text-white text-center">
-                      <p className="text-xl md:text-2xl font-bold">
-                        {selectedProvider.completedBookings || 0}
-                      </p>
-                      <p className="text-xs md:text-sm opacity-90 mt-1">Completed Jobs</p>
-                    </div>
-                    <div className="bg-yellow-500 p-3 md:p-4 rounded-lg text-white text-center">
-                      <p className="text-xl md:text-2xl font-bold">
-                        {selectedProvider.totalBookings || 0}
-                      </p>
-                      <p className="text-xs md:text-sm opacity-90 mt-1">Total Bookings</p>
-                    </div>
-                    <div className="bg-indigo-900 p-3 md:p-4 rounded-lg text-white text-center">
-                      <p className="text-xl md:text-2xl font-bold">
-                        {selectedProvider.acceptanceRate || 0}%
-                      </p>
-                      <p className="text-xs md:text-sm opacity-90 mt-1">Acceptance Rate</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Additional Information */}
-                <div className="col-span-2 bg-blue-50 p-3 md:p-4 rounded-xl border border-blue-100">
-                  <div className="flex items-center mb-3 md:mb-4">
-                    <FileText className="w-5 h-5 md:w-6 md:h-6 text-blue-900 mr-2 md:mr-3" />
-                    <h3 className="text-base md:text-lg font-bold text-blue-900">Additional Information</h3>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-                    <div>
-                      <p className="text-xs md:text-sm text-gray-600">Registration Date</p>
-                      <div className="flex items-center mt-1">
-                        <Calendar className="w-3 h-3 md:w-4 md:h-4 text-blue-600 mr-1 md:mr-2" />
-                        <span className="font-medium text-blue-900 text-sm md:text-base">
-                          {formatDate(selectedProvider.createdAt)}
-                        </span>
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-xs md:text-sm text-gray-600">Last Updated</p>
-                      <div className="flex items-center mt-1">
-                        <Calendar className="w-3 h-3 md:w-4 md:h-4 text-blue-600 mr-1 md:mr-2" />
-                        <span className="font-medium text-blue-900 text-sm md:text-base">
-                          {formatDate(selectedProvider.updatedAt)}
-                        </span>
-                      </div>
-                    </div>
-                    {selectedProvider.description && (
-                      <div className="col-span-2">
-                        <p className="text-xs md:text-sm text-gray-600">Description</p>
-                        <p className="text-gray-600 mt-1 text-sm md:text-base">
-                          {selectedProvider.description}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Documents Section */}
-                <div className="col-span-2 bg-blue-50 p-3 md:p-4 rounded-xl border border-blue-100">
-                  <div className="flex items-center mb-3 md:mb-4">
-                    <Download className="w-5 h-5 md:w-6 md:h-6 text-blue-900 mr-2 md:mr-3" />
-                    <h3 className="text-base md:text-lg font-bold text-blue-900">Documents</h3>
-                  </div>
-                  {loadingDocuments ? (
-                    <div className="flex justify-center py-4">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
-                      {/* Profile Picture */}
-                      {documents.profilePic && (
-                        <div className="bg-white p-3 rounded-lg border border-blue-200">
-                          <div className="flex items-center mb-2">
-                            <Image className="w-4 h-4 mr-2 text-blue-600" />
-                            <span className="font-medium text-sm">Profile Picture</span>
-                          </div>
-                          <div className="aspect-square bg-gray-100 rounded-md overflow-hidden mb-2">
-                            <img
-                              src={documents.profilePic}
-                              alt="Profile"
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                          <button
-                            onClick={() => window.open(documents.profilePic, '_blank')}
-                            className="w-full py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm flex items-center justify-center"
-                          >
-                            <Download className="w-3 h-3 mr-1" />
-                            Download
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Resume */}
-                      {documents.resume && (
-                        <div className="bg-white p-3 rounded-lg border border-blue-200">
-                          <div className="flex items-center mb-2">
-                            <File className="w-4 h-4 mr-2 text-blue-600" />
-                            <span className="font-medium text-sm">Resume/CV</span>
-                          </div>
-                          <div className="aspect-[4/3] bg-gray-100 rounded-md flex items-center justify-center mb-2">
-                            <FileText className="w-8 h-8 text-gray-400" />
-                          </div>
-                          <button
-                            onClick={() => window.open(documents.resume, '_blank')}
-                            className="w-full py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm flex items-center justify-center"
-                          >
-                            <Download className="w-3 h-3 mr-1" />
-                            Download
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Passbook */}
-                      {documents.passbook && (
-                        <div className="bg-white p-3 rounded-lg border border-blue-200">
-                          <div className="flex items-center mb-2">
-                            <FileImage className="w-4 h-4 mr-2 text-blue-600" />
-                            <span className="font-medium text-sm">Bank Passbook</span>
-                          </div>
-                          <div className="aspect-[4/3] bg-gray-100 rounded-md flex items-center justify-center mb-2">
-                            <FileText className="w-8 h-8 text-gray-400" />
-                          </div>
-                          <button
-                            onClick={() => window.open(documents.passbook, '_blank')}
-                            className="w-full py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm flex items-center justify-center"
-                          >
-                            <Download className="w-3 h-3 mr-1" />
-                            Download
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Show message if no documents */}
-                      {!documents.profilePic && !documents.resume && !documents.passbook && (
-                        <div className="col-span-3 text-center py-4 text-gray-500">
-                          No documents available for this provider
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Dialog Footer */}
-            <div className="p-3 md:p-4 bg-blue-50 border-t border-blue-100 flex justify-end">
-              <button
-                onClick={() => {
-                  setDialogOpen(false);
-                  // Clean up object URLs when dialog closes
-                  Object.values(documents).forEach(url => {
-                    if (url) URL.revokeObjectURL(url);
-                  });
-                  setDocuments({
-                    profilePic: null,
-                    resume: null,
-                    passbook: null
-                  });
-                }}
-                className="px-4 py-1.5 md:px-6 md:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-900 transition-colors text-sm md:text-base"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </Modal>
+        )}
+      </div>
     </div>
   );
 };
 
-export default ProviderList;
+// Reusable Modal Component
+const Modal = ({ isOpen, onClose, title, children, size = 'medium' }) => {
+  if (!isOpen) return null;
+
+  const sizeClasses = {
+    medium: 'sm:max-w-lg',
+    large: 'sm:max-w-2xl',
+    xlarge: 'sm:max-w-4xl'
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+        <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+          <div className="absolute inset-0 bg-gray-500 opacity-75" onClick={onClose}></div>
+        </div>
+
+        <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+        <div className={`inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle ${sizeClasses[size]} sm:w-full`}>
+          <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+            <div className="sm:flex sm:items-start">
+              <div className="mt-3 text-center sm:mt-0 sm:text-left w-full">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg leading-6 font-medium text-secondary">{title}</h3>
+                  <button
+                    onClick={onClose}
+                    className="text-gray-400 hover:text-gray-600 transition-colors duration-200"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                {children}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default AdminProviders;

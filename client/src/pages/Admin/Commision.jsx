@@ -27,7 +27,6 @@ const AdminCommissionPage = () => {
   
   // Stats
   const [stats, setStats] = useState({
-    totalCommission: 0,
     totalProviders: 0,
     activeRules: 0,
     totalProcessedCommissions: 0,
@@ -423,19 +422,7 @@ const AdminCommissionPage = () => {
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-              <div className="flex items-center">
-                <div className="p-2 rounded-full bg-teal-100">
-                  <DollarSign className="w-5 h-5 text-primary" />
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm font-medium text-gray-600">Total Commission</p>
-                  <p className="text-lg font-bold text-secondary">₹{stats.totalCommission.toLocaleString('en-IN')}</p>
-                </div>
-              </div>
-            </div>
-
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-4">
             <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
               <div className="flex items-center">
                 <div className="p-2 rounded-full bg-green-100">

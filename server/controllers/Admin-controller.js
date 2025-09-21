@@ -340,12 +340,34 @@ const getAllProviders = async (req, res) => {
             })
         };
 
-        const providers = await Provider.find(filter)
-            .select('-password -__v')
-            .skip(skip)
-            .limit(limit)
-            .sort({ createdAt: -1 });
+        const providersPipeline = [
+            { $match: filter },
+            {
+                $lookup: {
+                    from: 'feedbacks',
+                    localField: '_id',
+                    foreignField: 'providerFeedback.provider',
+                    as: 'feedback'
+                }
+            },
+            {
+                $addFields: {
+                    averageRating: { $ifNull: [{ $avg: '$feedback.providerFeedback.rating' }, 0] }
+                }
+            },
+            {
+                $project: {
+                    password: 0,
+                    __v: 0,
+                    feedback: 0 // Exclude the feedback array from the final output
+                }
+            },
+            { $sort: { createdAt: -1 } },
+            { $skip: skip },
+            { $limit: limit }
+        ];
 
+        const providers = await Provider.aggregate(providersPipeline);
         const total = await Provider.countDocuments(filter);
 
         res.status(200).json({
