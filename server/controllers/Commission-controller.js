@@ -6,57 +6,7 @@ const Admin = require('../models/Admin-model');
 
 
 
-// Get commission details for a provider
-exports.getProviderCommissionDetails = async (req, res) => {
-  try {
-    const providerId = req.params.providerId;
-    const provider = await Provider.findById(providerId);
 
-    if (!provider) {
-      return res.status(404).json({
-        success: false,
-        message: 'Provider not found'
-      });
-    }
-
-    const performanceTier = provider.performanceTier || 'standard';
-
-    // Get current applicable commission rule
-    const currentRule = await CommissionRule.getCommissionForProvider(
-      providerId,
-      performanceTier
-    );
-
-    const totalCompletedBookings = await Booking.countDocuments({
-      provider: providerId,
-      status: 'completed'
-    });
-
-    // Get all active rules for reference
-    const allRules = await CommissionRule.getActiveRules();
-
-    res.status(200).json({
-      success: true,
-      data: {
-        provider: {
-          id: provider._id,
-          name: provider.name,
-          performanceTier,
-          wallet: provider.wallet,
-          totalCompletedBookings
-        },
-        currentCommission: currentRule,
-        allActiveRules: allRules
-      }
-    });
-
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
-};
 
 // Get all commission rules (for admin)
 exports.listCommissionRules = async (req, res) => {

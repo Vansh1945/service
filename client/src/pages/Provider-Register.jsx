@@ -32,7 +32,7 @@ import {
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/auth';
-import useServices from '../hooks/';
+import useServices from '../hooks/useServices';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 

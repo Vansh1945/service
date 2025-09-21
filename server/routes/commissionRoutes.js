@@ -12,7 +12,6 @@ router.patch('/rules/:id/toggle-status', adminAuthMiddleware, commissionControll
 router.put('/rules/:id', adminAuthMiddleware, commissionController.updateCommissionRule);
 router.delete('/rules/:id', adminAuthMiddleware, commissionController.deleteCommissionRule);
 
-// Provider commission details
-router.get('/provider/:providerId', adminAuthMiddleware, commissionController.getProviderCommissionDetails);
+
 
 module.exports = router;
