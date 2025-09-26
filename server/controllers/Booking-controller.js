@@ -2020,12 +2020,10 @@ const providerBookingReport = async (req, res) => {
 // Get all bookings
 const getAllBookings = async (req, res) => {
   try {
-    // Pagination
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
-    // Sorting
     let sort = {};
     if (req.query.sortBy) {
       const sortFields = req.query.sortBy.split(',');
@@ -2034,53 +2032,148 @@ const getAllBookings = async (req, res) => {
         sort[key] = order === 'desc' ? -1 : 1;
       });
     } else {
-      sort = { createdAt: -1 }; // Default: newest first
+      sort = { date: -1 }; // Sort by date descending as requested
     }
 
-    // Filtering
-    let filter = {};
+    const pipeline = [];
+    const match = {};
 
-    // Status filter
     if (req.query.status) {
-      filter.status = { $in: req.query.status.split(',') };
+      match.status = { $in: req.query.status.split(',') };
     }
 
-    // Payment status filter
     if (req.query.paymentStatus) {
-      filter.paymentStatus = { $in: req.query.paymentStatus.split(',') };
+      match.paymentStatus = { $in: req.query.paymentStatus.split(',') };
     }
 
-    // Date range filter
     if (req.query.startDate || req.query.endDate) {
-      filter.date = {};
+      match.date = {};
       if (req.query.startDate) {
-        filter.date.$gte = new Date(req.query.startDate);
+        match.date.$gte = new Date(req.query.startDate);
       }
       if (req.query.endDate) {
-        filter.date.$lte = new Date(req.query.endDate);
+        match.date.$lte = new Date(req.query.endDate);
       }
     }
 
-    // Search by customer name or ID (if implemented in your model)
-    if (req.query.search) {
-      filter.$or = [
-        { 'customer.name': { $regex: req.query.search, $options: 'i' } },
-        { 'customer.email': { $regex: req.query.search, $options: 'i' } }
-      ];
+    if (Object.keys(match).length > 0) {
+      pipeline.push({ $match: match });
     }
 
-    // Get bookings with filters, pagination, and sorting
-    const bookings = await Booking.find(filter)
-      .populate('customer', 'name email phone')
-      .populate('provider', 'businessName contactPerson')
-      .populate('services.service', 'name description')
-      .sort(sort)
-      .skip(skip)
-      .limit(limit)
-      .lean();
+    // Lookups for customer, provider, and services
+    pipeline.push(
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'customer',
+          foreignField: '_id',
+          as: 'customer'
+        }
+      },
+      {
+        $unwind: {
+          path: '$customer',
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $lookup: {
+          from: 'providers',
+          localField: 'provider',
+          foreignField: '_id',
+          as: 'provider'
+        }
+      },
+      {
+        $unwind: {
+          path: '$provider',
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $lookup: {
+            from: 'services',
+            localField: 'services.service',
+            foreignField: '_id',
+            as: 'serviceDetails'
+        }
+      }
+    );
 
-    // Get total count for pagination
-    const total = await Booking.countDocuments(filter);
+    if (req.query.search) {
+      const search = req.query.search;
+      const searchRegex = { $regex: search, $options: 'i' };
+      
+      const searchMatch = {
+        $or: [
+          { 'customer.name': searchRegex },
+          { 'customer.email': searchRegex },
+          { 'provider.name': searchRegex },
+          { 'provider.email': searchRegex },
+          { 'serviceDetails.title': searchRegex },
+          { status: searchRegex },
+          { 'address.street': searchRegex },
+          { 'address.city': searchRegex },
+          { 'address.postalCode': searchRegex },
+          { 'address.state': searchRegex },
+        ]
+      };
+
+      if (mongoose.Types.ObjectId.isValid(search)) {
+        searchMatch.$or.push({ _id: new mongoose.Types.ObjectId(search) });
+      }
+
+      pipeline.push({ $match: searchMatch });
+    }
+
+    pipeline.push({
+        $addFields: {
+            'services': {
+                $map: {
+                    input: '$services',
+                    as: 'serviceItem',
+                    in: {
+                        $mergeObjects: [
+                            '$serviceItem',
+                            {
+                                service: {
+                                    $arrayElemAt: [
+                                        {
+                                            $filter: {
+                                                input: '$serviceDetails',
+                                                as: 'sd',
+                                                cond: { $eq: ['$sd._id', '$serviceItem.service'] }
+                                            }
+                                        },
+                                        0
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+    });
+    
+    pipeline.push({
+        $project: {
+            serviceDetails: 0
+        }
+    });
+
+    const countPipeline = [...pipeline, { $count: 'total' }];
+
+    pipeline.push({ $sort: sort });
+    pipeline.push({ $skip: skip });
+    pipeline.push({ $limit: limit });
+
+    const [bookings, totalResult] = await Promise.all([
+      Booking.aggregate(pipeline),
+      Booking.aggregate(countPipeline)
+    ]);
+
+    const total = totalResult.length > 0 ? totalResult[0].total : 0;
     const pages = Math.ceil(total / limit);
 
     res.status(200).json({
@@ -2111,7 +2204,7 @@ const getBookingDetails = async (req, res) => {
 
     const booking = await Booking.findById(id)
       .populate('customer', 'name email phone')
-      .populate('provider', 'name email phone businessName')
+      .populate('provider', 'name email phone')
       .populate({
         path: 'services.service',
         select: 'title category description basePrice duration image'
@@ -2178,7 +2271,11 @@ const getBookingDetails = async (req, res) => {
         updatedAt: booking.updatedAt,
         bookingDateTime: booking.bookingDateTime,
         isUpcoming: booking.isUpcoming,
-        confirmedBooking: booking.confirmedBooking
+        confirmedBooking: booking.confirmedBooking,
+        statusHistory: booking.statusHistory,
+        serviceStartedAt: booking.serviceStartedAt,
+        serviceCompletedAt: booking.serviceCompletedAt,
+        completedAt: booking.completedAt
       },
       customer: booking.customer,
       provider: booking.provider,
@@ -2217,7 +2314,6 @@ const getBookingDetails = async (req, res) => {
 const assignProvider = async (req, res) => {
   try {
     const { id } = req.params;
-    // Fix: Add null check for req.body before destructuring
     const { providerId } = req.body || {};
 
     const booking = await Booking.findById(id);
@@ -2228,10 +2324,17 @@ const assignProvider = async (req, res) => {
       });
     }
 
+    if (booking.provider) {
+      return res.status(400).json({
+        success: false,
+        message: 'Booking has already been assigned to a provider'
+      });
+    }
+
     if (booking.status !== 'pending') {
       return res.status(400).json({
         success: false,
-        message: 'Only pending bookings can be reassigned'
+        message: 'Only pending bookings can be assigned'
       });
     }
 
@@ -2243,10 +2346,9 @@ const assignProvider = async (req, res) => {
       });
     }
 
-    // Use findByIdAndUpdate instead of modifying and saving to avoid validation issues
     const updatedBooking = await Booking.findByIdAndUpdate(
       id,
-      { provider: providerId },
+      { provider: providerId, status: 'assigned' },
       { new: true, runValidators: true }
     );
 
@@ -2276,7 +2378,7 @@ const deleteBooking = async (req, res) => {
       });
     }
 
-    if (['completed', 'cancelled'].includes(booking.status)) {
+    if (['completed', 'cancelled', 'in-progress'].includes(booking.status)) {
       return res.status(400).json({
         success: false,
         message: `Cannot delete ${booking.status} booking`
@@ -2342,7 +2444,7 @@ const deleteUserBooking = async (req, res) => {
       });
     }
 
-    if (['completed', 'cancelled'].includes(booking.status)) {
+    if (['completed', 'cancelled', 'in-progress'].includes(booking.status)) {
       return res.status(400).json({
         success: false,
         message: `Cannot delete ${booking.status} booking`
@@ -2406,6 +2508,13 @@ const updateBookingDateTime = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Booking not found'
+      });
+    }
+
+    if (['completed', 'in-progress'].includes(booking.status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot reschedule a ${booking.status} booking.`
       });
     }
 

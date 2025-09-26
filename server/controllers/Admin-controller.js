@@ -129,24 +129,49 @@ const getAllCustomers = async (req, res) => {
         const skip = (page - 1) * limit;
         const search = req.query.search || '';
 
-        const filter = {
-            role: 'customer',
-            ...(search && {
-                $or: [
-                    { name: { $regex: search, $options: 'i' } },
-                    { email: { $regex: search, $options: 'i' } },
-                    { phone: { $regex: search, $options: 'i' } }
-                ]
-            })
-        };
+        const searchFilter = search ? {
+            $or: [
+                { name: { $regex: search, $options: 'i' } },
+                { email: { $regex: search, $options: 'i' } },
+                { phone: { $regex: search, $options: 'i' } }
+            ]
+        } : {};
 
-        const customers = await User.find(filter)
-            .select('name email phone address totalBookings')
-            .skip(skip)
-            .limit(limit)
-            .sort({ createdAt: -1 });
+        const pipeline = [
+            {
+                $match: {
+                    role: 'customer',
+                    ...searchFilter
+                }
+            },
+            {
+                $lookup: {
+                    from: 'bookings',
+                    localField: '_id',
+                    foreignField: 'customer',
+                    as: 'userBookings'
+                }
+            },
+            {
+                $addFields: {
+                    totalBookings: { $size: '$userBookings' },
+                    totalSpent: { $sum: '$userBookings.totalAmount' }
+                }
+            },
+            {
+                $project: {
+                    userBookings: 0, // Exclude the bookings array from the final output
+                    password: 0,
+                    __v: 0
+                }
+            },
+            { $sort: { createdAt: -1 } },
+            { $skip: skip },
+            { $limit: limit }
+        ];
 
-        const total = await User.countDocuments(filter);
+        const customers = await User.aggregate(pipeline);
+        const total = await User.countDocuments({ role: 'customer', ...searchFilter });
 
         res.status(200).json({
             success: true,
@@ -194,6 +219,9 @@ const approveProvider = async (req, res) => {
             provider.kycStatus = 'approved';
             provider.rejectionReason = '';
             provider.isActive = true;
+            if (provider.bankDetails) {
+                provider.bankDetails.verified = true;
+            }
 
             await provider.save();
 
@@ -417,6 +445,32 @@ const getProviderDetails = async (req, res) => {
     }
 };
 
+const getCustomerById = async (req, res) => {
+    try {
+        const customerId = req.params.id;
+        const customer = await User.findById(customerId).select('-password');
+
+        if (!customer) {
+            return res.status(404).json({
+                success: false,
+                message: 'Customer not found'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            user: customer
+        });
+
+    } catch (error) {
+        console.error('Get customer by ID error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error while fetching customer details'
+        });
+    }
+};
+
 /**
  * Get dashboard stats
  */
@@ -631,6 +685,7 @@ module.exports = {
     deleteAdmin,
     getAllAdmins,
     getAllCustomers,
+    getCustomerById, // Add this line
     approveProvider,
     getPendingProviders,
     getAllProviders,

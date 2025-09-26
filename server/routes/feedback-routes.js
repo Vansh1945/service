@@ -29,6 +29,7 @@ router.get('/provider/average-rating', providerAuthMiddleware, getProviderAverag
 
 // Admin routes
 router.get('/admin/all-feedbacks', adminAuthMiddleware, getAllFeedbacks);
+router.get('/admin/:feedbackId', adminAuthMiddleware, getFeedback);
 
 
 module.exports = router;

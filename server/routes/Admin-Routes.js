@@ -18,6 +18,7 @@ router.delete('/admins/:id', adminController.deleteAdmin);
 
 // Customer management
 router.get('/customers', adminController.getAllCustomers);
+router.get('/customers/:id', adminController.getCustomerById);
 
 // Provider management
 router.get('/providers/pending', adminController.getPendingProviders);

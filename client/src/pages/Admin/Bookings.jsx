@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../store/auth';
 import {
     Search,
@@ -15,14 +14,11 @@ import {
     AlertCircle,
     UserCheck,
     CreditCard,
-    ChevronDown,
-    ChevronUp,
     BarChart2,
     DollarSign,
     Users,
     Briefcase,
     Edit,
-    UserPlus,
     RefreshCw,
     TrendingUp,
     Activity,
@@ -32,79 +28,11 @@ import {
     Mail,
     Star,
     Award,
-    Target
+    Target,
+    X,
+    ChevronLeft,
+    ChevronRight
 } from 'lucide-react';
-
-// Skeleton Loading Component
-const SkeletonRow = () => (
-    <tr className="animate-pulse">
-        <td className="px-4 py-4 whitespace-nowrap">
-            <div className="h-4 bg-gray-200 rounded w-20"></div>
-        </td>
-        <td className="px-4 py-4 whitespace-nowrap">
-            <div className="flex items-center">
-                <div className="h-10 w-10 bg-gray-200 rounded-full"></div>
-                <div className="ml-3">
-                    <div className="h-4 bg-gray-200 rounded w-24 mb-1"></div>
-                    <div className="h-3 bg-gray-200 rounded w-32"></div>
-                </div>
-            </div>
-        </td>
-        <td className="px-4 py-4 whitespace-nowrap hidden md:table-cell">
-            <div className="flex items-center">
-                <div className="h-10 w-10 bg-gray-200 rounded-full"></div>
-                <div className="ml-3">
-                    <div className="h-4 bg-gray-200 rounded w-24 mb-1"></div>
-                    <div className="h-3 bg-gray-200 rounded w-32"></div>
-                </div>
-            </div>
-        </td>
-        <td className="px-4 py-4 whitespace-nowrap">
-            <div className="h-4 bg-gray-200 rounded w-32 mb-1"></div>
-            <div className="h-3 bg-gray-200 rounded w-24 mb-1"></div>
-            <div className="h-3 bg-gray-200 rounded w-16"></div>
-        </td>
-        <td className="px-4 py-4 whitespace-nowrap hidden sm:table-cell">
-            <div className="h-4 bg-gray-200 rounded w-20 mb-1"></div>
-            <div className="h-3 bg-gray-200 rounded w-16"></div>
-        </td>
-        <td className="px-4 py-4 whitespace-nowrap">
-            <div className="h-6 bg-gray-200 rounded-full w-20"></div>
-        </td>
-        <td className="px-4 py-4 whitespace-nowrap">
-            <div className="flex items-center space-x-2">
-                <div className="h-8 w-8 bg-gray-200 rounded-lg"></div>
-                <div className="h-8 w-8 bg-gray-200 rounded-lg"></div>
-            </div>
-        </td>
-    </tr>
-);
-
-// Animated Counter Component
-const AnimatedCounter = ({ value, duration = 2000 }) => {
-    const [count, setCount] = useState(0);
-
-    useEffect(() => {
-        let startTime;
-        let animationFrame;
-
-        const animate = (timestamp) => {
-            if (!startTime) startTime = timestamp;
-            const progress = Math.min((timestamp - startTime) / duration, 1);
-            
-            setCount(Math.floor(progress * value));
-            
-            if (progress < 1) {
-                animationFrame = requestAnimationFrame(animate);
-            }
-        };
-
-        animationFrame = requestAnimationFrame(animate);
-        return () => cancelAnimationFrame(animationFrame);
-    }, [value, duration]);
-
-    return <span>{count}</span>;
-};
 
 const AdminBookingsView = () => {
     const { token, API, showToast } = useAuth();
@@ -121,15 +49,26 @@ const AdminBookingsView = () => {
         revenue: 0
     });
     const [providers, setProviders] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [initialLoad, setInitialLoad] = useState(true);
+    const [loading, setLoading] = useState(true);
+    const [actionLoading, setActionLoading] = useState(false);
+    const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+    const [showAssignProviderModal, setShowAssignProviderModal] = useState(false);
 
     // Filter states
     const [filters, setFilters] = useState({
         status: '',
-        from: '',
-        to: '',
-        search: ''
+        startDate: '',
+        endDate: '',
+        search: '',
+        paymentStatus: ''
+    });
+
+    // Pagination state
+    const [pagination, setPagination] = useState({
+        page: 1,
+        limit: 10,
+        total: 0,
+        pages: 0
     });
 
     // Status options
@@ -137,34 +76,46 @@ const AdminBookingsView = () => {
         { value: '', label: 'All Status' },
         { value: 'pending', label: 'Pending' },
         { value: 'accepted', label: 'Accepted' },
+        { value: 'in-progress', label: 'In Progress' },
         { value: 'completed', label: 'Completed' },
         { value: 'cancelled', label: 'Cancelled' }
     ];
 
-    // Enhanced status colors with gradients
+    // Payment status options
+    const paymentStatusOptions = [
+        { value: '', label: 'All Payment Status' },
+        { value: 'pending', label: 'Pending' },
+        { value: 'paid', label: 'Paid' },
+        { value: 'failed', label: 'Failed' },
+        { value: 'refunded', label: 'Refunded' }
+    ];
+
+    // Enhanced status colors with transparent backgrounds
     const getStatusColor = (status) => {
         switch (status) {
-            case 'pending': return 'bg-gradient-to-r from-yellow-100 to-amber-100 text-yellow-800 border-yellow-200';
-            case 'accepted': return 'bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 border-blue-200';
-            case 'completed': return 'bg-gradient-to-r from-green-100 to-emerald-100 text-green-800 border-green-200';
-            case 'cancelled': return 'bg-gradient-to-r from-red-100 to-rose-100 text-red-800 border-red-200';
-            default: return 'bg-gradient-to-r from-gray-100 to-slate-100 text-gray-800 border-gray-200';
+            case 'pending': return 'bg-yellow-50 text-yellow-800 border-yellow-200';
+            case 'accepted': return 'bg-blue-50 text-blue-800 border-blue-200';
+            case 'in-progress': return 'bg-indigo-50 text-indigo-800 border-indigo-200';
+            case 'completed': return 'bg-green-50 text-green-800 border-green-200';
+            case 'cancelled': return 'bg-red-50 text-red-800 border-red-200';
+            default: return 'bg-gray-50 text-gray-800 border-gray-200';
         }
     };
 
-    // Status icons with animation
+    // Status icons
     const getStatusIcon = (status) => {
-        const baseClass = "w-4 h-4 transition-transform duration-300 group-hover:scale-110";
+        const baseClass = "w-4 h-4";
         switch (status) {
-            case 'pending': return <AlertCircle className={`${baseClass} animate-pulse`} />;
+            case 'pending': return <AlertCircle className={baseClass} />;
             case 'accepted': return <UserCheck className={baseClass} />;
+            case 'in-progress': return <Activity className={baseClass} />;
             case 'completed': return <CheckCircle className={baseClass} />;
             case 'cancelled': return <XCircle className={baseClass} />;
             default: return <AlertCircle className={baseClass} />;
         }
     };
 
-    // Fetch all providers
+    // Fetch all providers for assignment
     const fetchProviders = async () => {
         try {
             const response = await fetch(`${API}/admin/providers`, {
@@ -174,60 +125,35 @@ const AdminBookingsView = () => {
                 }
             });
 
-            if (!response.ok) {
-                throw new Error('Failed to fetch providers');
+            if (response.ok) {
+                const data = await response.json();
+                setProviders(data.providers || data.data || []);
+            } else {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to fetch providers');
             }
-
-            const data = await response.json();
-            setProviders(data.providers || data.data || []);
         } catch (error) {
             console.error('Error fetching providers:', error);
-            showToast('Failed to fetch providers', 'error');
+            showToast(error.message, 'error');
         }
     };
 
-    // Calculate stats from bookings
-    const calculateStats = (bookings) => {
-        const stats = {
-            total: bookings.length,
-            pending: 0,
-            accepted: 0,
-            completed: 0,
-            cancelled: 0,
-            revenue: 0
-        };
-
-        bookings.forEach(booking => {
-            if (booking.status) {
-                stats[booking.status] = (stats[booking.status] || 0) + 1;
-            }
-            if (booking.status === 'completed' || booking.status === 'accepted') {
-                stats.revenue += booking.totalAmount || 0;
-            }
-        });
-
-        return stats;
-    };
-
-    // Fetch bookings
+    // Fetch bookings with filters and pagination
     const fetchBookings = async () => {
         try {
             setLoading(true);
-            const queryParams = new URLSearchParams();
+            
+            const queryParams = new URLSearchParams({
+                page: pagination.page.toString(),
+                limit: pagination.limit.toString()
+            });
 
-            // Map filters to backend expected params
-            if (filters.status && filters.status.trim() !== '') {
-                queryParams.append('status', filters.status);
-            }
-            if (filters.from && filters.from.trim() !== '') {
-                queryParams.append('startDate', filters.from);
-            }
-            if (filters.to && filters.to.trim() !== '') {
-                queryParams.append('endDate', filters.to);
-            }
-            if (filters.search && filters.search.trim() !== '') {
-                queryParams.append('search', filters.search);
-            }
+            // Add filters
+            if (filters.status) queryParams.append('status', filters.status);
+            if (filters.startDate) queryParams.append('startDate', filters.startDate);
+            if (filters.endDate) queryParams.append('endDate', filters.endDate);
+            if (filters.search) queryParams.append('search', filters.search);
+            if (filters.paymentStatus) queryParams.append('paymentStatus', filters.paymentStatus);
 
             const response = await fetch(`${API}/booking/admin/bookings?${queryParams}`, {
                 headers: {
@@ -236,107 +162,85 @@ const AdminBookingsView = () => {
                 }
             });
 
-            if (!response.ok) {
-                throw new Error('Failed to fetch bookings');
+            if (response.ok) {
+                const data = await response.json();
+                const fetchedBookings = data.data || [];
+                
+                setBookings(fetchedBookings);
+                setPagination(prev => ({
+                    ...prev,
+                    total: data.total || 0,
+                    pages: data.pages || 1
+                }));
+
+                // Calculate stats
+                calculateStats(fetchedBookings);
+            } else {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to fetch bookings');
             }
-
-            const data = await response.json();
-            const fetchedBookings = Array.isArray(data.data) ? data.data : 
-                                   Array.isArray(data.bookings) ? data.bookings : [];
-
-            setBookings(fetchedBookings);
-            setStats(calculateStats(fetchedBookings));
         } catch (error) {
             console.error('Error fetching bookings:', error);
-            showToast('Failed to fetch bookings', 'error');
+            showToast(error.message, 'error');
         } finally {
             setLoading(false);
-            if (initialLoad) setInitialLoad(false);
         }
+    };
+
+    // Calculate statistics
+    const calculateStats = (bookingsData) => {
+        const newStats = {
+            total: bookingsData.length,
+            pending: 0,
+            accepted: 0,
+            completed: 0,
+            cancelled: 0,
+            revenue: 0
+        };
+
+        bookingsData.forEach(booking => {
+            if (booking.status) {
+                newStats[booking.status] = (newStats[booking.status] || 0) + 1;
+            }
+            if (booking.status === 'completed' && booking.paymentStatus === 'paid') {
+                newStats.revenue += booking.totalAmount || 0;
+            }
+        });
+
+        setStats(newStats);
     };
 
     // Fetch booking details
     const fetchBookingDetails = async (bookingId) => {
         try {
-            setLoading(true);
-            console.log('Fetching booking details for ID:', bookingId);
-            
-            // Try multiple possible endpoints
-            let response;
-            let data;
-            
-            // First try the admin-specific endpoint
-            try {
-                response = await fetch(`${API}/booking/admin/bookings/${bookingId}`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                if (response.ok) {
-                    data = await response.json();
-                    console.log('Admin endpoint response:', data);
+            setActionLoading(true);
+            const response = await fetch(`${API}/booking/bookings/${bookingId}`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
                 }
-            } catch (adminError) {
-                console.log('Admin endpoint failed, trying general endpoint');
-            }
-            
-            // If admin endpoint fails, try the general endpoint
-            if (!response || !response.ok) {
-                response = await fetch(`${API}/booking/bookings/${bookingId}`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`Failed to fetch booking details: ${response.status} ${response.statusText}`);
-                }
-                
-                data = await response.json();
-                console.log('General endpoint response:', data);
-            }
+            });
 
-            // Try different possible data structures
-            const bookingData = data.data || data.booking || data;
-            console.log('Processed booking data:', bookingData);
-            
-            if (!bookingData || !bookingData._id) {
-                // If no detailed data, use the booking from the list
-                const listBooking = bookings.find(b => b._id === bookingId);
-                if (listBooking) {
-                    console.log('Using booking from list:', listBooking);
-                    setSelectedBooking(listBooking);
-                } else {
-                    throw new Error('No booking data found');
-                }
+            if (response.ok) {
+                const data = await response.json();
+                setSelectedBooking(data.data);
+                setShowModal(true);
             } else {
-                setSelectedBooking(bookingData);
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to fetch booking details');
             }
-            
-            setShowModal(true);
         } catch (error) {
             console.error('Error fetching booking details:', error);
-            showToast(`Failed to fetch booking details: ${error.message}`, 'error');
-            
-            // Fallback: try to use booking data from the list
-            const listBooking = bookings.find(b => b._id === bookingId);
-            if (listBooking) {
-                console.log('Fallback: using booking from list');
-                setSelectedBooking(listBooking);
-                setShowModal(true);
-            }
+            showToast(error.message, 'error');
         } finally {
-            setLoading(false);
+            setActionLoading(false);
         }
     };
 
     // Delete booking
-    const deleteBooking = async (bookingId) => {
+    const handleDeleteBooking = async (bookingId) => {
         try {
-            setLoading(true);
+            setActionLoading(true);
             const response = await fetch(`${API}/booking/admin/${bookingId}`, {
                 method: 'DELETE',
                 headers: {
@@ -345,25 +249,27 @@ const AdminBookingsView = () => {
                 }
             });
 
-            if (!response.ok) {
-                throw new Error('Failed to delete booking');
+            if (response.ok) {
+                showToast('Booking deleted successfully', 'success');
+                setDeleteConfirm(null);
+                fetchBookings();
+                setShowModal(false);
+            } else {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to delete booking');
             }
-
-            showToast('Booking deleted successfully', 'success');
-            setDeleteConfirm(null);
-            fetchBookings();
         } catch (error) {
             console.error('Error deleting booking:', error);
-            showToast('Failed to delete booking', 'error');
+            showToast(error.message, 'error');
         } finally {
-            setLoading(false);
+            setActionLoading(false);
         }
     };
 
     // Delete user booking
-    const deleteUserBooking = async (userId, bookingId) => {
+    const handleDeleteUserBooking = async (userId, bookingId) => {
         try {
-            setLoading(true);
+            setActionLoading(true);
             const response = await fetch(`${API}/booking/admin/user/${userId}/booking/${bookingId}`, {
                 method: 'DELETE',
                 headers: {
@@ -372,25 +278,27 @@ const AdminBookingsView = () => {
                 }
             });
 
-            if (!response.ok) {
-                throw new Error('Failed to delete user booking');
+            if (response.ok) {
+                showToast('User booking deleted successfully', 'success');
+                setDeleteConfirm(null);
+                fetchBookings();
+                setShowModal(false);
+            } else {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to delete user booking');
             }
-
-            showToast('User booking deleted successfully', 'success');
-            setDeleteConfirm(null);
-            fetchBookings();
         } catch (error) {
             console.error('Error deleting user booking:', error);
-            showToast('Failed to delete user booking', 'error');
+            showToast(error.message, 'error');
         } finally {
-            setLoading(false);
+            setActionLoading(false);
         }
     };
 
     // Assign provider to booking
-    const assignProvider = async (bookingId, providerId) => {
+    const handleAssignProvider = async (bookingId, providerId) => {
         try {
-            setLoading(true);
+            setActionLoading(true);
             const response = await fetch(`${API}/booking/admin/${bookingId}/assign`, {
                 method: 'PATCH',
                 headers: {
@@ -400,34 +308,32 @@ const AdminBookingsView = () => {
                 body: JSON.stringify({ providerId })
             });
 
-            if (!response.ok) {
-                throw new Error('Failed to assign provider');
-            }
-
-            showToast('Provider assigned successfully', 'success');
-            fetchBookings();
-            if (selectedBooking) {
-                fetchBookingDetails(selectedBooking._id);
+            if (response.ok) {
+                showToast('Provider assigned successfully', 'success');
+                fetchBookings();
+                setShowAssignProviderModal(false);
+                if (selectedBooking) {
+                    fetchBookingDetails(selectedBooking._id);
+                }
+            } else {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to assign provider');
             }
         } catch (error) {
             console.error('Error assigning provider:', error);
-            showToast('Failed to assign provider', 'error');
+            showToast(error.message, 'error');
         } finally {
-            setLoading(false);
+            setActionLoading(false);
         }
     };
 
     // Reschedule booking
-    const rescheduleBooking = async (bookingId, newDate, newTime) => {
+    const handleRescheduleBooking = async (bookingId, newDate, newTime) => {
         try {
-            setLoading(true);
+            setActionLoading(true);
             const body = {};
             if (newDate) body.date = newDate;
             if (newTime) body.time = newTime;
-            
-            if (Object.keys(body).length === 0) {
-                throw new Error('Please provide date or time to reschedule');
-            }
 
             const response = await fetch(`${API}/booking/admin/${bookingId}/reschedule`, {
                 method: 'PATCH',
@@ -438,154 +344,112 @@ const AdminBookingsView = () => {
                 body: JSON.stringify(body)
             });
 
-            if (!response.ok) {
-                throw new Error('Failed to reschedule booking');
+            if (response.ok) {
+                showToast('Booking rescheduled successfully', 'success');
+                fetchBookings();
+                setShowRescheduleModal(false);
+                setShowModal(false);
+            } else {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to reschedule booking');
             }
-
-            showToast('Booking rescheduled successfully', 'success');
-            fetchBookings();
-            if (selectedBooking) {
-                fetchBookingDetails(selectedBooking._id);
-            }
-            setShowModal(false);
         } catch (error) {
             console.error('Error rescheduling booking:', error);
-            showToast('Failed to reschedule booking', 'error');
+            showToast(error.message, 'error');
         } finally {
-            setLoading(false);
+            setActionLoading(false);
         }
     };
 
-    // Handle filter change with debounce
-    const handleFilterChange = (key, value) => {
-        setFilters(prev => ({
-            ...prev,
-            [key]: value
-        }));
+    // Download booking report
+    const handleDownloadReport = async () => {
+        if (!filters.startDate || !filters.endDate) {
+            showToast('Please select a date range to export the report.', 'error');
+            return;
+        }
+        try {
+            setActionLoading(true);
+            const queryParams = new URLSearchParams();
+            
+            if (filters.startDate) queryParams.append('startDate', filters.startDate);
+            if (filters.endDate) queryParams.append('endDate', filters.endDate);
+
+            const response = await fetch(`${API}/booking/admin/booking-report?${queryParams}`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (response.ok) {
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `booking_report_${new Date().toISOString().split('T')[0]}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                
+                showToast('Report downloaded successfully', 'success');
+            } else {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to download report');
+            }
+        } catch (error) {
+            console.error('Error downloading report:', error);
+            showToast(error.message, 'error');
+        } finally {
+            setActionLoading(false);
+        }
     };
 
-    // Clear filters
+    // Handle filter changes
+    const handleFilterChange = (key, value) => {
+        setFilters(prev => ({ ...prev, [key]: value }));
+        setPagination(prev => ({ ...prev, page: 1 }));
+    };
+
+    // Clear all filters
     const clearFilters = () => {
         setFilters({
             status: '',
-            from: '',
-            to: '',
-            search: ''
+            startDate: '',
+            endDate: '',
+            search: '',
+            paymentStatus: ''
         });
+        setPagination(prev => ({ ...prev, page: 1 }));
     };
 
-    // Export bookings
-    const exportBookings = () => {
-        const headers = [
-            'Booking ID',
-            'Customer Name',
-            'Customer Email',
-            'Customer Phone',
-            'Provider Name',
-            'Provider Email',
-            'Provider Phone',
-            'Services',
-            'Booking Date',
-            'Booking Time',
-            'Status',
-            'Street Address',
-            'City',
-            'Postal Code',
-            'State',
-            'Country',
-            'Payment Method',
-            'Payment Status',
-            'Coupon Applied',
-            'Total Discount',
-            'Total Amount',
-            'Created At'
-        ];
-
-        const rows = bookings.map(booking => {
-            const servicesList = booking.services?.map(s => 
-                `${s.service?.title || 'N/A'} (Qty: ${s.quantity || 1})`
-            ).join('; ') || 'N/A';
-
-            return [
-                booking._id || 'N/A',
-                booking.customer?.name || 'N/A',
-                booking.customer?.email || 'N/A',
-                booking.customer?.phone || 'N/A',
-                booking.provider?.businessName || booking.provider?.name || 'N/A',
-                booking.provider?.email || 'N/A',
-                booking.provider?.phone || 'N/A',
-                servicesList,
-                formatDate(booking.date),
-                booking.time || 'N/A',
-                booking.status || 'N/A',
-                booking.address?.street || 'N/A',
-                booking.address?.city || 'N/A',
-                booking.address?.postalCode || 'N/A',
-                booking.address?.state || 'N/A',
-                booking.address?.country || 'N/A',
-                booking.paymentMethod || 'N/A',
-                booking.paymentStatus || 'N/A',
-                booking.couponApplied || 'N/A',
-                booking.totalDiscount || '0.00',
-                booking.totalAmount || '0.00',
-                booking.createdAt ? new Date(booking.createdAt).toLocaleString() : 'N/A'
-            ];
-        });
-
-        // Add BOM (Byte Order Mark) for UTF-8 encoding
-        const BOM = "\uFEFF";
-        const csvContent = BOM + [headers, ...rows]
-            .map(row => row.map(field => {
-                if (typeof field === 'string') {
-                    return `"${field.replace(/"/g, '""')}"`;
-                }
-                return field;
-            }).join(','))
-            .join('\n');
-
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `bookings_export_${new Date().toISOString().split('T')[0]}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-
-        showToast('Bookings exported successfully', 'success');
+    // Pagination handlers
+    const goToPage = (page) => {
+        setPagination(prev => ({ ...prev, page }));
     };
 
-    // Debounce filter changes
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            if (!initialLoad) {
-                fetchBookings();
-            }
-        }, 500);
+    const nextPage = () => {
+        if (pagination.page < pagination.pages) {
+            setPagination(prev => ({ ...prev, page: prev.page + 1 }));
+        }
+    };
 
-        return () => clearTimeout(timer);
-    }, [filters]);
+    const prevPage = () => {
+        if (pagination.page > 1) {
+            setPagination(prev => ({ ...prev, page: prev.page - 1 }));
+        }
+    };
 
-    useEffect(() => {
-        fetchBookings();
-        fetchProviders();
-    }, []);
-
-    const formatDate = (date) => {
-        if (!date) return 'N/A';
-        return new Date(date).toLocaleDateString('en-US', {
+    // Format date
+    const formatDate = (dateString) => {
+        if (!dateString) return 'N/A';
+        return new Date(dateString).toLocaleDateString('en-US', {
             year: 'numeric',
             month: 'short',
             day: 'numeric'
         });
     };
 
-    const formatTime = (time) => {
-        if (!time) return 'N/A';
-        return time;
-    };
-
+    // Format currency
     const formatCurrency = (amount) => {
         return new Intl.NumberFormat('en-IN', {
             style: 'currency',
@@ -593,686 +457,839 @@ const AdminBookingsView = () => {
         }).format(amount || 0);
     };
 
-    const getPaymentMethodIcon = (method) => {
-        switch (method?.toLowerCase()) {
-            case 'credit_card': return <CreditCard className="w-4 h-4 mr-1" />;
-            case 'wallet': return <Briefcase className="w-4 h-4 mr-1" />;
-            case 'cash': return <DollarSign className="w-4 h-4 mr-1" />;
-            default: return <CreditCard className="w-4 h-4 mr-1" />;
+    // Filter providers by service location match
+    const getFilteredProviders = (booking) => {
+        if (!booking || !booking.address) return providers;
+        
+        return providers.filter(provider => {
+            const providerCity = provider.serviceLocation?.city || provider.city || '';
+            const bookingCity = booking.address?.city || '';
+            
+            return providerCity.toLowerCase().includes(bookingCity.toLowerCase()) || 
+                   bookingCity.toLowerCase().includes(providerCity.toLowerCase());
+        });
+    };
+
+    // Memoized filtered bookings count
+    const filteredBookingsCount = useMemo(() => {
+        return bookings.length;
+    }, [bookings]);
+
+    // Fetch data on component mount and when filters/pagination change
+    useEffect(() => {
+        fetchBookings();
+        fetchProviders();
+    }, [filters, pagination.page, pagination.limit]);
+
+    // Generate pagination items
+    const getPaginationItems = () => {
+        const items = [];
+        const maxVisiblePages = 5;
+        let startPage = Math.max(1, pagination.page - Math.floor(maxVisiblePages / 2));
+        let endPage = Math.min(pagination.pages, startPage + maxVisiblePages - 1);
+
+        if (endPage - startPage + 1 < maxVisiblePages) {
+            startPage = Math.max(1, endPage - maxVisiblePages + 1);
         }
+
+        for (let i = startPage; i <= endPage; i++) {
+            items.push(
+                <button
+                    key={i}
+                    onClick={() => goToPage(i)}
+                    className={`px-3 py-1 rounded-lg ${
+                        pagination.page === i
+                            ? 'bg-primary text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                >
+                    {i}
+                </button>
+            );
+        }
+
+        return items;
     };
 
     return (
-        <div className="p-4 md:p-8 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 min-h-screen">
-            <div className="max-w-7xl mx-auto">
-                {/* Enhanced Header */}
-                <div className="bg-white rounded-2xl shadow-lg border border-blue-100 p-6 mb-8 backdrop-blur-sm bg-white/95">
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-                        <div className="space-y-2">
-                            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-900 via-indigo-800 to-purple-800 bg-clip-text text-transparent">
-                                Admin Bookings Management
-                            </h1>
-                            <p className="text-gray-600 flex items-center">
-                                <Activity className="w-4 h-4 mr-2 text-blue-500" />
-                                View and manage all system bookings with advanced controls
-                            </p>
+        <div className="min-h-screen  p-4 md:p-6">
+            {/* Header Section */}
+            <div className="mb-6">
+                <h1 className="text-3xl font-bold text-secondary mb-2">Bookings Management</h1>
+                <p className="text-gray-600">Manage and monitor all bookings in the system</p>
+            </div>
+
+            {/* Stats Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm text-gray-600">Total Bookings</p>
+                            <p className="text-2xl font-bold text-secondary">{stats.total}</p>
                         </div>
-                        <div className="flex items-center space-x-3">
-                            <button
-                                onClick={fetchBookings}
-                                disabled={loading}
-                                className="flex items-center px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-300 transform hover:scale-105 shadow-md hover:shadow-lg disabled:opacity-50"
-                            >
-                                <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                                Refresh
-                            </button>
-                            <button
-                                onClick={exportBookings}
-                                className="flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-lg hover:from-blue-700 hover:to-indigo-800 transition-all duration-300 transform hover:scale-105 shadow-md hover:shadow-lg"
-                            >
-                                <Download className="w-4 h-4 mr-2" />
-                                Export CSV
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Enhanced Stats Cards */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                        <div className="group relative bg-gradient-to-br from-blue-500 to-blue-600 p-6 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 overflow-hidden">
-                            <div className="absolute inset-0 bg-gradient-to-br from-blue-400/20 to-transparent"></div>
-                            <div className="relative flex items-center justify-between">
-                                <div>
-                                    <p className="text-blue-100 text-sm font-medium">Total Bookings</p>
-                                    <p className="text-3xl font-bold text-white mt-1">
-                                        <AnimatedCounter value={stats.total} />
-                                    </p>
-                                    <div className="flex items-center mt-2 text-blue-100 text-xs">
-                                        <TrendingUp className="w-3 h-3 mr-1" />
-                                        All time
-                                    </div>
-                                </div>
-                                <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
-                                    <BarChart2 className="w-8 h-8 text-white" />
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="group relative bg-gradient-to-br from-amber-500 to-orange-600 p-6 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 overflow-hidden">
-                            <div className="absolute inset-0 bg-gradient-to-br from-amber-400/20 to-transparent"></div>
-                            <div className="relative flex items-center justify-between">
-                                <div>
-                                    <p className="text-amber-100 text-sm font-medium">Pending</p>
-                                    <p className="text-3xl font-bold text-white mt-1">
-                                        <AnimatedCounter value={stats.pending} />
-                                    </p>
-                                    <div className="flex items-center mt-2 text-amber-100 text-xs">
-                                        <Clock className="w-3 h-3 mr-1" />
-                                        Awaiting action
-                                    </div>
-                                </div>
-                                <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
-                                    <AlertCircle className="w-8 h-8 text-white animate-pulse" />
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="group relative bg-gradient-to-br from-emerald-500 to-green-600 p-6 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 overflow-hidden">
-                            <div className="absolute inset-0 bg-gradient-to-br from-emerald-400/20 to-transparent"></div>
-                            <div className="relative flex items-center justify-between">
-                                <div>
-                                    <p className="text-emerald-100 text-sm font-medium">Completed</p>
-                                    <p className="text-3xl font-bold text-white mt-1">
-                                        <AnimatedCounter value={stats.completed} />
-                                    </p>
-                                    <div className="flex items-center mt-2 text-emerald-100 text-xs">
-                                        <Award className="w-3 h-3 mr-1" />
-                                        Successfully done
-                                    </div>
-                                </div>
-                                <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
-                                    <CheckCircle className="w-8 h-8 text-white" />
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="group relative bg-gradient-to-br from-purple-500 to-indigo-600 p-6 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 overflow-hidden">
-                            <div className="absolute inset-0 bg-gradient-to-br from-purple-400/20 to-transparent"></div>
-                            <div className="relative flex items-center justify-between">
-                                <div>
-                                    <p className="text-purple-100 text-sm font-medium">Total Revenue</p>
-                                    <p className="text-2xl font-bold text-white mt-1">
-                                        {formatCurrency(stats.revenue)}
-                                    </p>
-                                    <div className="flex items-center mt-2 text-purple-100 text-xs">
-                                        <Target className="w-3 h-3 mr-1" />
-                                        Earnings
-                                    </div>
-                                </div>
-                                <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
-                                    <DollarSign className="w-8 h-8 text-white" />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Enhanced Filters */}
-                    <div className="bg-gradient-to-r from-gray-50 to-blue-50 p-6 rounded-2xl border border-gray-200 mb-6">
-                        <div className="flex items-center mb-4">
-                            <Filter className="w-5 h-5 text-blue-600 mr-2" />
-                            <h3 className="text-lg font-semibold text-gray-800">Filter & Search</h3>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-                            <div className="space-y-2">
-                                <label className="block text-sm font-medium text-gray-700">Search</label>
-                                <div className="relative group">
-                                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
-                                    <input
-                                        type="text"
-                                        placeholder="Search bookings..."
-                                        value={filters.search}
-                                        onChange={(e) => handleFilterChange('search', e.target.value)}
-                                        className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white/80 backdrop-blur-sm hover:bg-white"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="block text-sm font-medium text-gray-700">Status</label>
-                                <select
-                                    value={filters.status}
-                                    onChange={(e) => handleFilterChange('status', e.target.value)}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white/80 backdrop-blur-sm hover:bg-white"
-                                >
-                                    {statusOptions.map(option => (
-                                        <option key={option.value} value={option.value}>
-                                            {option.label}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="block text-sm font-medium text-gray-700">From Date</label>
-                                <input
-                                    type="date"
-                                    value={filters.from}
-                                    onChange={(e) => handleFilterChange('from', e.target.value)}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white/80 backdrop-blur-sm hover:bg-white"
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="block text-sm font-medium text-gray-700">To Date</label>
-                                <input
-                                    type="date"
-                                    value={filters.to}
-                                    onChange={(e) => handleFilterChange('to', e.target.value)}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white/80 backdrop-blur-sm hover:bg-white"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                            <div className="text-sm text-gray-600 flex items-center">
-                                <Users className="w-4 h-4 mr-2 text-blue-500" />
-                                Showing <span className="font-semibold mx-1">{bookings.length}</span> bookings
-                            </div>
-                            <button
-                                onClick={clearFilters}
-                                className="flex items-center text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors duration-200"
-                            >
-                                <XCircle className="w-4 h-4 mr-1" />
-                                Clear Filters
-                            </button>
+                        <div className="p-2 bg-teal-50 rounded-full">
+                            <BarChart2 className="w-6 h-6 text-primary" />
                         </div>
                     </div>
                 </div>
 
-                {/* Enhanced Bookings Table */}
-                <div className="bg-white rounded-2xl shadow-xl border border-blue-100 overflow-hidden backdrop-blur-sm bg-white/95">
-                    {loading && initialLoad ? (
-                        <div className="text-center py-16">
-                            <div className="relative">
-                                <RefreshCw className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
-                                <div className="absolute inset-0 w-12 h-12 mx-auto border-4 border-blue-200 rounded-full animate-ping"></div>
-                            </div>
-                            <p className="text-gray-600 text-lg">Loading bookings...</p>
-                            <p className="text-gray-400 text-sm mt-2">Please wait while we fetch the latest data</p>
+                <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm text-gray-600">Pending</p>
+                            <p className="text-2xl font-bold text-yellow-600">{stats.pending}</p>
                         </div>
-                    ) : bookings.length === 0 ? (
-                        <div className="text-center py-16">
-                            <div className="relative mb-6">
-                                <Calendar className="w-20 h-20 text-gray-300 mx-auto" />
-                                <div className="absolute inset-0 w-20 h-20 mx-auto border-4 border-gray-200 rounded-full animate-pulse"></div>
-                            </div>
-                            <h3 className="text-xl font-semibold text-gray-900 mb-2">No bookings found</h3>
-                            <p className="text-gray-600 mb-4">Try adjusting your filters or search terms to find bookings.</p>
-                            <button
-                                onClick={clearFilters}
-                                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                            >
-                                <RefreshCw className="w-4 h-4 mr-2" />
-                                Reset Filters
-                            </button>
+                        <div className="p-2 bg-yellow-50 rounded-full">
+                            <AlertCircle className="w-6 h-6 text-yellow-600" />
                         </div>
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full">
-                                <thead className="bg-gradient-to-r from-blue-900 via-indigo-900 to-purple-900 text-white">
-                                    <tr>
-                                        <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider">
-                                            <div className="flex items-center">
-                                                <BarChart2 className="w-4 h-4 mr-2" />
-                                                Booking ID
-                                            </div>
-                                        </th>
-                                        <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider">
-                                            <div className="flex items-center">
-                                                <User className="w-4 h-4 mr-2" />
-                                                Customer
-                                            </div>
-                                        </th>
-                                        <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider hidden md:table-cell">
-                                            <div className="flex items-center">
-                                                <UserCheck className="w-4 h-4 mr-2" />
-                                                Provider
-                                            </div>
-                                        </th>
-                                        <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider">
-                                            <div className="flex items-center">
-                                                <Briefcase className="w-4 h-4 mr-2" />
-                                                Services
-                                            </div>
-                                        </th>
-                                        <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider hidden sm:table-cell">
-                                            <div className="flex items-center">
-                                                <Calendar className="w-4 h-4 mr-2" />
-                                                Date & Time
-                                            </div>
-                                        </th>
-                                        <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider">
-                                            <div className="flex items-center">
-                                                <Activity className="w-4 h-4 mr-2" />
-                                                Status
-                                            </div>
-                                        </th>
-                                        <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider">
-                                            <div className="flex items-center">
-                                                <MoreHorizontal className="w-4 h-4 mr-2" />
-                                                Actions
-                                            </div>
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-gray-200">
-                                    {loading && !initialLoad ? (
-                                        // Show skeleton rows during filtering/search
-                                        Array.from({ length: 5 }).map((_, index) => (
-                                            <SkeletonRow key={index} />
-                                        ))
-                                    ) : (
-                                        bookings.map((booking) => (
-                                            <tr key={booking._id || Math.random().toString(36).substr(2, 9)} 
-                                                className="group hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-300 transform hover:scale-[1.01]">
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="flex items-center">
-                                                        <div className="w-2 h-8 bg-gradient-to-b from-blue-400 to-blue-600 rounded-full mr-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                                                        <div className="text-sm font-bold text-blue-900 font-mono">
-                                                            #{booking._id ? booking._id.substring(booking._id.length - 8) : 'N/A'}
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="flex items-center">
-                                                        <div className="flex-shrink-0 h-12 w-12 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full flex items-center justify-center shadow-md group-hover:shadow-lg transition-shadow duration-300">
-                                                            <User className="w-6 h-6 text-blue-600" />
-                                                        </div>
-                                                        <div className="ml-4">
-                                                            <div className="text-sm font-semibold text-blue-900 group-hover:text-blue-700 transition-colors">
-                                                                {booking.customer?.name || 'N/A'}
-                                                            </div>
-                                                            <div className="text-sm text-gray-600 flex items-center">
-                                                                <Mail className="w-3 h-3 mr-1" />
-                                                                {booking.customer?.email || 'N/A'}
-                                                            </div>
-                                                            {booking.customer?.phone && (
-                                                                <div className="text-xs text-gray-500 flex items-center mt-1">
-                                                                    <Phone className="w-3 h-3 mr-1" />
-                                                                    {booking.customer.phone}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap hidden md:table-cell">
-                                                    <div className="flex items-center">
-                                                        <div className="flex-shrink-0 h-12 w-12 bg-gradient-to-br from-green-100 to-emerald-100 rounded-full flex items-center justify-center shadow-md group-hover:shadow-lg transition-shadow duration-300">
-                                                            {booking.provider ? (
-                                                                <UserCheck className="w-6 h-6 text-green-600" />
-                                                            ) : (
-                                                                <User className="w-6 h-6 text-gray-400" />
-                                                            )}
-                                                        </div>
-                                                        <div className="ml-4">
-                                                            <div className="text-sm font-semibold text-blue-900 group-hover:text-blue-700 transition-colors">
-                                                                {booking.provider?.businessName || booking.provider?.name || 'Unassigned'}
-                                                            </div>
-                                                            <div className="text-sm text-gray-600 flex items-center">
-                                                                <Mail className="w-3 h-3 mr-1" />
-                                                                {booking.provider?.email || 'N/A'}
-                                                            </div>
-                                                            {booking.provider?.phone && (
-                                                                <div className="text-xs text-gray-500 flex items-center mt-1">
-                                                                    <Phone className="w-3 h-3 mr-1" />
-                                                                    {booking.provider.phone}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="space-y-2">
-                                                        <div className="text-sm font-semibold text-blue-900 flex items-center">
-                                                            <Star className="w-4 h-4 mr-1 text-yellow-500" />
-                                                            {booking.services?.[0]?.service?.title || 'N/A'}
-                                                        </div>
-                                                        <div className="text-sm text-gray-600">
-                                                            {booking.services?.[0]?.service?.category || 'N/A'} 
-                                                            {booking.services?.length > 1 && (
-                                                                <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                                                                    +{booking.services.length - 1} more
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                        <div className="text-lg font-bold text-green-600 flex items-center">
-                                                            <DollarSign className="w-4 h-4 mr-1" />
-                                                            {formatCurrency(booking.totalAmount)}
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap hidden sm:table-cell">
-                                                    <div className="space-y-2">
-                                                        <div className="flex items-center text-sm font-medium text-blue-900">
-                                                            <Calendar className="w-4 h-4 mr-2 text-blue-500" />
-                                                            {formatDate(booking.date)}
-                                                        </div>
-                                                        {booking.time && (
-                                                            <div className="flex items-center text-sm text-gray-600">
-                                                                <Clock className="w-4 h-4 mr-2 text-gray-400" />
-                                                                {formatTime(booking.time)}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <span className={`group inline-flex items-center px-3 py-2 rounded-full text-sm font-medium border transition-all duration-300 hover:scale-105 ${getStatusColor(booking.status)}`}>
-                                                        {getStatusIcon(booking.status)}
-                                                        <span className="ml-2 capitalize">{booking.status || 'N/A'}</span>
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                                    <div className="flex items-center space-x-2">
-                                                        <button
-                                                            onClick={() => booking._id && fetchBookingDetails(booking._id)}
-                                                            className="group p-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-300 transform hover:scale-110 shadow-md hover:shadow-lg"
-                                                            title="View Details"
-                                                        >
-                                                            <Eye className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                                                        </button>
-                                                        {booking.status === 'pending' && booking._id && (
-                                                            <button
-                                                                onClick={() => setDeleteConfirm({
-                                                                    id: booking._id,
-                                                                    userId: booking.customer?._id
-                                                                })}
-                                                                className="group p-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:from-red-600 hover:to-red-700 transition-all duration-300 transform hover:scale-110 shadow-md hover:shadow-lg"
-                                                                title="Delete Booking"
-                                                            >
-                                                                <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
+                    </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm text-gray-600">Completed</p>
+                            <p className="text-2xl font-bold text-green-600">{stats.completed}</p>
                         </div>
+                        <div className="p-2 bg-green-50 rounded-full">
+                            <CheckCircle className="w-6 h-6 text-green-600" />
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm text-gray-600">Revenue</p>
+                            <p className="text-2xl font-bold text-primary">{formatCurrency(stats.revenue)}</p>
+                        </div>
+                        <div className="p-2 bg-teal-50 rounded-full">
+                            <DollarSign className="w-6 h-6 text-primary" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Filters Section */}
+            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 mb-6">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-secondary">Filters</h3>
+                    <div className="flex items-center space-x-2">
+                        <button
+                            onClick={clearFilters}
+                            className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800"
+                        >
+                            Clear All
+                        </button>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {/* Search */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
+                        <div className="relative">
+                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <input
+                                type="text"
+                                placeholder="Search bookings..."
+                                value={filters.search}
+                                onChange={(e) => handleFilterChange('search', e.target.value)}
+                                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Status Filter */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                        <select
+                            value={filters.status}
+                            onChange={(e) => handleFilterChange('status', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                        >
+                            {statusOptions.map(option => (
+                                <option key={option.value} value={option.value}>
+                                    {option.label}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Payment Status Filter */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Payment Status</label>
+                        <select
+                            value={filters.paymentStatus}
+                            onChange={(e) => handleFilterChange('paymentStatus', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                        >
+                            {paymentStatusOptions.map(option => (
+                                <option key={option.value} value={option.value}>
+                                    {option.label}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Date Range */}
+                    <div className="grid grid-cols-2 gap-2">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
+                            <input
+                                type="date"
+                                value={filters.startDate}
+                                onChange={(e) => handleFilterChange('startDate', e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">To</label>
+                            <input
+                                type="date"
+                                value={filters.endDate}
+                                onChange={(e) => handleFilterChange('endDate', e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Active Filters Badges */}
+                <div className="flex flex-wrap gap-2 mt-4">
+                    {filters.status && (
+                        <span className="inline-flex items-center px-2 py-1 bg-teal-50 text-primary text-sm rounded-full border border-teal-100">
+                            Status: {statusOptions.find(s => s.value === filters.status)?.label}
+                            <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => handleFilterChange('status', '')} />
+                        </span>
+                    )}
+                    {filters.paymentStatus && (
+                        <span className="inline-flex items-center px-2 py-1 bg-teal-50 text-primary text-sm rounded-full border border-teal-100">
+                            Payment: {paymentStatusOptions.find(p => p.value === filters.paymentStatus)?.label}
+                            <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => handleFilterChange('paymentStatus', '')} />
+                        </span>
+                    )}
+                    {filters.search && (
+                        <span className="inline-flex items-center px-2 py-1 bg-teal-50 text-primary text-sm rounded-full border border-teal-100">
+                            Search: {filters.search}
+                            <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => handleFilterChange('search', '')} />
+                        </span>
                     )}
                 </div>
+            </div>
 
-                {/* Enhanced Booking Details Modal */}
-                {showModal && selectedBooking && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                        <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-                            <div className="p-6">
-                                <div className="flex justify-between items-center mb-6">
-                                    <h2 className="text-xl font-bold text-blue-900">Booking Details</h2>
-                                    <button
-                                        onClick={() => setShowModal(false)}
-                                        className="text-gray-400 hover:text-gray-600"
-                                    >
-                                        <XCircle className="w-6 h-6" />
-                                    </button>
-                                </div>
+            {/* Bookings Table */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+                {/* Table Header */}
+                <div className="flex items-center justify-between p-4 border-b border-gray-100">
+                    <div>
+                        <h3 className="text-lg font-semibold text-secondary">All Bookings</h3>
+                        <p className="text-sm text-gray-600">
+                            Showing {filteredBookingsCount} of {pagination.total} bookings
+                        </p>
+                    </div>
+                    <button
+                        onClick={handleDownloadReport}
+                        disabled={actionLoading}
+                        className="flex items-center px-4 py-2 bg-accent text-white rounded-lg hover:bg-orange-600 disabled:opacity-50"
+                    >
+                        <Download className="w-4 h-4 mr-2" />
+                        Export Report
+                    </button>
+                </div>
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    {/* Booking Info */}
-                                    <div className="space-y-4">
-                                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                                            <h3 className="font-semibold text-blue-900 mb-3">Booking Information</h3>
-                                            <div className="space-y-3">
-                                                <div>
-                                                    <p className="text-sm text-gray-600">Booking ID</p>
-                                                    <p className="font-medium text-blue-900">{selectedBooking._id || 'N/A'}</p>
+                {/* Table */}
+                <div className="overflow-x-auto">
+                    <table className="w-full">
+                        <thead className="bg-gray-50">
+                            <tr>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Booking ID
+                                </th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Customer
+                                </th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
+                                    Provider
+                                </th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Service & Amount
+                                </th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">
+                                    Date & Time
+                                </th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Status
+                                </th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Actions
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                            {loading ? (
+                                // Loading skeleton
+                                Array.from({ length: 5 }).map((_, index) => (
+                                    <tr key={index} className="animate-pulse">
+                                        <td className="px-4 py-4">
+                                            <div className="h-4 bg-gray-200 rounded w-20"></div>
+                                        </td>
+                                        <td className="px-4 py-4">
+                                            <div className="h-4 bg-gray-200 rounded w-24"></div>
+                                        </td>
+                                        <td className="px-4 py-4 hidden md:table-cell">
+                                            <div className="h-4 bg-gray-200 rounded w-20"></div>
+                                        </td>
+                                        <td className="px-4 py-4">
+                                            <div className="h-4 bg-gray-200 rounded w-32"></div>
+                                        </td>
+                                        <td className="px-4 py-4 hidden lg:table-cell">
+                                            <div className="h-4 bg-gray-200 rounded w-24"></div>
+                                        </td>
+                                        <td className="px-4 py-4">
+                                            <div className="h-6 bg-gray-200 rounded-full w-16"></div>
+                                        </td>
+                                        <td className="px-4 py-4">
+                                            <div className="h-8 bg-gray-200 rounded w-20"></div>
+                                        </td>
+                                    </tr>
+                                ))
+                            ) : bookings.length === 0 ? (
+                                <tr>
+                                    <td colSpan="7" className="px-4 py-8 text-center text-gray-500">
+                                        <Calendar className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                                        <p>No bookings found</p>
+                                        <p className="text-sm">Try adjusting your filters</p>
+                                    </td>
+                                </tr>
+                            ) : (
+                                bookings.map((booking) => (
+                                    <tr key={booking._id} className="hover:bg-gray-50">
+                                        <td className="px-4 py-4 whitespace-nowrap">
+                                            <div className="text-sm font-medium text-secondary">
+                                                #{booking._id?.substring(booking._id.length - 8) || 'N/A'}
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-4 whitespace-nowrap">
+                                            <div>
+                                                <div className="text-sm font-medium text-secondary">
+                                                    {booking.customer?.name || 'N/A'}
                                                 </div>
-                                                <div>
-                                                    <p className="text-sm text-gray-600">Date</p>
-                                                    <p className="font-medium text-blue-900">{formatDate(selectedBooking.date)}</p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-sm text-gray-600">Time</p>
-                                                    <p className="font-medium text-blue-900">{selectedBooking.time || 'Not specified'}</p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-sm text-gray-600">Status</p>
-                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(selectedBooking.status)}`}>
-                                                        {getStatusIcon(selectedBooking.status)}
-                                                        <span className="ml-1 capitalize">{selectedBooking.status || 'N/A'}</span>
-                                                    </span>
+                                                <div className="text-sm text-gray-500">
+                                                    {booking.customer?.email || 'N/A'}
                                                 </div>
                                             </div>
-                                        </div>
-
-                                        {/* Customer Info */}
-                                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                                            <h3 className="font-semibold text-blue-900 mb-3">Customer Information</h3>
-                                            <div className="space-y-3">
-                                                <div>
-                                                    <p className="text-sm text-gray-600">Name</p>
-                                                    <p className="font-medium text-blue-900">{selectedBooking.customer?.name || 'N/A'}</p>
+                                        </td>
+                                        <td className="px-4 py-4 whitespace-nowrap hidden md:table-cell">
+                                            <div>
+                                                <div className="text-sm font-medium text-secondary">
+                                                    {booking.provider?.name || 'Unassigned'}
                                                 </div>
-                                                <div>
-                                                    <p className="text-sm text-gray-600">Email</p>
-                                                    <p className="font-medium text-blue-900">{selectedBooking.customer?.email || 'N/A'}</p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-sm text-gray-600">Phone</p>
-                                                    <p className="font-medium text-blue-900">{selectedBooking.customer?.phone || 'N/A'}</p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-sm text-gray-600">User ID</p>
-                                                    <p className="font-medium text-blue-900">{selectedBooking.customer?._id || 'N/A'}</p>
+                                                <div className="text-sm text-gray-500">
+                                                    {booking.provider?.email || 'N/A'}
                                                 </div>
                                             </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Service & Address */}
-                                    <div className="space-y-4">
-                                        {/* Service Info */}
-                                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                                            <h3 className="font-semibold text-blue-900 mb-3">Services Information</h3>
-                                            {selectedBooking.services?.map((serviceItem, index) => (
-                                                <div key={index} className="space-y-3 mb-4 last:mb-0">
-                                                    <div>
-                                                        <p className="text-sm text-gray-600">Service #{index + 1}</p>
-                                                        <p className="font-medium text-blue-900">{serviceItem.service?.title || 'N/A'}</p>
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-sm text-gray-600">Category</p>
-                                                        <p className="font-medium text-blue-900">{serviceItem.service?.category || 'N/A'}</p>
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-sm text-gray-600">Description</p>
-                                                        <p className="font-medium text-blue-900">{serviceItem.service?.description || 'N/A'}</p>
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-sm text-gray-600">Quantity</p>
-                                                        <p className="font-medium text-blue-900">{serviceItem.quantity || 1}</p>
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-sm text-gray-600">Price</p>
-                                                        <p className="font-medium text-blue-900">{formatCurrency(serviceItem.price)}</p>
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-sm text-gray-600">Discount</p>
-                                                        <p className="font-medium text-blue-900">{formatCurrency(serviceItem.discountAmount)}</p>
-                                                    </div>
+                                        </td>
+                                        <td className="px-4 py-4 whitespace-nowrap">
+                                            <div>
+                                                <div className="text-sm font-medium text-secondary">
+                                                    {booking.services?.[0]?.service?.title || 'N/A'}
                                                 </div>
-                                            ))}
-                                            {!selectedBooking.services?.length && (
-                                                <p className="text-sm text-gray-600">No services found</p>
-                                            )}
-                                        </div>
-
-                                        {/* Provider Assignment - Only show for pending bookings */}
-                                        {selectedBooking.status === 'pending' && (
-                                            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                                                <h3 className="font-semibold text-blue-900 mb-3">Provider Assignment</h3>
-                                                {selectedBooking.provider ? (
-                                                    <div className="space-y-3">
-                                                        <div>
-                                                            <p className="text-sm text-gray-600">Current Provider</p>
-                                                            <p className="font-medium text-blue-900">{selectedBooking.provider.businessName || selectedBooking.provider.name || 'N/A'}</p>
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-sm text-gray-600">Email</p>
-                                                            <p className="font-medium text-blue-900">{selectedBooking.provider.email || 'N/A'}</p>
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-sm text-gray-600">Phone</p>
-                                                            <p className="font-medium text-blue-900">{selectedBooking.provider.phone || 'N/A'}</p>
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <p className="text-sm text-gray-600">No provider assigned yet</p>
-                                                )}
-                                                
-                                                <div className="mt-4">
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">Assign New Provider</label>
-                                                    <select
-                                                        onChange={(e) => selectedBooking._id && assignProvider(selectedBooking._id, e.target.value)}
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                                        defaultValue=""
-                                                    >
-                                                        <option value="" disabled>Select a provider</option>
-                                                        {providers.map(provider => (
-                                                            <option key={provider._id} value={provider._id}>
-                                                                {provider.businessName || provider.name} ({provider.email})
-                                                            </option>
-                                                        ))}
-                                                    </select>
+                                                <div className="text-sm font-bold text-primary">
+                                                    {formatCurrency(booking.totalAmount)}
                                                 </div>
                                             </div>
-                                        )}
-
-                                        {/* Address */}
-                                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                                            <h3 className="font-semibold text-blue-900 mb-3">Service Address</h3>
-                                            <div className="flex items-start">
-                                                <MapPin className="w-4 h-4 mt-1 mr-2 text-blue-600" />
-                                                <div>
-                                                    <p className="font-medium text-blue-900">{selectedBooking.address?.street || 'N/A'}</p>
-                                                    <p className="font-medium text-blue-900">{selectedBooking.address?.city || 'N/A'}, {selectedBooking.address?.postalCode || 'N/A'}</p>
-                                                    <p className="font-medium text-blue-900">{selectedBooking.address?.state || 'N/A'}, {selectedBooking.address?.country || 'N/A'}</p>
+                                        </td>
+                                        <td className="px-4 py-4 whitespace-nowrap hidden lg:table-cell">
+                                            <div>
+                                                <div className="text-sm text-secondary">
+                                                    {formatDate(booking.date)}
+                                                </div>
+                                                <div className="text-sm text-gray-500">
+                                                    {booking.time || 'Not specified'}
                                                 </div>
                                             </div>
-                                        </div>
+                                        </td>
+                                        <td className="px-4 py-4 whitespace-nowrap">
+                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(booking.status)}`}>
+                                                {getStatusIcon(booking.status)}
+                                                <span className="ml-1 capitalize">{booking.status}</span>
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-4 whitespace-nowrap">
+                                            <div className="flex items-center space-x-2">
+                                                <button
+                                                    onClick={() => fetchBookingDetails(booking._id)}
+                                                    className="p-1 text-primary hover:text-teal-700"
+                                                    title="View Details"
+                                                >
+                                                    <Eye className="w-4 h-4" />
+                                                </button>
 
-                                        {/* Payment Info */}
-                                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                                            <h3 className="font-semibold text-blue-900 mb-3">Payment Information</h3>
-                                            <div className="space-y-3">
-                                                <div>
-                                                    <p className="text-sm text-gray-600">Payment Method</p>
-                                                    <div className="flex items-center">
-                                                        {getPaymentMethodIcon(selectedBooking.paymentMethod)}
-                                                        <span className="font-medium text-blue-900 capitalize">{selectedBooking.paymentMethod || 'N/A'}</span>
-                                                    </div>
-                                                </div>
-                                                <div>
-                                                    <p className="text-sm text-gray-600">Payment Status</p>
-                                                    <p className="font-medium text-blue-900">{selectedBooking.paymentStatus || 'N/A'}</p>
-                                                </div>
-                                                {selectedBooking.couponApplied && (
-                                                    <div>
-                                                        <p className="text-sm text-gray-600">Coupon Applied</p>
-                                                        <p className="font-medium text-blue-900">{selectedBooking.couponApplied}</p>
-                                                    </div>
-                                                )}
-                                                {selectedBooking.totalDiscount > 0 && (
-                                                    <div>
-                                                        <p className="text-sm text-gray-600">Total Discount</p>
-                                                        <p className="font-medium text-blue-900">{formatCurrency(selectedBooking.totalDiscount)}</p>
-                                                    </div>
-                                                )}
-                                                <div>
-                                                    <p className="text-sm text-gray-600">Total Amount</p>
-                                                    <p className="font-bold text-blue-900">{formatCurrency(selectedBooking.totalAmount)}</p>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Reschedule Booking - Only show for pending bookings */}
-                                        {selectedBooking.status === 'pending' && (
-                                            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                                                <h3 className="font-semibold text-blue-900 mb-3">Reschedule Booking</h3>
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                    <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-1">New Date</label>
-                                                        <input
-                                                            type="date"
-                                                            id="newDate"
-                                                            min={new Date().toISOString().split('T')[0]}
-                                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-1">New Time</label>
-                                                        <input
-                                                            type="time"
-                                                            id="newTime"
-                                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                                        />
-                                                    </div>
-                                                </div>
                                                 <button
                                                     onClick={() => {
-                                                        const newDate = document.getElementById('newDate').value;
-                                                        const newTime = document.getElementById('newTime').value;
-                                                        rescheduleBooking(selectedBooking._id, newDate, newTime);
+                                                        setSelectedBooking(booking);
+                                                        setShowRescheduleModal(true);
                                                     }}
-                                                    className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                                    className="p-1 text-blue-600 hover:text-blue-800"
+                                                    title="Update Date/Time"
                                                 >
-                                                    <Edit className="w-4 h-4 mr-2 inline" />
-                                                    Reschedule Booking
+                                                    <Calendar className="w-4 h-4" />
+                                                </button>
+
+                                                {booking.status === 'pending' && !booking.provider && (
+                                                    <button
+                                                        onClick={() => {
+                                                            setSelectedBooking(booking);
+                                                            setShowAssignProviderModal(true);
+                                                        }}
+                                                        className="p-1 text-green-600 hover:text-green-800"
+                                                        title="Assign Provider"
+                                                    >
+                                                        <UserCheck className="w-4 h-4" />
+                                                    </button>
+                                                )}
+
+                                                <button
+                                                    onClick={() => setDeleteConfirm({
+                                                        id: booking._id,
+                                                        userId: booking.customer?._id,
+                                                        type: 'booking'
+                                                    })}
+                                                    className="p-1 text-red-600 hover:text-red-800"
+                                                    title="Delete Booking"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
                                                 </button>
                                             </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
 
-                {/* Delete Confirmation Modal */}
-                {deleteConfirm && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                        <div className="bg-white rounded-lg p-6 max-w-md w-full">
-                            <div className="flex items-center mb-4">
-                                <AlertCircle className="w-6 h-6 text-red-600 mr-3" />
-                                <h3 className="text-lg font-semibold text-blue-900">Confirm Deletion</h3>
-                            </div>
-                            <p className="text-gray-700 mb-6">
-                                Are you sure you want to delete this booking? This action cannot be undone.
-                            </p>
-                            <div className="flex justify-end space-x-3">
-                                <button
-                                    onClick={() => setDeleteConfirm(null)}
-                                    className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        if (deleteConfirm.userId && deleteConfirm.id) {
-                                            deleteUserBooking(deleteConfirm.userId, deleteConfirm.id);
-                                        } else if (deleteConfirm.id) {
-                                            deleteBooking(deleteConfirm.id);
-                                        }
-                                    }}
-                                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                                >
-                                    Delete
-                                </button>
-                            </div>
+                {/* Pagination */}
+                {pagination.pages > 1 && (
+                    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
+                        <div className="text-sm text-gray-700">
+                            Showing {((pagination.page - 1) * pagination.limit) + 1} to{' '}
+                            {Math.min(pagination.page * pagination.limit, pagination.total)} of{' '}
+                            {pagination.total} results
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <button
+                                onClick={prevPage}
+                                disabled={pagination.page === 1}
+                                className="p-1 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                            >
+                                <ChevronLeft className="w-5 h-5" />
+                            </button>
+                            
+                            {getPaginationItems()}
+                            
+                            <button
+                                onClick={nextPage}
+                                disabled={pagination.page === pagination.pages}
+                                className="p-1 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                            >
+                                <ChevronRight className="w-5 h-5" />
+                            </button>
                         </div>
                     </div>
                 )}
             </div>
+
+            {/* Booking Details Modal */}
+            {showModal && selectedBooking && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="p-6">
+                            <div className="flex justify-between items-center mb-6">
+                                <h2 className="text-xl font-bold text-secondary">Booking Details</h2>
+                                <button
+                                    onClick={() => setShowModal(false)}
+                                    className="text-gray-400 hover:text-gray-600"
+                                >
+                                    <X className="w-6 h-6" />
+                                </button>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {/* Left Column */}
+                                <div className="space-y-4">
+                                    {/* Booking Information */}
+                                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                                        <h3 className="font-semibold text-secondary mb-3">Booking Information</h3>
+                                        <div className="space-y-2">
+                                            <div>
+                                                <span className="text-sm text-gray-600">Booking ID:</span>
+                                                <p className="font-medium">{selectedBooking.booking._id}</p>
+                                            </div>
+                                            <div>
+                                                <span className="text-sm text-gray-600">Date:</span>
+                                                <p className="font-medium">{formatDate(selectedBooking.booking.date)}</p>
+                                            </div>
+                                            <div>
+                                                <span className="text-sm text-gray-600">Time:</span>
+                                                <p className="font-medium">{selectedBooking.booking.time || 'Not specified'}</p>
+                                            </div>
+                                            <div>
+                                                <span className="text-sm text-gray-600">Status:</span>
+                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(selectedBooking.booking.status)}`}>
+                                                    {getStatusIcon(selectedBooking.booking.status)}
+                                                    <span className="ml-1 capitalize">{selectedBooking.booking.status}</span>
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Customer Information */}
+                                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                                        <h3 className="font-semibold text-secondary mb-3">Customer Information</h3>
+                                        <div className="space-y-2">
+                                            <div>
+                                                <span className="text-sm text-gray-600">Name:</span>
+                                                <p className="font-medium">{selectedBooking.customer?.name || 'N/A'}</p>
+                                            </div>
+                                            <div>
+                                                <span className="text-sm text-gray-600">Email:</span>
+                                                <p className="font-medium">{selectedBooking.customer?.email || 'N/A'}</p>
+                                            </div>
+                                            <div>
+                                                <span className="text-sm text-gray-600">Phone:</span>
+                                                <p className="font-medium">{selectedBooking.customer?.phone || 'N/A'}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Provider Information */}
+                                    {selectedBooking.provider && (
+                                        <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                                            <h3 className="font-semibold text-secondary mb-3">Provider Information</h3>
+                                            <div className="space-y-2">
+                                                <div>
+                                                    <span className="text-sm text-gray-600">Business Name:</span>
+                                                    <p className="font-medium">{selectedBooking.provider.businessName || selectedBooking.provider.name || 'N/A'}</p>
+                                                </div>
+                                                <div>
+                                                    <span className="text-sm text-gray-600">Email:</span>
+                                                    <p className="font-medium">{selectedBooking.provider.email || 'N/A'}</p>
+                                                </div>
+                                                <div>
+                                                    <span className="text-sm text-gray-600">Phone:</span>
+                                                    <p className="font-medium">{selectedBooking.provider.phone || 'N/A'}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Service Information */}
+                                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                                        <h3 className="font-semibold text-secondary mb-3">Service Information</h3>
+                                        {selectedBooking.services?.map((serviceItem, index) => (
+                                            <div key={index} className="mb-3 last:mb-0">
+                                                <div className="font-medium">{serviceItem.service?.title || 'N/A'}</div>
+                                                <div className="text-sm text-gray-600">
+                                                    Category: {serviceItem.service?.category || 'N/A'}
+                                                </div>
+                                                <div className="text-sm text-gray-600">
+                                                    Quantity: {serviceItem.quantity || 1}
+                                                </div>
+                                                <div className="text-sm text-gray-600">
+                                                    Price: {formatCurrency(serviceItem.price)}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Right Column */}
+                                <div className="space-y-4">
+                                    {/* Address Information */}
+                                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                                        <h3 className="font-semibold text-secondary mb-3">Service Address</h3>
+                                        <div className="space-y-1">
+                                            <p className="font-medium">{selectedBooking.booking.address?.street}</p>
+                                            <p className="text-sm text-gray-600">
+                                                {selectedBooking.booking.address?.city}, {selectedBooking.booking.address?.postalCode}
+                                            </p>
+                                            <p className="text-sm text-gray-600">
+                                                {selectedBooking.booking.address?.state}, {selectedBooking.booking.address?.country}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Payment Information */}
+                                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                                        <h3 className="font-semibold text-secondary mb-3">Payment Breakdown</h3>
+                                        <div className="space-y-2">
+                                            {selectedBooking.services?.map((item, index) => (
+                                                <div key={index} className="flex justify-between">
+                                                    <span className="text-sm text-gray-600">{item.service?.title} (Qty: {item.quantity})</span>
+                                                    <span className="text-sm font-medium">{formatCurrency(item.price * item.quantity)}</span>
+                                                </div>
+                                            ))}
+                                            <div className="border-t border-gray-200 my-2"></div>
+                                            <div className="flex justify-between">
+                                                <span className="text-sm text-gray-600">Subtotal</span>
+                                                <span className="text-sm font-medium">{formatCurrency(selectedBooking.payment.subtotal)}</span>
+                                            </div>
+                                            {selectedBooking.payment.couponApplied && (
+                                                <div className="flex justify-between">
+                                                    <span className="text-sm text-gray-600">Discount ({selectedBooking.payment.couponApplied.code})</span>
+                                                    <span className="text-sm font-medium text-red-500">- {formatCurrency(selectedBooking.payment.totalDiscount)}</span>
+                                                </div>
+                                            )}
+                                            <div className="border-t border-gray-200 my-2"></div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-sm font-bold text-secondary">Total Amount Paid</span>
+                                                <span className="font-bold text-primary text-lg">{formatCurrency(selectedBooking.payment.totalAmount)}</span>
+                                            </div>
+                                            <div className="pt-2">
+                                                <div className="flex justify-between">
+                                                    <span className="text-sm text-gray-600">Payment Method:</span>
+                                                    <span className="text-sm font-medium capitalize">{selectedBooking.payment?.method || 'N/A'}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-sm text-gray-600">Payment Status:</span>
+                                                    <span className="text-sm font-medium capitalize">{selectedBooking.payment?.status || 'N/A'}</span>
+                                                </div>
+                                                {selectedBooking.payment.details?.transactionId && (
+                                                    <div className="flex justify-between">
+                                                        <span className="text-sm text-gray-600">Transaction ID:</span>
+                                                        <span className="text-sm font-medium">{selectedBooking.payment.details.transactionId}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Booking Status Flow */}
+                                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                                        <h3 className="font-semibold text-secondary mb-3">Booking Status Flow</h3>
+                                        <ul className="space-y-4">
+                                            <li className="flex items-start">
+                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${selectedBooking.booking.statusHistory?.find(h => h.status === 'accepted') ? 'bg-green-50' : 'bg-gray-50'}`}>
+                                                    <CheckCircle className={`w-5 h-5 ${selectedBooking.booking.statusHistory?.find(h => h.status === 'accepted') ? 'text-green-600' : 'text-gray-400'}`} />
+                                                </div>
+                                                <div className="ml-4">
+                                                    <p className="font-medium">Booking Accepted</p>
+                                                    <p className="text-sm text-gray-500">
+                                                        {selectedBooking.booking.statusHistory?.find(h => h.status === 'accepted') ? new Date(selectedBooking.booking.statusHistory.find(h => h.status === 'accepted').timestamp).toLocaleString() : 'Pending'}
+                                                    </p>
+                                                </div>
+                                            </li>
+                                            <li className="flex items-start">
+                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${selectedBooking.booking.serviceStartedAt ? 'bg-blue-50' : 'bg-gray-50'}`}>
+                                                    <Activity className={`w-5 h-5 ${selectedBooking.booking.serviceStartedAt ? 'text-blue-600' : 'text-gray-400'}`} />
+                                                </div>
+                                                <div className="ml-4">
+                                                    <p className="font-medium">Service Started</p>
+                                                    <p className="text-sm text-gray-500">
+                                                        {selectedBooking.booking.serviceStartedAt ? new Date(selectedBooking.booking.serviceStartedAt).toLocaleString() : 'Not started yet'}
+                                                    </p>
+                                                </div>
+                                            </li>
+                                            <li className="flex items-start">
+                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${selectedBooking.booking.serviceCompletedAt ? 'bg-indigo-50' : 'bg-gray-50'}`}>
+                                                    <Award className={`w-5 h-5 ${selectedBooking.booking.serviceCompletedAt ? 'text-indigo-600' : 'text-gray-400'}`} />
+                                                </div>
+                                                <div className="ml-4">
+                                                    <p className="font-medium">Service Completed</p>
+                                                    <p className="text-sm text-gray-500">
+                                                        {selectedBooking.booking.serviceCompletedAt ? new Date(selectedBooking.booking.serviceCompletedAt).toLocaleString() : 'Not completed yet'}
+                                                    </p>
+                                                </div>
+                                            </li>
+                                        </ul>
+                                    </div>
+
+                                    {/* Action Buttons */}
+                                    <div className="flex space-x-3">
+                                        <button
+                                            onClick={() => setShowModal(false)}
+                                            className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                                        >
+                                            Close
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Reschedule Booking Modal */}
+            {showRescheduleModal && selectedBooking && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg max-w-md w-full">
+                        <div className="p-6">
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-lg font-semibold text-secondary">Reschedule Booking</h3>
+                                <button
+                                    onClick={() => setShowRescheduleModal(false)}
+                                    className="text-gray-400 hover:text-gray-600"
+                                >
+                                    <X className="w-6 h-6" />
+                                </button>
+                            </div>
+                            
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        New Date
+                                    </label>
+                                    <input
+                                        type="date"
+                                        id="rescheduleDate"
+                                        min={new Date().toISOString().split('T')[0]}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        New Time
+                                    </label>
+                                    <input
+                                        type="time"
+                                        id="rescheduleTime"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                                    />
+                                </div>
+                                
+                                <div className="flex space-x-3 pt-4">
+                                    <button
+                                        onClick={() => setShowRescheduleModal(false)}
+                                        className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            const date = document.getElementById('rescheduleDate').value;
+                                            const time = document.getElementById('rescheduleTime').value;
+                                            if (date || time) {
+                                                handleRescheduleBooking(selectedBooking._id, date, time);
+                                            } else {
+                                                showToast('Please provide either date or time', 'error');
+                                            }
+                                        }}
+                                        disabled={actionLoading}
+                                        className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-700 disabled:opacity-50"
+                                    >
+                                        {actionLoading ? 'Updating...' : 'Update Schedule'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Assign Provider Modal */}
+            {showAssignProviderModal && selectedBooking && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg max-w-md w-full">
+                        <div className="p-6">
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-lg font-semibold text-secondary">Assign Provider</h3>
+                                <button
+                                    onClick={() => setShowAssignProviderModal(false)}
+                                    className="text-gray-400 hover:text-gray-600"
+                                >
+                                    <X className="w-6 h-6" />
+                                </button>
+                            </div>
+                            
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Select Provider
+                                    </label>
+                                    <select
+                                        id="providerSelect"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                                    >
+                                        <option value="">Select a provider</option>
+                                        {getFilteredProviders(selectedBooking).map(provider => (
+                                            <option key={provider._id} value={provider._id}>
+                                                {provider.businessName || provider.name} - {provider.serviceLocation?.city || provider.city || 'N/A'}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        Showing providers matching the service location
+                                    </p>
+                                </div>
+                                
+                                <div className="flex space-x-3 pt-4">
+                                    <button
+                                        onClick={() => setShowAssignProviderModal(false)}
+                                        className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            const providerId = document.getElementById('providerSelect').value;
+                                            if (providerId) {
+                                                handleAssignProvider(selectedBooking._id, providerId);
+                                            } else {
+                                                showToast('Please select a provider', 'error');
+                                            }
+                                        }}
+                                        disabled={actionLoading}
+                                        className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-700 disabled:opacity-50"
+                                    >
+                                        {actionLoading ? 'Assigning...' : 'Assign Provider'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {deleteConfirm && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg p-6 max-w-md w-full">
+                        <div className="flex items-center mb-4">
+                            <AlertCircle className="w-6 h-6 text-red-600 mr-3" />
+                            <h3 className="text-lg font-semibold text-secondary">
+                                {deleteConfirm.type === 'user' ? 'Delete User Booking' : 'Delete Booking'}
+                            </h3>
+                        </div>
+                        <p className="text-gray-700 mb-6">
+                            Are you sure you want to delete this booking? This action cannot be undone.
+                        </p>
+                        <div className="flex justify-end space-x-3">
+                            <button
+                                onClick={() => setDeleteConfirm(null)}
+                                className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => {
+                                    if (deleteConfirm.type === 'user') {
+                                        handleDeleteUserBooking(deleteConfirm.userId, deleteConfirm.id);
+                                    } else {
+                                        handleDeleteBooking(deleteConfirm.id);
+                                    }
+                                }}
+                                disabled={actionLoading}
+                                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+                            >
+                                {actionLoading ? 'Deleting...' : 'Delete'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -197,29 +197,35 @@ const getCustomerFeedbacks = async (req, res) => {
   }
 };
 
-// @desc    Get single feedback (customer can only view their own)
+// @desc    Get single feedback (customer and admin can only view their own)
 // @route   GET /api/feedback/:feedbackId
 // @access  Private (Customer)
 const getFeedback = async (req, res) => {
   try {
-    const feedback = await Feedback.findOne({
-      _id: req.params.feedbackId,
-      customer: req.user._id
-    })
+    let query = { _id: req.params.feedbackId };
+    if (req.user) {
+      query.customer = req.user._id;
+    }
+
+    const feedback = await Feedback.findOne(query)
+      .populate('customer', 'name email phone') // Added phone as per modal
       .populate({
         path: 'providerFeedback.provider',
-        select: 'name profilePicUrl'
+        select: 'name email'
       })
       .populate({
         path: 'serviceFeedback.service',
-        select: 'title image averageRating'
+        select: 'title category'
       })
-      .populate('booking', 'date');
+      .populate('booking', 'date time'); // Added time as per modal
 
     if (!feedback) {
+      const message = req.user 
+        ? 'Feedback not found or you are not authorized to view it.'
+        : 'Feedback not found.';
       return res.status(404).json({
         success: false,
-        message: 'Feedback not found or unauthorized'
+        message: message
       });
     }
 

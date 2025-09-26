@@ -1045,7 +1045,7 @@ const ProviderBooking = () => {
                         </button>
 
                         {/* Action buttons based on status */}
-                        {booking.status === 'pending' && (
+                        {booking.status === 'pending' && (!booking.provider || booking.provider === user?._id) && (
                           <div className="flex space-x-2">
                             <button
                               onClick={() => handleBookingAction(booking._id, 'accept')}

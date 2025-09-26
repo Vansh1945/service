@@ -27,10 +27,10 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { useAuth } from '../../store/auth';
 
 const AdminProviders = () => {
-  const API = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api';
-  const token = localStorage.getItem("adminToken") || localStorage.getItem("token");
+    const { token, API, showToast } = useAuth();
 
   // State management
   const [providers, setProviders] = useState([]);
