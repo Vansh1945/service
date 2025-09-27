@@ -1,1117 +1,983 @@
+// src/pages/admin/ComplaintsPage.jsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../store/auth';
-import { 
-  Search, Check, RotateCcw, AlertCircle, Calendar, 
-  Wrench, Clock, DollarSign, Filter, Download, Eye, MessageSquare,
-  TrendingUp, Users, AlertTriangle, CheckCircle2, ChevronDown, ChevronUp,
-  Grid3X3, List, Zap, Shield, Star, Activity, BarChart3, FileText,
-  Phone, Mail, MapPin, Image as ImageIcon, X, Maximize2, Minimize2
+import axios from 'axios';
+import {
+  Search,
+  Filter,
+  Calendar,
+  MessageSquare,
+  User,
+  Clock,
+  AlertTriangle,
+  CheckCircle,
+  RefreshCw,
+  X,
+  Eye,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Edit,
+  Mail,
+  Phone
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 
-const AdminComplaints = () => {
-  const { API, isAdmin, logoutUser, showToast } = useAuth();
-  const [complaints, setComplaints] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [selectedComplaint, setSelectedComplaint] = useState(null);
-  const [isResolveModalOpen, setIsResolveModalOpen] = useState(false);
-  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
-  const [searchText, setSearchText] = useState('');
-  const [responseText, setResponseText] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [sortBy, setSortBy] = useState('newest');
-  const [showFilters, setShowFilters] = useState(false);
-  const [selectedComplaints, setSelectedComplaints] = useState([]);
-  const [viewMode, setViewMode] = useState('cards');
-  const [isFullscreen, setIsFullscreen] = useState(false);
+// Stats Cards Component
+const StatsCard = ({ title, value, icon: Icon, color, bgColor }) => (
+  <div className={`bg-white border border-gray-200 rounded-xl p-4 shadow-sm ${bgColor}`}>
+    <div className="flex items-center">
+      <div className={`p-2 rounded-full ${bgColor}`}>
+        <Icon className={`w-5 h-5 ${color}`} />
+      </div>
+      <div className="ml-3">
+        <p className="text-sm font-medium text-gray-600">{title}</p>
+        <p className="text-lg font-bold text-secondary">{value}</p>
+      </div>
+    </div>
+  </div>
+);
 
-  useEffect(() => {
-    if (!isAdmin) {
-      logoutUser();
-      return;
-    }
-    fetchComplaints();
-  }, [isAdmin]);
-
-  const fetchComplaints = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch(`${API}/complaint/`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      if (data.success) {
-        setComplaints(data.complaints || []);
-      } else {
-        showToast(data.message || 'Failed to fetch complaints', 'error');
-        setComplaints([]);
-      }
-    } catch (error) {
-      if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        showToast('Network error: Unable to connect to server', 'error');
-      } else {
-        showToast('Error fetching complaints', 'error');
-      }
-      console.error('Error fetching complaints:', error);
-      setComplaints([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResolveComplaint = async () => {
-    if (!responseText.trim()) {
-      showToast('Please provide a response before resolving the complaint', 'error');
-      return;
-    }
-
-    if (responseText.trim().length < 10) {
-      showToast('Response must be at least 10 characters long', 'error');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const response = await fetch(`${API}/complaint/${selectedComplaint._id}/resolve`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ response: responseText.trim() })
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      if (data.success) {
-        showToast('Complaint resolved successfully');
-        setIsResolveModalOpen(false);
-        setSelectedComplaint(null);
-        setResponseText('');
-        fetchComplaints();
-      } else {
-        showToast(data.message || 'Failed to resolve complaint', 'error');
-      }
-    } catch (error) {
-      if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        showToast('Network error: Unable to connect to server', 'error');
-      } else {
-        showToast('Error resolving complaint', 'error');
-      }
-      console.error('Error resolving complaint:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleReopenComplaint = async (complaint) => {
-    if (!window.confirm('Are you sure you want to reopen this complaint?')) return;
-
-    try {
-      setLoading(true);
-      const response = await fetch(`${API}/complaint/${complaint._id}/reopen`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ 
-          reason: 'Reopened by admin for further investigation' 
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      if (data.success) {
-        showToast('Complaint reopened successfully');
-        fetchComplaints();
-      } else {
-        showToast(data.message || 'Failed to reopen complaint', 'error');
-      }
-    } catch (error) {
-      showToast('Network error: Unable to reopen complaint', 'error');
-      console.error('Error reopening complaint:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const filteredComplaints = complaints.filter(complaint => {
-    const searchStr = searchText.toLowerCase();
-    const matchesSearch = (
-      complaint.customer?.name?.toLowerCase().includes(searchStr) ||
-      complaint.provider?.name?.toLowerCase().includes(searchStr) ||
-      complaint.message?.toLowerCase().includes(searchStr) ||
-      complaint._id.toLowerCase().includes(searchStr) ||
-      (complaint.booking?.serviceType?.toLowerCase().includes(searchStr)) ||
-      (complaint.booking?._id.toLowerCase().includes(searchStr))
-    );
-
-    const matchesFilter = filterStatus === 'all' || complaint.status === filterStatus;
-    return matchesSearch && matchesFilter;
-  }).sort((a, b) => {
-    switch (sortBy) {
-      case 'newest':
-        return new Date(b.createdAt) - new Date(a.createdAt);
-      case 'oldest':
-        return new Date(a.createdAt) - new Date(b.createdAt);
-      case 'status':
-        return a.status.localeCompare(b.status);
+// Status Badge Component
+const StatusBadge = ({ status }) => {
+  const getStatusConfig = (status) => {
+    switch (status) {
+      case 'Open':
+        return { color: 'text-blue-600 bg-blue-50 border-blue-200', label: 'Open' };
+      case 'In-Progress':
+        return { color: 'text-yellow-600 bg-yellow-50 border-yellow-200', label: 'In Progress' };
+      case 'Solved':
+        return { color: 'text-green-600 bg-green-50 border-green-200', label: 'Solved' };
+      case 'Reopened':
+        return { color: 'text-orange-600 bg-orange-50 border-orange-200', label: 'Reopened' };
+      case 'Closed':
+        return { color: 'text-gray-600 bg-gray-50 border-gray-200', label: 'Closed' };
       default:
-        return 0;
+        return { color: 'text-gray-600 bg-gray-50 border-gray-200', label: status };
     }
-  });
-
-  const getStatusBadge = (status) => {
-    if (status === 'open') {
-      return (
-        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-amber-100 to-yellow-100 text-amber-800 border border-amber-200">
-          <AlertTriangle className="mr-1.5" size={12} />
-          Open
-        </span>
-      );
-    }
-    return (
-      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-green-100 to-emerald-100 text-green-800 border border-green-200">
-        <CheckCircle2 className="mr-1.5" size={12} />
-        Resolved
-      </span>
-    );
   };
 
-  const formatDate = (dateString) => {
-    const options = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
-    return new Date(dateString).toLocaleDateString(undefined, options);
-  };
-
-  const formatBookingDate = (dateString) => {
-    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-    return new Date(dateString).toLocaleDateString(undefined, options);
-  };
-
-  const stats = {
-    total: complaints.length,
-    open: complaints.filter(c => c.status === 'open').length,
-    resolved: complaints.filter(c => c.status === 'resolved').length,
-    thisMonth: complaints.filter(c => {
-      const complaintDate = new Date(c.createdAt);
-      const now = new Date();
-      return complaintDate.getMonth() === now.getMonth() && complaintDate.getFullYear() === now.getFullYear();
-    }).length
-  };
-
-  const StatCard = ({ title, value, icon: Icon, color, trend, subtitle, percentage }) => (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      whileHover={{ y: -5, scale: 1.02 }}
-      className={`relative overflow-hidden bg-gradient-to-br ${color} rounded-2xl p-6 shadow-xl hover:shadow-2xl transition-all duration-500 border border-white/20 backdrop-blur-sm`}
-    >
-      {/* Background Pattern */}
-      <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent"></div>
-      <div className="absolute -top-4 -right-4 w-24 h-24 bg-white/5 rounded-full"></div>
-      <div className="absolute -bottom-2 -left-2 w-16 h-16 bg-white/5 rounded-full"></div>
-      
-      <div className="relative z-10">
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-2">
-              <p className="text-sm font-semibold text-white/90 uppercase tracking-wide">{title}</p>
-              {percentage && (
-                <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                  percentage > 0 ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'
-                }`}>
-                  {percentage > 0 ? '+' : ''}{percentage}%
-                </span>
-              )}
-            </div>
-            <p className="text-3xl font-bold text-white mb-1">{value}</p>
-            {subtitle && (
-              <p className="text-sm text-white/70">{subtitle}</p>
-            )}
-            {trend && (
-              <div className="flex items-center mt-3 text-sm text-green-300">
-                <TrendingUp size={14} className="mr-1" />
-                <span className="font-medium">{trend}</span>
-              </div>
-            )}
-          </div>
-          <div className="p-3 rounded-xl bg-white/10 backdrop-blur-sm border border-white/20">
-            <Icon size={28} className="text-white" />
-          </div>
-        </div>
-        
-        {/* Progress bar for visual enhancement */}
-        <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden">
-          <motion.div 
-            initial={{ width: 0 }}
-            animate={{ width: `${Math.min((value / stats.total) * 100, 100)}%` }}
-            transition={{ duration: 1, delay: 0.5 }}
-            className="h-full bg-gradient-to-r from-white/60 to-white/80 rounded-full"
-          />
-        </div>
-      </div>
-    </motion.div>
-  );
-
-  const ComplaintCard = ({ complaint, index }) => (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.1 }}
-      whileHover={{ y: -8, scale: 1.02 }}
-      className="group relative bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-500 p-6 border border-gray-100/50 overflow-hidden"
-    >
-      {/* Background gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-50/50 via-transparent to-purple-50/30 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-      
-      {/* Priority indicator */}
-      <div className={`absolute top-0 left-0 w-1 h-full ${
-        complaint.status === 'open' ? 'bg-gradient-to-b from-red-400 to-orange-400' : 'bg-gradient-to-b from-green-400 to-emerald-400'
-      }`}></div>
-      
-      <div className="relative z-10">
-        {/* Header */}
-        <div className="flex items-start justify-between mb-6">
-          <div className="flex items-center space-x-4">
-            <div className="relative">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg">
-                {complaint.customer?.name?.charAt(0) || 'U'}
-              </div>
-              <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${
-                complaint.status === 'open' ? 'bg-red-400' : 'bg-green-400'
-              }`}></div>
-            </div>
-            <div>
-              <h3 className="font-bold text-gray-900 text-lg group-hover:text-blue-600 transition-colors duration-300">
-                {complaint.customer?.name}
-              </h3>
-              <div className="flex items-center gap-2 mt-1">
-                <Mail size={14} className="text-gray-400" />
-                <p className="text-sm text-gray-600">{complaint.customer?.email}</p>
-              </div>
-              {complaint.customer?.phone && (
-                <div className="flex items-center gap-2 mt-1">
-                  <Phone size={14} className="text-gray-400" />
-                  <p className="text-sm text-gray-600">{complaint.customer?.phone}</p>
-                </div>
-              )}
-            </div>
-          </div>
-          <div className="flex flex-col items-end gap-2">
-            {getStatusBadge(complaint.status)}
-            <span className="text-xs text-gray-500 font-medium">
-              ID: #{complaint._id.substring(0, 8)}
-            </span>
-          </div>
-        </div>
-
-        {/* Complaint Message */}
-        <div className="mb-6">
-          <div className="bg-gray-50/80 rounded-xl p-4 border-l-4 border-blue-400">
-            <div className="flex items-start gap-2 mb-2">
-              <MessageSquare size={16} className="text-blue-500 mt-0.5 flex-shrink-0" />
-              <h4 className="font-semibold text-gray-800 text-sm">Complaint Details</h4>
-            </div>
-            <p className="text-gray-700 leading-relaxed text-sm">{complaint.message}</p>
-          </div>
-        </div>
-
-        {/* Provider Info */}
-        {complaint.provider && (
-          <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl border border-purple-100">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-gradient-to-br from-purple-400 to-pink-400 rounded-lg flex items-center justify-center text-white font-semibold text-sm">
-                {complaint.provider.name?.charAt(0) || 'P'}
-              </div>
-              <div>
-                <p className="font-semibold text-gray-800 text-sm">Provider: {complaint.provider.name}</p>
-                <p className="text-xs text-gray-600">{complaint.provider.email}</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Metadata */}
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div className="flex items-center gap-2 text-sm text-gray-600">
-            <Calendar size={16} className="text-blue-400" />
-            <div>
-              <p className="font-medium">Created</p>
-              <p className="text-xs">{formatDate(complaint.createdAt)}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 text-sm text-gray-600">
-            <Clock size={16} className="text-green-400" />
-            <div>
-              <p className="font-medium">Priority</p>
-              <p className="text-xs">{complaint.status === 'open' ? 'High' : 'Resolved'}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Image Proof */}
-        {complaint.imageProof && (
-          <div className="mb-6">
-            <div className="relative group/image">
-              <img
-                src={complaint.imageProof.startsWith('http') ? complaint.imageProof : `${API.replace('/api', '')}/${complaint.imageProof}`}
-                alt="Complaint proof"
-                className="w-full h-32 object-cover rounded-xl border border-gray-200 group-hover/image:scale-105 transition-transform duration-300"
-                onError={(e) => {
-                  e.target.style.display = 'none';
-                  console.error('Failed to load complaint image:', complaint.imageProof);
-                }}
-                loading="lazy"
-              />
-              <div className="absolute inset-0 bg-black/0 group-hover/image:bg-black/20 rounded-xl transition-colors duration-300 flex items-center justify-center">
-                <Eye className="text-white opacity-0 group-hover/image:opacity-100 transition-opacity duration-300" size={24} />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Actions */}
-        <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-          <div className="flex space-x-2">
-            {complaint.status === 'open' ? (
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => {
-                  setSelectedComplaint(complaint);
-                  setIsResolveModalOpen(true);
-                }}
-                className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white text-sm font-semibold rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all duration-300 shadow-lg hover:shadow-xl"
-              >
-                <Check className="mr-2" size={16} />
-                Resolve
-              </motion.button>
-            ) : (
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => handleReopenComplaint(complaint)}
-                className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-semibold rounded-xl hover:from-amber-600 hover:to-orange-600 transition-all duration-300 shadow-lg hover:shadow-xl"
-              >
-                <RotateCcw className="mr-2" size={16} />
-                Reopen
-              </motion.button>
-            )}
-          </div>
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => {
-              setSelectedComplaint(complaint);
-              setIsBookingModalOpen(true);
-            }}
-            className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white text-sm font-semibold rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all duration-300 shadow-lg hover:shadow-xl"
-          >
-            <Eye className="mr-2" size={16} />
-            Details
-          </motion.button>
-        </div>
-      </div>
-    </motion.div>
-  );
+  const config = getStatusConfig(status);
 
   return (
-    <div className={`min-h-screen transition-all duration-500 ${
-      isFullscreen ? 'fixed inset-0 z-50 bg-white' : 'bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100'
-    } ${isFullscreen ? 'p-0' : 'p-4 md:p-6'}`}>
-      <div className={`${isFullscreen ? 'h-full' : 'max-w-7xl'} mx-auto ${isFullscreen ? 'p-6' : ''}`}>
-        {/* Enhanced Header */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="relative mb-8"
-        >
-          {/* Background decoration */}
-          <div className="absolute inset-0 bg-gradient-to-r from-blue-600/5 via-purple-600/5 to-pink-600/5 rounded-3xl -z-10"></div>
-          
-          <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 p-6 bg-white/60 backdrop-blur-sm rounded-3xl border border-white/20 shadow-xl">
-            <div className="flex-1">
-              <div className="flex items-center gap-4 mb-4">
-                <div className="p-3 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl shadow-lg">
-                  <Shield className="w-8 h-8 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-3xl md:text-4xl xl:text-5xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
-                    Complaints Management
-                  </h1>
-                  <p className="text-gray-600 mt-2 text-lg">Monitor and resolve customer complaints with advanced analytics</p>
-                </div>
-              </div>
-              
-              {/* Quick stats in header */}
-              <div className="flex flex-wrap gap-4 text-sm">
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-100 rounded-full">
-                  <Activity className="w-4 h-4 text-blue-600" />
-                  <span className="font-semibold text-blue-800">{stats.total} Total</span>
-                </div>
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-red-100 rounded-full">
-                  <AlertTriangle className="w-4 h-4 text-red-600" />
-                  <span className="font-semibold text-red-800">{stats.open} Open</span>
-                </div>
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-green-100 rounded-full">
-                  <CheckCircle2 className="w-4 h-4 text-green-600" />
-                  <span className="font-semibold text-green-800">{stats.resolved} Resolved</span>
-                </div>
-              </div>
-            </div>
-            
-            <div className="flex flex-wrap items-center gap-3">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setIsFullscreen(!isFullscreen)}
-                className="inline-flex items-center px-4 py-2.5 bg-gradient-to-r from-gray-600 to-gray-700 text-white font-semibold rounded-xl hover:from-gray-700 hover:to-gray-800 transition-all duration-300 shadow-lg hover:shadow-xl"
-              >
-                {isFullscreen ? <Minimize2 className="mr-2" size={18} /> : <Maximize2 className="mr-2" size={18} />}
-                {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
-              </motion.button>
-              
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => showToast('Export functionality coming soon')}
-                className="inline-flex items-center px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-semibold rounded-xl hover:from-emerald-600 hover:to-teal-700 transition-all duration-300 shadow-lg hover:shadow-xl"
-              >
-                <Download className="mr-2" size={18} />
-                Export
-              </motion.button>
-              
-              {selectedComplaints.length > 0 && (
-                <motion.button
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => {
-                    showToast(`${selectedComplaints.length} complaints resolved successfully`);
-                    setSelectedComplaints([]);
-                  }}
-                  className="inline-flex items-center px-4 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-300 shadow-lg hover:shadow-xl"
-                >
-                  <Check className="mr-2" size={18} />
-                  Resolve Selected ({selectedComplaints.length})
-                </motion.button>
-              )}
-            </div>
-          </div>
-        </motion.div>
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${config.color}`}>
+      {config.label}
+    </span>
+  );
+};
 
-        {/* Enhanced Statistics Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <StatCard
-            title="Total Complaints"
-            value={stats.total}
-            icon={MessageSquare}
-            color="from-blue-500 via-blue-600 to-blue-700"
-            trend="+12% from last month"
-            subtitle="All time complaints"
-            percentage={12}
-          />
-          <StatCard
-            title="Open Complaints"
-            value={stats.open}
-            icon={AlertTriangle}
-            color="from-red-500 via-red-600 to-red-700"
-            subtitle="Requires attention"
-            percentage={-5}
-          />
-          <StatCard
-            title="Resolved"
-            value={stats.resolved}
-            icon={CheckCircle2}
-            color="from-green-500 via-green-600 to-green-700"
-            subtitle="Successfully closed"
-            percentage={18}
-          />
-          <StatCard
-            title="This Month"
-            value={stats.thisMonth}
-            icon={Calendar}
-            color="from-purple-500 via-purple-600 to-purple-700"
-            subtitle="Current month activity"
-            percentage={8}
-          />
+// Priority Badge Component
+const PriorityBadge = ({ priority }) => {
+  const getPriorityConfig = (priority) => {
+    switch (priority) {
+      case 'Urgent':
+        return { color: 'text-red-600 bg-red-50 border-red-200', label: 'Urgent' };
+      case 'High':
+        return { color: 'text-orange-600 bg-orange-50 border-orange-200', label: 'High' };
+      case 'Medium':
+        return { color: 'text-yellow-600 bg-yellow-50 border-yellow-200', label: 'Medium' };
+      case 'Low':
+        return { color: 'text-green-600 bg-green-50 border-green-200', label: 'Low' };
+      default:
+        return { color: 'text-gray-600 bg-gray-50 border-gray-200', label: priority };
+    }
+  };
+
+  const config = getPriorityConfig(priority);
+
+  return (
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${config.color}`}>
+      {config.label}
+    </span>
+  );
+};
+
+// Complaint Details Modal Component
+const ComplaintDetailsModal = ({ complaint, onClose, onUpdateStatus, onResolve }) => {
+  const [activeTab, setActiveTab] = useState('details');
+  const [statusUpdate, setStatusUpdate] = useState(complaint?.status || '');
+  const [resolutionNotes, setResolutionNotes] = useState('');
+  const { token, API, showToast } = useAuth();
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+
+
+  const handleStatusUpdate = async () => {
+    if (!statusUpdate) {
+      showToast('Please select a status', 'error');
+      return;
+    }
+
+    try {
+      await onUpdateStatus(complaint._id, statusUpdate);
+      showToast('Status updated successfully', 'success');
+    } catch (error) {
+      showToast('Failed to update status', 'error');
+    }
+  };
+
+  const handleResolve = async () => {
+    if (!resolutionNotes.trim()) {
+      showToast('Resolution notes are required', 'error');
+      return;
+    }
+
+    try {
+      await onResolve(complaint._id, resolutionNotes);
+      setResolutionNotes('');
+      showToast('Complaint resolved successfully', 'success');
+    } catch (error) {
+      showToast('Failed to resolve complaint', 'error');
+    }
+  };
+
+  if (!complaint) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl max-w-6xl w-full max-h-[95vh] overflow-y-auto">
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center sticky top-0 bg-white z-10">
+          <div>
+            <h3 className="text-xl font-bold text-secondary">Complaint Details</h3>
+            <p className="text-sm text-gray-600">ID: #{complaint._id?.slice(-8)}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <X className="w-5 h-5 text-gray-400" />
+          </button>
         </div>
 
-        {/* Search and Filters */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-xl shadow-lg p-6 mb-6 border border-gray-100"
-        >
-          <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
-            <div className="flex-1 max-w-md">
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  type="text"
-                  placeholder="Search complaints, customers, providers..."
-                  className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg leading-5 bg-gray-50 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white transition-all duration-200"
-                  value={searchText}
-                  onChange={(e) => setSearchText(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-3">
+        {/* Tabs */}
+        <div className="border-b border-gray-200">
+          <nav className="flex space-x-8 px-6">
+            {['details', 'timeline', 'actions'].map((tab) => (
               <button
-                onClick={() => setShowFilters(!showFilters)}
-                className={`inline-flex items-center px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
-                  showFilters 
-                    ? 'bg-blue-100 text-blue-700 border border-blue-200' 
-                    : 'bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200'
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`py-4 px-1 border-b-2 font-medium text-sm capitalize transition-colors ${
+                  activeTab === tab
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
               >
-                <Filter className="mr-2" size={16} />
-                Filters
-                {showFilters ? <ChevronUp className="ml-1" size={16} /> : <ChevronDown className="ml-1" size={16} />}
+                {tab}
               </button>
+            ))}
+          </nav>
+        </div>
 
-              <div className="flex items-center space-x-2 bg-gray-100 rounded-lg p-1">
-                <button
-                  onClick={() => setViewMode('table')}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 ${
-                    viewMode === 'table' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Table
-                </button>
-                <button
-                  onClick={() => setViewMode('cards')}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 ${
-                    viewMode === 'cards' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Cards
-                </button>
+        <div className="p-6">
+          {/* Details Tab */}
+          {activeTab === 'details' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Complaint Information */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h4 className="font-semibold text-lg text-secondary mb-4">Complaint Information</h4>
+                  <div className="space-y-3">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Title:</span>
+                      <span className="font-medium text-secondary text-right">{complaint.title}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Status:</span>
+                      <StatusBadge status={complaint.status} />
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Priority:</span>
+                      <PriorityBadge priority={complaint.priority} />
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Category:</span>
+                      <span className="font-medium text-secondary">{complaint.category}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Created:</span>
+                      <span className="text-sm text-gray-600">{formatDate(complaint.createdAt)}</span>
+                    </div>
+                    {complaint.resolvedAt && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Resolved:</span>
+                        <span className="text-sm text-gray-600">{formatDate(complaint.resolvedAt)}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Parties Involved */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h4 className="font-semibold text-lg text-secondary mb-4">Parties Involved</h4>
+                  <div className="space-y-4">
+                    <div>
+                      <h5 className="font-medium text-gray-700 mb-2">Customer</h5>
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
+                          <User className="w-4 h-4 text-white" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-secondary">{complaint.customer?.name || 'N/A'}</p>
+                          <div className="flex items-center space-x-2 text-sm text-gray-600">
+                            <Mail className="w-3 h-3" />
+                            <span>{complaint.customer?.email || 'N/A'}</span>
+                          </div>
+                          {complaint.customer?.phone && (
+                            <div className="flex items-center space-x-2 text-sm text-gray-600">
+                              <Phone className="w-3 h-3" />
+                              <span>{complaint.customer.phone}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h5 className="font-medium text-gray-700 mb-2">Service Provider</h5>
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                          <User className="w-4 h-4 text-white" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-secondary">{complaint.provider?.name || 'N/A'}</p>
+                          <div className="flex items-center space-x-2 text-sm text-gray-600">
+                            <Mail className="w-3 h-3" />
+                            <span>{complaint.provider?.email || 'N/A'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h5 className="font-medium text-gray-700 mb-2">Booking Reference</h5>
+                      <p className="text-secondary font-medium">#{complaint.booking?._id?.slice(-8) || 'N/A'}</p>
+                      {complaint.booking?.date && (
+                        <p className="text-sm text-gray-600">Date: {formatDate(complaint.booking.date)}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
+
+              {/* Description */}
+              <div className="bg-gray-50 rounded-lg p-4">
+                <h4 className="font-semibold text-lg text-secondary mb-3">Description</h4>
+                <p className="text-gray-700 whitespace-pre-wrap">{complaint.description}</p>
+              </div>
+
+              {/* Images */}
+              {complaint.images && complaint.images.length > 0 && (
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h4 className="font-semibold text-lg text-secondary mb-3">Attached Images</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {complaint.images.map((image, index) => (
+                      <img
+                        key={index}
+                        src={image.secure_url}
+                        alt={`Complaint evidence ${index + 1}`}
+                        className="rounded-lg w-full h-32 object-cover cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={() => window.open(image.secure_url, '_blank')}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
+          )}
 
-          <AnimatePresence>
-            {showFilters && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="mt-4 pt-4 border-t border-gray-200"
-              >
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-                    <select
-                      value={filterStatus}
-                      onChange={(e) => setFilterStatus(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="all">All Status</option>
-                      <option value="open">Open</option>
-                      <option value="resolved">Resolved</option>
-                    </select>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Sort By</label>
-                    <select
-                      value={sortBy}
-                      onChange={(e) => setSortBy(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="newest">Newest First</option>
-                      <option value="oldest">Oldest First</option>
-                      <option value="status">By Status</option>
-                    </select>
-                  </div>
+          {/* Timeline Tab */}
+          {activeTab === 'timeline' && (
+            <div className="space-y-4">
+              <h4 className="font-semibold text-lg text-secondary">Status History</h4>
+              <div className="space-y-3">
+                {(complaint.statusHistory || []).length > 0 ? (
+                  complaint.statusHistory.map((history, index) => (
+                    <div key={index} className="flex items-start space-x-4">
+                      <div className="flex flex-col items-center">
+                        <div className="w-3 h-3 bg-primary rounded-full mt-1"></div>
+                        {index < complaint.statusHistory.length - 1 && (
+                          <div className="w-0.5 h-8 bg-gray-300 mt-1"></div>
+                        )}
+                      </div>
+                      <div className="flex-1 bg-gray-50 rounded-lg p-3">
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="font-medium text-secondary">{history.status}</span>
+                          <span className="text-xs text-gray-500">{formatDate(history.updatedAt)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-gray-500 text-center py-4">No status history available</p>
+                )}
+              </div>
 
-                  <div className="flex items-end">
+              {/* Reopen History */}
+              {(complaint.reopenHistory || []).length > 0 && (
+                <div className="mt-6">
+                  <h5 className="font-semibold text-secondary mb-3">Reopen History</h5>
+                  <div className="space-y-3">
+                    {complaint.reopenHistory.map((history, index) => (
+                      <div key={index} className="flex items-start space-x-4">
+                        <div className="flex flex-col items-center">
+                          <div className="w-3 h-3 bg-orange-500 rounded-full mt-1"></div>
+                          {index < complaint.reopenHistory.length - 1 && (
+                            <div className="w-0.5 h-8 bg-gray-300 mt-1"></div>
+                          )}
+                        </div>
+                        <div className="flex-1 bg-orange-50 rounded-lg p-3">
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="font-medium text-secondary">Reopened</span>
+                            <span className="text-xs text-gray-500">{formatDate(history.reopenedAt)}</span>
+                          </div>
+                          <p className="text-sm text-gray-700">{history.reason}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+
+
+          {/* Actions Tab */}
+          {activeTab === 'actions' && (
+            <div className="space-y-6">
+              {/* Update Status */}
+              <div className="bg-gray-50 rounded-lg p-4">
+                <h4 className="font-semibold text-lg text-secondary mb-3">Update Status</h4>
+                <div className="flex flex-col sm:flex-row sm:items-center space-y-3 sm:space-y-0 sm:space-x-3">
+                  <select
+                    value={statusUpdate}
+                    onChange={(e) => setStatusUpdate(e.target.value)}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                  >
+                    <option value="">Select Status</option>
+                    <option value="Open">Open</option>
+                    <option value="In-Progress">In Progress</option>
+                    <option value="Solved">Solved</option>
+                    <option value="Closed">Closed</option>
+                  </select>
+                  <button
+                    onClick={handleStatusUpdate}
+                    disabled={!statusUpdate}
+                    className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Update Status
+                  </button>
+                </div>
+              </div>
+
+              {/* Resolve Complaint */}
+              {complaint.status !== 'Solved' && complaint.status !== 'Closed' && (
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h4 className="font-semibold text-lg text-secondary mb-3">Resolve Complaint</h4>
+                  <textarea
+                    value={resolutionNotes}
+                    onChange={(e) => setResolutionNotes(e.target.value)}
+                    placeholder="Enter resolution notes..."
+                    rows="3"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary mb-3"
+                  />
+                  <div className="flex justify-end">
                     <button
-                      onClick={() => {
-                        setFilterStatus('all');
-                        setSortBy('newest');
-                        setSearchText('');
-                      }}
-                      className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors duration-200"
+                      onClick={handleResolve}
+                      disabled={!resolutionNotes.trim()}
+                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
-                      Clear Filters
+                      Mark as Resolved
                     </button>
                   </div>
                 </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </motion.div>
-
-        {/* Complaints Display */}
-        <AnimatePresence mode="wait">
-          {loading && complaints.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="bg-white rounded-xl shadow-lg p-12 text-center"
-            >
-              <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500 mx-auto mb-4"></div>
-              <p className="text-gray-600 text-lg">Loading complaints...</p>
-            </motion.div>
-          ) : complaints.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="bg-white rounded-xl shadow-lg p-12 text-center"
-            >
-              <MessageSquare className="mx-auto h-16 w-16 text-gray-400 mb-4" />
-              <p className="text-gray-600 text-lg">No complaints found.</p>
-            </motion.div>
-          ) : viewMode === 'cards' ? (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"
-            >
-              {filteredComplaints.length > 0 ? (
-                filteredComplaints.map((complaint, index) => (
-                  <ComplaintCard key={complaint._id} complaint={complaint} index={index} />
-                ))
-              ) : (
-                <div className="col-span-full text-center py-12">
-                  <MessageSquare className="mx-auto h-16 w-16 text-gray-400 mb-4" />
-                  <p className="text-gray-600 text-lg">No complaints match your current filters.</p>
-                  <button
-                    onClick={() => {
-                      setFilterStatus('all');
-                      setSortBy('newest');
-                      setSearchText('');
-                    }}
-                    className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    Clear Filters
-                  </button>
-                </div>
               )}
-            </motion.div>
-          ) : (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100"
-            >
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
-                    <tr>
-                      <th className="px-3 sm:px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider">
-                        <input
-                          type="checkbox"
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                          checked={filteredComplaints.length > 0 && selectedComplaints.length === filteredComplaints.length}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedComplaints(filteredComplaints.map(c => c._id));
-                            } else {
-                              setSelectedComplaints([]);
-                            }
-                          }}
-                        />
-                      </th>
-                      <th className="px-3 sm:px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider">Customer</th>
-                      <th className="px-3 sm:px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider hidden lg:table-cell">Provider</th>
-                      <th className="px-3 sm:px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider">Complaint</th>
-                      <th className="px-3 sm:px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider hidden md:table-cell">Date</th>
-                      <th className="px-3 sm:px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider">Status</th>
-                      <th className="px-3 sm:px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredComplaints.map((complaint, index) => (
-                      <motion.tr
-                        key={complaint._id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.05 }}
-                        className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 transition-all duration-200"
-                      >
-                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
-                          <input
-                            type="checkbox"
-                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                            checked={selectedComplaints.includes(complaint._id)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedComplaints([...selectedComplaints, complaint._id]);
-                              } else {
-                                setSelectedComplaints(selectedComplaints.filter(id => id !== complaint._id));
-                              }
-                            }}
-                          />
-                        </td>
-                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <div className="w-8 sm:w-10 h-8 sm:h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold mr-2 sm:mr-3 text-xs sm:text-sm">
-                              {complaint.customer?.name?.charAt(0) || 'U'}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="text-sm font-semibold text-gray-900 truncate">{complaint.customer?.name || 'Unknown'}</div>
-                              <div className="text-xs sm:text-sm text-gray-500 truncate">{complaint.customer?.email || 'No email'}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap hidden lg:table-cell">
-                          <div className="text-sm font-medium text-gray-900">{complaint.provider?.name || 'Unknown'}</div>
-                          <div className="text-sm text-gray-500">{complaint.provider?.email || 'No email'}</div>
-                        </td>
-                        <td className="px-3 sm:px-6 py-4 max-w-xs">
-                          <div className="text-sm text-gray-900 line-clamp-2" title={complaint.message}>
-                            {complaint.message || 'No message provided'}
-                          </div>
-                        </td>
-                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap hidden md:table-cell">
-                          <div className="text-sm text-gray-900">{formatDate(complaint.createdAt)}</div>
-                        </td>
-                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
-                          {getStatusBadge(complaint.status)}
-                        </td>
-                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <div className="flex space-x-2">
-                            {complaint.status === 'open' ? (
-                              <motion.button
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
-                                onClick={() => {
-                                  setSelectedComplaint(complaint);
-                                  setIsResolveModalOpen(true);
-                                }}
-                                className="inline-flex items-center px-3 py-1.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-medium rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-200 shadow-sm"
-                              >
-                                <Check className="mr-1" size={12} />
-                                Resolve
-                              </motion.button>
-                            ) : (
-                              <motion.button
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
-                                onClick={() => handleReopenComplaint(complaint)}
-                                className="inline-flex items-center px-3 py-1.5 bg-gradient-to-r from-amber-500 to-yellow-500 text-white text-xs font-medium rounded-lg hover:from-amber-600 hover:to-yellow-600 transition-all duration-200 shadow-sm"
-                              >
-                                <RotateCcw className="mr-1" size={12} />
-                                Reopen
-                              </motion.button>
-                            )}
-                            <motion.button
-                              whileHover={{ scale: 1.05 }}
-                              whileTap={{ scale: 0.95 }}
-                              onClick={() => {
-                                setSelectedComplaint(complaint);
-                                setIsBookingModalOpen(true);
-                              }}
-                              className="inline-flex items-center px-3 py-1.5 bg-gradient-to-r from-gray-500 to-gray-600 text-white text-xs font-medium rounded-lg hover:from-gray-600 hover:to-gray-700 transition-all duration-200 shadow-sm"
-                            >
-                              <Eye className="mr-1" size={12} />
-                              View
-                            </motion.button>
-                          </div>
-                        </td>
-                      </motion.tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </motion.div>
+            </div>
           )}
-        </AnimatePresence>
+        </div>
       </div>
-
-      {/* Resolve Complaint Modal */}
-      {isResolveModalOpen && selectedComplaint && (
-        <div className="fixed inset-0 z-[9999] overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="resolve-modal-title">
-          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div 
-              className="fixed inset-0 transition-opacity" 
-              aria-hidden="true"
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsResolveModalOpen(false);
-                setResponseText('');
-              }}
-            >
-              <div className="absolute inset-0 bg-gray-900 opacity-75"></div>
-            </div>
-
-            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                <div className="sm:flex sm:items-start">
-                  <div className="mt-3 text-center sm:mt-0 sm:text-left w-full">
-                    <div className="flex justify-between items-center mb-4">
-                      <h3 id="resolve-modal-title" className="text-lg leading-6 font-medium text-gray-900">
-                        Resolve Complaint #{selectedComplaint._id.substring(0, 8)}
-                      </h3>
-                      <button
-                        onClick={() => {
-                          setIsResolveModalOpen(false);
-                          setResponseText('');
-                        }}
-                        className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 transition-colors"
-                        aria-label="Close modal"
-                      >
-                        <X size={20} />
-                      </button>
-                    </div>
-
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Resolution Response</label>
-                        <textarea
-                          rows={4}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition-colors"
-                          placeholder="Enter your response to the complaint... (minimum 10 characters)"
-                          value={responseText}
-                          onChange={(e) => setResponseText(e.target.value)}
-                          maxLength={1000}
-                          required
-                        />
-                        <div className="flex justify-between items-center mt-1">
-                          <span className={`text-xs ${responseText.length < 10 ? 'text-red-500' : 'text-gray-500'}`}>
-                            {responseText.length < 10 ? `${10 - responseText.length} more characters needed` : `${responseText.length}/1000 characters`}
-                          </span>
-                          {responseText.length >= 1000 && (
-                            <span className="text-xs text-red-500">Maximum length reached</span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="bg-blue-50 p-4 rounded-md">
-                        <h4 className="text-sm font-medium text-blue-800 mb-2">Complaint Details</h4>
-                        <div className="space-y-2 text-sm text-gray-700">
-                          <p><span className="font-medium">Customer:</span> {selectedComplaint.customer?.name || 'N/A'}</p>
-                          <p><span className="font-medium">Provider:</span> {selectedComplaint.provider?.name || 'N/A'}</p>
-                          <p><span className="font-medium">Message:</span> {selectedComplaint.message || 'N/A'}</p>
-                          {selectedComplaint.imageProof && (
-                            <div className="mt-2">
-                              <img
-                                src={selectedComplaint.imageProof.startsWith('http') ? selectedComplaint.imageProof : `${API.replace('/api', '')}/${selectedComplaint.imageProof}`}
-                                alt="Complaint proof"
-                                className="max-w-full h-auto max-h-40 rounded border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity"
-                                onError={(e) => {
-                                  e.target.style.display = 'none';
-                                  console.error('Failed to load complaint image in modal:', selectedComplaint.imageProof);
-                                }}
-                                onClick={() => window.open(selectedComplaint.imageProof.startsWith('http') ? selectedComplaint.imageProof : `${API.replace('/api', '')}/${selectedComplaint.imageProof}`, '_blank')}
-                                loading="lazy"
-                              />
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {selectedComplaint.booking && (
-                        <div className="bg-blue-50 p-4 rounded-md">
-                          <h4 className="text-sm font-medium text-blue-800 mb-2">Booking Details</h4>
-                          <div className="space-y-2 text-sm text-gray-700">
-                            <p className="flex items-center">
-                              <Wrench className="mr-2" size={14} />
-                              <span className="font-medium">Service:</span> {selectedComplaint.booking.serviceType || 'N/A'}
-                            </p>
-                            <p className="flex items-center">
-                              <Calendar className="mr-2" size={14} />
-                              <span className="font-medium">Date:</span> {selectedComplaint.booking.date ? formatBookingDate(selectedComplaint.booking.date) : 'N/A'}
-                            </p>
-                            <p className="flex items-center">
-                              <Clock className="mr-2" size={14} />
-                              <span className="font-medium">Time Slot:</span> {selectedComplaint.booking.timeSlot || 'N/A'}
-                            </p>
-                            <p className="flex items-center">
-                              <DollarSign className="mr-2" size={14} />
-                              <span className="font-medium">Amount:</span> ₹{selectedComplaint.booking.amount || '0'}
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                <button
-                  type="button"
-                  className={`w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 text-base font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm transition-colors ${
-                    loading || !responseText.trim() || responseText.length < 10
-                      ? 'bg-gray-400 cursor-not-allowed'
-                      : 'bg-blue-600 hover:bg-blue-700'
-                  }`}
-                  onClick={handleResolveComplaint}
-                  disabled={loading || !responseText.trim() || responseText.length < 10}
-                >
-                  {loading ? (
-                    <div className="flex items-center">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      Resolving...
-                    </div>
-                  ) : (
-                    'Submit Resolution'
-                  )}
-                </button>
-                <button
-                  type="button"
-                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-                  onClick={() => {
-                    setIsResolveModalOpen(false);
-                    setResponseText('');
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        </div>
-      )}
-
-      {/* Booking Details Modal */}
-      {isBookingModalOpen && selectedComplaint && (
-        <div className="fixed inset-0 z-[9999] overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="booking-modal-title">
-          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div 
-              className="fixed inset-0 transition-opacity" 
-              aria-hidden="true"
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsBookingModalOpen(false);
-              }}
-            >
-              <div className="absolute inset-0 bg-gray-900 opacity-75"></div>
-            </div>
-
-            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                <div className="sm:flex sm:items-start">
-                  <div className="mt-3 text-center sm:mt-0 sm:text-left w-full">
-                    <div className="flex justify-between items-center mb-4">
-                      <h3 id="booking-modal-title" className="text-lg leading-6 font-medium text-gray-900">
-                        Booking Details for Complaint #{selectedComplaint._id.substring(0, 8)}
-                      </h3>
-                      <button
-                        onClick={() => setIsBookingModalOpen(false)}
-                        className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 transition-colors"
-                        aria-label="Close modal"
-                      >
-                        <X size={20} />
-                      </button>
-                    </div>
-
-                    <div className="space-y-4">
-                      {selectedComplaint.booking ? (
-                        <div className="bg-blue-50 p-4 rounded-md">
-                          <h4 className="text-sm font-medium text-blue-800 mb-2">Booking Information</h4>
-                          <div className="space-y-2 text-sm text-gray-700">
-                            <p className="flex items-center">
-                              <Wrench className="mr-2" size={14} />
-                              <span className="font-medium">Service Type:</span> {selectedComplaint.booking.service || selectedComplaint.booking.serviceType || 'N/A'}
-                            </p>
-                            <p className="flex items-center">
-                              <Calendar className="mr-2" size={14} />
-                              <span className="font-medium">Booking Date:</span> {selectedComplaint.booking.date ? formatBookingDate(selectedComplaint.booking.date) : 'N/A'}
-                            </p>
-                            <p className="flex items-center">
-                              <Clock className="mr-2" size={14} />
-                              <span className="font-medium">Time Slot:</span> {selectedComplaint.booking.timeSlot || 'N/A'}
-                            </p>
-                            <p className="flex items-center">
-                              <DollarSign className="mr-2" size={14} />
-                              <span className="font-medium">Amount Paid:</span> ₹{selectedComplaint.booking.amount || '0'}
-                            </p>
-                            <p className="flex items-center">
-                              <span className="font-medium">Booking Status:</span>
-                              <span className={`ml-2 px-2 py-1 text-xs rounded-full ${
-                                selectedComplaint.booking.status === 'completed' ? 'bg-green-100 text-green-800' :
-                                selectedComplaint.booking.status === 'cancelled' ? 'bg-red-100 text-red-800' :
-                                'bg-blue-100 text-blue-800'
-                              }`}>
-                                {selectedComplaint.booking.status || 'N/A'}
-                              </span>
-                            </p>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="bg-yellow-50 p-4 rounded-md">
-                          <p className="text-sm text-yellow-800">No booking information available for this complaint.</p>
-                        </div>
-                      )}
-
-                      <div className="bg-blue-50 p-4 rounded-md">
-                        <h4 className="text-sm font-medium text-blue-800 mb-2">Customer Details</h4>
-                        <div className="space-y-2 text-sm text-gray-700">
-                          <p><span className="font-medium">Name:</span> {selectedComplaint.customer?.name || 'N/A'}</p>
-                          <p><span className="font-medium">Email:</span> {selectedComplaint.customer?.email || 'N/A'}</p>
-                          <p><span className="font-medium">Phone:</span> {selectedComplaint.customer?.phone || 'N/A'}</p>
-                        </div>
-                      </div>
-
-                      <div className="bg-blue-50 p-4 rounded-md">
-                        <h4 className="text-sm font-medium text-blue-800 mb-2">Provider Details</h4>
-                        <div className="space-y-2 text-sm text-gray-700">
-                          <p><span className="font-medium">Name:</span> {selectedComplaint.provider?.name || 'N/A'}</p>
-                          <p><span className="font-medium">Email:</span> {selectedComplaint.provider?.email || 'N/A'}</p>
-                          <p><span className="font-medium">Phone:</span> {selectedComplaint.provider?.phone || 'N/A'}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                <button
-                  type="button"
-                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-                  onClick={() => setIsBookingModalOpen(false)}
-                >
-                  Close
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
 
-export default AdminComplaints;
+// Main Complaints Page Component
+const ComplaintsPage = () => {
+  const { token, API, showToast } = useAuth();
+  const [complaints, setComplaints] = useState([]);
+  const [selectedComplaint, setSelectedComplaint] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
+
+  const [filters, setFilters] = useState({
+    status: '',
+    priority: '',
+    category: '',
+    search: '',
+    startDate: '',
+    endDate: ''
+  });
+
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    pages: 0
+  });
+
+  const statusOptions = [
+    { value: '', label: 'All Status' },
+    { value: 'Open', label: 'Open' },
+    { value: 'In-Progress', label: 'In Progress' },
+    { value: 'Solved', label: 'Solved' },
+    { value: 'Reopened', label: 'Reopened' },
+    { value: 'Closed', label: 'Closed' }
+  ];
+
+  const priorityOptions = [
+    { value: '', label: 'All Priority' },
+    { value: 'Low', label: 'Low' },
+    { value: 'Medium', label: 'Medium' },
+    { value: 'High', label: 'High' },
+    { value: 'Urgent', label: 'Urgent' }
+  ];
+
+  const categoryOptions = [
+    { value: '', label: 'All Categories' },
+    { value: 'Service issue', label: 'Service Issue' },
+    { value: 'Payment issue', label: 'Payment Issue' },
+    { value: 'Delivery issue', label: 'Delivery Issue' },
+    { value: 'Suggestion', label: 'Suggestion' },
+    { value: 'Other', label: 'Other' }
+  ];
+
+  // Fetch complaints using admin route
+  const fetchComplaints = async () => {
+    setLoading(true);
+    try {
+      const queryParams = new URLSearchParams({
+        page: pagination.page.toString(),
+        limit: pagination.limit.toString()
+      });
+
+      if (filters.status) queryParams.append('status', filters.status);
+      if (filters.priority) queryParams.append('priority', filters.priority);
+      if (filters.category) queryParams.append('category', filters.category);
+      if (filters.search) queryParams.append('search', filters.search);
+      if (filters.startDate) queryParams.append('startDate', filters.startDate);
+      if (filters.endDate) queryParams.append('endDate', filters.endDate);
+
+      const response = await axios.get(`${API}/complaint?${queryParams}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.data && response.data.success) {
+        setComplaints(response.data.data || []);
+        setPagination(prev => ({
+          ...prev,
+          total: response.data.total || 0,
+          pages: response.data.pages || 1
+        }));
+      } else {
+        showToast('Failed to fetch complaints', 'error');
+      }
+    } catch (error) {
+      console.error('Error fetching complaints:', error);
+      showToast('Error fetching complaints', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch complaint details using admin route
+  const fetchComplaintDetails = async (complaintId) => {
+    try {
+      const response = await axios.get(`${API}/complaint/${complaintId}/details`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.data && response.data.success) {
+        setSelectedComplaint(response.data.data);
+        setShowModal(true);
+      } else {
+        showToast('Failed to fetch complaint details', 'error');
+      }
+    } catch (error) {
+      console.error('Error fetching complaint details:', error);
+      showToast('Failed to fetch complaint details', 'error');
+    }
+  };
+
+  // Update complaint status using admin route
+  const updateComplaintStatus = async (complaintId, status) => {
+    setUpdating(true);
+    try {
+      const response = await axios.put(
+        `${API}/complaint/${complaintId}/status`,
+        { status },
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (response.data && response.data.success) {
+        await fetchComplaints();
+        if (selectedComplaint && selectedComplaint._id === complaintId) {
+          setSelectedComplaint(prev => ({ ...prev, status }));
+        }
+        return true;
+      } else {
+        showToast('Failed to update status', 'error');
+        return false;
+      }
+    } catch (error) {
+      console.error('Error updating complaint status:', error);
+      showToast('Failed to update status', 'error');
+      return false;
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  // Resolve complaint using admin route
+  const resolveComplaint = async (complaintId, resolutionNotes) => {
+    setUpdating(true);
+    try {
+      const response = await axios.put(
+        `${API}/complaint/${complaintId}/resolve`,
+        { resolutionNotes },
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (response.data && response.data.success) {
+        await fetchComplaints();
+        setShowModal(false);
+        return true;
+      } else {
+        showToast('Failed to resolve complaint', 'error');
+        return false;
+      }
+    } catch (error) {
+      console.error('Error resolving complaint:', error);
+      showToast('Failed to resolve complaint', 'error');
+      return false;
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+
+
+  const handleFilterChange = (key, value) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+    setPagination(prev => ({ ...prev, page: 1 }));
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      status: '',
+      priority: '',
+      category: '',
+      search: '',
+      startDate: '',
+      endDate: ''
+    });
+    setPagination(prev => ({ ...prev, page: 1 }));
+  };
+
+  const goToPage = (page) => {
+    setPagination(prev => ({ ...prev, page }));
+  };
+
+  const nextPage = () => {
+    if (pagination.page < pagination.pages) {
+      setPagination(prev => ({ ...prev, page: prev.page + 1 }));
+    }
+  };
+
+  const prevPage = () => {
+    if (pagination.page > 1) {
+      setPagination(prev => ({ ...prev, page: prev.page - 1 }));
+    }
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  const stats = {
+    total: pagination.total,
+    open: complaints.filter(c => c.status === 'Open').length,
+    inProgress: complaints.filter(c => c.status === 'In-Progress').length,
+    solved: complaints.filter(c => c.status === 'Solved').length
+  };
+
+  useEffect(() => {
+    fetchComplaints();
+  }, [filters, pagination.page, pagination.limit]);
+
+  return (
+    <div className="min-h-screen p-4 md:p-6 bg-gray-50">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-secondary">Complaint Management</h1>
+              <p className="text-gray-600 mt-1">Manage and track customer complaints efficiently</p>
+            </div>
+            <button
+              onClick={fetchComplaints}
+              disabled={loading}
+              className="flex items-center space-x-2 bg-primary text-white px-4 py-2 rounded-lg hover:bg-teal-700 disabled:opacity-50 transition-colors"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              <span>{loading ? 'Loading...' : 'Refresh'}</span>
+            </button>
+          </div>
+
+          {/* Stats Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            <StatsCard
+              title="Total Complaints"
+              value={stats.total}
+              icon={AlertTriangle}
+              color="text-blue-600"
+              bgColor="bg-blue-100"
+            />
+            <StatsCard
+              title="Open"
+              value={stats.open}
+              icon={Clock}
+              color="text-yellow-600"
+              bgColor="bg-yellow-100"
+            />
+            <StatsCard
+              title="In Progress"
+              value={stats.inProgress}
+              icon={RefreshCw}
+              color="text-blue-600"
+              bgColor="bg-blue-100"
+            />
+            <StatsCard
+              title="Solved"
+              value={stats.solved}
+              icon={CheckCircle}
+              color="text-green-600"
+              bgColor="bg-green-100"
+            />
+          </div>
+        </div>
+
+        {/* Filters */}
+        <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-medium text-secondary">Filters</h3>
+            <button
+              onClick={clearFilters}
+              className="text-sm text-primary hover:text-teal-700 transition-colors"
+            >
+              Clear All
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-secondary mb-2">Search</label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search className="h-4 w-4 text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search complaints..."
+                  value={filters.search}
+                  onChange={(e) => handleFilterChange('search', e.target.value)}
+                  className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-secondary mb-2">Status</label>
+              <select
+                value={filters.status}
+                onChange={(e) => handleFilterChange('status', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+              >
+                {statusOptions.map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-secondary mb-2">Priority</label>
+              <select
+                value={filters.priority}
+                onChange={(e) => handleFilterChange('priority', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+              >
+                {priorityOptions.map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-sm font-medium text-secondary mb-2">From</label>
+                <input
+                  type="date"
+                  value={filters.startDate}
+                  onChange={(e) => handleFilterChange('startDate', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-secondary mb-2">To</label>
+                <input
+                  type="date"
+                  value={filters.endDate}
+                  onChange={(e) => handleFilterChange('endDate', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Complaints Table */}
+        <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+          <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+            <h3 className="text-lg font-medium text-secondary">
+              All Complaints ({pagination.total})
+            </h3>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+                    Complaint ID
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+                    Title & Description
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+                    Customer
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+                    Priority
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+                    Category
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+                    Created Date
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {loading ? (
+                  Array.from({ length: 5 }).map((_, index) => (
+                    <tr key={index} className="animate-pulse">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="h-4 bg-gray-200 rounded w-20"></div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="h-4 bg-gray-200 rounded w-32"></div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="h-4 bg-gray-200 rounded w-24"></div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="h-6 bg-gray-200 rounded w-16"></div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="h-6 bg-gray-200 rounded w-16"></div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="h-4 bg-gray-200 rounded w-20"></div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="h-4 bg-gray-200 rounded w-20"></div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="h-8 bg-gray-200 rounded w-16"></div>
+                      </td>
+                    </tr>
+                  ))
+                ) : complaints.length === 0 ? (
+                  <tr>
+                    <td colSpan="8" className="px-6 py-8 text-center">
+                      <div className="flex flex-col items-center">
+                        <AlertTriangle className="w-12 h-12 text-gray-400 mb-4" />
+                        <h3 className="text-lg font-medium text-secondary mb-2">No Complaints Found</h3>
+                        <p className="text-sm text-gray-500">
+                          {Object.values(filters).some(filter => filter !== '') 
+                            ? 'Try adjusting your filters to see more results.' 
+                            : 'No complaints have been submitted yet.'}
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  complaints.map((complaint) => (
+                    <tr key={complaint._id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-secondary">
+                          #{(complaint._id || '').slice(-8)}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm font-medium text-secondary">
+                          {complaint.title || 'No Title'}
+                        </div>
+                        <div className="text-sm text-gray-500 truncate max-w-xs">
+                          {complaint.description || 'No description'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-secondary">
+                          {complaint.customer?.name || 'Unknown'}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {complaint.customer?.email || 'N/A'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <StatusBadge status={complaint.status} />
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <PriorityBadge priority={complaint.priority} />
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary">
+                        {complaint.category || 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary">
+                        {formatDate(complaint.createdAt)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <button
+                          onClick={() => fetchComplaintDetails(complaint._id)}
+                          className="text-primary hover:text-teal-700 transition-colors p-1 rounded"
+                          title="View Details"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          {pagination.pages > 1 && (
+            <div className="bg-gray-50 px-6 py-3 border-t border-gray-200">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-secondary">
+                  Showing {((pagination.page - 1) * pagination.limit) + 1} to{' '}
+                  {Math.min(pagination.page * pagination.limit, pagination.total)} of{' '}
+                  {pagination.total} results
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={prevPage}
+                    disabled={pagination.page === 1}
+                    className="flex items-center px-3 py-2 text-sm font-medium text-secondary bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronLeft className="w-4 h-4 mr-1" />
+                    Previous
+                  </button>
+
+                  <div className="flex space-x-1">
+                    {Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
+                      const pageNumber = i + 1;
+                      return (
+                        <button
+                          key={pageNumber}
+                          onClick={() => goToPage(pageNumber)}
+                          className={`px-3 py-1 rounded ${
+                            pagination.page === pageNumber
+                              ? 'bg-primary text-white'
+                              : 'bg-white text-gray-700 hover:bg-gray-100 border'
+                          }`}
+                        >
+                          {pageNumber}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <button
+                    onClick={nextPage}
+                    disabled={pagination.page === pagination.pages}
+                    className="flex items-center px-3 py-2 text-sm font-medium text-secondary bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Next
+                    <ChevronRight className="w-4 h-4 ml-1" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Complaint Details Modal */}
+        {showModal && selectedComplaint && (
+          <ComplaintDetailsModal
+            complaint={selectedComplaint}
+            onClose={() => setShowModal(false)}
+            onUpdateStatus={updateComplaintStatus}
+            onResolve={resolveComplaint}
+          />
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default ComplaintsPage;

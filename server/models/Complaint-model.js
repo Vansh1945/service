@@ -1,140 +1,126 @@
-const mongoose = require('mongoose');
-const { Schema } = mongoose;
+const mongoose = require("mongoose");
 
-// Complaint Schema
-const complaintSchema = new Schema({
-  customer: {
-    type: Schema.Types.ObjectId,
-    ref: 'User',
-    required: [true, 'Customer ID is required']
-  },
-  provider: {
-    type: Schema.Types.ObjectId,
-    ref: 'Provider',
-    required: [true, 'Provider ID is required']
-  },
-  booking: {
-    type: Schema.Types.ObjectId,
-    ref: 'Booking',
-    required: [true, 'Booking reference is required']
-  },
-  message: {
-    type: String,
-    required: [true, 'Complaint message is required'],
-    trim: true,
-    minlength: [20, 'Complaint message must be at least 20 characters'],
-    maxlength: [1000, 'Complaint message cannot exceed 1000 characters']
-  },
-  imageProof: {
-    type: String,
-    default: null
-  },
+
+
+// Schema for tracking status changes
+const statusHistorySchema = new mongoose.Schema({
   status: {
     type: String,
-    enum: ['open', 'resolved'],
-    default: 'open'
+    required: true
   },
-  responseByAdmin: {
-    type: String,
-    trim: true,
-    maxlength: [1000, 'Admin response cannot exceed 1000 characters'],
-    default: null
-  },
-  reopenedBy: {  // Added this field
-    type: Schema.Types.ObjectId,
-    ref: 'User',
-    default: null
-  },
-  reopenedAt: {  // Added this field
-    type: Date,
-    default: null
-  },
-  reopenedReason: {  // Added this field
-    type: String,
-    default: null
-  },
-  createdAt: {
+  updatedAt: {
     type: Date,
     default: Date.now
+  }
+});
+
+const complaintSchema = new mongoose.Schema(
+  {
+    // 1. Customer Details
+    customer: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+      ref: "User", // Links to the User who made the complaint
+    },
+    booking: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Booking",
+      required: true,
+    },
+    provider: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Provider", // Assuming you have a Provider model
+      required: true,
+    },
+    
+    // Complaint Details
+    title: {
+      type: String,
+      required: [true, "Title is required"],
+      trim: true,
+    },
+    description: {
+      type: String,
+      required: [true, "Description is required"],
+    },
+    category: {
+      type: String,
+      required: true,
+      enum: ["Service issue", "Payment issue", "Delivery issue", "Suggestion", "Other"],
+    },
+    priority: {
+      type: String,
+      enum: ["Low", "Medium", "High", "Urgent"],
+      default: "Medium",
+    },
+    
+    // 5. File Storage (Cloudinary)
+    images: [{
+      secure_url: { type: String, required: true },
+      public_id: { type: String, required: true }
+    }],
+    
+    // Complaint Status
+    status: {
+      type: String,
+      enum: ["Open", "In-Progress", "Solved", "Reopened", "Closed"],
+      default: "Open",
+    },
+
+    // 4. Timeline & History
+    statusHistory: [statusHistorySchema], // Tracks all status changes
+
+
+    // 2. Reopen Functionality
+    reopenHistory: [{
+      reopenedAt: { type: Date, default: Date.now },
+      reason: { type: String, required: true }
+    }],
+
+    // Resolution Details
+    resolvedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Admin",
+      default: null
+    },
+    resolvedAt: {
+      type: Date,
+      default: null
+    },
+    resolutionNotes: {
+      type: String,
+      default: null
+    }
   },
-  resolvedAt: {
-    type: Date,
-    default: null
+  {
+    // Complaint creation date and time
+    timestamps: true, // Adds createdAt and updatedAt
   }
-}, {
-  toJSON: { virtuals: true },
-  toObject: { virtuals: true }
-});
+);
 
-// Indexes for better query performance
-complaintSchema.index({ customer: 1 });
-complaintSchema.index({ provider: 1 });
-complaintSchema.index({ booking: 1 });
-complaintSchema.index({ status: 1 });
-complaintSchema.index({ createdAt: -1 });
-
-// Virtual for complaint duration (if resolved)
-complaintSchema.virtual('resolutionTime').get(function() {
-  if (this.status === 'resolved' && this.resolvedAt) {
-    return this.resolvedAt - this.createdAt;
-  }
-  return null;
-});
-
-// Virtual for formatted creation date
-complaintSchema.virtual('formattedDate').get(function() {
-  return this.createdAt.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-});
-
-// Pre-save hook to set resolvedAt timestamp
-complaintSchema.pre('save', function(next) {
-  if (this.isModified('status') && this.status === 'resolved' && !this.resolvedAt) {
-    this.resolvedAt = new Date();
+// Middleware to track status changes
+complaintSchema.pre("save", function (next) {
+  if (this.isModified("status")) {
+    this.statusHistory.push({ status: this.status });
+    
+    if (this.status === "Solved") {
+      this.resolvedAt = new Date();
+    } else if (this.status !== "Solved") {
+      this.resolvedAt = null;
+      this.resolvedBy = null;
+    }
   }
   next();
 });
 
-// Static method to get open complaints count
-complaintSchema.statics.getOpenComplaintsCount = function() {
-  return this.countDocuments({ status: 'open' });
-};
+// Initialize status history on creation
+complaintSchema.pre("save", function(next) {
+    if (this.isNew) {
+        this.statusHistory.push({ status: 'Open' });
+    }
+    next();
+});
 
-// Static method to find complaints by user (customer or provider)
-complaintSchema.statics.findByUser = function(userId) {
-  return this.find({
-    $or: [{ customer: userId }, { provider: userId }]
-  }).sort({ createdAt: -1 });
-};
-
-// Instance method to resolve complaint
-complaintSchema.methods.resolveComplaint = function(adminResponse) {
-  if (this.status === 'resolved') {
-    throw new Error('Complaint is already resolved');
-  }
-  this.status = 'resolved';
-  this.responseByAdmin = adminResponse;
-  return this.save();
-};
-
-// Instance method to reopen complaint
-complaintSchema.methods.reopenComplaint = function(reason, userId) {
-  if (this.status !== 'resolved') {
-    throw new Error('Only resolved complaints can be reopened');
-  }
-  this.status = 'open';
-  this.reopenedAt = new Date();
-  this.reopenedBy = userId;
-  this.reopenedReason = reason;
-  this.resolvedAt = null;
-  return this.save();
-};
-
-const Complaint = mongoose.model('Complaint', complaintSchema);
+const Complaint = mongoose.model("Complaint", complaintSchema);
 
 module.exports = Complaint;

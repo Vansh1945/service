@@ -1,11 +1,20 @@
-# Update Admin Feedback.jsx UI to Match Other Admin Pages
+# Remove Comment-Related Code from Complaint System
 
-## Tasks
-- [ ] Update main wrapper to `min-h-screen p-4 md:p-6` with `max-w-7xl mx-auto` container
-- [ ] Update header section to `bg-white rounded-xl shadow-lg p-6 mb-8`
-- [ ] Update stats cards styling to match (rounded-xl shadow-md)
-- [ ] Update filters section to `bg-white rounded-xl shadow-lg p-6`
-- [ ] Update table to `bg-white rounded-xl shadow-lg overflow-hidden`
-- [ ] Update modal to `bg-white rounded-xl shadow-xl`
-- [ ] Update pagination styling for consistency
-- [ ] Test the updated UI
+## Backend Changes
+- [x] Remove commentSchema and comments field from server/models/Complaint-model.js
+- [x] Remove addComment function from server/controllers/Complaint-controller.js
+- [x] Remove comment additions in submitComplaint, resolveComplaint, updateComplaintStatus, reopenComplaint functions
+- [x] Remove populate('comments.author') from getComplaint and getComplaintDetails functions
+- [x] Remove POST /:id/comments route from server/routes/complaintRoutes.js
+
+## Frontend Changes
+- [x] Remove comments tab from ComplaintDetailsModal in client/src/pages/Admin/Complaint.jsx
+- [x] Remove add comment functionality and UI from the modal
+- [x] Remove comment display components
+- [x] Update modal tabs to exclude comments
+
+## Testing
+- [ ] Verify complaint submission still works
+- [ ] Verify complaint status updates work
+- [ ] Verify complaint resolution works
+- [ ] Verify frontend modal displays correctly without comments
