@@ -240,94 +240,105 @@ const AdminFeedback = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 p-6">
-            {/* Header */}
-            <div className="mb-6">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-2xl font-bold text-gray-800 mb-1">Feedback Management</h1>
-                        <p className="text-gray-600">Manage and review customer feedback</p>
-                    </div>
-                    <button className="flex items-center space-x-2 px-4 py-2 bg-white border rounded-lg hover:bg-gray-50">
-                        <Download className="w-4 h-4" />
-                        <span>Export</span>
-                    </button>
-                </div>
-            </div>
-
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                <div className="bg-white p-4 rounded-lg shadow-sm border">
-                    <div className="flex items-center justify-between">
+        <div className="min-h-screen p-4 md:p-6">
+            <div className="max-w-7xl mx-auto">
+                {/* Header */}
+                <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                         <div>
-                            <p className="text-sm text-gray-600">Total Feedback</p>
-                            <p className="text-xl font-bold text-gray-800">{stats.total}</p>
+                            <h1 className="text-2xl md:text-3xl font-bold text-secondary">Feedback Management</h1>
+                            <p className="text-gray-600 mt-1">Manage and review customer feedback</p>
                         </div>
-                        <MessageSquare className="w-6 h-6 text-blue-600" />
                     </div>
-                </div>
 
-                <div className="bg-white p-4 rounded-lg shadow-sm border">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm text-gray-600">Average Rating</p>
-                            <p className="text-xl font-bold text-gray-800">{stats.averageRating}/5</p>
+                    {/* Stats Cards */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                            <div className="flex items-center">
+                                <div className="p-2 rounded-full bg-blue-100">
+                                    <MessageSquare className="w-5 h-5 text-blue-600" />
+                                </div>
+                                <div className="ml-3">
+                                    <p className="text-sm font-medium text-gray-600">Total Feedback</p>
+                                    <p className="text-lg font-bold text-secondary">{stats.total}</p>
+                                </div>
+                            </div>
                         </div>
-                        <Star className="w-6 h-6 text-yellow-600" />
-                    </div>
-                </div>
 
-                <div className="bg-white p-4 rounded-lg shadow-sm border">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm text-gray-600">Provider Feedback</p>
-                            <p className="text-xl font-bold text-gray-800">{stats.providerFeedback}</p>
+                        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                            <div className="flex items-center">
+                                <div className="p-2 rounded-full bg-amber-100">
+                                    <Star className="w-5 h-5 text-amber-600" />
+                                </div>
+                                <div className="ml-3">
+                                    <p className="text-sm font-medium text-gray-600">Average Rating</p>
+                                    <p className="text-lg font-bold text-secondary">{stats.averageRating}/5</p>
+                                </div>
+                            </div>
                         </div>
-                        <User className="w-6 h-6 text-green-600" />
-                    </div>
-                </div>
 
-                <div className="bg-white p-4 rounded-lg shadow-sm border">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm text-gray-600">Service Feedback</p>
-                            <p className="text-xl font-bold text-gray-800">{stats.serviceFeedback}</p>
+                        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                            <div className="flex items-center">
+                                <div className="p-2 rounded-full bg-green-100">
+                                    <User className="w-5 h-5 text-green-600" />
+                                </div>
+                                <div className="ml-3">
+                                    <p className="text-sm font-medium text-gray-600">Provider Feedback</p>
+                                    <p className="text-lg font-bold text-secondary">{stats.providerFeedback}</p>
+                                </div>
+                            </div>
                         </div>
-                        <MessageSquare className="w-6 h-6 text-purple-600" />
+
+                        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                            <div className="flex items-center">
+                                <div className="p-2 rounded-full bg-purple-100">
+                                    <MessageSquare className="w-5 h-5 text-purple-600" />
+                                </div>
+                                <div className="ml-3">
+                                    <p className="text-sm font-medium text-gray-600">Service Feedback</p>
+                                    <p className="text-lg font-bold text-secondary">{stats.serviceFeedback}</p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
 
             {/* Filters */}
-            <div className="bg-white p-4 rounded-lg shadow-sm border mb-6">
+            <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
                 <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-semibold text-gray-800">Filters</h3>
-                    <button onClick={clearFilters} className="text-sm text-gray-600 hover:text-gray-800">
+                    <h3 className="text-lg font-medium text-secondary">Filters</h3>
+                    <button
+                        onClick={clearFilters}
+                        className="text-sm text-primary hover:text-teal-700 transition-colors"
+                    >
                         Clear All
                     </button>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
+                        <label className="block text-sm font-medium text-secondary mb-2">Search</label>
                         <div className="relative">
-                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <Search className="h-4 w-4 text-gray-400" />
+                            </div>
                             <input
                                 type="text"
-                                placeholder="Search..."
+                                placeholder="Search feedback..."
                                 value={filters.search}
                                 onChange={(e) => handleFilterChange('search', e.target.value)}
-                                className="w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
+                                className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
                             />
                         </div>
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Rating</label>
+                        <label className="block text-sm font-medium text-secondary mb-2">Rating</label>
                         <select
                             value={filters.rating}
                             onChange={(e) => handleFilterChange('rating', e.target.value)}
-                            className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
                         >
                             {ratingOptions.map(option => (
                                 <option key={option.value} value={option.value}>
@@ -338,11 +349,11 @@ const AdminFeedback = () => {
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                        <label className="block text-sm font-medium text-secondary mb-2">Type</label>
                         <select
                             value={filters.type}
                             onChange={(e) => handleFilterChange('type', e.target.value)}
-                            className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
                         >
                             {typeOptions.map(option => (
                                 <option key={option.value} value={option.value}>
@@ -354,21 +365,21 @@ const AdminFeedback = () => {
 
                     <div className="grid grid-cols-2 gap-2">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
+                            <label className="block text-sm font-medium text-secondary mb-2">From</label>
                             <input
                                 type="date"
                                 value={filters.startDate}
                                 onChange={(e) => handleFilterChange('startDate', e.target.value)}
-                                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">To</label>
+                            <label className="block text-sm font-medium text-secondary mb-2">To</label>
                             <input
                                 type="date"
                                 value={filters.endDate}
                                 onChange={(e) => handleFilterChange('endDate', e.target.value)}
-                                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
                             />
                         </div>
                     </div>
@@ -376,79 +387,103 @@ const AdminFeedback = () => {
             </div>
 
             {/* Feedback Table */}
-            <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
-                <div className="p-4 border-b">
-                    <h3 className="font-semibold text-gray-800">All Feedback ({pagination.total})</h3>
+            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+                <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+                    <h3 className="text-lg font-medium text-secondary">
+                        All Feedback ({pagination.total})
+                    </h3>
                 </div>
 
                 <div className="overflow-x-auto">
-                    <table className="w-full">
+                    <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
                             <tr>
-                                <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Customer</th>
-                                <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Provider</th>
-                                <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Service</th>
-                                <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Provider Rating</th>
-                                <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Service Rating</th>
-                                <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Date</th>
-                                <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Actions</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+                                    Customer
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+                                    Provider
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+                                    Service
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+                                    Provider Rating
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+                                    Service Rating
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+                                    Date
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
+                                    Actions
+                                </th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-200">
+                        <tbody className="bg-white divide-y divide-gray-200">
                             {loading ? (
                                 Array.from({ length: 5 }).map((_, index) => (
                                     <tr key={index} className="animate-pulse">
-                                        <td className="px-4 py-3">
+                                        <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="h-4 bg-gray-200 rounded w-24"></div>
                                         </td>
-                                        <td className="px-4 py-3">
+                                        <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="h-4 bg-gray-200 rounded w-20"></div>
                                         </td>
-                                        <td className="px-4 py-3">
+                                        <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="h-4 bg-gray-200 rounded w-32"></div>
                                         </td>
-                                        <td className="px-4 py-3">
+                                        <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="h-6 bg-gray-200 rounded w-16"></div>
                                         </td>
-                                        <td className="px-4 py-3">
+                                        <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="h-6 bg-gray-200 rounded w-16"></div>
                                         </td>
-                                        <td className="px-4 py-3">
+                                        <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="h-4 bg-gray-200 rounded w-20"></div>
                                         </td>
-                                        <td className="px-4 py-3">
+                                        <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="h-8 bg-gray-200 rounded w-16"></div>
                                         </td>
                                     </tr>
                                 ))
                             ) : feedbacks.length === 0 ? (
                                 <tr>
-                                    <td colSpan="7" className="px-4 py-8 text-center text-gray-500">
-                                        No feedback found
+                                    <td colSpan="7" className="px-6 py-8 text-center">
+                                        <div className="flex flex-col items-center">
+                                            <MessageSquare className="w-12 h-12 text-gray-400 mb-4" />
+                                            <h3 className="text-lg font-medium text-secondary mb-2">No Feedback Found</h3>
+                                            <p className="text-sm text-gray-500">
+                                                {Object.values(filters).some(filter => filter !== '') 
+                                                    ? 'Try adjusting your filters to see more results.' 
+                                                    : 'No feedback has been submitted yet.'}
+                                            </p>
+                                        </div>
                                     </td>
                                 </tr>
                             ) : (
                                 feedbacks.map((feedback) => (
-                                    <tr key={feedback._id} className="hover:bg-gray-50">
-                                        <td className="px-4 py-3">
-                                            <div className="text-sm font-medium text-gray-900">
+                                    <tr key={feedback._id} className="hover:bg-gray-50 transition-colors">
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="text-sm font-medium text-secondary">
                                                 {feedback.customer?.name || 'Unknown'}
                                             </div>
                                             <div className="text-sm text-gray-500">
                                                 {feedback.customer?.email || 'N/A'}
                                             </div>
                                         </td>
-                                        <td className="px-4 py-3 text-sm text-gray-900">
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary">
                                             {feedback.providerFeedback?.provider?.name || 'N/A'}
                                         </td>
-                                        <td className="px-4 py-3 text-sm text-gray-900">
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary">
                                             {feedback.serviceFeedback?.service?.title || 'N/A'}
                                         </td>
-                                        <td className="px-4 py-3">
+                                        <td className="px-6 py-4 whitespace-nowrap">
                                             {feedback.providerFeedback?.rating ? (
                                                 <div className="flex items-center space-x-2">
                                                     {renderStars(feedback.providerFeedback.rating)}
-                                                    <span className={`text-xs px-2 py-1 rounded-full border ${getRatingColor(feedback.providerFeedback.rating)}`}>
+                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRatingColor(feedback.providerFeedback.rating)}`}>
                                                         {feedback.providerFeedback.rating}
                                                     </span>
                                                 </div>
@@ -456,11 +491,11 @@ const AdminFeedback = () => {
                                                 <span className="text-sm text-gray-400">No rating</span>
                                             )}
                                         </td>
-                                        <td className="px-4 py-3">
+                                        <td className="px-6 py-4 whitespace-nowrap">
                                             {feedback.serviceFeedback?.rating ? (
                                                 <div className="flex items-center space-x-2">
                                                     {renderStars(feedback.serviceFeedback.rating)}
-                                                    <span className={`text-xs px-2 py-1 rounded-full border ${getRatingColor(feedback.serviceFeedback.rating)}`}>
+                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRatingColor(feedback.serviceFeedback.rating)}`}>
                                                         {feedback.serviceFeedback.rating}
                                                     </span>
                                                 </div>
@@ -468,13 +503,13 @@ const AdminFeedback = () => {
                                                 <span className="text-sm text-gray-400">No rating</span>
                                             )}
                                         </td>
-                                        <td className="px-4 py-3 text-sm text-gray-900">
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary">
                                             {formatDate(feedback.createdAt)}
                                         </td>
-                                        <td className="px-4 py-3">
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                             <button
                                                 onClick={() => fetchFeedbackDetails(feedback._id)}
-                                                className="p-2 text-blue-600 hover:bg-blue-50 rounded"
+                                                className="text-primary hover:text-teal-700 transition-colors p-1 rounded"
                                                 title="View Details"
                                             >
                                                 <Eye className="w-4 h-4" />
@@ -489,30 +524,34 @@ const AdminFeedback = () => {
 
                 {/* Pagination */}
                 {pagination.pages > 1 && (
-                    <div className="flex items-center justify-between px-4 py-3 border-t bg-gray-50">
-                        <div className="text-sm text-gray-700">
-                            Showing {((pagination.page - 1) * pagination.limit) + 1} to{' '}
-                            {Math.min(pagination.page * pagination.limit, pagination.total)} of{' '}
-                            {pagination.total} results
-                        </div>
-                        <div className="flex items-center space-x-2">
-                            <button
-                                onClick={prevPage}
-                                disabled={pagination.page === 1}
-                                className="p-2 rounded disabled:opacity-30 hover:bg-white border"
-                            >
-                                <ChevronLeft className="w-4 h-4" />
-                            </button>
-                            
-                            {getPaginationItems()}
-                            
-                            <button
-                                onClick={nextPage}
-                                disabled={pagination.page === pagination.pages}
-                                className="p-2 rounded disabled:opacity-30 hover:bg-white border"
-                            >
-                                <ChevronRight className="w-4 h-4" />
-                            </button>
+                    <div className="bg-gray-50 px-6 py-3 border-t border-gray-200">
+                        <div className="flex items-center justify-between">
+                            <div className="text-sm text-secondary">
+                                Showing {((pagination.page - 1) * pagination.limit) + 1} to{' '}
+                                {Math.min(pagination.page * pagination.limit, pagination.total)} of{' '}
+                                {pagination.total} results
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <button
+                                    onClick={prevPage}
+                                    disabled={pagination.page === 1}
+                                    className="flex items-center px-3 py-2 text-sm font-medium text-secondary bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    <ChevronLeft className="w-4 h-4 mr-1" />
+                                    Previous
+                                </button>
+
+                                {getPaginationItems()}
+
+                                <button
+                                    onClick={nextPage}
+                                    disabled={pagination.page === pagination.pages}
+                                    className="flex items-center px-3 py-2 text-sm font-medium text-secondary bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    Next
+                                    <ChevronRight className="w-4 h-4 ml-1" />
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -521,11 +560,14 @@ const AdminFeedback = () => {
             {/* Feedback Details Modal */}
             {showModal && selectedFeedback && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                        <div className="p-4 border-b flex justify-between items-center">
-                            <h3 className="text-lg font-semibold">Feedback Details</h3>
-                            <button onClick={() => setShowModal(false)} className="p-1 hover:bg-gray-100 rounded">
-                                <X className="w-5 h-5" />
+                    <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                            <h3 className="text-lg font-medium text-secondary">Feedback Details</h3>
+                            <button
+                                onClick={() => setShowModal(false)}
+                                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                            >
+                                <X className="w-5 h-5 text-gray-400" />
                             </button>
                         </div>
 
