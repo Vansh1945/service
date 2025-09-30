@@ -1,9 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../store/auth';
 import {
   StarIcon,
-  ArrowLeftIcon,
   ClockIcon,
   CheckBadgeIcon,
   ShieldCheckIcon,
@@ -14,65 +13,53 @@ import {
   ChevronRightIcon,
   ExclamationTriangleIcon,
   ChatBubbleLeftEllipsisIcon,
-  TruckIcon,
-  CreditCardIcon,
-  ArrowPathIcon,
-  ShareIcon,
-  MapPinIcon,
-  CalendarIcon,
-  CogIcon,
+  PhoneIcon,
   WrenchIcon,
   BoltIcon,
   HomeIcon,
-  PhoneIcon,
-  HeartIcon
+  CalendarIcon,
+  ShareIcon,
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  PhotoIcon
 } from '@heroicons/react/24/outline';
-import { StarIcon as StarIconSolid, HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid';
-import Rating from 'react-rating';
-import FeedbackModal from '../Customer/Feedback';
+import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 
 const ServiceDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { API, showToast, user, isAuthenticated, logoutUser, token } = useAuth();
+  const { API, showToast, user, isAuthenticated, token } = useAuth();
 
   // State management
   const [service, setService] = useState(null);
   const [relatedServices, setRelatedServices] = useState([]);
-  const [openAccordion, setOpenAccordion] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [feedbackData, setFeedbackData] = useState(null);
-  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
-  const [hasCompletedBooking, setHasCompletedBooking] = useState(false);
-  const [averageRating, setAverageRating] = useState(0);
-  const [ratingCount, setRatingCount] = useState(0);
-  const [allFeedbacks, setAllFeedbacks] = useState([]);
+  const [error, setError] = useState(null);
+  const [activeTab, setActiveTab] = useState('overview');
+  const [openAccordion, setOpenAccordion] = useState(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [zoomImage, setZoomImage] = useState(false);
+  const [imageLoading, setImageLoading] = useState(true);
+  const [allImages, setAllImages] = useState([]);
 
-  const fetchServiceFeedbacks = async () => {
-    try {
-      const response = await fetch(`${API}/feedback/service/${id}`);
-      const data = await response.json();
-
-      if (response.ok && data.success) {
-        setAllFeedbacks(data.data || []);
-
-        if (data.data && data.data.length > 0) {
-          const sum = data.data.reduce((acc, curr) => acc + curr.rating, 0);
-          const avgRating = parseFloat((sum / data.data.length).toFixed(1));
-          setAverageRating(avgRating);
-          setRatingCount(data.data.length);
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching service feedbacks:', error);
-    }
+  // Category icons mapping
+  const getCategoryIcon = (category) => {
+    const icons = {
+      'Electrical': BoltIcon,
+      'AC': WrenchIcon,
+      'Appliance Repair': WrenchIcon,
+      'Other': WrenchIcon
+    };
+    return icons[category] || WrenchIcon;
   };
 
+  // Fetch service data
   const fetchServiceData = async () => {
     try {
       setLoading(true);
+      setError(null);
+
+      // Simulate API delay for better UX
+      await new Promise(resolve => setTimeout(resolve, 800));
 
       const serviceResponse = await fetch(`${API}/service/services/${id}`);
       const serviceData = await serviceResponse.json();
@@ -82,57 +69,39 @@ const ServiceDetailPage = () => {
       }
 
       if (!serviceData.success || !serviceData.data) {
-        throw new Error('Service data not available');
+        throw new Error('Service not found');
       }
 
-      setService(serviceData.data);
+      const serviceDetails = serviceData.data;
+      setService(serviceDetails);
 
-      const relatedResponse = await fetch(
-        `${API}/service/services/category/${serviceData.data.category}?limit=4`
-      );
-      const relatedData = await relatedResponse.json();
+      // Process all images from the service
+      const images = serviceDetails.images || [];
+      setAllImages(images);
+      
+      // Set default image if no images available
+      if (images.length === 0) {
+        setAllImages(['https://images.unsplash.com/photo-1581093458791-8a0a1ac4e8e8?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80']);
+      }
 
-      if (relatedResponse.ok && relatedData.success) {
-        const filteredRelated = relatedData.data.filter(
-          s => s._id !== serviceData.data._id
+      // Fetch related services
+      try {
+        const relatedResponse = await fetch(
+          `${API}/service/services/category/${serviceDetails.category}?limit=4`
         );
-        setRelatedServices(filteredRelated);
-      }
+        const relatedData = await relatedResponse.json();
 
-      if (isAuthenticated && token) {
-        try {
-          const bookingsResponse = await fetch(`${API}/booking/customer`, {
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          });
-
-          if (bookingsResponse.status === 401) {
-            logoutUser();
-            showToast('Session expired. Please login again.', 'error');
-            return;
-          }
-
-          if (bookingsResponse.ok) {
-            const bookingsData = await bookingsResponse.json();
-            const completedBooking = bookingsData.data?.find(
-              booking => booking.services.some(s => s.service._id === id) &&
-                booking.status === 'completed'
-            );
-            setHasCompletedBooking(!!completedBooking);
-          }
-
-          const userFeedbacks = allFeedbacks.filter(feedback =>
-            feedback.customer && feedback.customer._id === user._id
+        if (relatedResponse.ok && relatedData.success) {
+          const filteredRelated = relatedData.data.filter(
+            s => s._id !== serviceDetails._id
           );
-          if (userFeedbacks.length > 0) {
-            setFeedbackData(userFeedbacks[0]);
-          }
-        } catch (err) {
-          console.error('Error fetching user-specific data:', err);
+          setRelatedServices(filteredRelated);
         }
+      } catch (relatedError) {
+        console.log('Failed to fetch related services:', relatedError);
       }
     } catch (err) {
+      setError(err.message);
       showToast(err.message, 'error');
     } finally {
       setLoading(false);
@@ -141,99 +110,42 @@ const ServiceDetailPage = () => {
 
   useEffect(() => {
     if (id) {
-      fetchServiceFeedbacks();
       fetchServiceData();
     }
-  }, [id, isAuthenticated]);
+  }, [id]);
 
   const handleBookNow = () => {
-    if (!isAuthenticated || !user) {
+    if (!isAuthenticated) {
       showToast('Please login to book services', 'error');
-      navigate('/login', { state: { from: `/customer/service/${id}` } });
+      navigate('/login', { state: { from: `/customer/services/${id}` } });
       return;
     }
 
     navigate(`/customer/book-service/${id}`, {
-      state: {
-        serviceDetails: service
-      }
+      state: { serviceDetails: service }
     });
   };
 
-  const handleShare = () => {
+  const handleShare = async () => {
+    const shareData = {
+      title: service?.title,
+      text: `Check out this ${service?.title} service from Raj Electrical Service`,
+      url: window.location.href,
+    };
+
     if (navigator.share) {
-      navigator.share({
-        title: service?.title,
-        text: `Check out this ${service?.title} service`,
-        url: window.location.href
-      }).catch(console.error);
+      try {
+        await navigator.share(shareData);
+      } catch (err) {
+        console.log('Error sharing:', err);
+      }
     } else {
-      navigator.clipboard.writeText(window.location.href);
-      showToast('Link copied to clipboard!', 'success');
-    }
-  };
-
-  const handleSubmitFeedback = async (feedback) => {
-    try {
-      const bookingsResponse = await fetch(`${API}/booking/customer`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (bookingsResponse.status === 401) {
-        logoutUser();
-        showToast('Session expired. Please login again.', 'error');
-        return;
+      try {
+        await navigator.clipboard.writeText(window.location.href);
+        showToast('Link copied to clipboard!', 'success');
+      } catch (err) {
+        console.log('Error copying to clipboard:', err);
       }
-
-      if (!bookingsResponse.ok) {
-        throw new Error('Failed to fetch bookings');
-      }
-
-      const bookingsData = await bookingsResponse.json();
-      const completedBooking = bookingsData.data?.find(
-        booking => booking.services.some(s => s.service._id === id) &&
-          booking.status === 'completed'
-      );
-
-      if (!completedBooking) {
-        throw new Error('No completed booking found for this service');
-      }
-
-      const response = await fetch(`${API}/feedback`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          service: id,
-          booking: completedBooking._id,
-          rating: feedback.rating,
-          comment: feedback.comment
-        })
-      });
-
-      if (response.status === 401) {
-        logoutUser();
-        showToast('Session expired. Please login again.', 'error');
-        return;
-      }
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to submit feedback');
-      }
-
-      showToast('Feedback submitted successfully!', 'success');
-      setFeedbackData(data.data);
-      setShowFeedbackModal(false);
-      await fetchServiceFeedbacks();
-    } catch (error) {
-      console.error('Feedback submission error:', error);
-      showToast(error.message || 'Failed to submit feedback', 'error');
     }
   };
 
@@ -241,97 +153,79 @@ const ServiceDetailPage = () => {
     setOpenAccordion(openAccordion === index ? null : index);
   };
 
+  const nextImage = () => {
+    setCurrentImageIndex(prev => 
+      prev === allImages.length - 1 ? 0 : prev + 1
+    );
+  };
+
+  const prevImage = () => {
+    setCurrentImageIndex(prev => 
+      prev === 0 ? allImages.length - 1 : prev - 1
+    );
+  };
+
   const formatDuration = (hours) => {
     const hrs = Math.floor(hours);
     const mins = Math.round((hours - hrs) * 60);
-    return `${hrs > 0 ? `${hrs} hr` : ''} ${mins > 0 ? `${mins} min` : ''}`.trim();
+    
+    if (hrs === 0) return `${mins} min`;
+    if (mins === 0) return `${hrs} hr`;
+    return `${hrs} hr ${mins} min`;
   };
 
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
+  const handleImageLoad = () => {
+    setImageLoading(false);
   };
 
-  const getCustomerInitials = (customerName) => {
-    if (!customerName) return 'U';
-    return customerName.split(' ').map(name => name[0]).join('').toUpperCase().slice(0, 2);
+  const handleThumbnailClick = (index) => {
+    setCurrentImageIndex(index);
+    setImageLoading(true);
   };
 
-  // Get top-rated review
-  const getTopReview = () => {
-    if (allFeedbacks.length === 0) return null;
-    return allFeedbacks.reduce((prev, current) => 
-      (prev.rating > current.rating) ? prev : current
-    );
-  };
+  const ratingDistribution = useMemo(() => {
+    const distribution = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+    if (service?.feedback && service.feedback.length > 0) {
+      for (const review of service.feedback) {
+        if (distribution[review.rating] !== undefined) {
+          distribution[review.rating]++;
+        }
+      }
+    }
+    return distribution;
+  }, [service?.feedback]);
 
-  // Custom Rating Component to avoid deprecated lifecycle warnings
-  const CustomRating = ({ value, readonly = true }) => {
-    return (
-      <div className="flex items-center">
-        {[1, 2, 3, 4, 5].map((star) => (
-          readonly ? (
-            <span key={star}>
-              {value >= star ? (
-                <StarIconSolid className="w-5 h-5 text-yellow-400" />
-              ) : (
-                <StarIcon className="w-5 h-5 text-gray-300" />
-              )}
-            </span>
-          ) : (
-            <button
-              key={star}
-              type="button"
-              onClick={() => !readonly && onChange(star)}
-            >
-              {value >= star ? (
-                <StarIconSolid className="w-5 h-5 text-yellow-400" />
-              ) : (
-                <StarIcon className="w-5 h-5 text-gray-300" />
-              )}
-            </button>
-          )
-        ))}
-      </div>
-    );
-  };
-
+  // Loading State
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
-        <div className="text-center bg-white/80 backdrop-blur-sm rounded-2xl p-8 shadow-xl border border-white/20">
-          <div className="inline-flex items-center space-x-2 mb-6">
-            <div className="w-3 h-3 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-            <div className="w-3 h-3 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-            <div className="w-3 h-3 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-flex items-center space-x-2 mb-4">
+            <div className="w-3 h-3 bg-teal-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+            <div className="w-3 h-3 bg-teal-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+            <div className="w-3 h-3 bg-teal-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
           </div>
-          <p className="text-secondary font-medium text-lg">Loading service details...</p>
-          <div className="mt-4 w-32 h-1 bg-gray-200 rounded-full overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-primary to-accent rounded-full animate-pulse"></div>
-          </div>
+          <p className="text-gray-600 font-medium">Loading service details...</p>
         </div>
       </div>
     );
   }
 
-  if (!service) {
+  // Error State
+  if (error || !service) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
-        <div className="text-center max-w-md bg-white/90 backdrop-blur-sm rounded-2xl p-8 shadow-xl border border-white/20">
-          <div className="w-16 h-16 bg-gradient-to-br from-accent/20 to-accent/10 rounded-full flex items-center justify-center mx-auto mb-6">
-            <ExclamationTriangleIcon className="w-8 h-8 text-accent" />
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="text-center max-w-md bg-white rounded-2xl p-8 shadow-xl border border-gray-200">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <ExclamationTriangleIcon className="w-8 h-8 text-red-600" />
           </div>
-          <h3 className="text-xl font-semibold text-secondary mb-3">Service Not Found</h3>
-          <p className="text-gray-600 mb-6 leading-relaxed">
-            The service you're looking for doesn't exist or may have been removed.
+          <h3 className="text-xl font-bold text-gray-800 mb-2">Service Not Found</h3>
+          <p className="text-gray-600 mb-6">
+            {error || 'The service you\'re looking for doesn\'t exist.'}
           </p>
           <button
-            onClick={() => navigate('/services')}
-            className="px-6 py-3 bg-gradient-to-r from-primary to-primary/90 text-white font-medium rounded-xl hover:from-primary/90 hover:to-primary transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+            onClick={() => navigate('/customer/services')}
+            className="px-6 py-3 bg-orange-500 text-white font-medium rounded-lg hover:bg-orange-600 transition-all duration-300 shadow-lg hover:shadow-xl"
           >
             Browse Services
           </button>
@@ -340,30 +234,133 @@ const ServiceDetailPage = () => {
     );
   }
 
-  const topReview = getTopReview();
+  const CategoryIcon = getCategoryIcon(service.category);
+  const specialNotes = service.specialNotes;
+  const materialsUsed = service.materialsUsed;
+
+  // Desktop Booking Card
+  const DesktopBookingCard = (
+    <div className="sticky top-8 space-y-8">
+      <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-xl">
+        <div className="text-center mb-6">
+          <div className="flex items-baseline justify-center mb-2">
+            <CurrencyRupeeIcon className="w-8 h-8 text-gray-600" />
+            <span className="text-4xl font-bold text-gray-800 ml-1">
+              {service.basePrice?.toLocaleString() || '0'}
+            </span>
+          </div>
+          <p className="text-gray-600">All inclusive pricing • No hidden charges</p>
+          <p className="text-orange-500 text-sm mt-1 font-medium">
+            * Material cost from local market is not included
+          </p>
+        </div>
+
+        {/* Service Features */}
+        <div className="space-y-4 mb-6">
+          <div className="flex items-center p-3 bg-white rounded-lg border border-gray-200 shadow-sm">
+            <ClockIcon className="w-5 h-5 text-teal-600 mr-3" />
+            <div>
+              <div className="font-medium text-gray-800">Service Duration</div>
+              <div className="text-sm text-gray-600">{formatDuration(service.duration)} Approx</div>
+            </div>
+          </div>
+          
+          <div className="flex items-center p-3 bg-white rounded-lg border border-gray-200 shadow-sm">
+            <ShieldCheckIcon className="w-5 h-5 text-teal-600 mr-3" />
+            <div>
+              <div className="font-medium text-gray-800">Service Warranty</div>
+              <div className="text-sm text-gray-600">30 days comprehensive</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Enhanced Action Buttons */}
+        <div className="grid grid-cols-3 gap-3">
+          <button
+            onClick={handleBookNow}
+            className="col-span-2 bg-orange-500 text-white py-4 px-6 rounded-xl font-bold hover:bg-orange-600 transition-all duration-300 transform hover:scale-105 flex items-center justify-center shadow-lg hover:shadow-xl"
+          >
+            <CalendarIcon className="w-5 h-5 mr-3" />
+            Book Service
+          </button>
+          
+          <button
+            onClick={handleShare}
+            className="flex items-center justify-center py-2 px-3 border border-gray-300 rounded-xl hover:bg-gray-50 transition-all duration-300 transform hover:scale-105 shadow-sm"
+          >
+            <ShareIcon className="w-5 h-5 text-gray-600" />
+          </button>
+        </div>
+
+        {/* Enhanced Contact Info */}
+        <div className="mt-6 pt-6 border-t border-gray-200">
+          <div className="text-center">
+            <div className="flex items-center justify-center text-sm text-gray-600 mb-2">
+              <PhoneIcon className="w-4 h-4 mr-2" />
+              <span>Need help? Call us at</span>
+            </div>
+            <a 
+              href="tel:+911234567890" 
+              className="text-teal-600 font-semibold hover:text-teal-700 transition-colors duration-300"
+            >
+              +91-XXXXXX-XXXX
+            </a>
+          </div>
+        </div>
+      </div>
+      
+      {/* Desktop Only - Peace of Mind Card */}
+      <div className="hidden lg:block bg-white rounded-2xl p-6 border border-gray-200 shadow-xl">
+        <h4 className="font-semibold text-gray-800 mb-4 text-lg flex items-center">
+          <ShieldCheckIcon className="w-6 h-6 text-teal-600 mr-3" />
+          Peace of Mind
+        </h4>
+        <div className="space-y-4">
+          <div className="flex items-start">
+            <div className="w-6 h-6 bg-teal-100 rounded-full flex items-center justify-center mr-3 mt-0.5 flex-shrink-0">
+              <CheckIcon className="w-4 h-4 text-teal-600" />
+            </div>
+            <span className="text-gray-600"><strong>Expert Professionals:</strong> All our service providers are verified and trained.</span>
+          </div>
+          <div className="flex items-start">
+            <div className="w-6 h-6 bg-teal-100 rounded-full flex items-center justify-center mr-3 mt-0.5 flex-shrink-0">
+              <CheckIcon className="w-4 h-4 text-teal-600" />
+            </div>
+            <span className="text-gray-600"><strong>Transparent Pricing:</strong> No hidden costs. What you see is what you pay.</span>
+          </div>
+          <div className="flex items-start">
+            <div className="w-6 h-6 bg-teal-100 rounded-full flex items-center justify-center mr-3 mt-0.5 flex-shrink-0">
+              <CheckIcon className="w-4 h-4 text-teal-600" />
+            </div>
+            <span className="text-gray-600"><strong>Service Warranty:</strong> We stand by our work with a 30-day warranty.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
-      {/* Breadcrumb Navigation */}
-      <div className="bg-white/80 backdrop-blur-sm border-b border-gray-200/50 sticky top-0 z-40">
+    <div className="min-h-screen bg-gray-50 font-inter">
+      {/* Breadcrumb */}
+      <div className="bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <nav className="flex" aria-label="Breadcrumb">
-            <ol className="inline-flex items-center space-x-2 md:space-x-4">
-              <li className="inline-flex items-center">
+            <ol className="inline-flex items-center space-x-1 md:space-x-3">
+              <li>
                 <button
                   onClick={() => navigate('/customer/services')}
-                  className="inline-flex items-center text-sm font-medium text-secondary hover:text-primary transition-all duration-300 group"
+                  className="inline-flex items-center text-sm font-medium text-gray-500 hover:text-teal-600 transition-colors duration-300"
                 >
-                  <HomeIcon className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform duration-300" />
-                  All Services
+                  <HomeIcon className="w-4 h-4 mr-2" />
+                  Services
                 </button>
               </li>
               <li>
                 <div className="flex items-center">
-                  <ChevronRightIcon className="w-4 h-4 mx-2 text-gray-400" />
+                  <ChevronRightIcon className="w-4 h-4 text-gray-400 mx-1" />
                   <button
                     onClick={() => navigate(`/customer/services?category=${service.category}`)}
-                    className="text-sm font-medium text-gray-600 hover:text-primary transition-all duration-300 px-2 py-1 rounded-lg hover:bg-primary/5"
+                    className="text-sm font-medium text-gray-500 hover:text-teal-600 transition-colors duration-300"
                   >
                     {service.category}
                   </button>
@@ -371,8 +368,8 @@ const ServiceDetailPage = () => {
               </li>
               <li aria-current="page">
                 <div className="flex items-center">
-                  <ChevronRightIcon className="w-4 h-4 mx-2 text-gray-400" />
-                  <span className="text-sm font-medium text-primary bg-primary/10 px-3 py-1 rounded-full truncate max-w-xs">
+                  <ChevronRightIcon className="w-4 h-4 text-gray-400 mx-1" />
+                  <span className="text-sm font-medium text-teal-600 truncate max-w-xs">
                     {service.title}
                   </span>
                 </div>
@@ -384,406 +381,550 @@ const ServiceDetailPage = () => {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl overflow-hidden border border-white/20">
-          <div className="lg:flex">
-            {/* Service Image Gallery */}
-            <div className="lg:w-2/5 p-6 lg:p-8">
-              <div className="sticky top-24">
-                <div 
-                  className={`relative h-80 lg:h-96 rounded-2xl overflow-hidden bg-gradient-to-br from-gray-100 to-gray-50 mb-6 cursor-${zoomImage ? 'zoom-out' : 'zoom-in'} group`}
-                  onClick={() => setZoomImage(!zoomImage)}
-                >
-                  <img
-                    src={`${API}/uploads/services/${service.image || 'default-service.jpg'}`}
-                    alt={service.title}
-                    className={`w-full h-full object-contain transition-all duration-500 ${zoomImage ? 'scale-150' : 'scale-100 group-hover:scale-105'}`}
-                    onError={(e) => {
-                      e.target.onerror = null;
-                      e.target.src = '/placeholder-service.jpg';
-                    }}
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                  {zoomImage && (
-                    <div className="absolute bottom-4 right-4 bg-black/70 backdrop-blur-sm text-white text-sm px-3 py-2 rounded-lg">
-                      Click to zoom out
+        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+          <div className="grid grid-cols-1 lg:grid-cols-3 lg:gap-8 p-6 lg:p-8">
+            {/* Left Column - Images & Basic Info */}
+            <div className="lg:col-span-2">
+              {/* Enhanced Image Gallery */}
+              <div className="mb-8">
+                <div className="relative h-80 lg:h-96 rounded-xl overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 group">
+                  {imageLoading && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600"></div>
                     </div>
+                  )}
+                  
+                  {allImages.length > 0 ? (
+                    <img
+                      src={allImages[currentImageIndex]}
+                      alt={`${service.title} - Image ${currentImageIndex + 1}`}
+                      className={`w-full h-full object-cover transition-opacity duration-300 ${ 
+                        imageLoading ? 'opacity-0' : 'opacity-100'
+                      }`}
+                      onLoad={handleImageLoad}
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = 'https://images.unsplash.com/photo-1581093458791-8a0a1ac4e8e8?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80';
+                        setImageLoading(false);
+                      }}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-200 to-gray-300">
+                      <div className="text-center text-gray-600">
+                        <PhotoIcon className="w-16 h-16 mx-auto mb-2" />
+                        <p>No images available</p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Image Navigation */}
+                  {allImages.length > 1 && (
+                    <>
+                      <button
+                        onClick={prevImage}
+                        className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-white/90 backdrop-blur-sm rounded-full p-3 shadow-lg hover:bg-white hover:scale-110 transition-all duration-300 opacity-0 group-hover:opacity-100"
+                      >
+                        <ArrowLeftIcon className="w-5 h-5 text-gray-600" />
+                      </button>
+                      <button
+                        onClick={nextImage}
+                        className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-white/90 backdrop-blur-sm rounded-full p-3 shadow-lg hover:bg-white hover:scale-110 transition-all duration-300 opacity-0 group-hover:opacity-100"
+                      >
+                        <ArrowRightIcon className="w-5 h-5 text-gray-600" />
+                      </button>
+                      
+                      {/* Image Counter */}
+                      <div className="absolute top-4 left-4 bg-black/70 text-white px-3 py-1 rounded-full text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                        {currentImageIndex + 1} / {allImages.length}
+                      </div>
+                    </>
                   )}
                 </div>
 
-                {/* Service Tags */}
-                <div className="flex flex-wrap gap-2 mb-6">
-                  <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold bg-gradient-to-r from-green-100 to-green-50 text-green-700 border border-green-200">
-                    <CheckBadgeIcon className="w-3 h-3 mr-1.5" />
-                    Verified
-                  </span>
-                  <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold bg-gradient-to-r from-primary/10 to-primary/5 text-primary border border-primary/20">
-                    <BoltIcon className="w-3 h-3 mr-1.5" />
-                    Popular
-                  </span>
-                  <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold bg-gradient-to-r from-accent/10 to-accent/5 text-accent border border-accent/20">
-                    <WrenchIcon className="w-3 h-3 mr-1.5" />
-                    Expert Service
-                  </span>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="flex space-x-3 mb-8">
-                  <button
-                    onClick={handleBookNow}
-                    className="flex-1 flex items-center justify-center bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary text-white font-semibold py-3.5 px-6 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 group"
-                  >
-                    <CalendarIcon className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform duration-300" />
-                    Book Now
-                  </button>
-                  <button
-                    onClick={handleShare}
-                    className="p-3.5 rounded-xl border border-gray-200 hover:border-primary/30 hover:bg-primary/5 transition-all duration-300 group"
-                  >
-                    <ShareIcon className="w-5 h-5 text-gray-600 group-hover:text-primary transition-colors duration-300" />
-                  </button>
-                  <button className="p-3.5 rounded-xl border border-gray-200 hover:border-accent/30 hover:bg-accent/5 transition-all duration-300 group">
-                    <HeartIcon className="w-5 h-5 text-gray-600 group-hover:text-accent transition-colors duration-300" />
-                  </button>
-                </div>
-
-                {/* Contact Info */}
-                <div className="p-4 bg-gradient-to-r from-primary/5 to-accent/5 rounded-xl border border-primary/10">
-                  <div className="flex items-start">
-                    <div className="p-2 bg-primary/10 rounded-lg">
-                      <PhoneIcon className="w-5 h-5 text-primary" />
-                    </div>
-                    <div className="ml-4">
-                      <h4 className="text-sm font-semibold text-secondary mb-1">Need Help?</h4>
-                      <p className="text-xs text-gray-600 leading-relaxed">
-                        Contact our support team for any queries about this service.
-                      </p>
+                {/* Enhanced Thumbnail Strip */}
+                {allImages.length > 1 && (
+                  <div className="mt-4">
+                    <h4 className="text-sm font-medium text-gray-600 mb-3 flex items-center">
+                      <PhotoIcon className="w-4 h-4 mr-2" />
+                      All Service Images ({allImages.length})
+                    </h4>
+                    <div className="flex space-x-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+                      {allImages.map((image, index) => (
+                        <button
+                          key={index}
+                          onClick={() => handleThumbnailClick(index)}
+                          className={`flex-shrink-0 w-24 h-20 rounded-lg overflow-hidden border-2 transition-all duration-300 transform hover:scale-105 ${ 
+                            index === currentImageIndex
+                              ? 'border-teal-500 ring-2 ring-teal-500/20 scale-105'
+                              : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                        >
+                          <img
+                            src={image}
+                            alt={`${service.title} - Thumbnail ${index + 1}`}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              e.target.onerror = null;
+                              e.target.src = 'https://images.unsplash.com/photo-1581093458791-8a0a1ac4e8e8?ixlib=rb-4.0.3&auto=format&fit=crop&w=100&q=80';
+                            }}
+                          />
+                          {/* Thumbnail overlay for active state */}
+                          {index === currentImageIndex && (
+                            <div className="absolute inset-0 bg-teal-500/20 border-2 border-teal-500 rounded-lg"></div>
+                          )}
+                        </button>
+                      ))}
                     </div>
                   </div>
+                )}
+              </div>
+
+              {/* Service Header */}
+              <div className="mb-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex-1">
+                    <div className="flex items-center mb-2">
+                      <CategoryIcon className="w-5 h-5 text-teal-600 mr-2" />
+                      <span className="text-sm font-medium text-teal-600 bg-teal-50 px-3 py-1 rounded-full border border-teal-200">
+                        {service.category}
+                      </span>
+                    </div>
+                    <h1 className="text-3xl font-bold text-gray-800 mb-3">
+                      {service.title}
+                    </h1>
+                    
+                    {/* Mobile Price and Book Button Section */}
+                    <div className="lg:hidden flex items-center justify-between bg-gray-50 p-4 rounded-xl border border-gray-200 mb-4">
+                      <div className="flex items-baseline">
+                        <CurrencyRupeeIcon className="w-6 h-6 text-gray-600" />
+                        <span className="text-3xl font-bold text-gray-800 ml-1">
+                          {service.basePrice?.toLocaleString() || '0'}
+                        </span>
+                      </div>
+                      <button
+                        onClick={handleBookNow}
+                        className="bg-orange-500 text-white py-3 px-6 rounded-xl font-bold hover:bg-orange-600 transition-all duration-300 flex items-center justify-center shadow-lg"
+                      >
+                        <CalendarIcon className="w-5 h-5 mr-2" />
+                        Book Now
+                      </button>
+                    </div>
+                  </div>
+                  
+                  {/* Rating Badge - Hidden on mobile, shown on desktop */}
+                  <div className="hidden lg:block text-right">
+                    <div className="flex items-center bg-yellow-50 px-3 py-2 rounded-lg border border-yellow-200">
+                      <StarIconSolid className="w-5 h-5 text-yellow-400 mr-1" />
+                      <span className="font-semibold text-gray-800">
+                        {service.averageRating?.toFixed(1) || '0.0'}
+                      </span>
+                      <span className="text-gray-600 text-sm ml-1">
+                        ({service.ratingCount || 0})
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-gray-600 text-lg leading-relaxed">
+                  {service.description}
+                </p>
+
+                {/* Mobile Rating - Only shown on mobile */}
+                <div className="lg:hidden flex items-center mt-4">
+                  <StarIconSolid className="w-5 h-5 text-yellow-400 mr-1" />
+                  <span className="font-semibold text-gray-800">
+                    {service.averageRating?.toFixed(1) || '0.0'}
+                  </span>
+                  <span className="text-gray-600 text-sm ml-1">
+                    ({service.ratingCount || 0} reviews)
+                  </span>
                 </div>
               </div>
-            </div>
 
-            {/* Service Details */}
-            <div className="lg:w-3/5 p-6 lg:p-8 border-l border-gray-200/50">
-              <div className="sticky top-24">
-                <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start mb-6">
-                  <div className="flex-1">
-                    <h1 className="text-3xl lg:text-4xl font-bold text-secondary mb-3 leading-tight">{service.title}</h1>
-                    <div className="flex items-center mb-4">
-                      <span className="text-primary text-sm font-semibold flex items-center bg-gradient-to-r from-green-100 to-green-50 px-3 py-1.5 rounded-full border border-green-200">
-                        <CheckBadgeIcon className="w-4 h-4 mr-1.5" />
-                        Verified Service
-                      </span>
-                      <span className="ml-3 text-sm text-gray-600 bg-gray-100 px-3 py-1.5 rounded-full">{service.category}</span>
+              {/* Service Details Tabs */}
+              <div className="border-b border-gray-200 mb-6">
+                <nav className="-mb-px flex space-x-8">
+                  {[ 
+                    { id: 'overview', label: 'Service Overview' },
+                    { id: 'specifications', label: 'Specifications' },
+                    { id: 'reviews', label: `Reviews (${service.ratingCount || 0})` }
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-300 ${ 
+                        activeTab === tab.id
+                          ? 'border-teal-600 text-teal-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </nav>
+              </div>
+
+              {/* Tab Content */}
+              <div className="prose prose-lg max-w-none">
+                {activeTab === 'overview' && (
+                  <div className="space-y-6">
+                    <div className="grid md:grid-cols-2 gap-6">
+                      <div className="bg-gradient-to-br from-teal-50 to-teal-100 rounded-xl p-6 border border-teal-200">
+                        <h4 className="font-semibold text-gray-800 mb-4 flex items-center text-lg">
+                          <CheckBadgeIcon className="w-6 h-6 text-teal-600 mr-3" />
+                          Service Inclusions
+                        </h4>
+                        <ul className="text-gray-600 space-y-3">
+                          {specialNotes && specialNotes.length > 0 ? specialNotes.map((note, index) => (
+                            <li key={index} className="flex items-start">
+                              <div className="w-6 h-6 bg-teal-600 rounded-full flex items-center justify-center mr-3 mt-0.5 flex-shrink-0">
+                                <CheckIcon className="w-3 h-3 text-white" />
+                              </div>
+                              <span className="pt-0.5">{note}</span>
+                            </li>
+                          )) : <p>No special notes available.</p>}
+                        </ul>
+                      </div>
+
+                      <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-6 border border-orange-200">
+                        <h4 className="font-semibold text-gray-800 mb-4 flex items-center text-lg">
+                          <WrenchIcon className="w-6 h-6 text-orange-500 mr-3" />
+                          Tools & Equipment
+                        </h4>
+                        <ul className="text-gray-600 space-y-3">
+                          {materialsUsed && materialsUsed.length > 0 ? materialsUsed.map((material, index) => (
+                            <li key={index} className="flex items-start">
+                              <div className="w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center mr-3 mt-0.5 flex-shrink-0">
+                                <CheckIcon className="w-3 h-3 text-white" />
+                              </div>
+                              <span className="pt-0.5">{material}</span>
+                            </li>
+                          )) : <p>No materials information available.</p>}
+                        </ul>
+                      </div>
+                    </div>
+
+                    {/* Service Benefits */}
+                    <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-6 border border-gray-200">
+                      <h4 className="font-semibold text-gray-800 mb-4 text-lg">
+                        Why Choose Raj Electrical Service
+                      </h4>
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div className="flex items-center p-3 bg-white/50 rounded-lg">
+                          <ShieldCheckIcon className="w-5 h-5 text-teal-600 mr-3" />
+                          <span className="text-gray-600">30-day service warranty</span>
+                        </div>
+                        <div className="flex items-center p-3 bg-white/50 rounded-lg">
+                          <UserIcon className="w-5 h-5 text-teal-600 mr-3" />
+                          <span className="text-gray-600">Certified electricians</span>
+                        </div>
+                        <div className="flex items-center p-3 bg-white/50 rounded-lg">
+                          <ClockIcon className="w-5 h-5 text-teal-600 mr-3" />
+                          <span className="text-gray-600">On-time service guarantee</span>
+                        </div>
+                        <div className="flex items-center p-3 bg-white/50 rounded-lg">
+                          <CheckBadgeIcon className="w-5 h-5 text-teal-600 mr-3" />
+                          <span className="text-gray-600">Quality assured work</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center bg-gradient-to-r from-accent/10 to-accent/5 px-4 py-2 rounded-xl border border-accent/20 mt-4 lg:mt-0">
-                    <CustomRating value={averageRating} readonly />
-                    <span className="text-sm text-secondary font-medium ml-2">
-                      {ratingCount} {ratingCount === 1 ? 'Rating' : 'Ratings'}
-                    </span>
-                  </div>
-                </div>
+                )}
 
-                {/* Price Section */}
-                <div className="mb-8 p-6 bg-gradient-to-r from-primary/5 via-white to-accent/5 rounded-2xl border border-primary/10 shadow-sm">
-                  <div className="flex items-baseline mb-3">
-                    <CurrencyRupeeIcon className="w-7 h-7 text-secondary" />
-                    <span className="text-4xl font-bold text-secondary ml-1">
-                      {service.basePrice?.toFixed(2) || '0.00'}
-                    </span>
-                    <span className="ml-3 text-sm text-primary font-semibold bg-primary/10 px-3 py-1 rounded-full">Inclusive of all taxes</span>
-                  </div>
-                  <div className="flex items-center text-gray-600">
-                    <ClockIcon className="w-5 h-5 text-primary mr-2" />
-                    <span className="text-sm font-medium">
-                      {formatDuration(service.duration)} service duration
-                    </span>
-                  </div>
-                </div>
-
-                {/* Description Section */}
-                <div className="mb-8">
-                  <h3 className="text-xl font-bold text-secondary mb-4 flex items-center">
-                    <div className="w-1 h-6 bg-gradient-to-b from-primary to-accent rounded-full mr-3"></div>
-                    Service Details
-                  </h3>
-                  <div className="prose prose-sm text-gray-700 max-w-none leading-relaxed bg-gray-50/50 p-4 rounded-xl border border-gray-100">
-                    {service.description}
-                  </div>
-                </div>
-
-                {/* User's Feedback Section */}
-                {feedbackData ? (
-                  <div className="border-t border-gray-200/50 pt-8">
-                    <h3 className="text-xl font-bold text-secondary mb-4 flex items-center">
-                      <div className="w-1 h-6 bg-gradient-to-b from-primary to-accent rounded-full mr-3"></div>
-                      Your Feedback
-                    </h3>
-                    <div className="bg-gradient-to-r from-gray-50/80 to-white/80 backdrop-blur-sm p-6 rounded-2xl border border-gray-100/50 shadow-sm">
-                      <div className="flex items-start">
-                        <div className="flex-shrink-0">
-                          <div className="h-12 w-12 rounded-full bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center text-white shadow-lg">
-                            <UserIcon className="h-6 w-6" />
-                          </div>
-                        </div>
-                        <div className="ml-4 flex-1">
-                          <div className="flex items-center mb-2">
-                            <CustomRating value={feedbackData.rating} readonly />
-                            <span className="ml-3 text-sm text-gray-600 bg-gray-100 px-2 py-1 rounded-full">
-                              {formatDate(feedbackData.createdAt)}
+                {activeTab === 'specifications' && (
+                  <div className="grid gap-8 lg:grid-cols-5">
+                    <div className="lg:col-span-2">
+                      <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-6 border border-gray-200">
+                        <h4 className="font-semibold text-gray-800 mb-4 text-lg">
+                          Service Specifications
+                        </h4>
+                        <div className="space-y-4">
+                          <div className="flex justify-between items-center py-3 border-b border-gray-200">
+                            <span className="font-medium text-gray-600 flex items-center">
+                              <ClockIcon className="w-4 h-4 mr-2" />
+                              Service Duration
+                            </span>
+                            <span className="text-gray-800 font-semibold bg-orange-100 px-3 py-1 rounded-full border border-orange-200">
+                              {formatDuration(service.duration)}
                             </span>
                           </div>
-                          <p className="text-gray-700 leading-relaxed">
-                            {feedbackData.comment || 'No additional comments'}
-                          </p>
+                          
+                          <div className="flex justify-between items-center py-3 border-b border-gray-200">
+                            <span className="font-medium text-gray-600 flex items-center">
+                              <CategoryIcon className="w-4 h-4 mr-2" />
+                              Service Category
+                            </span>
+                            <span className="text-gray-800 font-semibold">{service.category}</span>
+                          </div>
+                          
+                          <div className="flex justify-between items-center py-3 border-b border-gray-200">
+                            <span className="font-medium text-gray-600">Service Status</span>
+                            <span className={`font-semibold px-3 py-1 rounded-full border ${ 
+                              service.isActive 
+                                ? 'bg-green-100 text-green-800 border-green-200'
+                                : 'bg-red-100 text-red-800 border-red-200'
+                            }`}> 
+                              {service.isActive ? 'Active' : 'Inactive'}
+                            </span>
+                          </div>
+
+                          <div className="flex justify-between items-center py-3">
+                            <span className="font-medium text-gray-600">Total Images</span>
+                            <span className="text-gray-800 font-semibold bg-teal-100 text-teal-800 px-3 py-1 rounded-full border border-teal-200">
+                              {allImages.length} photos
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="lg:col-span-3">
+                      {/* FAQ Section */}
+                      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                        <h4 className="font-semibold text-gray-800 p-6 text-lg border-b border-gray-200 bg-gray-50">
+                          Frequently Asked Questions
+                        </h4>
+                        <div className="divide-y divide-gray-200">
+                          {[ 
+                            {
+                              question: "What's included in the service cost?",
+                              answer: "The service cost includes professional labor, basic materials, standard tools, and transportation. Material cost from local market is not included in the service charge."
+                            },
+                            {
+                              question: "Do you provide service warranty?",
+                              answer: "Yes, we provide a 30-day service warranty on all our electrical repairs and installations. This covers any issues arising from the service provided."
+                            },
+                            {
+                              question: "Are your electricians certified?",
+                              answer: "Yes, all our electricians are certified professionals with extensive experience in electrical services and safety protocols."
+                            },
+                            {
+                              question: "How do I prepare for the electrical service?",
+                              answer: "Ensure the service area is accessible and clear. Make sure the main power is accessible. Our professional electrician will guide you through any specific preparations needed for safety."
+                            }
+                          ].map((faq, index) => (
+                            <div key={index} className="group">
+                              <button
+                                className="flex justify-between items-center w-full p-6 text-left hover:bg-gray-50 transition-colors duration-300"
+                                onClick={() => toggleAccordion(index)}
+                              >
+                                <span className="font-medium text-gray-800 pr-4">{faq.question}</span>
+                                <ChevronDownIcon
+                                  className={`w-5 h-5 text-gray-500 transition-transform duration-300 flex-shrink-0 ${ 
+                                    openAccordion === index ? 'transform rotate-180' : ''
+                                  }`}
+                                />
+                              </button>
+                              {openAccordion === index && (
+                                <div className="px-6 pb-6 bg-gray-50">
+                                  <p className="text-gray-600 leading-relaxed">{faq.answer}</p>
+                                </div>
+                              )}
+                            </div>
+                          ))}
                         </div>
                       </div>
                     </div>
                   </div>
-                ) : hasCompletedBooking ? (
-                  <div className="border-t border-gray-200/50 pt-8">
-                    <h3 className="text-xl font-bold text-secondary mb-4 flex items-center">
-                      <div className="w-1 h-6 bg-gradient-to-b from-primary to-accent rounded-full mr-3"></div>
-                      Share Your Experience
-                    </h3>
-                    <div className="bg-gradient-to-r from-primary/5 to-accent/5 p-6 rounded-2xl border border-primary/10">
-                      <p className="text-secondary mb-4 font-medium">How was your experience with this service?</p>
-                      <button
-                        onClick={() => setShowFeedbackModal(true)}
-                        className="px-6 py-3 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary text-white rounded-xl hover:shadow-lg transition-all duration-300 font-semibold flex items-center transform hover:-translate-y-0.5"
-                      >
-                        <ChatBubbleLeftEllipsisIcon className="w-5 h-5 mr-2" />
-                        Submit Feedback
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          </div>
+                )}
 
-          {/* Detailed Information Section */}
-          <div className="border-t border-gray-200/50 p-6 lg:p-8 bg-gradient-to-br from-gray-50/50 to-white/50 backdrop-blur-sm">
-            <div className="grid lg:grid-cols-2 gap-8 lg:gap-12">
-              <div>
-                <h3 className="text-2xl font-bold text-secondary mb-6 flex items-center">
-                  <div className="w-1 h-6 bg-gradient-to-b from-primary to-accent rounded-full mr-3"></div>
-                  Service Inclusions
-                </h3>
-                <div className="space-y-4">
-                  {[
-                    "Professional diagnosis of the issue",
-                    "High-quality replacement parts (if needed)",
-                    "Complete service as per industry standards",
-                    "Testing and verification of the solution",
-                    "30-day service warranty"
-                  ].map((item, index) => (
-                    <div key={index} className="flex items-start p-3 bg-white/80 backdrop-blur-sm rounded-xl border border-gray-100/50 hover:border-primary/20 hover:shadow-sm transition-all duration-300 group">
-                      <div className="flex-shrink-0 p-1.5 bg-primary/10 rounded-lg group-hover:bg-primary/20 transition-colors duration-300 mt-0.5">
-                        <CheckIcon className="w-4 h-4 text-primary" />
+                {activeTab === 'reviews' && (
+                  <div className="space-y-6">
+                    {/* Rating Summary */}
+                    <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl p-6 border border-yellow-200">
+                      <div className="flex flex-col lg:flex-row items-center justify-between">
+                        <div className="text-center lg:text-left mb-6 lg:mb-0">
+                          <div className="text-4xl font-bold text-gray-800 mb-2">
+                            {service.averageRating?.toFixed(1) || '0.0'}
+                          </div>
+                          <div className="flex items-center justify-center lg:justify-start mb-2">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <StarIconSolid
+                                key={star}
+                                className={`w-6 h-6 ${ 
+                                  star <= (service.averageRating || 0)
+                                    ? 'text-yellow-400'
+                                    : 'text-gray-300'
+                                }`}
+                              />
+                            ))}
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            Based on {service.ratingCount || 0} reviews
+                          </div>
+                        </div>
+                        
+                        <div className="flex-1 max-w-md">
+                          {[5, 4, 3, 2, 1].map((rating) => {
+                            const count = ratingDistribution[rating];
+                            const percentage = service.ratingCount > 0 ? (count / service.ratingCount) * 100 : 0;
+                            return (
+                              <div key={rating} className="flex items-center text-sm mb-2">
+                                <span className="w-8 text-gray-600">{rating}</span>
+                                <StarIconSolid className="w-4 h-4 text-yellow-400 mr-2" />
+                                <div className="flex-1 bg-gray-200 rounded-full h-2">
+                                  <div
+                                    className="bg-yellow-400 h-2 rounded-full transition-all duration-1000"
+                                    style={{ width: `${percentage}%` }}
+                                  />
+                                </div>
+                                <span className="w-12 text-gray-600 text-right">{percentage.toFixed(0)}%</span>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
-                      <p className="text-gray-700 ml-3 leading-relaxed group-hover:text-secondary transition-colors duration-300">{item}</p>
                     </div>
-                  ))}
-                </div>
-              </div>
 
-              {/* FAQ Section */}
-              <div>
-                <h3 className="text-2xl font-bold text-secondary mb-6 flex items-center">
-                  <div className="w-1 h-6 bg-gradient-to-b from-primary to-accent rounded-full mr-3"></div>
-                  Frequently Asked Questions
-                </h3>
-                <div className="space-y-3">
-                  {[
-                    {
-                      question: "Does the cost include spare parts?",
-                      answer: "Yes, our service cost includes all necessary spare parts unless specified otherwise in the exclusions."
-                    },
-                    {
-                      question: "What if the same issue occurs again?",
-                      answer: "We provide a 30-day warranty on all services. If the same issue reoccurs within this period, we'll fix it at no additional cost."
-                    },
-                    {
-                      question: "What if anything gets damaged during service?",
-                      answer: "Our professionals are fully insured. Any accidental damage caused during service will be covered by us."
-                    },
-                    {
-                      question: "Are spare parts covered under warranty?",
-                      answer: "Yes, all replacement parts come with a 90-day manufacturer warranty unless otherwise specified."
-                    },
-                    {
-                      question: "What is excluded from the service?",
-                      answer: "Wiring beyond 2 meters is not included. Extra charges apply for additional materials or complex installations."
-                    }
-                  ].map((faq, index) => (
-                    <div key={index} className="border border-gray-200/50 rounded-xl overflow-hidden bg-white/80 backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-300">
-                      <button
-                        className={`flex items-center justify-between w-full p-4 text-left transition-all duration-300 ${
-                          openAccordion === index 
-                            ? 'bg-gradient-to-r from-primary/5 to-accent/5 text-secondary' 
-                            : 'bg-white/50 hover:bg-gray-50/50 text-gray-900'
-                        }`}
-                        onClick={() => toggleAccordion(index)}
-                      >
-                        <span className="font-semibold">{faq.question}</span>
-                        <ChevronDownIcon
-                          className={`w-5 h-5 text-primary transition-transform duration-300 ${
-                            openAccordion === index ? 'transform rotate-180' : ''
-                          }`}
-                        />
-                      </button>
-                      {openAccordion === index && (
-                        <div className="p-4 bg-white/90 backdrop-blur-sm border-t border-gray-100/50 animate-in slide-in-from-top-2 duration-300">
-                          <p className="text-gray-700 leading-relaxed">{faq.answer}</p>
+                    {/* Reviews List */}
+                    <div className="space-y-4">
+                      {service.feedback?.length > 0 ? (
+                        service.feedback.slice(0, 10).map((review, index) => (
+                          <div key={index} className="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-md transition-shadow duration-300">
+                            <div className="flex items-start mb-4">
+                              <div className="w-12 h-12 bg-gradient-to-br from-teal-600 to-teal-700 rounded-full flex items-center justify-center text-white font-semibold mr-4 flex-shrink-0">
+                                <UserIcon className="w-6 h-6" />
+                              </div>
+                              <div className="flex-1">
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="font-semibold text-gray-800">
+                                    {review.customer?.name || 'Anonymous User'}
+                                  </div>
+                                  <div className="text-sm text-gray-500">
+                                    {new Date(review.createdAt).toLocaleDateString('en-US', {
+                                      year: 'numeric',
+                                      month: 'long',
+                                      day: 'numeric'
+                                    })}
+                                  </div>
+                                </div>
+                                <div className="flex items-center mb-3">
+                                  {[1, 2, 3, 4, 5].map((star) => (
+                                    <StarIconSolid
+                                      key={star}
+                                      className={`w-4 h-4 ${ 
+                                        star <= review.rating
+                                          ? 'text-yellow-400'
+                                          : 'text-gray-300'
+                                      }`}
+                                    />
+                                  ))}
+                                </div>
+                                {review.comment && (
+                                  <p className="text-gray-600 leading-relaxed">{review.comment}</p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-12 text-gray-500 bg-white rounded-xl border border-gray-200">
+                          <ChatBubbleLeftEllipsisIcon className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                          <p className="text-lg mb-2">No reviews yet</p>
+                          <p className="text-sm">Be the first to review this service!</p>
                         </div>
                       )}
                     </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Customer Reviews Section */}
-          <div className="border-t border-gray-200/50 p-6 lg:p-8">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-8">
-              <h3 className="text-2xl font-bold text-secondary mb-4 lg:mb-0 flex items-center">
-                <div className="w-1 h-6 bg-gradient-to-b from-primary to-accent rounded-full mr-3"></div>
-                Customer Reviews
-              </h3>
-              <div className="flex items-center bg-gradient-to-r from-accent/10 to-accent/5 px-4 py-2 rounded-xl border border-accent/20">
-                <CustomRating value={averageRating} readonly />
-                <span className="ml-3 text-sm text-secondary font-semibold">
-                  {averageRating} out of 5 ({ratingCount} {ratingCount === 1 ? 'review' : 'reviews'})
-                </span>
-              </div>
-            </div>
-
-            {topReview ? (
-              <div className="bg-gradient-to-r from-gray-50/80 to-white/80 backdrop-blur-sm p-6 rounded-2xl border border-gray-100/50 hover:border-primary/20 hover:shadow-lg transition-all duration-300 group">
-                <div className="flex items-start">
-                  <div className="flex-shrink-0">
-                    <div className="h-12 w-12 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white font-bold text-sm shadow-lg">
-                      {getCustomerInitials(topReview.customer?.name || 'Unknown User')}
-                    </div>
                   </div>
-                  <div className="ml-4 flex-1">
-                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-3">
-                      <div className="flex items-center mb-2 lg:mb-0">
-                        <h4 className="font-semibold text-secondary mr-3">
-                          {topReview.customer?.name || 'Anonymous User'}
-                        </h4>
-                        <CustomRating value={topReview.rating} readonly />
-                      </div>
-                      <span className="text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
-                        {formatDate(topReview.createdAt)}
-                      </span>
-                    </div>
-                    {topReview.comment && (
-                      <p className="text-gray-700 leading-relaxed mb-3 italic">
-                        "{topReview.comment}"
-                      </p>
-                    )}
-                    {topReview.booking && (
-                      <div>
-                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-green-100 to-green-50 text-green-700 border border-green-200">
-                          <CheckBadgeIcon className="w-3 h-3 mr-1.5" />
-                          Verified Purchase
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-12 bg-gradient-to-r from-gray-50/80 to-white/80 backdrop-blur-sm rounded-2xl border border-gray-100/50">
-                <div className="w-16 h-16 bg-gradient-to-br from-gray-100 to-gray-50 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <ChatBubbleLeftEllipsisIcon className="w-8 h-8 text-gray-400" />
-                </div>
-                <h4 className="text-lg font-semibold text-secondary mb-2">No reviews yet</h4>
-                <p className="text-gray-600 mb-6">Be the first to review this service!</p>
-                {isAuthenticated && hasCompletedBooking && (
-                  <button
-                    onClick={() => setShowFeedbackModal(true)}
-                    className="px-6 py-3 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary text-white rounded-xl hover:shadow-lg transition-all duration-300 font-semibold transform hover:-translate-y-0.5"
-                  >
-                    Write a Review
-                  </button>
                 )}
               </div>
-            )}
+            </div>
+
+            {/* Right Column - Enhanced Booking Card & Guarantee */}
+            <div className="hidden lg:block lg:col-span-1 mt-8 lg:mt-0">
+              {DesktopBookingCard}
+            </div>
           </div>
         </div>
 
-        {/* Related Services Section */}
+        {/* Enhanced Related Services */}
         {relatedServices.length > 0 && (
           <div className="mt-16">
-            <h2 className="text-3xl font-bold text-secondary mb-8 flex items-center">
-              <div className="w-1 h-8 bg-gradient-to-b from-primary to-accent rounded-full mr-4"></div>
-              Similar Services You Might Like
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {relatedServices.map((relatedService) => (
-                <div
-                  key={relatedService._id}
-                  className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 cursor-pointer border border-white/20 group transform hover:-translate-y-2"
-                  onClick={() => navigate(`/customer/service/${relatedService._id}`)}
-                >
-                  <div className="relative h-48 bg-gradient-to-br from-gray-100 to-gray-50 overflow-hidden">
-                    <img
-                      src={`${API}/uploads/serviceImages/${relatedService.image || 'default-service.jpg'}`}
-                      alt={relatedService.title}
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                      onError={(e) => {
-                        e.target.onerror = null;
-                        e.target.src = '/placeholder-service.jpg';
-                      }}
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                  </div>
-                  <div className="p-5">
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className="text-xs font-semibold text-gray-600 bg-gray-100 px-2.5 py-1 rounded-full">{relatedService.category}</span>
-                      <span className="text-xs font-semibold text-primary bg-primary/10 px-2.5 py-1 rounded-full border border-primary/20">
-                        {formatDuration(relatedService.duration)}
-                      </span>
-                    </div>
-                    <h3 className="font-bold text-secondary mb-3 line-clamp-2 group-hover:text-primary transition-colors duration-300">{relatedService.title}</h3>
-                    <div className="flex items-center mb-4">
-                      <CustomRating value={relatedService.averageRating || 0} readonly />
-                      <span className="text-xs text-gray-600 ml-2 bg-gray-50 px-2 py-1 rounded-full">({relatedService.feedback?.length || 0})</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-baseline">
-                        <CurrencyRupeeIcon className="w-5 h-5 text-secondary" />
-                        <span className="text-xl font-bold text-secondary ml-1">
-                          {relatedService.basePrice?.toFixed(2) || '0.00'}
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-3xl font-bold text-gray-800">Related Services</h2>
+              <button
+                onClick={() => navigate(`/customer/services?category=${service.category}`)}
+                className="text-teal-600 hover:text-teal-700 font-medium flex items-center transition-colors duration-300"
+              >
+                View all
+                <ChevronRightIcon className="w-4 h-4 ml-1" />
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {relatedServices.map((relatedService) => {
+                const RelatedCategoryIcon = getCategoryIcon(relatedService.category);
+                const relatedImages = relatedService.images || [];
+                
+                return (
+                  <div
+                    key={relatedService._id}
+                    className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 cursor-pointer border border-gray-200 group"
+                    onClick={() => navigate(`/customer/services/${relatedService._id}`)}
+                  >
+                    <div className="relative h-48 bg-gradient-to-br from-gray-100 to-gray-200 overflow-hidden">
+                      <img
+                        src={relatedImages[0] || 'https://images.unsplash.com/photo-1581093458791-8a0a1ac4e8e8?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80'}
+                        alt={relatedService.title}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.src = 'https://images.unsplash.com/photo-1581093458791-8a0a1ac4e8e8?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80';
+                        }}
+                      />
+                      <div className="absolute top-3 left-3">
+                        <span className="text-xs font-medium text-teal-600 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-full border border-teal-200">
+                          {relatedService.category}
                         </span>
                       </div>
-                      <button className="text-primary font-semibold text-sm hover:text-accent transition-colors duration-300 flex items-center group-hover:translate-x-1 transition-transform duration-300">
-                        View Details
-                        <ChevronRightIcon className="w-4 h-4 ml-1" />
-                      </button>
+                      {relatedImages.length > 1 && (
+                        <div className="absolute top-3 right-3">
+                          <span className="text-xs font-medium text-white bg-black/70 backdrop-blur-sm px-2 py-1 rounded-full">
+                            +{relatedImages.length - 1} more
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="p-5">
+                      <h3 className="font-semibold text-gray-800 mb-2 line-clamp-2 group-hover:text-teal-600 transition-colors duration-300">
+                        {relatedService.title}
+                      </h3>
+                      <p className="text-gray-600 text-sm mb-4 line-clamp-2">
+                        {relatedService.description}
+                      </p>
+                      
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-baseline">
+                          <CurrencyRupeeIcon className="w-4 h-4 text-gray-600" />
+                          <span className="text-xl font-bold text-gray-800 ml-1">
+                            {relatedService.basePrice?.toLocaleString() || '0'}
+                          </span>
+                        </div>
+                        
+                        <div className="flex items-center text-sm text-gray-600 bg-gray-100 px-2 py-1 rounded-full border border-gray-200">
+                          <ClockIcon className="w-3 h-3 mr-1" />
+                          {formatDuration(relatedService.duration)}
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center mt-3">
+                        <StarIconSolid className="w-4 h-4 text-yellow-400 mr-1" />
+                        <span className="text-sm font-medium text-gray-800">
+                          {relatedService.averageRating?.toFixed(1) || '0.0'}
+                        </span>
+                        <span className="text-gray-600 text-sm ml-1">
+                          ({relatedService.ratingCount || 0})
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
       </div>
-
-      {/* Feedback Modal */}
-      {showFeedbackModal && (
-        <FeedbackModal
-          serviceId={id}
-          serviceTitle={service.title}
-          onClose={() => setShowFeedbackModal(false)}
-          onSubmit={handleSubmitFeedback}
-        />
-      )}
     </div>
   );
 };

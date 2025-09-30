@@ -12,6 +12,11 @@ export default {
         secondary: '#374151',  // Dark Gray – Professional text
         accent: '#F97316',     // Orange – Strong action buttons
       },
+      fontFamily: {
+        poppins: ['Poppins', 'sans-serif'],
+        inter: ['Inter', 'sans-serif'],
+        roboto: ['Roboto', 'sans-serif'],
+      },
     },
   },
   plugins: [],

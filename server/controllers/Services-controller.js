@@ -368,7 +368,7 @@ const getActiveServices = async (req, res) => {
 
         // First get the services without virtuals to avoid issues
         const services = await Service.find(query)
-            .select('title category description image basePrice duration feedback averageRating ratingCount')
+            .select('title category description images basePrice duration feedback averageRating ratingCount')
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(parseInt(limit))
@@ -431,7 +431,7 @@ const getPublicServiceById = async (req, res) => {
 
         // First get the service with basic info
         const service = await Service.findById(id)
-            .select('title category description image basePrice duration isActive averageRating ratingCount')
+            .select('title category description images basePrice duration isActive averageRating ratingCount specialNotes materialsUsed')
             .lean();
 
         if (!service) {
@@ -521,7 +521,7 @@ const getServicesByCategory = async (req, res) => {
         const skip = (page - 1) * limit;
 
         const services = await Service.findActiveByCategory(category)
-            .select('title category description image basePrice duration durationFormatted averageRating')
+            .select('title category description images basePrice duration durationFormatted averageRating')
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(parseInt(limit));

@@ -1,22 +1,29 @@
-# Admin Dashboard Implementation TODO
+# TODO: Fix Service Specifications UI
 
-## Backend Updates
-- [x] Expand server/controllers/Admin-controller.js: Add getEarningsData, getComplaintsStats, getBookingsTransactions, getAlerts functions for comprehensive dashboard data
-- [x] Update server/routes/Admin-Routes.js: Add routes for /admin/dashboard/earnings, /admin/dashboard/complaints, /admin/dashboard/bookings, /admin/dashboard/alerts
-- [x] Create server/controllers/Report-controller.js: Add functions for CSV/PDF export of reports (earnings, complaints, bookings)
-- [x] Update server/routes/Admin-Routes.js: Add routes for /admin/reports/earnings, /admin/reports/complaints, /admin/reports/bookings
+## Tasks
+- [ ] Enhance the Specifications tab in Servicedetail.jsx by adding more service details
+- [ ] Add Base Price specification with icon
+- [ ] Add Special Notes count specification
+- [ ] Add Materials Used count specification
+- [ ] Add Created Date specification
+- [ ] Improve styling and layout for better visual appeal
+- [ ] Ensure responsive design
+- [ ] Test the UI changes
 
-## Frontend Updates
-- [x] Restructure client/src/pages/Admin/Dashboard.jsx: Add state and fetches for earnings, complaints, bookings, alerts data
-- [x] Restructure client/src/pages/Admin/Dashboard.jsx: Implement earnings section (commission cards, trends chart, top providers table)
-- [x] Restructure client/src/pages/Admin/Dashboard.jsx: Implement complaints section (stats cards, recent complaints table)
-- [x] Restructure client/src/pages/Admin/Dashboard.jsx: Implement bookings/transactions section (recent transactions table, pending/failed counts)
-- [x] Restructure client/src/pages/Admin/Dashboard.jsx: Implement alerts/notifications section (alert cards with action buttons)
-- [x] Restructure client/src/pages/Admin/Dashboard.jsx: Ensure responsive design across all sections
+## Information Gathered
+- Servicedetail.jsx has a Specifications tab showing basic info: duration, category, status, images count
+- Service model includes additional displayable fields: basePrice, specialNotes, materialsUsed, createdAt
+- Current layout uses grid with specs on left (col-span-2) and FAQ on right (col-span-3)
+
+## Plan
+- Modify the specifications section to include more comprehensive service details
+- Use consistent styling with icons and better formatting
+- Maintain responsive design for mobile and desktop
+
+## Dependent Files
+- client/src/pages/Customer/Servicedetail.jsx
 
 ## Followup Steps
-- [ ] Install new dependencies (json2csv, pdfkit for backend reports)
-- [ ] Test backend APIs: Run server and verify dashboard and report endpoints return correct data
-- [ ] Test frontend: Run client, check all dashboard sections load, charts render, responsive layout
-- [ ] Verify integrations: Ensure fetches handle auth, data displays correctly, error/empty states
-- [ ] Edge cases: Test with no data, auth failure, mobile view, high-value alerts
+- Run the client to test UI changes
+- Verify specifications display correctly
+- Check responsiveness on different screen sizes

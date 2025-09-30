@@ -184,7 +184,7 @@ serviceSchema.statics.updateBasePrice = async function (adminId, serviceId, newP
 // Query active services by category
 serviceSchema.statics.findActiveByCategory = function (category) {
   return this.find({ category, isActive: true })
-    .select('title category description image basePrice duration averageRating ratingCount');
+    .select('title category description images basePrice duration averageRating ratingCount');
 };
 
 // Query services with feedback stats
