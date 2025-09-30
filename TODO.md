@@ -1,30 +1,24 @@
-# Update Servicedetail.jsx with Professional Icons
+# Coupon and Booking Integration Improvements
 
-## Tasks
-- [ ] Replace Heroicons imports with react-icons Material Design icons
-- [ ] Update all icon usages in JSX to use new Material Design icons
-- [ ] Test the page to ensure icons render correctly
-- [ ] Verify professional appearance of icons
+## Frontend Improvements (Book-Service.jsx)
+- [ ] Review coupon application flow and validation
+- [ ] Ensure coupon discount calculation is accurate
+- [ ] Verify coupon removal functionality works correctly
+- [ ] Check coupon usage marking after successful booking
+- [ ] Improve error handling and user feedback for coupon operations
 
-## Icon Mapping
-- StarIcon -> MdStar
-- ClockIcon -> MdAccessTime
-- CheckBadgeIcon -> MdVerified
-- ShieldCheckIcon -> MdSecurity
-- UserIcon -> MdPerson
-- ChevronDownIcon -> MdExpandMore
-- CheckIcon -> MdCheck
-- CurrencyRupeeIcon -> MdCurrencyRupee
-- ChevronRightIcon -> MdChevronRight
-- ExclamationTriangleIcon -> MdError
-- ChatBubbleLeftEllipsisIcon -> MdChat
-- PhoneIcon -> MdPhone
-- WrenchIcon -> MdBuild
-- BoltIcon -> MdFlashOn
-- HomeIcon -> MdHome
-- CalendarIcon -> MdCalendarToday
-- ShareIcon -> MdShare
-- ArrowLeftIcon -> MdArrowBack
-- ArrowRightIcon -> MdArrowForward
-- PhotoIcon -> MdPhoto
-- StarIconSolid -> MdStar (filled)
+## Backend Verification (Coupon Controller & Model)
+- [ ] Verify coupon validation logic in applyCoupon endpoint
+- [ ] Check markCouponUsed functionality
+- [ ] Review coupon model methods for edge cases
+- [ ] Ensure proper error responses for invalid coupons
+
+## Booking Integration
+- [ ] Confirm coupon data is properly stored in booking model
+- [ ] Verify total amount calculation includes coupon discounts
+- [ ] Check booking creation with coupon applied
+
+## Testing & Validation
+- [ ] Test end-to-end coupon application flow
+- [ ] Verify coupon usage limits and expiry handling
+- [ ] Test error scenarios and edge cases

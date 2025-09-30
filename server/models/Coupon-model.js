@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
+const User = require('./User-model');
 
 const couponSchema = new Schema({
   code: {
@@ -92,7 +93,8 @@ couponSchema.index({ isFirstBooking: 1, isActive: 1 });
 // -------------------- Virtuals --------------------
 couponSchema.virtual('remainingUses').get(function () {
   if (this.usageLimit === null) return Infinity;
-  return this.usageLimit - this.usedBy.length;
+  const usedCount = this.usedBy ? this.usedBy.length : 0;
+  return this.usageLimit - usedCount;
 });
 
 couponSchema.virtual('isExpired').get(function () {
@@ -162,12 +164,12 @@ couponSchema.statics.validateCoupon = async function (userId, couponCode, servic
 };
 
 couponSchema.statics.getAvailableCoupons = async function (userId, bookingValue = 0) {
-  const user = await mongoose.model('User').findById(userId);
+  const user = await User.findById(userId);
 
   const query = {
     isActive: true,
     expiryDate: { $gte: new Date() },
-    minBookingValue: { $lte: bookingValue },
+    usedBy: { $not: { $elemMatch: { user: userId } } },
     $or: [
       { isGlobal: true },
       { assignedTo: userId }
@@ -180,14 +182,8 @@ couponSchema.statics.getAvailableCoupons = async function (userId, bookingValue 
   }
 
   const coupons = await this.find(query).select('-usedBy -createdBy');
-  
-  // Filter out coupons that user has already used
-  return coupons.filter(coupon => {
-    const alreadyUsed = coupon.usedBy.some(usage => 
-      usage.user && usage.user.toString() === userId.toString()
-    );
-    return !alreadyUsed;
-  });
+
+  return coupons;
 };
 
 // -------------------- Instance Methods --------------------
@@ -223,7 +219,7 @@ couponSchema.methods.markAsUsed = async function (userId, bookingValue = 0) {
   }
 
   if (this.isFirstBooking) {
-    await mongoose.model('User').findByIdAndUpdate(userId, {
+    await User.findByIdAndUpdate(userId, {
       $set: { firstBookingUsed: true }
     });
   }

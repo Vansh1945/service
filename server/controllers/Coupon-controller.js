@@ -306,7 +306,11 @@ const markCouponUsed = async (req, res) => {
 const getAvailableCoupons = async (req, res) => {
   try {
     const { bookingValue } = req.query;
-    const userId = req.user.id;
+    const userId = req.user?.id; // safe check
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized: User ID missing' });
+    }
 
     const coupons = await Coupon.getAvailableCoupons(userId, Number(bookingValue) || 0);
 
@@ -316,12 +320,14 @@ const getAvailableCoupons = async (req, res) => {
       data: coupons
     });
   } catch (error) {
+    console.error('Get Available Coupons Error:', error);
     res.status(500).json({
       success: false,
       message: error.message
     });
   }
 };
+
 
 module.exports = {
   createCoupon,
