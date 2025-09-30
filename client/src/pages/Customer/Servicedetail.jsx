@@ -1,29 +1,41 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../store/auth';
 import {
-  StarIcon,
-  ClockIcon,
-  CheckBadgeIcon,
+  MdStar,
+  MdAccessTime,
+  MdVerified,
+  MdSecurity,
+  MdPerson,
+  MdExpandMore,
+  MdCheck,
+  MdCurrencyRupee,
+  MdChevronRight,
+  MdError,
+  MdChat,
+  MdPhone,
+  MdBuild,
+  MdFlashOn,
+  MdHome,
+  MdCalendarToday,
+  MdShare,
+  MdArrowBack,
+  MdArrowForward,
+  MdPhoto
+} from 'react-icons/md';
+import {
+  StarIcon as StarIconSolid,
   ShieldCheckIcon,
-  UserIcon,
-  ChevronDownIcon,
-  CheckIcon,
-  CurrencyRupeeIcon,
-  ChevronRightIcon,
-  ExclamationTriangleIcon,
-  ChatBubbleLeftEllipsisIcon,
-  PhoneIcon,
+  CheckBadgeIcon,
   WrenchIcon,
-  BoltIcon,
-  HomeIcon,
-  CalendarIcon,
-  ShareIcon,
-  ArrowLeftIcon,
-  ArrowRightIcon,
-  PhotoIcon
+  UserIcon,
+  ClockIcon,
+  ChevronDownIcon,
+  ChatBubbleLeftEllipsisIcon,
+  ChevronRightIcon,
+  CheckIcon,
+  CurrencyRupeeIcon
 } from '@heroicons/react/24/outline';
-import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 
 const ServiceDetailPage = () => {
   const { id } = useParams();
@@ -44,12 +56,12 @@ const ServiceDetailPage = () => {
   // Category icons mapping
   const getCategoryIcon = (category) => {
     const icons = {
-      'Electrical': BoltIcon,
-      'AC': WrenchIcon,
-      'Appliance Repair': WrenchIcon,
-      'Other': WrenchIcon
+      'Electrical': MdFlashOn,
+      'AC': MdBuild,
+      'Appliance Repair': MdBuild,
+      'Other': MdBuild
     };
-    return icons[category] || WrenchIcon;
+    return icons[category] || MdBuild;
   };
 
   // Fetch service data
@@ -78,7 +90,7 @@ const ServiceDetailPage = () => {
       // Process all images from the service
       const images = serviceDetails.images || [];
       setAllImages(images);
-      
+
       // Set default image if no images available
       if (images.length === 0) {
         setAllImages(['https://images.unsplash.com/photo-1581093458791-8a0a1ac4e8e8?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80']);
@@ -154,13 +166,13 @@ const ServiceDetailPage = () => {
   };
 
   const nextImage = () => {
-    setCurrentImageIndex(prev => 
+    setCurrentImageIndex(prev =>
       prev === allImages.length - 1 ? 0 : prev + 1
     );
   };
 
   const prevImage = () => {
-    setCurrentImageIndex(prev => 
+    setCurrentImageIndex(prev =>
       prev === 0 ? allImages.length - 1 : prev - 1
     );
   };
@@ -168,7 +180,7 @@ const ServiceDetailPage = () => {
   const formatDuration = (hours) => {
     const hrs = Math.floor(hours);
     const mins = Math.round((hours - hrs) * 60);
-    
+
     if (hrs === 0) return `${mins} min`;
     if (mins === 0) return `${hrs} hr`;
     return `${hrs} hr ${mins} min`;
@@ -217,7 +229,7 @@ const ServiceDetailPage = () => {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="text-center max-w-md bg-white rounded-2xl p-8 shadow-xl border border-gray-200">
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <ExclamationTriangleIcon className="w-8 h-8 text-red-600" />
+            <MdError className="w-8 h-8 text-red-600" />
           </div>
           <h3 className="text-xl font-bold text-gray-800 mb-2">Service Not Found</h3>
           <p className="text-gray-600 mb-6">
@@ -238,13 +250,13 @@ const ServiceDetailPage = () => {
   const specialNotes = service.specialNotes;
   const materialsUsed = service.materialsUsed;
 
-  // Desktop Booking Card
+  //  Booking Card
   const DesktopBookingCard = (
     <div className="sticky top-8 space-y-8">
       <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-xl">
         <div className="text-center mb-6">
           <div className="flex items-baseline justify-center mb-2">
-            <CurrencyRupeeIcon className="w-8 h-8 text-gray-600" />
+            <MdCurrencyRupee className="w-8 h-8 text-gray-600" />
             <span className="text-4xl font-bold text-gray-800 ml-1">
               {service.basePrice?.toLocaleString() || '0'}
             </span>
@@ -258,15 +270,15 @@ const ServiceDetailPage = () => {
         {/* Service Features */}
         <div className="space-y-4 mb-6">
           <div className="flex items-center p-3 bg-white rounded-lg border border-gray-200 shadow-sm">
-            <ClockIcon className="w-5 h-5 text-teal-600 mr-3" />
+            <MdAccessTime className="w-5 h-5 text-teal-600 mr-3" />
             <div>
               <div className="font-medium text-gray-800">Service Duration</div>
               <div className="text-sm text-gray-600">{formatDuration(service.duration)} Approx</div>
             </div>
           </div>
-          
+
           <div className="flex items-center p-3 bg-white rounded-lg border border-gray-200 shadow-sm">
-            <ShieldCheckIcon className="w-5 h-5 text-teal-600 mr-3" />
+            <MdSecurity className="w-5 h-5 text-teal-600 mr-3" />
             <div>
               <div className="font-medium text-gray-800">Service Warranty</div>
               <div className="text-sm text-gray-600">30 days comprehensive</div>
@@ -280,35 +292,24 @@ const ServiceDetailPage = () => {
             onClick={handleBookNow}
             className="col-span-2 bg-orange-500 text-white py-4 px-6 rounded-xl font-bold hover:bg-orange-600 transition-all duration-300 transform hover:scale-105 flex items-center justify-center shadow-lg hover:shadow-xl"
           >
-            <CalendarIcon className="w-5 h-5 mr-3" />
+            <MdCalendarToday className="w-5 h-5 mr-3" />
             Book Service
           </button>
-          
+
           <button
             onClick={handleShare}
             className="flex items-center justify-center py-2 px-3 border border-gray-300 rounded-xl hover:bg-gray-50 transition-all duration-300 transform hover:scale-105 shadow-sm"
           >
-            <ShareIcon className="w-5 h-5 text-gray-600" />
+            <MdShare className="w-5 h-5 text-gray-600" />
           </button>
         </div>
 
-        {/* Enhanced Contact Info */}
-        <div className="mt-6 pt-6 border-t border-gray-200">
-          <div className="text-center">
-            <div className="flex items-center justify-center text-sm text-gray-600 mb-2">
-              <PhoneIcon className="w-4 h-4 mr-2" />
-              <span>Need help? Call us at</span>
-            </div>
-            <a 
-              href="tel:+911234567890" 
-              className="text-teal-600 font-semibold hover:text-teal-700 transition-colors duration-300"
-            >
-              +91-XXXXXX-XXXX
-            </a>
-          </div>
+        {/* Contact Info */}
+        <div className="mt-6 pt-6 border-t border-gray-200 text-center">
+          <p className="text-sm text-gray-600 mb-4">Need help? <Link to="/contact" className="text-teal-600 hover:text-teal-800 font-medium transition-colors duration-300">Contact us</Link></p>
         </div>
       </div>
-      
+
       {/* Desktop Only - Peace of Mind Card */}
       <div className="hidden lg:block bg-white rounded-2xl p-6 border border-gray-200 shadow-xl">
         <h4 className="font-semibold text-gray-800 mb-4 text-lg flex items-center">
@@ -351,13 +352,13 @@ const ServiceDetailPage = () => {
                   onClick={() => navigate('/customer/services')}
                   className="inline-flex items-center text-sm font-medium text-gray-500 hover:text-teal-600 transition-colors duration-300"
                 >
-                  <HomeIcon className="w-4 h-4 mr-2" />
+                  <MdHome className="w-4 h-4 mr-2" />
                   Services
                 </button>
               </li>
               <li>
                 <div className="flex items-center">
-                  <ChevronRightIcon className="w-4 h-4 text-gray-400 mx-1" />
+                  <MdChevronRight className="w-4 h-4 text-gray-400 mx-1" />
                   <button
                     onClick={() => navigate(`/customer/services?category=${service.category}`)}
                     className="text-sm font-medium text-gray-500 hover:text-teal-600 transition-colors duration-300"
@@ -368,7 +369,7 @@ const ServiceDetailPage = () => {
               </li>
               <li aria-current="page">
                 <div className="flex items-center">
-                  <ChevronRightIcon className="w-4 h-4 text-gray-400 mx-1" />
+                  <MdChevronRight className="w-4 h-4 text-gray-400 mx-1" />
                   <span className="text-sm font-medium text-teal-600 truncate max-w-xs">
                     {service.title}
                   </span>
@@ -393,14 +394,13 @@ const ServiceDetailPage = () => {
                       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600"></div>
                     </div>
                   )}
-                  
+
                   {allImages.length > 0 ? (
                     <img
                       src={allImages[currentImageIndex]}
                       alt={`${service.title} - Image ${currentImageIndex + 1}`}
-                      className={`w-full h-full object-cover transition-opacity duration-300 ${ 
-                        imageLoading ? 'opacity-0' : 'opacity-100'
-                      }`}
+                      className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoading ? 'opacity-0' : 'opacity-100'
+                        }`}
                       onLoad={handleImageLoad}
                       onError={(e) => {
                         e.target.onerror = null;
@@ -411,12 +411,12 @@ const ServiceDetailPage = () => {
                   ) : (
                     <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-200 to-gray-300">
                       <div className="text-center text-gray-600">
-                        <PhotoIcon className="w-16 h-16 mx-auto mb-2" />
+                        <MdPhoto className="w-16 h-16 mx-auto mb-2" />
                         <p>No images available</p>
                       </div>
                     </div>
                   )}
-                  
+
                   {/* Image Navigation */}
                   {allImages.length > 1 && (
                     <>
@@ -424,15 +424,15 @@ const ServiceDetailPage = () => {
                         onClick={prevImage}
                         className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-white/90 backdrop-blur-sm rounded-full p-3 shadow-lg hover:bg-white hover:scale-110 transition-all duration-300 opacity-0 group-hover:opacity-100"
                       >
-                        <ArrowLeftIcon className="w-5 h-5 text-gray-600" />
+                        <MdArrowBack className="w-5 h-5 text-gray-600" />
                       </button>
                       <button
                         onClick={nextImage}
                         className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-white/90 backdrop-blur-sm rounded-full p-3 shadow-lg hover:bg-white hover:scale-110 transition-all duration-300 opacity-0 group-hover:opacity-100"
                       >
-                        <ArrowRightIcon className="w-5 h-5 text-gray-600" />
+                        <MdArrowForward className="w-5 h-5 text-gray-600" />
                       </button>
-                      
+
                       {/* Image Counter */}
                       <div className="absolute top-4 left-4 bg-black/70 text-white px-3 py-1 rounded-full text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                         {currentImageIndex + 1} / {allImages.length}
@@ -445,7 +445,7 @@ const ServiceDetailPage = () => {
                 {allImages.length > 1 && (
                   <div className="mt-4">
                     <h4 className="text-sm font-medium text-gray-600 mb-3 flex items-center">
-                      <PhotoIcon className="w-4 h-4 mr-2" />
+                      <MdPhoto className="w-4 h-4 mr-2" />
                       All Service Images ({allImages.length})
                     </h4>
                     <div className="flex space-x-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
@@ -453,11 +453,10 @@ const ServiceDetailPage = () => {
                         <button
                           key={index}
                           onClick={() => handleThumbnailClick(index)}
-                          className={`flex-shrink-0 w-24 h-20 rounded-lg overflow-hidden border-2 transition-all duration-300 transform hover:scale-105 ${ 
-                            index === currentImageIndex
-                              ? 'border-teal-500 ring-2 ring-teal-500/20 scale-105'
-                              : 'border-gray-200 hover:border-gray-300'
-                          }`}
+                          className={`flex-shrink-0 w-24 h-20 rounded-lg overflow-hidden border-2 transition-all duration-300 transform hover:scale-105 ${index === currentImageIndex
+                            ? 'border-teal-500 ring-2 ring-teal-500/20 scale-105'
+                            : 'border-gray-200 hover:border-gray-300'
+                            }`}
                         >
                           <img
                             src={image}
@@ -484,33 +483,16 @@ const ServiceDetailPage = () => {
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
                     <div className="flex items-center mb-2">
-                      <CategoryIcon className="w-5 h-5 text-teal-600 mr-2" />
-                      <span className="text-sm font-medium text-teal-600 bg-teal-50 px-3 py-1 rounded-full border border-teal-200">
+                      <span className="flex items-center text-sm font-medium text-teal-600 bg-teal-50 px-3 py-1 rounded-full border border-teal-200">
+                        <CategoryIcon className="w-4 h-4 mr-2" />
                         {service.category}
                       </span>
                     </div>
                     <h1 className="text-3xl font-bold text-gray-800 mb-3">
                       {service.title}
                     </h1>
-                    
-                    {/* Mobile Price and Book Button Section */}
-                    <div className="lg:hidden flex items-center justify-between bg-gray-50 p-4 rounded-xl border border-gray-200 mb-4">
-                      <div className="flex items-baseline">
-                        <CurrencyRupeeIcon className="w-6 h-6 text-gray-600" />
-                        <span className="text-3xl font-bold text-gray-800 ml-1">
-                          {service.basePrice?.toLocaleString() || '0'}
-                        </span>
-                      </div>
-                      <button
-                        onClick={handleBookNow}
-                        className="bg-orange-500 text-white py-3 px-6 rounded-xl font-bold hover:bg-orange-600 transition-all duration-300 flex items-center justify-center shadow-lg"
-                      >
-                        <CalendarIcon className="w-5 h-5 mr-2" />
-                        Book Now
-                      </button>
-                    </div>
                   </div>
-                  
+
                   {/* Rating Badge - Hidden on mobile, shown on desktop */}
                   <div className="hidden lg:block text-right">
                     <div className="flex items-center bg-yellow-50 px-3 py-2 rounded-lg border border-yellow-200">
@@ -541,10 +523,70 @@ const ServiceDetailPage = () => {
                 </div>
               </div>
 
+              {/* Mobile Booking Card */}
+              <div className="lg:hidden mb-6">
+                <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-xl">
+                  <div className="text-center mb-6">
+                    <div className="flex items-baseline justify-center mb-2">
+                      <MdCurrencyRupee className="w-6 h-6 text-gray-600" />
+                      <span className="text-3xl font-bold text-gray-800 ml-1">
+                        {service.basePrice?.toLocaleString() || '0'}
+                      </span>
+                    </div>
+                    <p className="text-gray-600">All inclusive pricing • No hidden charges</p>
+                    <p className="text-orange-500 text-sm mt-1 font-medium">
+                      * Material cost from local market is not included
+                    </p>
+                  </div>
+
+                  {/* Service Features */}
+                  {/* <div className="space-y-4 mb-6">
+                    <div className="flex items-center p-3 bg-white rounded-lg border border-gray-200 shadow-sm">
+                      <MdAccessTime className="w-5 h-5 text-teal-600 mr-3" />
+                      <div>
+                        <div className="font-medium text-gray-800">Service Duration</div>
+                        <div className="text-sm text-gray-600">{formatDuration(service.duration)} Approx</div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center p-3 bg-white rounded-lg border border-gray-200 shadow-sm">
+                      <MdSecurity className="w-5 h-5 text-teal-600 mr-3" />
+                      <div>
+                        <div className="font-medium text-gray-800">Service Warranty</div>
+                        <div className="text-sm text-gray-600">30 days comprehensive</div>
+                      </div>
+                    </div>
+                  </div> */}
+
+                  {/* Enhanced Action Buttons */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <button
+                      onClick={handleBookNow}
+                      className="col-span-2 bg-orange-500 text-white py-3 px-4 rounded-xl font-bold hover:bg-orange-600 transition-all duration-300 transform hover:scale-105 flex items-center justify-center shadow-lg hover:shadow-xl text-sm"
+                    >
+                      <MdCalendarToday className="w-4 h-4 mr-2" />
+                      Book Service
+                    </button>
+
+                    <button
+                      onClick={handleShare}
+                      className="flex items-center justify-center py-2 px-2 border border-gray-300 rounded-xl hover:bg-gray-50 transition-all duration-300 transform hover:scale-105 shadow-sm"
+                    >
+                      <MdShare className="w-4 h-4 text-gray-600" />
+                    </button>
+                  </div>
+
+                  {/* Contact Info */}
+                  <div className="mt-6 pt-6 border-t border-gray-200 text-center">
+                    <p className="text-sm text-gray-600 mb-4">Need help? <Link to="/contact" className="text-teal-600 hover:text-teal-800 font-medium transition-colors duration-300">Contact us</Link></p>
+                  </div>
+                </div>
+              </div>
+
               {/* Service Details Tabs */}
               <div className="border-b border-gray-200 mb-6">
                 <nav className="-mb-px flex space-x-8">
-                  {[ 
+                  {[
                     { id: 'overview', label: 'Service Overview' },
                     { id: 'specifications', label: 'Specifications' },
                     { id: 'reviews', label: `Reviews (${service.ratingCount || 0})` }
@@ -552,11 +594,10 @@ const ServiceDetailPage = () => {
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
-                      className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-300 ${ 
-                        activeTab === tab.id
-                          ? 'border-teal-600 text-teal-600'
-                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                      }`}
+                      className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-300 ${activeTab === tab.id
+                        ? 'border-teal-600 text-teal-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        }`}
                     >
                       {tab.label}
                     </button>
@@ -648,7 +689,7 @@ const ServiceDetailPage = () => {
                               {formatDuration(service.duration)}
                             </span>
                           </div>
-                          
+
                           <div className="flex justify-between items-center py-3 border-b border-gray-200">
                             <span className="font-medium text-gray-600 flex items-center">
                               <CategoryIcon className="w-4 h-4 mr-2" />
@@ -656,14 +697,13 @@ const ServiceDetailPage = () => {
                             </span>
                             <span className="text-gray-800 font-semibold">{service.category}</span>
                           </div>
-                          
+
                           <div className="flex justify-between items-center py-3 border-b border-gray-200">
                             <span className="font-medium text-gray-600">Service Status</span>
-                            <span className={`font-semibold px-3 py-1 rounded-full border ${ 
-                              service.isActive 
-                                ? 'bg-green-100 text-green-800 border-green-200'
-                                : 'bg-red-100 text-red-800 border-red-200'
-                            }`}> 
+                            <span className={`font-semibold px-3 py-1 rounded-full border ${service.isActive
+                              ? 'bg-green-100 text-green-800 border-green-200'
+                              : 'bg-red-100 text-red-800 border-red-200'
+                              }`}>
                               {service.isActive ? 'Active' : 'Inactive'}
                             </span>
                           </div>
@@ -685,7 +725,7 @@ const ServiceDetailPage = () => {
                           Frequently Asked Questions
                         </h4>
                         <div className="divide-y divide-gray-200">
-                          {[ 
+                          {[
                             {
                               question: "What's included in the service cost?",
                               answer: "The service cost includes professional labor, basic materials, standard tools, and transportation. Material cost from local market is not included in the service charge."
@@ -710,9 +750,8 @@ const ServiceDetailPage = () => {
                               >
                                 <span className="font-medium text-gray-800 pr-4">{faq.question}</span>
                                 <ChevronDownIcon
-                                  className={`w-5 h-5 text-gray-500 transition-transform duration-300 flex-shrink-0 ${ 
-                                    openAccordion === index ? 'transform rotate-180' : ''
-                                  }`}
+                                  className={`w-5 h-5 text-gray-500 transition-transform duration-300 flex-shrink-0 ${openAccordion === index ? 'transform rotate-180' : ''
+                                    }`}
                                 />
                               </button>
                               {openAccordion === index && (
@@ -741,11 +780,10 @@ const ServiceDetailPage = () => {
                             {[1, 2, 3, 4, 5].map((star) => (
                               <StarIconSolid
                                 key={star}
-                                className={`w-6 h-6 ${ 
-                                  star <= (service.averageRating || 0)
-                                    ? 'text-yellow-400'
-                                    : 'text-gray-300'
-                                }`}
+                                className={`w-6 h-6 ${star <= (service.averageRating || 0)
+                                  ? 'text-yellow-400'
+                                  : 'text-gray-300'
+                                  }`}
                               />
                             ))}
                           </div>
@@ -753,7 +791,7 @@ const ServiceDetailPage = () => {
                             Based on {service.ratingCount || 0} reviews
                           </div>
                         </div>
-                        
+
                         <div className="flex-1 max-w-md">
                           {[5, 4, 3, 2, 1].map((rating) => {
                             const count = ratingDistribution[rating];
@@ -802,11 +840,10 @@ const ServiceDetailPage = () => {
                                   {[1, 2, 3, 4, 5].map((star) => (
                                     <StarIconSolid
                                       key={star}
-                                      className={`w-4 h-4 ${ 
-                                        star <= review.rating
-                                          ? 'text-yellow-400'
-                                          : 'text-gray-300'
-                                      }`}
+                                      className={`w-4 h-4 ${star <= review.rating
+                                        ? 'text-yellow-400'
+                                        : 'text-gray-300'
+                                        }`}
                                     />
                                   ))}
                                 </div>
@@ -830,10 +867,7 @@ const ServiceDetailPage = () => {
               </div>
             </div>
 
-            {/* Right Column - Enhanced Booking Card & Guarantee */}
-            <div className="hidden lg:block lg:col-span-1 mt-8 lg:mt-0">
-              {DesktopBookingCard}
-            </div>
+
           </div>
         </div>
 
@@ -850,12 +884,12 @@ const ServiceDetailPage = () => {
                 <ChevronRightIcon className="w-4 h-4 ml-1" />
               </button>
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {relatedServices.map((relatedService) => {
                 const RelatedCategoryIcon = getCategoryIcon(relatedService.category);
                 const relatedImages = relatedService.images || [];
-                
+
                 return (
                   <div
                     key={relatedService._id}
@@ -885,7 +919,7 @@ const ServiceDetailPage = () => {
                         </div>
                       )}
                     </div>
-                    
+
                     <div className="p-5">
                       <h3 className="font-semibold text-gray-800 mb-2 line-clamp-2 group-hover:text-teal-600 transition-colors duration-300">
                         {relatedService.title}
@@ -893,23 +927,23 @@ const ServiceDetailPage = () => {
                       <p className="text-gray-600 text-sm mb-4 line-clamp-2">
                         {relatedService.description}
                       </p>
-                      
+
                       <div className="flex items-center justify-between">
                         <div className="flex items-baseline">
-                          <CurrencyRupeeIcon className="w-4 h-4 text-gray-600" />
+                          <MdCurrencyRupee className="w-4 h-4 text-gray-600" />
                           <span className="text-xl font-bold text-gray-800 ml-1">
                             {relatedService.basePrice?.toLocaleString() || '0'}
                           </span>
                         </div>
-                        
+
                         <div className="flex items-center text-sm text-gray-600 bg-gray-100 px-2 py-1 rounded-full border border-gray-200">
-                          <ClockIcon className="w-3 h-3 mr-1" />
+                          <MdAccessTime className="w-3 h-3 mr-1" />
                           {formatDuration(relatedService.duration)}
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center mt-3">
-                        <StarIconSolid className="w-4 h-4 text-yellow-400 mr-1" />
+                        <MdStar className="w-4 h-4 text-yellow-400 mr-1" />
                         <span className="text-sm font-medium text-gray-800">
                           {relatedService.averageRating?.toFixed(1) || '0.0'}
                         </span>
