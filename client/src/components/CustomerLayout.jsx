@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
-    FiHome, FiCalendar, FiCreditCard, FiMessageSquare, 
+    FiHome, FiCalendar, FiCreditCard, FiMessageSquare,
     FiBell, FiUser, FiAlertCircle, FiLogOut, FiSearch,
     FiShoppingBag, FiMenu, FiX, FiChevronDown, FiMapPin
 } from 'react-icons/fi';
@@ -106,21 +106,6 @@ const CustomerLayout = () => {
                                 <FiChevronDown className="h-4 w-4 text-gray-400" />
                             </div>
 
-                            {/* My Bookings Link */}
-                            <Link
-                                to="/customer/bookings"
-                                className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-primary/10 hover:text-primary transition-all duration-200 group"
-                            >
-                                <FiCalendar className="h-5 w-5 text-secondary group-hover:text-primary transition-colors" />
-                                <span className="text-sm font-medium text-secondary group-hover:text-primary transition-colors">My Bookings</span>
-                            </Link>
-
-                            {/* Notifications */}
-                            <button className="relative p-2 text-secondary hover:text-primary hover:bg-primary/10 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary/20">
-                                <FiBell className="h-5 w-5" />
-                                <span className="absolute -top-1 -right-1 h-3 w-3 bg-accent rounded-full animate-pulse shadow-sm"></span>
-                            </button>
-
                             {/* Profile Dropdown */}
                             <div className="relative">
                                 <button
@@ -152,30 +137,17 @@ const CustomerLayout = () => {
                                             <p className="text-xs text-gray-500 truncate">{user?.email}</p>
                                         </div>
                                         <div className="py-2">
-                                            <Link
-                                                to="/customer/profile"
-                                                className="flex items-center px-4 py-2 text-sm text-secondary hover:bg-primary/10 hover:text-primary transition-all duration-200"
-                                                onClick={() => setProfileDropdownOpen(false)}
-                                            >
-                                                <FiUser className="mr-3 h-4 w-4" />
-                                                Profile
-                                            </Link>
-                                            <Link
-                                                to="/customer/bookings"
-                                                className="flex items-center px-4 py-2 text-sm text-secondary hover:bg-primary/10 hover:text-primary transition-all duration-200"
-                                                onClick={() => setProfileDropdownOpen(false)}
-                                            >
-                                                <FiCalendar className="mr-3 h-4 w-4" />
-                                                Bookings
-                                            </Link>
-                                            <Link
-                                                to="/customer/complaints"
-                                                className="flex items-center px-4 py-2 text-sm text-secondary hover:bg-primary/10 hover:text-primary transition-all duration-200"
-                                                onClick={() => setProfileDropdownOpen(false)}
-                                            >
-                                                <FiAlertCircle className="mr-3 h-4 w-4" />
-                                                Complaints
-                                            </Link>
+                                            {navigationItems.map((item) => (
+                                                <Link
+                                                    key={item.name}
+                                                    to={item.path}
+                                                    className="flex items-center px-4 py-2 text-sm text-secondary hover:bg-primary/10 hover:text-primary transition-all duration-200"
+                                                    onClick={() => setProfileDropdownOpen(false)}
+                                                >
+                                                    {React.cloneElement(item.icon, { className: "mr-3 h-4 w-4" })}
+                                                    {item.name}
+                                                </Link>
+                                            ))}
                                         </div>
                                         <div className="border-t border-gray-100 pt-2">
                                             <button
@@ -193,12 +165,6 @@ const CustomerLayout = () => {
 
                         {/* Mobile Menu Button */}
                         <div className="lg:hidden flex items-center space-x-3">
-                            {/* Notifications */}
-                            <button className="relative p-2 text-secondary hover:text-primary hover:bg-primary/10 rounded-lg transition-all duration-200">
-                                <FiBell className="h-5 w-5" />
-                                <span className="absolute -top-1 -right-1 h-3 w-3 bg-accent rounded-full animate-pulse"></span>
-                            </button>
-                            
                             {/* Mobile Menu Toggle */}
                             <button
                                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -290,31 +256,7 @@ const CustomerLayout = () => {
                 )}
             </header>
 
-            {/* Mobile Bottom Navigation */}
-            <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-background border-t border-gray-200 z-30 shadow-lg">
-                <div className="grid grid-cols-5 gap-1 py-2">
-                    {navigationItems.slice(0, 5).map((item) => (
-                        <Link
-                            key={item.name}
-                            to={item.path}
-                            className={`flex flex-col items-center justify-center py-2 px-1 text-xs font-medium transition-all duration-200 ${
-                                isActiveRoute(item.path)
-                                    ? 'text-primary bg-primary/10'
-                                    : 'text-gray-500 hover:text-primary hover:bg-primary/5'
-                            }`}
-                        >
-                            <span className={`mb-1 ${isActiveRoute(item.path) ? 'text-primary' : 'text-gray-400'}`}>
-                                {item.icon}
-                            </span>
-                            <span className="truncate text-[10px]">
-                                {item.name === 'Dashboard' ? 'Home' : 
-                                 item.name === 'Complaints' ? 'Help' : 
-                                 item.name}
-                            </span>
-                        </Link>
-                    ))}
-                </div>
-            </div>
+
 
             {/* Main Content */}
             <main className="pb-20 lg:pb-0">

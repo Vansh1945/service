@@ -15,9 +15,6 @@ const fs = require('fs');
 /**
  * Register a new user with OTP verification
  */
-/**
- * Validation helper functions
- */
 const validateName = (name) => {
     if (!name || typeof name !== 'string') {
         return "Name is required";
@@ -320,10 +317,7 @@ const getProfile = async (req, res) => {
             });
         }
 
-        // If profilePicUrl exists, make it a full URL
-        if (user.profilePicUrl) {
-            user.profilePicUrl = `${req.protocol}://${req.get('host')}/${user.profilePicUrl}`;
-        }
+        // profilePicUrl is already a full Cloudinary URL, no need to construct local URL
 
         res.status(200).json({
             success: true,
@@ -383,7 +377,7 @@ const uploadProfilePicture = async (req, res) => {
     try {
         console.log('Upload request received'); // Debug log
         console.log('File:', req.file); // Debug log
-        
+
         if (!req.file) {
             console.log('No file in request'); // Debug log
             return res.status(400).json({
@@ -392,27 +386,22 @@ const uploadProfilePicture = async (req, res) => {
             });
         }
 
-        // Get the relative file path
-        const relativePath = req.file.path.replace(/\\/g, '/');
-        
-        // Update user's profile picture URL
+        // For Cloudinary uploads, req.file.path contains the full Cloudinary URL
+        const cloudinaryUrl = req.file.path;
+
+        // Update user's profile picture URL with Cloudinary URL
         const user = await User.findByIdAndUpdate(
             req.user._id,
-            { profilePicUrl: relativePath },
+            { profilePicUrl: cloudinaryUrl },
             { new: true }
         ).select('-password -__v');
 
-        console.log('User before update:', user); // Debug log
+        console.log('User updated with Cloudinary URL:', cloudinaryUrl); // Debug log
 
-        // Construct full URL for the response
-        const fullUrl = `${req.protocol}://${req.get('host')}/${relativePath}`;
-
-        console.log('Upload successful:', fullUrl); // Debug log
-        
         res.status(200).json({
             success: true,
             message: 'Profile picture uploaded successfully',
-            profilePicUrl: fullUrl,
+            profilePicUrl: cloudinaryUrl,
             user
         });
     } catch (error) {
