@@ -609,7 +609,14 @@ const BookService = () => {
                       </span>
                       <div className="flex items-center text-yellow-500 space-x-1">
                         <Star className="w-4 h-4 fill-current" />
-                        <span className="text-sm font-semibold text-gray-700">4.5</span>
+                        <span className="text-sm font-semibold text-gray-700">
+                          {service.averageRating?.toFixed(1) || '0.0'}
+                        </span>
+                        {service.ratingCount > 0 && (
+                          <span className="text-xs text-gray-600 ml-1">
+                            ({service.ratingCount})
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>

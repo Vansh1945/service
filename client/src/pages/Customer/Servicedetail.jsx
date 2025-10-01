@@ -250,7 +250,7 @@ const ServiceDetailPage = () => {
   const specialNotes = service.specialNotes;
   const materialsUsed = service.materialsUsed;
 
-  //  Booking Card
+  // Desktop Booking Card
   const DesktopBookingCard = (
     <div className="sticky top-8 space-y-8">
       <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-xl">
@@ -540,7 +540,7 @@ const ServiceDetailPage = () => {
                   </div>
 
                   {/* Service Features */}
-                  {/* <div className="space-y-4 mb-6">
+                  <div className="space-y-4 mb-6">
                     <div className="flex items-center p-3 bg-white rounded-lg border border-gray-200 shadow-sm">
                       <MdAccessTime className="w-5 h-5 text-teal-600 mr-3" />
                       <div>
@@ -556,7 +556,7 @@ const ServiceDetailPage = () => {
                         <div className="text-sm text-gray-600">30 days comprehensive</div>
                       </div>
                     </div>
-                  </div> */}
+                  </div>
 
                   {/* Enhanced Action Buttons */}
                   <div className="grid grid-cols-3 gap-3">
@@ -867,7 +867,10 @@ const ServiceDetailPage = () => {
               </div>
             </div>
 
-
+            {/* Right Column - Desktop Booking Card */}
+            <div className="hidden lg:block">
+              {DesktopBookingCard}
+            </div>
           </div>
         </div>
 
