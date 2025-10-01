@@ -1,24 +1,9 @@
-# Coupon and Booking Integration Improvements
+# TODO List
 
-## Frontend Improvements (Book-Service.jsx)
-- [ ] Review coupon application flow and validation
-- [ ] Ensure coupon discount calculation is accurate
-- [ ] Verify coupon removal functionality works correctly
-- [ ] Check coupon usage marking after successful booking
-- [ ] Improve error handling and user feedback for coupon operations
+## Service Card Image Fix
+- [x] Update BookingConfirmation.jsx to use backend images array (serviceDetails.images[0]) instead of single image field
+- [x] Verify that Services.jsx already uses backend images correctly
+- [x] Test the changes to ensure images load from backend
 
-## Backend Verification (Coupon Controller & Model)
-- [ ] Verify coupon validation logic in applyCoupon endpoint
-- [ ] Check markCouponUsed functionality
-- [ ] Review coupon model methods for edge cases
-- [ ] Ensure proper error responses for invalid coupons
-
-## Booking Integration
-- [ ] Confirm coupon data is properly stored in booking model
-- [ ] Verify total amount calculation includes coupon discounts
-- [ ] Check booking creation with coupon applied
-
-## Testing & Validation
-- [ ] Test end-to-end coupon application flow
-- [ ] Verify coupon usage limits and expiry handling
-- [ ] Test error scenarios and edge cases
+## Completed Tasks
+- Fixed service card image source in BookingConfirmation.jsx to fetch from backend images array
