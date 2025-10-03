@@ -524,8 +524,10 @@ const updateBookingStatus = async (req, res) => {
 // Get user bookings
 const getUserBookings = async (req, res) => {
   try {
-    const { status, timeFilter, searchTerm } = req.query;
+    const { status, timeFilter, searchTerm, page = 1, limit = 10 } = req.query;
     const query = { customer: req.user._id };
+    const currentPage = parseInt(page);
+    const itemsPerPage = parseInt(limit);
 
     // Status filter
     if (status) {
@@ -563,16 +565,21 @@ const getUserBookings = async (req, res) => {
         }
     }
     
+    // Get total count for pagination
+    const totalBookings = await Booking.countDocuments(query);
+
     const bookings = await Booking.find(query)
       .populate({
         path: 'services.service',
-        select: 'title description basePrice category image duration',
+        select: 'title description basePrice category images duration',
         // Search term filter on service title
         match: searchTerm ? { title: { $regex: searchTerm, $options: 'i' } } : {}
       })
       .populate('provider', 'name email phone businessName contactPerson rating')
       .populate('customer', 'name email phone')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .skip((currentPage - 1) * itemsPerPage)
+      .limit(itemsPerPage);
 
     // Since the match on populated field might return bookings with empty services, we filter them out.
     const filteredBookings = bookings.filter(b => b.services && b.services.length > 0 && b.services[0].service);
@@ -601,13 +608,20 @@ const getUserBookings = async (req, res) => {
       })
     );
 
-    const totalBookings = await Booking.countDocuments({ customer: req.user._id });
+    const totalPages = Math.ceil(totalBookings / itemsPerPage);
 
     res.status(200).json({
       success: true,
       message: 'Bookings retrieved successfully',
       data: bookingsWithTransactions,
-      totalBookings: totalBookings
+      pagination: {
+        currentPage,
+        totalPages,
+        totalBookings,
+        itemsPerPage,
+        hasNextPage: currentPage < totalPages,
+        hasPrevPage: currentPage > 1
+      }
     });
 
   } catch (error) {
@@ -782,7 +796,7 @@ const getServiceById = async (req, res) => {
     }
 
     const service = await Service.findById(id)
-      .select('title description basePrice category image duration isActive')
+      .select('title description basePrice category images duration isActive')
       .lean();
 
     if (!service) {
@@ -813,7 +827,7 @@ const getBooking = async (req, res) => {
     const { id } = req.params;
 
     const booking = await Booking.findById(id)
-      .populate('services.service', 'title description basePrice category image duration')
+      .populate('services.service', 'title description basePrice category images duration')
       .populate('customer', 'name email phone')
       .populate('provider', 'name email phone businessName contactPerson rating address')
       .populate('feedback');
@@ -2230,7 +2244,7 @@ const getBookingDetails = async (req, res) => {
         description: item.service?.description,
         basePrice: item.service?.basePrice,
         duration: item.service?.duration,
-        image: item.service?.image
+        images: item.service?.images
       },
       quantity: item.quantity,
       price: item.price,

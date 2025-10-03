@@ -1,9 +1,5 @@
-# TODO List
-
-## Service Card Image Fix
-- [x] Update BookingConfirmation.jsx to use backend images array (serviceDetails.images[0]) instead of single image field
-- [x] Verify that Services.jsx already uses backend images correctly
-- [x] Test the changes to ensure images load from backend
-
-## Completed Tasks
-- Fixed service card image source in BookingConfirmation.jsx to fetch from backend images array
+- [ ] Implement full booking list display on desktop and responsive pagination on smaller screens in CustomerBookingsPage.jsx
+  - [ ] Add screen size detection (desktop >=1024px)
+  - [ ] Modify fetchBookings to set limit 1000 for desktop, 10 for mobile
+  - [ ] Hide pagination controls on desktop when full list is shown
+  - [ ] Ensure responsive grid layout remains intact
