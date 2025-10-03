@@ -1,5 +1,6 @@
-- [ ] Implement full booking list display on desktop and responsive pagination on smaller screens in CustomerBookingsPage.jsx
-  - [ ] Add screen size detection (desktop >=1024px)
-  - [ ] Modify fetchBookings to set limit 1000 for desktop, 10 for mobile
-  - [ ] Hide pagination controls on desktop when full list is shown
-  - [ ] Ensure responsive grid layout remains intact
+# TODO: Fix Service Images Display in CustomerBookingsPage
+
+## Tasks
+- [x] Update Service model aggregate projection to use 'images' instead of 'image'
+- [ ] Test the changes: Ensure service images are now displayed in the CustomerBookingsPage
+- [ ] Fix any remaining issues with image paths or display
