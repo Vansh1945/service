@@ -394,8 +394,7 @@ const confirmBooking = async (req, res) => {
 // Helper function to process online payments
 async function processOnlinePayment({ amount, bookingId, paymentDetails, userId }, session) {
   try {
-    // In a real implementation, this would call your payment gateway (Razorpay, Stripe, etc.)
-    // This is a simplified version
+
 
     // Validate payment details
     if (!paymentDetails || !paymentDetails.cardNumber || !paymentDetails.expiry || !paymentDetails.cvv) {
@@ -575,7 +574,14 @@ const getUserBookings = async (req, res) => {
         // Search term filter on service title
         match: searchTerm ? { title: { $regex: searchTerm, $options: 'i' } } : {}
       })
-      .populate('provider', 'name email phone businessName contactPerson rating')
+      .populate({
+        path: 'provider',
+        select: 'name email phone  completedBookings feedbacks',
+        populate: {
+          path: 'feedbacks',
+          select: 'providerFeedback.rating'
+        }
+      })
       .populate('customer', 'name email phone')
       .sort({ createdAt: -1 })
       .skip((currentPage - 1) * itemsPerPage)
@@ -758,7 +764,7 @@ const getProviderById = async (req, res) => {
     }
 
     const provider = await Provider.findById(id)
-      .select('name email phone businessName contactPerson rating services experience serviceArea address')
+      .select('name email phone  rating services experience serviceArea address')
       .lean();
 
     if (!provider) {
@@ -942,7 +948,6 @@ const cancelBooking = async (req, res) => {
       await Provider.findByIdAndUpdate(booking.provider, {
         $inc: { canceledBookings: 1 }
       }, { session });
-      await Provider.calculatePerformance(booking.provider);
     }
 
     let refundDetails = null;
@@ -1487,11 +1492,6 @@ const acceptBooking = async (req, res) => {
 
     await booking.save();
 
-    // Recalculate provider performance after accepting a booking
-    if (booking.provider) {
-      await Provider.calculatePerformance(booking.provider);
-    }
-
     // Populate booking details for response
     const populatedBooking = await Booking.findById(booking._id)
       .populate('customer', 'name email phone')
@@ -1854,9 +1854,6 @@ const completeBooking = async (req, res) => {
       { $inc: { completedBookings: 1, totalEarnings: netAmount, totalCommissionPaid: commission } },
       { session }
     );
-
-    // Recalculate provider performance after completing a booking
-    await Provider.calculatePerformance(providerId);
 
     // Notifications (as before)
     setImmediate(async () => {

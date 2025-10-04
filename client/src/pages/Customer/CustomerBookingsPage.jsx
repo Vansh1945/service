@@ -135,7 +135,7 @@ const CustomerBookingsPage = () => {
     if (!window.confirm('Are you sure you want to cancel this booking?')) return;
 
     try {
-      const response = await fetch(`${API}/booking/bookings/${bookingId}/cancel`, {
+      const response = await fetch(`${API}/booking/user/${bookingId}/cancel`, {
         method: 'PATCH',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -192,12 +192,11 @@ const CustomerBookingsPage = () => {
     }
   };
 
-  const callProvider = (phoneNumber) => {
-    if (!phoneNumber) {
+  const callProvider = (phone) => {
+    if (!phone) {
       showToast('Provider phone number not available', 'warning');
       return;
     }
-    window.location.href = `tel:${phoneNumber}`;
   };
 
   const getStatusColor = (status) => {
@@ -206,6 +205,8 @@ const CustomerBookingsPage = () => {
         return 'bg-amber-50 text-amber-800 border-amber-200';
       case 'accepted':
         return 'bg-blue-50 text-blue-800 border-blue-200';
+      case 'assigned':
+        return 'bg-indigo-50 text-indigo-800 border-indigo-200';
       case 'in_progress':
       case 'in-progress':
         return 'bg-purple-50 text-purple-800 border-purple-200';
@@ -226,6 +227,8 @@ const CustomerBookingsPage = () => {
         return <Timer className="w-4 h-4" />;
       case 'accepted':
         return <CheckCircle className="w-4 h-4" />;
+      case 'assigned':
+        return <User className="w-4 h-4" />;
       case 'in_progress':
       case 'in-progress':
         return <Activity className="w-4 h-4" />;
@@ -246,6 +249,8 @@ const CustomerBookingsPage = () => {
         return 'Finding Provider';
       case 'accepted':
         return 'Confirmed';
+      case 'assigned':
+        return 'Provider Assigned';
       case 'in_progress':
       case 'in-progress':
         return 'In Progress';
@@ -336,18 +341,18 @@ const CustomerBookingsPage = () => {
           booking.paymentStatus === 'paid'
             ? `Payment of ₹${booking.totalAmount} completed via ${booking.paymentMethod}`
             : booking.paymentMethod === 'cash'
-            ? 'Pay after service completion'
-            : 'Payment is pending',
+              ? 'Pay after service completion'
+              : 'Payment is pending',
         time: booking.paymentDate || getStatusTimestamp('payment_pending'),
       },
       {
         key: 'assigned',
         label: 'Provider Assigned',
         icon: User,
-        completed: ['accepted', 'in-progress', 'completed'].includes(booking.status),
-        active: booking.providerDetails && booking.status === 'pending',
-        description: booking.providerDetails
-          ? `${booking.providerDetails.name} has been assigned.`
+        completed: ['accepted', 'assigned', 'in-progress', 'completed'].includes(booking.status),
+        active: booking.provider && (booking.status === 'pending' || booking.status === 'assigned'),
+        description: booking.provider
+          ? `${booking.provider.name} has been assigned.`
           : 'Waiting for a provider to be assigned.',
         time: getStatusTimestamp('accepted') || getStatusTimestamp('assigned'),
       },
@@ -396,18 +401,16 @@ const CustomerBookingsPage = () => {
             {steps.map((step) => (
               <div key={step.key} className="relative flex items-start space-x-4">
                 <div
-                  className={`relative z-10 w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 ${
-                    step.completed ? 'bg-primary text-white shadow-lg' : step.active ? 'bg-accent text-white animate-pulse' : 'bg-gray-100 text-gray-400'
-                  }`}
+                  className={`relative z-10 w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 ${step.completed ? 'bg-primary text-white shadow-lg' : step.active ? 'bg-accent text-white animate-pulse' : 'bg-gray-100 text-gray-400'
+                    }`}
                 >
                   <step.icon className="w-5 h-5" />
                 </div>
 
                 <div className="flex-1 min-w-0 pb-4">
                   <h5
-                    className={`text-sm font-semibold ${
-                      step.completed ? 'text-primary' : step.active ? 'text-accent' : 'text-gray-500'
-                    }`}
+                    className={`text-sm font-semibold ${step.completed ? 'text-primary' : step.active ? 'text-accent' : 'text-gray-500'
+                      }`}
                   >
                     {step.label}
                   </h5>
@@ -421,7 +424,7 @@ const CustomerBookingsPage = () => {
       </div>
     );
   };
-  
+
   // Re-add BookingTimeline to BookingModal
   const BookingModal = ({ booking, onClose }) => (
     <>
@@ -434,7 +437,7 @@ const CustomerBookingsPage = () => {
                 <p className="text-sm text-gray-500">ID: #{booking._id.slice(-8).toUpperCase()}</p>
               </div>
               <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl">
-                
+
               </button>
             </div>
           </div>
@@ -450,7 +453,7 @@ const CustomerBookingsPage = () => {
                   Service Details
                 </h4>
                 <div className="space-y-3">
-                      {booking.services.map((serviceItem, index) => (
+                  {booking.services.map((serviceItem, index) => (
                     <div key={index} className="bg-white rounded-lg p-3 border border-gray-200">
                       <div className="flex justify-between items-start mb-2">
                         <h5 className="font-medium text-secondary">
@@ -570,7 +573,7 @@ const CustomerBookingsPage = () => {
               )}
 
               {/* Provider Details */}
-              {booking.providerDetails && ['accepted', 'in_progress', 'in-progress'].includes(booking.status) && (
+              {booking.provider && ['accepted', 'assigned', 'in-progress', 'confirmed'].includes(booking.status) && (
                 <div className="bg-gray-50 rounded-xl p-4">
                   <h4 className="font-semibold text-secondary mb-3 flex items-center">
                     <User className="w-4 h-4 text-primary mr-2" />
@@ -579,21 +582,21 @@ const CustomerBookingsPage = () => {
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
                       <span className="text-gray-600">Name:</span>
-                      <span className="font-medium">{booking.providerDetails.name}</span>
+                      <span className="font-medium">{booking.provider.name}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Phone:</span>
-                      <span className="font-medium">{booking.providerDetails.phone}</span>
-                    </div>
-                    {booking.providerDetails.rating && (
+                    {booking.provider.averageRating && booking.provider.averageRating > 0 && (
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Rating:</span>
+                        <span className="text-gray-600">Average Rating:</span>
                         <div className="flex items-center">
                           <Star className="w-4 h-4 text-yellow-400 mr-1" />
-                          <span className="font-medium">{booking.providerDetails.rating}/5</span>
+                          <span className="font-medium">{booking.provider.averageRating}/5</span>
                         </div>
                       </div>
                     )}
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Completed Bookings:</span>
+                      <span className="font-medium">{booking.provider.completedBookings || 0}</span>
+                    </div>
                   </div>
                 </div>
               )}
@@ -633,13 +636,12 @@ const CustomerBookingsPage = () => {
   const BookingCard = ({ booking }) => (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden">
       {/* Status Banner */}
-      <div className={`h-1 ${
-        booking.status === 'completed' ? 'bg-primary' :
-        booking.status === 'cancelled' ? 'bg-red-500' :
-        booking.status === 'in_progress' || booking.status === 'in-progress' ? 'bg-accent' :
-        booking.status === 'accepted' ? 'bg-blue-500' :
-        'bg-amber-500'
-      }`}></div>
+      <div className={`h-1 ${booking.status === 'completed' ? 'bg-primary' :
+          booking.status === 'cancelled' ? 'bg-red-500' :
+            booking.status === 'in_progress' || booking.status === 'in-progress' ? 'bg-accent' :
+              booking.status === 'accepted' ? 'bg-blue-500' :
+                'bg-amber-500'
+        }`}></div>
 
       <div className="p-4">
         <div className="flex flex-col sm:flex-row justify-between items-start mb-3">
@@ -715,9 +717,8 @@ const CustomerBookingsPage = () => {
             <p className="text-2xl font-bold text-secondary">
               ₹{booking.totalAmount || 0}
             </p>
-            <p className={`text-sm font-medium ${
-              booking.paymentStatus === 'paid' ? 'text-primary' : 'text-accent'
-            }`}>
+            <p className={`text-sm font-medium ${booking.paymentStatus === 'paid' ? 'text-primary' : 'text-accent'
+              }`}>
               ✓ Paid via {booking.paymentMethod}
             </p>
           </div>
@@ -756,9 +757,9 @@ const CustomerBookingsPage = () => {
             </button>
           )}
 
-          {booking.status !== 'completed' && booking.status !== 'pending' && booking.status !== 'cancelled' && (booking.providerDetails?.phone || booking.provider?.phone) && (
+          {['accepted', 'assigned', 'in-progress', 'confirmed'].includes(booking.status) && booking.provider?.phone && (
             <button
-              onClick={() => callProvider(booking.providerDetails?.phone || booking.provider?.phone)}
+              onClick={() => callProvider(booking.provider?.phone)}
               className="flex items-center space-x-1 text-sm font-medium text-primary hover:text-primary/80 px-3 py-2 rounded-lg hover:bg-primary/5 transition-colors border border-primary/20"
             >
               <Phone className="w-4 h-4" />
@@ -844,41 +845,41 @@ const CustomerBookingsPage = () => {
                     <span className="font-medium text-green-600">-₹{booking.totalDiscount}</span>
                   </div>
                 )}
-              {booking.couponApplied && (
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Coupon Applied:</span>
-                  <span className="font-medium text-blue-600">{booking.couponApplied.code}</span>
-                </div>
-              )}
-              <div className="border-t border-gray-300 pt-2 mt-2">
-                <div className="flex justify-between font-semibold text-secondary">
-                  <span>Total Amount:</span>
-                  <span>₹{booking.totalAmount || 0}</span>
-                </div>
-              </div>
-              {booking.transactionId && (
-                <div className="mt-3 pt-3 border-t border-gray-300">
-                  <h5 className="font-medium text-secondary mb-2">Transaction Information</h5>
-                  <div className="space-y-1 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Transaction ID:</span>
-                      <span className="font-mono">{booking.transactionId}</span>
-                    </div>
-                    {booking.razorpayPaymentId && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Payment ID:</span>
-                        <span className="font-mono">{booking.razorpayPaymentId}</span>
-                      </div>
-                    )}
-                    {booking.paymentDate && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Payment Date:</span>
-                        <span>{new Date(booking.paymentDate).toLocaleString()}</span>
-                      </div>
-                    )}
+                {booking.couponApplied && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Coupon Applied:</span>
+                    <span className="font-medium text-blue-600">{booking.couponApplied.code}</span>
+                  </div>
+                )}
+                <div className="border-t border-gray-300 pt-2 mt-2">
+                  <div className="flex justify-between font-semibold text-secondary">
+                    <span>Total Amount:</span>
+                    <span>₹{booking.totalAmount || 0}</span>
                   </div>
                 </div>
-              )}
+                {booking.transactionId && (
+                  <div className="mt-3 pt-3 border-t border-gray-300">
+                    <h5 className="font-medium text-secondary mb-2">Transaction Information</h5>
+                    <div className="space-y-1 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Transaction ID:</span>
+                        <span className="font-mono">{booking.transactionId}</span>
+                      </div>
+                      {booking.razorpayPaymentId && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Payment ID:</span>
+                          <span className="font-mono">{booking.razorpayPaymentId}</span>
+                        </div>
+                      )}
+                      {booking.paymentDate && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Payment Date:</span>
+                          <span>{new Date(booking.paymentDate).toLocaleString()}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -905,7 +906,7 @@ const CustomerBookingsPage = () => {
               )}
 
               {/* Provider Details */}
-              {booking.providerDetails && ['accepted', 'in_progress', 'in-progress'].includes(booking.status) && (
+              {booking.provider && ['accepted', 'assigned', 'in-progress', 'confirmed'].includes(booking.status) && (
                 <div className="bg-gray-50 rounded-xl p-4">
                   <h4 className="font-semibold text-secondary mb-3 flex items-center">
                     <User className="w-4 h-4 text-primary mr-2" />
@@ -914,21 +915,21 @@ const CustomerBookingsPage = () => {
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
                       <span className="text-gray-600">Name:</span>
-                      <span className="font-medium">{booking.providerDetails.name}</span>
+                      <span className="font-medium">{booking.provider.name}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Phone:</span>
-                      <span className="font-medium">{booking.providerDetails.phone}</span>
-                    </div>
-                    {booking.providerDetails.rating && (
+                    {booking.provider.averageRating && booking.provider.averageRating > 0 && (
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Rating:</span>
+                        <span className="text-gray-600">Average Rating:</span>
                         <div className="flex items-center">
                           <Star className="w-4 h-4 text-yellow-400 mr-1" />
-                          <span className="font-medium">{booking.providerDetails.rating}/5</span>
+                          <span className="font-medium">{booking.provider.averageRating}/5</span>
                         </div>
                       </div>
                     )}
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Completed Bookings:</span>
+                      <span className="font-medium">{booking.provider.completedBookings || 0}</span>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1003,9 +1004,9 @@ const CustomerBookingsPage = () => {
 
   // Loading Component
   if (loading) {
-  return (
-    <div className="min-h-screen bg-background p-4 md:p-6 font-inter">
-      <div className="max-w-6xl mx-auto">
+    return (
+      <div className="min-h-screen bg-background p-4 md:p-6 font-inter">
+        <div className="max-w-6xl mx-auto">
           <div className="animate-pulse space-y-6">
             <div className="h-8 bg-gray-200 rounded w-1/4"></div>
             <div className="h-20 bg-gray-200 rounded"></div>
@@ -1023,15 +1024,15 @@ const CustomerBookingsPage = () => {
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-        <div className="flex flex-col sm:flex-row items-center justify-between mb-4">
-          <div>
-            <h1 className="text-3xl font-bold text-secondary">My Bookings</h1>
-            <p className="text-gray-600 mt-1">
-              {filteredBookings.length} of {pagination.totalBookings || 0} {pagination.totalBookings === 1 ? 'booking' : 'total bookings'} shown
-            </p>
+          <div className="flex flex-col sm:flex-row items-center justify-between mb-4">
+            <div>
+              <h1 className="text-3xl font-bold text-secondary">My Bookings</h1>
+              <p className="text-gray-600 mt-1">
+                {filteredBookings.length} of {pagination.totalBookings || 0} {pagination.totalBookings === 1 ? 'booking' : 'total bookings'} shown
+              </p>
+            </div>
           </div>
         </div>
-      </div>
 
         {/* Filters */}
         <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6 shadow-sm">
@@ -1142,10 +1143,10 @@ const CustomerBookingsPage = () => {
         <BookingModal booking={selectedBooking} onClose={() => setShowModal(false)} />
       )}
       {showRescheduleModal && bookingToReschedule && (
-        <RescheduleModal 
-            booking={bookingToReschedule}
-            onClose={() => setShowRescheduleModal(false)}
-            onConfirm={handleRescheduleSubmit}
+        <RescheduleModal
+          booking={bookingToReschedule}
+          onClose={() => setShowRescheduleModal(false)}
+          onConfirm={handleRescheduleSubmit}
         />
       )}
     </div>
