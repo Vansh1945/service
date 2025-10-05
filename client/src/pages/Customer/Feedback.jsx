@@ -1,151 +1,127 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../store/auth';
-import { useNavigate } from 'react-router-dom';
-import {
-  Star as StarIcon,
-  Edit as EditIcon,
-  CheckCircle as CheckCircleIcon,
-  Add as AddIcon,
-  ArrowBack as ArrowBackIcon,
-  Close as CloseIcon,
-  CalendarToday as CalendarIcon,
-  Person as PersonIcon,
-  Work as WorkIcon,
-  RateReview as RateReviewIcon,
-  ThumbUp as ThumbUpIcon,
-  ThumbDown as ThumbDownIcon
-} from '@mui/icons-material';
-import { format, subDays, isAfter } from 'date-fns';
+import { toast } from 'react-toastify';
 
-const FeedbackManagement = () => {
-  const { token, user, API, logoutUser } = useAuth();
-  const navigate = useNavigate();
+const Feedback = () => {
+  const { token ,API} = useAuth();
 
-  // State management
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return 'Invalid Date';
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
+  const [completedBookings, setCompletedBookings] = useState([]);
   const [feedbacks, setFeedbacks] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [editingFeedback, setEditingFeedback] = useState(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState({
+  const [submitting, setSubmitting] = useState(false);
+  const [selectedFeedback, setSelectedFeedback] = useState(null);
+  const [isViewing, setIsViewing] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [detailedFeedback, setDetailedFeedback] = useState(null);
+  const [isAddingFeedback, setIsAddingFeedback] = useState(false);
+  const [selectedBookingForFeedback, setSelectedBookingForFeedback] = useState(null);
+  const [editingForm, setEditingForm] = useState({
     providerRating: 0,
     providerComment: '',
     serviceRating: 0,
     serviceComment: ''
   });
-  const [formErrors, setFormErrors] = useState({});
-  const [selectedBooking, setSelectedBooking] = useState(null);
-  const [bookingsForFeedback, setBookingsForFeedback] = useState([]);
-  const [openDialog, setOpenDialog] = useState(false);
-  const [openBookingDialog, setOpenBookingDialog] = useState(false);
-  const [openEditModal, setOpenEditModal] = useState(false);
-  const [activeTab, setActiveTab] = useState('all');
-  const [snackbar, setSnackbar] = useState({
-    open: false,
-    message: '',
-    severity: 'success'
+
+  // Feedback form state
+  const [feedbackForm, setFeedbackForm] = useState({
+    bookingId: '',
+    providerRating: 0,
+    providerComment: '',
+    serviceRating: 0,
+    serviceComment: ''
   });
 
-  // Fetch customer's feedbacks
-  const fetchFeedbacks = async () => {
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API}/feedback/my-feedbacks`, {
+
+      // Fetch completed bookings
+      const bookingsResponse = await fetch(`${API}/booking/customer?status=completed`, {
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
       });
 
-      if (!response.ok) {
-        if (response.status === 401) {
-          logoutUser();
-          return;
+      if (!bookingsResponse.ok) {
+        throw new Error('Failed to fetch bookings');
+      }
+
+      const bookingsData = await bookingsResponse.json();
+      setCompletedBookings(bookingsData.data || []);
+
+      // Fetch existing feedbacks
+      const feedbacksResponse = await fetch(`${API}/feedback/my-feedbacks`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
+      });
+
+      if (!feedbacksResponse.ok) {
         throw new Error('Failed to fetch feedbacks');
       }
 
-      const data = await response.json();
-      setFeedbacks(data.data || []);
-    } catch (err) {
-      setError(err.message);
-      showSnackbar(err.message, 'error');
+      const feedbacksData = await feedbacksResponse.json();
+      setFeedbacks(feedbacksData.data || []);
+
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      toast.error('Failed to load data');
     } finally {
       setLoading(false);
     }
   };
 
-  // Fetch bookings eligible for feedback
-  const fetchEligibleBookings = async () => {
-    try {
-      const response = await fetch(`${API}/booking/customer?status=completed`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch eligible bookings');
-
-      const data = await response.json();
-      const feedbackBookingIds = feedbacks
-        .filter(f => f.booking) // This ensures f.booking is not null
-        .map(f => f.booking._id);
-
-      const eligibleBookings = data.data.filter(
-        booking => !feedbackBookingIds.includes(booking._id)
-      );
-//...
-      
-      setBookingsForFeedback(eligibleBookings || []);
-    } catch (err) {
-      console.error('Error fetching eligible bookings:', err);
-      setBookingsForFeedback([]);
-    }
+  const handleRatingChange = (type, rating) => {
+    setFeedbackForm(prev => ({
+      ...prev,
+      [type]: rating
+    }));
   };
 
-  // Validate form
-  const validateForm = () => {
-    const errors = {};
-    
-    if (formData.providerRating === 0) {
-      errors.providerRating = 'Please rate the provider';
-    }
-    
-    if (formData.serviceRating === 0) {
-      errors.serviceRating = 'Please rate the service';
-    }
-    
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
+  const handleCommentChange = (type, comment) => {
+    setFeedbackForm(prev => ({
+      ...prev,
+      [type]: comment
+    }));
   };
 
-  // Submit new feedback
-  const handleSubmitFeedback = async (e) => {
-    e.preventDefault();
-    
-    if (!validateForm()) return;
-    if (!selectedBooking) {
-      showSnackbar('Please select a booking first', 'error');
+  const submitFeedback = async (bookingId) => {
+    if (feedbackForm.providerRating === 0 || feedbackForm.serviceRating === 0) {
+      toast.error('Please provide ratings for both provider and service');
       return;
     }
 
-    setIsSubmitting(true);
-
     try {
-      const formPayload = {
-        bookingId: selectedBooking._id,
-        providerRating: formData.providerRating,
-        providerComment: formData.providerComment,
-        serviceRating: formData.serviceRating,
-        serviceComment: formData.serviceComment
-      };
+      setSubmitting(true);
 
       const response = await fetch(`${API}/feedback`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify(formPayload)
+        body: JSON.stringify({
+          bookingId,
+          providerRating: feedbackForm.providerRating,
+          providerComment: feedbackForm.providerComment,
+          serviceRating: feedbackForm.serviceRating,
+          serviceComment: feedbackForm.serviceComment
+        })
       });
 
       if (!response.ok) {
@@ -153,45 +129,116 @@ const FeedbackManagement = () => {
         throw new Error(errorData.message || 'Failed to submit feedback');
       }
 
-      showSnackbar('Feedback submitted successfully!', 'success');
-      setOpenDialog(false);
-      setSelectedBooking(null);
-      setFormData({
+      toast.success('Feedback submitted successfully!');
+      setFeedbackForm({
+        bookingId: '',
         providerRating: 0,
         providerComment: '',
         serviceRating: 0,
         serviceComment: ''
       });
-      fetchFeedbacks();
-    } catch (err) {
-      showSnackbar(err.message, 'error');
+
+      // Refresh data
+      await fetchData();
+
+    } catch (error) {
+      console.error('Error submitting feedback:', error);
+      toast.error(error.message || 'Failed to submit feedback');
     } finally {
-      setIsSubmitting(false);
+      setSubmitting(false);
     }
   };
 
-  // Update existing feedback
-  const handleUpdateFeedback = async (e) => {
-    e.preventDefault();
-    if (!validateForm()) return;
-    
-    setIsSubmitting(true);
+  const getFeedbackForBooking = (bookingId) => {
+    return feedbacks.find(feedback => feedback.booking === bookingId);
+  };
+
+  const getBookingsWithoutFeedback = () => {
+    return completedBookings.filter(booking => !getFeedbackForBooking(booking._id));
+  };
+
+  const openAddFeedbackModal = () => {
+    setIsAddingFeedback(true);
+    setSelectedBookingForFeedback(null);
+    setFeedbackForm({
+      bookingId: '',
+      providerRating: 0,
+      providerComment: '',
+      serviceRating: 0,
+      serviceComment: ''
+    });
+  };
+
+  const closeAddFeedbackModal = () => {
+    setIsAddingFeedback(false);
+    setSelectedBookingForFeedback(null);
+    setFeedbackForm({
+      bookingId: '',
+      providerRating: 0,
+      providerComment: '',
+      serviceRating: 0,
+      serviceComment: ''
+    });
+  };
+
+  const selectBookingForFeedback = (booking) => {
+    setSelectedBookingForFeedback(booking);
+    setFeedbackForm(prev => ({ ...prev, bookingId: booking._id }));
+  };
+
+  const submitFeedbackAndClose = async () => {
+    if (!selectedBookingForFeedback) return;
+
+    await submitFeedback(selectedBookingForFeedback._id);
+    if (!submitting) {
+      closeAddFeedbackModal();
+    }
+  };
+
+  const getFeedback = async (feedbackId) => {
+    try {
+      const response = await fetch(`${API}/feedback/${feedbackId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch feedback details');
+      }
+
+      const data = await response.json();
+      setDetailedFeedback(data.data);
+      setSelectedFeedback(data.data);
+      setIsViewing(true);
+    } catch (error) {
+      console.error('Error fetching feedback:', error);
+      toast.error('Failed to load feedback details');
+    }
+  };
+
+  const editFeedback = async (feedbackId) => {
+    if (editingForm.providerRating === 0 || editingForm.serviceRating === 0) {
+      toast.error('Please provide ratings for both provider and service');
+      return;
+    }
 
     try {
-      const formPayload = {
-        providerRating: formData.providerRating,
-        providerComment: formData.providerComment,
-        serviceRating: formData.serviceRating,
-        serviceComment: formData.serviceComment
-      };
+      setSubmitting(true);
 
-      const response = await fetch(`${API}/feedback/edit/${editingFeedback._id}`, {
+      const response = await fetch(`${API}/feedback/edit/${feedbackId}`, {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify(formPayload)
+        body: JSON.stringify({
+          providerRating: editingForm.providerRating,
+          providerComment: editingForm.providerComment,
+          serviceRating: editingForm.serviceRating,
+          serviceComment: editingForm.serviceComment
+        })
       });
 
       if (!response.ok) {
@@ -199,587 +246,411 @@ const FeedbackManagement = () => {
         throw new Error(errorData.message || 'Failed to update feedback');
       }
 
-      showSnackbar('Feedback updated successfully!', 'success');
-      setOpenEditModal(false);
-      fetchFeedbacks();
-    } catch (err) {
-      showSnackbar(err.message, 'error');
+      toast.success('Feedback updated successfully!');
+      setIsEditing(false);
+      setSelectedFeedback(null);
+      setDetailedFeedback(null);
+      setEditingForm({
+        providerRating: 0,
+        providerComment: '',
+        serviceRating: 0,
+        serviceComment: ''
+      });
+
+      // Refresh data
+      await fetchData();
+
+    } catch (error) {
+      console.error('Error updating feedback:', error);
+      toast.error(error.message || 'Failed to update feedback');
     } finally {
-      setIsSubmitting(false);
+      setSubmitting(false);
     }
   };
 
-  // Check if feedback can be edited (within 7 days)
-  const canEditFeedback = (feedback) => {
-    const feedbackDate = new Date(feedback.createdAt);
-    const sevenDaysAgo = subDays(new Date(), 7);
-    return isAfter(feedbackDate, sevenDaysAgo);
+  const handleEditRatingChange = (type, rating) => {
+    setEditingForm(prev => ({
+      ...prev,
+      [type]: rating
+    }));
   };
 
-  // Show snackbar notification
-  const showSnackbar = (message, severity) => {
-    setSnackbar({
-      open: true,
-      message,
-      severity
-    });
+  const handleEditCommentChange = (type, comment) => {
+    setEditingForm(prev => ({
+      ...prev,
+      [type]: comment
+    }));
   };
 
-  // Close snackbar
-  const handleSnackbarClose = () => {
-    setSnackbar({ ...snackbar, open: false });
-  };
-
-  // Handle booking selection
-  const handleBookingSelect = (booking) => {
-    setSelectedBooking(booking);
-    setOpenBookingDialog(false);
-    setOpenDialog(true);
-  };
-
-  // Open edit modal
-  const handleOpenEditModal = (feedback) => {
-    setEditingFeedback(feedback);
-    setFormData({
+  const startEditing = (feedback) => {
+    setSelectedFeedback(feedback);
+    setEditingForm({
       providerRating: feedback.providerFeedback.rating,
       providerComment: feedback.providerFeedback.comment || '',
       serviceRating: feedback.serviceFeedback.rating,
       serviceComment: feedback.serviceFeedback.comment || ''
     });
-    setFormErrors({});
-    setOpenEditModal(true);
+    setIsEditing(true);
+    setIsViewing(false);
   };
 
-  // Initialize component
-  useEffect(() => {
-    if (!user) {
-      navigate('/login');
-      return;
-    }
-    fetchFeedbacks();
-  }, [user]);
+  const closeModal = () => {
+    setIsViewing(false);
+    setIsEditing(false);
+    setSelectedFeedback(null);
+    setDetailedFeedback(null);
+    setEditingForm({
+      providerRating: 0,
+      providerComment: '',
+      serviceRating: 0,
+      serviceComment: ''
+    });
+  };
 
-  // Fetch eligible bookings whenever feedbacks change
-  useEffect(() => {
-    if (feedbacks.length >= 0) {
-      fetchEligibleBookings();
-    }
-  }, [feedbacks]);
-
-  // Star Rating Component
-  const StarRating = ({ rating, onChange, error, maxStars = 5 }) => (
-    <div>
-      <div className="flex items-center">
-        {[...Array(maxStars)].map((_, index) => {
-          const starValue = index + 1;
-          return (
-            <button
-              key={index}
-              type="button"
-              onClick={() => onChange(starValue)}
-              className="focus:outline-none transition-transform hover:scale-110"
-            >
-              <StarIcon
-                className={`h-8 w-8 ${
-                  starValue <= rating 
-                    ? 'text-yellow-400 fill-current' 
-                    : 'text-gray-300'
-                }`}
-              />
-            </button>
-          );
-        })}
-        <span className="ml-2 text-sm font-medium text-secondary">
-          {rating || 0} out of {maxStars}
-        </span>
-      </div>
-      {error && <p className="mt-1 text-sm text-red-500">{error}</p>}
-    </div>
-  );
-
-  // Feedback Form Component
-  const FeedbackForm = ({ isEdit = false, booking }) => (
-    <form onSubmit={isEdit ? handleUpdateFeedback : handleSubmitFeedback} className="space-y-6">
-      {booking && (
-        <div className="bg-primary/10 p-4 rounded-lg mb-4">
-          <h4 className="font-semibold text-primary">Booking Details</h4>
-          <p className="text-sm text-secondary">
-            {booking.services?.[0]?.service?.title} • {format(new Date(booking.date), 'MMM dd, yyyy')}
-          </p>
-        </div>
-      )}
-      
-      <div className="grid grid-cols-1 gap-6">
-        {/* Service Feedback Section */}
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-          <h3 className="text-lg font-semibold text-secondary mb-4 flex items-center">
-            <WorkIcon className="mr-2 text-primary" />
-            Rate the Service
-          </h3>
-          
-          <div className="mb-4">
-            <p className="text-sm font-medium text-secondary mb-2">
-              How satisfied are you with the service? *
-            </p>
-            <StarRating 
-              rating={formData.serviceRating} 
-              onChange={(value) => {
-                setFormData(prev => ({ ...prev, serviceRating: value }));
-                if (formErrors.serviceRating) {
-                  setFormErrors(prev => ({ ...prev, serviceRating: '' }));
-                }
-              }}
-              error={formErrors.serviceRating}
-            />
-          </div>
-          
-          <div>
-            <label htmlFor="serviceComment" className="block text-sm font-medium text-secondary mb-2">
-              Share your experience (optional)
-            </label>
-            <textarea
-              id="serviceComment"
-              name="serviceComment"
-              value={formData.serviceComment}
-              onChange={(e) => setFormData(prev => ({ ...prev, serviceComment: e.target.value }))}
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-colors"
-              placeholder="Tell us what you liked or didn't like about the service..."
-              maxLength={500}
-            />
-            <p className="text-xs text-gray-500 mt-1 text-right">
-              {formData.serviceComment.length}/500 characters
-            </p>
-          </div>
-        </div>
-
-        {/* Provider Feedback Section */}
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-          <h3 className="text-lg font-semibold text-secondary mb-4 flex items-center">
-            <PersonIcon className="mr-2 text-primary" />
-            Rate the Service Provider
-          </h3>
-          
-          <div className="mb-4">
-            <p className="text-sm font-medium text-secondary mb-2">
-              How would you rate the provider's service? *
-            </p>
-            <StarRating 
-              rating={formData.providerRating} 
-              onChange={(value) => {
-                setFormData(prev => ({ ...prev, providerRating: value }));
-                if (formErrors.providerRating) {
-                  setFormErrors(prev => ({ ...prev, providerRating: '' }));
-                }
-              }}
-              error={formErrors.providerRating}
-            />
-          </div>
-          
-          <div>
-            <label htmlFor="providerComment" className="block text-sm font-medium text-secondary mb-2">
-              Tell us about the provider (optional)
-            </label>
-            <textarea
-              id="providerComment"
-              name="providerComment"
-              value={formData.providerComment}
-              onChange={(e) => setFormData(prev => ({ ...prev, providerComment: e.target.value }))}
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-colors"
-              placeholder="Was the provider professional, punctual, and helpful?"
-              maxLength={500}
-            />
-            <p className="text-xs text-gray-500 mt-1 text-right">
-              {formData.providerComment.length}/500 characters
-            </p>
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex justify-end space-x-3 pt-4">
-          <button
-            type="button"
-            onClick={() => isEdit ? setOpenEditModal(false) : setOpenDialog(false)}
-            disabled={isSubmitting}
-            className="px-6 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-secondary bg-white hover:bg-gray-50 disabled:opacity-50 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="px-6 py-2.5 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 transition-colors"
-          >
-            {isSubmitting ? (
-              <span className="flex items-center">
-                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                {isEdit ? 'Updating...' : 'Submitting...'}
-              </span>
-            ) : isEdit ? 'Update Review' : 'Submit Review'}
-          </button>
-        </div>
-      </div>
-    </form>
-  );
-
-  // Feedback Card Component
-  const FeedbackCard = ({ feedback }) => {
-    const editable = canEditFeedback(feedback);
-    
+  const renderStars = (rating, onChange, interactive = false) => {
     return (
-      <div className="bg-white rounded-xl shadow-sm p-6 mb-4 border border-gray-100 transition-all hover:shadow-md">
-        <div className="flex flex-col md:flex-row md:justify-between md:items-start mb-4">
-          <div>
-            <h3 className="text-xl font-semibold text-secondary">
-              {feedback.serviceFeedback?.service?.title || 'Service'}
-            </h3>
-            <div className="flex items-center mt-1 text-sm text-gray-600">
-              <CalendarIcon className="h-4 w-4 mr-1" />
-              <span>{format(new Date(feedback.booking?.date || feedback.createdAt), 'MMM dd, yyyy')}</span>
-            </div>
-          </div>
-          <div className="flex space-x-2 mt-2 md:mt-0">
-            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-              editable ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-            }`}>
-              {editable ? 'Editable' : 'View Only'}
-            </span>
-          </div>
-        </div>
-
-        <div className="border-t border-gray-200 my-4"></div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Service Rating */}
-          <div>
-            <h4 className="text-md font-semibold text-secondary mb-2">
-              Service Review
-            </h4>
-            <div className="flex items-center mb-2">
-              <div className="flex">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <StarIcon
-                    key={star}
-                    className={`h-5 w-5 ${star <= (feedback.serviceFeedback?.rating || 0) ? 'text-yellow-400' : 'text-gray-300'}`}
-                  />
-                ))}
-              </div>
-              <span className="ml-2 text-sm font-medium text-secondary">
-                {feedback.serviceFeedback?.rating?.toFixed(1) || 'N/A'}
-              </span>
-            </div>
-            
-            {feedback.serviceFeedback?.comment && (
-              <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg mt-2">
-                "{feedback.serviceFeedback.comment}"
-                {feedback.serviceFeedback.isEdited && (
-                  <span className="text-xs text-gray-500 ml-1">(edited)</span>
-                )}
-              </p>
-            )}
-          </div>
-
-          {/* Provider Rating */}
-          <div>
-            <h4 className="text-md font-semibold text-secondary mb-2">
-              Provider Review
-            </h4>
-            <div className="flex items-center mb-2">
-              <div className="flex">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <StarIcon
-                    key={star}
-                    className={`h-5 w-5 ${star <= (feedback.providerFeedback?.rating || 0) ? 'text-yellow-400' : 'text-gray-300'}`}
-                  />
-                ))}
-              </div>
-              <span className="ml-2 text-sm font-medium text-secondary">
-                {feedback.providerFeedback?.rating?.toFixed(1) || 'N/A'}
-              </span>
-            </div>
-            
-            {feedback.providerFeedback?.comment && (
-              <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg mt-2">
-                "{feedback.providerFeedback.comment}"
-                {feedback.providerFeedback.isEdited && (
-                  <span className="text-xs text-gray-500 ml-1">(edited)</span>
-                )}
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        {editable && (
-          <div className="flex justify-end mt-4 pt-4 border-t border-gray-200">
-            <button
-              onClick={() => handleOpenEditModal(feedback)}
-              className="flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-primary hover:bg-primary/90 transition-colors"
-            >
-              <EditIcon className="h-4 w-4 mr-1" />
-              Edit Review
-            </button>
-          </div>
-        )}
+      <div className="flex space-x-1">
+        {[1, 2, 3, 4, 5].map((star) => (
+          <button
+            key={star}
+            type="button"
+            onClick={() => interactive && onChange(star)}
+            className={`text-2xl ${interactive ? 'cursor-pointer hover:scale-110 transition-transform' : 'cursor-default'} ${
+              star <= rating ? 'text-accent' : 'text-secondary/30'
+            }`}
+            disabled={!interactive}
+          >
+            ★
+          </button>
+        ))}
       </div>
     );
   };
 
-  // Booking Selection Dialog
-  const BookingSelectionDialog = () => (
-    <div className={`fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 transition-opacity ${openBookingDialog ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
-      <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col">
-        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-          <h3 className="text-lg font-semibold text-secondary">
-            Select Booking to Review
-          </h3>
-          <button
-            onClick={() => setOpenBookingDialog(false)}
-            className="text-gray-500 hover:text-gray-700"
-          >
-            <CloseIcon />
-          </button>
-        </div>
-        <div className="p-6 overflow-y-auto flex-grow">
-          {bookingsForFeedback.length === 0 ? (
-            <div className="text-center py-8">
-              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
-                <CheckCircleIcon className="h-6 w-6 text-green-600" />
-              </div>
-              <h4 className="mt-4 text-md font-semibold text-secondary">
-                No Bookings Available for Review
-              </h4>
-              <p className="mt-2 text-sm text-gray-600">
-                You've reviewed all your completed bookings or don't have any bookings ready for review yet.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {bookingsForFeedback.map(booking => (
-                <div 
-                  key={booking._id}
-                  onClick={() => handleBookingSelect(booking)}
-                  className="p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
-                >
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0 h-12 w-12 bg-primary rounded-full flex items-center justify-center text-white font-semibold">
-                      {booking.services?.[0]?.service?.title?.charAt(0) || 'S'}
-                    </div>
-                    <div className="ml-4">
-                      <h4 className="text-sm font-semibold text-secondary">
-                        {booking.services?.[0]?.service?.title || 'Service'}
-                      </h4>
-                      <p className="text-sm text-gray-600">
-                        {format(new Date(booking.date), 'MMM dd, yyyy')}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        Provider: {booking.provider?.name || 'Unknown'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-secondary">Loading your completed bookings...</p>
         </div>
       </div>
-    </div>
-  );
-
-  // Feedback Submission Dialog
-  const FeedbackSubmissionDialog = () => (
-    <div className={`fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 transition-opacity ${openDialog ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
-      <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
-        <div className="px-6 py-4 border-b border-gray-200 flex items-center">
-          {selectedBooking && (
-            <button 
-              onClick={() => {
-                setOpenDialog(false);
-                setOpenBookingDialog(true);
-              }}
-              className="mr-2 text-gray-500 hover:text-gray-700"
-            >
-              <ArrowBackIcon />
-            </button>
-          )}
-          <h3 className="text-lg font-semibold text-secondary">
-            {selectedBooking ? `Review for ${selectedBooking.services?.[0]?.service?.title}` : 'Submit Feedback'}
-          </h3>
-          <button
-            onClick={() => setOpenDialog(false)}
-            className="ml-auto text-gray-500 hover:text-gray-700"
-          >
-            <CloseIcon />
-          </button>
-        </div>
-        <div className="p-6 overflow-y-auto flex-grow">
-          <FeedbackForm booking={selectedBooking} />
-        </div>
-      </div>
-    </div>
-  );
-
-  // Edit Feedback Modal
-  const EditFeedbackModal = () => (
-    <div className={`fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 transition-opacity ${openEditModal ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
-      <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
-        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-          <h3 className="text-lg font-semibold text-secondary">
-            Edit Your Review
-          </h3>
-          <button
-            onClick={() => setOpenEditModal(false)}
-            className="text-gray-500 hover:text-gray-700"
-          >
-            <CloseIcon />
-          </button>
-        </div>
-        <div className="p-6 overflow-y-auto flex-grow">
-          <p className="text-sm text-gray-600 mb-4 bg-blue-50 p-3 rounded-lg">
-            You can update your review within 7 days of submission.
-          </p>
-          <FeedbackForm isEdit />
-        </div>
-      </div>
-    </div>
-  );
-
-  // Snackbar Notification
-  const SnackbarNotification = () => (
-    <div className={`fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50 transition-opacity duration-300 ${snackbar.open ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-      <div className={`px-4 py-3 rounded-lg shadow-md flex items-center ${
-        snackbar.severity === 'error' ? 'bg-red-100 text-red-800 border border-red-200' : 
-        'bg-green-100 text-green-800 border border-green-200'
-      }`}>
-        {snackbar.severity === 'error' ? (
-          <ThumbDownIcon className="h-5 w-5 mr-2" />
-        ) : (
-          <ThumbUpIcon className="h-5 w-5 mr-2" />
-        )}
-        <span>{snackbar.message}</span>
-        <button
-          onClick={handleSnackbarClose}
-          className="ml-4 text-gray-500 hover:text-gray-700"
-        >
-          <CloseIcon className="h-4 w-4" />
-        </button>
-      </div>
-    </div>
-  );
-
-  // Filter feedbacks based on active tab
-  const filteredFeedbacks = activeTab === 'editable' 
-    ? feedbacks.filter(f => canEditFeedback(f))
-    : feedbacks;
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8 font-inter">
       <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-8 text-center">
-          <h1 className="text-3xl font-bold text-secondary">
-            My Reviews
+        <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-md overflow-hidden p-6">
+          <h1 className="text-3xl font-poppins font-bold text-secondary mb-8 text-center">
+            Service Feedback
           </h1>
-          <p className="mt-2 text-gray-600">
-            Manage your service and provider reviews
-          </p>
-        </div>
 
-        {/* Tabs */}
-        <div className="bg-white rounded-xl shadow-sm p-2 mb-6 inline-flex mx-auto">
-          <nav className="flex space-x-2">
+          {/* Add New Feedback Button */}
+          <div className="mb-8 text-center">
             <button
-              onClick={() => setActiveTab('all')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === 'all'
-                  ? 'bg-primary text-white'
-                  : 'text-gray-600 hover:text-primary'
-              }`}
+              onClick={openAddFeedbackModal}
+              className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary transition-colors"
             >
-              All Reviews ({feedbacks.length})
+              Add New Feedback
             </button>
-            <button
-              onClick={() => setActiveTab('editable')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === 'editable'
-                  ? 'bg-primary text-white'
-                  : 'text-gray-600 hover:text-primary'
-              }`}
-            >
-              Editable ({feedbacks.filter(f => canEditFeedback(f)).length})
-            </button>
-          </nav>
-        </div>
+          </div>
 
-        {/* Content */}
-        {loading ? (
-          <div className="flex justify-center my-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-          </div>
-        ) : error ? (
-          <div className="bg-red-100 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-center">
-            {error}
-          </div>
-        ) : (
-          <>
-            {filteredFeedbacks.length === 0 ? (
-              <div className="bg-white rounded-xl shadow-sm p-8 text-center">
-                <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-primary/10">
-                  <RateReviewIcon className="h-8 w-8 text-primary" />
-                </div>
-                <h3 className="mt-4 text-lg font-semibold text-secondary">
-                  {activeTab === 'all' ? 'No Reviews Yet' : 'No Editable Reviews'}
+          {/* Submitted Feedbacks Section */}
+          <div className="space-y-6">
+            <h2 className="text-2xl font-semibold text-secondary mb-4">Submitted Feedbacks</h2>
+
+            {feedbacks.length === 0 ? (
+              <div className="text-center py-12 bg-gray-50 rounded-lg">
+                <div className="text-secondary/50 text-6xl mb-4">📝</div>
+                <h3 className="text-xl font-medium text-secondary mb-2">
+                  No Feedbacks Submitted Yet
                 </h3>
-                <p className="mt-2 text-gray-600 mb-4">
-                  {activeTab === 'all' 
-                    ? "You haven't reviewed any of your completed bookings. Share your experience to help others."
-                    : "You don't have any reviews that can be edited. Reviews can only be edited within 7 days of submission."
-                  }
+                <p className="text-secondary">
+                  Click "Add New Feedback" to submit your first feedback.
                 </p>
-                {activeTab === 'all' && (
-                  <button
-                    onClick={() => setOpenBookingDialog(true)}
-                    className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary/90 transition-colors"
-                  >
-                    <EditIcon className="h-4 w-4 mr-1" />
-                    Write Your First Review
-                  </button>
-                )}
               </div>
             ) : (
-              <div>
-                <h3 className="text-lg font-semibold text-secondary mb-4">
-                  {activeTab === 'all' ? 'All Reviews' : 'Editable Reviews'} ({filteredFeedbacks.length})
-                </h3>
-                {filteredFeedbacks.map(feedback => (
-                  <FeedbackCard key={feedback._id} feedback={feedback} />
-                ))}
+              <div className="space-y-4">
+                {feedbacks.map((feedback) => {
+                  const serviceTitle = feedback.serviceFeedback?.service?.title || 'Service';
+                  const providerName = feedback.providerFeedback?.provider?.name || 'Provider';
+
+                  return (
+                    <div key={feedback._id} className="border border-gray-200 rounded-lg p-6 bg-white shadow-sm">
+                      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between mb-4">
+                        <div className="flex-1">
+                          <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                            {serviceTitle}
+                          </h3>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
+                            <div>
+                              <span className="font-medium">Provider:</span> {providerName}
+                            </div>
+                            <div>
+                              <span className="font-medium">Date:</span> {formatDate(feedback.booking?.date)}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex space-x-2 mt-4 lg:mt-0">
+                          <button
+                            onClick={() => getFeedback(feedback._id)}
+                            className="px-3 py-1 text-sm bg-primary/10 text-primary rounded-md hover:bg-primary/20"
+                          >
+                            View Details
+                          </button>
+                          {new Date() - new Date(feedback.createdAt) <= 7 * 24 * 60 * 60 * 1000 && (
+                            <button
+                              onClick={() => startEditing(feedback)}
+                              className="px-3 py-1 text-sm bg-accent/10 text-accent rounded-md hover:bg-accent/20"
+                            >
+                              Edit
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                          <h5 className="font-medium text-gray-700 mb-2">Provider Rating</h5>
+                          {renderStars(feedback.providerFeedback.rating)}
+                          {feedback.providerFeedback.comment && (
+                            <p className="text-sm text-gray-600 mt-2 italic">
+                              "{feedback.providerFeedback.comment}"
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <h5 className="font-medium text-gray-700 mb-2">Service Rating</h5>
+                          {renderStars(feedback.serviceFeedback.rating)}
+                          {feedback.serviceFeedback.comment && (
+                            <p className="text-sm text-gray-600 mt-2 italic">
+                              "{feedback.serviceFeedback.comment}"
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-4">
+                        Submitted on {formatDate(feedback.createdAt)}
+                      </p>
+                    </div>
+                  );
+                })}
               </div>
             )}
-          </>
+          </div>
+        </div>
+
+        {/* Modal for viewing/editing feedback */}
+        {(isViewing || isEditing) && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    {isViewing ? 'Feedback Details' : 'Edit Feedback'}
+                  </h2>
+                  <button
+                    onClick={closeModal}
+                    className="text-gray-400 hover:text-gray-600 text-2xl"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                {isViewing && detailedFeedback && (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <h3 className="text-lg font-medium text-gray-900 mb-3">Provider Feedback</h3>
+                        <div className="mb-2">
+                          <span className="font-medium">Rating:</span>
+                          {renderStars(detailedFeedback.providerFeedback.rating)}
+                        </div>
+                        {detailedFeedback.providerFeedback.comment && (
+                          <div>
+                            <span className="font-medium">Comment:</span>
+                            <p className="text-gray-600 mt-1 italic">
+                              "{detailedFeedback.providerFeedback.comment}"
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-medium text-gray-900 mb-3">Service Feedback</h3>
+                        <div className="mb-2">
+                          <span className="font-medium">Rating:</span>
+                          {renderStars(detailedFeedback.serviceFeedback.rating)}
+                        </div>
+                        {detailedFeedback.serviceFeedback.comment && (
+                          <div>
+                            <span className="font-medium">Comment:</span>
+                            <p className="text-gray-600 mt-1 italic">
+                              "{detailedFeedback.serviceFeedback.comment}"
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      <p>Submitted on {formatDate(detailedFeedback.createdAt)}</p>
+                      <p>Last updated on {formatDate(detailedFeedback.updatedAt)}</p>
+                    </div>
+                  </div>
+                )}
+
+                {isEditing && selectedFeedback && (
+                  <form onSubmit={(e) => { e.preventDefault(); editFeedback(selectedFeedback._id); }} className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Provider Rating *
+                        </label>
+                        {renderStars(editingForm.providerRating, handleEditRatingChange, true)}
+                        <textarea
+                          placeholder="Comments about the provider (optional)"
+                          value={editingForm.providerComment}
+                          onChange={(e) => handleEditCommentChange('providerComment', e.target.value)}
+                          className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          rows="3"
+                          maxLength="500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Service Rating *
+                        </label>
+                        {renderStars(editingForm.serviceRating, handleEditRatingChange, true)}
+                        <textarea
+                          placeholder="Comments about the service (optional)"
+                          value={editingForm.serviceComment}
+                          onChange={(e) => handleEditCommentChange('serviceComment', e.target.value)}
+                          className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          rows="3"
+                          maxLength="500"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end space-x-3">
+                      <button
+                        type="button"
+                        onClick={closeModal}
+                        className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={submitting}
+                        className="px-6 py-2 bg-primary text-white rounded-md hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {submitting ? 'Updating...' : 'Update Feedback'}
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            </div>
+          </div>
         )}
 
-        {/* Modals */}
-        <BookingSelectionDialog />
-        <FeedbackSubmissionDialog />
-        <EditFeedbackModal />
-        <SnackbarNotification />
+        {/* Modal for adding new feedback */}
+        {isAddingFeedback && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">Add New Feedback</h2>
+                <button
+                  onClick={closeAddFeedbackModal}
+                  className="text-gray-400 hover:text-gray-600 text-2xl"
+                >
+                  ×
+                </button>
+              </div>
 
-        {/* Floating action button */}
-        <button
-          onClick={() => setOpenBookingDialog(true)}
-          className="fixed bottom-6 right-6 md:bottom-8 md:right-8 w-14 h-14 md:w-auto md:h-auto md:px-4 md:py-3 rounded-full bg-primary text-white shadow-lg flex items-center justify-center hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-transform hover:scale-105"
-        >
-          <AddIcon className="h-6 w-6 md:mr-1" />
-          <span className="hidden md:inline">Write Review</span>
-        </button>
+              {!selectedBookingForFeedback ? (
+                <>
+                  <h3 className="text-lg font-semibold mb-4">Select a Booking</h3>
+                  {getBookingsWithoutFeedback().length === 0 ? (
+                    <p className="text-gray-600">No completed bookings available for feedback.</p>
+                  ) : (
+                    <ul className="space-y-4 max-h-96 overflow-y-auto">
+                      {getBookingsWithoutFeedback().map((booking) => {
+                        const serviceTitle = booking.services && booking.services.length > 0 && booking.services[0].service
+                          ? booking.services[0].service.title
+                          : 'Service';
+                        return (
+                          <li key={booking._id} className="border border-gray-300 rounded p-4 cursor-pointer hover:bg-gray-100"
+                            onClick={() => selectBookingForFeedback(booking)}>
+                            <div className="font-semibold">{serviceTitle}</div>
+                              <div className="text-sm text-gray-600">
+                              Date: {formatDate(booking.date)} | Provider: {booking.provider?.name || 'N/A'}
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </>
+              ) : (
+                <>
+                  <h3 className="text-lg font-semibold mb-4">Provide Feedback for Booking</h3>
+                  <form onSubmit={(e) => { e.preventDefault(); submitFeedbackAndClose(); }} className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Provider Rating *
+                        </label>
+                        {renderStars(feedbackForm.providerRating, (rating) => handleRatingChange('providerRating', rating), true)}
+                        <textarea
+                          placeholder="Comments about the provider (optional)"
+                          value={feedbackForm.providerComment}
+                          onChange={(e) => handleCommentChange('providerComment', e.target.value)}
+                          className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          rows="3"
+                          maxLength="500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Service Rating *
+                        </label>
+                        {renderStars(feedbackForm.serviceRating, (rating) => handleRatingChange('serviceRating', rating), true)}
+                        <textarea
+                          placeholder="Comments about the service (optional)"
+                          value={feedbackForm.serviceComment}
+                          onChange={(e) => handleCommentChange('serviceComment', e.target.value)}
+                          className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          rows="3"
+                          maxLength="500"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end space-x-3">
+                      <button
+                        type="button"
+                        onClick={closeAddFeedbackModal}
+                        className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={submitting}
+                        className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {submitting ? 'Submitting...' : 'Submit Feedback'}
+                      </button>
+                    </div>
+                  </form>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
-export default FeedbackManagement;
+export default Feedback;
