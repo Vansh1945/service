@@ -8,17 +8,29 @@ const mongoose = require('mongoose');
 // @access  Private (Customer)
 const submitComplaint = async (req, res) => {
   try {
-    const { title, description, category, priority, bookingId } = req.body;
+    const { title, description, category, bookingId } = req.body;
     const customerId = req.user._id;
 
     // 1. Validation
-    if (!title || !description || !category || !bookingId) {
-      return res.status(400).json({ message: 'Please provide title, description, category, and bookingId.' });
+    if (!title || !description || !category) {
+      return res.status(400).json({ message: 'Please provide title, description, and category.' });
     }
 
-    const booking = await Booking.findById(bookingId);
-    if (!booking || booking.customer.toString() !== customerId.toString()) {
-      return res.status(404).json({ message: 'Booking not found or you are not authorized.' });
+    let booking = null;
+    let provider = null;
+
+    if (category === 'Service issue') {
+      if (!bookingId) {
+        return res.status(400).json({ message: 'Booking ID is required for service-related complaints.' });
+      }
+      booking = await Booking.findById(bookingId);
+      if (!booking || booking.customer.toString() !== customerId.toString()) {
+        return res.status(404).json({ message: 'Booking not found or you are not authorized.' });
+      }
+      if (!booking.provider) {
+        return res.status(400).json({ message: 'Cannot submit complaint for booking without assigned provider.' });
+      }
+      provider = booking.provider;
     }
 
     // 2. Handle Image Uploads
@@ -33,12 +45,11 @@ const submitComplaint = async (req, res) => {
     // 3. Create Complaint
     const complaint = await Complaint.create({
       customer: customerId,
-      booking: bookingId,
-      provider: booking.provider,
+      booking: booking ? bookingId : undefined,
+      provider: provider,
       title,
       description,
       category,
-      priority: priority || "Medium",
       images
     });
 
@@ -67,7 +78,6 @@ const getAllComplaints = async (req, res) => {
       page = 1,
       limit = 10,
       status,
-      priority,
       category,
       search,
       startDate,
@@ -77,7 +87,6 @@ const getAllComplaints = async (req, res) => {
     // Build the query
     const query = {};
     if (status) query.status = status;
-    if (priority) query.priority = priority;
     if (category) query.category = category;
 
     if (search) {
@@ -130,7 +139,7 @@ const getMyComplaints = async (req, res) => {
     
     if (req.user.role === 'provider') {
       query = { provider: req.user._id };
-    } else if (req.user.role === 'user') {
+    } else if (req.user.role === 'customer') {
       query = { customer: req.user._id };
     } else {
       return res.status(403).json({
@@ -176,7 +185,7 @@ const getComplaint = async (req, res) => {
     }
 
     // Check authorization
-    if (req.user.role === 'user' && complaint.customer._id.toString() !== req.user._id.toString()) {
+    if (req.user.role === 'customer' && complaint.customer._id.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to access this complaint'

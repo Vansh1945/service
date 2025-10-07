@@ -65,31 +65,7 @@ const StatusBadge = ({ status }) => {
   );
 };
 
-// Priority Badge Component
-const PriorityBadge = ({ priority }) => {
-  const getPriorityConfig = (priority) => {
-    switch (priority) {
-      case 'Urgent':
-        return { color: 'text-red-600 bg-red-50 border-red-200', label: 'Urgent' };
-      case 'High':
-        return { color: 'text-orange-600 bg-orange-50 border-orange-200', label: 'High' };
-      case 'Medium':
-        return { color: 'text-yellow-600 bg-yellow-50 border-yellow-200', label: 'Medium' };
-      case 'Low':
-        return { color: 'text-green-600 bg-green-50 border-green-200', label: 'Low' };
-      default:
-        return { color: 'text-gray-600 bg-gray-50 border-gray-200', label: priority };
-    }
-  };
 
-  const config = getPriorityConfig(priority);
-
-  return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${config.color}`}>
-      {config.label}
-    </span>
-  );
-};
 
 // Complaint Details Modal Component
 const ComplaintDetailsModal = ({ complaint, onClose, onUpdateStatus, onResolve }) => {
@@ -196,10 +172,6 @@ const ComplaintDetailsModal = ({ complaint, onClose, onUpdateStatus, onResolve }
                       <StatusBadge status={complaint.status} />
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Priority:</span>
-                      <PriorityBadge priority={complaint.priority} />
-                    </div>
-                    <div className="flex justify-between">
                       <span className="text-gray-600">Category:</span>
                       <span className="font-medium text-secondary">{complaint.category}</span>
                     </div>
@@ -260,7 +232,7 @@ const ComplaintDetailsModal = ({ complaint, onClose, onUpdateStatus, onResolve }
 
                     <div>
                       <h5 className="font-medium text-gray-700 mb-2">Booking Reference</h5>
-                      <p className="text-secondary font-medium">#{complaint.booking?._id?.slice(-8) || 'N/A'}</p>
+                      <p className="text-secondary font-medium">#{complaint.booking?.bookingId || complaint.booking?._id?.slice(-8) || 'N/A'}</p>
                       {complaint.booking?.date && (
                         <p className="text-sm text-gray-600">Date: {formatDate(complaint.booking.date)}</p>
                       )}
@@ -314,6 +286,13 @@ const ComplaintDetailsModal = ({ complaint, onClose, onUpdateStatus, onResolve }
                           <span className="font-medium text-secondary">{history.status}</span>
                           <span className="text-xs text-gray-500">{formatDate(history.updatedAt)}</span>
                         </div>
+                        {history.status === 'Solved' && complaint.resolutionNotes && (
+                          <div className="mt-2 p-2 bg-green-50 rounded border-l-4 border-green-400">
+                            <p className="text-sm text-gray-700">
+                              <strong>Resolution Notes:</strong> {complaint.resolutionNotes}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))
@@ -368,6 +347,7 @@ const ComplaintDetailsModal = ({ complaint, onClose, onUpdateStatus, onResolve }
                     <option value="Open">Open</option>
                     <option value="In-Progress">In Progress</option>
                     <option value="Solved">Solved</option>
+                    <option value="Reopened">Reopened</option>
                     <option value="Closed">Closed</option>
                   </select>
                   <button
@@ -421,7 +401,6 @@ const ComplaintsPage = () => {
 
   const [filters, setFilters] = useState({
     status: '',
-    priority: '',
     category: '',
     search: '',
     startDate: '',
@@ -444,13 +423,7 @@ const ComplaintsPage = () => {
     { value: 'Closed', label: 'Closed' }
   ];
 
-  const priorityOptions = [
-    { value: '', label: 'All Priority' },
-    { value: 'Low', label: 'Low' },
-    { value: 'Medium', label: 'Medium' },
-    { value: 'High', label: 'High' },
-    { value: 'Urgent', label: 'Urgent' }
-  ];
+
 
   const categoryOptions = [
     { value: '', label: 'All Categories' },
@@ -471,7 +444,6 @@ const ComplaintsPage = () => {
       });
 
       if (filters.status) queryParams.append('status', filters.status);
-      if (filters.priority) queryParams.append('priority', filters.priority);
       if (filters.category) queryParams.append('category', filters.category);
       if (filters.search) queryParams.append('search', filters.search);
       if (filters.startDate) queryParams.append('startDate', filters.startDate);
@@ -600,7 +572,6 @@ const ComplaintsPage = () => {
   const clearFilters = () => {
     setFilters({
       status: '',
-      priority: '',
       category: '',
       search: '',
       startDate: '',
@@ -742,20 +713,7 @@ const ComplaintsPage = () => {
               </select>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-secondary mb-2">Priority</label>
-              <select
-                value={filters.priority}
-                onChange={(e) => handleFilterChange('priority', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-              >
-                {priorityOptions.map(option => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+
 
             <div className="grid grid-cols-2 gap-2">
               <div>
@@ -804,9 +762,7 @@ const ComplaintsPage = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                     Status
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                    Priority
-                  </th>
+
                   <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                     Category
                   </th>
@@ -888,9 +844,6 @@ const ComplaintsPage = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <StatusBadge status={complaint.status} />
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <PriorityBadge priority={complaint.priority} />
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary">
                         {complaint.category || 'N/A'}

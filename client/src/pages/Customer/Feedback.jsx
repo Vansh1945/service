@@ -150,11 +150,14 @@ const Feedback = () => {
   };
 
   const getFeedbackForBooking = (bookingId) => {
-    return feedbacks.find(feedback => feedback.booking === bookingId);
+    return feedbacks.find(feedback => {
+      const fbBookingId = typeof feedback.booking === 'string' ? feedback.booking : feedback.booking?._id;
+      return fbBookingId === bookingId;
+    });
   };
 
   const getBookingsWithoutFeedback = () => {
-    return completedBookings.filter(booking => !getFeedbackForBooking(booking._id));
+    return completedBookings;
   };
 
   const openAddFeedbackModal = () => {
@@ -414,20 +417,10 @@ const Feedback = () => {
                         <div>
                           <h5 className="font-medium text-gray-700 mb-2">Provider Rating</h5>
                           {renderStars(feedback.providerFeedback.rating)}
-                          {feedback.providerFeedback.comment && (
-                            <p className="text-sm text-gray-600 mt-2 italic">
-                              "{feedback.providerFeedback.comment}"
-                            </p>
-                          )}
                         </div>
                         <div>
                           <h5 className="font-medium text-gray-700 mb-2">Service Rating</h5>
                           {renderStars(feedback.serviceFeedback.rating)}
-                          {feedback.serviceFeedback.comment && (
-                            <p className="text-sm text-gray-600 mt-2 italic">
-                              "{feedback.serviceFeedback.comment}"
-                            </p>
-                          )}
                         </div>
                       </div>
                       <p className="text-xs text-gray-500 mt-4">
@@ -471,7 +464,7 @@ const Feedback = () => {
                           <div>
                             <span className="font-medium">Comment:</span>
                             <p className="text-gray-600 mt-1 italic">
-                              "{detailedFeedback.providerFeedback.comment}"
+                              {detailedFeedback.providerFeedback.comment}
                             </p>
                           </div>
                         )}
@@ -486,7 +479,7 @@ const Feedback = () => {
                           <div>
                             <span className="font-medium">Comment:</span>
                             <p className="text-gray-600 mt-1 italic">
-                              "{detailedFeedback.serviceFeedback.comment}"
+                              {detailedFeedback.serviceFeedback.comment}
                             </p>
                           </div>
                         )}
@@ -511,7 +504,7 @@ const Feedback = () => {
                           placeholder="Comments about the provider (optional)"
                           value={editingForm.providerComment}
                           onChange={(e) => handleEditCommentChange('providerComment', e.target.value)}
-                          className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                           rows="3"
                           maxLength="500"
                         />
@@ -525,7 +518,7 @@ const Feedback = () => {
                           placeholder="Comments about the service (optional)"
                           value={editingForm.serviceComment}
                           onChange={(e) => handleEditCommentChange('serviceComment', e.target.value)}
-                          className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                           rows="3"
                           maxLength="500"
                         />
@@ -579,12 +572,14 @@ const Feedback = () => {
                         const serviceTitle = booking.services && booking.services.length > 0 && booking.services[0].service
                           ? booking.services[0].service.title
                           : 'Service';
+                        const hasFeedback = !!getFeedbackForBooking(booking._id);
                         return (
-                          <li key={booking._id} className="border border-gray-300 rounded p-4 cursor-pointer hover:bg-gray-100"
-                            onClick={() => selectBookingForFeedback(booking)}>
+                          <li key={booking._id} className={`border border-gray-300 rounded p-4 ${hasFeedback ? 'bg-gray-100 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-100'}`}
+                            onClick={() => !hasFeedback && selectBookingForFeedback(booking)}>
                             <div className="font-semibold">{serviceTitle}</div>
                               <div className="text-sm text-gray-600">
                               Date: {formatDate(booking.date)} | Provider: {booking.provider?.name || 'N/A'}
+                              {hasFeedback && <span className="block text-red-500 font-medium">Feedback already submitted</span>}
                             </div>
                           </li>
                         );
@@ -606,7 +601,7 @@ const Feedback = () => {
                           placeholder="Comments about the provider (optional)"
                           value={feedbackForm.providerComment}
                           onChange={(e) => handleCommentChange('providerComment', e.target.value)}
-                          className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                           rows="3"
                           maxLength="500"
                         />
@@ -620,7 +615,7 @@ const Feedback = () => {
                           placeholder="Comments about the service (optional)"
                           value={feedbackForm.serviceComment}
                           onChange={(e) => handleCommentChange('serviceComment', e.target.value)}
-                          className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                           rows="3"
                           maxLength="500"
                         />
@@ -637,7 +632,7 @@ const Feedback = () => {
                       <button
                         type="submit"
                         disabled={submitting}
-                        className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-6 py-2 bg-primary text-white rounded-md hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {submitting ? 'Submitting...' : 'Submit Feedback'}
                       </button>

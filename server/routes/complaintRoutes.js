@@ -24,10 +24,9 @@ router.post(
   submitComplaint
 );
 
-// Provider routes
-router.get('/my-complaints', userAuthMiddleware, getMyComplaints);
 
-// Shared routes (both User and Admin, but with different access levels)
+// Shared routes (both Customer and Admin, but with different access levels)
+router.get('/my-complaints', userAuthMiddleware, getMyComplaints);
 router.get('/:id', userAuthMiddleware, getComplaint);
 router.put('/:id/reopen', userAuthMiddleware, reopenComplaint);
 

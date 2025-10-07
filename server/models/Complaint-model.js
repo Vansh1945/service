@@ -25,12 +25,12 @@ const complaintSchema = new mongoose.Schema(
     booking: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Booking",
-      required: true,
+      required: function() { return this.category === 'Service issue'; },
     },
     provider: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Provider", // Assuming you have a Provider model
-      required: true,
+      required: function() { return this.category === 'Service issue'; },
     },
     
     // Complaint Details
@@ -47,11 +47,6 @@ const complaintSchema = new mongoose.Schema(
       type: String,
       required: true,
       enum: ["Service issue", "Payment issue", "Delivery issue", "Suggestion", "Other"],
-    },
-    priority: {
-      type: String,
-      enum: ["Low", "Medium", "High", "Urgent"],
-      default: "Medium",
     },
     
     // 5. File Storage (Cloudinary)
