@@ -1,8 +1,9 @@
-# Correct Admin/Complaint.jsx according to backend
+# Contact Page UI Update Plan
 
 ## Tasks
-- [x] Change API endpoints from singular `/complaint` to plural `/complaints` in fetchComplaints, fetchComplaintDetails, updateComplaintStatus, resolveComplaint
-- [x] Remove priority-related code: priorityOptions, priority filter in UI, PriorityBadge component, priority column in table, priority display in modal
-- [x] Add 'Reopened' to statusOptions and status update select
-- [x] Fix booking ID display in modal to use `complaint.booking?.bookingId || complaint.booking?._id?.slice(-8) || 'N/A'`
-- [ ] Test the corrected page for proper fetching, displaying, and updating complaints
+- [ ] Update hero section to match Service.jsx style with background image, badge, title, description, CTA buttons, and trust indicators
+- [ ] Keep contact methods grid section
+- [ ] Keep main contact section with form and contact info
+- [ ] Add testimonials section similar to Service.jsx
+- [ ] Keep CTA section
+- [ ] Verify all sections match the UI consistency of other pages

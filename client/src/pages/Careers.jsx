@@ -1,58 +1,59 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { 
-  FaDollarSign, 
-  FaClock, 
-  FaGraduationCap, 
-  FaMapMarkerAlt, 
-  FaArrowRight,
-  FaTools,
-  FaHandshake,
-  FaChartLine
-} from 'react-icons/fa';
 import { Link } from 'react-router-dom';
+import {
+  DollarSign,
+  Clock,
+  GraduationCap,
+  MapPin,
+  ArrowRight,
+  Wrench,
+  Handshake,
+  TrendingUp,
+  Zap
+} from 'lucide-react';
 
 const CareersPage = () => {
   const benefits = [
     {
       title: "Earn Good Income",
       description: "Competitive rates with potential to earn $50-100+ per hour based on your expertise and service quality.",
-      icon: <FaDollarSign className="text-2xl" />,
+      icon: DollarSign,
       color: "from-primary to-primary/80"
     },
     {
       title: "Flexible Hours",
       description: "Choose your own schedule and work when it's convenient for you. No minimum hour requirements.",
-      icon: <FaClock className="text-2xl" />,
+      icon: Clock,
       color: "from-accent/80 to-accent"
     },
     {
       title: "Training & Support",
       description: "Access to ongoing training programs, technical support, and professional development resources.",
-      icon: <FaGraduationCap className="text-2xl" />,
+      icon: GraduationCap,
       color: "from-primary/70 to-accent/70"
     },
     {
       title: "Work Locally",
       description: "Get matched with customers in your area. Reduce travel time and build local relationships.",
-      icon: <FaMapMarkerAlt className="text-2xl" />,
+      icon: MapPin,
       color: "from-accent/60 to-primary/60"
     }
   ];
 
   const additionalBenefits = [
     {
-      icon: <FaTools className="text-accent text-xl" />,
+      icon: Wrench,
       title: "Professional Tools",
       description: "Access to discounted professional-grade tools and equipment"
     },
     {
-      icon: <FaHandshake className="text-accent text-xl" />,
+      icon: Handshake,
       title: "Steady Work",
       description: "Consistent job opportunities with verified customers"
     },
     {
-      icon: <FaChartLine className="text-accent text-xl" />,
+      icon: TrendingUp,
       title: "Growth Opportunities",
       description: "Build your reputation and expand your service offerings"
     }
@@ -84,23 +85,26 @@ const CareersPage = () => {
               </p>
 
               <div className="space-y-4 mb-8">
-                {additionalBenefits.map((benefit, index) => (
-                  <motion.div
-                    key={index}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: index * 0.1 }}
-                    className="flex items-center space-x-3"
-                  >
-                    <div className="bg-accent/10 p-2 rounded-full">
-                      {benefit.icon}
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-primary">{benefit.title}</h3>
-                      <p className="text-secondary text-sm">{benefit.description}</p>
-                    </div>
-                  </motion.div>
-                ))}
+                {additionalBenefits.map((benefit, index) => {
+                  const IconComponent = benefit.icon;
+                  return (
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.5, delay: index * 0.1 }}
+                      className="flex items-center space-x-3"
+                    >
+                      <div className="bg-accent/10 p-2 rounded-full">
+                        <IconComponent className="w-4 h-4 text-accent" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-primary">{benefit.title}</h3>
+                        <p className="text-secondary text-sm">{benefit.description}</p>
+                      </div>
+                    </motion.div>
+                  );
+                })}
               </div>
 
               <motion.div
@@ -108,12 +112,12 @@ const CareersPage = () => {
                 whileTap={{ scale: 0.95 }}
                 className="inline-block"
               >
-                <Link 
+                <Link
                   to="/provider-register"
                   className="bg-accent hover:bg-accent/90 text-white font-bold py-4 px-8 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 inline-flex items-center group"
                 >
-                  Apply Now 
-                  <FaArrowRight className="ml-2 group-hover:translate-x-1 transition-transform duration-300" />
+                  Apply Now
+                  <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform duration-300" />
                 </Link>
               </motion.div>
             </motion.div>
@@ -129,7 +133,7 @@ const CareersPage = () => {
                 {/* Placeholder for electrician image */}
                 <div className="bg-gradient-to-br from-primary/10 to-accent/10 rounded-2xl p-8 lg:p-12 border border-primary/20">
                   <div className="bg-gradient-to-br from-primary to-accent/80 rounded-xl p-8 text-white text-center">
-                    <FaTools className="text-6xl lg:text-8xl mx-auto mb-4 opacity-90" />
+                    <Wrench className="w-16 h-16 lg:w-24 lg:h-24 mx-auto mb-4 opacity-90" />
                     <h3 className="text-xl lg:text-2xl font-bold mb-2">Professional Electrician</h3>
                     <p className="text-white/90">Join our network of certified professionals</p>
                   </div>
@@ -163,30 +167,33 @@ const CareersPage = () => {
           </motion.div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
-            {benefits.map((benefit, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
-                viewport={{ once: true }}
-                whileHover={{ y: -8, scale: 1.02 }}
-                className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100 transition-all duration-300 hover:shadow-2xl group cursor-pointer"
-              >
-                <div className={`h-2 bg-gradient-to-r ${benefit.color}`}></div>
-                <div className="p-6 lg:p-8">
-                  <div className="bg-primary/10 group-hover:bg-primary/20 transition-colors duration-300 p-4 rounded-2xl w-16 h-16 flex items-center justify-center mb-6 mx-auto text-primary">
-                    {benefit.icon}
+            {benefits.map((benefit, index) => {
+              const IconComponent = benefit.icon;
+              return (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: index * 0.1 }}
+                  viewport={{ once: true }}
+                  whileHover={{ y: -8, scale: 1.02 }}
+                  className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100 transition-all duration-300 hover:shadow-2xl group cursor-pointer"
+                >
+                  <div className={`h-2 bg-gradient-to-r ${benefit.color}`}></div>
+                  <div className="p-6 lg:p-8">
+                    <div className="bg-primary/10 group-hover:bg-primary/20 transition-colors duration-300 p-4 rounded-2xl w-16 h-16 flex items-center justify-center mb-6 mx-auto text-primary">
+                      <IconComponent className="w-6 h-6" />
+                    </div>
+                    <h3 className="text-xl lg:text-2xl font-bold text-primary mb-4 text-center group-hover:text-accent transition-colors duration-300">
+                      {benefit.title}
+                    </h3>
+                    <p className="text-secondary text-center leading-relaxed">
+                      {benefit.description}
+                    </p>
                   </div>
-                  <h3 className="text-xl lg:text-2xl font-bold text-primary mb-4 text-center group-hover:text-accent transition-colors duration-300">
-                    {benefit.title}
-                  </h3>
-                  <p className="text-secondary text-center leading-relaxed">
-                    {benefit.description}
-                  </p>
-                </div>
-              </motion.div>
-            ))}
+                </motion.div>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -213,12 +220,12 @@ const CareersPage = () => {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >
-                <Link 
+                <Link
                   to="/provider-register"
                   className="bg-accent hover:bg-accent/90 text-white font-bold py-4 px-8 rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 inline-flex items-center group"
                 >
-                  Join Today 
-                  <FaArrowRight className="ml-2 group-hover:translate-x-1 transition-transform duration-300" />
+                  Join Today
+                  <ArrowRight className="ml-2 group-hover:translate-x-1 transition-transform duration-300" />
                 </Link>
               </motion.div>
               

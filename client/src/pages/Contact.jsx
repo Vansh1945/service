@@ -89,39 +89,8 @@ const Contact = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Hero Section */}
-      <section className="relative py-16 sm:py-20 lg:py-24 overflow-hidden">
-        {/* Background with gradient */}
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-background to-accent/5"></div>
-        
-        {/* Floating decorative elements */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <motion.div
-            animate={{ 
-              y: [0, -20, 0],
-              rotate: [0, 5, 0]
-            }}
-            transition={{ 
-              duration: 6,
-              repeat: Infinity,
-              ease: "easeInOut"
-            }}
-            className="absolute top-20 left-10 w-16 h-16 bg-accent/20 rounded-full blur-xl"
-          />
-          <motion.div
-            animate={{ 
-              y: [0, 30, 0],
-              x: [0, 10, 0]
-            }}
-            transition={{ 
-              duration: 8,
-              repeat: Infinity,
-              ease: "easeInOut"
-            }}
-            className="absolute bottom-32 right-20 w-24 h-24 bg-primary/20 rounded-full blur-2xl"
-          />
-        </div>
-
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section className="py-16 sm:py-20 lg:py-24">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Section Header */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -144,51 +113,50 @@ const Contact = () => {
             </p>
           </motion.div>
 
-          {/* Quick Contact Methods */}
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.2 }}
-            className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16"
-          >
-            {contactMethods.map((method, index) => {
-              const IconComponent = method.icon;
-              return (
-                <motion.div
-                  key={index}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: 0.3 + index * 0.1 }}
-                  whileHover={{ y: -8, scale: 1.02 }}
-                  className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 hover:shadow-2xl transition-all duration-300 group cursor-pointer"
-                >
-                  <div className={`h-2 bg-gradient-to-r ${method.color} rounded-t-2xl -mx-6 -mt-6 mb-6`}></div>
-                  <div className="text-center">
-                    <div className="bg-primary/10 group-hover:bg-primary/20 transition-colors duration-300 p-4 rounded-2xl w-16 h-16 flex items-center justify-center mb-4 mx-auto">
-                      <IconComponent className="w-8 h-8 text-primary" />
-                    </div>
-                    <h3 className="text-xl font-bold text-primary mb-2 group-hover:text-accent transition-colors duration-300">
-                      {method.title}
-                    </h3>
-                    <p className="text-secondary/70 text-sm mb-4">{method.description}</p>
-                    <div className="space-y-1">
-                      {method.details.map((detail, idx) => (
-                        <p key={idx} className="text-secondary font-medium text-sm">{detail}</p>
-                      ))}
-                    </div>
-                    <div className="mt-4 px-3 py-1 bg-accent/10 rounded-full">
-                      <span className="text-accent text-xs font-medium">{method.available}</span>
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </motion.div>
+      {/* Quick Contact Methods */}
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.7, delay: 0.2 }}
+        className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16"
+      >
+        {contactMethods.map((method, index) => {
+          const IconComponent = method.icon;
+          return (
+            <motion.div
+              key={index}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.3 + index * 0.1 }}
+              className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 cursor-pointer"
+            >
+              <div className={`h-2 bg-gradient-to-r ${method.color} rounded-t-2xl -mx-6 -mt-6 mb-6`}></div>
+              <div className="text-center">
+                <div className="bg-primary/10 p-4 rounded-2xl w-16 h-16 flex items-center justify-center mb-4 mx-auto">
+                  <IconComponent className="w-8 h-8 text-primary" />
+                </div>
+                <h3 className="text-xl font-bold text-primary mb-2">
+                  {method.title}
+                </h3>
+                <p className="text-secondary/70 text-sm mb-4">{method.description}</p>
+                <div className="space-y-1">
+                  {method.details.map((detail, idx) => (
+                    <p key={idx} className="text-secondary font-medium text-sm">{detail}</p>
+                  ))}
+                </div>
+                <div className="mt-4 px-3 py-1 bg-accent/10 rounded-full">
+                  <span className="text-accent text-xs font-medium">{method.available}</span>
+                </div>
+              </div>
+            </motion.div>
+          );
+        })}
+      </motion.div>
         </div>
       </section>
 
       {/* Main Contact Section */}
-      <section className="py-16 lg:py-20">
+      <section className="py-16 sm:py-20 lg:py-24">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-start">
             {/* Contact Form */}
@@ -233,7 +201,7 @@ const Contact = () => {
                         value={formData.name}
                         onChange={handleChange}
                         required
-                        className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-300 text-secondary placeholder-gray-400 hover:border-primary/50"
+                        className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary text-secondary placeholder-gray-400"
                         placeholder="Enter your full name"
                       />
                     </motion.div>
@@ -256,7 +224,7 @@ const Contact = () => {
                         value={formData.email}
                         onChange={handleChange}
                         required
-                        className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-300 text-secondary placeholder-gray-400 hover:border-primary/50"
+                        className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary text-secondary placeholder-gray-400"
                         placeholder="Enter your email address"
                       />
                     </motion.div>
@@ -278,7 +246,7 @@ const Contact = () => {
                         name="phone"
                         value={formData.phone}
                         onChange={handleChange}
-                        className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-300 text-secondary placeholder-gray-400 hover:border-primary/50"
+                        className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary text-secondary placeholder-gray-400"
                         placeholder="Enter your phone number"
                       />
                     </motion.div>
@@ -301,7 +269,7 @@ const Contact = () => {
                         onChange={handleChange}
                         required
                         rows="5"
-                        className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-300 text-secondary placeholder-gray-400 resize-vertical hover:border-primary/50"
+                        className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary text-secondary placeholder-gray-400 resize-vertical"
                         placeholder="Tell us about your electrical service needs, project details, or any questions you have..."
                       ></textarea>
                     </motion.div>
@@ -312,14 +280,12 @@ const Contact = () => {
                       whileInView={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.5, delay: 0.5 }}
                       viewport={{ once: true }}
-                      whileHover={{ scale: 1.02, y: -2 }}
-                      whileTap={{ scale: 0.98 }}
                       type="submit"
-                      className="w-full bg-gradient-to-r from-accent to-accent/90 hover:from-accent/90 hover:to-accent text-white font-bold py-4 px-8 rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 flex items-center justify-center group"
+                      className="w-full bg-gradient-to-r from-accent to-accent/90 text-white font-bold py-4 px-8 rounded-xl shadow-lg flex items-center justify-center group"
                     >
-                      <Send className="w-5 h-5 mr-3 group-hover:translate-x-1 transition-transform duration-300" />
+                      <Send className="w-5 h-5 mr-3" />
                       Send Message
-                      <Zap className="w-5 h-5 ml-3 group-hover:animate-pulse" />
+                      <Zap className="w-5 h-5 ml-3" />
                     </motion.button>
                   </form>
 
@@ -370,7 +336,7 @@ const Contact = () => {
                     whileInView={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, delay: 0.1 }}
                     viewport={{ once: true }}
-                    className="flex items-start space-x-4 p-4 rounded-xl bg-primary/5 hover:bg-primary/10 transition-colors duration-300"
+                    className="flex items-start space-x-4 p-4 rounded-xl bg-primary/5"
                   >
                     <div className="flex-shrink-0 w-12 h-12 bg-primary rounded-xl flex items-center justify-center">
                       <Phone className="w-6 h-6 text-white" />
@@ -389,7 +355,7 @@ const Contact = () => {
                     whileInView={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, delay: 0.2 }}
                     viewport={{ once: true }}
-                    className="flex items-start space-x-4 p-4 rounded-xl bg-accent/5 hover:bg-accent/10 transition-colors duration-300"
+                    className="flex items-start space-x-4 p-4 rounded-xl bg-accent/5"
                   >
                     <div className="flex-shrink-0 w-12 h-12 bg-accent rounded-xl flex items-center justify-center">
                       <Mail className="w-6 h-6 text-white" />
@@ -464,12 +430,7 @@ const Contact = () => {
       </section>
 
       {/* Call to Action Section */}
-      <section className="py-16 lg:py-20 bg-gradient-to-r from-primary via-primary/90 to-accent/80 relative overflow-hidden">
-        {/* Background Pattern */}
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute top-0 left-0 w-96 h-96 bg-accent rounded-full filter blur-3xl"></div>
-          <div className="absolute bottom-0 right-0 w-96 h-96 bg-white rounded-full filter blur-3xl"></div>
-        </div>
+      <section className="py-16 sm:py-20 lg:py-24 bg-gradient-to-r from-primary to-primary/90">
 
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
           <motion.div
@@ -488,18 +449,14 @@ const Contact = () => {
             
             <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
               <motion.button
-                whileHover={{ scale: 1.05, y: -2 }}
-                whileTap={{ scale: 0.95 }}
-                className="bg-accent hover:bg-accent/90 text-white font-bold py-4 px-8 rounded-xl shadow-2xl hover:shadow-accent/25 transition-all duration-300 inline-flex items-center group"
+                className="bg-accent text-white font-bold py-4 px-8 rounded-xl shadow-2xl inline-flex items-center group"
               >
                 <Phone className="w-5 h-5 mr-3" />
                 Call Now: +91-XXXXX-XXXXX
               </motion.button>
-              
+
               <motion.button
-                whileHover={{ scale: 1.05, y: -2 }}
-                whileTap={{ scale: 0.95 }}
-                className="bg-white/10 hover:bg-white/20 backdrop-blur-md text-white font-bold py-4 px-8 border-2 border-white/30 hover:border-white/50 rounded-xl transition-all duration-300 inline-flex items-center"
+                className="bg-white/10 backdrop-blur-md text-white font-bold py-4 px-8 border-2 border-white/30 rounded-xl inline-flex items-center"
               >
                 <Mail className="w-5 h-5 mr-3" />
                 Get Free Quote
