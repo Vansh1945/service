@@ -75,7 +75,6 @@ const Navbar = () => {
         <div className="flex justify-between h-16 md:h-18 lg:h-20 items-center">
           {/* Left side - Logo & Desktop Nav */}
           <div className="flex items-center">
-            <div className="flex-shrink-0">
               <Link
                 to="/"
               className="transition-all duration-300 focus:outline-none rounded-lg p-1"
@@ -83,7 +82,6 @@ const Navbar = () => {
               >
                 <Logo size="text-xl md:text-2xl lg:text-3xl" />
               </Link>
-            </div>
 
             {/* Desktop Navigation */}
             <div className="hidden lg:block ml-8 xl:ml-12">
