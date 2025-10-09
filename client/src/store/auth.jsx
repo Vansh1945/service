@@ -86,13 +86,21 @@ export const AuthProvider = ({ children }) => {
 
             showToast('Login successful!');
 
-            // Redirect based on role
-            if (finalRole === 'admin' || userObj.isAdmin) {
-                navigate('/admin/dashboard', { replace: true });
-            } else if (finalRole === 'provider') {
-                navigate(userObj.approved ? '/provider/dashboard' : '/pending-approval');
+            // Check for redirectTo query parameter
+            const urlParams = new URLSearchParams(window.location.search);
+            const redirectTo = urlParams.get('redirectTo');
+
+            if (redirectTo) {
+                navigate(redirectTo, { replace: true });
             } else {
-                navigate('/customer/services');
+                // Redirect based on role
+                if (finalRole === 'admin' || userObj.isAdmin) {
+                    navigate('/admin/dashboard', { replace: true });
+                } else if (finalRole === 'provider') {
+                    navigate(userObj.approved ? '/provider/dashboard' : '/pending-approval');
+                } else {
+                    navigate('/customer/services');
+                }
             }
 
         } catch (error) {

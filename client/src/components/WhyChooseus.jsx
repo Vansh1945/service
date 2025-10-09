@@ -4,8 +4,6 @@ import {
   DollarSign, 
   Shield,
   Star,
-  Users,
-  TrendingUp,
   CheckCircle2,
   Heart,
   Clock
@@ -14,7 +12,6 @@ import { motion } from 'framer-motion';
 
 const WhyChooseUs = () => {
   const [visibleCards, setVisibleCards] = useState(new Set());
-  const [hoveredCard, setHoveredCard] = useState(null);
   const [countUp, setCountUp] = useState({ 
     projects: 0, 
     satisfaction: 0,
@@ -24,32 +21,32 @@ const WhyChooseUs = () => {
   const sectionRef = useRef(null);
   const [hasAnimated, setHasAnimated] = useState(false);
 
-  // Feature cards data (only 3 cards)
+  // Feature cards data
   const features = [
     {
       icon: Award,
-      title: "Certified Experts",
-      description: "All our electricians are licensed, background-checked, and trained to the highest industry standards.",
-      gradient: "from-primary to-primary/80",
-      glowColor: "shadow-primary/30"
+      title: "Experienced Electricians",
+      description: "Our team of skilled electricians brings years of expertise to every project, ensuring professional and reliable service.",
+      gradient: "from-primary to-primary/70",
+      glowColor: "shadow-primary/40"
     },
     {
       icon: DollarSign,
       title: "Affordable Pricing",
       description: "No hidden charges. We offer competitive rates with transparent pricing for all services.",
-      gradient: "from-accent to-accent/80",
-      glowColor: "shadow-accent/30"
+      gradient: "from-accent to-accent/70",
+      glowColor: "shadow-accent/40"
     },
     {
       icon: Shield,
-      title: "Safety First",
-      description: "We follow strict safety protocols to ensure risk-free electrical installations and repairs.",
-      gradient: "from-primary/80 to-primary",
-      glowColor: "shadow-primary/30"
+      title: "Safety & Quality Guarantee",
+      description: "We prioritize safety with strict protocols and guarantee high-quality workmanship on all electrical installations and repairs.",
+      gradient: "from-primary/70 to-primary",
+      glowColor: "shadow-primary/40"
     }
   ];
 
-  // Stats data (4 stats)
+  // Stats data
   const stats = [
     { key: 'projects', target: 500, suffix: '+', label: 'Projects Completed', icon: CheckCircle2 },
     { key: 'satisfaction', target: 99, suffix: '%', label: 'Customer Satisfaction', icon: Heart },
@@ -66,11 +63,11 @@ const WhyChooseUs = () => {
             const cardIndex = parseInt(entry.target.dataset.index);
             setTimeout(() => {
               setVisibleCards(prev => new Set([...prev, cardIndex]));
-            }, cardIndex * 150);
+            }, cardIndex * 200);
           }
         });
       },
-      { threshold: 0.2 }
+      { threshold: 0.25 }
     );
 
     const cards = sectionRef.current?.querySelectorAll('[data-index]');
@@ -81,6 +78,8 @@ const WhyChooseUs = () => {
 
   // Counter animation
   useEffect(() => {
+    if (hasAnimated) return;
+
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
@@ -100,12 +99,12 @@ const WhyChooseUs = () => {
                   ...prev,
                   [stat.key]: Math.floor(current)
                 }));
-              }, 40);
+              }, 30);
             });
           }
         });
       },
-      { threshold: 0.8 }
+      { threshold: 0.85 }
     );
 
     const statsSection = document.querySelector('[data-stats]');
@@ -115,68 +114,67 @@ const WhyChooseUs = () => {
   }, [hasAnimated, stats]);
 
   return (
-    <section className="relative py-16 sm:py-20 lg:py-24 bg-gradient-to-b from-primary/5 to-background overflow-hidden">
+    <section className="relative py-16 sm:py-20 lg:py-24 bg-transparent overflow-hidden font-poppins">
       {/* Background Elements */}
-      <div className="absolute inset-0 opacity-10">
-        <div className="absolute top-20 left-10 w-32 h-32 bg-primary/20 rounded-full blur-xl"></div>
-        <div className="absolute bottom-20 right-10 w-40 h-40 bg-accent/20 rounded-full blur-xl"></div>
+      <div className="absolute inset-0 opacity-5 pointer-events-none" aria-hidden="true">
+        <div className="absolute top-24 left-12 w-36 h-36 bg-primary/20 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-24 right-12 w-48 h-48 bg-accent/20 rounded-full blur-3xl"></div>
       </div>
 
-      <div ref={sectionRef} className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div ref={sectionRef} className="relative z-10 max-w-7xl mx-auto px-6 sm:px-8 lg:px-12">
         {/* Section Header */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
+          transition={{ duration: 0.8, ease: "easeInOut" }}
           viewport={{ once: true }}
-          className="text-center mb-12 sm:mb-16"
+          className="text-center mb-14 sm:mb-20"
         >
-          <div className="inline-flex items-center bg-background px-4 sm:px-6 py-3 rounded-full shadow-sm border border-primary/20 mb-6">
-            <Star className="w-5 h-5 text-accent mr-2" />
-            <span className="text-primary font-medium">Why Choose Us</span>
+          <div className="inline-flex items-center bg-white bg-opacity-20 backdrop-blur-md px-5 py-3 rounded-full shadow-md border border-primary/30 mb-6">
+            <Star className="w-6 h-6 text-accent mr-3" aria-hidden="true" />
+            <span className="text-primary font-semibold text-lg tracking-wide">Why Choose Us</span>
           </div>
           
-          <h2 className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold text-secondary mb-4 px-4">
+          <h2 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-secondary mb-4 px-4">
             Why Choose <span className="text-accent">Raj Electrical?</span>
           </h2>
-          <p className="text-lg sm:text-xl text-secondary/80 max-w-3xl mx-auto px-4">
+          <p className="text-lg sm:text-xl text-secondary/90 max-w-4xl mx-auto px-4 leading-relaxed">
             We provide top-tier electrical services with unmatched reliability, safety, and customer care.
           </p>
         </motion.div>
 
-        {/* Feature Cards Grid - 3 equal size cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 px-4">
+        {/* Feature Cards Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 px-4" role="list" aria-label="Features">
           {features.map((feature, index) => {
             const IconComponent = feature.icon;
             const isVisible = visibleCards.has(index);
-            const isHovered = hoveredCard === index;
             
             return (
               <motion.div
                 key={index}
                 data-index={index}
-                onMouseEnter={() => setHoveredCard(index)}
-                onMouseLeave={() => setHoveredCard(null)}
-                initial={{ opacity: 0, y: 30 }}
+                initial={{ opacity: 0, y: 40 }}
                 animate={isVisible ? { opacity: 1, y: 0 } : {}}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
-                whileHover={{ y: -10 }}
-                className={`group relative ${isHovered ? 'z-10' : ''}`}
+                transition={{ duration: 0.6, delay: index * 0.15, ease: "easeInOut" }}
+                className="relative rounded-3xl transform-gpu"
+                role="listitem"
+                tabIndex={0}
+                aria-label={feature.title}
               >
                 {/* Glow Effect */}
-                <div className={`absolute inset-0 bg-gradient-to-r ${feature.gradient} rounded-2xl opacity-0 group-hover:opacity-20 blur-xl transition-opacity duration-300`}></div>
+                <div className={`absolute inset-0 bg-gradient-to-r ${feature.gradient} rounded-3xl opacity-0 blur-3xl transition-opacity duration-500 pointer-events-none`}></div>
                 
-                {/* Card with fixed height */}
-                <div className={`h-full p-1 bg-gradient-to-r ${feature.gradient} rounded-2xl shadow-lg ${isHovered ? feature.glowColor + ' shadow-xl' : ''} transition-all duration-300`}>
-                  <div className="bg-white rounded-xl p-8 h-full flex flex-col items-center text-center relative overflow-hidden">
+                {/* Card */}
+                <div className={`h-full p-1 bg-gradient-to-r ${feature.gradient} rounded-3xl shadow-lg transition-all duration-500`}>
+                  <div className="bg-white bg-opacity-90 rounded-3xl p-10 h-full flex flex-col items-center text-center relative overflow-hidden shadow-md">
                     {/* Icon */}
-                    <div className={`p-4 rounded-full bg-gradient-to-r ${feature.gradient} text-white mb-6 group-hover:scale-110 transition-transform duration-300 shadow-md`}>
-                      <IconComponent className="w-8 h-8" />
+                    <div className={`p-5 rounded-full bg-gradient-to-r ${feature.gradient} text-white mb-8 transition-transform duration-500 shadow-lg`}>
+                      <IconComponent className="w-10 h-10" aria-hidden="true" />
                     </div>
                     
                     {/* Content */}
-                    <h3 className="text-xl font-bold text-secondary mb-2">{feature.title}</h3>
-                    <p className="text-secondary/70 flex-grow leading-relaxed">{feature.description}</p>
+                    <h3 className="text-2xl font-semibold text-secondary mb-3">{feature.title}</h3>
+                    <p className="text-secondary/80 flex-grow leading-relaxed">{feature.description}</p>
                   </div>
                 </div>
               </motion.div>
@@ -184,16 +182,17 @@ const WhyChooseUs = () => {
           })}
         </div>
 
-        {/* Stats Section - 4 stats */}
+        {/* Stats Section */}
         <motion.div
           data-stats
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          transition={{ duration: 0.8, delay: 0.4 }}
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.9, delay: 0.5, ease: "easeInOut" }}
           viewport={{ once: true }}
-          className="mt-12 sm:mt-16 mx-4 bg-gradient-to-r from-primary to-primary/80 rounded-2xl p-6 sm:p-8 text-white shadow-xl"
+          className="mt-16 sm:mt-20 mx-6 bg-gradient-to-r from-primary to-primary/80 rounded-3xl p-8 text-white shadow-2xl"
+          aria-label="Statistics"
         >
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 text-center">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 text-center">
             {stats.map((stat, index) => {
               const IconComponent = stat.icon;
               const currentValue = stat.key === 'service' ? 24 : countUp[stat.key] || 0;
@@ -201,48 +200,22 @@ const WhyChooseUs = () => {
               return (
                 <motion.div 
                   key={index}
-                  whileHover={{ y: -5 }}
-                  className="group"
+                  className=""
+                  tabIndex={0}
+                  aria-label={`${stat.label}: ${currentValue}${stat.suffix}`}
                 >
-                  <div className="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-accent to-accent/80 rounded-2xl flex items-center justify-center mx-auto mb-3 sm:mb-4 group-hover:rotate-6 transition-transform duration-300">
-                    <IconComponent className="w-6 h-6 sm:w-8 sm:h-8 text-background" />
+                  <div className="w-16 h-16 bg-gradient-to-br from-accent to-accent/90 rounded-3xl flex items-center justify-center mx-auto mb-4 transition-transform duration-500">
+                    <IconComponent className="w-8 h-8 text-background" aria-hidden="true" />
                   </div>
-                  <p className="text-2xl sm:text-3xl lg:text-4xl font-bold text-accent mb-1 sm:mb-2">
+                  <p className="text-3xl font-extrabold text-accent mb-2">
                     {currentValue}{stat.suffix}
                   </p>
-                  <p className="text-primary/20 text-xs sm:text-sm font-medium">{stat.label}</p>
+                  <p className="text-primary/30 text-sm font-semibold tracking-wide">{stat.label}</p>
                 </motion.div>
               );
             })}
           </div>
         </motion.div>
-
-        {/* Call to Action */}
-        {/* <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.2 }}
-          viewport={{ once: true }}
-          className="text-center mt-16"
-        >
-          <div className="inline-flex flex-col sm:flex-row gap-4 justify-center">
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white font-bold py-4 px-8 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center"
-            >
-              <Users className="mr-2 w-5 h-5" /> Choose Excellence Today
-            </motion.button>
-            
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="border-2 border-yellow-400 text-yellow-500 hover:bg-yellow-400 hover:text-white font-bold py-4 px-8 rounded-xl shadow-sm hover:shadow-md transition-all duration-300 flex items-center justify-center"
-            >
-              <TrendingUp className="mr-2 w-5 h-5" /> Free Consultation
-            </motion.button>
-          </div>
-        </motion.div> */}
       </div>
     </section>
   );

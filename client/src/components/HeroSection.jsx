@@ -1,5 +1,6 @@
 import React from "react";
 import { FaBolt, FaPhone } from "react-icons/fa";
+import ServiceImg from '../assets/ServiceImg.png';
 
 const HeroSection = () => {
   return (
@@ -8,62 +9,60 @@ const HeroSection = () => {
       <div 
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
         style={{
-          backgroundImage: `url('https://images.unsplash.com/photo-1621905251189-08b45d6a269e?ixlib=rb-4.0.3&auto=format&fit=crop&w=2069&q=80')`
+          backgroundImage: `url(${ServiceImg})`
         }}
       >
-        {/* Semi-transparent overlay */}
-        <div className="absolute inset-0 bg-black/60"></div>
+        {/* Gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/50 to-black/80"></div>
       </div>
 
       {/* Main Content */}
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 text-center">
         <header className="space-y-6 md:space-y-8">
           {/* Main Headline */}
-          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold leading-tight text-white">
+          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold leading-tight text-white font-poppins animate-fadeInDown">
             <span className="block">Power Your Home &</span>
             <span className="block text-primary">Business with Reliable</span>
             <span className="block text-accent">Electrical Services</span>
           </h1>
 
           {/* Subheading */}
-          <p className="text-lg sm:text-xl md:text-2xl text-gray-200 max-w-4xl mx-auto leading-relaxed px-4">
+          <p className="text-lg sm:text-xl md:text-2xl text-gray-200 max-w-4xl mx-auto leading-relaxed px-4 font-poppins animate-fadeInUp">
             Expert wiring, repair, and maintenance for homes & industries in Himachal & Punjab.
           </p>
 
           {/* Call-to-Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 justify-center items-center mt-8 md:mt-12 px-4">
             <button 
-              className="w-full sm:w-auto bg-primary hover:bg-accent text-white font-bold py-4 px-8 rounded-lg transition-all duration-300 transform hover:scale-105 hover:shadow-xl flex items-center justify-center gap-3 text-lg"
+              className="w-full sm:w-auto bg-primary hover:bg-accent text-white font-extrabold py-4 px-10 rounded-xl transition-all duration-300 transform hover:scale-110 hover:shadow-2xl flex items-center justify-center gap-4 text-lg shadow-primary/50"
               aria-label="Book electrical service"
             >
-              <FaBolt className="text-xl" />
+              <FaBolt className="text-2xl" />
               Book a Service
             </button>
             
             <button 
-              className="w-full sm:w-auto bg-transparent hover:bg-secondary/80 text-white font-bold py-4 px-8 border-2 border-secondary hover:border-accent rounded-lg transition-all duration-300 transform hover:scale-105 hover:shadow-xl flex items-center justify-center gap-3 text-lg"
+              className="w-full sm:w-auto bg-transparent hover:bg-secondary/90 text-white font-extrabold py-4 px-10 border-2 border-secondary hover:border-accent rounded-xl transition-all duration-300 transform hover:scale-110 hover:shadow-2xl flex items-center justify-center gap-4 text-lg shadow-secondary/50"
               aria-label="Contact us for electrical services"
             >
-              <FaPhone className="text-xl" />
+              <FaPhone className="text-2xl" />
               Contact Us
             </button>
           </div>
 
           {/* Trust Indicators */}
-          <div className="mt-12 md:mt-16">
-            <div className="flex flex-wrap justify-center gap-4 md:gap-8 text-white/90">
-              <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full border border-white/20">
-                <FaBolt className="text-accent text-sm" />
-                <span className="text-sm md:text-base font-medium">24/7 Emergency Service</span>
-              </div>
-              <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full border border-white/20">
-                <FaBolt className="text-accent text-sm" />
-                <span className="text-sm md:text-base font-medium">Certified Electricians</span>
-              </div>
-              <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full border border-white/20">
-                <FaBolt className="text-accent text-sm" />
-                <span className="text-sm md:text-base font-medium">Licensed & Insured</span>
-              </div>
+          <div className="mt-12 md:mt-16 flex flex-wrap justify-center gap-6 md:gap-10 text-white/90 font-poppins">
+            <div className="flex items-center gap-3 bg-white/20 backdrop-blur-md px-5 py-3 rounded-full border border-white/30 shadow-lg hover:scale-105 transition-transform duration-300">
+              <FaBolt className="text-accent text-base md:text-lg" />
+              <span className="text-base md:text-lg font-semibold">24/7 Emergency Service</span>
+            </div>
+            <div className="flex items-center gap-3 bg-white/20 backdrop-blur-md px-5 py-3 rounded-full border border-white/30 shadow-lg hover:scale-105 transition-transform duration-300">
+              <FaBolt className="text-accent text-base md:text-lg" />
+              <span className="text-base md:text-lg font-semibold">Certified Electricians</span>
+            </div>
+            <div className="flex items-center gap-3 bg-white/20 backdrop-blur-md px-5 py-3 rounded-full border border-white/30 shadow-lg hover:scale-105 transition-transform duration-300">
+              <FaBolt className="text-accent text-base md:text-lg" />
+              <span className="text-base md:text-lg font-semibold">Licensed & Insured</span>
             </div>
           </div>
         </header>

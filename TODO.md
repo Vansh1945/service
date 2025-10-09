@@ -1,9 +1,3 @@
-# Contact Page UI Update Plan
-
-## Tasks
-- [ ] Update hero section to match Service.jsx style with background image, badge, title, description, CTA buttons, and trust indicators
-- [ ] Keep contact methods grid section
-- [ ] Keep main contact section with form and contact info
-- [ ] Add testimonials section similar to Service.jsx
-- [ ] Keep CTA section
-- [ ] Verify all sections match the UI consistency of other pages
+- [ ] Add responsive screen size detection logic in Services.jsx to set dynamic limit (mobile:1, tablet:2, desktop:4)
+- [ ] Update grid classes in Services.jsx to use lg:grid-cols-4 instead of lg:grid-cols-3 xl:grid-cols-4
+- [ ] Test the responsive behavior on different screen sizes
