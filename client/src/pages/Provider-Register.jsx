@@ -393,154 +393,154 @@ const ProviderRegistration = () => {
 
   // Progress Steps Component
   const ProgressIndicator = () => (
-    <div className="mb-10">
-      <div className="flex items-center justify-between mb-6">
-        {[1, 2, 3, 4].map((stepNumber) => (
-          <div key={stepNumber} className="flex items-center">
-            <div
-              className={`relative w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-500 transform ${
-                stepNumber <= step
-                  ? 'bg-gradient-to-br from-primary to-primary/80 text-white shadow-lg shadow-primary/30 scale-110'
-                  : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
-              }`}
-            >
-              {stepNumber < step ? (
-                <CheckCircle className="w-6 h-6 animate-pulse" />
-              ) : (
-                <span className="font-bold">{stepNumber}</span>
-              )}
-              {stepNumber <= step && (
-                <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping"></div>
-              )}
-            </div>
-            {stepNumber < 4 && (
-              <div className="flex-1 mx-3 h-2 bg-gray-100 rounded-full overflow-hidden">
-                <div
-                  className={`h-full transition-all duration-700 ease-out ${
-                    stepNumber < step 
-                      ? 'w-full bg-gradient-to-r from-primary to-primary/80' 
-                      : 'w-0 bg-gray-300'
-                  }`}
-                />
+            <div className="mb-10">
+              <div className="flex items-center justify-between mb-6">
+                {[1, 2, 3, 4].map((stepNumber) => (
+                  <div key={stepNumber} className="flex items-center">
+                    <div
+                      className={`relative w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-500 transform ${
+                        stepNumber <= step
+                          ? 'bg-primary text-white shadow-lg shadow-primary/30 scale-110'
+                          : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                      }`}
+                    >
+                      {stepNumber < step ? (
+                        <CheckCircle className="w-6 h-6 animate-pulse" />
+                      ) : (
+                        <span className="font-bold">{stepNumber}</span>
+                      )}
+                      {stepNumber <= step && (
+                        <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping"></div>
+                      )}
+                    </div>
+                    {stepNumber < 4 && (
+                      <div className="flex-1 mx-3 h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full transition-all duration-700 ease-out ${
+                            stepNumber < step 
+                              ? 'w-full bg-primary' 
+                              : 'w-0 bg-gray-300'
+                          }`}
+                        />
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
-            )}
-          </div>
-        ))}
-      </div>
-      <div className="text-center">
-        <p className="text-sm text-secondary/60 font-medium tracking-wide">
-          Step {step} of 4
-        </p>
-        <div className="mt-2 text-xs text-primary font-semibold">
-          {step === 1 && "Email Verification"}
-          {step === 2 && "Personal Details"}
-          {step === 3 && "Account Login"}
-          {step === 4 && "Professional Profile"}
-        </div>
-      </div>
-    </div>
+              <div className="text-center">
+                <p className="text-sm text-secondary/60 font-medium tracking-wide">
+                  Step {step} of 4
+                </p>
+                <div className="mt-2 text-xs text-primary font-semibold">
+                  {step === 1 && "Email Verification"}
+                  {step === 2 && "Personal Details"}
+                  {step === 3 && "Account Login"}
+                  {step === 4 && "Professional Profile"}
+                </div>
+              </div>
+            </div>
   );
 
   // Benefits Section Component
   const BenefitsSection = () => (
-    <div className="space-y-8">
-      {/* Hero Section */}
-      <div className="text-center space-y-6">
-        <div className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-primary/10 to-accent/10 rounded-full mb-4">
-          <Sparkles className="w-4 h-4 text-primary mr-2" />
-          <span className="text-sm font-semibold text-secondary">Join 2,000+ Trusted Providers</span>
-        </div>
-        
-        <h1 className="text-5xl lg:text-6xl font-bold text-secondary leading-tight">
-          Become a <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">SafeVolt</span>
-          <br />
-          <span className="text-3xl lg:text-4xl font-semibold text-secondary/80">Trusted Provider!</span>
-        </h1>
-        
-        <p className="text-xl text-secondary/70 max-w-md mx-auto leading-relaxed">
-          Join our network of verified electrical professionals and 
-          <span className="font-semibold text-primary"> start earning more today!</span>
-        </p>
-      </div>
+        <div className="space-y-8">
+          {/* Hero Section */}
+          <div className="text-center space-y-6">
+            <div className="inline-flex items-center px-4 py-2 bg-gray-100 rounded-full mb-4">
+              <Sparkles className="w-4 h-4 text-primary mr-2" />
+              <span className="text-sm font-semibold text-secondary">Join 2,000+ Trusted Providers</span>
+            </div>
+            
+            <h1 className="text-5xl lg:text-6xl font-bold text-secondary leading-tight">
+              Become a <span className="text-primary">SafeVolt</span>
+              <br />
+              <span className="text-3xl lg:text-4xl font-semibold text-secondary/80">Trusted Provider!</span>
+            </h1>
+            
+            <p className="text-xl text-secondary/70 max-w-md mx-auto leading-relaxed">
+              Join our network of verified electrical professionals and 
+              <span className="font-semibold text-primary"> start earning more today!</span>
+            </p>
+          </div>
 
       {/* Benefits Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        <div className="group bg-gradient-to-br from-primary/5 to-primary/10 rounded-2xl p-6 border border-primary/20 hover:border-primary/40 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10">
-          <div className="flex items-center mb-4">
-            <div className="w-12 h-12 bg-primary/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-              <DollarSign className="w-6 h-6 text-primary" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          <div className="group bg-white rounded-2xl p-6 border border-primary/20 hover:border-primary/40 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10">
+            <div className="flex items-center mb-4">
+              <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                <DollarSign className="w-6 h-6 text-primary" />
+              </div>
+              <div className="ml-4">
+                <h3 className="font-bold text-secondary">Earn More Income</h3>
+                <p className="text-sm text-secondary/60">Flexible earnings</p>
+              </div>
             </div>
-            <div className="ml-4">
-              <h3 className="font-bold text-secondary">Earn More Income</h3>
-              <p className="text-sm text-secondary/60">Flexible earnings</p>
-            </div>
+            <p className="text-sm text-secondary/70">Set your own rates and work schedule. Earn 20-40% more than traditional employment with verified leads.</p>
           </div>
-          <p className="text-sm text-secondary/70">Set your own rates and work schedule. Earn 20-40% more than traditional employment with verified leads.</p>
-        </div>
 
-        <div className="group bg-gradient-to-br from-accent/5 to-accent/10 rounded-2xl p-6 border border-accent/20 hover:border-accent/40 transition-all duration-300 hover:shadow-lg hover:shadow-accent/10">
-          <div className="flex items-center mb-4">
-            <div className="w-12 h-12 bg-accent/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-              <Shield className="w-6 h-6 text-accent" />
+          <div className="group bg-white rounded-2xl p-6 border border-accent/20 hover:border-accent/40 transition-all duration-300 hover:shadow-lg hover:shadow-accent/10">
+            <div className="flex items-center mb-4">
+              <div className="w-12 h-12 bg-accent/10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                <Shield className="w-6 h-6 text-accent" />
+              </div>
+              <div className="ml-4">
+                <h3 className="font-bold text-secondary">Get Verified</h3>
+                <p className="text-sm text-secondary/60">Build trust & credibility</p>
+              </div>
             </div>
-            <div className="ml-4">
-              <h3 className="font-bold text-secondary">Get Verified</h3>
-              <p className="text-sm text-secondary/60">Build trust & credibility</p>
-            </div>
+            <p className="text-sm text-secondary/70">Complete verification process increases customer trust and booking rates by up to 300%.</p>
           </div>
-          <p className="text-sm text-secondary/70">Complete verification process increases customer trust and booking rates by up to 300%.</p>
-        </div>
 
-        <div className="group bg-gradient-to-br from-primary/5 to-primary/10 rounded-2xl p-6 border border-primary/20 hover:border-primary/40 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10">
-          <div className="flex items-center mb-4">
-            <div className="w-12 h-12 bg-primary/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-              <Zap className="w-6 h-6 text-primary" />
+          <div className="group bg-white rounded-2xl p-6 border border-primary/20 hover:border-primary/40 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10">
+            <div className="flex items-center mb-4">
+              <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                <Zap className="w-6 h-6 text-primary" />
+              </div>
+              <div className="ml-4">
+                <h3 className="font-bold text-secondary">Instant Payments</h3>
+                <p className="text-sm text-secondary/60">Secure & fast</p>
+              </div>
             </div>
-            <div className="ml-4">
-              <h3 className="font-bold text-secondary">Instant Payments</h3>
-              <p className="text-sm text-secondary/60">Secure & fast</p>
-            </div>
+            <p className="text-sm text-secondary/70">Get paid instantly after job completion through our secure payment system. No waiting periods.</p>
           </div>
-          <p className="text-sm text-secondary/70">Get paid instantly after job completion through our secure payment system. No waiting periods.</p>
-        </div>
 
-        <div className="group bg-gradient-to-br from-accent/5 to-accent/10 rounded-2xl p-6 border border-accent/20 hover:border-accent/40 transition-all duration-300 hover:shadow-lg hover:shadow-accent/10">
-          <div className="flex items-center mb-4">
-            <div className="w-12 h-12 bg-accent/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-              <Calendar className="w-6 h-6 text-accent" />
+          <div className="group bg-white rounded-2xl p-6 border border-accent/20 hover:border-accent/40 transition-all duration-300 hover:shadow-lg hover:shadow-accent/10">
+            <div className="flex items-center mb-4">
+              <div className="w-12 h-12 bg-accent/10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                <Calendar className="w-6 h-6 text-accent" />
+              </div>
+              <div className="ml-4">
+                <h3 className="font-bold text-secondary">Flexible Hours</h3>
+                <p className="text-sm text-secondary/60">Work on your terms</p>
+              </div>
             </div>
-            <div className="ml-4">
-              <h3 className="font-bold text-secondary">Flexible Hours</h3>
-              <p className="text-sm text-secondary/60">Work on your terms</p>
-            </div>
+            <p className="text-sm text-secondary/70">Choose your working hours and service areas. Perfect for full-time professionals or side income.</p>
           </div>
-          <p className="text-sm text-secondary/70">Choose your working hours and service areas. Perfect for full-time professionals or side income.</p>
-        </div>
       </div>
 
       {/* How It Works */}
-      <div className="bg-gradient-to-r from-primary/10 to-accent/10 rounded-2xl p-8 border border-primary/20">
+      <div className="bg-white rounded-2xl p-8 border border-primary/20">
         <h3 className="text-2xl font-bold text-secondary mb-6 text-center flex items-center justify-center">
           <Award className="w-6 h-6 text-primary mr-2" />
           How It Works
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="text-center">
-            <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
               <span className="text-2xl font-bold text-primary">1</span>
             </div>
             <h4 className="font-bold text-secondary mb-2">Register</h4>
             <p className="text-sm text-secondary/70">Complete your profile with credentials and experience</p>
           </div>
           <div className="text-center">
-            <div className="w-16 h-16 bg-accent/20 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 bg-accent/10 rounded-full flex items-center justify-center mx-auto mb-4">
               <span className="text-2xl font-bold text-accent">2</span>
             </div>
             <h4 className="font-bold text-secondary mb-2">Get Verified</h4>
             <p className="text-sm text-secondary/70">Our team reviews and verifies your qualifications</p>
           </div>
           <div className="text-center">
-            <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
               <span className="text-2xl font-bold text-primary">3</span>
             </div>
             <h4 className="font-bold text-secondary mb-2">Start Earning</h4>
@@ -550,7 +550,7 @@ const ProviderRegistration = () => {
       </div>
 
       {/* Trust Points */}
-      <div className="bg-gradient-to-r from-accent/5 to-primary/5 rounded-2xl p-6 border border-accent/20">
+      <div className="bg-white rounded-2xl p-6 border border-accent/20">
         <h3 className="text-xl font-bold text-secondary mb-4 flex items-center">
           <Users className="w-5 h-5 text-accent mr-2" />
           Why Providers Trust SafeVolt
@@ -1140,12 +1140,12 @@ const ProviderRegistration = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 pt-28 bg-gradient-to-br from-primary/5 via-background to-primary/10 relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center p-4 pt-28 bg-background relative overflow-hidden">
       {/* Animated Background Elements */}
-      <div className="absolute inset-0 opacity-15">
-        <div className="absolute top-20 left-20 w-32 h-32 bg-accent rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-20 right-20 w-48 h-48 bg-primary/60 rounded-full blur-3xl animate-pulse delay-1000"></div>
-        <div className="absolute top-1/2 left-1/4 w-24 h-24 bg-accent/80 rounded-full blur-2xl animate-pulse delay-500"></div>
+      <div className="absolute inset-0 opacity-10">
+        <div className="absolute top-20 left-20 w-32 h-32 bg-accent/30 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute bottom-20 right-20 w-48 h-48 bg-primary/30 rounded-full blur-3xl animate-pulse delay-1000"></div>
+        <div className="absolute top-1/2 left-1/4 w-24 h-24 bg-accent/30 rounded-full blur-2xl animate-pulse delay-500"></div>
       </div>
 
       {/* Main Container - Desktop: Grid Layout, Mobile: Single Column */}
@@ -1188,7 +1188,7 @@ const ProviderRegistration = () => {
                   disabled={isSubmitting}
                   className={`flex items-center justify-center px-8 py-3 rounded-2xl font-semibold transition-all duration-300 transform hover:scale-[1.02] disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none ${
                     step === 1 ? 'w-full' : 'flex-1'
-                  } bg-gradient-to-r from-accent to-accent/90 hover:from-accent/90 hover:to-accent text-background shadow-lg hover:shadow-xl`}
+                  } bg-accent text-background shadow-lg hover:shadow-xl`}
                 >
                   {isSubmitting ? (
                     <div className="flex items-center">

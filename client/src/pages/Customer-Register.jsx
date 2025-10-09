@@ -211,7 +211,7 @@ const CustomerRegistration = () => {
             <div
               className={`relative w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-500 transform ${
                 step <= currentStep
-                  ? 'bg-gradient-to-br from-primary to-primary/80 text-white shadow-lg shadow-primary/30 scale-110'
+                  ? 'bg-primary text-white shadow-lg shadow-primary/30 scale-110'
                   : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
               }`}
             >
@@ -228,8 +228,8 @@ const CustomerRegistration = () => {
               <div className="flex-1 mx-3 h-2 bg-gray-100 rounded-full overflow-hidden">
                 <div
                   className={`h-full transition-all duration-700 ease-out ${
-                    step < currentStep 
-                      ? 'w-full bg-gradient-to-r from-primary to-primary/80' 
+                    step < currentStep
+                      ? 'w-full bg-primary'
                       : 'w-0 bg-gray-300'
                   }`}
                 />
@@ -653,13 +653,8 @@ const CustomerRegistration = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 pt-28 bg-gradient-to-br from-primary/5 via-background to-primary/10 relative overflow-hidden">
-      {/* Animated Background Elements */}
-      <div className="absolute inset-0 opacity-15">
-        <div className="absolute top-20 left-20 w-32 h-32 bg-accent rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-20 right-20 w-48 h-48 bg-primary/60 rounded-full blur-3xl animate-pulse delay-1000"></div>
-        <div className="absolute top-1/2 left-1/4 w-24 h-24 bg-accent/80 rounded-full blur-2xl animate-pulse delay-500"></div>
-      </div>
+    <div className="min-h-screen flex items-center justify-center p-4 pt-28 bg-background relative overflow-hidden">
+
 
       {/* Main Container - Desktop: Grid Layout, Mobile: Single Column */}
       <div className="w-full max-w-7xl relative z-10 lg:grid lg:grid-cols-2 lg:gap-12 lg:items-start">
@@ -671,63 +666,67 @@ const CustomerRegistration = () => {
         
         {/* Form Container - Full width on mobile, Right side on desktop */}
         <div className="w-full max-w-lg mx-auto lg:mx-0">
-          <div className="bg-background/95 backdrop-blur-sm rounded-3xl shadow-2xl p-8 border border-primary/20 shadow-primary/10">
-            <ProgressIndicator />
-            
+          <div className="backdrop-blur-lg bg-transparent rounded-3xl shadow-2xl p-8 border border-primary/20 shadow-primary/10 hover:shadow-primary/20 transition-shadow duration-500 relative overflow-hidden">
+            {/* Subtle inner glow */}
+            <div className="absolute inset-0 bg-primary/5 rounded-3xl pointer-events-none"></div>
+            <div className="relative z-10">
+              <ProgressIndicator />
+
               {renderStepContent()}
 
-            {/* Navigation Buttons */}
-            <div className="flex justify-between mt-8 space-x-4">
-              {currentStep > 1 && (
+              {/* Navigation Buttons */}
+              <div className="flex justify-between mt-8 space-x-4">
+                {currentStep > 1 && (
+                  <button
+                    type="button"
+                    onClick={prevStep}
+                    className="flex items-center px-6 py-3 rounded-2xl border-2 border-primary text-primary hover:bg-primary hover:text-white transition-all duration-300 font-semibold"
+                  >
+                    <ArrowLeft className="w-5 h-5 mr-2" />
+                    Back
+                  </button>
+                )}
+
                 <button
                   type="button"
-                  onClick={prevStep}
-                  className="flex items-center px-6 py-3 rounded-2xl border-2 border-primary text-primary hover:bg-primary hover:text-white transition-all duration-300 font-semibold"
+                  onClick={nextStep}
+                  disabled={isLoading}
+                  className={`flex items-center justify-center px-8 py-3 rounded-2xl font-semibold transition-all duration-300 transform hover:scale-[1.02] disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none ${
+                    currentStep === 1 ? 'w-full' : 'flex-1'
+                  } bg-accent hover:bg-accent/90 text-background shadow-lg hover:shadow-xl`}
                 >
-                  <ArrowLeft className="w-5 h-5 mr-2" />
-                  Back
+                  {isLoading ? (
+                    <div className="flex items-center">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-background mr-2"></div>
+                      <span>Processing...</span>
+                    </div>
+                  ) : (
+                    <>
+                      <span className="mr-2">
+                        {currentStep === 4 && otpSent
+                          ? 'Complete Registration'
+                          : currentStep === 4
+                          ? 'Send Verification Code'
+                          : currentStep === 3
+                          ? 'Review Information'
+                          : 'Continue'
+                        }
+                      </span>
+                      <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                    </>
+                  )}
                 </button>
-              )}
-              
-              <button
-                type="button"
-                onClick={nextStep}
-                disabled={isLoading}
-                className={`flex items-center justify-center px-8 py-3 rounded-2xl font-semibold transition-all duration-300 transform hover:scale-[1.02] disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none ${
-                  currentStep === 1 ? 'w-full' : 'flex-1'
-                } bg-gradient-to-r from-accent to-accent/90 hover:from-accent/90 hover:to-accent text-background shadow-lg hover:shadow-xl`}
-              >
-                {isLoading ? (
-                  <div className="flex items-center">
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-background mr-2"></div>
-                    <span>Processing...</span>
-                  </div>
-                ) : (
-                  <>
-                    <span className="mr-2">
-                      {currentStep === 4 && otpSent 
-                        ? 'Complete Registration' 
-                        : currentStep === 4 
-                        ? 'Send Verification Code'
-                        : currentStep === 3
-                        ? 'Review Information'
-                        : 'Continue'
-                      }
-                    </span>
-                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                  </>
-                )}
-              </button>
-            </div>
+              </div>
 
-            {/* Login Link */}
-            <div className="text-center mt-6">
-              <a
-                href="/login"
-                className="text-accent hover:text-accent/80 font-semibold transition-colors duration-300"
-              >
-                Already have an account? Sign in
-              </a>
+              {/* Login Link */}
+              <div className="text-center mt-6">
+                <a
+                  href="/login"
+                  className="text-accent hover:text-accent/80 font-semibold transition-colors duration-300"
+                >
+                  Already have an account? Sign in
+                </a>
+              </div>
             </div>
           </div>
         </div>

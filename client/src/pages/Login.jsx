@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/auth';
-import { 
-  Mail, 
-  Lock, 
-  ArrowRight, 
-  Eye, 
+import {
+  Mail,
+  Lock,
+  ArrowRight,
+  Eye,
   EyeOff
 } from 'lucide-react';
 
@@ -136,6 +136,7 @@ const LoginPage = () => {
           
           {/* Header Section */}
           <div className="text-center mb-8">
+
             <h2 className="text-3xl font-bold text-secondary mb-3">Sign In</h2>
             <p className="text-secondary/70 text-lg">Access your SafeVolt Solutions account</p>
             <div className="w-16 h-1 bg-gradient-to-r from-primary to-accent mx-auto mt-4 rounded-full"></div>
@@ -157,11 +158,18 @@ const LoginPage = () => {
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
-                  className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 hover:border-primary/50 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:shadow-md focus:shadow-lg font-medium"
+                  className={`w-full pl-12 pr-4 py-4 rounded-2xl border-2 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:shadow-md focus:shadow-lg font-medium ${
+                    errors.email
+                      ? 'border-red-500 focus:border-red-500 focus:ring-red-200'
+                      : 'border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 hover:border-primary/50'
+                  }`}
                   placeholder="Enter your email address"
                   required
                 />
               </div>
+              {errors.email && (
+                <p className="text-red-500 text-sm mt-1 font-medium">{errors.email}</p>
+              )}
             </div>
 
             {/* Password Field */}
@@ -179,7 +187,11 @@ const LoginPage = () => {
                   name="password"
                   value={formData.password}
                   onChange={handleChange}
-                  className="w-full pl-12 pr-12 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 hover:border-primary/50 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:shadow-md focus:shadow-lg font-medium"
+                  className={`w-full pl-12 pr-12 py-4 rounded-2xl border-2 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:shadow-md focus:shadow-lg font-medium ${
+                    errors.password
+                      ? 'border-red-500 focus:border-red-500 focus:ring-red-200'
+                      : 'border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 hover:border-primary/50'
+                  }`}
                   placeholder="Enter your password"
                   minLength="6"
                   required
@@ -192,6 +204,9 @@ const LoginPage = () => {
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
+              {errors.password && (
+                <p className="text-red-500 text-sm mt-1 font-medium">{errors.password}</p>
+              )}
             </div>
 
             {/* Remember Me & Forgot Password */}

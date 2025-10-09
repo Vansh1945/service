@@ -113,7 +113,7 @@ const CareersPage = () => {
                 className="inline-block"
               >
                 <Link
-                  to="/provider-register"
+                  to="/register-provider"
                   className="bg-accent hover:bg-accent/90 text-white font-bold py-4 px-8 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 inline-flex items-center group"
                 >
                   Apply Now
@@ -221,7 +221,7 @@ const CareersPage = () => {
                 whileTap={{ scale: 0.95 }}
               >
                 <Link
-                  to="/provider-register"
+                  to="/register-provider"
                   className="bg-accent hover:bg-accent/90 text-white font-bold py-4 px-8 rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 inline-flex items-center group"
                 >
                   Join Today

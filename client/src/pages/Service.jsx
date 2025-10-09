@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -11,66 +11,70 @@ import {
 } from 'lucide-react';
 
 const ServicesPage = () => {
-    const [services, setServices] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
     const navigate = useNavigate();
 
-    useEffect(() => {
-        const fetchServices = async () => {
-            try {
-                setLoading(true);
-                setError(null);
-                const response = await fetch('/service/services');
-                const data = await response.json();
-
-                if (!response.ok) {
-                    throw new Error(data.message || 'Failed to fetch services');
-                }
-
-                if (data.success && data.data) {
-                    // Transform data to match UI expectations
-                    const transformed = data.data.map(service => ({
-                        ...service,
-                        price: service.basePrice ? `Starting at ₹${service.basePrice.toLocaleString()}` : 'Price on request',
-                        rating: service.averageRating || 0,
-                        features: service.specialNotes || [],
-                        image: service.images && service.images.length > 0 ? service.images[0] : 'https://via.placeholder.com/400x300?text=No+Image'
-                    }));
-                    setServices(transformed);
-                } else {
-                    setServices([]);
-                }
-            } catch (err) {
-                setError(err.message);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchServices();
-    }, []);
+    // Static services data
+    const services = [
+        {
+            _id: '1',
+            title: 'Wiring Installation',
+            description: 'Professional wiring installation for new constructions or renovations.',
+            price: 'Starting at ₹5,000',
+            rating: 4.8,
+            features: ['Certified electricians', 'Quality materials', 'Safety guaranteed'],
+            image: 'https://via.placeholder.com/400x300?text=Wiring+Installation'
+        },
+        {
+            _id: '2',
+            title: 'Electrical Repairs',
+            description: 'Quick and reliable repairs for all electrical issues in your home or office.',
+            price: 'Starting at ₹1,000',
+            rating: 4.7,
+            features: ['24/7 emergency service', 'Warranty on repairs', 'Expert technicians'],
+            image: 'https://via.placeholder.com/400x300?text=Electrical+Repairs'
+        },
+        {
+            _id: '3',
+            title: 'Lighting Installation',
+            description: 'Install modern lighting solutions to enhance your space.',
+            price: 'Starting at ₹2,500',
+            rating: 4.9,
+            features: ['Energy-efficient options', 'Custom designs', 'Free consultation'],
+            image: 'https://via.placeholder.com/400x300?text=Lighting+Installation'
+        },
+        {
+            _id: '4',
+            title: 'Panel Upgrades',
+            description: 'Upgrade your electrical panel for better safety and efficiency.',
+            price: 'Starting at ₹10,000',
+            rating: 4.6,
+            features: ['Code-compliant upgrades', 'Increased capacity', 'Insurance approved'],
+            image: 'https://via.placeholder.com/400x300?text=Panel+Upgrades'
+        },
+        {
+            _id: '5',
+            title: 'Safety Inspections',
+            description: 'Comprehensive electrical safety inspections for peace of mind.',
+            price: 'Starting at ₹3,000',
+            rating: 4.8,
+            features: ['Detailed reports', 'Compliance checks', 'Preventive maintenance'],
+            image: 'https://via.placeholder.com/400x300?text=Safety+Inspections'
+        },
+        {
+            _id: '6',
+            title: 'Smart Home Setup',
+            description: 'Transform your home with smart electrical systems and automation.',
+            price: 'Starting at ₹15,000',
+            rating: 4.9,
+            features: ['Latest technology', 'Remote control', 'Energy monitoring'],
+            image: 'https://via.placeholder.com/400x300?text=Smart+Home+Setup'
+        }
+    ];
 
     const handleBookNow = (service) => {
         // Assuming user auth check and navigation logic here
         navigate(`/customer/services/${service._id}`);
     };
-
-    if (loading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center">
-                <p>Loading services...</p>
-            </div>
-        );
-    }
-
-    if (error) {
-        return (
-            <div className="min-h-screen flex items-center justify-center text-red-600">
-                <p>Error loading services: {error}</p>
-            </div>
-        );
-    }
 
     return (
         <div className="min-h-screen bg-background py-16 sm:py-20 lg:py-24">
@@ -106,8 +110,7 @@ const ServicesPage = () => {
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true }}
                             transition={{ duration: 0.6, delay: index * 0.1 }}
-                            whileHover={{ y: -8, transition: { duration: 0.3 } }}
-                            className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100 hover:shadow-xl transition-all duration-300 group"
+                            className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100 transition-all duration-300 group hover:shadow-xl hover:border-accent/20"
                         >
                             {/* Service Image */}
                             <div className="relative h-48 overflow-hidden">
@@ -171,6 +174,41 @@ const ServicesPage = () => {
                         </motion.div>
                     ))}
                 </div>
+
+                {/* Call to Action Section */}
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.6, delay: 0.3 }}
+                    className="text-center mt-16 sm:mt-20"
+                >
+                    <div className="bg-gradient-to-r from-primary/10 to-accent/10 rounded-2xl p-8 sm:p-12 border border-primary/20">
+                        <h3 className="text-2xl sm:text-3xl font-bold text-primary mb-4">
+                            Can't Find What You're Looking For?
+                        </h3>
+                        <p className="text-secondary/80 mb-6 max-w-2xl mx-auto">
+                            Contact us directly for custom electrical solutions and specialized services tailored to your unique requirements.
+                        </p>
+                        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                            <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                className="bg-primary text-background px-8 py-3 rounded-xl font-semibold flex items-center justify-center hover:bg-primary/90 transition-colors"
+                            >
+                                <Phone className="w-5 h-5 mr-2" />
+                                Call Now
+                            </motion.button>
+                            <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                className="border-2 border-primary text-primary px-8 py-3 rounded-xl font-semibold hover:bg-primary hover:text-background transition-colors"
+                            >
+                                Get Free Consultation
+                            </motion.button>
+                        </div>
+                    </div>
+                </motion.div>
             </div>
         </div>
     );
