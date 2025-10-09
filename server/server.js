@@ -6,11 +6,15 @@ const crypto = require('crypto');
 const connectDB = require("./config/db");
 const Transaction = require("./models/Transaction-model ");
 
+
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173' || 'http://localhost:5174';
+
+
 // Initialize express app
 const app = express();
 
 const corsOptions = {
-  origin: ['http://localhost:5173', 'http://localhost:5174'], 
+  origin: FRONTEND_URL,
   credentials: true, // Allow credentials (cookies)
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
