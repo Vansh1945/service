@@ -1,7 +1,7 @@
 const CommissionRule = require('../models/CommissionRule-model');
 const Booking = require('../models/Booking-model');
 const Provider = require('../models/Provider-model');
-const Transaction = require('../models/Transaction-model ');
+const Transaction = require('../models/Transaction-model');
 const Admin = require('../models/Admin-model');
 
 

@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const serviceController = require('../controllers/Services-controller');
 const adminAuthMiddleware = require('../middlewares/Admin-middleware');
-const providerAuthMiddleware = require('../middlewares/Provider-middleware');
+const { providerAuthMiddleware, providerTestPassedMiddleware } = require('../middlewares/Provider-middleware');
 const { uploadServiceImage, uploadServicesFile, handleUploadErrors } = require('../middlewares/upload');
 
 /**
@@ -58,14 +58,14 @@ router.get('/admin/services-export',
  * PROVIDER ROUTES
  */
 router.get('/provider/services',
-    providerAuthMiddleware.providerAuthMiddleware,
-    providerAuthMiddleware.providerTestPassedMiddleware,
+    providerAuthMiddleware,
+    providerTestPassedMiddleware,
     serviceController.getServicesForProvider
 );
 
 router.get('/provider/services/:id',
-    providerAuthMiddleware.providerAuthMiddleware,
-    providerAuthMiddleware.providerTestPassedMiddleware,
+    providerAuthMiddleware,
+    providerTestPassedMiddleware,
     serviceController.getServiceDetailsForProvider
 );
 

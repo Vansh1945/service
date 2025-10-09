@@ -1,4 +1,4 @@
-const Transaction = require('../models/Transaction-model ');
+const Transaction = require('../models/Transaction-model');
 const Booking = require('../models/Booking-model');
 const User = require('../models/User-model');
 const Provider = require('../models/Provider-model');
