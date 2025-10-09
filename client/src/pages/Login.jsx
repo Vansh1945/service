@@ -106,7 +106,7 @@ const LoginPage = () => {
 
       // ✅ CRITICAL FIX: Call loginUser to authenticate and redirect
       if (data.token && data.user) {
-        showToast(data.message || 'Login successful!', 'success');
+        showToast(data.message , 'success');
         loginUser(data.token, data.user.role || 'customer', data.user);
       } else {
         throw new Error('Invalid response from server');

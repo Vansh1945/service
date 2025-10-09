@@ -70,7 +70,7 @@ const Services = ({ limit }) => {
     const ServiceCard = ({ service }) => {
         const imageUrl = service.displayImage ||
           (service.images && service.images.length > 0 ? service.images[0] :
-           service.image || 'https://via.placeholder.com/400x300?text=No+Image');
+           service.image || '/placeholder-service.jpg');
 
         const isServiceAvailable = service.isActive !== false;
 
@@ -84,7 +84,7 @@ const Services = ({ limit }) => {
                 className="w-full h-full object-cover"
                 onError={(e) => {
                   e.target.onerror = null;
-                  e.target.src = 'https://via.placeholder.com/400x300?text=No+Image';
+                  e.target.src = '/placeholder-service.jpg';
                 }}
               />
 

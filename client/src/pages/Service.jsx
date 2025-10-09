@@ -22,7 +22,7 @@ const ServicesPage = () => {
             price: 'Starting at ₹5,000',
             rating: 4.8,
             features: ['Certified electricians', 'Quality materials', 'Safety guaranteed'],
-            image: 'https://via.placeholder.com/400x300?text=Wiring+Installation'
+            image: '/placeholder-service.jpg'
         },
         {
             _id: '2',
@@ -31,7 +31,7 @@ const ServicesPage = () => {
             price: 'Starting at ₹1,000',
             rating: 4.7,
             features: ['24/7 emergency service', 'Warranty on repairs', 'Expert technicians'],
-            image: 'https://via.placeholder.com/400x300?text=Electrical+Repairs'
+            image: '/placeholder-service.jpg'
         },
         {
             _id: '3',
@@ -40,7 +40,7 @@ const ServicesPage = () => {
             price: 'Starting at ₹2,500',
             rating: 4.9,
             features: ['Energy-efficient options', 'Custom designs', 'Free consultation'],
-            image: 'https://via.placeholder.com/400x300?text=Lighting+Installation'
+            image: '/placeholder-service.jpg'
         },
         {
             _id: '4',
@@ -49,7 +49,7 @@ const ServicesPage = () => {
             price: 'Starting at ₹10,000',
             rating: 4.6,
             features: ['Code-compliant upgrades', 'Increased capacity', 'Insurance approved'],
-            image: 'https://via.placeholder.com/400x300?text=Panel+Upgrades'
+            image: '/placeholder-service.jpg'
         },
         {
             _id: '5',
@@ -58,7 +58,7 @@ const ServicesPage = () => {
             price: 'Starting at ₹3,000',
             rating: 4.8,
             features: ['Detailed reports', 'Compliance checks', 'Preventive maintenance'],
-            image: 'https://via.placeholder.com/400x300?text=Safety+Inspections'
+            image: '/placeholder-service.jpg'
         },
         {
             _id: '6',
@@ -67,7 +67,7 @@ const ServicesPage = () => {
             price: 'Starting at ₹15,000',
             rating: 4.9,
             features: ['Latest technology', 'Remote control', 'Energy monitoring'],
-            image: 'https://via.placeholder.com/400x300?text=Smart+Home+Setup'
+            image: '/placeholder-service.jpg'
         }
     ];
 
@@ -119,10 +119,10 @@ const ServicesPage = () => {
                                     alt={service.title}
                                     className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                                     loading="lazy"
-                                    onError={(e) => {
-                                        e.target.onerror = null;
-                                        e.target.src = 'https://via.placeholder.com/400x300?text=No+Image';
-                                    }}
+                                onError={(e) => {
+                                    e.target.onerror = null;
+                                    e.target.src = '/placeholder-service.jpg';
+                                }}
                                 />
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
 

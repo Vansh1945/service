@@ -161,7 +161,7 @@ const UserProfile = () => {
                                 <div className="flex flex-col items-center">
                                     <div className="relative mb-4">
                                         <img
-                                            src={profile.profilePicUrl || 'https://via.placeholder.com/150'}
+                                            src={profile.profilePicUrl || 'https://placehold.co/150'}
                                             alt="Profile"
                                             className="w-32 h-32 rounded-full border-4 border-primary/30 object-cover"
                                         />

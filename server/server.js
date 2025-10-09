@@ -10,7 +10,7 @@ const Transaction = require("./models/Transaction-model ");
 const app = express();
 
 const corsOptions = {
-  origin: ['http://localhost:5173', 'http://localhost:5174', 'https://rajelectricalservices.vercel.app'],
+  origin: ['http://localhost:5173', 'http://localhost:5174'],
   credentials: true, // Allow credentials (cookies)
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
@@ -111,6 +111,15 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', timestamp: new Date() });
 });
 
+
+// Catch-all 404 handler for unknown routes
+app.use((req, res, next) => {
+  res.status(404).json({
+    success: false,
+    message: "Resource not found",
+    error: "NOT_FOUND"
+  });
+});
 
 // Error handling middleware
 app.use((err, req, res, next) => {

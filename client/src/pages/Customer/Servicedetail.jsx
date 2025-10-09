@@ -387,8 +387,8 @@ const ServiceDetailPage = () => {
             {/* Left Column - Images & Basic Info */}
             <div className="lg:col-span-2">
               {/* Enhanced Image Gallery */}
-              <div className="mb-8">
-                <div className="relative h-80 lg:h-96 rounded-xl overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 group">
+              <div className="mb-6 lg:mb-8">
+                <div className="relative h-64 sm:h-80 lg:h-96 rounded-xl overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 group">
                   {imageLoading && (
                     <div className="absolute inset-0 flex items-center justify-center">
                       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600"></div>
@@ -448,12 +448,12 @@ const ServiceDetailPage = () => {
                       <MdPhoto className="w-4 h-4 mr-2" />
                       All Service Images ({allImages.length})
                     </h4>
-                    <div className="flex space-x-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+                    <div className="flex space-x-2 sm:space-x-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
                       {allImages.map((image, index) => (
                         <button
                           key={index}
                           onClick={() => handleThumbnailClick(index)}
-                          className={`flex-shrink-0 w-24 h-20 rounded-lg overflow-hidden border-2 transition-all duration-300 transform hover:scale-105 ${index === currentImageIndex
+                          className={`flex-shrink-0 w-16 h-12 sm:w-20 sm:h-16 lg:w-24 lg:h-20 rounded-lg overflow-hidden border-2 transition-all duration-300 transform hover:scale-105 ${index === currentImageIndex
                             ? 'border-teal-500 ring-2 ring-teal-500/20 scale-105'
                             : 'border-gray-200 hover:border-gray-300'
                             }`}
@@ -479,16 +479,16 @@ const ServiceDetailPage = () => {
               </div>
 
               {/* Service Header */}
-              <div className="mb-6">
-                <div className="flex items-start justify-between mb-4">
+              <div className="mb-4 lg:mb-6">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-4 gap-4">
                   <div className="flex-1">
                     <div className="flex items-center mb-2">
-                      <span className="flex items-center text-sm font-medium text-teal-600 bg-teal-50 px-3 py-1 rounded-full border border-teal-200">
-                        <CategoryIcon className="w-4 h-4 mr-2" />
+                      <span className="flex items-center text-xs sm:text-sm font-medium text-teal-600 bg-teal-50 px-2 sm:px-3 py-1 rounded-full border border-teal-200">
+                        <CategoryIcon className="w-3 h-3 sm:w-4 sm:h-4 mr-2" />
                         {service.category}
                       </span>
                     </div>
-                    <h1 className="text-3xl font-bold text-gray-800 mb-3">
+                    <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-3">
                       {service.title}
                     </h1>
                   </div>
