@@ -1,49 +1,39 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../store/auth';
-import { 
-  Search, 
-  Star, 
-  User, 
-  MessageSquare, 
-  Filter, 
-  Eye, 
-  X, 
-  ChevronLeft, 
-  ChevronRight, 
-  Download, 
-  Calendar,
+import {
+  DollarSign,
+  Users,
+  Settings,
   Plus,
+  Search,
   Edit,
   Trash2,
+  CheckCircle,
+  XCircle,
+  ChevronLeft,
+  ChevronRight,
+  Percent,
   Info
 } from 'lucide-react';
 import { format } from 'date-fns';
 
-const AdminFeedback = () => {
-  const { token, API, showToast } = useAuth();
-  const [feedbacks, setFeedbacks] = useState([]);
-  const [selectedFeedback, setSelectedFeedback] = useState(null);
-  const [showModal, setShowModal] = useState(false);
-  const [loading, setLoading] = useState(true);
+const AdminCommissionPage = () => {
+  const { API, token, showToast } = useAuth();
+  const [loading, setLoading] = useState(false);
 
-  // Stats state
+  // Data states
+  const [commissionRules, setCommissionRules] = useState([]);
+  const [providers, setProviders] = useState([]);
+
+  // Stats
   const [stats, setStats] = useState({
-    total: 0,
-    averageRating: 0,
-    providerFeedback: 0,
-    serviceFeedback: 0
+    totalProviders: 0,
+    activeRules: 0,
+    totalProcessedCommissions: 0,
+    avgCommissionRate: 0
   });
 
-  // Filters state
-  const [filters, setFilters] = useState({
-    rating: '',
-    type: '',
-    search: '',
-    startDate: '',
-    endDate: ''
-  });
-
-  // Pagination state
+  // Pagination
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 10,
@@ -51,220 +41,363 @@ const AdminFeedback = () => {
     pages: 0
   });
 
-  // Filter options
-  const ratingOptions = [
-    { value: '', label: 'All Ratings' },
-    { value: '5', label: '5 Stars' },
-    { value: '4', label: '4 Stars' },
-    { value: '3', label: '3 Stars' },
-    { value: '2', label: '2 Stars' },
-    { value: '1', label: '1 Star' }
-  ];
+  // Modal states
+  const [showRuleModal, setShowRuleModal] = useState(false);
+  const [showRuleDetailsModal, setShowRuleDetailsModal] = useState(false);
+  const [editingRule, setEditingRule] = useState(null);
+  const [viewingRule, setViewingRule] = useState(null);
 
-  const typeOptions = [
-    { value: '', label: 'All Types' },
-    { value: 'provider', label: 'Provider Feedback' },
-    { value: 'service', label: 'Service Feedback' }
-  ];
+  // Form state matching backend model
+  const [ruleForm, setRuleForm] = useState({
+    name: '',
+    description: '',
+    type: 'percentage',
+    value: 10,
+    applyTo: 'all',
+    performanceTier: '',
+    specificProvider: '',
+    effectiveFrom: new Date(),
+    effectiveUntil: ''
+  });
 
-  // Fetch feedbacks
-  const fetchFeedbacks = async () => {
+  // Filters
+  const [filters, setFilters] = useState({
+    search: '',
+    isActive: '',
+    applyTo: ''
+  });
+
+  // Available options matching backend enum
+  const performanceTiers = ['basic', 'standard', 'premium'];
+  const applyToOptions = ['all', 'performanceTier', 'specificProvider'];
+
+  // Fetch commission rules
+  const fetchCommissionRules = async (page = 1, limit = 10) => {
+    setLoading(true);
+
     try {
-      setLoading(true);
-      
       const queryParams = new URLSearchParams({
-        page: pagination.page.toString(),
-        limit: pagination.limit.toString()
+        page: page.toString(),
+        limit: limit.toString(),
+        ...(filters.isActive && { isActive: filters.isActive }),
+        ...(filters.applyTo && { applyTo: filters.applyTo })
       });
 
-      if (filters.rating) queryParams.append('rating', filters.rating);
-      if (filters.type) queryParams.append('type', filters.type);
-      if (filters.search) queryParams.append('search', filters.search);
-      if (filters.startDate) queryParams.append('startDate', filters.startDate);
-      if (filters.endDate) queryParams.append('endDate', filters.endDate);
-
-      const response = await fetch(`${API}/feedback/admin/all-feedbacks?${queryParams}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+      const response = await fetch(`${API}/commission/rules?${queryParams}`, {
+        headers: { Authorization: `Bearer ${token}` }
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        const fetchedFeedbacks = data.data || [];
+      
+      const data = await response.json();
+      if (data.success) {
+        setCommissionRules(data.data);
+        setPagination(data.pagination);
         
-        setFeedbacks(fetchedFeedbacks);
-        setPagination(prev => ({
-          ...prev,
-          total: data.total || 0,
-          pages: data.pages || 1
+        // Calculate stats
+        const activeCount = data.data.filter(rule => rule.isActive).length;
+        setStats(prev => ({ 
+          ...prev, 
+          activeRules: activeCount,
+          totalRules: data.pagination.total
         }));
 
-        calculateStats(fetchedFeedbacks);
-      } else {
-        throw new Error('Failed to fetch feedbacks');
+        // Calculate average commission rate
+        if (data.data.length > 0) {
+          const percentageRules = data.data.filter(rule => rule.type === 'percentage');
+          const avgRate = percentageRules.length > 0 
+            ? percentageRules.reduce((sum, rule) => sum + rule.value, 0) / percentageRules.length
+            : 0;
+          setStats(prev => ({ ...prev, avgCommissionRate: avgRate.toFixed(1) }));
+        }
       }
     } catch (error) {
-      console.error('Error fetching feedbacks:', error);
-      showToast('Failed to fetch feedbacks', 'error');
+      showToast('Failed to fetch commission rules', 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  // Calculate statistics
-  const calculateStats = (feedbacksData) => {
-    const newStats = {
-      total: feedbacksData.length,
-      averageRating: 0,
-      providerFeedback: 0,
-      serviceFeedback: 0
-    };
-
-    let totalRating = 0;
-    let ratingCount = 0;
-
-    feedbacksData.forEach(feedback => {
-      if (feedback.providerFeedback?.rating) {
-        totalRating += feedback.providerFeedback.rating;
-        ratingCount++;
-        newStats.providerFeedback++;
-      }
-
-      if (feedback.serviceFeedback?.rating) {
-        totalRating += feedback.serviceFeedback.rating;
-        ratingCount++;
-        newStats.serviceFeedback++;
-      }
-    });
-
-    newStats.averageRating = ratingCount > 0 ? (totalRating / ratingCount).toFixed(1) : 0;
-    setStats(newStats);
-  };
-
-  // Fetch feedback details
-  const fetchFeedbackDetails = async (feedbackId) => {
+  // Fetch specific commission rule by ID
+  const fetchCommissionRuleById = async (ruleId) => {
+    setLoading(true);
     try {
-      const response = await fetch(`${API}/feedback/admin/${feedbackId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+      const response = await fetch(`${API}/commission/rules/${ruleId}`, {
+        headers: { Authorization: `Bearer ${token}` }
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        setSelectedFeedback(data.data);
-        setShowModal(true);
+      
+      const data = await response.json();
+      if (data.success) {
+        setViewingRule(data.data);
+        setShowRuleDetailsModal(true);
       } else {
-        throw new Error('Failed to fetch feedback details');
+        showToast(data.message || 'Failed to fetch rule details', 'error');
       }
     } catch (error) {
-      console.error('Error fetching feedback details:', error);
-      showToast('Failed to fetch feedback details', 'error');
+      showToast('Failed to fetch rule details', 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Handle filter changes
-  const handleFilterChange = (key, value) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
-    setPagination(prev => ({ ...prev, page: 1 }));
+  // Fetch providers
+  const fetchProviders = async () => {
+    try {
+      const response = await fetch(`${API}/admin/providers?limit=100`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await response.json();
+      if (data.success) {
+        setProviders(data.providers || []);
+        setStats(prev => ({
+          ...prev,
+          totalProviders: (data.providers || []).length
+        }));
+      } else {
+        showToast(data.message || 'Failed to fetch providers', 'error');
+      }
+    } catch (error) {
+      showToast('Failed to fetch providers', 'error');
+      setProviders([]);
+    }
   };
 
-  // Clear all filters
-  const clearFilters = () => {
-    setFilters({
-      rating: '',
-      type: '',
-      search: '',
-      startDate: '',
-      endDate: ''
+  // Create commission rule
+  const createCommissionRule = async () => {
+    // Validate required fields
+    if (!ruleForm.name || !ruleForm.value || ruleForm.value < 0) {
+      showToast('Please fill all required fields with valid values', 'error');
+      return;
+    }
+
+    // Validate percentage value
+    if (ruleForm.type === 'percentage' && ruleForm.value > 100) {
+      showToast('Percentage commission cannot exceed 100%', 'error');
+      return;
+    }
+
+    // Validate conditional fields
+    if (ruleForm.applyTo === 'performanceTier' && !ruleForm.performanceTier) {
+      showToast('Performance tier is required when applyTo is performanceTier', 'error');
+      return;
+    }
+
+    if (ruleForm.applyTo === 'specificProvider' && !ruleForm.specificProvider) {
+      showToast('Provider is required when applyTo is specificProvider', 'error');
+      return;
+    }
+
+    // Validate dates
+    if (ruleForm.effectiveUntil && new Date(ruleForm.effectiveUntil) <= new Date(ruleForm.effectiveFrom)) {
+      showToast('Effective until date must be after effective from date', 'error');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const payload = {
+        name: ruleForm.name,
+        description: ruleForm.description,
+        type: ruleForm.type,
+        value: ruleForm.value,
+        applyTo: ruleForm.applyTo,
+        ...(ruleForm.applyTo === 'performanceTier' && { performanceTier: ruleForm.performanceTier }),
+        ...(ruleForm.applyTo === 'specificProvider' && { specificProvider: ruleForm.specificProvider }),
+        effectiveFrom: ruleForm.effectiveFrom,
+        ...(ruleForm.effectiveUntil && { effectiveUntil: ruleForm.effectiveUntil })
+      };
+
+      const response = await fetch(`${API}/commission/rules`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        showToast('Rule created successfully');
+        setShowRuleModal(false);
+        resetRuleForm();
+        fetchCommissionRules(pagination.page, pagination.limit);
+      } else {
+        showToast(data.message || 'Failed to create rule', 'error');
+      }
+    } catch (error) {
+      showToast('Failed to create rule', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Update commission rule
+  const updateCommissionRule = async () => {
+    // Validate required fields
+    if (!ruleForm.name || !ruleForm.value || ruleForm.value < 0) {
+      showToast('Please fill all required fields with valid values', 'error');
+      return;
+    }
+
+    // Validate percentage value
+    if (ruleForm.type === 'percentage' && ruleForm.value > 100) {
+      showToast('Percentage commission cannot exceed 100%', 'error');
+      return;
+    }
+
+    // Validate conditional fields
+    if (ruleForm.applyTo === 'performanceTier' && !ruleForm.performanceTier) {
+      showToast('Performance tier is required when applyTo is performanceTier', 'error');
+      return;
+    }
+
+    if (ruleForm.applyTo === 'specificProvider' && !ruleForm.specificProvider) {
+      showToast('Provider is required when applyTo is specificProvider', 'error');
+      return;
+    }
+
+    // Validate dates
+    if (ruleForm.effectiveUntil && new Date(ruleForm.effectiveUntil) <= new Date(ruleForm.effectiveFrom)) {
+      showToast('Effective until date must be after effective from date', 'error');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const payload = {
+        name: ruleForm.name,
+        description: ruleForm.description,
+        type: ruleForm.type,
+        value: ruleForm.value,
+        applyTo: ruleForm.applyTo,
+        ...(ruleForm.applyTo === 'performanceTier' && { performanceTier: ruleForm.performanceTier }),
+        ...(ruleForm.applyTo === 'specificProvider' && { specificProvider: ruleForm.specificProvider }),
+        effectiveFrom: ruleForm.effectiveFrom,
+        ...(ruleForm.effectiveUntil && { effectiveUntil: ruleForm.effectiveUntil })
+      };
+
+      const response = await fetch(`${API}/commission/rules/${editingRule._id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        showToast('Rule updated successfully');
+        setShowRuleModal(false);
+        setEditingRule(null);
+        resetRuleForm();
+        fetchCommissionRules(pagination.page, pagination.limit);
+      } else {
+        showToast(data.message || 'Failed to update rule', 'error');
+      }
+    } catch (error) {
+      showToast('Failed to update rule', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Toggle rule status
+  const toggleRuleStatus = async (ruleId) => {
+    try {
+      const response = await fetch(`${API}/commission/rules/${ruleId}/toggle-status`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await response.json();
+      if (data.success) {
+        showToast(data.message || 'Rule status updated');
+        fetchCommissionRules(pagination.page, pagination.limit);
+      } else {
+        showToast(data.message || 'Failed to toggle rule status', 'error');
+      }
+    } catch (error) {
+      showToast('Failed to toggle rule status', 'error');
+    }
+  };
+
+  // Delete commission rule
+  const deleteCommissionRule = async (ruleId) => {
+    if (!window.confirm('Are you sure you want to delete this commission rule?')) return;
+    
+    try {
+      const response = await fetch(`${API}/commission/rules/${ruleId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await response.json();
+      if (data.success) {
+        showToast('Commission rule deleted successfully');
+        fetchCommissionRules(pagination.page, pagination.limit);
+      } else {
+        showToast(data.message || 'Failed to delete rule', 'error');
+      }
+    } catch (error) {
+      showToast('Failed to delete commission rule', 'error');
+    }
+  };
+
+  // Reset form
+  const resetRuleForm = () => {
+    setRuleForm({
+      name: '',
+      description: '',
+      type: 'percentage',
+      value: 10,
+      applyTo: 'all',
+      performanceTier: '',
+      specificProvider: '',
+      effectiveFrom: new Date(),
+      effectiveUntil: ''
     });
-    setPagination(prev => ({ ...prev, page: 1 }));
   };
 
-  // Pagination functions
-  const goToPage = (page) => {
-    setPagination(prev => ({ ...prev, page }));
+  // Open edit modal
+  const openEditModal = (rule) => {
+    setEditingRule(rule);
+    setRuleForm({
+      name: rule.name || '',
+      description: rule.description || '',
+      type: rule.type || 'percentage',
+      value: rule.value || 10,
+      applyTo: rule.applyTo || 'all',
+      performanceTier: rule.performanceTier || '',
+      specificProvider: rule.specificProvider?._id || '',
+      effectiveFrom: rule.effectiveFrom ? new Date(rule.effectiveFrom) : new Date(),
+      effectiveUntil: rule.effectiveUntil ? new Date(rule.effectiveUntil) : ''
+    });
+    setShowRuleModal(true);
   };
 
-  const nextPage = () => {
-    if (pagination.page < pagination.pages) {
-      setPagination(prev => ({ ...prev, page: prev.page + 1 }));
-    }
+  // View rule details
+  const viewRuleDetails = (rule) => {
+    fetchCommissionRuleById(rule._id);
   };
 
-  const prevPage = () => {
-    if (pagination.page > 1) {
-      setPagination(prev => ({ ...prev, page: prev.page - 1 }));
-    }
-  };
+  // Filter rules
+  const filteredRules = commissionRules.filter(rule => {
+    const matchesSearch = rule.name.toLowerCase().includes(filters.search.toLowerCase()) ||
+                         rule.description?.toLowerCase().includes(filters.search.toLowerCase());
+    const matchesActive = filters.isActive === '' || rule.isActive.toString() === filters.isActive;
+    const matchesApplyTo = filters.applyTo === '' || rule.applyTo === filters.applyTo;
+    
+    return matchesSearch && matchesActive && matchesApplyTo;
+  });
 
-  // Utility functions
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    return format(new Date(dateString), 'dd MMM yyyy');
-  };
-
-  const renderStars = (rating) => {
-    return (
-      <div className="flex items-center space-x-1">
-        {[1, 2, 3, 4, 5].map((star) => (
-          <Star
-            key={star}
-            className={`w-3 h-3 ${
-              star <= rating 
-                ? 'fill-current text-yellow-500' 
-                : 'text-gray-300'
-            }`}
-          />
-        ))}
-      </div>
-    );
-  };
-
-  const getRatingColor = (rating) => {
-    if (rating >= 4) return 'text-green-600 bg-green-100';
-    if (rating >= 3) return 'text-yellow-600 bg-yellow-100';
-    if (rating >= 2) return 'text-orange-600 bg-orange-100';
-    return 'text-red-600 bg-red-100';
-  };
-
-  // Fetch data on component mount and when filters/pagination change
+  // Initial data fetch
   useEffect(() => {
-    fetchFeedbacks();
-  }, [filters, pagination.page, pagination.limit]);
+    fetchCommissionRules();
+    fetchProviders();
+  }, []);
 
-  // Generate pagination items
-  const getPaginationItems = () => {
-    const items = [];
-    const maxVisiblePages = 5;
-    let startPage = Math.max(1, pagination.page - Math.floor(maxVisiblePages / 2));
-    let endPage = Math.min(pagination.pages, startPage + maxVisiblePages - 1);
-
-    if (endPage - startPage + 1 < maxVisiblePages) {
-      startPage = Math.max(1, endPage - maxVisiblePages + 1);
-    }
-
-    for (let i = startPage; i <= endPage; i++) {
-      items.push(
-        <button
-          key={i}
-          onClick={() => goToPage(i)}
-          className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
-            pagination.page === i
-              ? 'z-10 bg-primary border-primary text-white'
-              : 'bg-white border-gray-300 text-secondary hover:bg-gray-50'
-          }`}
-        >
-          {i}
-        </button>
-      );
-    }
-
-    return items;
-  };
+  // Refetch when filters change
+  useEffect(() => {
+    fetchCommissionRules(1, pagination.limit);
+  }, [filters.isActive, filters.applyTo]);
 
   return (
     <div className="p-4 md:p-8 min-h-screen">
@@ -273,25 +406,44 @@ const AdminFeedback = () => {
         <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
             <div className="space-y-2">
-              <h1 className="text-3xl font-bold text-secondary">Feedback Management</h1>
-              <p className="text-gray-600">Manage and review customer feedback</p>
+              <h1 className="text-3xl font-bold text-secondary">Commission Management</h1>
+              <p className="text-gray-600">Manage commission rules and provider earnings</p>
             </div>
-            <button className="flex items-center px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-700 transition-colors shadow-md hover:shadow-lg">
-              <Download className="w-4 h-4 mr-2" />
-              Export Feedback
+            <button
+              onClick={() => {
+                resetRuleForm();
+                setEditingRule(null);
+                setShowRuleModal(true);
+              }}
+              className="flex items-center px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-700 transition-colors shadow-md hover:shadow-lg"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Commission Rule
             </button>
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-4">
+            <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+              <div className="flex items-center">
+                <div className="p-2 rounded-full bg-green-100">
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm font-medium text-gray-600">Active Rules</p>
+                  <p className="text-lg font-bold text-secondary">{stats.activeRules}</p>
+                </div>
+              </div>
+            </div>
+
             <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
               <div className="flex items-center">
                 <div className="p-2 rounded-full bg-blue-100">
-                  <MessageSquare className="w-5 h-5 text-blue-600" />
+                  <Users className="w-5 h-5 text-blue-600" />
                 </div>
                 <div className="ml-3">
-                  <p className="text-sm font-medium text-gray-600">Total Feedback</p>
-                  <p className="text-lg font-bold text-secondary">{stats.total}</p>
+                  <p className="text-sm font-medium text-gray-600">Total Providers</p>
+                  <p className="text-lg font-bold text-secondary">{stats.totalProviders}</p>
                 </div>
               </div>
             </div>
@@ -299,35 +451,11 @@ const AdminFeedback = () => {
             <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
               <div className="flex items-center">
                 <div className="p-2 rounded-full bg-amber-100">
-                  <Star className="w-5 h-5 text-amber-600" />
+                  <Percent className="w-5 h-5 text-amber-600" />
                 </div>
                 <div className="ml-3">
-                  <p className="text-sm font-medium text-gray-600">Average Rating</p>
-                  <p className="text-lg font-bold text-secondary">{stats.averageRating}/5</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-              <div className="flex items-center">
-                <div className="p-2 rounded-full bg-green-100">
-                  <User className="w-5 h-5 text-green-600" />
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm font-medium text-gray-600">Provider Feedback</p>
-                  <p className="text-lg font-bold text-secondary">{stats.providerFeedback}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-              <div className="flex items-center">
-                <div className="p-2 rounded-full bg-purple-100">
-                  <MessageSquare className="w-5 h-5 text-purple-600" />
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm font-medium text-gray-600">Service Feedback</p>
-                  <p className="text-lg font-bold text-secondary">{stats.serviceFeedback}</p>
+                  <p className="text-sm font-medium text-gray-600">Avg Commission Rate</p>
+                  <p className="text-lg font-bold text-secondary">{stats.avgCommissionRate}%</p>
                 </div>
               </div>
             </div>
@@ -338,17 +466,7 @@ const AdminFeedback = () => {
         <div className="space-y-6">
           {/* Filters */}
           <div className="bg-white rounded-xl shadow-lg p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium text-secondary">Filters</h3>
-              <button 
-                onClick={clearFilters}
-                className="text-sm text-primary hover:text-teal-700 transition-colors"
-              >
-                Clear All
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-secondary mb-2">Search</label>
                 <div className="relative">
@@ -357,95 +475,70 @@ const AdminFeedback = () => {
                   </div>
                   <input
                     type="text"
-                    placeholder="Search feedback..."
+                    placeholder="Search rules..."
                     value={filters.search}
-                    onChange={(e) => handleFilterChange('search', e.target.value)}
+                    onChange={(e) => setFilters({...filters, search: e.target.value})}
                     className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
                   />
                 </div>
               </div>
-
+              
               <div>
-                <label className="block text-sm font-medium text-secondary mb-2">Rating</label>
+                <label className="block text-sm font-medium text-secondary mb-2">Status</label>
                 <select
-                  value={filters.rating}
-                  onChange={(e) => handleFilterChange('rating', e.target.value)}
+                  value={filters.isActive}
+                  onChange={(e) => setFilters({...filters, isActive: e.target.value})}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
                 >
-                  {ratingOptions.map(option => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
+                  <option value="">All</option>
+                  <option value="true">Active</option>
+                  <option value="false">Inactive</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-secondary mb-2">Apply To</label>
+                <select
+                  value={filters.applyTo}
+                  onChange={(e) => setFilters({...filters, applyTo: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                >
+                  <option value="">All Types</option>
+                  {applyToOptions.map(option => (
+                    <option key={option} value={option}>
+                      {option === 'all' ? 'All Providers' : 
+                       option === 'performanceTier' ? 'Performance Tier' : 
+                       'Specific Provider'}
                     </option>
                   ))}
                 </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-2">Type</label>
-                <select
-                  value={filters.type}
-                  onChange={(e) => handleFilterChange('type', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-                >
-                  {typeOptions.map(option => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-2">From</label>
-                  <input
-                    type="date"
-                    value={filters.startDate}
-                    onChange={(e) => handleFilterChange('startDate', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-2">To</label>
-                  <input
-                    type="date"
-                    value={filters.endDate}
-                    onChange={(e) => handleFilterChange('endDate', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-                  />
-                </div>
               </div>
             </div>
           </div>
 
-          {/* Feedback Table */}
+          {/* Rules Table */}
           <div className="bg-white rounded-xl shadow-lg overflow-hidden">
             <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-secondary">
-                All Feedback ({pagination.total})
-              </h3>
+              <h3 className="text-lg font-medium text-secondary">Commission Rules</h3>
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                      Customer
+                      Rule Name
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                      Provider
+                      Commission
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                      Service
+                      Apply To
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                      Provider Rating
+                      Status
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                      Service Rating
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                      Date
+                      Created
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
                       Actions
@@ -457,97 +550,129 @@ const AdminFeedback = () => {
                     Array.from({ length: 5 }).map((_, index) => (
                       <tr key={index} className="animate-pulse">
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="h-4 bg-gray-200 rounded w-24"></div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="h-4 bg-gray-200 rounded w-20"></div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
                           <div className="h-4 bg-gray-200 rounded w-32"></div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="h-6 bg-gray-200 rounded w-16"></div>
+                          <div className="h-4 bg-gray-200 rounded w-20"></div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="h-6 bg-gray-200 rounded w-16"></div>
+                          <div className="h-4 bg-gray-200 rounded w-24"></div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="h-6 bg-gray-200 rounded-full w-16"></div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="h-4 bg-gray-200 rounded w-20"></div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="h-8 bg-gray-200 rounded w-16"></div>
+                          <div className="flex space-x-2">
+                            <div className="h-8 w-8 bg-gray-200 rounded"></div>
+                            <div className="h-8 w-8 bg-gray-200 rounded"></div>
+                            <div className="h-8 w-8 bg-gray-200 rounded"></div>
+                            <div className="h-8 w-8 bg-gray-200 rounded"></div>
+                          </div>
                         </td>
                       </tr>
                     ))
-                  ) : feedbacks.length === 0 ? (
+                  ) : filteredRules.length > 0 ? (
+                    filteredRules.map((rule) => (
+                      <tr key={rule._id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-secondary">{rule.name}</div>
+                          {rule.description && (
+                            <div className="text-sm text-gray-500 truncate max-w-xs">{rule.description}</div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-secondary">
+                            {rule.type === 'percentage' ? `${rule.value}%` : `₹${rule.value.toFixed(2)}`}
+                          </div>
+                          <div className="text-xs text-gray-500 capitalize">{rule.type}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-800">
+                            {rule.applyTo === 'all' && 'All Providers'}
+                            {rule.applyTo === 'performanceTier' && 'Performance Tier'}
+                            {rule.applyTo === 'specificProvider' && 'Specific Provider'}
+                          </span>
+                          {rule.performanceTier && (
+                            <div className="text-xs text-gray-500 mt-1">
+                              {rule.performanceTier.charAt(0).toUpperCase() + rule.performanceTier.slice(1)} Tier
+                            </div>
+                          )}
+                          {rule.specificProvider && (
+                            <div className="text-xs text-gray-500 mt-1">
+                              {rule.specificProvider.name}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            rule.isActive 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-red-100 text-red-800'
+                          }`}>
+                            {rule.isActive ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {format(new Date(rule.createdAt), 'dd MMM yyyy')}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => viewRuleDetails(rule)}
+                              className="text-primary hover:text-teal-700 transition-colors"
+                              title="View Details"
+                            >
+                              <Info className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => openEditModal(rule)}
+                              className="text-primary hover:text-teal-700 transition-colors"
+                              title="Edit Rule"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => toggleRuleStatus(rule._id)}
+                              className={rule.isActive ? "text-red-600 hover:text-red-800 transition-colors" : "text-green-600 hover:text-green-800 transition-colors"}
+                              title={rule.isActive ? 'Deactivate Rule' : 'Activate Rule'}
+                            >
+                              {rule.isActive ? <XCircle className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
+                            </button>
+                            <button
+                              onClick={() => deleteCommissionRule(rule._id)}
+                              className="text-red-600 hover:text-red-800 transition-colors"
+                              title="Delete Rule"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
                     <tr>
-                      <td colSpan="7" className="px-6 py-8 text-center">
+                      <td colSpan="6" className="px-6 py-8 text-center">
                         <div className="flex flex-col items-center">
-                          <MessageSquare className="w-12 h-12 text-gray-400 mb-4" />
-                          <h3 className="text-lg font-medium text-secondary mb-2">No Feedback Found</h3>
-                          <p className="text-sm text-gray-500">
-                            {Object.values(filters).some(filter => filter !== '') 
-                              ? 'Try adjusting your filters to see more results.' 
-                              : 'No feedback has been submitted yet.'}
-                          </p>
+                          <Settings className="w-12 h-12 text-gray-400 mb-4" />
+                          <h3 className="text-lg font-medium text-secondary mb-2">No Commission Rules Found</h3>
+                          <p className="text-sm text-gray-500 mb-4">Get started by creating your first commission rule.</p>
+                          <button
+                            onClick={() => {
+                              resetRuleForm();
+                              setEditingRule(null);
+                              setShowRuleModal(true);
+                            }}
+                            className="inline-flex items-center px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-700 transition-colors shadow-md hover:shadow-lg"
+                          >
+                            <Plus className="w-4 h-4 mr-2" />
+                            Create First Rule
+                          </button>
                         </div>
                       </td>
                     </tr>
-                  ) : (
-                    feedbacks.map((feedback) => (
-                      <tr key={feedback._id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-secondary">
-                            {feedback.customer?.name || 'Unknown'}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            {feedback.customer?.email || 'N/A'}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary">
-                          {feedback.providerFeedback?.provider?.name || 'N/A'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary">
-                          {feedback.serviceFeedback?.service?.title || 'N/A'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {feedback.providerFeedback?.rating ? (
-                            <div className="flex items-center space-x-2">
-                              {renderStars(feedback.providerFeedback.rating)}
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRatingColor(feedback.providerFeedback.rating)}`}>
-                                {feedback.providerFeedback.rating}
-                              </span>
-                            </div>
-                          ) : (
-                            <span className="text-sm text-gray-400">No rating</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {feedback.serviceFeedback?.rating ? (
-                            <div className="flex items-center space-x-2">
-                              {renderStars(feedback.serviceFeedback.rating)}
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRatingColor(feedback.serviceFeedback.rating)}`}>
-                                {feedback.serviceFeedback.rating}
-                              </span>
-                            </div>
-                          ) : (
-                            <span className="text-sm text-gray-400">No rating</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary">
-                          {formatDate(feedback.createdAt)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <button
-                            onClick={() => fetchFeedbackDetails(feedback._id)}
-                            className="text-primary hover:text-teal-700 transition-colors p-1 rounded"
-                            title="View Details"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))
                   )}
                 </tbody>
               </table>
@@ -558,14 +683,14 @@ const AdminFeedback = () => {
               <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200">
                 <div className="flex-1 flex justify-between sm:hidden">
                   <button
-                    onClick={prevPage}
+                    onClick={() => fetchCommissionRules(pagination.page - 1, pagination.limit)}
                     disabled={pagination.page <= 1}
                     className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-secondary bg-white hover:bg-gray-50 disabled:opacity-50"
                   >
                     Previous
                   </button>
                   <button
-                    onClick={nextPage}
+                    onClick={() => fetchCommissionRules(pagination.page + 1, pagination.limit)}
                     disabled={pagination.page >= pagination.pages}
                     className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-secondary bg-white hover:bg-gray-50 disabled:opacity-50"
                   >
@@ -585,15 +710,39 @@ const AdminFeedback = () => {
                   <div>
                     <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
                       <button
-                        onClick={prevPage}
+                        onClick={() => fetchCommissionRules(pagination.page - 1, pagination.limit)}
                         disabled={pagination.page <= 1}
                         className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-secondary hover:bg-gray-50 disabled:opacity-50"
                       >
                         <ChevronLeft className="h-5 w-5" />
                       </button>
-                      {getPaginationItems()}
+                      {Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
+                        let pageNum;
+                        if (pagination.pages <= 5) {
+                          pageNum = i + 1;
+                        } else if (pagination.page <= 3) {
+                          pageNum = i + 1;
+                        } else if (pagination.page >= pagination.pages - 2) {
+                          pageNum = pagination.pages - 4 + i;
+                        } else {
+                          pageNum = pagination.page - 2 + i;
+                        }
+                        return (
+                          <button
+                            key={pageNum}
+                            onClick={() => fetchCommissionRules(pageNum, pagination.limit)}
+                            className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                              pagination.page === pageNum
+                                ? 'z-10 bg-primary border-primary text-white'
+                                : 'bg-white border-gray-300 text-secondary hover:bg-gray-50'
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      })}
                       <button
-                        onClick={nextPage}
+                        onClick={() => fetchCommissionRules(pagination.page + 1, pagination.limit)}
                         disabled={pagination.page >= pagination.pages}
                         className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-secondary hover:bg-gray-50 disabled:opacity-50"
                       >
@@ -607,111 +756,277 @@ const AdminFeedback = () => {
           </div>
         </div>
 
-        {/* Feedback Details Modal */}
-        {showModal && selectedFeedback && (
+        {/* Commission Rule Modal */}
+        {showRuleModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
-            <div className="relative bg-white rounded-xl shadow-xl w-full max-w-2xl">
+            <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md">
               <div className="px-6 py-4 border-b border-gray-200">
-                <h3 className="text-xl font-semibold text-secondary">Feedback Details</h3>
-                <button 
-                  onClick={() => setShowModal(false)}
-                  className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+                <h3 className="text-xl font-semibold text-secondary">
+                  {editingRule ? 'Edit Commission Rule' : 'Add Commission Rule'}
+                </h3>
               </div>
-              
-              <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
-                {/* Customer Information */}
+              <div className="p-6 space-y-4">
                 <div>
-                  <h4 className="text-lg font-medium text-secondary mb-3">Customer Information</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-600 mb-1">Name</label>
-                      <p className="text-secondary font-medium">{selectedFeedback.customer?.name || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-600 mb-1">Email</label>
-                      <p className="text-secondary font-medium">{selectedFeedback.customer?.email || 'N/A'}</p>
-                    </div>
+                  <label className="block text-sm font-medium text-secondary mb-1">Rule Name *</label>
+                  <input
+                    type="text"
+                    value={ruleForm.name}
+                    onChange={(e) => setRuleForm({...ruleForm, name: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                    placeholder="Enter rule name"
+                    maxLength={100}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-secondary mb-1">Description</label>
+                  <textarea
+                    value={ruleForm.description}
+                    onChange={(e) => setRuleForm({...ruleForm, description: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                    rows="3"
+                    placeholder="Enter description"
+                    maxLength={500}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-secondary mb-1">Commission Type *</label>
+                    <select
+                      value={ruleForm.type}
+                      onChange={(e) => setRuleForm({...ruleForm, type: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                    >
+                      <option value="percentage">Percentage</option>
+                      <option value="fixed">Fixed Amount</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-secondary mb-1">
+                      Value * {ruleForm.type === 'percentage' ? '(%)' : '(₹)'}
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step={ruleForm.type === 'percentage' ? '0.1' : '1'}
+                      value={ruleForm.value}
+                      onChange={(e) => setRuleForm({...ruleForm, value: parseFloat(e.target.value) || 0})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                      placeholder={ruleForm.type === 'percentage' ? '10.5' : '1000'}
+                    />
                   </div>
                 </div>
 
-                {/* Provider Feedback */}
                 <div>
-                  <h4 className="text-lg font-medium text-secondary mb-3">Provider Feedback</h4>
-                  <div className="space-y-3 text-sm">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-600 mb-1">Provider</label>
-                        <p className="text-secondary font-medium">{selectedFeedback.providerFeedback?.provider?.name || 'N/A'}</p>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-600 mb-1">Rating</label>
-                        <div className="flex items-center space-x-2">
-                          {renderStars(selectedFeedback.providerFeedback?.rating || 0)}
-                          <span className="text-secondary font-medium">
-                            {selectedFeedback.providerFeedback?.rating || 'N/A'}/5
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-600 mb-1">Comment</label>
-                      <div className="p-3 bg-gray-50 rounded-lg text-secondary">
-                        {selectedFeedback.providerFeedback?.comment || 'No comment provided'}
-                      </div>
-                    </div>
-                  </div>
+                  <label className="block text-sm font-medium text-secondary mb-1">Apply To *</label>
+                  <select
+                    value={ruleForm.applyTo}
+                    onChange={(e) => setRuleForm({...ruleForm, applyTo: e.target.value, performanceTier: '', specificProvider: ''})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                  >
+                    <option value="all">All Providers</option>
+                    <option value="performanceTier">Performance Tier</option>
+                    <option value="specificProvider">Specific Provider</option>
+                  </select>
                 </div>
 
-                {/* Service Feedback */}
-                <div>
-                  <h4 className="text-lg font-medium text-secondary mb-3">Service Feedback</h4>
-                  <div className="space-y-3 text-sm">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-600 mb-1">Service</label>
-                        <p className="text-secondary font-medium">{selectedFeedback.serviceFeedback?.service?.title || 'N/A'}</p>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-600 mb-1">Rating</label>
-                        <div className="flex items-center space-x-2">
-                          {renderStars(selectedFeedback.serviceFeedback?.rating || 0)}
-                          <span className="text-secondary font-medium">
-                            {selectedFeedback.serviceFeedback?.rating || 'N/A'}/5
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-600 mb-1">Comment</label>
-                      <div className="p-3 bg-gray-50 rounded-lg text-secondary">
-                        {selectedFeedback.serviceFeedback?.comment || 'No comment provided'}
-                      </div>
-                    </div>
+                {ruleForm.applyTo === 'performanceTier' && (
+                  <div>
+                    <label className="block text-sm font-medium text-secondary mb-1">Performance Tier *</label>
+                    <select
+                      value={ruleForm.performanceTier}
+                      onChange={(e) => setRuleForm({...ruleForm, performanceTier: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                    >
+                      <option value="">Select tier</option>
+                      {performanceTiers.map(tier => (
+                        <option key={tier} value={tier}>
+                          {tier.charAt(0).toUpperCase() + tier.slice(1)}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                </div>
+                )}
 
-                {/* Submission Information */}
-                <div>
-                  <h4 className="text-lg font-medium text-secondary mb-3">Submission Information</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-600 mb-1">Submitted</label>
-                      <p className="text-secondary font-medium">{formatDate(selectedFeedback.createdAt)}</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-600 mb-1">Last Updated</label>
-                      <p className="text-secondary font-medium">{formatDate(selectedFeedback.updatedAt)}</p>
-                    </div>
+                {ruleForm.applyTo === 'specificProvider' && (
+                  <div>
+                    <label className="block text-sm font-medium text-secondary mb-1">Provider *</label>
+                    <select
+                      value={ruleForm.specificProvider}
+                      onChange={(e) => setRuleForm({...ruleForm, specificProvider: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                    >
+                      <option value="">Select provider</option>
+                      {providers.map(provider => (
+                        <option key={provider._id} value={provider._id}>
+                          {provider.name} - {provider.email}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-secondary mb-1">Effective From</label>
+                    <input
+                      type="date"
+                      value={ruleForm.effectiveFrom ? new Date(ruleForm.effectiveFrom).toISOString().split('T')[0] : ''}
+                      onChange={(e) => setRuleForm({...ruleForm, effectiveFrom: new Date(e.target.value)})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-secondary mb-1">Effective Until (Optional)</label>
+                    <input
+                      type="date"
+                      value={ruleForm.effectiveUntil ? new Date(ruleForm.effectiveUntil).toISOString().split('T')[0] : ''}
+                      onChange={(e) => setRuleForm({...ruleForm, effectiveUntil: e.target.value ? new Date(e.target.value) : ''})}
+                      min={ruleForm.effectiveFrom ? new Date(ruleForm.effectiveFrom).toISOString().split('T')[0] : ''}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                    />
                   </div>
                 </div>
               </div>
-
               <div className="flex justify-end gap-3 p-6 border-t border-gray-200">
                 <button
-                  onClick={() => setShowModal(false)}
+                  onClick={() => {
+                    setShowRuleModal(false);
+                    setEditingRule(null);
+                    resetRuleForm();
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-secondary bg-gray-100 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={editingRule ? updateCommissionRule : createCommissionRule}
+                  disabled={loading}
+                  className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 transition-colors"
+                >
+                  {loading ? 'Saving...' : (editingRule ? 'Update Rule' : 'Create Rule')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Commission Rule Details Modal */}
+        {showRuleDetailsModal && viewingRule && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
+            <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h3 className="text-xl font-semibold text-secondary">Commission Rule Details</h3>
+              </div>
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-secondary mb-1">Rule Name</label>
+                  <p className="text-sm text-secondary">{viewingRule.name}</p>
+                </div>
+
+                {viewingRule.description && (
+                  <div>
+                    <label className="block text-sm font-medium text-secondary mb-1">Description</label>
+                    <p className="text-sm text-secondary">{viewingRule.description}</p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-secondary mb-1">Commission Type</label>
+                    <p className="text-sm text-secondary capitalize">{viewingRule.type}</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-secondary mb-1">Value</label>
+                    <p className="text-sm text-secondary">
+                      {viewingRule.type === 'percentage' ? `${viewingRule.value}%` : `₹${viewingRule.value.toFixed(2)}`}
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-secondary mb-1">Apply To</label>
+                  <p className="text-sm text-secondary capitalize">
+                    {viewingRule.applyTo === 'all' && 'All Providers'}
+                    {viewingRule.applyTo === 'performanceTier' && 'Performance Tier'}
+                    {viewingRule.applyTo === 'specificProvider' && 'Specific Provider'}
+                  </p>
+                </div>
+
+                {viewingRule.performanceTier && (
+                  <div>
+                    <label className="block text-sm font-medium text-secondary mb-1">Performance Tier</label>
+                    <p className="text-sm text-secondary capitalize">{viewingRule.performanceTier}</p>
+                  </div>
+                )}
+
+                {viewingRule.specificProvider && (
+                  <div>
+                    <label className="block text-sm font-medium text-secondary mb-1">Specific Provider</label>
+                    <p className="text-sm text-secondary">{viewingRule.specificProvider.name}</p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-secondary mb-1">Status</label>
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      viewingRule.isActive 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      {viewingRule.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-secondary mb-1">Created By</label>
+                    <p className="text-sm text-secondary">{viewingRule.createdBy?.name || 'N/A'}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-secondary mb-1">Effective From</label>
+                    <p className="text-sm text-secondary">
+                      {viewingRule.effectiveFrom ? format(new Date(viewingRule.effectiveFrom), 'dd MMM yyyy') : 'N/A'}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-secondary mb-1">Effective Until</label>
+                    <p className="text-sm text-secondary">
+                      {viewingRule.effectiveUntil ? format(new Date(viewingRule.effectiveUntil), 'dd MMM yyyy') : 'No expiration'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-secondary mb-1">Created At</label>
+                    <p className="text-sm text-secondary">
+                      {viewingRule.createdAt ? format(new Date(viewingRule.createdAt), 'dd MMM yyyy') : 'N/A'}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-secondary mb-1">Last Updated</label>
+                    <p className="text-sm text-secondary">
+                      {viewingRule.updatedAt ? format(new Date(viewingRule.updatedAt), 'dd MMM yyyy') : 'N/A'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 p-6 border-t border-gray-200">
+                <button
+                  onClick={() => {
+                    setShowRuleDetailsModal(false);
+                    setViewingRule(null);
+                  }}
                   className="px-4 py-2 text-sm font-medium text-secondary bg-gray-100 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors"
                 >
                   Close
@@ -725,4 +1040,4 @@ const AdminFeedback = () => {
   );
 };
 
-export default AdminFeedback;
+export default AdminCommissionPage;

@@ -592,7 +592,7 @@ const getUserBookings = async (req, res) => {
 
 
     // Fetch transaction details for each booking
-    const Transaction = require('../models/Transaction-model ');
+    const Transaction = require('../models/Transaction-model');
     const bookingsWithTransactions = await Promise.all(
       filteredBookings.map(async (booking) => {
         const bookingObj = booking.toObject();
@@ -854,7 +854,7 @@ const getBooking = async (req, res) => {
     }
 
     // Fetch transaction details
-    const Transaction = require('../models/Transaction-model ');
+    const Transaction = require('../models/Transaction-model');
     const transactions = await Transaction.find({
       booking: booking._id
     }).sort({ createdAt: -1 });
@@ -1792,7 +1792,7 @@ const completeBooking = async (req, res) => {
 
     // Cash transaction record (if applicable)
     if (booking.paymentMethod === 'cash' && booking.paymentStatus === 'pending') {
-      const Transaction = require('../models/Transaction-model ');
+      const Transaction = require('../models/Transaction-model');
       const cashTransaction = new Transaction({
         booking: booking._id,
         user: booking.customer._id,
@@ -2250,7 +2250,7 @@ const getBookingDetails = async (req, res) => {
 
     // Get payment details from transactions
     let paymentDetails = null;
-    const Transaction = require('../models/Transaction-model ');
+    const Transaction = require('../models/Transaction-model');
     const transactions = await Transaction.find({
       booking: booking._id
     }).sort({ createdAt: -1 });
