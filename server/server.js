@@ -1,8 +1,10 @@
+
 require('dotenv').config();
 const express = require("express");
 const cors = require("cors");
 const cron = require('node-cron');
 const crypto = require('crypto');
+const path = require('path');
 const connectDB = require("./config/db");
 const Transaction = require("./models/Transaction-model ");
 
@@ -30,7 +32,8 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/uploads", express.static("uploads"));
 app.use("/assets", express.static("assets"));
 
-
+// Serve React static files
+app.use(express.static(path.join(__dirname, '../client/dist')));
 
 // Route imports
 const adminRoutes = require("./routes/Admin-Routes");
@@ -63,8 +66,6 @@ app.use('/api/complaint', complaintRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/commission', commissionRoutes);
 app.use('/api/payment', paymentRoutes);
-
-
 
 // Razorpay Webhook (localhost configuration)
 app.post('/razorpay-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
@@ -111,6 +112,13 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', timestamp: new Date() });
 });
 
+// Catch-all route to serve React app for client-side routing
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api')) {
+    return next();
+  }
+  res.sendFile(path.join(__dirname, '../client/dist/index.html'));
+});
 
 // Catch-all 404 handler for unknown routes
 app.use((req, res, next) => {
