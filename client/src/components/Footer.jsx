@@ -22,15 +22,15 @@ const Footer = () => {
       { name: 'Careers', href: '/careers' }
     ],
     services: [
-      { name: 'Electrical Wiring', href: '/services/wiring' },
-      { name: 'Lighting Solutions', href: '/services/lighting' },
-      { name: 'Safety Inspections', href: '/services/inspections' },
-      { name: 'Emergency Repairs', href: '/services/emergency' }
+      { name: 'Electrical Wiring', href: '/services' },
+      { name: 'Lighting Solutions', href: '/services' },
+      { name: 'Safety Inspections', href: '/services' },
+      { name: 'Emergency Repairs', href: '/services' }
     ],
     contact: {
-      address: "123 Electric Ave, Power City, PC 12345",
-      phone: "+1 (555) 123-4567",
-      email: "contact@safevoltsolutions.com"
+      address: "Urban Phase 1 , Jalandhar, Punjab, India 144005",
+      phone: "+91 9625333919",
+      email: "rajelectricalservice25@gmail.com"
     },
     legalLinks: [
       { name: 'Privacy Policy', href: '/privacy' },
