@@ -114,7 +114,7 @@ const CareersPage = () => {
               >
                 <Link
                   to="/register-provider"
-                  className="bg-accent hover:bg-accent/90 text-white font-bold py-4 px-8 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 inline-flex items-center group"
+                  className="bg-accent hover:bg-accent/90 text-white font-bold py-4 px-8 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 inline-flex items-center group focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
                 >
                   Apply Now
                   <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform duration-300" />
@@ -149,7 +149,7 @@ const CareersPage = () => {
       </section>
 
       {/* Key Benefits Grid Section */}
-      <section className="py-16 lg:py-20 bg-gray-50">
+      <section className="py-20 lg:py-24 bg-primary/5">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -177,7 +177,7 @@ const CareersPage = () => {
                   transition={{ duration: 0.5, delay: index * 0.1 }}
                   viewport={{ once: true }}
                   whileHover={{ y: -8, scale: 1.02 }}
-                  className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100 transition-all duration-300 hover:shadow-2xl group cursor-pointer"
+                  className="bg-white rounded-2xl shadow-lg overflow-hidden border border-primary/10 transition-all duration-300 hover:shadow-2xl group cursor-pointer"
                 >
                   <div className={`h-2 bg-gradient-to-r ${benefit.color}`}></div>
                   <div className="p-6 lg:p-8">
@@ -222,7 +222,7 @@ const CareersPage = () => {
               >
                 <Link
                   to="/register-provider"
-                  className="bg-accent hover:bg-accent/90 text-white font-bold py-4 px-8 rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 inline-flex items-center group"
+                  className="bg-accent hover:bg-accent/90 text-white font-bold py-4 px-8 rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 inline-flex items-center group focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
                 >
                   Join Today
                   <ArrowRight className="ml-2 group-hover:translate-x-1 transition-transform duration-300" />
@@ -233,9 +233,9 @@ const CareersPage = () => {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >
-                <Link 
+                <Link
                   to="/contact"
-                  className="bg-white/10 hover:bg-white/20 text-white font-bold py-4 px-8 rounded-xl border-2 border-white/30 hover:border-white/50 transition-all duration-300 inline-flex items-center backdrop-blur-sm"
+                  className="bg-white/10 hover:bg-white/20 text-white font-bold py-4 px-8 rounded-xl border-2 border-white/30 hover:border-white/50 transition-all duration-300 inline-flex items-center backdrop-blur-sm focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2"
                 >
                   Learn More
                 </Link>
@@ -267,7 +267,7 @@ const CareersPage = () => {
               viewport={{ once: true }}
               className="p-6"
             >
-              <div className="text-4xl lg:text-5xl font-bold text-accent mb-2">$75</div>
+              <div className="text-4xl lg:text-5xl font-bold text-accent mb-2">₹100</div>
               <div className="text-secondary font-medium">Average Hourly Rate</div>
             </motion.div>
             

@@ -13,6 +13,10 @@ import {
 const ServicesPage = () => {
     const navigate = useNavigate();
 
+    // Dynamic data for Call Now and Get Free Consultation
+    const phoneNumber = '+91 9625333919'; 
+    const consultationLink = '/contact'; 
+
     // Static services data
     const services = [
         {
@@ -194,6 +198,7 @@ const ServicesPage = () => {
                             <motion.button
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.95 }}
+                                onClick={() => window.location.href = `tel:${phoneNumber}`}
                                 className="bg-primary text-background px-8 py-3 rounded-xl font-semibold flex items-center justify-center hover:bg-primary/90 transition-colors"
                             >
                                 <Phone className="w-5 h-5 mr-2" />
@@ -202,6 +207,7 @@ const ServicesPage = () => {
                             <motion.button
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.95 }}
+                                onClick={() => navigate(consultationLink)}
                                 className="border-2 border-primary text-primary px-8 py-3 rounded-xl font-semibold hover:bg-primary hover:text-background transition-colors"
                             >
                                 Get Free Consultation

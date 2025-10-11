@@ -20,7 +20,7 @@ const ForgotPassword = () => {
 
   // Send OTP to email
   const sendOTP = async () => {
-    
+
     if (!email) {
       toast.error('Please enter your email address');
       return;
@@ -31,7 +31,6 @@ const ForgotPassword = () => {
       return;
     }
 
-    setLoading(true);
     try {
       const response = await fetch(`${API}/auth/forgot-password`, {
         method: 'POST',
@@ -53,8 +52,6 @@ const ForgotPassword = () => {
       toast.success('OTP sent to your email');
     } catch (err) {
       toast.error(err.message || 'Failed to send OTP. Please try again.');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -143,10 +140,10 @@ const ForgotPassword = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
-          email, 
-          newPassword,
-          otp // Include the OTP for verification
+        body: JSON.stringify({
+          email,
+          otp,
+          newPassword
         }),
       });
 
@@ -182,7 +179,7 @@ const ForgotPassword = () => {
   }, [isTimerActive, timer]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 to-accent/5 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md mx-auto">
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
@@ -267,17 +264,9 @@ const ForgotPassword = () => {
                 onClick={sendOTP}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                disabled={loading}
                 className="w-full bg-accent hover:bg-accent/90 text-secondary font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center"
               >
-                {loading ? (
-                  <>
-                    <FaSpinner className="animate-spin mr-2" />
-                    Sending...
-                  </>
-                ) : (
-                  'Send Verification Code'
-                )}
+                Send Verification Code
               </motion.button>
             </motion.div>
           )}

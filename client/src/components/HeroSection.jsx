@@ -1,5 +1,7 @@
 import React from "react";
-import { FaBolt, FaPhone } from "react-icons/fa";
+import { FaBolt, FaPhone, FaClock, FaCertificate, FaChevronDown } from "react-icons/fa";
+import { FaShield } from "react-icons/fa6";
+import { Link } from 'react-router-dom';
 import ServiceImg from '../assets/ServiceImg.png';
 
 const HeroSection = () => {
@@ -20,35 +22,17 @@ const HeroSection = () => {
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 text-center">
         <header className="space-y-6 md:space-y-8">
           {/* Main Headline */}
-          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold leading-tight text-white font-poppins animate-fadeInDown">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-7xl font-extrabold leading-tight text-white font-poppins animate-fadeInDown" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.7)' }}>
             <span className="block">Power Your Home &</span>
             <span className="block text-primary">Business with Reliable</span>
             <span className="block text-accent">Electrical Services</span>
           </h1>
 
           {/* Subheading */}
-          <p className="text-lg sm:text-xl md:text-2xl text-gray-200 max-w-4xl mx-auto leading-relaxed px-4 font-poppins animate-fadeInUp">
+          <p className="text-md sm:text-lg md:text-xl text-gray-200 max-w-4xl mx-auto leading-relaxed px-4 font-poppins animate-fadeInUp">
             Expert wiring, repair, and maintenance for homes & industries in Himachal & Punjab.
           </p>
 
-          {/* Call-to-Action Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 justify-center items-center mt-8 md:mt-12 px-4">
-            <button 
-              className="w-full sm:w-auto bg-primary hover:bg-accent text-white font-extrabold py-4 px-10 rounded-xl transition-all duration-300 transform hover:scale-110 hover:shadow-2xl flex items-center justify-center gap-4 text-lg shadow-primary/50"
-              aria-label="Book electrical service"
-            >
-              <FaBolt className="text-2xl" />
-              Book a Service
-            </button>
-            
-            <button 
-              className="w-full sm:w-auto bg-transparent hover:bg-secondary/90 text-white font-extrabold py-4 px-10 border-2 border-secondary hover:border-accent rounded-xl transition-all duration-300 transform hover:scale-110 hover:shadow-2xl flex items-center justify-center gap-4 text-lg shadow-secondary/50"
-              aria-label="Contact us for electrical services"
-            >
-              <FaPhone className="text-2xl" />
-              Contact Us
-            </button>
-          </div>
 
           {/* Trust Indicators */}
           <div className="mt-12 md:mt-16 flex flex-wrap justify-center gap-6 md:gap-10 text-white/90 font-poppins">

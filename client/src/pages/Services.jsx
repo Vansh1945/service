@@ -126,8 +126,8 @@ const Services = ({ limit }) => {
 
               {/* Rating and Duration */}
               <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-1 bg-primary/10 px-3 py-1.5 rounded-lg">
-                  <Clock className="w-4 h-4 text-primary" />
+                <div className="flex items-center gap-1 bg-primary/10 px-2 py-1 rounded-lg">
+                  <Clock className="w-3 h-3 text-primary" />
                   <span className="text-sm text-primary font-medium">
                     {service.durationFormatted || `${service.duration || 1} hrs`}
                   </span>
@@ -155,7 +155,7 @@ const Services = ({ limit }) => {
               {/* Price and Book Button */}
               <div className="flex items-center justify-between pt-3 border-t border-gray-100">
                 <div>
-                  <span className="text-xl font-bold text-secondary">
+                  <span className="text-lg font-bold text-secondary">
                     ₹{service.basePrice?.toLocaleString() || '0'}
                   </span>
                   <p className="text-xs text-gray-500">Starting price</p>
@@ -172,7 +172,6 @@ const Services = ({ limit }) => {
                   {isServiceAvailable ? (
                     <>
                       Book Now
-                      <ChevronRight className="w-4 h-4" />
                     </>
                   ) : 'Unavailable'}
                 </button>

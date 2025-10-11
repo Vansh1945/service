@@ -7,9 +7,9 @@ import Services from './Services';
 const Home = () => {
   return (
     <div className="overflow-hidden bg-gray-50">
+
       {/* Hero Section */}
       <HeroSection />
-
 
 
       {/* Limited Services Section */}
@@ -29,17 +29,6 @@ const Home = () => {
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-20 mb-20">
         <WhyChooseUs />
       </section>
-
-      {/* Smooth Transition Divider */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        whileInView={{ opacity: 1 }}
-        transition={{ duration: 0.8 }}
-        viewport={{ once: true }}
-        className="relative py-16 bg-gradient-to-b from-white to-gray-50"
-      >
-        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary via-accent to-primary"></div>
-      </motion.div>
     </div>
   );
 };
