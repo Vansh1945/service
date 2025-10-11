@@ -1,32 +1,7 @@
-# Servicedetail.jsx Responsive Improvements
-
-## Current Status: Completed
-
-### Completed Tasks:
-- [x] Analyze current responsive issues
-- [x] Create improvement plan
-- [x] Get user approval
-- [x] Image Gallery Improvements
-  - [x] Make thumbnail sizes responsive
-  - [x] Adjust main image height for mobile
-  - [x] Improve thumbnail strip scrolling
-- [x] Layout & Grid Adjustments
-  - [x] Optimize specifications section grid
-  - [x] Improve related services grid breakpoints
-  - [x] Adjust main content grid for tablet
-- [x] Typography & Spacing
-  - [x] Reduce text sizes on mobile
-  - [x] Adjust padding and margins
-  - [x] Ensure proper line heights
-- [x] Component-Specific Fixes
-  - [x] Improve breadcrumb responsiveness
-  - [x] Optimize FAQ section for mobile
-  - [x] Adjust booking card layouts
-  - [x] Make rating displays mobile-friendly
-- [x] Interactive Elements
-  - [x] Ensure touch-friendly button sizes
-  - [x] Improve hover states
-- [x] Testing & Verification
-  - [ ] Test on different screen sizes
-  - [ ] Verify touch interactions
-  - [ ] Check for layout breaks
+- [ ] Update server/server.js: Add 'https://rajelectricalservices.vercel.app' to CORS origins
+- [ ] Update server/server.js: Remove '/api' prefix from all route app.use statements
+- [ ] Update server/server.js: Change test route from '/api/test-route' to '/test-route'
+- [ ] Update client/src/store/auth.jsx: Change default API from 'http://localhost:5000/api' to 'http://localhost:5000'
+- [ ] Deploy server changes to render.com
+- [ ] Deploy client changes to vercel
+- [ ] Test the services fetch on production
