@@ -1,7 +1,13 @@
-- [ ] Update server/server.js: Add 'https://rajelectricalservices.vercel.app' to CORS origins
-- [ ] Update server/server.js: Remove '/api' prefix from all route app.use statements
-- [ ] Update server/server.js: Change test route from '/api/test-route' to '/test-route'
-- [ ] Update client/src/store/auth.jsx: Change default API from 'http://localhost:5000/api' to 'http://localhost:5000'
-- [ ] Deploy server changes to render.com
-- [ ] Deploy client changes to vercel
-- [ ] Test the services fetch on production
+# ServiceCard Tablet Fix
+
+- [x] Update grid in client/src/pages/Customer/Services.jsx to sm:grid-cols-2
+
+- [x] Update grid in client/src/pages/Services.jsx skeleton to sm:grid-cols-2
+
+- [x] Update grid in client/src/pages/Services.jsx limited view to sm:grid-cols-2
+
+- [x] Update grid in client/src/pages/Services.jsx full page to sm:grid-cols-2
+
+- [x] Update grid in client/src/pages/Service.jsx to sm:grid-cols-2
+
+- [ ] Test on tablet view
