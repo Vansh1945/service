@@ -92,7 +92,7 @@ const ServicesPage = () => {
                         <span className="text-primary font-medium">Our Services</span>
                     </div>
 
-                    <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-primary mb-6">
+                    <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-primary mb-6">
                         Professional <span className="text-accent">Electrical Solutions</span>
                     </h2>
                     <p className="text-lg text-secondary/80 max-w-3xl mx-auto">

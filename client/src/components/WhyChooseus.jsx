@@ -1,13 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Award, 
-  DollarSign, 
-  Shield,
-  Star,
-  CheckCircle2,
-  Heart,
-  Clock
-} from 'lucide-react';
+import { Award, DollarSign, Shield, Star, CheckCircle2, Heart, Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const WhyChooseUs = () => {
@@ -21,7 +13,6 @@ const WhyChooseUs = () => {
   const sectionRef = useRef(null);
   const [hasAnimated, setHasAnimated] = useState(false);
 
-  // Feature cards data
   const features = [
     {
       icon: Award,
@@ -46,7 +37,6 @@ const WhyChooseUs = () => {
     }
   ];
 
-  // Stats data
   const stats = [
     { key: 'projects', target: 500, suffix: '+', label: 'Projects Completed', icon: CheckCircle2 },
     { key: 'satisfaction', target: 99, suffix: '%', label: 'Customer Satisfaction', icon: Heart },
@@ -54,7 +44,6 @@ const WhyChooseUs = () => {
     { key: 'experience', target: 20, suffix: '+', label: 'Years Experience', icon: Award }
   ];
 
-  // Intersection Observer for card animations
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -72,11 +61,9 @@ const WhyChooseUs = () => {
 
     const cards = sectionRef.current?.querySelectorAll('[data-index]');
     cards?.forEach(card => observer.observe(card));
-
     return () => observer.disconnect();
   }, []);
 
-  // Counter animation
   useEffect(() => {
     if (hasAnimated) return;
 
@@ -85,7 +72,6 @@ const WhyChooseUs = () => {
         entries.forEach((entry) => {
           if (entry.isIntersecting && !hasAnimated) {
             setHasAnimated(true);
-            
             stats.forEach((stat) => {
               let current = 0;
               const increment = stat.target / 100;
@@ -109,20 +95,17 @@ const WhyChooseUs = () => {
 
     const statsSection = document.querySelector('[data-stats]');
     if (statsSection) observer.observe(statsSection);
-
     return () => observer.disconnect();
   }, [hasAnimated, stats]);
 
   return (
     <section className="relative py-16 sm:py-20 lg:py-24 bg-transparent overflow-hidden font-poppins">
-      {/* Background Elements */}
-      <div className="absolute inset-0 opacity-5 pointer-events-none" aria-hidden="true">
+      <div className="absolute inset-0 opacity-5 pointer-events-none">
         <div className="absolute top-24 left-12 w-36 h-36 bg-primary/20 rounded-full blur-3xl"></div>
         <div className="absolute bottom-24 right-12 w-48 h-48 bg-accent/20 rounded-full blur-3xl"></div>
       </div>
 
       <div ref={sectionRef} className="relative z-10 max-w-7xl mx-auto px-6 sm:px-8 lg:px-12">
-        {/* Section Header */}
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -131,11 +114,10 @@ const WhyChooseUs = () => {
           className="text-center mb-14 sm:mb-20"
         >
           <div className="inline-flex items-center bg-white bg-opacity-20 backdrop-blur-md px-5 py-3 rounded-full shadow-md border border-primary/30 mb-6">
-            <Star className="w-6 h-6 text-accent mr-3" aria-hidden="true" />
-            <span className="text-primary font-semibold text-lg tracking-wide">Why Choose Us</span>
+            <Star className="w-4 h-4 text-accent mr-3" />
+            <span className="text-primary font-semibold text-md tracking-wide">Why Choose Us</span>
           </div>
-          
-          <h2 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-secondary mb-4 px-4">
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-secondary mb-4 px-4">
             Why Choose <span className="text-accent">Raj Electrical?</span>
           </h2>
           <p className="text-lg sm:text-xl text-secondary/90 max-w-4xl mx-auto px-4 leading-relaxed">
@@ -143,8 +125,7 @@ const WhyChooseUs = () => {
           </p>
         </motion.div>
 
-        {/* Feature Cards Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 px-4" role="list" aria-label="Features">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 px-2">
           {features.map((feature, index) => {
             const IconComponent = feature.icon;
             const isVisible = visibleCards.has(index);
@@ -157,23 +138,14 @@ const WhyChooseUs = () => {
                 animate={isVisible ? { opacity: 1, y: 0 } : {}}
                 transition={{ duration: 0.6, delay: index * 0.15, ease: "easeInOut" }}
                 className="relative rounded-3xl transform-gpu"
-                role="listitem"
-                tabIndex={0}
-                aria-label={feature.title}
               >
-                {/* Glow Effect */}
                 <div className={`absolute inset-0 bg-gradient-to-r ${feature.gradient} rounded-3xl opacity-0 blur-3xl transition-opacity duration-500 pointer-events-none`}></div>
-                
-                {/* Card */}
                 <div className={`h-full p-1 bg-gradient-to-r ${feature.gradient} rounded-3xl shadow-lg transition-all duration-500`}>
                   <div className="bg-white bg-opacity-90 rounded-3xl p-10 h-full flex flex-col items-center text-center relative overflow-hidden shadow-md">
-                    {/* Icon */}
                     <div className={`p-5 rounded-full bg-gradient-to-r ${feature.gradient} text-white mb-8 transition-transform duration-500 shadow-lg`}>
-                      <IconComponent className="w-10 h-10" aria-hidden="true" />
+                      <IconComponent className="w-10 h-10" />
                     </div>
-                    
-                    {/* Content */}
-                    <h3 className="text-2xl font-semibold text-secondary mb-3">{feature.title}</h3>
+                    <h3 className="text-xl font-semibold text-secondary mb-3">{feature.title}</h3>
                     <p className="text-secondary/80 flex-grow leading-relaxed">{feature.description}</p>
                   </div>
                 </div>
@@ -182,15 +154,13 @@ const WhyChooseUs = () => {
           })}
         </div>
 
-        {/* Stats Section */}
         <motion.div
           data-stats
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.9, delay: 0.5, ease: "easeInOut" }}
           viewport={{ once: true }}
-          className="mt-16 sm:mt-20 mx-6 bg-gradient-to-r from-primary to-primary/80 rounded-3xl p-8 text-white shadow-2xl"
-          aria-label="Statistics"
+          className="mt-12 sm:mt-16 mx-4 bg-gradient-to-r from-primary to-primary/80 rounded-3xl p-8 text-white shadow-2xl"
         >
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 text-center">
             {stats.map((stat, index) => {
@@ -198,19 +168,14 @@ const WhyChooseUs = () => {
               const currentValue = stat.key === 'service' ? 24 : countUp[stat.key] || 0;
               
               return (
-                <motion.div 
-                  key={index}
-                  className=""
-                  tabIndex={0}
-                  aria-label={`${stat.label}: ${currentValue}${stat.suffix}`}
-                >
-                  <div className="w-16 h-16 bg-gradient-to-br from-accent to-accent/90 rounded-3xl flex items-center justify-center mx-auto mb-4 transition-transform duration-500">
-                    <IconComponent className="w-8 h-8 text-background" aria-hidden="true" />
+                <motion.div key={index} className="">
+                  <div className="w-12 h-12 bg-gradient-to-br from-accent to-accent/90 rounded-3xl flex items-center justify-center mx-auto mb-3 transition-transform duration-500">
+                    <IconComponent className="w-6 h-6 text-background" />
                   </div>
-                  <p className="text-3xl font-extrabold text-accent mb-2">
+                  <p className="text-2xl font-extrabold text-accent mb-2">
                     {currentValue}{stat.suffix}
                   </p>
-                  <p className="text-primary/30 text-sm font-semibold tracking-wide">{stat.label}</p>
+                  <p className="text-white text-sm font-semibold tracking-wide">{stat.label}</p>
                 </motion.div>
               );
             })}

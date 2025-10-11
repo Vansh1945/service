@@ -1,27 +1,40 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  Phone, 
-  Mail, 
-  MapPin, 
-  Clock, 
-  Zap, 
+import {
+  Phone,
+  Mail,
+  Clock,
+  Zap,
   Send,
   MessageSquare,
   User,
-  Mountain,
   Shield,
   CheckCircle,
   AlertCircle
 } from 'lucide-react';
 
 const Contact = () => {
+  // Dynamic contact information data
+  const contactInfo = {
+    primaryPhone: '+91-9625333919',
+    emergencyPhone: '+91-98160-99999',
+    ctaPhone: '+91-98160-12345',
+    email: 'rajelectricalservice25@gmail.com',
+    businessHours: {
+      weekdays: '8:00 AM - 6:00 PM',
+      sunday: '9:00 AM - 5:00 PM'
+    }
+  };
+
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     phone: '',
     message: ''
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
 
   const handleChange = (e) => {
     setFormData({
@@ -30,61 +43,28 @@ const Contact = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Handle form submission logic here
-    console.log('Form submitted:', formData);
-    alert('Thank you for your message! We will get back to you soon.');
-    // Reset form
-    setFormData({
-      name: '',
-      email: '',
-      phone: '',
-      message: ''
-    });
+    setIsSubmitting(true);
+    setSuccessMessage('');
+    setErrorMessage('');
+    // Simulate API call
+    try {
+      await new Promise(resolve => setTimeout(resolve, 2000)); // 2s delay
+      console.log('Form submitted:', formData);
+      setSuccessMessage('Thank you for your message! We will get back to you soon.');
+      setFormData({
+        name: '',
+        email: '',
+        phone: '',
+        message: ''
+      });
+    } catch (error) {
+      setErrorMessage('Something went wrong. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
-
-  const contactMethods = [
-    {
-      icon: Phone,
-      title: "Call Us",
-      description: "Speak directly with our electrical experts",
-      details: ["+91-XXXXX-XXXXX", "+91-XXXXX-XXXXX"],
-      color: "from-primary to-primary/80",
-      available: "24/7 Emergency"
-    },
-    {
-      icon: Mail,
-      title: "Email Us",
-      description: "Send us your queries and requirements",
-      details: ["contact@electricalservice.com", "support@electricalservice.com"],
-      color: "from-accent to-accent/80",
-      available: "Response within 2 hours"
-    },
-    {
-      icon: MapPin,
-      title: "Visit Us",
-      description: "Our service areas across the region",
-      details: ["Himachal Pradesh", "Punjab"],
-      color: "from-primary/70 to-accent/70",
-      available: "On-site consultations"
-    }
-  ];
-
-  const serviceAreas = [
-    {
-      region: "Himachal Pradesh",
-      cities: ["Shimla", "Dharamshala", "Manali", "Kullu", "Solan"],
-      icon: Mountain,
-      description: "Specialized mountain region electrical services"
-    },
-    {
-      region: "Punjab",
-      cities: ["Chandigarh", "Ludhiana", "Amritsar", "Jalandhar", "Patiala"],
-      icon: Shield,
-      description: "Comprehensive urban and rural electrical solutions"
-    }
-  ];
 
   return (
     <div className="min-h-screen bg-background">
@@ -102,63 +82,24 @@ const Contact = () => {
               <MessageSquare className="w-5 h-5 text-primary mr-2" />
               <span className="text-primary font-medium">Contact Us</span>
             </div>
-            
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-primary mb-6">
-              Get in Touch with Our 
+
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold font-poppins text-primary mb-6">
+              Get in Touch with Our
               <span className="block text-accent">Electrical Experts</span>
             </h1>
-            <p className="text-lg sm:text-xl text-secondary/80 max-w-3xl mx-auto leading-relaxed">
-              Ready to solve your electrical needs? Our certified professionals across Himachal Pradesh and Punjab 
+            <p className="text-base sm:text-lg text-secondary/80 max-w-3xl mx-auto leading-relaxed">
+              Ready to solve your electrical needs? Our certified professionals across Himachal Pradesh and Punjab
               are here to provide reliable, safe, and efficient electrical solutions for your home or business.
             </p>
           </motion.div>
 
-      {/* Quick Contact Methods */}
-      <motion.div
-        initial={{ opacity: 0, y: 30 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.7, delay: 0.2 }}
-        className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16"
-      >
-        {contactMethods.map((method, index) => {
-          const IconComponent = method.icon;
-          return (
-            <motion.div
-              key={index}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.3 + index * 0.1 }}
-              className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 cursor-pointer"
-            >
-              <div className={`h-2 bg-gradient-to-r ${method.color} rounded-t-2xl -mx-6 -mt-6 mb-6`}></div>
-              <div className="text-center">
-                <div className="bg-primary/10 p-4 rounded-2xl w-16 h-16 flex items-center justify-center mb-4 mx-auto">
-                  <IconComponent className="w-8 h-8 text-primary" />
-                </div>
-                <h3 className="text-xl font-bold text-primary mb-2">
-                  {method.title}
-                </h3>
-                <p className="text-secondary/70 text-sm mb-4">{method.description}</p>
-                <div className="space-y-1">
-                  {method.details.map((detail, idx) => (
-                    <p key={idx} className="text-secondary font-medium text-sm">{detail}</p>
-                  ))}
-                </div>
-                <div className="mt-4 px-3 py-1 bg-accent/10 rounded-full">
-                  <span className="text-accent text-xs font-medium">{method.available}</span>
-                </div>
-              </div>
-            </motion.div>
-          );
-        })}
-      </motion.div>
         </div>
       </section>
 
       {/* Main Contact Section */}
-      <section className="py-16 sm:py-20 lg:py-24">
+      <section className="py-8 sm:py-12 lg:py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 items-start">
             {/* Contact Form */}
             <motion.div
               initial={{ opacity: 0, x: -30 }}
@@ -170,19 +111,19 @@ const Contact = () => {
               <div className="bg-white rounded-2xl shadow-2xl p-8 lg:p-10 border border-gray-100 relative overflow-hidden">
                 {/* Decorative gradient */}
                 <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary via-accent to-primary"></div>
-                
+
                 <div className="relative z-10">
-                  <div className="flex items-center mb-8">
+                  <div className="flex items-center mb-4">
                     <div className="bg-primary/10 p-3 rounded-xl mr-4">
                       <Send className="w-6 h-6 text-primary" />
                     </div>
                     <div>
-                      <h2 className="text-2xl lg:text-3xl font-bold text-primary">Send us a Message</h2>
+                      <h2 className="text-xl lg:text-2xl font-bold text-primary">Send us a Message</h2>
                       <p className="text-secondary/70">We'll get back to you within 2 hours</p>
                     </div>
                   </div>
-                  
-                  <form onSubmit={handleSubmit} className="space-y-6">
+
+                  <form onSubmit={handleSubmit} className="space-y-4">
                     {/* Name Field */}
                     <motion.div
                       initial={{ opacity: 0, y: 20 }}
@@ -281,13 +222,45 @@ const Contact = () => {
                       transition={{ duration: 0.5, delay: 0.5 }}
                       viewport={{ once: true }}
                       type="submit"
-                      className="w-full bg-gradient-to-r from-accent to-accent/90 text-white font-bold py-4 px-8 rounded-xl shadow-lg flex items-center justify-center group"
+                      disabled={isSubmitting}
+                      className="w-full bg-gradient-to-r from-accent to-accent/90 text-white font-bold py-4 px-8 rounded-xl shadow-lg flex items-center justify-center group disabled:opacity-50"
                     >
-                      <Send className="w-5 h-5 mr-3" />
-                      Send Message
-                      <Zap className="w-5 h-5 ml-3" />
+                      {isSubmitting ? (
+                        <>
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
+                          Sending...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-5 h-5 mr-3" />
+                          Send Message
+                          <Zap className="w-5 h-5 ml-3" />
+                        </>
+                      )}
                     </motion.button>
                   </form>
+
+                  {/* Feedback Messages */}
+                  {successMessage && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="mt-4 p-4 bg-green-100 text-green-800 rounded-xl border border-green-200"
+                    >
+                      <CheckCircle className="w-5 h-5 inline mr-2" />
+                      {successMessage}
+                    </motion.div>
+                  )}
+                  {errorMessage && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="mt-4 p-4 bg-red-100 text-red-800 rounded-xl border border-red-200"
+                    >
+                      <AlertCircle className="w-5 h-5 inline mr-2" />
+                      {errorMessage}
+                    </motion.div>
+                  )}
 
                   {/* Trust indicators */}
                   <motion.div
@@ -295,7 +268,7 @@ const Contact = () => {
                     whileInView={{ opacity: 1 }}
                     transition={{ duration: 0.5, delay: 0.6 }}
                     viewport={{ once: true }}
-                    className="mt-8 flex items-center justify-center space-x-6 text-sm text-secondary/70"
+                    className="mt-4 flex items-center justify-center space-x-6 text-sm text-secondary/70"
                   >
                     <div className="flex items-center">
                       <CheckCircle className="w-4 h-4 text-primary mr-2" />
@@ -316,35 +289,34 @@ const Contact = () => {
               whileInView={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.7, delay: 0.2 }}
               viewport={{ once: true }}
-              className="space-y-8"
+              className="space-y-4"
             >
               {/* Contact Details Card */}
-              <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100 relative overflow-hidden">
+              <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100 relative overflow-hidden">
                 <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary to-accent"></div>
-                
-                <div className="flex items-center mb-6">
+
+                <div className="flex items-center mb-4">
                   <div className="bg-primary/10 p-3 rounded-xl mr-4">
-                    <Phone className="w-6 h-6 text-primary" />
+                    <Phone className="w-4 h-4 text-primary" />
                   </div>
-                  <h2 className="text-2xl font-bold text-primary">Contact Information</h2>
+                  <h2 className="text-xl lg:text-2xl font-bold text-primary">Contact Information</h2>
                 </div>
-                
-                <div className="space-y-6">
+
+                <div className="space-y-4">
                   {/* Phone */}
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, delay: 0.1 }}
                     viewport={{ once: true }}
-                    className="flex items-start space-x-4 p-4 rounded-xl bg-primary/5"
+                    className="flex items-start space-x-4 p-4 rounded-xl bg-primary/5 cursor-pointer"
                   >
-                    <div className="flex-shrink-0 w-12 h-12 bg-primary rounded-xl flex items-center justify-center">
-                      <Phone className="w-6 h-6 text-white" />
+                    <div className="flex-shrink-0 w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
+                      <Phone className="w-4 h-4 text-white" />
                     </div>
                     <div>
                       <h3 className="text-lg font-semibold text-secondary mb-1">Phone Numbers</h3>
-                      <p className="text-primary font-medium">+91-XXXXX-XXXXX</p>
-                      <p className="text-primary font-medium">+91-XXXXX-XXXXX</p>
+                      <p className="text-primary font-medium">{contactInfo.primaryPhone}</p>
                       <p className="text-accent text-sm font-medium mt-1">24/7 Emergency Available</p>
                     </div>
                   </motion.div>
@@ -355,15 +327,14 @@ const Contact = () => {
                     whileInView={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, delay: 0.2 }}
                     viewport={{ once: true }}
-                    className="flex items-start space-x-4 p-4 rounded-xl bg-accent/5"
+                    className="flex items-start space-x-4 p-4 rounded-xl bg-accent/5 cursor-pointer"
                   >
-                    <div className="flex-shrink-0 w-12 h-12 bg-accent rounded-xl flex items-center justify-center">
-                      <Mail className="w-6 h-6 text-white" />
+                    <div className="flex-shrink-0 w-10 h-10 bg-accent rounded-xl flex items-center justify-center">
+                      <Mail className="w-4 h-4 text-white" />
                     </div>
                     <div>
                       <h3 className="text-lg font-semibold text-secondary mb-1">Email Addresses</h3>
-                      <p className="text-secondary">contact@electricalservice.com</p>
-                      <p className="text-secondary">support@electricalservice.com</p>
+                      <p className="text-secondary">{contactInfo.email}</p>
                       <p className="text-accent text-sm font-medium mt-1">Response within 2 hours</p>
                     </div>
                   </motion.div>
@@ -374,26 +345,25 @@ const Contact = () => {
                     whileInView={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, delay: 0.3 }}
                     viewport={{ once: true }}
-                    className="p-4 rounded-xl bg-primary/5"
+                    className="p-4 rounded-xl bg-primary/5 cursor-pointer"
                   >
-                    <div className="flex items-center mb-4">
+                    <div className="flex items-center mb-2">
                       <Clock className="w-5 h-5 text-primary mr-2" />
                       <h3 className="text-lg font-semibold text-secondary">Business Hours</h3>
                     </div>
                     <div className="space-y-3">
                       <div className="flex justify-between items-center py-2 border-b border-gray-200">
                         <span className="text-secondary font-medium">Monday - Saturday</span>
-                        <span className="text-primary font-medium">8:00 AM - 6:00 PM</span>
+                        <span className="text-primary font-medium">{contactInfo.businessHours.weekdays}</span>
                       </div>
-                      <div className="flex justify-between items-center py-2">
+                      <div className="flex justify-between items-center ">
                         <span className="text-secondary font-medium">Sunday</span>
-                        <span className="text-accent font-medium">9:00 AM - 5:00 PM</span>
+                        <span className="text-accent font-medium">{contactInfo.businessHours.sunday}</span>
                       </div>
                     </div>
                   </motion.div>
                 </div>
               </div>
-
 
               {/* Emergency Contact Card */}
               <motion.div
@@ -401,25 +371,25 @@ const Contact = () => {
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.4 }}
                 viewport={{ once: true }}
-                className="bg-gradient-to-r from-accent to-accent/90 rounded-2xl shadow-xl p-8 text-white relative overflow-hidden"
+                className="bg-gradient-to-r from-accent to-accent/90 rounded-2xl shadow-xl p-6 text-white relative overflow-hidden"
               >
                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
                 <div className="relative z-10">
                   <div className="flex items-center mb-4">
-                    <AlertCircle className="w-8 h-8 mr-3" />
-                    <h3 className="text-2xl font-bold">Emergency Services</h3>
+                    <AlertCircle className="w-6 h-6 mr-3" />
+                    <h3 className="text-lg lg:text-2xl font-bold">Emergency Services</h3>
                   </div>
-                  <p className="text-white/90 mb-4 leading-relaxed">
-                    Electrical emergencies don't wait for business hours. Our certified electricians are available 
+                  <p className="text-white/90 mb-4 text-base sm:text-lg leading-relaxed">
+                    Electrical emergencies don't wait for business hours. Our certified electricians are available
                     24/7 for urgent electrical issues across Himachal Pradesh and Punjab.
                   </p>
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-white/80 text-sm">Emergency Hotline</p>
-                      <p className="text-2xl font-bold">+91-XXXXX-XXXXX</p>
+                      <p className="text-lg font-bold">{contactInfo.emergencyPhone}</p>
                     </div>
-                    <div className="bg-white/20 p-4 rounded-xl">
-                      <Zap className="w-8 h-8" />
+                    <div className="bg-white/20 p-2 rounded-xl">
+                      <Zap className="w-6 h-6" />
                     </div>
                   </div>
                 </div>
@@ -430,8 +400,7 @@ const Contact = () => {
       </section>
 
       {/* Call to Action Section */}
-      <section className="py-16 sm:py-20 lg:py-24 bg-gradient-to-r from-primary to-primary/90">
-
+      <section className="py-12 sm:py-16 lg:py-20 bg-gradient-to-r from-primary to-primary/90">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -439,23 +408,25 @@ const Contact = () => {
             transition={{ duration: 0.6 }}
             viewport={{ once: true }}
           >
-            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-6">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-4">
               Ready to Get Started?
             </h2>
-            <p className="text-xl text-white/90 max-w-3xl mx-auto mb-8 leading-relaxed">
-              Don't let electrical issues disrupt your daily life. Contact our expert team today for reliable, 
+            <p className="text-base sm:text-lg text-white/90 max-w-3xl mx-auto mb-6 leading-relaxed">
+              Don't let electrical issues disrupt your daily life. Contact our expert team today for reliable,
               professional electrical services across Himachal Pradesh and Punjab.
             </p>
-            
+
             <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
               <motion.button
+                whileHover={{ scale: 1.05 }}
                 className="bg-accent text-white font-bold py-4 px-8 rounded-xl shadow-2xl inline-flex items-center group"
               >
                 <Phone className="w-5 h-5 mr-3" />
-                Call Now: +91-XXXXX-XXXXX
+                Call Now: {contactInfo.ctaPhone}
               </motion.button>
 
               <motion.button
+                whileHover={{ scale: 1.05 }}
                 className="bg-white/10 backdrop-blur-md text-white font-bold py-4 px-8 border-2 border-white/30 rounded-xl inline-flex items-center"
               >
                 <Mail className="w-5 h-5 mr-3" />
@@ -469,7 +440,7 @@ const Contact = () => {
               whileInView={{ opacity: 1 }}
               transition={{ delay: 0.5 }}
               viewport={{ once: true }}
-              className="mt-8 inline-flex items-center bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/20"
+              className="mt-4 inline-flex items-center bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/20"
             >
               <Shield className="w-5 h-5 text-white mr-3" />
               <span className="text-white font-medium">Licensed & Insured Professionals</span>

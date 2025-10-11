@@ -29,7 +29,7 @@ const AboutPage = () => {
               <span className="text-primary font-medium">About Us</span>
             </div>
             
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-primary mb-6">
+            <h1 className="text-3xl sm:text-4xl lg:text-4xl font-bold text-primary mb-6">
               Your Trusted Electrical Partner
             </h1>
             <p className="text-lg sm:text-xl text-secondary/80 max-w-3xl mx-auto">
@@ -110,8 +110,8 @@ const AboutPage = () => {
                         <IconComponent className="w-4 h-4" />
                       </div>
                       <div>
-                        <h4 className="font-semibold text-primary text-sm">{feature.title}</h4>
-                        <p className="text-secondary/70 text-sm">{feature.description}</p>
+                        <h4 className="font-semibold text-primary text-base">{feature.title}</h4>
+                        <p className="text-secondary/70 text-base">{feature.description}</p>
                       </div>
                     </motion.div>
                   );
@@ -157,9 +157,9 @@ const AboutPage = () => {
                 <div className="absolute bottom-0 left-0 right-0 p-6 text-background">
                   <div className="flex items-center space-x-2 mb-2">
                     <MapPin className="w-4 h-4" />
-                    <span className="text-sm font-medium">Himachal Pradesh & Punjab</span>
+                    <span className="text-base font-medium">Himachal Pradesh & Punjab</span>
                   </div>
-                  <p className="text-background/90 text-sm">
+                  <p className="text-background/90 text-base">
                     Professional electrical services rooted in tradition, powered by expertise
                   </p>
                 </div>
