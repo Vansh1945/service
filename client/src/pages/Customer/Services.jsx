@@ -209,7 +209,7 @@ const ServiceListingPage = () => {
   const ServiceCard = ({ service }) => {
     const imageUrl = service.displayImage || 
       (service.images && service.images.length > 0 ? service.images[0] : 
-       service.image || 'https://via.placeholder.com/400x300?text=No+Image');
+       service.image || '//via.placeholder.com/400x300?text=No+Image');
 
     const isServiceAvailable = service.isActive !== false;
 
@@ -264,13 +264,13 @@ const ServiceListingPage = () => {
 
           {/* Rating and Duration */}
           <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2 bg-gray-50 px-3 py-1 rounded-lg">
+            <div className="flex items-center gap-1 bg-gray-100 px-3 py-1 rounded-lg">
               <Clock className="w-4 h-4 text-teal-600" />
               <span className="text-sm text-gray-700 font-medium">
                 {service.durationFormatted || `${service.duration || 1} hrs`}
               </span>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center ">
               <Rating
                 name="read-only"
                 value={service.averageRating || 0}
@@ -309,7 +309,6 @@ const ServiceListingPage = () => {
               {isServiceAvailable ? (
                 <>
                   Book Now
-                  <ChevronRight className="w-4 h-4" />
                 </>
               ) : 'Unavailable'}
             </button>
@@ -601,7 +600,7 @@ const ServiceListingPage = () => {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6 px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4 px-4 sm:px-6 lg:px-8">
             {filteredServices.map((service) => (
               <ServiceCard key={service._id} service={service} />
             ))}

@@ -17,8 +17,8 @@ const Contact = () => {
   // Dynamic contact information data
   const contactInfo = {
     primaryPhone: '+91-9625333919',
-    emergencyPhone: '+91-98160-99999',
-    ctaPhone: '+91-98160-12345',
+    emergencyPhone: '+91-9625333919',
+    ctaPhone: '+91-9625333919',
     email: 'rajelectricalservice25@gmail.com',
     businessHours: {
       weekdays: '8:00 AM - 6:00 PM',
