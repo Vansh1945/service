@@ -5,6 +5,33 @@ const { sendOTP, verifyOTP, clearOTP } = require('../utils/otpSend');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
+// Validate email configuration on startup
+const validateEmailConfig = () => {
+  const requiredEnvVars = ['SENDER_EMAIL', 'EMAIL_PASSWORD'];
+  const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+  if (missingVars.length > 0) {
+    console.error('❌ Email configuration error: Missing environment variables:', missingVars.join(', '));
+    console.error('Please set the following environment variables:');
+    console.error('- SENDER_EMAIL: Your email address');
+    console.error('- EMAIL_PASSWORD: Your email app password');
+    console.error('- EMAIL_SERVICE: Email service (gmail, outlook, etc.) - defaults to gmail');
+    return false;
+  }
+
+  // Validate email format
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(process.env.SENDER_EMAIL)) {
+    console.error('❌ Invalid SENDER_EMAIL format:', process.env.SENDER_EMAIL);
+    return false;
+  }
+
+  console.log('✅ Email configuration validated successfully');
+  console.log(`📧 Sender: ${process.env.SENDER_EMAIL}`);
+  console.log(`🌐 Service: ${process.env.EMAIL_SERVICE || 'gmail'}`);
+  return true;
+};
+
 /**
  * @desc    Unified login for all user types
  * @route   POST /api/auth/login

@@ -14,6 +14,82 @@ setInterval(() => {
   }
 }, 60000);
 
+// Validate email configuration on startup
+const validateEmailConfig = () => {
+  const requiredEnvVars = ['SENDER_EMAIL', 'EMAIL_PASSWORD'];
+  const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+  if (missingVars.length > 0) {
+    console.error('❌ Email configuration error: Missing environment variables:', missingVars.join(', '));
+    console.error('Please set the following environment variables:');
+    console.error('- SENDER_EMAIL: Your email address');
+    console.error('- EMAIL_PASSWORD: Your email app password');
+    console.error('- EMAIL_SERVICE: Email service (gmail, outlook, etc.) - defaults to gmail');
+    return false;
+  }
+
+  // Validate email format
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(process.env.SENDER_EMAIL)) {
+    console.error('❌ Invalid SENDER_EMAIL format:', process.env.SENDER_EMAIL);
+    return false;
+  }
+
+  console.log('✅ Email configuration validated successfully');
+  console.log(`📧 Sender: ${process.env.SENDER_EMAIL}`);
+  console.log(`🌐 Service: ${process.env.EMAIL_SERVICE || 'gmail'}`);
+  return true;
+};
+
+// Create optimized transporter based on environment
+const createTransporter = () => {
+  const isProduction = process.env.NODE_ENV === 'production';
+  const emailService = process.env.EMAIL_SERVICE || 'gmail';
+
+  console.log(`📧 Creating email transporter for ${emailService} (${isProduction ? 'production' : 'development'})`);
+
+  const baseConfig = {
+    service: emailService,
+    auth: {
+      user: process.env.SENDER_EMAIL,
+      pass: process.env.EMAIL_PASSWORD,
+    },
+    secure: true,
+    tls: {
+      rejectUnauthorized: false
+    }
+  };
+
+  // Production-optimized settings for Vercel/Render
+  if (isProduction) {
+    return nodemailer.createTransporter({
+      ...baseConfig,
+      pool: true,
+      maxConnections: 3, // Reduced for serverless
+      maxMessages: 100,
+      rateDelta: 10000, // 10 seconds
+      rateLimit: 10, // 10 emails per 10 seconds
+      // Disable connection pooling for serverless
+      pool: false,
+      // Add timeout settings
+      connectionTimeout: 10000, // 10 seconds
+      greetingTimeout: 5000,   // 5 seconds
+      socketTimeout: 30000,    // 30 seconds
+    });
+  }
+
+  // Development settings
+  return nodemailer.createTransporter({
+    ...baseConfig,
+    pool: true,
+    maxConnections: 5,
+    rateDelta: 10000,
+    rateLimit: 20,
+    debug: true,
+    logger: true
+  });
+};
+
 exports.generateOTP = (email) => {
   const otp = crypto.randomInt(100000, 999999).toString();
   const expiresAt = Date.now() + 300000; // 5 minutes
@@ -33,10 +109,9 @@ exports.sendOTP = async (email) => {
   try {
     console.log(`Attempting to send OTP to: ${email}`);
 
-    // Validate email credentials
-    if (!process.env.SENDER_EMAIL || !process.env.EMAIL_PASSWORD) {
-      console.error('Missing email credentials in environment variables');
-      throw new Error('Email service not configured properly');
+    // Validate email configuration
+    if (!validateEmailConfig()) {
+      throw new Error('Email service not configured properly. Please check environment variables.');
     }
 
     // Clear any existing OTP for this email
@@ -47,31 +122,18 @@ exports.sendOTP = async (email) => {
 
     const otp = exports.generateOTP(email);
 
-    // Optimized transporter configuration for better performance
-    const transporter = nodemailer.createTransport({
-      service: process.env.EMAIL_SERVICE || "gmail",
-      auth: {
-        user: process.env.SENDER_EMAIL,
-        pass: process.env.EMAIL_PASSWORD,
-      },
-      // Optimized settings for better performance
-      pool: true,
-      maxConnections: 5, // Increased from 1
-      rateDelta: 10000, // Reduced from 20000ms
-      rateLimit: 10, // Increased from 5
-      secure: true,
-      tls: {
-        rejectUnauthorized: false
-      }
-    });
+    // Use optimized transporter based on environment
+    const transporter = createTransporter();
 
-    // Verify transporter configuration
-    try {
-      await transporter.verify();
-      console.log('Email transporter verified successfully');
-    } catch (verifyError) {
-      console.error('Email transporter verification failed:', verifyError.message);
-      throw new Error('Email service configuration error');
+    // Verify transporter configuration (skip in production for faster sending)
+    if (process.env.NODE_ENV !== 'production') {
+      try {
+        await transporter.verify();
+        console.log('✅ Email transporter verified successfully');
+      } catch (verifyError) {
+        console.error('❌ Email transporter verification failed:', verifyError.message);
+        throw new Error('Email service configuration error');
+      }
     }
 
     const mailOptions = {
