@@ -6,33 +6,6 @@ const crypto = require('crypto');
 const connectDB = require("./config/db");
 const Transaction = require("./models/Transaction-model");
 
-// Validate email configuration on startup
-const validateEmailConfig = () => {
-  const requiredEnvVars = ['SENDER_EMAIL', 'EMAIL_PASSWORD'];
-  const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
-
-  if (missingVars.length > 0) {
-    console.error('❌ Email configuration error: Missing environment variables:', missingVars.join(', '));
-    console.error('Please set the following environment variables:');
-    console.error('- SENDER_EMAIL: Your email address');
-    console.error('- EMAIL_PASSWORD: Your email app password');
-    console.error('- EMAIL_SERVICE: Email service (gmail, outlook, etc.) - defaults to gmail');
-    return false;
-  }
-
-  // Validate email format
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(process.env.SENDER_EMAIL)) {
-    console.error('❌ Invalid SENDER_EMAIL format:', process.env.SENDER_EMAIL);
-    return false;
-  }
-
-  console.log('✅ Email configuration validated successfully');
-  console.log(`📧 Sender: ${process.env.SENDER_EMAIL}`);
-  console.log(`🌐 Service: ${process.env.EMAIL_SERVICE || 'gmail'}`);
-  return true;
-};
-
 const frontend = process.env.FRONTEND_URL;
 
 // Initialize express app
@@ -159,10 +132,6 @@ app.use((err, req, res, next) => {
     error: process.env.NODE_ENV === "development" ? err.stack : undefined
   });
 });
-
-// Validate email configuration on startup
-console.log('🔧 Validating email configuration...');
-validateEmailConfig();
 
 // Connect to MongoDB
 connectDB();

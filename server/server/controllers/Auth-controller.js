@@ -5,33 +5,6 @@ const { sendOTP, verifyOTP, clearOTP } = require('../utils/otpSend');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
-// Validate email configuration on startup
-const validateEmailConfig = () => {
-  const requiredEnvVars = ['SENDER_EMAIL', 'EMAIL_PASSWORD'];
-  const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
-
-  if (missingVars.length > 0) {
-    console.error('❌ Email configuration error: Missing environment variables:', missingVars.join(', '));
-    console.error('Please set the following environment variables:');
-    console.error('- SENDER_EMAIL: Your email address');
-    console.error('- EMAIL_PASSWORD: Your email app password');
-    console.error('- EMAIL_SERVICE: Email service (gmail, outlook, etc.) - defaults to gmail');
-    return false;
-  }
-
-  // Validate email format
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(process.env.SENDER_EMAIL)) {
-    console.error('❌ Invalid SENDER_EMAIL format:', process.env.SENDER_EMAIL);
-    return false;
-  }
-
-  console.log('✅ Email configuration validated successfully');
-  console.log(`📧 Sender: ${process.env.SENDER_EMAIL}`);
-  console.log(`🌐 Service: ${process.env.EMAIL_SERVICE || 'gmail'}`);
-  return true;
-};
-
 /**
  * @desc    Unified login for all user types
  * @route   POST /api/auth/login
@@ -244,54 +217,28 @@ exports.verifyResetOTP = async (req, res) => {
 exports.resetPassword = async (req, res) => {
   try {
     console.log('Reset Password Request Body:', req.body); // Log incoming request
+    
+    const { email, newPassword } = req.body;
 
-    const { email, otp, newPassword } = req.body;
-
-    // Validate input - now requires OTP
-    if (!email || !otp || !newPassword) {
+    if (!email || !newPassword) {
       console.log('Validation failed - missing fields');
       return res.status(400).json({
         success: false,
-        message: "Email, OTP, and new password are required"
-      });
-    }
-
-    // Validate password strength
-    if (newPassword.length < 8) {
-      return res.status(400).json({
-        success: false,
-        message: 'Password must be at least 8 characters long'
-      });
-    }
-
-    // Verify OTP before allowing password reset
-    try {
-      const isValidOTP = verifyOTP(email, otp);
-      if (!isValidOTP) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid or expired OTP'
-        });
-      }
-    } catch (otpError) {
-      console.error('OTP verification error during password reset:', otpError.message);
-      return res.status(400).json({
-        success: false,
-        message: otpError.message
+        message: "Email and new password are required"
       });
     }
 
     console.log('Searching for user with email:', email);
-
+    
     let user = await User.findOne({ email });
     let userType = 'user';
-
+    
     if (!user) {
       user = await Provider.findOne({ email });
       userType = 'provider';
       console.log('Found provider user');
     }
-
+    
     if (!user) {
       user = await Admin.findOne({ email });
       userType = 'admin';
@@ -316,13 +263,8 @@ exports.resetPassword = async (req, res) => {
       });
     }
 
-    console.log('Hashing new password...');
-    // Hash the new password before saving
-    const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
-
     console.log('Updating password...');
-    user.password = hashedPassword;
+    user.password = newPassword;
     await user.save();
     console.log('Password updated successfully');
 

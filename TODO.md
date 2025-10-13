@@ -1,7 +1,19 @@
-# TODO: Fix Forgot Password Functionality
+# OTP Sending Issues - Fix Plan
 
-## Steps to Complete
-- [x] Update forgotPassword in Auth-controller.js: Always return success, send OTP only if user exists (prevent email enumeration).
-- [x] Update verifyResetOTP in Auth-controller.js: Remove clearOTP after successful verification to keep OTP valid for reset.
-- [x] Update resetPassword in Auth-controller.js: Add OTP verification, hash newPassword, check against old hash, update password, then clear OTP.
-- [x] Test the updated flow (restart server, verify requests work).
+## Issues Identified
+- Rate limiting configuration causing delays (maxConnections: 1, rateLimit: 5 per 20s)
+- Security vulnerability in password reset (no OTP re-verification)
+- Poor error handling for email sending failures
+- Missing detailed logging for debugging
+
+## Fixes to Implement
+- [x] Optimize email sending performance in otpSend.js
+- [x] Fix password reset security bug in Auth-controller.js
+- [x] Add comprehensive error handling and logging
+- [x] Add email credential validation
+- [ ] Test the fixes
+
+## Status
+- [x] Analysis completed
+- [x] Plan approved by user
+- [x] Implementation in progress

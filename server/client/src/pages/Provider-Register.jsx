@@ -71,8 +71,6 @@ const ProviderRegistration = () => {
     state: '',
     postalCode: '',
     country: 'India',
-    bankName: '',
-    accountName: '',
     accountNo: '',
     ifsc: '',
     passbookImage: null,
@@ -286,10 +284,10 @@ const ProviderRegistration = () => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    // Use selectedServices array directly as backend expects array
+    // Convert selected services array to a comma-separated string
     const formDataWithServices = {
       ...formData,
-      services: selectedServices // Send as array, not comma-separated string
+      services: selectedServices.join(',')
     };
 
     const promise = new Promise(async (resolve, reject) => {
@@ -300,9 +298,6 @@ const ProviderRegistration = () => {
           if (value !== null && value !== undefined && value !== '') {
             if (key === 'resume' || key === 'passbookImage' || key === 'profilePic') {
               if (value) formDataToSend.append(key, value);
-            } else if (key === 'services') {
-              // Handle services array
-              value.forEach(service => formDataToSend.append('services', service));
             } else {
               formDataToSend.append(key, value);
             }
@@ -957,17 +952,17 @@ const ProviderRegistration = () => {
                     name="resume"
                     onChange={handleFileChange('resume')}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    accept=".jpg,.jpeg,.png"
+                    accept="image/*"
                     required
                   />
                   <div className="flex items-center justify-between px-4 py-4 bg-gradient-to-r from-primary/5 to-transparent border-2 border-gray-200 rounded-2xl hover:border-primary/50 transition-all duration-300 hover:shadow-md">
                     <span className="text-secondary/70 truncate">
-                      {formData.resume ? formData.resume.name : 'Choose PDF/DOC file...'}
+                      {formData.resume ? formData.resume.name : 'Choose PDF file...'}
                     </span>
                     <FileText className="text-primary w-5 h-5" />
                   </div>
                 </div>
-                <p className="mt-2 text-sm text-secondary/60">Upload your professional resume highlighting electrical experience (PDF or DOC format)</p>
+                <p className="mt-2 text-sm text-secondary/60">Upload your professional resume highlighting electrical experience</p>
               </div>
 
               <div className="group">
@@ -1108,38 +1103,6 @@ const ProviderRegistration = () => {
                     className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                     placeholder="ABCD0123456"
                     required
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-                <div className="group">
-                  <label htmlFor="bankName" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                    Bank Name
-                  </label>
-                  <input
-                    type="text"
-                    id="bankName"
-                    name="bankName"
-                    value={formData.bankName}
-                    onChange={handleChange}
-                    className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
-                    placeholder="e.g., State Bank of India"
-                  />
-                </div>
-
-                <div className="group">
-                  <label htmlFor="accountName" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                    Account Holder Name
-                  </label>
-                  <input
-                    type="text"
-                    id="accountName"
-                    name="accountName"
-                    value={formData.accountName}
-                    onChange={handleChange}
-                    className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
-                    placeholder="Name as per bank records"
                   />
                 </div>
               </div>
