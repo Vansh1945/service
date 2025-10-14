@@ -13,22 +13,15 @@ const Home = () => {
 
 
       {/* Limited Services Section */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-16">
-        <h2 className="text-3xl font-extrabold text-gray-900 mb-6">Featured Services</h2>
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          viewport={{ once: true }}
-        >
-          <Services limit={8} />
-        </motion.div>
+      <section className="max-w-10xl mx-auto px-4 sm:px-6 lg:px-8 mt-12 bg-transparent">
+        <h2 className="text-3xl font-extrabold text-gray-900 mb-4">Featured Services</h2>
+          <Services/>
       </section>
 
       {/* Why Choose Us */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-20 mb-20">
+      {/* <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-20 mb-20">
         <WhyChooseUs />
-      </section>
+      </section> */}
     </div>
   );
 };

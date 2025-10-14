@@ -62,7 +62,7 @@ const createTransporter = () => {
 
   // Production-optimized settings for Vercel/Render
   if (isProduction) {
-    return nodemailer.createTransporter({
+    return nodemailer.createTransport({
       ...baseConfig,
       pool: true,
       maxConnections: 3, // Reduced for serverless
@@ -79,7 +79,7 @@ const createTransporter = () => {
   }
 
   // Development settings
-  return nodemailer.createTransporter({
+  return nodemailer.createTransport({
     ...baseConfig,
     pool: true,
     maxConnections: 5,
