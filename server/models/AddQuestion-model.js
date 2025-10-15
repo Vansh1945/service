@@ -31,13 +31,13 @@ const questionSchema = new Schema({
   category: {
     type: String,
     required: true, 
-    enum: ['electrical','general'],
+        enum: ['Electrical', 'Appliance Repair', 'Wiring'],
     index: true
   },
   subcategory: {
     type: String,
     required: true,
-    enum: ['wiring','ac','repair','all'],
+        enum: ['Electrical', 'Inverter ', 'Appliance Repair', 'Wiring', 'Fan'],
     index: true
   },
   createdBy: {

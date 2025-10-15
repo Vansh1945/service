@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
-const ServiceImages = "/assets/Services.png"; 
+const ServiceImages = "/assets/Services.png";
 
 // Service Schema
 const serviceSchema = new Schema({
@@ -14,7 +14,7 @@ const serviceSchema = new Schema({
   category: {
     type: String,
     required: true,
-    enum: ['Electrical', 'AC', 'Appliance Repair', 'Other'], 
+    enum: ['Electrical', 'Inverter ', 'Appliance Repair', 'Wiring', 'Fan', 'Other'],
     default: 'Other'
   },
   description: {
@@ -120,7 +120,7 @@ serviceSchema.index({ averageRating: -1 });
 // Pre-save hook to update average rating
 serviceSchema.pre('save', function (next) {
   this.updatedAt = Date.now();
-  
+
   // Calculate average rating if feedback array is modified
   if (this.isModified('feedback')) {
     if (this.feedback.length > 0) {
@@ -132,7 +132,7 @@ serviceSchema.pre('save', function (next) {
       this.ratingCount = 0;
     }
   }
-  
+
   next();
 });
 
@@ -144,14 +144,14 @@ serviceSchema.virtual('durationFormatted').get(function () {
 });
 
 // Method to add feedback and update average rating
-serviceSchema.methods.addFeedback = async function(feedbackData) {
+serviceSchema.methods.addFeedback = async function (feedbackData) {
   this.feedback.push(feedbackData);
-  
+
   // Recalculate average rating
   const sum = this.feedback.reduce((acc, curr) => acc + curr.rating, 0);
   this.averageRating = sum / this.feedback.length;
   this.ratingCount = this.feedback.length;
-  
+
   await this.save();
   return this;
 };
@@ -188,7 +188,7 @@ serviceSchema.statics.findActiveByCategory = function (category) {
 };
 
 // Query services with feedback stats
-serviceSchema.statics.findWithFeedbackStats = function() {
+serviceSchema.statics.findWithFeedbackStats = function () {
   return this.aggregate([
     {
       $lookup: {
@@ -201,7 +201,7 @@ serviceSchema.statics.findWithFeedbackStats = function() {
     {
       $addFields: {
         feedbackCount: { $size: '$fullFeedback' },
-        averageRating: { 
+        averageRating: {
           $cond: {
             if: { $gt: [{ $size: '$fullFeedback' }, 0] },
             then: { $avg: '$fullFeedback.rating' },
