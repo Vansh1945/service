@@ -1,7 +1,7 @@
 import React from "react";
-import { FaBolt, FaPhone, FaClock, FaCertificate, FaChevronDown } from "react-icons/fa";
+import { FaClock, FaCertificate } from "react-icons/fa";
 import { FaShield } from "react-icons/fa6";
-import { Link } from 'react-router-dom';
+
 import ServiceImg from '../assets/ServiceImg.png';
 
 const HeroSection = () => {
@@ -15,7 +15,7 @@ const HeroSection = () => {
         }}
       >
         {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/50 to-black/80"></div>
+        <div className="absolute inset-0 bg-gradient-to-r from-black/10 via-black/5 to-black/10"></div>
       </div>
 
       {/* Main Content */}
@@ -30,22 +30,22 @@ const HeroSection = () => {
 
           {/* Subheading */}
           <p className="text-md sm:text-lg md:text-xl text-gray-200 max-w-4xl mx-auto leading-relaxed px-4 font-poppins animate-fadeInUp">
-            Expert wiring, repair, and maintenance for homes & industries in Himachal & Punjab.
+            Expert wiring, repair, and maintenance for homes & industries in Jalandhar, Punjab.
           </p>
 
 
           {/* Trust Indicators */}
           <div className="mt-12 md:mt-16 flex flex-wrap justify-center gap-6 md:gap-10 text-white/90 font-poppins">
             <div className="flex items-center gap-3 bg-white/20 backdrop-blur-md px-5 py-3 rounded-full border border-white/30 shadow-lg hover:scale-105 transition-transform duration-300">
-              <FaBolt className="text-accent text-base md:text-lg" />
+              <FaClock className="text-accent text-base md:text-lg" />
               <span className="text-base md:text-lg font-semibold">24/7 Emergency Service</span>
             </div>
             <div className="flex items-center gap-3 bg-white/20 backdrop-blur-md px-5 py-3 rounded-full border border-white/30 shadow-lg hover:scale-105 transition-transform duration-300">
-              <FaBolt className="text-accent text-base md:text-lg" />
+              <FaCertificate className="text-accent text-base md:text-lg" />
               <span className="text-base md:text-lg font-semibold">Certified Electricians</span>
             </div>
             <div className="flex items-center gap-3 bg-white/20 backdrop-blur-md px-5 py-3 rounded-full border border-white/30 shadow-lg hover:scale-105 transition-transform duration-300">
-              <FaBolt className="text-accent text-base md:text-lg" />
+              <FaShield className="text-accent text-base md:text-lg" />
               <span className="text-base md:text-lg font-semibold">Licensed & Insured</span>
             </div>
           </div>

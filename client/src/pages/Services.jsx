@@ -75,7 +75,7 @@ const Services = ({ limit }) => {
         const isServiceAvailable = service.isActive !== false;
 
         return (
-          <div className="flex flex-col h-full bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
+          <div className="flex flex-col h-full bg-white/80 backdrop-blur-sm rounded-xl shadow-md border border-gray-200 overflow-hidden">
             {/* Service Image */}
             <div className="relative h-48 overflow-hidden flex-shrink-0 bg-gray-50">
               <img
@@ -183,32 +183,18 @@ const Services = ({ limit }) => {
 
     // Loading Skeleton Component
     const ServiceCardSkeleton = () => (
-        <div className="flex flex-col h-full bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden animate-pulse">
+        <div className="flex flex-col h-full bg-white/80 backdrop-blur-sm rounded-xl shadow-md border border-gray-200 overflow-hidden animate-pulse">
             <div className="aspect-square bg-gray-200"></div>
-          
+
         </div>
     );
 
     if (loading) {
         return (
-            <section className="py-20 px-6 sm:px-10 lg:px-16 bg-gray-50 min-h-screen">
-                <div className="max-w-7xl mx-auto">
-                    {/* Header */}
-                    <div className="text-center mb-20">
-                        <h2 className="text-5xl font-extrabold text-gray-900 mb-6">
-                            Our Electrical Services
-                        </h2>
-                        <p className="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
-                            Explore our wide range of electrical services designed to meet your needs.
-                        </p>
-                    </div>
-
-                    {/* Services Grid Skeleton */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-                        {Array.from({ length: 8 }).map((_, index) => (
-                            <ServiceCardSkeleton key={index} />
-                        ))}
-                    </div>
+            <section className="py-20 px-6 sm:px-10 lg:px-16 bg-transparent min-h-screen flex items-center justify-center">
+                <div className="text-center">
+                    <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto mb-4" />
+                    <p className="text-xl text-gray-600">Loading services...</p>
                 </div>
             </section>
         );
@@ -216,7 +202,7 @@ const Services = ({ limit }) => {
 
     if (error) {
         return (
-            <section className="py-20 px-6 sm:px-10 lg:px-16 bg-background min-h-screen flex flex-col justify-center">
+            <section className="py-20 px-6 sm:px-10 lg:px-16 bg-transparent min-h-screen flex flex-col justify-center">
                 <div className="max-w-7xl mx-auto">
                     <div className="text-center mb-20">
                         <h2 className="text-5xl font-extrabold text-primary mb-6 font-poppins">
@@ -239,10 +225,8 @@ const Services = ({ limit }) => {
     if (limit) {
         if (loading) {
             return (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-                    {Array.from({ length: limit }).map((_, index) => (
-                        <div key={index} className="bg-gray-200 animate-pulse rounded-xl h-80"></div>
-                    ))}
+                <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-8 h-8 animate-spin text-primary" />
                 </div>
             );
         }
@@ -266,7 +250,7 @@ const Services = ({ limit }) => {
 
     // Full page render
     return (
-        <section className="py-20 px-6 sm:px-10 lg:px-16 bg-background min-h-screen">
+        <section className="py-20 px-6 sm:px-10 lg:px-16 bg-transparent min-h-screen">
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <div className="text-center mb-20">

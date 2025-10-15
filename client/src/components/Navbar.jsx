@@ -65,11 +65,7 @@ const Navbar = () => {
     <nav
       role="navigation"
       aria-label="Main navigation"
-      className={`fixed w-full top-0 z-50 transition-all duration-500 ease-out ${
-        scrolled
-          ? 'bg-background/95 backdrop-blur-xl shadow-lg border-b border-gray-200/30'
-          : 'bg-background/90 backdrop-blur-md'
-      }`}
+      className="fixed w-full top-0 z-50 bg-white border-b border-gray-200 transition-all duration-500 ease-out shadow-lg"
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16 md:h-18 lg:h-20 items-center">
