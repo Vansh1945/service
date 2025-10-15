@@ -32,10 +32,12 @@ import {
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useAuth } from '../../store/auth';
+import useServices from '../../hooks/useServices';
 
 
 const AdminServices = () => {
   const { token, API } = useAuth();
+  const { providerServices, fetchProviderServiceCategories } = useServices();
 
   // State management
   const [services, setServices] = useState([]);
@@ -83,12 +85,13 @@ const AdminServices = () => {
   const editFileInputRef = useRef(null);
   const bulkFileInputRef = useRef(null);
 
-  // Categories
-  const categories = ['Electrical', 'AC', 'Appliance Repair', 'Other'];
+  // Categories from useServices hook
+  const categories = providerServices.map(service => service.category);
 
   // Check admin access
   useEffect(() => {
     fetchServices();
+    fetchProviderServiceCategories();
   }, []);
 
   // Filter and search services

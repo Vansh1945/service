@@ -33,8 +33,10 @@ const useServices = () => {
       // Set fallback provider services from Provider model enum
       setProviderServices([
         { _id: 'electrical', title: 'Electrical', category: 'Electrical' },
-        { _id: 'ac', title: 'AC', category: 'AC' },
+        { _id: 'inverter', title: 'Inverter ', category: 'Inverter ' },
         { _id: 'appliance-repair', title: 'Appliance Repair', category: 'Appliance Repair' },
+        { _id: 'wiring', title: 'Wiring', category: 'Wiring' },
+        { _id: 'fan', title: 'Fan', category: 'Fan' },
         { _id: 'other', title: 'Other', category: 'Other' }
       ]);
     } finally {
