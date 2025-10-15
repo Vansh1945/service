@@ -16,7 +16,8 @@ import {
   Zap,
   HeadphonesIcon,
   Sparkles,
-  Award
+  Award,
+  Flag
 } from 'lucide-react';
 
 const CustomerRegistration = () => {
@@ -28,7 +29,8 @@ const CustomerRegistration = () => {
     address: {
       street: '',
       city: '',
-      pincode: ''
+      state: '',
+      postalCode: ''
     }
   });
 
@@ -395,7 +397,7 @@ const CustomerRegistration = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                 <div className="group">
                   <label htmlFor="city" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
                     City *
@@ -418,8 +420,29 @@ const CustomerRegistration = () => {
                 </div>
 
                 <div className="group">
-                  <label htmlFor="pincode" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                    Postal/Zip Code *
+                  <label htmlFor="state" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
+                    State *
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
+                      <Flag className="text-primary w-5 h-5 group-focus-within:scale-110 transition-transform duration-200" />
+                    </div>
+                    <input
+                      type="text"
+                      id="state"
+                      name="address.state"
+                      value={formData.address.state}
+                      onChange={handleChange}
+                      className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
+                      placeholder="Your state"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="group">
+                  <label htmlFor="postalCode" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
+                    Postal Code *
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
@@ -427,9 +450,9 @@ const CustomerRegistration = () => {
                     </div>
                     <input
                       type="text"
-                      id="pincode"
-                      name="address.pincode"
-                      value={formData.address.pincode}
+                      id="postalCode"
+                      name="address.postalCode"
+                      value={formData.address.postalCode}
                       onChange={handleChange}
                       className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                       placeholder="12345"
@@ -522,7 +545,7 @@ const CustomerRegistration = () => {
                 <div className="flex justify-between items-center py-2">
                   <span className="text-secondary/70 font-medium">Address:</span>
                   <span className="font-semibold text-secondary text-right">
-                    {formData.address.street}, {formData.address.city}, {formData.address.pincode}
+                    {formData.address.street}, {formData.address.city}, {formData.address.state}, {formData.address.postalCode}
                   </span>
                 </div>
               </div>
