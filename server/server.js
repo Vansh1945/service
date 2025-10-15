@@ -13,7 +13,7 @@ const frontend = process.env.FRONTEND_URL;
 const app = express();
 
 const corsOptions = {
-  origin: [frontend, 'http://localhost:5173', 'http://localhost:5174'],
+  origin: [frontend, 'http://localhost:5175', 'http://localhost:5174'],
   credentials: true, // Allow credentials (cookies)
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']

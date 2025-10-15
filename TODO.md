@@ -1,19 +1,16 @@
-# OTP Sending Issues - Fix Plan
+# Registration Without OTP Verification - Task List
 
-## Issues Identified
-- Rate limiting configuration causing delays (maxConnections: 1, rateLimit: 5 per 20s)
-- Security vulnerability in password reset (no OTP re-verification)
-- Poor error handling for email sending failures
-- Missing detailed logging for debugging
+## Backend Changes
+- [x] Modify `server/controllers/User-controller.js` to remove OTP sending and verification logic
+- [x] Update registration flow to complete directly after validation
 
-## Fixes to Implement
-- [x] Optimize email sending performance in otpSend.js
-- [x] Fix password reset security bug in Auth-controller.js
-- [x] Add comprehensive error handling and logging
-- [x] Add email credential validation
-- [ ] Test the fixes
+## Frontend Changes
+- [ ] Modify `client/src/pages/Customer-Register.jsx` to reduce steps from 4 to 3
+- [ ] Remove OTP verification step and related UI
+- [ ] Update progress indicator and navigation logic
+- [ ] Modify form submission to register directly
 
-## Status
-- [x] Analysis completed
-- [x] Plan approved by user
-- [x] Implementation in progress
+## Testing
+- [ ] Test registration flow end-to-end
+- [ ] Verify no console errors
+- [ ] Check that user is created successfully without OTP

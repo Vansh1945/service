@@ -1,26 +1,22 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/auth';
-import { 
-  User, 
-  Mail, 
-  Phone, 
-  Lock, 
-  MapPin, 
-  Home, 
-  Building, 
-  ArrowRight, 
+import {
+  User,
+  Mail,
+  Phone,
+  Lock,
+  MapPin,
+  Home,
+  Building,
+  ArrowRight,
   ArrowLeft,
   CheckCircle,
   Shield,
-  Clock,
-  Star,
   Zap,
   HeadphonesIcon,
   Sparkles,
-  Award,
-  Users,
-  TrendingUp
+  Award
 } from 'lucide-react';
 
 const CustomerRegistration = () => {
@@ -33,19 +29,17 @@ const CustomerRegistration = () => {
       street: '',
       city: '',
       pincode: ''
-    },
-    otp: ''
+    }
   });
 
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
-  const [otpSent, setOtpSent] = useState(false);
   const [errors, setErrors] = useState({});
 
   const { API, showToast } = useAuth();
   const navigate = useNavigate();
 
-  const totalSteps = 4;
+  const totalSteps = 3;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -89,59 +83,10 @@ const CustomerRegistration = () => {
     }
   };
 
-  const handleSendOtp = async () => {
-    setIsLoading(true);
-    setErrors({});
-    
-    try {
-      const response = await fetch(`${API}/customer/register`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: formData.name,
-          email: formData.email,
-          phone: formData.phone,
-          password: formData.password
-        })
-      });
-      
-      const data = await response.json();
-      
-      if (!response.ok) {
-        if (data.errors) {
-          handleValidationErrors(data.errors);
-        } else {
-          showToast(data.message || 'Failed to send OTP', 'error');
-        }
-        return false;
-      }
-      
-      setOtpSent(true);
-      showToast(data.message || 'OTP sent to your email');
-      return true;
-    } catch (error) {
-      console.error('OTP sending error:', error);
-      showToast('Network error. Please check your connection and try again.', 'error');
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleSubmit = async () => {
     setIsLoading(true);
     setErrors({});
-    
-    // Basic OTP validation
-    if (!formData.otp || formData.otp.length !== 6) {
-      setErrors({ otp: 'Please enter a valid 6-digit OTP' });
-      showToast('Please enter a valid 6-digit OTP', 'error');
-      setIsLoading(false);
-      return;
-    }
-    
+
     try {
       const response = await fetch(`${API}/customer/register`, {
         method: 'POST',
@@ -153,29 +98,24 @@ const CustomerRegistration = () => {
           email: formData.email,
           phone: formData.phone,
           password: formData.password,
-          otp: formData.otp,
           address: formData.address
         })
       });
-      
+
       const data = await response.json();
-      
+
       if (!response.ok) {
         if (data.errors) {
           handleValidationErrors(data.errors);
-          
-          if (data.errors.otp) {
-            setFormData(prev => ({ ...prev, otp: '' }));
-          }
         } else {
           showToast(data.message || 'Registration failed', 'error');
         }
         return;
       }
-      
+
       showToast(data.message || 'Registration successful! You can now login.');
       navigate('/login');
-      
+
     } catch (error) {
       console.error('Registration error:', error);
       showToast('Network error. Please check your connection and try again.', 'error');
@@ -186,12 +126,6 @@ const CustomerRegistration = () => {
 
   const nextStep = async () => {
     if (currentStep === 3) {
-      // Send OTP before moving to step 4
-      const success = await handleSendOtp();
-      if (success) {
-        setCurrentStep(4);
-      }
-    } else if (currentStep === 4) {
       // Final submission
       await handleSubmit();
     } else {
@@ -206,7 +140,7 @@ const CustomerRegistration = () => {
   const ProgressIndicator = () => (
     <div className="mb-10">
       <div className="flex items-center justify-between mb-6">
-        {[1, 2, 3, 4].map((step) => (
+        {[1, 2, 3].map((step) => (
           <div key={step} className="flex items-center">
             <div
               className={`relative w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-500 transform ${
@@ -224,7 +158,7 @@ const CustomerRegistration = () => {
                 <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping"></div>
               )}
             </div>
-            {step < 4 && (
+            {step < 3 && (
               <div className="flex-1 mx-3 h-2 bg-gray-100 rounded-full overflow-hidden">
                 <div
                   className={`h-full transition-all duration-700 ease-out ${
@@ -246,7 +180,6 @@ const CustomerRegistration = () => {
           {currentStep === 1 && "Personal Information"}
           {currentStep === 2 && "Address Details"}
           {currentStep === 3 && "Account Security"}
-          {currentStep === 4 && "Email Verification"}
         </div>
       </div>
     </div>

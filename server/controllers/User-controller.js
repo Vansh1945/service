@@ -5,15 +5,14 @@ const Complaint = require('../models/Complaint-model');
 const Transaction = require('../models/Transaction-model');
 const Coupon = require('../models/Coupon-model');
 const User = require('../models/User-model');
-const { sendOTP, verifyOTP } = require('../utils/otpSend');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { uploadProfilePic } = require('../middlewares/upload'); // Assuming you have this configured
+const { uploadProfilePic } = require('../middlewares/upload'); 
 const path = require('path');
 const fs = require('fs');
 
 /**
- * Register a new user with OTP verification
+ * Register a new user
  */
 const validateName = (name) => {
     if (!name || typeof name !== 'string') {
@@ -146,11 +145,11 @@ const validateRegistrationData = (data) => {
 
 const register = async (req, res) => {
     try {
-        const { name, email, phone, password, otp, address, profilePicUrl } = req.body;
+        const { name, email, phone, password, address, profilePicUrl } = req.body;
 
-        // Step 1: Validate basic registration data
+        // Validate registration data including address
         const validationErrors = validateRegistrationData({ name, email, phone, password, address });
-        
+
         if (validationErrors) {
             return res.status(400).json({
                 success: false,
@@ -175,50 +174,11 @@ const register = async (req, res) => {
             if (userExists.phone === phone.trim().replace(/\s+/g, '')) {
                 errors.phone = "Phone number is already registered";
             }
-            
+
             return res.status(400).json({
                 success: false,
                 message: "User already exists",
                 errors
-            });
-        }
-
-        // Step 2: Handle OTP flow
-        if (!otp) {
-            // Send OTP for email verification
-            try {
-                await sendOTP(email.trim().toLowerCase());
-                return res.json({
-                    success: true,
-                    message: "OTP sent to your email address"
-                });
-            } catch (error) {
-                console.error("OTP sending error:", error);
-                return res.status(400).json({
-                    success: false,
-                    message: "Failed to send OTP. Please try again.",
-                    errors: { otp: "Unable to send verification code" }
-                });
-            }
-        }
-
-        // Step 3: Verify OTP and complete registration
-        if (!address) {
-            return res.status(400).json({
-                success: false,
-                message: "Address information is required for registration",
-                errors: { address: "Complete address information is required" }
-            });
-        }
-
-        try {
-            verifyOTP(email.trim().toLowerCase(), otp);
-        } catch (error) {
-            console.error("OTP verification error:", error);
-            return res.status(400).json({
-                success: false,
-                message: "OTP verification failed",
-                errors: { otp: error.message || "Invalid or expired OTP" }
             });
         }
 
@@ -264,14 +224,14 @@ const register = async (req, res) => {
 
     } catch (error) {
         console.error("Registration error:", error);
-        
+
         // Handle mongoose validation errors
         if (error.name === 'ValidationError') {
             const errors = {};
             Object.keys(error.errors).forEach(key => {
                 errors[key] = error.errors[key].message;
             });
-            
+
             return res.status(400).json({
                 success: false,
                 message: "Validation failed",
@@ -284,7 +244,7 @@ const register = async (req, res) => {
             const field = Object.keys(error.keyPattern)[0];
             const errors = {};
             errors[field] = `${field.charAt(0).toUpperCase() + field.slice(1)} is already registered`;
-            
+
             return res.status(400).json({
                 success: false,
                 message: "User already exists",
