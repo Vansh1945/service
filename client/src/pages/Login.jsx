@@ -264,15 +264,6 @@ const LoginPage = () => {
                 </Link>
               </p>
             </div>
-            <p className="text-secondary/60 text-xs">
-              Are you a service provider?{' '}
-              <Link 
-                to="/register-provider" 
-                className="text-accent hover:text-accent/80 font-semibold transition-colors duration-300"
-              >
-                Register as Provider
-              </Link>
-            </p>
           </div>
         </div>
       </div>
