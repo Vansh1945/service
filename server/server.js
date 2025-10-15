@@ -134,7 +134,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-validateEmailConfig();
+
 
 // Connect to MongoDB
 connectDB();
