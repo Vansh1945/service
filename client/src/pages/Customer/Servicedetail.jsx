@@ -507,9 +507,8 @@ const ServiceDetailPage = () => {
                   </div>
                 </div>
 
-                <p className="text-gray-600 text-lg leading-relaxed">
-                  {service.description}
-                </p>
+
+
 
                 {/* Mobile Rating - Only shown on mobile */}
                 <div className="lg:hidden flex items-center mt-4">
@@ -609,6 +608,12 @@ const ServiceDetailPage = () => {
               <div className="prose prose-lg max-w-none">
                 {activeTab === 'overview' && (
                   <div className="space-y-6">
+                    {/* Service Description */}
+                    <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+                      <h4 className="font-semibold text-gray-800 mb-4 text-lg">Service Description</h4>
+                      <p className="text-gray-600 leading-relaxed">{service.description}</p>
+                    </div>
+
                     <div className="grid md:grid-cols-2 gap-6">
                       <div className="bg-gradient-to-br from-teal-50 to-teal-100 rounded-xl p-6 border border-teal-200">
                         <h4 className="font-semibold text-gray-800 mb-4 flex items-center text-lg">
