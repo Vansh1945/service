@@ -22,7 +22,11 @@ const createService = async (req, res) => {
             imageUrls = uploadResults.map(result => result.secure_url);
 
             // Optional: delete local files after upload
-            req.files.forEach(file => fs.unlinkSync(file.path));
+            req.files.forEach(file => {
+                if (file.path && !file.path.startsWith('http')) {
+                    fs.unlinkSync(file.path);
+                }
+            });
         } else {
             // Upload default image to Cloudinary if no image is provided
             try {
@@ -81,6 +85,9 @@ const updateService = async (req, res) => {
             const uploadResults = await Promise.all(uploadPromises);
             const newImageUrls = uploadResults.map(result => result.secure_url);
             finalImages = [...finalImages, ...newImageUrls];
+
+            // Optional: delete local files after upload
+            req.files.forEach(file => fs.unlinkSync(file.path));
         }
 
         updates.images = finalImages;
