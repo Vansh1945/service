@@ -50,7 +50,6 @@ const serviceSchema = new Schema({
     ref: 'Admin',
     required: true
   },
-  // Expected completion time
   // Example: "1 to 2 Hours", "Within same day", etc.
   duration: {
     type: Number,
