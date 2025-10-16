@@ -1707,6 +1707,75 @@ const AdminServices = () => {
                 </div>
               )}
 
+              {/* Customer Feedback Section */}
+              {selectedService.feedback && selectedService.feedback.length > 0 ? (
+                <div className="bg-purple-50 p-5 rounded-xl border border-purple-100">
+                  <h4 className="text-lg font-semibold text-secondary mb-4 flex items-center">
+                    <Star className="w-5 h-5 mr-2 text-purple-600" />
+                    Customer Feedback ({selectedService.feedback.length})
+                  </h4>
+                  <div className="space-y-4">
+                    {selectedService.feedback.map((feedback, index) => (
+                      <div key={feedback._id || index} className="bg-white p-4 rounded-lg border border-purple-200 shadow-sm">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center">
+                            {feedback.customer?.profilePicUrl ? (
+                              <img
+                                src={feedback.customer.profilePicUrl}
+                                alt={feedback.customer.name}
+                                className="w-8 h-8 rounded-full mr-3"
+                              />
+                            ) : (
+                              <div className="w-8 h-8 bg-purple-200 rounded-full flex items-center justify-center mr-3">
+                                <span className="text-sm font-medium text-purple-700">
+                                  {feedback.customer?.name?.charAt(0)?.toUpperCase() || 'U'}
+                                </span>
+                              </div>
+                            )}
+                            <div>
+                              <p className="font-medium text-secondary">{feedback.customer?.name || 'Anonymous'}</p>
+                              <p className="text-xs text-gray-500">
+                                {new Date(feedback.createdAt).toLocaleDateString('en-IN', {
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric'
+                                })}
+                                {feedback.isEdited && ' (Edited)'}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center">
+                            {[...Array(5)].map((_, starIndex) => (
+                              <Star
+                                key={starIndex}
+                                className={`w-4 h-4 ${
+                                  starIndex < feedback.rating
+                                    ? 'text-yellow-400 fill-current'
+                                    : 'text-gray-300'
+                                }`}
+                              />
+                            ))}
+                            <span className="ml-2 text-sm font-medium text-secondary">
+                              {feedback.rating}/5
+                            </span>
+                          </div>
+                        </div>
+                        {feedback.comment && (
+                          <p className="text-gray-700 bg-gray-50 p-3 rounded-lg border border-gray-100">
+                            {feedback.comment}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-gray-50 p-5 rounded-xl border border-gray-100 text-center">
+                  <Star className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                  <p className="text-gray-600">No feedback available for this service yet.</p>
+                </div>
+              )}
+
               {/* Action Buttons */}
               <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
                 <button
