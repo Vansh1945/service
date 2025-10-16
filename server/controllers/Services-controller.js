@@ -356,39 +356,46 @@ const getActiveServices = async (req, res) => {
         const { page = 1, limit = 10, search, category } = req.query;
         const skip = (page - 1) * limit;
 
+        // Base query for active services
         let query = { isActive: true };
-        
+
+        // Search by title or description (text index)
         if (search) {
-            query.$text = { $search: search };
+            query.$or = [
+                { title: { $regex: search, $options: 'i' } },
+                { description: { $regex: search, $options: 'i' } }
+            ];
         }
-        
+
+        // Filter by category
         if (category) {
             query.category = category;
         }
 
-        // First get the services without virtuals to avoid issues
+        // Fetch paginated results
         const services = await Service.find(query)
-            .select('title category description images basePrice duration feedback averageRating ratingCount updatedAt')
+            .select('title category description images basePrice duration feedback averageRating ratingCount updatedAt isActive specialNotes materialsUsed createdAt')
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(parseInt(limit))
+            .lean(); // ✅ convert to plain JS object (avoids Mongoose doc issues)
 
-        // Manually calculate durationFormatted and ensure averageRating is correct
+        // Enhance results with derived fields
         const enhancedServices = services.map(service => {
-            // Calculate duration formatted
             const hours = Math.floor(service.duration);
             const minutes = Math.round((service.duration - hours) * 60);
             const durationFormatted = `${hours > 0 ? `${hours} hr` : ''} ${minutes > 0 ? `${minutes} min` : ''}`.trim();
 
-            // Calculate average rating if not already calculated
-            let averageRating = service.averageRating;
-            if ((!averageRating || averageRating === 0) && service.feedback && service.feedback.length > 0) {
-                const sum = service.feedback.reduce((acc, curr) => acc + curr.rating, 0);
+            // Calculate average rating if missing
+            let averageRating = service.averageRating || 0;
+            if ((!averageRating || averageRating === 0) && Array.isArray(service.feedback) && service.feedback.length > 0) {
+                const sum = service.feedback.reduce((acc, curr) => acc + (curr.rating || 0), 0);
                 averageRating = parseFloat((sum / service.feedback.length).toFixed(1));
             }
 
             return {
                 ...service,
+                id: service._id, // ✅ ensures React key is available
                 durationFormatted,
                 averageRating,
                 ratingCount: service.feedback ? service.feedback.length : 0
@@ -414,6 +421,7 @@ const getActiveServices = async (req, res) => {
         });
     }
 };
+
 
 // Get service by ID (public)
 const getPublicServiceById = async (req, res) => {

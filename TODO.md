@@ -1,5 +1,1 @@
-# TODO List for Navbar Hover Accent Color Update
-
-- [x] Update NavItem hover background to use accent color
-- [x] Update MobileNavItem hover background to use accent color
-- [x] Test the changes by running the application
+- [ ] Remove duplicate toast notification from auth store loginUser function to ensure only one "Login successfully" alert appears on login.

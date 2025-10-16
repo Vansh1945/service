@@ -84,13 +84,12 @@ export const AuthProvider = ({ children }) => {
             setRole(finalRole);
             setUser(userObj);
 
-            showToast('Login successful!');
-
             // Check for redirectTo query parameter
             const urlParams = new URLSearchParams(window.location.search);
             const redirectTo = urlParams.get('redirectTo');
 
             if (redirectTo) {
+                showToast('Redirecting to your requested page...', 'info');
                 navigate(redirectTo, { replace: true });
             } else {
                 // Redirect based on role

@@ -59,7 +59,7 @@ const Services = ({ limit }) => {
 
         if (!user) {
             toast.info('Please login to book a service');
-            navigate(`/login?redirectTo=/services/${serviceId}`);
+            navigate(`/login?redirectTo=/customer/services/${serviceId}`);
             return;
         }
 
