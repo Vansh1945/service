@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   FiMenu, FiX, FiHome, FiCheckCircle, FiUsers, FiCalendar, FiMessageCircle,
-  FiDollarSign, FiTag, FiPlus, FiTool, FiAlertCircle, FiChevronDown, 
+  FiDollarSign, FiTag, FiPlus, FiTool, FiAlertCircle, FiChevronDown,
   FiLogOut, FiUser, FiBell, FiSettings, FiCreditCard, FiActivity, FiFileText
 } from 'react-icons/fi';
 import { useAuth } from '../store/auth';
@@ -28,6 +28,8 @@ const AdminLayout = () => {
     { name: 'Complaint', path: '/admin/complaints', icon: <FiAlertCircle className="w-5 h-5" /> },
     { name: 'Feedback', path: '/admin/feedback', icon: <FiMessageCircle className="w-5 h-5" /> },
     { name: 'Earning', path: '/admin/earning', icon: <FiActivity className="w-5 h-5" /> },
+    { name: 'Contact', path: '/admin/contact', icon: <FiActivity className="w-5 h-5" /> },
+
   ];
 
   const isDashboardActive = location.pathname === '/admin' || location.pathname === '/admin/dashboard';
@@ -47,20 +49,18 @@ const AdminLayout = () => {
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
       {/* Mobile sidebar overlay */}
-      <div 
-        className={`fixed inset-0 z-40 lg:hidden transition-opacity duration-300 ${
-          sidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
-        }`}
+      <div
+        className={`fixed inset-0 z-40 lg:hidden transition-opacity duration-300 ${sidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+          }`}
       >
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm" 
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm"
           onClick={() => setSidebarOpen(false)}
         />
-        
+
         {/* Mobile sidebar */}
-        <div className={`relative flex flex-col w-80 max-w-xs h-full bg-white shadow-2xl transform transition-transform duration-300 ease-in-out ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}>
+        <div className={`relative flex flex-col w-80 max-w-xs h-full bg-white shadow-2xl transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}>
           {/* Mobile header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
             <Logo className="h-8 w-auto text-primary" />
@@ -80,11 +80,10 @@ const AdminLayout = () => {
                 <Link
                   key={item.name}
                   to={item.path}
-                  className={`flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
-                    isActive
+                  className={`flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${isActive
                       ? 'bg-primary text-white shadow-lg shadow-primary/25'
                       : 'text-secondary hover:bg-primary/10 hover:text-primary'
-                  }`}
+                    }`}
                   onClick={() => setSidebarOpen(false)}
                 >
                   <span className="mr-3">{item.icon}</span>
@@ -112,11 +111,10 @@ const AdminLayout = () => {
                 <Link
                   key={item.name}
                   to={item.path}
-                  className={`flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 group ${
-                    isActive
+                  className={`flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 group ${isActive
                       ? 'bg-primary text-white shadow-lg shadow-primary/25'
                       : 'text-secondary hover:bg-primary/10 hover:text-primary'
-                  }`}
+                    }`}
                 >
                   <span className="mr-3">{item.icon}</span>
                   {item.name}
@@ -125,16 +123,7 @@ const AdminLayout = () => {
             })}
           </nav>
 
-          {/* Desktop sidebar footer */}
-          <div className="px-4 py-4 border-t border-gray-200">
-            <Link
-              to="/admin/settings"
-              className="flex items-center px-4 py-3 text-sm font-medium text-secondary hover:bg-primary/10 hover:text-primary rounded-xl transition-all duration-200"
-            >
-              <FiSettings className="w-5 h-5 mr-3" />
-              Settings
-            </Link>
-          </div>
+
         </div>
       </div>
 
@@ -152,7 +141,7 @@ const AdminLayout = () => {
               >
                 <FiMenu className="w-6 h-6" />
               </button>
-              
+
               {/* Page title on mobile */}
               <h1 className="ml-3 text-xl font-semibold text-secondary lg:hidden">
                 {menuItems.find(item => item.path === location.pathname)?.name || 'Dashboard'}
@@ -206,10 +195,9 @@ const AdminLayout = () => {
                       {user?.email || 'admin@example.com'}
                     </p>
                   </div>
-                  <FiChevronDown 
-                    className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${
-                      profileDropdownOpen ? 'transform rotate-180' : ''
-                    }`} 
+                  <FiChevronDown
+                    className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${profileDropdownOpen ? 'transform rotate-180' : ''
+                      }`}
                   />
                 </button>
 
@@ -224,7 +212,7 @@ const AdminLayout = () => {
                         {user?.email || 'admin@example.com'}
                       </p>
                     </div>
-                    
+
                     <Link
                       to="/admin/profile"
                       className="flex items-center px-4 py-3 text-sm text-secondary hover:bg-primary/10 hover:text-primary transition-colors"
@@ -233,7 +221,7 @@ const AdminLayout = () => {
                       <FiUser className="w-4 h-4 mr-3" />
                       Profile Settings
                     </Link>
-                    
+
                     <Link
                       to="/admin/settings"
                       className="flex items-center px-4 py-3 text-sm text-secondary hover:bg-primary/10 hover:text-primary transition-colors"
@@ -242,9 +230,9 @@ const AdminLayout = () => {
                       <FiSettings className="w-4 h-4 mr-3" />
                       Account Settings
                     </Link>
-                    
+
                     <hr className="my-2 border-gray-100" />
-                    
+
                     <button
                       onClick={handleLogout}
                       className="w-full flex items-center px-4 py-3 text-sm text-red-600 hover:bg-red-50 transition-colors"

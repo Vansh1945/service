@@ -12,8 +12,11 @@ import {
   CheckCircle,
   AlertCircle
 } from 'lucide-react';
+import { useAuth } from '../store/auth';
 
 const Contact = () => {
+  const { API, showToast } = useAuth();
+
   // Dynamic contact information data
   const contactInfo = {
     primaryPhone: '+91-9625333919',
@@ -30,11 +33,10 @@ const Contact = () => {
     name: '',
     email: '',
     phone: '',
+    subject: '',
     message: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [successMessage, setSuccessMessage] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
 
   const handleChange = (e) => {
     setFormData({
@@ -46,21 +48,33 @@ const Contact = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-    setSuccessMessage('');
-    setErrorMessage('');
-    // Simulate API call
+
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000)); // 2s delay
-      console.log('Form submitted:', formData);
-      setSuccessMessage('Thank you for your message! We will get back to you soon.');
-      setFormData({
-        name: '',
-        email: '',
-        phone: '',
-        message: ''
+      const response = await fetch(`${API}/contact/contact-submit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
       });
+
+      const data = await response.json();
+
+      if (data.success) {
+        showToast(data.message, 'success');
+        setFormData({
+          name: '',
+          email: '',
+          phone: '',
+          subject: '',
+          message: ''
+        });
+      } else {
+        showToast(data.message || 'Something went wrong. Please try again.', 'error');
+      }
     } catch (error) {
-      setErrorMessage('Something went wrong. Please try again.');
+      console.error('Form submission error:', error);
+      showToast('Network error. Please check your connection and try again.', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -192,6 +206,29 @@ const Contact = () => {
                       />
                     </motion.div>
 
+                    {/* Subject Field */}
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.5, delay: 0.35 }}
+                      viewport={{ once: true }}
+                    >
+                      <label htmlFor="subject" className="block text-sm font-semibold text-secondary mb-3 flex items-center">
+                        <MessageSquare className="w-4 h-4 mr-2 text-primary" />
+                        Subject *
+                      </label>
+                      <input
+                        type="text"
+                        id="subject"
+                        name="subject"
+                        value={formData.subject}
+                        onChange={handleChange}
+                        required
+                        className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary text-secondary placeholder-gray-400"
+                        placeholder="Enter the subject of your message"
+                      />
+                    </motion.div>
+
                     {/* Message Field */}
                     <motion.div
                       initial={{ opacity: 0, y: 20 }}
@@ -240,27 +277,7 @@ const Contact = () => {
                     </motion.button>
                   </form>
 
-                  {/* Feedback Messages */}
-                  {successMessage && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="mt-4 p-4 bg-green-100 text-green-800 rounded-xl border border-green-200"
-                    >
-                      <CheckCircle className="w-5 h-5 inline mr-2" />
-                      {successMessage}
-                    </motion.div>
-                  )}
-                  {errorMessage && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="mt-4 p-4 bg-red-100 text-red-800 rounded-xl border border-red-200"
-                    >
-                      <AlertCircle className="w-5 h-5 inline mr-2" />
-                      {errorMessage}
-                    </motion.div>
-                  )}
+
 
                   {/* Trust indicators */}
                   <motion.div
