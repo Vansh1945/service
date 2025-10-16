@@ -79,6 +79,8 @@ const AdminServices = () => {
   const [newMaterial, setNewMaterial] = useState('');
   const [editNewSpecialNote, setEditNewSpecialNote] = useState('');
   const [editNewMaterial, setEditNewMaterial] = useState('');
+  const [editingPriceId, setEditingPriceId] = useState(null);
+  const [newPrice, setNewPrice] = useState('');
 
   // Refs
   const fileInputRef = useRef(null);
@@ -327,7 +329,7 @@ const AdminServices = () => {
       const data = await response.json();
       setServices(prev => [data.data, ...prev]);
       toast.update(toastId, {
-        render: 'Service created successfully!',
+        render: data.message || 'Service created successfully!',
         type: 'success',
         isLoading: false,
         autoClose: 2000
@@ -387,7 +389,7 @@ const AdminServices = () => {
       const data = await response.json();
       setServices(prev => prev.map(s => s._id === data.data._id ? data.data : s));
       toast.update(toastId, {
-        render: 'Service updated successfully!',
+        render: data.message || 'Service updated successfully!',
         type: 'success',
         isLoading: false,
         autoClose: 2000
@@ -420,7 +422,7 @@ const AdminServices = () => {
       const data = await response.json();
       setServices(prev => prev.map(s => s._id === data.data._id ? data.data : s));
       toast.update(toastId, {
-        render: 'Price updated successfully!',
+        render: data.message || 'Price updated successfully!',
         type: 'success',
         isLoading: false,
         autoClose: 2000
@@ -429,6 +431,27 @@ const AdminServices = () => {
       console.error('Update price error:', error);
       toast.error(error.message || 'Failed to update price');
     }
+  };
+
+  // Start inline price editing
+  const startPriceEdit = (service) => {
+    setEditingPriceId(service._id);
+    setNewPrice(service.basePrice);
+  };
+
+  // Save inline price edit
+  const savePriceEdit = async () => {
+    if (editingPriceId && newPrice !== '') {
+      await handleUpdatePrice(editingPriceId, parseFloat(newPrice));
+      setEditingPriceId(null);
+      setNewPrice('');
+    }
+  };
+
+  // Cancel inline price edit
+  const cancelPriceEdit = () => {
+    setEditingPriceId(null);
+    setNewPrice('');
   };
 
   // Toggle service status
@@ -504,7 +527,7 @@ const AdminServices = () => {
 
       const data = await response.json();
       toast.update(toastId, {
-        render: `Successfully imported ${data.importedCount} services!`,
+        render: data.message || `Successfully imported ${data.importedCount} services!`,
         type: 'success',
         isLoading: false,
         autoClose: 3000
@@ -828,7 +851,7 @@ const AdminServices = () => {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {currentServices.map((service) => (
-                      <tr key={service._id} className="hover:bg-gray-50 transition-colors duration-200">
+                      <tr key={service._id} className="hover:bg-gray-50 transition-colors duration-200 group">
                         <td className="px-4 md:px-6 py-4">
                           <div className="flex items-center">
                             <div className="flex-shrink-0 h-10 w-10 md:h-12 md:w-12">
@@ -861,9 +884,46 @@ const AdminServices = () => {
                           </span>
                         </td>
                         <td className="px-4 md:px-6 py-4 whitespace-nowrap">
-                          <span className="text-sm font-semibold text-green-600">
-                            {formatCurrency(service.basePrice)}
-                          </span>
+                          {editingPriceId === service._id ? (
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="number"
+                                value={newPrice}
+                                onChange={(e) => setNewPrice(e.target.value)}
+                                className="w-20 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary"
+                                min="0"
+                                step="0.01"
+                                autoFocus
+                              />
+                              <button
+                                onClick={savePriceEdit}
+                                className="text-green-600 hover:text-green-800 p-1"
+                                title="Save"
+                              >
+                                <CheckCircle className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={cancelPriceEdit}
+                                className="text-red-600 hover:text-red-800 p-1"
+                                title="Cancel"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center space-x-2">
+                              <span className="text-sm font-semibold text-green-600">
+                                {formatCurrency(service.basePrice)}
+                              </span>
+                              <button
+                                onClick={() => startPriceEdit(service)}
+                                className="text-primary hover:text-teal-800 p-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                                title="Edit Price"
+                              >
+                                <Edit className="w-3 h-3" />
+                              </button>
+                            </div>
+                          )}
                         </td>
                         <td className="px-4 md:px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
