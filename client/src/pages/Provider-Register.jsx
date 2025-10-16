@@ -62,7 +62,7 @@ const ProviderRegistration = () => {
     dateOfBirth: '',
 
     // Step 4: Professional Details
-    services: '', // Changed to string
+    services: '', 
     experience: '',
     serviceArea: '',
     resume: null,
@@ -124,10 +124,10 @@ const ProviderRegistration = () => {
     setSelectedServices(prev => {
       if (prev.includes(service)) {
         // If the service is already selected, deselect it
-        return [];
+        return prev.filter(s => s !== service);
       } else {
-        // If a new service is selected, make it the only selected service
-        return [service];
+        // If a new service is selected, add it to the selection
+        return [...prev, service];
       }
     });
   };
@@ -284,6 +284,13 @@ const ProviderRegistration = () => {
   // Step 4: Complete Profile
   const handleCompleteProfile = async (e) => {
     e.preventDefault();
+
+    // Validate that at least one service is selected
+    if (selectedServices.length === 0) {
+      toast.error('Please select at least one service category.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     // Use selectedServices array directly as backend expects array
@@ -858,7 +865,7 @@ const ProviderRegistration = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="group">
                 <label className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                  Service Categories (Select only 1) *
+                  Service Categories (Select all that apply) *
                 </label>
                 <div className="grid grid-cols-2 gap-3">
                   {providerServicesLoading ? (
@@ -887,7 +894,6 @@ const ProviderRegistration = () => {
                           checked={selectedServices.includes(service.category)}
                           onChange={() => handleServiceChange(service.category)}
                           className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-                          disabled={selectedServices.length >= 1 && !selectedServices.includes(service.category)}
                         />
                         <label htmlFor={`service-${service._id}`} className="ml-2 text-sm text-secondary">
                           {service.title}

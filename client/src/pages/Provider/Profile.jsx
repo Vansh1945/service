@@ -132,7 +132,7 @@ const ProviderProfile = () => {
 
     fetchProfile();
     fetchProviderServiceCategories(); // Fetch service categories
-  }, [token, API, showToast, fetchProviderServiceCategories]);
+  }, [token, API, showToast]);
 
   // Handle service changes (for multi-select)
   const handleServiceChange = (service) => {
@@ -214,7 +214,7 @@ const ProviderProfile = () => {
           break;
 
         case 'professional':
-          formData.append('services', profileData.services);
+          formData.append('services', JSON.stringify(profileData.services));
           formData.append('experience', profileData.experience);
           formData.append('serviceArea', profileData.serviceArea);
           if (fileUploads.resume) {
@@ -427,7 +427,7 @@ const ProviderProfile = () => {
         <div className="bg-white rounded-xl shadow-md overflow-hidden mb-6 border border-gray-100">
           <div className="border-b border-gray-200">
             <nav className="-mb-px flex flex-wrap space-x-8 px-6">
-              {[
+            {[
                 { id: 'overview', name: 'Overview', icon: '👤' },
                 { id: 'documents', name: 'Documents', icon: '📄' },
                 { id: 'profile', name: 'Profile Details', icon: '⚙️' }
@@ -1133,7 +1133,9 @@ const ProviderProfile = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="p-4 bg-gray-50 rounded-lg">
                       <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Service Type</h3>
-                      <p className="mt-1 text-sm font-medium text-gray-900">{profileData.services || 'Not provided'}</p>
+                      <p className="mt-1 text-sm font-medium text-gray-900">
+                        {Array.isArray(profileData.services) && profileData.services.length > 0 ? profileData.services.join(', ') : 'Not provided'}
+                      </p>
                     </div>
 
                     <div className="p-4 bg-gray-50 rounded-lg">

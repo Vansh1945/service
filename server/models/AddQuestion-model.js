@@ -4,14 +4,14 @@ const { Schema } = mongoose;
 const questionSchema = new Schema({
   questionText: {
     type: String,
-    required: true, 
+    required: true,
     trim: true
   },
   options: {
     type: [String],
-    required: true, 
+    required: true,
     validate: {
-      validator: function(v) {
+      validator: function (v) {
         return v.length >= 2 && v.length <= 5;
       },
       message: 'Questions must have between 2-5 options'
@@ -19,10 +19,10 @@ const questionSchema = new Schema({
   },
   correctAnswer: {
     type: Number,
-    required: true, 
-    min: 0, 
+    required: true,
+    min: 0,
     validate: {
-      validator: function(v) {
+      validator: function (v) {
         return v < this.options.length;
       },
       message: 'Correct answer index must be within options range'
@@ -30,14 +30,14 @@ const questionSchema = new Schema({
   },
   category: {
     type: String,
-    required: true, 
-        enum: ['Electrical', 'Appliance Repair', 'Wiring'],
+    required: true,
+    enum: ['Electrical', 'All'],
     index: true
   },
   subcategory: {
     type: String,
     required: true,
-        enum: ['Electrical', 'Inverter ', 'Appliance Repair', 'Wiring', 'Fan'],
+    enum: ['Electrical', 'Inverter ', 'Appliance', 'Wiring', 'Fan','All'],
     index: true
   },
   createdBy: {

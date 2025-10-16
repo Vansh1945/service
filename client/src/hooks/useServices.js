@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../store/auth';
 
 const useServices = () => {
@@ -10,7 +10,7 @@ const useServices = () => {
   const [providerServicesError, setProviderServicesError] = useState(null);
   const { API } = useAuth();
 
-  const fetchProviderServiceCategories = async () => {
+  const fetchProviderServiceCategories = useCallback(async () => {
     try {
       setProviderServicesLoading(true);
       setProviderServicesError(null);
@@ -30,19 +30,19 @@ const useServices = () => {
     } catch (err) {
       console.error('Error fetching provider service categories:', err);
       setProviderServicesError(err.message);
-      // Set fallback provider services from Provider model enum
+      // Set fallback provider services from Service model enum
       setProviderServices([
         { _id: 'electrical', title: 'Electrical', category: 'Electrical' },
         { _id: 'inverter', title: 'Inverter ', category: 'Inverter ' },
-        { _id: 'appliance', title: 'Appliance ', category: 'Appliance' },
+        { _id: 'appliance', title: 'Appliance ', category: 'Appliance ' },
         { _id: 'wiring', title: 'Wiring', category: 'Wiring' },
         { _id: 'fan', title: 'Fan', category: 'Fan' },
         { _id: 'other', title: 'Other', category: 'Other' }
       ]);
-    } finally {
+    } finally { 
       setProviderServicesLoading(false);
     }
-  };
+  }, [API]);
   
 
   const refetchProviderServices = () => {

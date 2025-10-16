@@ -324,7 +324,9 @@ exports.completeProfile = async (req, res) => {
             postalCode,
             country,
             accountNo,
-            ifsc
+            ifsc,
+            bankName,
+            accountName
         } = req.body;
 
         // Validate required fields
@@ -372,7 +374,7 @@ exports.completeProfile = async (req, res) => {
         }
 
         // Update professional info
-        provider.services = services;
+        provider.services = typeof services === 'string' ? JSON.parse(services) : services;
         provider.experience = experience;
         provider.serviceArea = serviceArea;
 
@@ -389,6 +391,8 @@ exports.completeProfile = async (req, res) => {
         provider.bankDetails = {
             accountNo,
             ifsc,
+            bankName,
+            accountName,
             passbookImage: req.files && req.files['passbookImage'] ? req.files['passbookImage'][0].path : undefined,
             passbookImagePublicId: req.files && req.files['passbookImage'] ? req.files['passbookImage'][0].filename : undefined,
             verified: false
@@ -618,7 +622,10 @@ exports.updateProviderProfile = async (req, res) => {
 
         if (!updateType || updateType === 'professional') {
             // Professional Information Updates
-            if (services) updates.services = services;
+            if (services) {
+                // Parse services if it's a JSON string from frontend
+                updates.services = typeof services === 'string' ? JSON.parse(services) : services;
+            }
             if (experience !== undefined) updates.experience = experience;
             if (serviceArea) updates.serviceArea = serviceArea;
         }
@@ -825,12 +832,14 @@ exports.viewDocument = async (req, res) => {
         let fileUrl;
         let fileName;
         let publicId;
+        let resourceType = 'image'; // Default to image
 
         switch (type) {
             case 'resume':
                 fileUrl = provider.resume;
                 publicId = provider.resumePublicId;
                 fileName = 'resume';
+                resourceType = 'raw'; // Assume resumes are raw files
                 break;
             case 'passbook':
                 fileUrl = provider.bankDetails?.passbookImage;
@@ -856,14 +865,25 @@ exports.viewDocument = async (req, res) => {
             });
         }
 
-        // Generate a signed URL for the private resource
-        const signedUrl = cloudinary.url(publicId, {
+        const urlOptions = {
             secure: true,
             private_cdn: false,
             sign_url: true,
-            resource_type: 'image',
+            resource_type: resourceType,
             expires_at: Math.floor(Date.now() / 1000) + 3600
-        });
+        };
+
+        // For image resources, add the format to the URL options to ensure
+        // the generated URL has the correct file extension (e.g., .jpg, .png).
+        if (resourceType === 'image') {
+            const format = path.extname(fileUrl).substring(1);
+            if (format) {
+                urlOptions.format = format;
+            }
+        }
+
+        // Generate a signed URL for the private resource
+        const signedUrl = cloudinary.url(publicId, urlOptions);
 
         return res.status(200).json({
             success: true,
