@@ -34,7 +34,7 @@ const useServices = () => {
       setProviderServices([
         { _id: 'electrical', title: 'Electrical', category: 'Electrical' },
         { _id: 'inverter', title: 'Inverter ', category: 'Inverter ' },
-        { _id: 'appliance-repair', title: 'Appliance Repair', category: 'Appliance Repair' },
+        { _id: 'appliance', title: 'Appliance ', category: 'Appliance' },
         { _id: 'wiring', title: 'Wiring', category: 'Wiring' },
         { _id: 'fan', title: 'Fan', category: 'Fan' },
         { _id: 'other', title: 'Other', category: 'Other' }

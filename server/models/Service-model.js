@@ -14,7 +14,7 @@ const serviceSchema = new Schema({
   category: {
     type: String,
     required: true,
-    enum: ['Electrical', 'Inverter ', 'Appliance Repair', 'Wiring', 'Fan', 'Other'],
+    enum: ['Electrical', 'Inverter ', 'Appliance ', 'Wiring', 'Fan', 'Other'],
     default: 'Other'
   },
   description: {
