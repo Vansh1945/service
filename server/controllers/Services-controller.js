@@ -368,11 +368,10 @@ const getActiveServices = async (req, res) => {
 
         // First get the services without virtuals to avoid issues
         const services = await Service.find(query)
-            .select('title category description images basePrice duration feedback averageRating ratingCount')
+            .select('title category description images basePrice duration feedback averageRating ratingCount updatedAt')
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(parseInt(limit))
-            .lean(); // Convert to plain JavaScript objects
 
         // Manually calculate durationFormatted and ensure averageRating is correct
         const enhancedServices = services.map(service => {

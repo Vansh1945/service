@@ -101,10 +101,10 @@ const Services = ({ limit }) => {
                 )}
               </div>
 
-              {/* Premium Badge */}
-              {service.basePrice > 1000 && (
+              {/* New Badge */}
+              {new Date() - new Date(service.updatedAt) < 2 * 24 * 60 * 60  && (
                 <div className="absolute top-3 right-3 bg-accent text-secondary px-2 py-1 rounded-full text-xs font-bold shadow-sm">
-                  Premium
+                  New
                 </div>
               )}
 
