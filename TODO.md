@@ -1,2 +1,0 @@
-- [ ] Enhance Logo.jsx component for better aesthetics: fix rotating border, add gradients, animations, and responsiveness.
-- [ ] Test the updated logo by running the client application.
