@@ -3,7 +3,7 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   FiMenu, FiX, FiHome, FiCheckCircle, FiUsers, FiCalendar, FiMessageCircle,
   FiDollarSign, FiTag, FiPlus, FiTool, FiAlertCircle, FiChevronDown,
-  FiLogOut, FiUser, FiBell, FiSettings, FiCreditCard, FiActivity, FiFileText
+  FiLogOut, FiUser, FiBell, FiSettings, FiCreditCard, FiActivity, FiFileText, FiMail
 } from 'react-icons/fi';
 import { useAuth } from '../store/auth';
 import Logo from './Logo';
@@ -28,8 +28,7 @@ const AdminLayout = () => {
     { name: 'Complaint', path: '/admin/complaints', icon: <FiAlertCircle className="w-5 h-5" /> },
     { name: 'Feedback', path: '/admin/feedback', icon: <FiMessageCircle className="w-5 h-5" /> },
     { name: 'Earning', path: '/admin/earning', icon: <FiActivity className="w-5 h-5" /> },
-    { name: 'Contact', path: '/admin/contact', icon: <FiActivity className="w-5 h-5" /> },
-
+    { name: 'Contact', path: '/admin/contact', icon: <FiMail className="w-5 h-5" /> },
   ];
 
   const isDashboardActive = location.pathname === '/admin' || location.pathname === '/admin/dashboard';
