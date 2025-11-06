@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Admin = require('../models/Admin-model');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -14,6 +15,7 @@ const moment = require('moment');
 const path = require('path');
 const fs = require('fs');
 const cloudinary = require('../services/cloudinary');
+const ExcelJS = require('exceljs');
 
 /**
  * Register a new admin
@@ -678,6 +680,379 @@ const deleteAdmin = async (req, res) => {
     }
 };
 
+/**
+ * Get all transactions with filtering
+ */
+const getAllTransactions = async (req, res) => {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+        const filter = req.query.filter || 'lifetime';
+        const search = req.query.search || '';
+
+        // Calculate date ranges based on filter
+        let dateFilter = {};
+        const now = moment();
+
+        switch (filter) {
+            case '1month':
+                dateFilter = { createdAt: { $gte: now.subtract(1, 'months').toDate() } };
+                break;
+            case '3months':
+                dateFilter = { createdAt: { $gte: now.subtract(3, 'months').toDate() } };
+                break;
+            case '6months':
+                dateFilter = { createdAt: { $gte: now.subtract(6, 'months').toDate() } };
+                break;
+            case 'current_fy':
+                // Current FY: April 1st to March 31st
+                const currentYear = now.year();
+                const fyStart = moment(`${currentYear}-04-01`, 'YYYY-MM-DD');
+                const fyEnd = moment(`${currentYear + 1}-03-31`, 'YYYY-MM-DD');
+                if (now.isBefore(fyStart)) {
+                    // If current date is before April, use previous FY
+                    fyStart.subtract(1, 'year');
+                    fyEnd.subtract(1, 'year');
+                }
+                dateFilter = { createdAt: { $gte: fyStart.toDate(), $lte: fyEnd.toDate() } };
+                break;
+            case 'previous_fy':
+                // Previous FY: April 1st to March 31st of previous year
+                const prevYear = now.year() - 1;
+                const prevFyStart = moment(`${prevYear}-04-01`, 'YYYY-MM-DD');
+                const prevFyEnd = moment(`${prevYear + 1}-03-31`, 'YYYY-MM-DD');
+                dateFilter = { createdAt: { $gte: prevFyStart.toDate(), $lte: prevFyEnd.toDate() } };
+                break;
+            case 'lifetime':
+            default:
+                // No date filter for lifetime
+                break;
+        }
+
+        const pipeline = [
+            { $match: dateFilter },
+            {
+                $lookup: {
+                    from: 'bookings',
+                    localField: 'booking',
+                    foreignField: '_id',
+                    as: 'booking'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: 'user',
+                    foreignField: '_id',
+                    as: 'user'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'services',
+                    localField: 'booking.services.service',
+                    foreignField: '_id',
+                    as: 'services'
+                }
+            },
+            {
+                $addFields: {
+                    booking: { $arrayElemAt: ['$booking', 0] },
+                    user: { $arrayElemAt: ['$user', 0] },
+                    service: { $arrayElemAt: ['$services', 0] }
+                }
+            },
+            {
+                $project: {
+                    razorpayResponse: 0,
+                    razorpaySignature: 0,
+                    __v: 0,
+                    'user.password': 0,
+                    'user.__v': 0
+                }
+            }
+        ];
+
+        // Add search filter if provided
+        if (search) {
+            pipeline.push({
+                $match: {
+                    $or: [
+                        { transactionId: { $regex: search, $options: 'i' } },
+                        { 'user.name': { $regex: search, $options: 'i' } },
+                        { 'user.email': { $regex: search, $options: 'i' } },
+                        { 'booking._id': { $regex: search, $options: 'i' } },
+                        { 'service.title': { $regex: search, $options: 'i' } }
+                    ]
+                }
+            });
+        }
+
+        // Create count pipeline (without sort, skip, limit)
+        const countPipeline = [...pipeline, { $count: "total" }];
+        const countResult = await Transaction.aggregate(countPipeline);
+        const total = countResult[0]?.total || 0;
+
+        // Add pagination to main pipeline
+        pipeline.push(
+            { $sort: { createdAt: -1 } },
+            { $skip: skip },
+            { $limit: limit }
+        );
+
+        const transactions = await Transaction.aggregate(pipeline);
+
+        res.status(200).json({
+            success: true,
+            count: transactions.length,
+            total,
+            page,
+            pages: Math.ceil(total / limit),
+            filter,
+            search,
+            transactions
+        });
+
+    } catch (error) {
+        console.error('Get transactions error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error while fetching transactions'
+        });
+    }
+};
+
+/**
+ * Get transaction by ID with populated details
+ */
+const getTransactionById = async (req, res) => {
+    try {
+        const transactionId = req.params.id;
+
+        // Validate ObjectId
+        if (!mongoose.Types.ObjectId.isValid(transactionId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid transaction ID'
+            });
+        }
+
+        const pipeline = [
+            { $match: { _id: new mongoose.Types.ObjectId(transactionId) } },
+            {
+                $lookup: {
+                    from: 'bookings',
+                    localField: 'booking',
+                    foreignField: '_id',
+                    as: 'booking'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: 'user',
+                    foreignField: '_id',
+                    as: 'user'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'services',
+                    localField: 'booking.services.service',
+                    foreignField: '_id',
+                    as: 'services'
+                }
+            },
+            {
+                $addFields: {
+                    booking: { $arrayElemAt: ['$booking', 0] },
+                    user: { $arrayElemAt: ['$user', 0] },
+                    service: { $arrayElemAt: ['$services', 0] }
+                }
+            },
+            {
+                $project: {
+                    razorpayResponse: 0,
+                    razorpaySignature: 0,
+                    __v: 0,
+                    'user.password': 0,
+                    'user.__v': 0
+                }
+            }
+        ];
+
+        const transaction = await Transaction.aggregate(pipeline);
+
+        if (!transaction || transaction.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Transaction not found'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            transaction: transaction[0]
+        });
+
+    } catch (error) {
+        console.error('Get transaction by ID error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error while fetching transaction details'
+        });
+    }
+};
+
+/**
+ * Export transactions to CSV
+ */
+const exportTransactionsCSV = async (req, res) => {
+    try {
+        const filter = req.query.filter || 'lifetime';
+        const search = req.query.search || '';
+
+        // Calculate date ranges based on filter (same logic as getAllTransactions)
+        let dateFilter = {};
+        const now = moment();
+
+        switch (filter) {
+            case '1month':
+                dateFilter = { createdAt: { $gte: now.subtract(1, 'months').toDate() } };
+                break;
+            case '3months':
+                dateFilter = { createdAt: { $gte: now.subtract(3, 'months').toDate() } };
+                break;
+            case '6months':
+                dateFilter = { createdAt: { $gte: now.subtract(6, 'months').toDate() } };
+                break;
+            case 'current_fy':
+                const currentYear = now.year();
+                const fyStart = moment(`${currentYear}-04-01`, 'YYYY-MM-DD');
+                const fyEnd = moment(`${currentYear + 1}-03-31`, 'YYYY-MM-DD');
+                if (now.isBefore(fyStart)) {
+                    fyStart.subtract(1, 'year');
+                    fyEnd.subtract(1, 'year');
+                }
+                dateFilter = { createdAt: { $gte: fyStart.toDate(), $lte: fyEnd.toDate() } };
+                break;
+            case 'previous_fy':
+                const prevYear = now.year() - 1;
+                const prevFyStart = moment(`${prevYear}-04-01`, 'YYYY-MM-DD');
+                const prevFyEnd = moment(`${prevYear + 1}-03-31`, 'YYYY-MM-DD');
+                dateFilter = { createdAt: { $gte: prevFyStart.toDate(), $lte: prevFyEnd.toDate() } };
+                break;
+            case 'lifetime':
+            default:
+                break;
+        }
+
+        const pipeline = [
+            { $match: dateFilter },
+            {
+                $lookup: {
+                    from: 'bookings',
+                    localField: 'booking',
+                    foreignField: '_id',
+                    as: 'booking'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: 'user',
+                    foreignField: '_id',
+                    as: 'user'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'services',
+                    localField: 'booking.services.service',
+                    foreignField: '_id',
+                    as: 'services'
+                }
+            },
+            {
+                $addFields: {
+                    booking: { $arrayElemAt: ['$booking', 0] },
+                    user: { $arrayElemAt: ['$user', 0] },
+                    service: { $arrayElemAt: ['$services', 0] }
+                }
+            },
+            {
+                $project: {
+                    razorpayResponse: 0,
+                    razorpaySignature: 0,
+                    __v: 0,
+                    'user.password': 0,
+                    'user.__v': 0
+                }
+            }
+        ];
+
+        // Add search filter if provided
+        if (search) {
+            pipeline.push({
+                $match: {
+                    $or: [
+                        { transactionId: { $regex: search, $options: 'i' } },
+                        { 'user.name': { $regex: search, $options: 'i' } },
+                        { 'user.email': { $regex: search, $options: 'i' } },
+                        { 'booking._id': { $regex: search, $options: 'i' } },
+                        { 'service.title': { $regex: search, $options: 'i' } }
+                    ]
+                }
+            });
+        }
+
+        pipeline.push({ $sort: { createdAt: -1 } });
+
+        const transactions = await Transaction.aggregate(pipeline);
+
+        // Prepare CSV data
+        const csvData = transactions.map(transaction => ({
+            'Transaction ID': transaction.transactionId,
+            'Amount': transaction.paymentMethod === 'online' ? transaction.amount / 100 : transaction.amount,
+            'Currency': transaction.currency,
+            'Payment Status': transaction.paymentStatus,
+            'Payment Method': transaction.paymentMethod,
+            'Customer Name': transaction.user?.name || 'N/A',
+            'Customer Email': transaction.user?.email || 'N/A',
+            'Customer Phone': transaction.user?.phone || 'N/A',
+            'Service Name': transaction.service?.title || 'N/A',
+            'Booking ID': transaction.booking?._id || 'N/A',
+            'Booking Status': transaction.booking?.status || 'N/A',
+            'Razorpay Order ID': transaction.razorpayOrderId || 'N/A',
+            'Razorpay Payment ID': transaction.razorpayPaymentId || 'N/A',
+            'Transaction Date': moment(transaction.createdAt).format('YYYY-MM-DD HH:mm:ss'),
+            'Updated Date': moment(transaction.updatedAt).format('YYYY-MM-DD HH:mm:ss')
+        }));
+
+        // Convert to CSV string
+        const csvHeaders = Object.keys(csvData[0] || {}).join(',') + '\n';
+        const csvRows = csvData.map(row =>
+            Object.values(row).map(value =>
+                typeof value === 'string' && value.includes(',') ? `"${value}"` : value
+            ).join(',')
+        ).join('\n');
+        const csvContent = csvHeaders + csvRows;
+
+        // Set response headers for CSV download
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename=transactions_${filter}_${moment().format('YYYY-MM-DD')}.csv`);
+        res.status(200).send(csvContent);
+
+    } catch (error) {
+        console.error('Export transactions CSV error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error while exporting transactions'
+        });
+    }
+};
+
 module.exports = {
     registerAdmin,
     getAdminProfile,
@@ -690,5 +1065,8 @@ module.exports = {
     getPendingProviders,
     getAllProviders,
     getProviderDetails,
-    getDashboardStats
+    getDashboardStats,
+    getAllTransactions,
+    getTransactionById,
+    exportTransactionsCSV
 };

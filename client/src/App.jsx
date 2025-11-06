@@ -50,6 +50,7 @@ import BookingConfirmation from "./pages/Customer/BookingConfirmation";
 import FeedbackManagement from "./pages/Customer/Feedback";
 import ComplaintsPage from "./pages/Customer/Complaint";
 import AdminContact from "./pages/Admin/Contact";
+import AdminTransaction from "./pages/Admin/AdminTransaction";
 
 const App = () => {
   const location = useLocation();
@@ -92,6 +93,7 @@ const App = () => {
             <Route path="feedback" element={<AdminServiceFeedback />} />
             <Route path="earning" element={<AdminPayments />} />
             <Route path="contact" element={<AdminContact />} />
+            <Route path="transactions" element={<AdminTransaction />} />
           </Route>
         </Route>
 
