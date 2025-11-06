@@ -12,7 +12,7 @@ const createCloudinaryStorage = (folder, resourceType, allowedFormats) => {
       if (file.mimetype === 'application/pdf') {
         resourceTypeResult = 'raw';
       } else if (file.mimetype === 'audio/mpeg') {
-        resourceTypeResult = 'video';
+        resourceTypeResult = 'video';                                                                                                   
       }
       return {
         folder: folder,
@@ -65,6 +65,11 @@ const uploadServicesFile = multer({
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
 });
 
+const uploadBannerImage = multer({
+  storage: createCloudinaryStorage('banners', 'image', ['jpg', 'jpeg', 'png']),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+});
+
 // Error handler middleware
 const handleUploadErrors = (err, req, res, next) => {
   if (err instanceof multer.MulterError) {
@@ -96,5 +101,6 @@ module.exports = {
   uploadComplaintImage,
   uploadPassbookImg,
   uploadServicesFile,
+  uploadBannerImage,
   handleUploadErrors,
 };

@@ -223,7 +223,7 @@ const AdminLayout = () => {
                     </Link>
 
                     <Link
-                      to="/admin/settings"
+                      to="/admin/banners"
                       className="flex items-center px-4 py-3 text-sm text-secondary hover:bg-primary/10 hover:text-primary transition-colors"
                       onClick={() => setProfileDropdownOpen(false)}
                     >

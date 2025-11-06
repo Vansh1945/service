@@ -51,6 +51,7 @@ import FeedbackManagement from "./pages/Customer/Feedback";
 import ComplaintsPage from "./pages/Customer/Complaint";
 import AdminContact from "./pages/Admin/Contact";
 import AdminTransaction from "./pages/Admin/AdminTransaction";
+import Banners from "./pages/Admin/Banners";
 
 const App = () => {
   const location = useLocation();
@@ -94,6 +95,7 @@ const App = () => {
             <Route path="earning" element={<AdminPayments />} />
             <Route path="contact" element={<AdminContact />} />
             <Route path="transactions" element={<AdminTransaction />} />
+            <Route path="banners" element={<Banners />} />
           </Route>
         </Route>
 
