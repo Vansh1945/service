@@ -12,13 +12,15 @@ const createCloudinaryStorage = (folder, resourceType, allowedFormats) => {
       if (file.mimetype === 'application/pdf') {
         resourceTypeResult = 'raw';
       } else if (file.mimetype === 'audio/mpeg') {
-        resourceTypeResult = 'video';                                                                                                   
+        resourceTypeResult = 'video';
       }
+      let transformation = [];
       return {
         folder: folder,
         resource_type: resourceTypeResult,
         allowed_formats: allowedFormats,
         public_id: `${folder}_${Date.now()}_${file.originalname.split('.')[0].replace(/\s/g, '-')}`, // Ensure public_id is unique and descriptive and URL-safe
+        transformation: transformation,
       };
     },
   });
@@ -65,10 +67,7 @@ const uploadServicesFile = multer({
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
 });
 
-const uploadBannerImage = multer({
-  storage: createCloudinaryStorage('banners', 'image', ['jpg', 'jpeg', 'png']),
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
-});
+
 
 // Error handler middleware
 const handleUploadErrors = (err, req, res, next) => {
@@ -101,6 +100,5 @@ module.exports = {
   uploadComplaintImage,
   uploadPassbookImg,
   uploadServicesFile,
-  uploadBannerImage,
   handleUploadErrors,
 };

@@ -51,7 +51,6 @@ const feedbackRoutes = require("./routes/feedback-routes");
 const commissionRoutes = require('./routes/commissionRoutes');
 const paymentRoutes = require('./routes/payment-routes');
 const contactRoutes = require('./routes/Contact-Routes');
-const bannerRoutes = require('./routes/bannerRoutes');
 
 // Routes
 app.use("/api/auth", authRoutes);
@@ -69,7 +68,6 @@ app.use('/api/feedback', feedbackRoutes);
 app.use('/api/commission', commissionRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/contact', contactRoutes);
-app.use('/api/banner', bannerRoutes);
 
 
 
