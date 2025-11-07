@@ -9,7 +9,7 @@ const cloudinary = require('../services/cloudinary');
 // Create a new banner (Admin only)
 const createBanner = async (req, res) => {
     try {
-        const { title, startDate, endDate, isActive } = req.body;
+        const { title, subtitle, startDate, endDate, isActive } = req.body;
 
         let imageUrl;
         if (req.file) {
@@ -23,6 +23,7 @@ const createBanner = async (req, res) => {
 
         const banner = await Banner.create({
             title,
+            subtitle,
             imageUrl,
             startDate: new Date(startDate),
             endDate: endDate ? new Date(endDate) : undefined,

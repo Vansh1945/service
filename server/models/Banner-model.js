@@ -7,6 +7,10 @@ const bannerSchema = new Schema({
     type: String,
     maxlength: 200,
   },
+  subtitle: {
+    type: String,
+    maxlength: 300,
+  },
   imageUrl: {
     type: String,
     required: true,

@@ -49,6 +49,7 @@ const AdminBanners = () => {
 
   const [createForm, setCreateForm] = useState({
     title: "",
+    subtitle: "",
     startDate: "",
     endDate: "",
     isActive: true,
@@ -205,6 +206,7 @@ const AdminBanners = () => {
   const resetCreateForm = () => {
     setCreateForm({
       title: "",
+      subtitle: "",
       startDate: "",
       endDate: "",
       isActive: true,
@@ -217,6 +219,7 @@ const AdminBanners = () => {
     setSelectedBanner(banner);
     setEditForm({
       title: banner.title,
+      subtitle: banner.subtitle || "",
       startDate: new Date(banner.startDate).toISOString().split("T")[0],
       endDate: banner.endDate ? new Date(banner.endDate).toISOString().split("T")[0] : "",
       isActive: banner.isActive,
@@ -585,13 +588,26 @@ const Modal = ({ title, onClose, onSubmit, form, handleChange, fileRef }) => (
       <form onSubmit={onSubmit} className="p-6 space-y-6">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Banner Title *
+            Banner Title (Optional)
           </label>
           <input
             name="title"
             value={form.title || ""}
             onChange={handleChange}
             placeholder="Enter banner title"
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Banner Subtitle (Optional)
+          </label>
+          <input
+            name="subtitle"
+            value={form.subtitle || ""}
+            onChange={handleChange}
+            placeholder="Enter banner subtitle"
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200"
           />
         </div>
@@ -745,6 +761,15 @@ const ViewModal = ({ banner, onClose }) => {
                 </label>
                 <p className="text-lg font-semibold text-gray-900">{banner.title}</p>
               </div>
+
+              {banner.subtitle && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Banner Subtitle
+                  </label>
+                  <p className="text-gray-900">{banner.subtitle}</p>
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
