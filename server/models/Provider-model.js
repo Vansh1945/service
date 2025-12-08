@@ -56,7 +56,7 @@ const providerSchema = new mongoose.Schema({
     },
     services: [{
         type: String,
-        enum: ['Electrical', 'Inverter ', 'Appliance Repair', 'Wiring', 'Fan','Other'],
+        enum: ['Electrical', 'Inverter ', 'Appliance ', 'Wiring', 'Fan', 'Other'],
     }],
     experience: {
         type: Number,
