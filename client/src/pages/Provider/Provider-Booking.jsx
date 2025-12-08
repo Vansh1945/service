@@ -739,7 +739,14 @@ const ProviderBooking = () => {
 
   const formatTime = useCallback((timeString) => {
     if (!timeString) return '--:--';
-    return timeString;
+    try {
+      const [hours, minutes] = timeString.split(':');
+      const date = new Date();
+      date.setHours(hours, minutes);
+      return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    } catch {
+      return timeString;
+    }
   }, []);
 
   const formatDuration = useCallback((hours) => {
@@ -1151,6 +1158,24 @@ const ProviderBooking = () => {
                           </p>
                         </div>
                       </div>
+                      <div className="flex items-center">
+                        <div className="p-2 bg-green-100 rounded-lg mr-3">
+                          <Calendar className="w-5 h-5 text-green-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-500">Service Date</p>
+                          <p className="font-medium">{formatDate(selectedBooking.date)}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center">
+                        <div className="p-2 bg-purple-100 rounded-lg mr-3">
+                          <Clock className="w-5 h-5 text-purple-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-500">Booking Time Slot</p>
+                          <p className="font-medium">{formatTime(selectedBooking.time)}</p>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1290,6 +1315,12 @@ const ProviderBooking = () => {
                               <p className="text-sm text-gray-500 mt-1">
                                 {service.service?.description || 'No description available'}
                               </p>
+                              {service.service?.duration && (
+                                <div className="flex items-center mt-2 text-sm text-blue-600">
+                                  <Timer className="w-4 h-4 mr-1" />
+                                  <span>Duration: {formatDuration(service.service.duration)}</span>
+                                </div>
+                              )}
                             </div>
                             <div className="text-right ml-4">
                               <p className="font-medium text-secondary">
@@ -1308,6 +1339,23 @@ const ProviderBooking = () => {
                           )}
                         </div>
                       ))}
+
+                      {/* Additional Instructions */}
+                      {selectedBooking.notes && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                          <div className="flex items-start">
+                            <div className="p-2 bg-blue-100 rounded-lg mr-3">
+                              <HelpCircle className="w-5 h-5 text-blue-600" />
+                            </div>
+                            <div className="flex-1">
+                              <h4 className="font-medium text-secondary text-sm">Additional Instructions</h4>
+                              <p className="text-sm text-gray-700 mt-1">
+                                {selectedBooking.notes}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
