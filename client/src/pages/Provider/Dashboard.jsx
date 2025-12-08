@@ -47,12 +47,21 @@ const Dashboard = () => {
     try {
       setLoading(true);
 
+      // Calculate current month start and end dates
+      const currentDate = new Date();
+      const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+      endOfMonth.setHours(23, 59, 59, 999);
+
+      const startDate = startOfMonth.toISOString().split('T')[0];
+      const endDate = endOfMonth.toISOString().split('T')[0];
+
       // Fetch profile, earnings, and bookings in parallel
       const [profileResponse, summaryResponse, pendingResponse, acceptedResponse, completedResponse, withdrawalsResponse] = await Promise.all([
         fetch(`${API}/provider/profile`, {
           headers: { 'Authorization': `Bearer ${token}` }
         }),
-        fetch(`${API}/payment/summary`, {
+        fetch(`${API}/payment/summary?startDate=${startDate}&endDate=${endDate}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         }),
         fetch(`${API}/booking/provider/status/pending?limit=5`, {
