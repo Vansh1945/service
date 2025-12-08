@@ -132,18 +132,7 @@ providerEarningSchema.statics.getEarningsSummary = async function (providerId) {
                       },
                     },
                     // No paymentInfo exists: check if more than 7 days passed since booking updatedAt
-                    {
-                      $cond: [
-                        {
-                          $lte: [
-                            { $subtract: [new Date(), '$bookingInfo.updatedAt'] },
-                            7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
-                          ],
-                        },
-                        'processing',
-                        'paid by online', // After 7 days auto-paid
-                      ],
-                    },
+                    'paid by online', 
                   ],
                 },
                 'unknown',

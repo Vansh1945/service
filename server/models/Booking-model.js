@@ -220,6 +220,11 @@ const bookingSchema = new Schema({
     default: 0,
     min: [0, 'Commission cannot be negative']
   },
+  providerEarnings: {
+    type: Number,
+    default: 0,
+    min: [0, 'Provider earnings cannot be negative']
+  },
   commissionRule: {
     type: Schema.Types.ObjectId,
     ref: 'CommissionRule'
@@ -297,6 +302,7 @@ bookingSchema.pre('save', async function (next) {
       case 'completed':
         statusChange.note = 'Service has been completed successfully';
         this.serviceCompletedAt = new Date();
+        // Note: totalBookings increment is handled in the controller on confirmation
         break;
       case 'cancelled':
         statusChange.note = 'Booking has been cancelled';
@@ -332,33 +338,13 @@ bookingSchema.pre('save', async function (next) {
     }
   }
 
-  // 🚀 Create ProviderEarning only when booking is completed
+  // Increment customer total bookings when booking is completed
   if (this.isModified('status') && this.status === 'completed') {
     const User = mongoose.model('User');
     await User.findByIdAndUpdate(this.customer, { $inc: { totalBookings: 1 } });
-    try {
-      const ProviderEarning = mongoose.model('ProviderEarning');
-      // Avoid duplicate record
-      const existing = await ProviderEarning.findOne({ booking: this._id });
-      if (!existing) {
-        await ProviderEarning.createFromBooking(this);
-      }
-    } catch (err) {
-      console.error('Error creating provider earning record:', err);
-    }
   }
 
   next();
-});
-
-
-// Add providerEarnings field to the schema
-bookingSchema.add({
-  providerEarnings: {
-    type: Number,
-    default: 0,
-    min: [0, 'Provider earnings cannot be negative']
-  }
 });
 
 // Payment confirmation will be handled through Transaction model updates

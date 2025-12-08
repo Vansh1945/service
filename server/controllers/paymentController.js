@@ -8,6 +8,24 @@ const sendEmail = require('../utils/sendEmail');
 const ExcelJS = require('exceljs');
 
 
+// Helper function to calculate payment settlement
+const calculatePaymentSettlement = (availableBalanceResult) => {
+  return availableBalanceResult.reduce(
+    (settlement, item) => {
+      if (item._id === 'online') {
+        // For online payments, add net amount to available balance
+        settlement.availableBalance += item.totalNet || 0;
+      } else if (item._id === 'cash') {
+        // For cash payments, provider keeps full amount but owes commission
+        settlement.commissionPending += item.totalCommission || 0;
+        settlement.availableBalance -= item.totalCommission || 0;
+      }
+      return settlement;
+    },
+    { availableBalance: 0, commissionPending: 0 }
+  );
+};
+
 // Provider - Get earnings summary
 const getEarningsSummary = async (req, res) => {
   try {
@@ -53,7 +71,7 @@ const getEarningsSummary = async (req, res) => {
       }
     ]);
 
-    // Get available balance (online earnings minus cash commissions)
+    // Get available balance data grouped by payment method
     const availableBalanceResult = await ProviderEarning.aggregate([
       {
         $match: {
@@ -80,21 +98,11 @@ const getEarningsSummary = async (req, res) => {
       }
     ]);
 
-    let availableBalance = 0;
-    let commissionPending = 0;
-
-    availableBalanceResult.forEach(item => {
-      if (item._id === 'online') {
-        availableBalance += item.totalNet;
-      } else if (item._id === 'cash') {
-        commissionPending += item.totalCommission;
-        // For cash payments, provider keeps the full amount but owes commission
-        availableBalance -= item.totalCommission;
-      }
-    });
+    // Calculate payment settlement using helper function
+    const settlement = calculatePaymentSettlement(availableBalanceResult);
 
     // Ensure available balance doesn't go negative
-    availableBalance = Math.max(0, availableBalance);
+    settlement.availableBalance = Math.max(0, settlement.availableBalance);
 
     // Get total requested/processing withdrawals that should be deducted from available balance
     const pendingWithdrawals = await PaymentRecord.aggregate([
@@ -117,7 +125,7 @@ const getEarningsSummary = async (req, res) => {
       : 0;
 
     // Subtract pending withdrawals from available balance
-    availableBalance = Math.max(0, availableBalance - totalPendingWithdrawals);
+    settlement.availableBalance = Math.max(0, settlement.availableBalance - totalPendingWithdrawals);
 
     const result = earnings[0] || {
       totalEarnings: 0,
@@ -130,7 +138,7 @@ const getEarningsSummary = async (req, res) => {
       totalEarnings: result.totalEarnings || 0,
       cashReceived: result.cashReceived || 0,
       commissionPending: result.commissionPending || 0,
-      availableBalance,
+      availableBalance: settlement.availableBalance,
       pendingWithdrawals: totalPendingWithdrawals
     });
 
