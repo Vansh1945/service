@@ -101,8 +101,8 @@ const ConfirmationDialog = ({ isOpen, onClose, onConfirm, title, message, type =
             <button
               onClick={onConfirm}
               className={`flex-1 px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white ${type === 'danger'
-                  ? 'bg-red-600 hover:bg-red-700'
-                  : 'bg-primary hover:bg-primary/90'
+                ? 'bg-red-600 hover:bg-red-700'
+                : 'bg-primary hover:bg-primary/90'
                 }`}
             >
               Confirm
@@ -200,12 +200,12 @@ const SummaryCards = ({ stats, formatCurrency }) => {
 };
 
 // Download Reports Component
-const DownloadReports = ({ 
-  dateFilter, 
-  setDateFilter, 
-  downloadReport, 
-  downloading, 
-  showToast 
+const DownloadReports = ({
+  dateFilter,
+  setDateFilter,
+  downloadReport,
+  downloading,
+  showToast
 }) => {
   return (
     <div className="bg-white rounded-xl shadow-sm p-5 mb-6 border border-gray-200">
@@ -325,16 +325,6 @@ const ProviderBooking = () => {
   const [downloading, setDownloading] = useState(false);
   const [showSummary, setShowSummary] = useState(true);
   const [showReports, setShowReports] = useState(false);
-
-  // Utility functions (unchanged)
-  const maskPhoneNumber = useCallback((phone) => {
-    if (!phone) return 'N/A';
-    const phoneStr = phone.toString();
-    if (phoneStr.length >= 4) {
-      return `****${phoneStr.slice(-6)}`;
-    }
-    return phoneStr;
-  }, []);
 
   const calculateSubtotal = useCallback((booking) => {
     if (!booking?.services) return 0;
@@ -468,7 +458,7 @@ const ProviderBooking = () => {
       }
 
       setDownloading(true);
-      
+
       const response = await fetch(
         `${API}/booking/provider/booking-report?startDate=${dateFilter.startDate}&endDate=${dateFilter.endDate}`,
         {
@@ -493,7 +483,7 @@ const ProviderBooking = () => {
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(downloadUrl);
-     
+
       showToast('Report downloaded successfully', 'success');
     } catch (err) {
       console.error('Error downloading report:', err);
@@ -610,7 +600,7 @@ const ProviderBooking = () => {
       // Optimistic UI update
       setBookings(prev => {
         const updatedBookings = { ...prev };
-        
+
         if (action === 'accept') {
           const bookingIndex = updatedBookings.pending.findIndex(b => b._id === bookingId);
           if (bookingIndex !== -1) {
@@ -631,7 +621,7 @@ const ProviderBooking = () => {
             });
           }
         }
-        
+
         return updatedBookings;
       });
     }
@@ -854,11 +844,11 @@ const ProviderBooking = () => {
 
         {/* Download Reports Section */}
         {showReports && (
-          <DownloadReports 
-            dateFilter={dateFilter} 
-            setDateFilter={setDateFilter} 
-            downloadReport={downloadReport} 
-            downloading={downloading} 
+          <DownloadReports
+            dateFilter={dateFilter}
+            setDateFilter={setDateFilter}
+            downloadReport={downloadReport}
+            downloading={downloading}
             showToast={showToast}
           />
         )}
@@ -1151,28 +1141,6 @@ const ProviderBooking = () => {
                         </div>
                       </div>
                       <div className="flex items-center">
-                        <div className="p-2 bg-purple-100 rounded-lg mr-3">
-                          <Calendar className="w-5 h-5 text-purple-600" />
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-500">Date & Time</p>
-                          <p className="font-medium">
-                            {formatDate(selectedBooking.date)} at {formatTime(selectedBooking.time)}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center">
-                        <div className="p-2 bg-green-100 rounded-lg mr-3">
-                          <Clock className="w-5 h-5 text-green-600" />
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-500">Duration</p>
-                          <p className="font-medium">
-                            {formatDuration(selectedBooking.duration)}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center">
                         <div className="p-2 bg-amber-100 rounded-lg mr-3">
                           {getStatusIcon(selectedBooking.status)}
                         </div>
@@ -1206,53 +1174,92 @@ const ProviderBooking = () => {
 
                   {expandedSections.customer && (
                     <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="flex items-center">
-                        <div className="p-2 bg-blue-100 rounded-lg mr-3">
-                          <User className="w-5 h-5 text-primary" />
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-500">Name</p>
-                          <p className="font-medium">
-                            {selectedBooking.customer?.name || 'Not specified'}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center">
-                        <div className="p-2 bg-green-100 rounded-lg mr-3">
-                          <Phone className="w-5 h-5 text-green-600" />
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-500">Phone</p>
-                          <p className="font-medium">
-                            {maskPhoneNumber(selectedBooking.customer?.phone)}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center">
-                        <div className="p-2 bg-red-100 rounded-lg mr-3">
-                          <Mail className="w-5 h-5 text-red-600" />
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-500">Email</p>
-                          <p className="font-medium">
-                            {selectedBooking.customer?.email || 'Not specified'}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center">
-                        <div className="p-2 bg-purple-100 rounded-lg mr-3">
-                          <Star className="w-5 h-5 text-purple-600" />
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-500">Customer Since</p>
-                          <p className="font-medium">
-                            {selectedBooking.customer?.createdAt ? formatDate(selectedBooking.customer.createdAt) : 'N/A'}
-                          </p>
-                        </div>
-                      </div>
+
+                      {/* ============== ACCEPTED / IN-PROGRESS / ASSIGNED ============== */}
+                      {['accepted', 'in-progress', 'assigned'].includes(selectedBooking.status) && (
+                        <>
+                          {/* Name */}
+                          <div className="flex items-center">
+                            <div className="p-2 bg-blue-100 rounded-lg mr-3">
+                              <User className="w-5 h-5 text-primary" />
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-500">Name</p>
+                              <p className="font-medium">
+                                {selectedBooking.customer?.name || 'Not specified'}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Phone */}
+                          <div className="flex items-center">
+                            <div className="p-2 bg-green-100 rounded-lg mr-3">
+                              <Phone className="w-5 h-5 text-green-600" />
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-500">Phone</p>
+                              <p className="font-medium">
+                                {selectedBooking.customer?.phone}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Email */}
+                          <div className="flex items-center">
+                            <div className="p-2 bg-red-100 rounded-lg mr-3">
+                              <Mail className="w-5 h-5 text-red-600" />
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-500">Email</p>
+                              <p className="font-medium">
+                                {selectedBooking.customer?.email || 'Not specified'}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Customer Since */}
+                          <div className="flex items-center">
+                            <div className="p-2 bg-purple-100 rounded-lg mr-3">
+                              <Star className="w-5 h-5 text-purple-600" />
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-500">Customer Since</p>
+                              <p className="font-medium">
+                                {selectedBooking.customer?.createdAt
+                                  ? formatDate(selectedBooking.customer.createdAt)
+                                  : 'N/A'}
+                              </p>
+                            </div>
+                          </div>
+                        </>
+                      )}
+
+                      {/* ============== PENDING ============== */}
+                      {selectedBooking.status === "pending" && (
+                        <>
+                          <div className="col-span-full text-center py-4 text-gray-500">
+                            <p>
+                              Customer details will be visible after you accept the booking.
+                            </p>
+                          </div>
+                        </>
+                      )}
+
+                      {/* ============== COMPLETED ============== */}
+                      {selectedBooking.status === "completed" && (
+                        <>
+                          <div className="col-span-full text-center py-4 text-gray-500">
+                            <p>
+                              Customer information is hidden because the service has been completed for privacy reasons.
+                            </p>
+                          </div>
+                        </>
+                      )}
+
                     </div>
                   )}
                 </div>
+
 
                 {/* Service Information Section */}
                 <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
@@ -1356,7 +1363,7 @@ const ProviderBooking = () => {
                         </div>
                         {selectedBooking.commission?.amount > 0 && (
                           <div className="flex justify-between py-2 text-gray-600">
-                            <span>Platform Commission ({selectedBooking.commission?.rate || 0}%):</span>
+                            <span>Platform Commission ({selectedBooking.commission?.rule?.type === 'percentage' ? `${selectedBooking.commission?.rule?.value || 0}%` : `₹${selectedBooking.commission?.rule?.value || 0}`}):</span>
                             <span>-{formatCurrency(selectedBooking.commission?.amount || 0)}</span>
                           </div>
                         )}

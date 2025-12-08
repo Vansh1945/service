@@ -55,12 +55,27 @@ const ProviderEarningsDashboard = () => {
   const [monthlyData, setMonthlyData] = useState([]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [processingWithdrawal, setProcessingWithdrawal] = useState(false);
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    pageSize: 20,
+    totalEarnings: 0
+  });
 
   // Fetch earnings summary
   const fetchSummary = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API}/payment/summary`, {
+
+      // Calculate current month start and end dates
+      const currentDate = new Date();
+      const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+      endOfMonth.setHours(23, 59, 59, 999);
+
+      const startDate = startOfMonth.toISOString().split('T')[0];
+      const endDate = endOfMonth.toISOString().split('T')[0];
+
+      const response = await fetch(`${API}/payment/summary?startDate=${startDate}&endDate=${endDate}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -197,17 +212,18 @@ const ProviderEarningsDashboard = () => {
   };
 
   // Fetch earnings report
-  const fetchEarningsReport = async () => {
+  const fetchEarningsReport = async (page = pagination.currentPage, limit = pagination.pageSize) => {
     try {
       let url = `${API}/payment/earnings-report`;
       const params = new URLSearchParams();
 
+      params.append('page', page.toString());
+      params.append('limit', limit.toString());
+
       if (dateFilter.startDate) params.append('startDate', dateFilter.startDate);
       if (dateFilter.endDate) params.append('endDate', dateFilter.endDate);
 
-      if (params.toString()) {
-        url += `?${params.toString()}`;
-      }
+      url += `?${params.toString()}`;
 
       const response = await fetch(url, {
         headers: {
@@ -224,6 +240,12 @@ const ProviderEarningsDashboard = () => {
       const data = await response.json();
       if (data.success) {
         setEarningsReport(data.earnings || []);
+        setPagination(prev => ({
+          ...prev,
+          currentPage: page,
+          pageSize: limit,
+          totalEarnings: data.totalCount || 0
+        }));
       } else {
         throw new Error(data.error || data.message || 'Failed to fetch earnings report');
       }
@@ -948,7 +970,7 @@ const ProviderEarningsDashboard = () => {
                           <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
                           <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Commission</th>
                           <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Net</th>
-                          <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                          <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment Method</th>
                         </tr>
                       </thead>
                       <tbody className="bg-background divide-y divide-gray-200">
@@ -959,10 +981,10 @@ const ProviderEarningsDashboard = () => {
                             <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatCurrency(earning.grossAmount)}</td>
                             <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500 hidden sm:table-cell">-{formatCurrency(earning.commissionAmount)} ({earning.commissionRate}%)</td>
                             <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm font-medium text-primary">+{formatCurrency(earning.netAmount)}</td>
-                            <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
-                              <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(earning.status)}`}>
-                                {earning.status}
-                              </span>
+                            <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {earning.paymentMethod
+                                ? earning.paymentMethod.charAt(0).toUpperCase() + earning.paymentMethod.slice(1)
+                                : 'N/A'}
                             </td>
                           </tr>
                         ))}
@@ -973,6 +995,33 @@ const ProviderEarningsDashboard = () => {
                   <div className="text-center py-6 sm:py-8">
                     <AlertCircle className="w-10 sm:w-12 h-10 sm:h-12 text-gray-400 mx-auto mb-3" />
                     <p className="text-gray-500">No earnings found for the selected period</p>
+                  </div>
+                )}
+
+                {pagination.totalEarnings > 0 && (
+                  <div className="flex items-center justify-between mt-4">
+                    <div className="text-sm text-gray-500">
+                      Showing {((pagination.currentPage - 1) * pagination.pageSize) + 1} to {Math.min(pagination.currentPage * pagination.pageSize, pagination.totalEarnings)} of {pagination.totalEarnings} entries
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => fetchEarningsReport(pagination.currentPage - 1)}
+                        disabled={pagination.currentPage === 1}
+                        className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Previous
+                      </button>
+                      <span className="text-sm text-gray-600">
+                        Page {pagination.currentPage} of {Math.ceil(pagination.totalEarnings / pagination.pageSize)}
+                      </span>
+                      <button
+                        onClick={() => fetchEarningsReport(pagination.currentPage + 1)}
+                        disabled={pagination.currentPage >= Math.ceil(pagination.totalEarnings / pagination.pageSize)}
+                        className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Next
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

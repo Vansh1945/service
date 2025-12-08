@@ -2028,7 +2028,7 @@ const providerBookingReport = async (req, res) => {
       provider: providerId,
       date: { $gte: start, $lte: end },
     })
-      .populate("customer", "name email")
+      .populate("customer", "name email phone createdAt")
       .populate("services.service", "name")
       .sort({ date: -1 });
 

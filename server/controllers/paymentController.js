@@ -34,14 +34,25 @@ const getEarningsSummary = async (req, res) => {
     }
 
     const providerId = new mongoose.Types.ObjectId(req.provider._id);
+    const { startDate, endDate } = req.query;
 
-    // Get all completed earnings
+    // Build match conditions
+    const matchConditions = {
+      provider: providerId,
+      isVisibleToProvider: true
+    };
+
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999); // Include the entire end date
+      matchConditions.createdAt = { $gte: start, $lte: end };
+    }
+
+    // Get earnings (filtered by date if provided)
     const earnings = await ProviderEarning.aggregate([
       {
-        $match: {
-          provider: providerId,
-          isVisibleToProvider: true
-        }
+        $match: matchConditions
       },
       {
         $lookup: {
@@ -276,7 +287,7 @@ const requestWithdrawal = async (req, res) => {
 const downloadEarningsReport = async (req, res) => {
   try {
     const providerId = req.provider._id;
-    const { startDate, endDate, download } = req.query;
+    const { startDate, endDate, download, page = 1, limit = 20 } = req.query;
 
     let filter = { provider: new mongoose.Types.ObjectId(providerId) };
 
@@ -300,16 +311,21 @@ const downloadEarningsReport = async (req, res) => {
       filter.createdAt = { $gte: start, $lte: end };
     }
 
-    // First, let's debug by checking what data exists
-    console.log("Filter:", JSON.stringify(filter, null, 2));
+    // Get total count for pagination
+    const total = await ProviderEarning.countDocuments(filter);
 
-    // Simple find first to debug
-    const simpleEarnings = await ProviderEarning.find(filter).limit(5);
-    console.log("Simple find result:", simpleEarnings.length);
-
-    // Modified aggregation with simpler approach
+    // Modified aggregation with sorting and pagination
     const earnings = await ProviderEarning.aggregate([
       { $match: filter },
+      {
+        $lookup: {
+          from: "bookings",
+          localField: "booking",
+          foreignField: "_id",
+          as: "bookingInfo",
+        },
+      },
+      { $unwind: "$bookingInfo" },
       {
         $lookup: {
           from: "paymentrecords",
@@ -321,23 +337,17 @@ const downloadEarningsReport = async (req, res) => {
       { $unwind: { path: "$paymentInfo", preserveNullAndEmptyArrays: true } },
       {
         $addFields: {
-          status: {
-            $cond: {
-              if: { $ifNull: ["$paymentInfo", false] },
-              then: {
-                $switch: {
-                  branches: [
-                    { case: { $eq: ["$paymentInfo.status", "completed"] }, then: "paid" },
-                    { case: { $in: ["$paymentInfo.status", ["pending", "processing"]] }, then: "processing" },
-                    { case: { $in: ["$paymentInfo.status", ["failed", "rejected"]] }, then: "failed" },
-                  ],
-                  default: "unknown",
-                },
-              },
-              else: "available",
-            },
-          },
+          paymentMethod: "$bookingInfo.paymentMethod",
         },
+      },
+      {
+        $sort: { createdAt: -1 } // Sort by latest first
+      },
+      {
+        $skip: (parseInt(page) - 1) * parseInt(limit)
+      },
+      {
+        $limit: parseInt(limit)
       },
       {
         $project: {
@@ -347,18 +357,58 @@ const downloadEarningsReport = async (req, res) => {
           commissionAmount: 1,
           netAmount: 1,
           createdAt: 1,
-          status: 1,
+          paymentMethod: 1,
         },
       },
     ]);
 
-    console.log("Aggregation result count:", earnings.length);
-
-    if (!earnings.length) {
+    if (!earnings.length && page === 1) {
       return res.status(200).json({ success: false, message: "No earnings found" });
     }
 
     if (download === "true") {
+      // For download, get all earnings without pagination
+      const allEarnings = await ProviderEarning.aggregate([
+        { $match: filter },
+        {
+          $lookup: {
+            from: "bookings",
+            localField: "booking",
+            foreignField: "_id",
+            as: "bookingInfo",
+          },
+        },
+        { $unwind: "$bookingInfo" },
+        {
+          $lookup: {
+            from: "paymentrecords",
+            localField: "paymentRecord",
+            foreignField: "_id",
+            as: "paymentInfo",
+          },
+        },
+        { $unwind: { path: "$paymentInfo", preserveNullAndEmptyArrays: true } },
+        {
+          $addFields: {
+            paymentMethod: "$bookingInfo.paymentMethod",
+          },
+        },
+        {
+          $sort: { createdAt: -1 } // Sort by latest first
+        },
+        {
+          $project: {
+            booking: 1,
+            grossAmount: 1,
+            commissionRate: 1,
+            commissionAmount: 1,
+            netAmount: 1,
+            createdAt: 1,
+            paymentMethod: 1,
+          },
+        },
+      ]);
+
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("Earnings Report");
 
@@ -368,18 +418,18 @@ const downloadEarningsReport = async (req, res) => {
         { header: "Commission Rate (%)", key: "commissionRate", width: 20 },
         { header: "Commission Amount (₹)", key: "commissionAmount", width: 20 },
         { header: "Net Amount (₹)", key: "netAmount", width: 20 },
-        { header: "Status", key: "status", width: 15 },
+        { header: "Payment Method", key: "paymentMethod", width: 15 },
         { header: "Created At", key: "createdAt", width: 25 },
       ];
 
-      earnings.forEach((earning) => {
+      allEarnings.forEach((earning) => {
         worksheet.addRow({
           booking: earning.booking?.toString() || "N/A",
           grossAmount: earning.grossAmount || 0,
           commissionRate: earning.commissionRate || 0,
           commissionAmount: earning.commissionAmount || 0,
           netAmount: earning.netAmount || 0,
-          status: earning.status || "unknown",
+          paymentMethod: earning.paymentMethod || "unknown",
           createdAt: earning.createdAt
             ? new Date(earning.createdAt).toISOString().slice(0, 19).replace("T", " ")
             : "N/A",
@@ -399,7 +449,7 @@ const downloadEarningsReport = async (req, res) => {
       console.log("Earnings report generated and sent successfully");
       return;
     } else {
-      res.json({ success: true, earnings });
+      res.json({ success: true, earnings, total, page: parseInt(page), limit: parseInt(limit) });
     }
   } catch (error) {
     console.error("Error generating earnings report:", error);
