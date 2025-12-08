@@ -80,7 +80,6 @@ const bookingSchema = new Schema({
   },
   time: {
     type: String,
-    required: [true, 'Booking time is required'],
     match: [/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Please provide time in HH:MM format']
   },
   status: {

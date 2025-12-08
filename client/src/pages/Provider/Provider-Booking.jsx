@@ -701,11 +701,6 @@ const ProviderBooking = () => {
 
   const getServiceIcon = useCallback((category) => {
     switch (category?.toLowerCase()) {
-      case 'salon':
-      case 'beauty':
-        return <Scissors className="w-5 h-5 text-pink-500" />;
-      case 'cleaning':
-        return <Sparkles className="w-5 h-5 text-blue-500" />;
       case 'electrical':
         return <Zap className="w-5 h-5 text-yellow-500" />;
       case 'ac':
@@ -764,7 +759,7 @@ const ProviderBooking = () => {
     }).format(amount || 0);
   };
 
-  // Enhanced filtering with combined status and time filters (unchanged)
+  // Enhanced filtering with combined status and time filters
   const currentBookings = useMemo(() => {
     // Get all bookings or specific status bookings
     let filtered = activeTab === 'all'
@@ -782,17 +777,27 @@ const ProviderBooking = () => {
     }
 
     // Apply time-based filter
+    const today = new Date();
+    const todayString = today.toISOString().split('T')[0];
     if (filter === 'today') {
-      const today = new Date().toISOString().split('T')[0];
-      filtered = filtered.filter(booking =>
-        new Date(booking.date).toISOString().split('T')[0] === today);
+      filtered = filtered.filter(booking => {
+        const bookingDate = new Date(booking.date).toISOString().split('T')[0];
+        return bookingDate === todayString;
+      });
     } else if (filter === 'upcoming') {
-      const today = new Date();
-      filtered = filtered.filter(booking => new Date(booking.date) >= today);
+      filtered = filtered.filter(booking => {
+        const bookingDate = new Date(booking.date).toISOString().split('T')[0];
+        return bookingDate >= todayString;
+      });
     } else if (filter === 'past') {
-      const today = new Date();
-      filtered = filtered.filter(booking => new Date(booking.date) < today);
+      filtered = filtered.filter(booking => {
+        const bookingDate = new Date(booking.date).toISOString().split('T')[0];
+        return bookingDate < todayString;
+      });
     }
+
+    // Sort by creation date (latest first)
+    filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
     return filtered;
   }, [bookings, activeTab, searchQuery, filter]);
@@ -913,16 +918,6 @@ const ProviderBooking = () => {
                   <Filter className="h-4 w-4 text-gray-400" />
                 </div>
               </div>
-            </div>
-
-            <div className="flex items-center space-x-2 self-start">
-              <button
-                onClick={() => setViewMode(viewMode === 'card' ? 'list' : 'card')}
-                className="p-2 border border-gray-300 rounded-md hover:bg-gray-50"
-                title={`Switch to ${viewMode === 'card' ? 'List' : 'Card'} View`}
-              >
-                {viewMode === 'card' ? <List className="w-4 h-4" /> : <Grid className="w-4 h-4" />}
-              </button>
             </div>
           </div>
         </div>
@@ -1443,14 +1438,11 @@ const ProviderBooking = () => {
 
                   {expandedSections.address && (
                     <div className="mt-4">
-                      <p className="font-medium">
-                        {formatAddress(selectedBooking.address)}
-                      </p>
-                      {selectedBooking.address?.coordinates && (
-                        <div className="mt-4 h-48 bg-gray-200 rounded-lg flex items-center justify-center text-gray-500">
-                          Map View (Coordinates: {selectedBooking.address.coordinates.join(', ')})
-                        </div>
-                      )}
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="font-medium">
+                          {formatAddress(selectedBooking.address)}
+                        </p> 
+                      </div>
                     </div>
                   )}
                 </div>

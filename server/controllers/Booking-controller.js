@@ -1260,8 +1260,8 @@ const getProviderBookingById = async (req, res) => {
         { provider: providerId }
       ]
     })
-      .populate('customer', 'name email phone')
-      .populate('services.service', 'name description duration price')
+      .populate('customer', 'name email phone createdAt')
+      .populate('services.service', 'title description duration price')
       .lean();
 
     if (!booking) {
@@ -1371,7 +1371,7 @@ const getBookingsByStatus = async (req, res) => {
 
     const bookings = await Booking.find(query)
       .populate('customer', 'name email phone')
-      .populate('services.service', 'name price duration')
+      .populate('services.service', 'title price duration category')
       .sort({ date: 1, time: 1 })
       .skip((page - 1) * limit)
       .limit(parseInt(limit))
