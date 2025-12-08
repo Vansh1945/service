@@ -133,11 +133,6 @@ commissionRuleSchema.statics.getCommissionForProvider = async function (provider
       isActive: true,
       applyTo: 'specificProvider',
       specificProvider: providerId,
-      effectiveFrom: { $lte: now },
-      $or: [
-        { effectiveUntil: { $exists: false } },
-        { effectiveUntil: { $gte: now } }
-      ]
     }).sort({ createdAt: -1 });
 
     if (providerSpecificRule) return providerSpecificRule;
@@ -147,11 +142,6 @@ commissionRuleSchema.statics.getCommissionForProvider = async function (provider
       isActive: true,
       applyTo: 'performanceTier',
       performanceTier: providerPerformanceTier,
-      effectiveFrom: { $lte: now },
-      $or: [
-        { effectiveUntil: { $exists: false } },
-        { effectiveUntil: { $gte: now } }
-      ]
     }).sort({ createdAt: -1 });
 
     if (tierRule) return tierRule;
@@ -160,11 +150,6 @@ commissionRuleSchema.statics.getCommissionForProvider = async function (provider
     const allProvidersRule = await this.findOne({
       isActive: true,
       applyTo: 'all',
-      effectiveFrom: { $lte: now },
-      $or: [
-        { effectiveUntil: { $exists: false } },
-        { effectiveUntil: { $gte: now } }
-      ]
     }).sort({ createdAt: -1 });
 
     return allProvidersRule || null;

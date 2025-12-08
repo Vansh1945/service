@@ -54,6 +54,11 @@ const providerSchema = new mongoose.Schema({
         type: String,
         default: 'provider'
     },
+    performanceTier: {
+        type: String,
+        enum: ['basic', 'standard', 'premium'],
+        default: 'standard'
+    },
     services: [{
         type: String,
         enum: ['Electrical', 'Inverter ', 'Appliance ', 'Wiring', 'Fan', 'Other'],

@@ -530,40 +530,40 @@ const getUserBookings = async (req, res) => {
 
     // Status filter
     if (status) {
-        if (status === 'upcoming') {
-            query.status = { $in: ['pending', 'accepted', 'in-progress'] };
-        } else if (status === 'pending_payment') {
-            query.paymentStatus = 'pending';
-        } else if (status !== 'all') {
-            query.status = status;
-        }
+      if (status === 'upcoming') {
+        query.status = { $in: ['pending', 'accepted', 'in-progress'] };
+      } else if (status === 'pending_payment') {
+        query.paymentStatus = 'pending';
+      } else if (status !== 'all') {
+        query.status = status;
+      }
     }
 
     // Time filter
     if (timeFilter && timeFilter !== 'all') {
-        const now = new Date();
-        let startDate;
-        switch (timeFilter) {
-            case '7days':
-                startDate = new Date(now.setDate(now.getDate() - 7));
-                break;
-            case '1month':
-                startDate = new Date(now.setMonth(now.getMonth() - 1));
-                break;
-            case '6months':
-                startDate = new Date(now.setMonth(now.getMonth() - 6));
-                break;
-            case '1year':
-                startDate = new Date(now.setFullYear(now.getFullYear() - 1));
-                break;
-            default:
-                startDate = null;
-        }
-        if (startDate) {
-            query.createdAt = { $gte: startDate };
-        }
+      const now = new Date();
+      let startDate;
+      switch (timeFilter) {
+        case '7days':
+          startDate = new Date(now.setDate(now.getDate() - 7));
+          break;
+        case '1month':
+          startDate = new Date(now.setMonth(now.getMonth() - 1));
+          break;
+        case '6months':
+          startDate = new Date(now.setMonth(now.getMonth() - 6));
+          break;
+        case '1year':
+          startDate = new Date(now.setFullYear(now.getFullYear() - 1));
+          break;
+        default:
+          startDate = null;
+      }
+      if (startDate) {
+        query.createdAt = { $gte: startDate };
+      }
     }
-    
+
     // Get total count for pagination
     const totalBookings = await Booking.countDocuments(query);
 
@@ -1429,7 +1429,7 @@ const acceptBooking = async (req, res) => {
   try {
     const { id } = req.params;
     const providerId = req.provider._id;
-    const { time } = req.body || {}; 
+    const { time } = req.body || {};
     // Validate booking ID format
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
@@ -1720,6 +1720,8 @@ const rejectBooking = async (req, res) => {
   }
 };
 
+
+
 /**
  * @desc    Complete a booking
  * @route   PATCH /api/booking/provider/:id/complete
@@ -1734,15 +1736,22 @@ const completeBooking = async (req, res) => {
 
   try {
     const provider = await Provider.findById(providerId)
-      .select('name email performanceTier wallet services')
+      .select('name email performanceTier wallet')
       .session(session);
 
     if (!provider) throw new Error('Provider not found');
 
+    const performanceTier = provider.performanceTier || 'standard';
+
+    // Get commission rule for provider
     const commissionRule = await CommissionRule.getCommissionForProvider(
       providerId,
-      provider.performanceTier
+      performanceTier
     );
+
+    if (!commissionRule) {
+      throw new Error('No active commission rule found for this provider. Cannot complete booking.');
+    }
 
     const booking = await Booking.findOne({
       _id: id,
@@ -1752,6 +1761,7 @@ const completeBooking = async (req, res) => {
 
     if (!booking) {
       const currentBooking = await Booking.findById(id).select('status commissionProcessed').lean();
+
       if (currentBooking && currentBooking.status === 'completed') {
         await session.commitTransaction();
         session.endSession();
@@ -1763,51 +1773,52 @@ const completeBooking = async (req, res) => {
       throw new Error('Booking not found or cannot be completed.');
     }
 
-    // Prevent duplicate commission processing
+    // Prevent duplicate commission
     if (booking.commissionProcessed) {
       await session.commitTransaction();
       session.endSession();
       return res.status(409).json({
         success: false,
-        message: 'Commission has already been processed for this booking.'
+        message: 'Commission already processed for this booking.'
       });
     }
 
     booking.status = 'completed';
     booking.completedAt = new Date();
     booking.paymentStatus = 'paid';
-    booking.commissionProcessed = true; // Mark commission as processed
+    booking.commissionProcessed = true;
 
     await booking.save({ session });
-
-    const populatedBooking = await Booking.findById(booking._id)
-      .populate('customer', 'name email phone')
-      .populate('services.service', 'title basePrice category')
-      .session(session);
 
     const { commission, netAmount } = CommissionRule.calculateCommission(
       booking.totalAmount,
       commissionRule
     );
 
-    // Cash transaction record (if applicable)
-    if (booking.paymentMethod === 'cash' && booking.paymentStatus === 'pending') {
+    // ------------------------------
+    //  CASH PAYMENT: Create a cash transaction
+    // ------------------------------
+    if (booking.paymentMethod === 'cash') {
       const Transaction = require('../models/Transaction-model');
+
       const cashTransaction = new Transaction({
         booking: booking._id,
-        user: booking.customer._id,
+        user: booking.customer,
         amount: booking.totalAmount,
         paymentMethod: 'cash',
         paymentStatus: 'completed',
         transactionId: `CASH-${Date.now()}-${booking._id.toString().slice(-6)}`,
         currency: 'INR',
         completedAt: new Date(),
-        description: `Cash payment for completed booking ${booking._id}`
+        description: `Cash payment for booking ${booking._id}`
       });
+
       await cashTransaction.save({ session });
     }
 
-    // Prevent duplicate earnings record
+    // ------------------------------
+    //  PREVENT DUPLICATE EARNING RECORD
+    // ------------------------------
     const existingEarning = await ProviderEarning.findOne({
       booking: booking._id,
       provider: providerId
@@ -1818,15 +1829,22 @@ const completeBooking = async (req, res) => {
       session.endSession();
       return res.status(409).json({
         success: false,
-        message: 'Earning already recorded for this booking.'
+        message: 'Earning already recorded!'
       });
     }
 
-    const isCashPayment = booking.paymentMethod === 'cash';
-    const earningStatus = isCashPayment ? 'paid' : 'available';
-    const availableAfter = isCashPayment
-      ? new Date()
-      : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    // ------------------------------
+    //  EARNING RELEASE DATE & STATUS
+    // ------------------------------
+    let earningStatus, availableAfter;
+
+    if (booking.paymentMethod === "cash") {
+      earningStatus = "paid"; // provider already received cash
+      availableAfter = new Date();
+    } else {
+      earningStatus = "available";
+      availableAfter = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    }
 
     const providerEarning = new ProviderEarning({
       provider: providerId,
@@ -1836,65 +1854,127 @@ const completeBooking = async (req, res) => {
       commissionAmount: commission,
       netAmount: netAmount,
       status: earningStatus,
-      availableAfter: availableAfter
+      availableAfter
     });
+
     await providerEarning.save({ session });
 
-    // --- Crucial Fix: Update Provider Wallet Available Balance ---
+    // ------------------------------
+    //  FIXED WALLET LOGIC
+    // ------------------------------
     if (!provider.wallet) {
       provider.wallet = { availableBalance: 0, totalWithdrawn: 0, lastUpdated: new Date() };
     }
-    provider.wallet.availableBalance += netAmount;
-    provider.wallet.lastUpdated = new Date();
 
+    if (booking.paymentMethod === "cash") {
+      // Provider receives full amount from customer
+      provider.wallet.availableBalance += booking.totalAmount;
+
+      // Immediately deduct commission
+      provider.wallet.availableBalance -= commission;
+
+    } else {
+      // Online payment → provider gets only netAmount
+      provider.wallet.availableBalance += netAmount;
+    }
+
+    provider.wallet.lastUpdated = new Date();
     await provider.save({ session });
 
+    // Stats update
     await Provider.findByIdAndUpdate(
       providerId,
-      { $inc: { completedBookings: 1, totalEarnings: netAmount, totalCommissionPaid: commission } },
+      { $inc: { completedBookings: 1 } },
       { session }
     );
 
-    // Notifications (as before)
+    // ------------------------------
+    //  EMAIL NOTIFICATION (Async)
+    // ------------------------------
     setImmediate(async () => {
       try {
-        const servicesList = booking.services.map(item =>
-          `<li>${item.service.title} (Qty: ${item.quantity}) - ₹${item.price.toFixed(2)}</li>`
-        ).join('');
+        const populatedBooking = await Booking.findById(booking._id)
+          .populate('customer', 'name email phone')
+          .populate('services.service', 'title basePrice category')
+          .lean();
 
-        const paymentStatusText = booking.paymentMethod === 'cash'
-          ? 'Cash Payment Received - Thank you!'
-          : (booking.paymentStatus === 'paid' ? 'Paid - Thank you!' : 'Pending');
+        const servicesListHTML = populatedBooking.services
+          .map(item => `
+        <tr>
+          <td>${item.service.title}</td>
+          <td>${item.quantity}</td>
+          <td>₹${item.price.toFixed(2)}</td>
+        </tr>
+      `)
+          .join('');
+
+        const paymentStatusText =
+          booking.paymentMethod === 'cash'
+            ? 'Cash Collected'
+            : (booking.paymentStatus === 'paid' ? 'Paid (Online)' : 'Pending');
 
         const emailHtml = `
-          <h2>Service Completed</h2>
-          <p>Booking ID: ${booking._id}</p>
-          <ul>${servicesList}</ul>
-          <p><strong>Total Amount:</strong> ₹${booking.totalAmount.toFixed(2)}</p>
-          <p><strong>Commission:</strong> ₹${commission.toFixed(2)}</p>
-          <p><strong>Provider Earnings:</strong> ₹${netAmount.toFixed(2)}</p>
-          <p><strong>Payment Status:</strong> ${paymentStatusText}</p>
-        `;
+      <h2 style="color:#4CAF50;">Booking Completed Successfully</h2>
 
+      <p><strong>Booking ID:</strong> ${booking._id}</p>
+      <p><strong>Completed At:</strong> ${booking.completedAt.toLocaleString()}</p>
+
+      <h3>Customer Details</h3>
+      <p><strong>Name:</strong> ${populatedBooking.customer.name}</p>
+      <p><strong>Phone:</strong> ${populatedBooking.customer.phone}</p>
+
+      <h3>Services</h3>
+      <table border="1" cellspacing="0" cellpadding="8">
+        <tr>
+          <th>Service</th>
+          <th>Qty</th>
+          <th>Price</th>
+        </tr>
+        ${servicesListHTML}
+      </table>
+
+      <h3>Payment Summary</h3>
+      <p><strong>Payment Method:</strong> ${booking.paymentMethod}</p>
+      <p><strong>Payment Status:</strong> ${paymentStatusText}</p>
+
+      <h3>Amount Breakdown</h3>
+      <p><strong>Total Amount:</strong> ₹${booking.totalAmount.toFixed(2)}</p>
+      <p><strong>Commission Applied (${commissionRule?.value}${commissionRule?.type === 'percentage' ? '%' : ''}):</strong> ₹${commission.toFixed(2)}</p>
+      <p><strong>Provider Earnings (Net Amount):</strong> <span style="color:green;">₹${netAmount.toFixed(2)}</span></p>
+
+      <br/>
+      <p>Thank you for using our service!</p>
+    `;
+
+        // Send email to customer + provider
         await Promise.all([
-          sendEmail({ to: booking.customer.email, subject: 'Service Completed', html: emailHtml }),
-          sendEmail({ to: provider.email, subject: 'Service Completed - Provider Copy', html: emailHtml })
+          sendEmail({
+            to: populatedBooking.customer.email,
+            subject: 'Your Service Has Been Completed',
+            html: emailHtml
+          }),
+          sendEmail({
+            to: provider.email,
+            subject: 'Service Completed - Provider Summary',
+            html: emailHtml
+          })
         ]);
+
       } catch (err) {
-        console.error('Email error:', err);
+        console.error('Email Error:', err);
       }
     });
+
 
     await session.commitTransaction();
     session.endSession();
 
-    res.json({
+    return res.json({
       success: true,
-      message: 'Booking completed and provider wallet updated successfully.',
+      message: "Booking completed successfully.",
       data: {
         bookingId: booking._id,
-        status: 'completed',
-        paymentStatus: 'paid',
+        status: "completed",
         totalAmount: booking.totalAmount,
         commission,
         netAmount
@@ -1904,13 +1984,14 @@ const completeBooking = async (req, res) => {
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
-    console.error('Complete Booking Error:', error);
+    console.error("Complete Booking Error:", error);
     res.status(500).json({
       success: false,
-      message: error.message || 'Failed to complete booking'
+      message: error.message || "Failed to complete booking"
     });
   }
 };
+
 
 
 
@@ -2103,10 +2184,10 @@ const getAllBookings = async (req, res) => {
       },
       {
         $lookup: {
-            from: 'services',
-            localField: 'services.service',
-            foreignField: '_id',
-            as: 'serviceDetails'
+          from: 'services',
+          localField: 'services.service',
+          foreignField: '_id',
+          as: 'serviceDetails'
         }
       }
     );
@@ -2114,7 +2195,7 @@ const getAllBookings = async (req, res) => {
     if (req.query.search) {
       const search = req.query.search;
       const searchRegex = { $regex: search, $options: 'i' };
-      
+
       const searchMatch = {
         $or: [
           { 'customer.name': searchRegex },
@@ -2138,39 +2219,39 @@ const getAllBookings = async (req, res) => {
     }
 
     pipeline.push({
-        $addFields: {
-            'services': {
-                $map: {
-                    input: '$services',
-                    as: 'serviceItem',
-                    in: {
-                        $mergeObjects: [
-                            '$serviceItem',
-                            {
-                                service: {
-                                    $arrayElemAt: [
-                                        {
-                                            $filter: {
-                                                input: '$serviceDetails',
-                                                as: 'sd',
-                                                cond: { $eq: ['$sd._id', '$serviceItem.service'] }
-                                            }
-                                        },
-                                        0
-                                    ]
-                                }
-                            }
-                        ]
-                    }
+      $addFields: {
+        'services': {
+          $map: {
+            input: '$services',
+            as: 'serviceItem',
+            in: {
+              $mergeObjects: [
+                '$serviceItem',
+                {
+                  service: {
+                    $arrayElemAt: [
+                      {
+                        $filter: {
+                          input: '$serviceDetails',
+                          as: 'sd',
+                          cond: { $eq: ['$sd._id', '$serviceItem.service'] }
+                        }
+                      },
+                      0
+                    ]
+                  }
                 }
+              ]
             }
+          }
         }
+      }
     });
-    
+
     pipeline.push({
-        $project: {
-            serviceDetails: 0
-        }
+      $project: {
+        serviceDetails: 0
+      }
     });
 
     const countPipeline = [...pipeline, { $count: 'total' }];
