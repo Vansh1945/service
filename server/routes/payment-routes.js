@@ -19,6 +19,10 @@ router.get("/admin/withdrawal-report", adminAuthMiddleware, paymentController.ge
 router.get('/admin/provider-earnings-report', adminAuthMiddleware, paymentController.generateProviderEarningsReport);
 router.get('/admin/commission-report', adminAuthMiddleware, paymentController.getCommissionReport);
 router.get('/admin/failed-rejected-report', adminAuthMiddleware, paymentController.failedRejectedWithdrawalsReport);
+router.get('/admin/provider-ledger/:providerId', adminAuthMiddleware, paymentController.providerLedgerReport);
+router.get('/admin/earnings-summary-report', adminAuthMiddleware, paymentController.earningsSummaryReport);
+router.get('/admin/payout-history-report', adminAuthMiddleware, paymentController.payoutHistoryReport);
+router.get('/admin/outstanding-balance-report', adminAuthMiddleware, paymentController.outstandingBalanceReport);
 
 module.exports = router;
 

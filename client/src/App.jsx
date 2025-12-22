@@ -89,7 +89,7 @@ const App = () => {
             <Route path="add-services" element={<AdminServices />} />
             <Route path="complaints" element={<AdminComplaints />} />
             <Route path="feedback" element={<AdminServiceFeedback />} />
-            <Route path="earning" element={<AdminReports />} />
+            <Route path="earning-reports" element={<AdminReports />} />
           </Route>
         </Route>
 

@@ -567,11 +567,20 @@ const getAllWithdrawalRequests = async (req, res) => {
     const filter = {};
     if (status) filter.status = status; // requested / processing / completed / rejected
 
-    // Date filter (optional)
+    // Date filter (optional) with validation
     if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      const diffDays = Math.floor((end - start) / (1000 * 60 * 60 * 24));
+      if (diffDays < 7) {
+        return res.status(400).json({ success: false, error: "Minimum range is 7 days" });
+      }
+      if (diffDays > 62) {
+        return res.status(400).json({ success: false, error: "Maximum range is 2 months" });
+      }
       filter.createdAt = {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate)
+        $gte: start,
+        $lte: end
       };
     }
 
@@ -808,7 +817,7 @@ const generateWithdrawalReport = async (req, res) => {
     // Ensure min 7 days and max 2 months range
     const diffMs = to - from;
     const minRangeMs = 7 * 24 * 60 * 60 * 1000;    // 7 days
-    const maxRangeMs = 60 * 24 * 60 * 60 * 1000; // 60 days
+    const maxRangeMs = 62 * 24 * 60 * 60 * 1000; // 62 days
 
     if (diffMs < minRangeMs || diffMs > maxRangeMs) {
       return res.status(400).json({
@@ -837,13 +846,12 @@ const generateWithdrawalReport = async (req, res) => {
     const worksheet = workbook.addWorksheet('Withdrawal Report');
 
     worksheet.columns = [
-      { header: 'Transaction Reference', key: 'transactionReference', width: 25 },
-      { header: 'Provider ID', key: 'providerId', width: 25 },
       { header: 'Provider Name', key: 'providerName', width: 25 },
+      { header: 'Provider ID', key: 'providerId', width: 25 },
       { header: 'Requested Amount', key: 'amount', width: 15 },
       { header: 'Net Amount Paid', key: 'netAmount', width: 15 },
       { header: 'Payment Method', key: 'paymentMethod', width: 15 },
-      { header: 'Account Number', key: 'accountNumber', width: 25 },
+      { header: 'Account Number (Masked)', key: 'accountNumber', width: 25 },
       { header: 'IFSC Code', key: 'ifscCode', width: 20 },
       { header: 'Bank Name', key: 'bankName', width: 25 },
       { header: 'Status', key: 'status', width: 15 },
@@ -853,14 +861,16 @@ const generateWithdrawalReport = async (req, res) => {
     ];
 
     records.forEach(record => {
+      const rawAccount = record.paymentDetails.accountNumber || '';
+      const maskedAccount = rawAccount.length > 4 ? 'X'.repeat(rawAccount.length - 4) + rawAccount.slice(-4) : rawAccount;
+
       worksheet.addRow({
-        transactionReference: record.transactionReference || '-',
-        providerId: record.provider ? record.provider._id.toString() : '-',
         providerName: record.provider ? record.provider.name : '-',
+        providerId: record.provider ? record.provider._id.toString() : '-',
         amount: record.amount,
         netAmount: record.netAmount,
         paymentMethod: record.paymentMethod,
-        accountNumber: record.paymentDetails.accountNumber || '-',
+        accountNumber: maskedAccount,
         ifscCode: record.paymentDetails.ifscCode || '-',
         bankName: record.paymentDetails.bankName || '-',
         status: record.status,
@@ -1126,35 +1136,424 @@ const failedRejectedWithdrawalsReport = async (req, res) => {
 
       records.forEach(record => {
         worksheet.addRow({
-          providerName: record.provider?.name || 'N/A',
-          providerId: record.provider?._id || 'N/A',
+          providerName: record.provider ? record.provider.name : 'N/A',
+          providerId: record.provider ? record.provider._id.toString() : 'N/A',
           amount: record.amount,
-          reason: record.rejectionReason || 'N/A',
+          reason: record.rejectionReason || record.adminRemark || 'N/A',
           status: record.status,
-          requestedAt: record.createdAt ? record.createdAt.toISOString().split('T')[0] : 'N/A',
-          actionDate: record.completedAt ? record.completedAt.toISOString().split('T')[0] : 'N/A'
+          requestedAt: record.createdAt.toISOString().slice(0, 10),
+          actionDate: record.completedAt ? record.completedAt.toISOString().slice(0, 10) : 'N/A'
         });
       });
 
-      res.setHeader(
-        'Content-Type',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      );
-      res.setHeader(
-        'Content-Disposition',
-        `attachment; filename=FailedRejectedWithdrawals_${startDate}_to_${endDate}.xlsx`
-      );
+      res.setHeader('Content-Disposition', `attachment; filename=failed_rejected_withdrawals_${startDate}_to_${endDate}.xlsx`);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 
       await workbook.xlsx.write(res);
-      return res.status(200).end();
+      res.end();
+
+    } else {
+      res.json({ success: true, records });
+    }
+  } catch (error) {
+    console.error('Failed rejected withdrawals report error:', error);
+    res.status(500).json({ success: false, error: 'Failed to generate failed rejected withdrawals report' });
+  }
+};
+
+// Admin - Provider Ledger Report
+const providerLedgerReport = async (req, res) => {
+  try {
+    const { providerId } = req.params;
+    const { fromDate, toDate } = req.query;
+
+    // Validate providerId
+    if (!mongoose.isValidObjectId(providerId)) {
+      return res.status(400).json({ success: false, error: 'Invalid provider ID' });
     }
 
-    // JSON view
-    res.status(200).json(records);
+    // Validate dates
+    if (!fromDate || !toDate) {
+      return res.status(400).json({ success: false, error: 'fromDate and toDate are required' });
+    }
 
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
+    const start = new Date(fromDate);
+    const end = new Date(toDate);
+    end.setHours(23, 59, 59, 999);
+
+    const diffDays = Math.floor((end - start) / (1000 * 60 * 60 * 24));
+    if (diffDays < 7 || diffDays > 62) {
+      return res.status(400).json({ success: false, error: 'Date range must be between 7 days and 2 months' });
+    }
+
+    // Get earnings for the provider
+    const earnings = await ProviderEarning.aggregate([
+      {
+        $match: {
+          provider: new mongoose.Types.ObjectId(providerId),
+          createdAt: { $gte: start, $lte: end }
+        }
+      },
+      {
+        $lookup: {
+          from: 'bookings',
+          localField: 'booking',
+          foreignField: '_id',
+          as: 'booking'
+        }
+      },
+      { $unwind: '$booking' },
+      {
+        $lookup: {
+          from: 'paymentrecords',
+          localField: 'paymentRecord',
+          foreignField: '_id',
+          as: 'paymentInfo',
+        },
+      },
+      { $unwind: { path: '$paymentInfo', preserveNullAndEmptyArrays: true } },
+      {
+        $sort: { createdAt: -1 }
+      }
+    ]);
+
+    // Create Excel
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Provider Ledger Report');
+
+    worksheet.columns = [
+      { header: 'Date', key: 'date', width: 20 },
+      { header: 'Booking ID', key: 'bookingId', width: 25 },
+      { header: 'Gross Amount', key: 'grossAmount', width: 15 },
+      { header: 'Commission Rate', key: 'commissionRate', width: 15 },
+      { header: 'Commission Amount', key: 'commissionAmount', width: 15 },
+      { header: 'Net Amount', key: 'netAmount', width: 15 },
+      { header: 'Payment Method', key: 'paymentMethod', width: 15 }, // cash / online
+      { header: 'Withdrawal Linked', key: 'withdrawalLinked', width: 15 },
+      { header: 'Withdrawal Reference ID', key: 'withdrawalRef', width: 25 },
+      { header: 'Status', key: 'status', width: 15 } // Booking status
+    ];
+
+    earnings.forEach(earning => {
+      worksheet.addRow({
+        date: earning.createdAt.toISOString().slice(0, 10),
+        bookingId: earning.booking._id.toString(),
+        grossAmount: earning.grossAmount,
+        commissionRate: earning.commissionRate,
+        commissionAmount: earning.commissionAmount,
+        netAmount: earning.netAmount,
+        paymentMethod: earning.booking.paymentMethod,
+        withdrawalLinked: earning.paymentRecord ? 'Yes' : 'No',
+        withdrawalRef: earning.paymentInfo?.transactionReference || '-',
+        status: earning.booking.status
+      });
+    });
+
+    res.setHeader('Content-Disposition', `attachment; filename=provider_ledger_${providerId}_${fromDate}_to_${toDate}.xlsx`);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
+    await workbook.xlsx.write(res);
+    res.end();
+
+  } catch (error) {
+    console.error('Provider ledger report error:', error);
+    res.status(500).json({ success: false, error: 'Failed to generate provider ledger report' });
+  }
+};
+
+// Admin - Earnings Summary Report
+const earningsSummaryReport = async (req, res) => {
+  try {
+    const { fromDate, toDate, groupBy = 'month' } = req.query;
+
+    let start, end, dateFilter = {};
+
+    if (fromDate && toDate) {
+      start = new Date(fromDate);
+      end = new Date(toDate);
+
+      const diffDays = Math.floor((end - start) / (1000 * 60 * 60 * 24));
+      if (diffDays < 7 || diffDays > 62) {
+        return res.status(400).json({ success: false, error: 'Date range must be between 7 days and 2 months' });
+      }
+
+      dateFilter = { createdAt: { $gte: start, $lte: end } };
+    }
+
+    let groupId = { year: { $year: '$createdAt' }, month: { $month: '$createdAt' } };
+
+    if (groupBy === 'week') {
+      groupId = { year: { $year: '$createdAt' }, week: { $week: '$createdAt' } };
+    }
+
+    // Aggregate earnings
+    const summary = await ProviderEarning.aggregate([
+      {
+        $match: dateFilter
+      },
+      {
+        $lookup: {
+          from: 'bookings',
+          localField: 'booking',
+          foreignField: '_id',
+          as: 'booking'
+        }
+      },
+      { $unwind: '$booking' },
+      { $match: { 'booking.status': 'completed' } },
+      {
+        $group: {
+          _id: groupId,
+          totalGross: { $sum: '$grossAmount' },
+          totalCommission: { $sum: '$commissionAmount' },
+          totalNet: { $sum: '$netAmount' },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { '_id.year': 1, '_id.month': 1 } }
+    ]);
+
+    // Get withdrawals for the same period
+    const withdrawals = await PaymentRecord.aggregate([
+      {
+        $match: {
+          status: 'completed',
+          ...dateFilter
+        }
+      },
+      {
+        $group: {
+          _id: groupId,
+          totalWithdrawn: { $sum: '$amount' }
+        }
+      }
+    ]);
+
+    // Create Excel
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Earnings Summary Report');
+
+    worksheet.columns = [
+      { header: 'Period', key: 'period', width: 20 },
+      { header: 'Total Platform Earnings (Gross)', key: 'totalGross', width: 25 },
+      { header: 'Total Provider Earnings (Net)', key: 'totalNet', width: 25 },
+      { header: 'Total Commission Earned', key: 'totalCommission', width: 25 },
+      { header: 'Total Withdrawals Processed', key: 'totalWithdrawn', width: 25 },
+      { header: 'Net Platform Revenue', key: 'netRevenue', width: 20 }
+    ];
+
+    summary.forEach(item => {
+      const period = groupBy === 'week' 
+        ? `Week ${item._id.week}, ${item._id.year}`
+        : `${item._id.year}-${(item._id.month || 0).toString().padStart(2, '0')}`;
+
+      const withdrawalData = withdrawals.find(w => 
+        w._id.year === item._id.year && 
+        (groupBy === 'week' ? w._id.week === item._id.week : w._id.month === item._id.month)
+      );
+
+      worksheet.addRow({
+        period,
+        totalGross: item.totalGross,
+        totalCommission: item.totalCommission,
+        totalNet: item.totalNet,
+        totalWithdrawn: withdrawalData ? withdrawalData.totalWithdrawn : 0,
+        netRevenue: item.totalCommission // Platform revenue is essentially the commission
+      });
+    });
+
+    res.setHeader('Content-Disposition', `attachment; filename=earnings_summary_${fromDate}_to_${toDate}.xlsx`);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
+    await workbook.xlsx.write(res);
+    res.end();
+
+  } catch (error) {
+    console.error('Earnings summary report error:', error);
+    res.status(500).json({ success: false, error: 'Failed to generate earnings summary report' });
+  }
+};
+
+// Admin - Payout History Report
+const payoutHistoryReport = async (req, res) => {
+  try {
+    const { fromDate, toDate } = req.query;
+
+    if (!fromDate || !toDate) {
+      return res.status(400).json({ success: false, error: 'fromDate and toDate are required' });
+    }
+
+    const start = new Date(fromDate);
+    const end = new Date(toDate);
+
+    const diffDays = Math.floor((end - start) / (1000 * 60 * 60 * 24));
+    if (diffDays < 7 || diffDays > 62) {
+      return res.status(400).json({ success: false, error: 'Date range must be between 7 days and 2 months' });
+    }
+
+    const payouts = await PaymentRecord.find({
+      status: 'completed',
+      createdAt: { $gte: start, $lte: end }
+    }).populate('provider', 'name').populate('admin', 'name').sort({ createdAt: -1 });
+
+    // Create Excel
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Payout History Report');
+
+    worksheet.columns = [
+      { header: 'Provider Name', key: 'providerName', width: 25 },
+      { header: 'Provider ID', key: 'providerId', width: 25 },
+      { header: 'Amount', key: 'amount', width: 15 },
+      { header: 'Payment Method', key: 'paymentMethod', width: 15 },
+      { header: 'Bank Details', key: 'bankDetails', width: 30 },
+      { header: 'Transaction Reference', key: 'reference', width: 25 },
+      { header: 'Requested Date', key: 'requestedDate', width: 20 },
+      { header: 'Processed Date', key: 'completedDate', width: 20 },
+      { header: 'Approved By', key: 'approvedBy', width: 20 }
+    ];
+
+    payouts.forEach(payout => {
+      const bankInfo = payout.paymentDetails 
+        ? `${payout.paymentDetails.bankName} - ${payout.paymentDetails.accountNumber}` 
+        : 'N/A';
+
+      worksheet.addRow({
+        providerName: payout.provider.name,
+        providerId: payout.provider._id.toString(),
+        amount: payout.amount,
+        paymentMethod: payout.paymentMethod,
+        bankDetails: bankInfo,
+        reference: payout.transactionReference,
+        requestedDate: payout.createdAt.toISOString().slice(0, 10),
+        completedDate: payout.completedAt ? payout.completedAt.toISOString().slice(0, 10) : '',
+        approvedBy: payout.admin ? payout.admin.name : 'Admin'
+      });
+    });
+
+    res.setHeader('Content-Disposition', `attachment; filename=payout_history_${fromDate}_to_${toDate}.xlsx`);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
+    await workbook.xlsx.write(res);
+    res.end();
+
+  } catch (error) {
+    console.error('Payout history report error:', error);
+    res.status(500).json({ success: false, error: 'Failed to generate payout history report' });
+  }
+};
+
+// Admin - Outstanding Balance Report
+const outstandingBalanceReport = async (req, res) => {
+  try {
+    const providers = await Provider.find({ isDeleted: false }).select('name email phone');
+
+    const reportData = [];
+
+    for (const provider of providers) {
+      // Calculate available balance
+      const availableBalanceResult = await ProviderEarning.aggregate([
+        {
+          $match: {
+            provider: provider._id,
+            isVisibleToProvider: true
+          }
+        },
+        {
+          $lookup: {
+            from: 'bookings',
+            localField: 'booking',
+            foreignField: '_id',
+            as: 'booking'
+          }
+        },
+        { $unwind: '$booking' },
+        { $match: { 'booking.status': 'completed' } },
+        {
+          $group: {
+            _id: '$booking.paymentMethod',
+            totalNet: { $sum: '$netAmount' },
+            totalCommission: { $sum: '$commissionAmount' }
+          }
+        }
+      ]);
+
+      let availableBalance = 0;
+      availableBalanceResult.forEach(item => {
+        if (item._id === 'online') {
+          availableBalance += item.totalNet;
+        } else if (item._id === 'cash') {
+          availableBalance -= item.totalCommission;
+        }
+      });
+      availableBalance = Math.max(0, availableBalance);
+
+      // Pending withdrawals
+      const pendingWithdrawals = await PaymentRecord.aggregate([
+        {
+          $match: {
+            provider: provider._id,
+            status: { $in: ['requested', 'processing'] }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalPending: { $sum: '$amount' }
+          }
+        }
+      ]);
+
+      const totalPending = pendingWithdrawals.length > 0 ? pendingWithdrawals[0].totalPending : 0;
+
+      const outstandingBalance = Math.max(0, availableBalance - totalPending);
+
+      // Get last withdrawal date
+      const lastWithdrawal = await PaymentRecord.findOne({
+        provider: provider._id,
+        status: 'completed'
+      }).sort({ completedAt: -1 });
+
+      const lastWithdrawalDate = lastWithdrawal ? lastWithdrawal.completedAt : null;
+      const daysPending = lastWithdrawalDate 
+        ? Math.floor((new Date() - lastWithdrawalDate) / (1000 * 60 * 60 * 24)) 
+        : 'N/A';
+
+      if (outstandingBalance > 0) {
+        reportData.push({
+          providerId: provider._id.toString(),
+          providerName: provider.name,
+          availableBalance: outstandingBalance,
+          lastWithdrawalDate: lastWithdrawalDate ? lastWithdrawalDate.toISOString().slice(0, 10) : 'Never',
+          daysPending
+        });
+      }
+    }
+
+    // Create Excel
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Outstanding Balance Report');
+
+    worksheet.columns = [
+      { header: 'Provider Name', key: 'providerName', width: 25 },
+      { header: 'Provider ID', key: 'providerId', width: 25 },
+      { header: 'Available Balance', key: 'availableBalance', width: 20 },
+      { header: 'Last Withdrawal Date', key: 'lastWithdrawalDate', width: 20 },
+      { header: 'Days Pending', key: 'daysPending', width: 15 }
+    ];
+
+    reportData.forEach(item => {
+      worksheet.addRow(item);
+    });
+
+    res.setHeader('Content-Disposition', `attachment; filename=outstanding_balance_report.xlsx`);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
+    await workbook.xlsx.write(res);
+    res.end();
+
+  } catch (error) {
+    console.error('Outstanding balance report error:', error);
+    res.status(500).json({ success: false, error: 'Failed to generate outstanding balance report' });
   }
 };
 
@@ -1174,6 +1573,9 @@ module.exports = {
   generateWithdrawalReport,
   generateProviderEarningsReport,
   getCommissionReport,
-  failedRejectedWithdrawalsReport
-
+  failedRejectedWithdrawalsReport,
+  providerLedgerReport,
+  earningsSummaryReport,
+  payoutHistoryReport,
+  outstandingBalanceReport
 };
