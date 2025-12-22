@@ -220,12 +220,13 @@ const hardDeleteCoupon = async (req, res) => {
       });
     }
 
-    // Check if coupon has been used
-    if (coupon.usedBy.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Cannot delete coupon that has been used'
-      });
+    // Log the status of the coupon before deleting
+    console.log(`Deleting coupon ${coupon.code}...`);
+    if (coupon.isExpired) {
+      console.log('Coupon is expired.');
+    }
+    if (coupon.usedBy && coupon.usedBy.length > 0) {
+      console.log(`Coupon has been used ${coupon.usedBy.length} times.`);
     }
 
     // Permanent deletion

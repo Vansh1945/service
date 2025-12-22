@@ -25,11 +25,10 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { useAuth } from '../../store/auth';
 
 const AdminCoupons = () => {
-  const API = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api';
-  const token = localStorage.getItem("adminToken") || localStorage.getItem("token");
-
+  const { API, token } = useAuth();
   // State management
   const [coupons, setCoupons] = useState([]);
   const [filteredCoupons, setFilteredCoupons] = useState([]);
@@ -37,6 +36,8 @@ const AdminCoupons = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
+  const [showHardDeleteModal, setShowHardDeleteModal] = useState(false);
+  const [couponToDelete, setCouponToDelete] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -147,24 +148,17 @@ const AdminCoupons = () => {
           'Authorization': `Bearer ${token}`
         }
       });
+      const data = await response.json();
 
       if (response.ok) {
-        const data = await response.json();
-        console.log('Users data:', data); // Debug log
-
         const usersList = data.users || [];
         setUsers(usersList);
-
-        if (usersList.length === 0) {
-          console.log('No users found in response');
-        }
       } else {
-        console.error('Failed to fetch users:', response.status);
-        toast.error('Failed to load users list');
+        throw new Error(data.message || 'Failed to load users list');
       }
     } catch (error) {
       console.error('Fetch users error:', error);
-      toast.error('Error loading users');
+      toast.error(error.message || 'Error loading users');
     }
   };
 
@@ -207,19 +201,18 @@ const AdminCoupons = () => {
         body: JSON.stringify(couponData)
       });
 
+      const data = await response.json();
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to create coupon');
+        throw new Error(data.message || 'Failed to create coupon');
       }
 
-      const data = await response.json();
       setCoupons(prev => [data.data, ...prev]);
-      toast.success('Coupon created successfully!');
+      toast.success(data.message);
       resetCreateForm();
       setShowCreateModal(false);
     } catch (error) {
       console.error('Create coupon error:', error);
-      toast.error(error.message || 'Failed to create coupon');
+      toast.error(error.message);
     }
   };
 
@@ -260,18 +253,16 @@ const AdminCoupons = () => {
 
       const data = await response.json();
       setCoupons(prev => prev.map(c => c._id === data.data._id ? data.data : c));
-      toast.success('Coupon updated successfully!');
+      toast.success(data.message);
       setShowEditModal(false);
     } catch (error) {
       console.error('Update coupon error:', error);
-      toast.error(error.message || 'Failed to update coupon');
+      toast.error(error.message);
     }
   };
 
-  // Delete coupon (soft delete)
+  // Deactivate coupon
   const handleDeleteCoupon = async (couponId) => {
-    if (!window.confirm('Are you sure you want to deactivate this coupon?')) return;
-
     try {
       const response = await fetch(`${API}/coupon/admin/coupons/${couponId}`, {
         method: 'DELETE',
@@ -280,41 +271,49 @@ const AdminCoupons = () => {
         }
       });
 
+      const data = await response.json();
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to deactivate coupon');
+        throw new Error(data.message);
       }
 
+      toast.success(data.message);
       await fetchCoupons();
-      toast.success('Coupon deactivated successfully!');
     } catch (error) {
-      console.error('Delete coupon error:', error);
-      toast.error(error.message || 'Failed to deactivate coupon');
+      console.error('Deactivate coupon error:', error);
+      toast.error(error.message);
     }
   };
 
   // Hard delete coupon
-  const handleHardDeleteCoupon = async (couponId) => {
-    if (!window.confirm('Are you sure you want to permanently delete this coupon? This action cannot be undone.')) return;
+  const handleHardDeleteCoupon = (couponId) => {
+    setCouponToDelete(couponId);
+    setShowHardDeleteModal(true);
+  };
+
+  const confirmHardDeleteCoupon = async () => {
+    if (!couponToDelete) return;
 
     try {
-      const response = await fetch(`${API}/coupon/admin/coupons/${couponId}/hard`, {
+      const response = await fetch(`${API}/coupon/admin/coupons/${couponToDelete}/hard`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
+      const data = await response.json();
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to delete coupon');
+        throw new Error(data.message);
       }
 
       await fetchCoupons();
-      toast.success('Coupon deleted successfully!');
+      toast.success(data.message);
     } catch (error) {
-      console.error('Hard delete coupon error:', error);
-      toast.error(error.message || 'Failed to delete coupon');
+      console.error('Delete coupon error:', error);
+      toast.error(error.message);
+    } finally {
+      setShowHardDeleteModal(false);
+      setCouponToDelete(null);
     }
   };
 
@@ -398,7 +397,7 @@ const AdminCoupons = () => {
     if (!user) return 'Unknown User';
 
     // Handle different user object structures
-    if (typeof user === 'string') return user; 
+    if (typeof user === 'string') return user;
 
     if (user.name) return user.name;
     if (user.email) return user.email;
@@ -665,8 +664,15 @@ const AdminCoupons = () => {
                               </button>
                               <button
                                 onClick={() => handleDeleteCoupon(coupon._id)}
-                                className="text-red-600 hover:text-red-800 p-1 rounded transition-colors duration-200"
+                                className="text-yellow-600 hover:text-yellow-800 p-1 rounded transition-colors duration-200"
                                 title="Deactivate Coupon"
+                              >
+                                <XCircle className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleHardDeleteCoupon(coupon._id)}
+                                className="text-red-600 hover:text-red-800 p-1 rounded transition-colors duration-200"
+                                title="Delete Coupon Permanently"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
@@ -1127,16 +1133,6 @@ const AdminCoupons = () => {
                   <Save className="w-4 h-4 mr-2" />
                   Update Coupon
                 </button>
-                {selectedCoupon.usedBy && selectedCoupon.usedBy.length === 0 && (
-                  <button
-                    type="button"
-                    onClick={() => handleHardDeleteCoupon(selectedCoupon._id)}
-                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200"
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Delete Permanently
-                  </button>
-                )}
               </div>
             </form>
           </Modal>
@@ -1327,6 +1323,37 @@ const AdminCoupons = () => {
             </div>
           </Modal>
         )}
+
+
+
+        {/* Hard Delete Confirmation Modal */}
+        {showHardDeleteModal && (
+          <Modal
+            isOpen={showHardDeleteModal}
+            onClose={() => setShowHardDeleteModal(false)}
+            title="Confirm Permanent Deletion"
+          >
+            <div>
+              <p className="text-gray-600 mb-4">Are you sure you want to permanently delete this coupon? This action cannot be undone.</p>
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowHardDeleteModal(false)}
+                  className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmHardDeleteCoupon}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 flex items-center"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete
+                </button>
+              </div>
+            </div>
+          </Modal>
+        )}
+
       </div>
     </div>
   );
@@ -1344,13 +1371,13 @@ const Modal = ({ isOpen, onClose, title, children, size = 'medium' }) => {
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+      <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:p-0">
         <div className="fixed inset-0 transition-opacity" aria-hidden="true">
           <div className="absolute inset-0 bg-gray-500 opacity-75" onClick={onClose}></div>
         </div>
 
 
-        <div className={`inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle ${sizeClasses[size]} sm:w-full`}>
+        <div className={`bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 ${sizeClasses[size]} sm:w-full`}>
           <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
             <div className="sm:flex sm:items-start">
               <div className="mt-3 text-center sm:mt-0 sm:text-left w-full">

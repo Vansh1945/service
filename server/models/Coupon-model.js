@@ -155,7 +155,7 @@ couponSchema.statics.validateCoupon = async function (userId, couponCode, servic
   if (coupon.usageLimit && coupon.usedBy.length >= coupon.usageLimit) {
     throw new Error('Coupon usage limit reached');
   }
-  
+
   // Check if user has already used this coupon
   const alreadyUsed = coupon.usedBy.some(usage => usage.user && usage.user.toString() === userId.toString());
   if (alreadyUsed) throw new Error('You have already used this coupon');
@@ -207,7 +207,7 @@ couponSchema.methods.applyCoupon = function (totalAmount) {
 };
 
 couponSchema.methods.markAsUsed = async function (userId, bookingValue = 0) {
-  const alreadyUsed = this.usedBy.some(usage => 
+  const alreadyUsed = this.usedBy.some(usage =>
     usage.user && usage.user.toString() === userId.toString()
   );
   if (alreadyUsed) throw new Error('User has already used this coupon');
