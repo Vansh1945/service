@@ -23,6 +23,7 @@ import {
   Edit3,
   ChevronLeft,
   ChevronRight,
+  X,
 } from 'lucide-react';
 
 const CustomerBookingsPage = () => {
@@ -56,7 +57,7 @@ const CustomerBookingsPage = () => {
         timeFilter: timeFilter,
         searchTerm: searchTerm,
         page: currentPage,
-        limit: 10,
+        limit: 20,
       });
 
       const response = await fetch(`${API}/booking/customer?${params.toString()}`, {
@@ -318,69 +319,93 @@ const CustomerBookingsPage = () => {
     };
 
     // Define steps dynamically based on booking statusHistory and fields
-    const steps = [
-      {
-        key: 'booked',
-        label: 'Booking Placed',
-        icon: ShoppingCart,
-        completed: true,
-        description: 'Your booking has been placed.',
-        time: booking.createdAt,
-      },
-      {
-        key: 'payment',
-        label: 'Payment',
-        icon: booking.paymentMethod === 'cash' ? DollarSign : CreditCard,
-        completed: booking.paymentStatus === 'paid',
-        active: booking.paymentStatus === 'pending' && !booking.confirmedBooking,
-        description:
-          booking.paymentStatus === 'paid'
-            ? `Payment of ₹${booking.totalAmount} completed via ${booking.paymentMethod}`
-            : booking.paymentMethod === 'cash'
-            ? 'Pay after service completion'
-            : 'Payment is pending',
-        time: booking.paymentDate || getStatusTimestamp('payment_pending'),
-      },
-      {
-        key: 'assigned',
-        label: 'Provider Assigned',
-        icon: User,
-        completed: ['accepted', 'in-progress', 'completed'].includes(booking.status),
-        active: booking.providerDetails && booking.status === 'pending',
-        description: booking.providerDetails
-          ? `${booking.providerDetails.name} has been assigned.`
-          : 'Waiting for a provider to be assigned.',
-        time: getStatusTimestamp('accepted') || getStatusTimestamp('assigned'),
-      },
-      {
-        key: 'in_progress',
-        label: 'Work Started',
-        icon: Wrench,
-        completed: ['in-progress', 'completed'].includes(booking.status),
-        active: booking.status === 'in-progress',
-        description: booking.status === 'in-progress' ? 'The provider has started the work.' : 'Work will begin soon.',
-        time: booking.serviceStartedAt || getStatusTimestamp('in-progress'),
-      },
-      {
-        key: 'completed',
-        label: 'Completed',
-        icon: CheckCircle,
-        completed: booking.status === 'completed',
-        description: booking.status === 'completed' ? 'Service has been completed successfully.' : 'Service completion is pending.',
-        time: booking.serviceCompletedAt || getStatusTimestamp('completed'),
-      },
-    ];
+    let steps;
 
-    // Add estimated completion time step if available and not completed yet
-    if (booking.estimatedCompletionTime && booking.status !== 'completed') {
-      steps.push({
-        key: 'estimated_completion',
-        label: 'Estimated Completion',
-        icon: Timer,
-        completed: false,
-        description: 'Estimated time for service completion',
-        time: booking.estimatedCompletionTime,
-      });
+    if (booking.status === 'cancelled') {
+      steps = [
+        {
+          key: 'booked',
+          label: 'Booking Placed',
+          icon: ShoppingCart,
+          completed: true,
+          description: 'Your booking has been placed.',
+          time: booking.createdAt,
+        },
+        {
+          key: 'cancelled',
+          label: 'Booking Cancelled',
+          icon: XCircle,
+          completed: false,
+          active: true,
+          description: `Booking was cancelled. ${booking.cancellationReason ? `Reason: ${booking.cancellationReason}` : 'No reason provided.'}`,
+          time: getStatusTimestamp('cancelled'),
+        },
+      ];
+    } else {
+      steps = [
+        {
+          key: 'booked',
+          label: 'Booking Placed',
+          icon: ShoppingCart,
+          completed: true,
+          description: 'Your booking has been placed.',
+          time: booking.createdAt,
+        },
+        {
+          key: 'payment',
+          label: 'Payment',
+          icon: booking.paymentMethod === 'cash' ? DollarSign : CreditCard,
+          completed: booking.paymentStatus === 'paid',
+          active: booking.paymentStatus === 'pending' && !booking.confirmedBooking,
+          description:
+            booking.paymentStatus === 'paid'
+              ? `Payment of ₹${booking.totalAmount} completed via ${booking.paymentMethod}`
+              : booking.paymentMethod === 'cash'
+              ? 'Pay after service completion'
+              : 'Payment is pending',
+          time: booking.paymentDate || getStatusTimestamp('payment_pending'),
+        },
+        {
+          key: 'assigned',
+          label: 'Provider Assigned',
+          icon: User,
+          completed: ['accepted', 'in-progress', 'completed'].includes(booking.status),
+          active: booking.providerDetails && booking.status === 'pending',
+          description: booking.providerDetails
+            ? `${booking.providerDetails.name} has been assigned.`
+            : 'Waiting for a provider to be assigned.',
+          time: getStatusTimestamp('accepted') || getStatusTimestamp('assigned'),
+        },
+        {
+          key: 'in_progress',
+          label: 'Work Started',
+          icon: Wrench,
+          completed: ['in-progress', 'completed'].includes(booking.status),
+          active: booking.status === 'in-progress',
+          description: booking.status === 'in-progress' ? 'The provider has started the work.' : 'Work will begin soon.',
+          time: booking.serviceStartedAt || getStatusTimestamp('in-progress'),
+        },
+        {
+          key: 'completed',
+          label: 'Completed',
+          icon: CheckCircle,
+          completed: booking.status === 'completed',
+          description: booking.status === 'completed' ? 'Service has been completed successfully.' : 'Service completion is pending.',
+          time: booking.serviceCompletedAt || getStatusTimestamp('completed'),
+        },
+      ];
+
+      // Add estimated completion time step if available and not completed yet
+      if (booking.estimatedCompletionTime && booking.status !== 'completed') {
+        steps.push({
+          key: 'estimated_completion',
+          label: 'Estimated Completion',
+          icon: Timer,
+          completed: false,
+          description: 'Estimated time for service completion',
+          time: booking.estimatedCompletionTime,
+        });
+      }
     }
 
     return (
@@ -435,7 +460,7 @@ const CustomerBookingsPage = () => {
                 <p className="text-sm text-gray-500">ID: #{booking._id.slice(-8).toUpperCase()}</p>
               </div>
               <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl">
-                
+                <X className="w-6 h-6" />
               </button>
             </div>
           </div>
@@ -571,7 +596,7 @@ const CustomerBookingsPage = () => {
               )}
 
               {/* Provider Details */}
-              {booking.providerDetails && ['accepted', 'in_progress', 'in-progress'].includes(booking.status) && (
+              {booking.provider && ['accepted', 'in_progress', 'in-progress'].includes(booking.status) && (
                 <div className="bg-gray-50 rounded-xl p-4">
                   <h4 className="font-semibold text-secondary mb-3 flex items-center">
                     <User className="w-4 h-4 text-primary mr-2" />
@@ -580,19 +605,31 @@ const CustomerBookingsPage = () => {
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
                       <span className="text-gray-600">Name:</span>
-                      <span className="font-medium">{booking.providerDetails.name}</span>
+                      <span className="font-medium">{booking.provider.name}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Phone:</span>
-                      <span className="font-medium">{booking.providerDetails.phone}</span>
+                      <span className="font-medium">{booking.provider.phone}</span>
                     </div>
-                    {booking.providerDetails.rating && (
+                    {booking.provider.rating && (
                       <div className="flex justify-between">
                         <span className="text-gray-600">Rating:</span>
                         <div className="flex items-center">
                           <Star className="w-4 h-4 text-yellow-400 mr-1" />
-                          <span className="font-medium">{booking.providerDetails.rating}/5</span>
+                          <span className="font-medium">{booking.provider.rating}/5</span>
                         </div>
+                      </div>
+                    )}
+                    {booking.provider.totalCompletedBookings && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Completed Bookings:</span>
+                        <span className="font-medium">{booking.provider.totalCompletedBookings}</span>
+                      </div>
+                    )}
+                    {booking.provider.email && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Email:</span>
+                        <span className="font-medium">{booking.provider.email}</span>
                       </div>
                     )}
                   </div>
@@ -643,8 +680,8 @@ const CustomerBookingsPage = () => {
       }`}></div>
 
       <div className="p-4">
-        <div className="flex flex-col sm:flex-row justify-between items-start mb-3">
-          <div className="flex items-start space-x-4 flex-1">
+        <div className="flex flex-col sm:flex-row justify-between items-start mb-3 gap-4">
+          <div className="flex items-start space-x-4 flex-1 min-w-0">
             {/* Service Image */}
             <div className="flex-shrink-0">
               {booking.services?.[0]?.service?.images && booking.services[0].service.images.length > 0 ? (
@@ -690,7 +727,7 @@ const CustomerBookingsPage = () => {
               </div>
 
               {/* Status Badge */}
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2 mb-2">
                 <span className={`inline-flex items-center space-x-1 text-xs font-medium px-3 py-1.5 rounded-full border ${getStatusColor(booking.status)}`}>
                   {getStatusIcon(booking.status)}
                   <span>{getStatusText(booking.status)}</span>
@@ -712,15 +749,15 @@ const CustomerBookingsPage = () => {
           </div>
 
           {/* Price & Actions */}
-          <div className="text-right mt-4 sm:mt-0">
-            <p className="text-2xl font-bold text-secondary">
-              ₹{booking.totalAmount || 0}
-            </p>
-            <p className={`text-sm font-medium ${
-              booking.paymentStatus === 'paid' ? 'text-primary' : 'text-accent'
-            }`}>
-              ✓ Paid via {booking.paymentMethod}
-            </p>
+          <div className="flex flex-col items-end sm:items-end w-full sm:w-auto mt-4 sm:mt-0">
+            <div className="text-right w-full sm:w-auto">
+              <p className="text-2xl font-bold text-secondary">
+                ₹{booking.totalAmount || 0}
+              </p>
+              <p className={`text-sm font-medium ${booking.paymentStatus === 'paid' ? 'text-primary' : 'text-accent'}`}>
+                {booking.paymentStatus === 'paid' ? `✓ Paid via ${booking.paymentMethod}` : 'Payment Pending'}
+              </p>
+            </div>
           </div>
         </div>
 
@@ -906,7 +943,7 @@ const CustomerBookingsPage = () => {
               )}
 
               {/* Provider Details */}
-              {booking.providerDetails && ['accepted', 'in_progress', 'in-progress'].includes(booking.status) && (
+              {booking.provider && ['accepted', 'in_progress', 'in-progress'].includes(booking.status) && (
                 <div className="bg-gray-50 rounded-xl p-4">
                   <h4 className="font-semibold text-secondary mb-3 flex items-center">
                     <User className="w-4 h-4 text-primary mr-2" />
@@ -915,19 +952,31 @@ const CustomerBookingsPage = () => {
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
                       <span className="text-gray-600">Name:</span>
-                      <span className="font-medium">{booking.providerDetails.name}</span>
+                      <span className="font-medium">{booking.provider.name}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Phone:</span>
-                      <span className="font-medium">{booking.providerDetails.phone}</span>
+                      <span className="font-medium">{booking.provider.phone}</span>
                     </div>
-                    {booking.providerDetails.rating && (
+                    {booking.provider.rating && (
                       <div className="flex justify-between">
                         <span className="text-gray-600">Rating:</span>
                         <div className="flex items-center">
                           <Star className="w-4 h-4 text-yellow-400 mr-1" />
-                          <span className="font-medium">{booking.providerDetails.rating}/5</span>
+                          <span className="font-medium">{booking.provider.rating}/5</span>
                         </div>
+                      </div>
+                    )}
+                    {booking.provider.totalCompletedBookings && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Completed Bookings:</span>
+                        <span className="font-medium">{booking.provider.totalCompletedBookings}</span>
+                      </div>
+                    )}
+                    {booking.provider.email && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Email:</span>
+                        <span className="font-medium">{booking.provider.email}</span>
                       </div>
                     )}
                   </div>
