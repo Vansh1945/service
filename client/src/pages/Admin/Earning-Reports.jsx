@@ -16,7 +16,7 @@ import {
   Line
 } from 'recharts';
 
-const AdminEarnings = () => {
+const AdminEarningReports = () => {
   const { API, showToast, token } = useAuth();
   const [loading, setLoading] = useState(true);
   const [earningsData, setEarningsData] = useState({
@@ -809,4 +809,4 @@ const ReportsSection = ({ onDownload, onFetchReport, downloading, filters, onFil
   );
 };
 
-export default AdminEarnings;
+export default AdminEarningReports;

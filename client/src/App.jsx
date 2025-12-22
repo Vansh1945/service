@@ -45,7 +45,7 @@ import ServiceListingPage from "./pages/Customer/Services";
 import ServiceDetailPage from "./pages/Customer/Servicedetail";
 import UserProfile from "./pages/Customer/Profile";
 import CustomerBookingsPage from "./pages/Customer/CustomerBookingsPage";
-import AdminPayments from "./pages/Admin/Earning";
+import AdminReports from "./pages/Admin/Earning-Reports";
 import BookingConfirmation from "./pages/Customer/BookingConfirmation";
 import FeedbackManagement from "./pages/Customer/Feedback";
 import ComplaintsPage from "./pages/Customer/Complaint";
@@ -89,7 +89,7 @@ const App = () => {
             <Route path="add-services" element={<AdminServices />} />
             <Route path="complaints" element={<AdminComplaints />} />
             <Route path="feedback" element={<AdminServiceFeedback />} />
-            <Route path="earning" element={<AdminPayments />} />
+            <Route path="earning" element={<AdminReports />} />
           </Route>
         </Route>
 
