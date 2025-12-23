@@ -357,7 +357,7 @@ const ProviderBooking = () => {
   const [showSummary, setShowSummary] = useState(true);
   const [showReports, setShowReports] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [bookingsPerPage] = useState(10);
+  const [bookingsPerPage, setBookingsPerPage] = useState(10);
 
   const calculateSubtotal = useCallback((booking) => {
     if (!booking?.services) return 0;
@@ -946,6 +946,23 @@ const ProviderBooking = () => {
                 </select>
                 <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
                   <Filter className="h-4 w-4 text-gray-400" />
+                </div>
+              </div>
+              <div className="relative">
+                <select
+                  value={bookingsPerPage}
+                  onChange={(e) => {
+                    setBookingsPerPage(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="appearance-none pl-3 pr-8 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary text-sm bg-white font-medium w-full"
+                >
+                  <option value={10}>10 per page</option>
+                  <option value={20}>20 per page</option>
+                  <option value={25}>25 per page</option>
+                </select>
+                <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+                  <ChevronDown className="h-4 w-4 text-gray-400" />
                 </div>
               </div>
             </div>
