@@ -274,6 +274,48 @@ const DownloadReports = ({
   );
 };
 
+// Pagination component
+const Pagination = ({ bookingsPerPage, totalBookings, paginate, currentPage }) => {
+  const pageNumbers = [];
+  const totalPages = Math.ceil(totalBookings / bookingsPerPage);
+
+  for (let i = 1; i <= totalPages; i++) {
+    pageNumbers.push(i);
+  }
+
+  return (
+    <div className="flex justify-center items-center py-4">
+      <button
+        onClick={() => paginate(currentPage - 1)}
+        disabled={currentPage === 1}
+        className="px-3 py-1 mx-1 rounded-md bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        Prev
+      </button>
+      {pageNumbers.map(number => (
+        <button
+          key={number}
+          onClick={() => paginate(number)}
+          className={`px-3 py-1 mx-1 rounded-md ${
+            currentPage === number
+              ? 'bg-primary text-white border border-primary'
+              : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+          }`}
+        >
+          {number}
+        </button>
+      ))}
+      <button
+        onClick={() => paginate(currentPage + 1)}
+        disabled={currentPage === totalPages}
+        className="px-3 py-1 mx-1 rounded-md bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        Next
+      </button>
+    </div>
+  );
+};
+
 // Main Provider Booking Component
 const ProviderBooking = () => {
   const { token, API, showToast, user } = useAuth();
@@ -314,6 +356,8 @@ const ProviderBooking = () => {
   const [downloading, setDownloading] = useState(false);
   const [showSummary, setShowSummary] = useState(true);
   const [showReports, setShowReports] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [bookingsPerPage] = useState(10);
 
   const calculateSubtotal = useCallback((booking) => {
     if (!booking?.services) return 0;
@@ -773,6 +817,12 @@ const ProviderBooking = () => {
     return filtered;
   }, [bookings, activeTab, searchQuery, filter]);
 
+  const indexOfLastBooking = currentPage * bookingsPerPage;
+  const indexOfFirstBooking = indexOfLastBooking - bookingsPerPage;
+  const paginatedBookings = currentBookings.slice(indexOfFirstBooking, indexOfLastBooking);
+
+  const paginate = pageNumber => setCurrentPage(pageNumber);
+
   // Simple Loading State
   if (loading) {
     return (
@@ -931,7 +981,7 @@ const ProviderBooking = () => {
               </p>
             </div>
           ) : (
-            currentBookings.map((booking) => (
+            paginatedBookings.map((booking) => (
               <div
                 key={booking._id}
                 className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all hover:shadow-md"
@@ -1062,6 +1112,12 @@ const ProviderBooking = () => {
               </div>
             ))
           )}
+           <Pagination
+                bookingsPerPage={bookingsPerPage}
+                totalBookings={currentBookings.length}
+                paginate={paginate}
+                currentPage={currentPage}
+            />
         </div>
       </div>
 
