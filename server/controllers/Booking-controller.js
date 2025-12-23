@@ -319,7 +319,7 @@ const confirmBooking = async (req, res) => {
     booking.paymentMethod = paymentMethod;
     booking.paymentStatus = paymentResult.paymentStatus || 'paid';
     booking.confirmedBooking = true;
-    booking.status = 'pending';
+    booking.status = 'scheduled';
 
     // Update transaction
     const transaction = await Transaction.findOneAndUpdate(
@@ -491,6 +491,7 @@ const updateBookingStatus = async (req, res) => {
     // Validate status transition
     const allowedTransitions = {
       'pending': ['confirmed', 'cancelled'],
+      'scheduled': ['accepted', 'cancelled'],
       'confirmed': ['completed', 'cancelled'],
       'cancelled': []
     };
@@ -531,7 +532,7 @@ const getUserBookings = async (req, res) => {
     // Status filter
     if (status) {
       if (status === 'upcoming') {
-        query.status = { $in: ['pending', 'accepted', 'in-progress'] };
+        query.status = { $in: ['scheduled', 'accepted', 'in-progress'] };
       } else if (status === 'pending_payment') {
         query.paymentStatus = 'pending';
       } else if (status !== 'all') {
@@ -1653,6 +1654,7 @@ const rejectBooking = async (req, res) => {
     const booking = await Booking.findOne({
       _id: id,
       status: 'pending',
+      paymentStatus: { $ne: 'paid' },
       $or: [
         { provider: { $exists: false } },
         { provider: providerId }
@@ -2022,6 +2024,12 @@ const providerBookingReport = async (req, res) => {
         message: "Date range must be between 7 days and 2 months",
       });
     }
+    
+    // Get provider to ensure they exist and for commission calculations
+    const provider = await Provider.findById(providerId).select('performanceTier');
+    if (!provider) {
+        return res.status(404).json({ success: false, message: "Provider not found." });
+    }
 
     // Fetch bookings
     const bookings = await Booking.find({
@@ -2029,7 +2037,7 @@ const providerBookingReport = async (req, res) => {
       date: { $gte: start, $lte: end },
     })
       .populate("customer", "name email phone createdAt")
-      .populate("services.service", "name")
+      .populate("services.service", "title")
       .sort({ date: -1 });
 
     if (!bookings.length) {
@@ -2038,6 +2046,25 @@ const providerBookingReport = async (req, res) => {
         message: "No bookings found for the selected date range",
       });
     }
+
+    // Get and commission rule for calculations
+    const commissionRule = await CommissionRule.getCommissionForProvider(
+      providerId,
+      provider.performanceTier
+    );
+
+    // Add commission calculations to bookings
+    const bookingsWithCommission = bookings.map(booking => {
+      const { commission, netAmount } = CommissionRule.calculateCommission(
+        booking.totalAmount,
+        commissionRule
+      );
+      return {
+        ...booking.toObject(),
+        commissionAmount: commission,
+        providerEarnings: netAmount
+      };
+    });
 
     // Create Excel workbook
     const workbook = new ExcelJS.Workbook();
@@ -2059,12 +2086,12 @@ const providerBookingReport = async (req, res) => {
     ];
 
     // Add rows
-    bookings.forEach((booking) => {
+    bookingsWithCommission.forEach((booking) => {
       // Format services
       const serviceDetails = booking.services
         .map(
           (s) =>
-            `${s.service?.name || "Unknown"} (Qty: ${s.quantity}, Price: ₹${s.price})`
+            `${s.service?.title || "Unknown"} (Qty: ${s.quantity}, Price: ₹${s.price})`
         )
         .join("; ");
 
@@ -2079,8 +2106,8 @@ const providerBookingReport = async (req, res) => {
         totalAmount: booking.totalAmount,
         commissionAmount: booking.commissionAmount,
         providerEarnings: booking.providerEarnings,
-        completedAt: booking.serviceCompletedAt
-          ? booking.serviceCompletedAt.toISOString().split("T")[0]
+        completedAt: booking.completedAt
+          ? booking.completedAt.toISOString().split("T")[0]
           : "N/A",
       });
     });
@@ -2286,8 +2313,6 @@ const getAllBookings = async (req, res) => {
     });
   }
 };
-
-
 
 // Get booking details with service and payment information
 const getBookingDetails = async (req, res) => {

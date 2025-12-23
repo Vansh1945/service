@@ -84,7 +84,7 @@ const bookingSchema = new Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'accepted', 'in-progress', 'completed', 'cancelled', 'confirmed', 'no-show', 'assigned'],
+    enum: ['pending', 'accepted', 'in-progress', 'completed', 'cancelled', 'confirmed', 'scheduled', 'no-show', 'assigned'],
     default: 'pending'
   },
   rating: {
@@ -290,6 +290,9 @@ bookingSchema.pre('save', async function (next) {
     switch (this.status) {
       case 'pending':
         statusChange.note = 'Booking is waiting for provider assignment';
+        break;
+      case 'scheduled':
+        statusChange.note = 'Booking is confirmed and scheduled';
         break;
       case 'accepted':
         statusChange.note = 'Provider has accepted the booking';

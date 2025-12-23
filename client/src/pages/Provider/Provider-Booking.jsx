@@ -19,10 +19,11 @@ import {
   ChevronUp,
   Filter,
   ClipboardList,
-  Scissors,
-  Sparkles,
+  Timer,
+  CheckCheck,
+  HelpCircle,
+  Copy,
   Zap,
-  Plug,
   Wrench,
   Play,
   CreditCard,
@@ -31,26 +32,16 @@ import {
   Star,
   Package,
   Search,
-  BarChart3,
   Activity,
-  Timer,
-  CheckCheck,
-  HelpCircle,
-  Copy,
-  Grid,
-  List,
-  TrendingUp,
   Banknote,
   Download,
   FileText,
-  RefreshCw,
   Loader,
-  Home,
   BarChart2,
   DownloadCloud
 } from 'lucide-react';
 
-// Confirmation Dialog Component (unchanged)
+// Confirmation Dialog Component
 const ConfirmationDialog = ({ isOpen, onClose, onConfirm, title, message, type = 'default' }) => {
   const getTypeStyles = () => {
     switch (type) {
@@ -118,7 +109,6 @@ const ConfirmationDialog = ({ isOpen, onClose, onConfirm, title, message, type =
 const SummaryCards = ({ stats, formatCurrency }) => {
   return (
     <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
-      {/* Total Bookings */}
       <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-200 hover:shadow-md transition-shadow">
         <div className="flex items-center justify-between">
           <div>
@@ -131,7 +121,6 @@ const SummaryCards = ({ stats, formatCurrency }) => {
         </div>
       </div>
 
-      {/* Completed Bookings */}
       <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-200 hover:shadow-md transition-shadow">
         <div className="flex items-center justify-between">
           <div>
@@ -144,7 +133,6 @@ const SummaryCards = ({ stats, formatCurrency }) => {
         </div>
       </div>
 
-      {/* Pending Bookings */}
       <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-200 hover:shadow-md transition-shadow">
         <div className="flex items-center justify-between">
           <div>
@@ -157,7 +145,6 @@ const SummaryCards = ({ stats, formatCurrency }) => {
         </div>
       </div>
 
-      {/* Total Cash Collected */}
       <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-200 hover:shadow-md transition-shadow">
         <div className="flex items-center justify-between">
           <div>
@@ -170,7 +157,6 @@ const SummaryCards = ({ stats, formatCurrency }) => {
         </div>
       </div>
 
-      {/* Commission Payable */}
       <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-200 hover:shadow-md transition-shadow">
         <div className="flex items-center justify-between">
           <div>
@@ -183,7 +169,6 @@ const SummaryCards = ({ stats, formatCurrency }) => {
         </div>
       </div>
 
-      {/* Net Earnings */}
       <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-200 hover:shadow-md transition-shadow">
         <div className="flex items-center justify-between">
           <div>
@@ -191,7 +176,7 @@ const SummaryCards = ({ stats, formatCurrency }) => {
             <p className="text-lg font-bold text-primary">{formatCurrency(stats.netEarnings)}</p>
           </div>
           <div className="bg-primary/10 p-2 rounded-full">
-            <TrendingUp className="w-5 h-5 text-primary" />
+            <BarChart2 className="w-5 h-5 text-primary" />
           </div>
         </div>
       </div>
@@ -207,6 +192,11 @@ const DownloadReports = ({
   downloading,
   showToast
 }) => {
+
+  const handleDownload = () => {
+    downloadReport('booking');
+  };
+
   return (
     <div className="bg-white rounded-xl shadow-sm p-5 mb-6 border border-gray-200">
       <div className="flex items-center justify-between mb-4">
@@ -255,7 +245,7 @@ const DownloadReports = ({
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4">
         <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
           <div className="flex items-center gap-3 mb-3">
             <div className="bg-primary/10 p-2 rounded-full">
@@ -267,7 +257,7 @@ const DownloadReports = ({
             </div>
           </div>
           <button
-            onClick={downloadReport}
+            onClick={handleDownload}
             disabled={!dateFilter.startDate || !dateFilter.endDate || downloading}
             className="w-full bg-primary hover:bg-primary/90 text-white px-3 py-2 rounded-md text-xs flex items-center justify-center gap-1 disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
@@ -308,7 +298,6 @@ const ProviderBooking = () => {
   const [filter, setFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, type: '', data: null });
-  const [viewMode, setViewMode] = useState('card');
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState({
     totalBookings: 0,
@@ -347,7 +336,6 @@ const ProviderBooking = () => {
     }));
   }, []);
 
-  // Fetch bookings function (unchanged)
   const fetchBookings = useCallback(async (status) => {
     try {
       setError(null);
@@ -380,22 +368,18 @@ const ProviderBooking = () => {
     }
   }, [API, token, showToast]);
 
-  // Calculate statistics from bookings (unchanged)
   const calculateStats = useCallback((allBookings) => {
     const completedBookings = allBookings.filter(b => b.status === 'completed');
     const pendingBookings = allBookings.filter(b => b.status === 'pending');
 
-    // Calculate cash collected (only from completed COD bookings with paid status)
     const totalCashCollected = completedBookings
       .filter(booking => booking.paymentMethod === 'cash' && booking.paymentStatus === 'paid')
       .reduce((sum, booking) => sum + (booking.totalAmount || 0), 0);
 
-    // Calculate commission from backend commission data
     const commissionPayable = completedBookings
       .filter(booking => booking.paymentMethod === 'cash' && booking.paymentStatus === 'paid')
       .reduce((sum, booking) => sum + (booking.commission?.amount || 0), 0);
 
-    // Calculate net earnings (after commission)
     const netEarnings = totalCashCollected - commissionPayable;
 
     return {
@@ -408,13 +392,11 @@ const ProviderBooking = () => {
     };
   }, []);
 
-  // Initial data fetch - last 7 days by default (unchanged)
   useEffect(() => {
     const fetchData = async () => {
       if (token) {
         setLoading(true);
         try {
-          // Calculate default date range (last 7 days)
           const today = new Date();
           const oneWeekAgo = new Date(today);
           oneWeekAgo.setDate(today.getDate() - 7);
@@ -426,7 +408,6 @@ const ProviderBooking = () => {
             endDate: formatDate(today)
           });
 
-          // Fetch all statuses
           const allBookings = await Promise.all([
             fetchBookings('pending'),
             fetchBookings('accepted'),
@@ -435,7 +416,6 @@ const ProviderBooking = () => {
             fetchBookings('cancelled')
           ]);
 
-          // Calculate stats
           const flattenedBookings = allBookings.flat();
           setStats(calculateStats(flattenedBookings));
         } catch (error) {
@@ -449,8 +429,7 @@ const ProviderBooking = () => {
     fetchData();
   }, [token, fetchBookings, calculateStats]);
 
-  // Download report function - FIXED to work with backend (unchanged)
-  const downloadReport = useCallback(async () => {
+  const downloadReport = useCallback(async (reportType) => {
     try {
       if (!dateFilter.startDate || !dateFilter.endDate) {
         showToast('Please select a date range first', 'error');
@@ -459,8 +438,18 @@ const ProviderBooking = () => {
 
       setDownloading(true);
 
+      let url, filename;
+      if (reportType === 'providerBooking' || reportType === 'booking') {
+        url = `${API}/booking/provider/booking-report?startDate=${dateFilter.startDate}&endDate=${dateFilter.endDate}`;
+        filename = `provider_booking_report_${dateFilter.startDate}_to_${dateFilter.endDate}.xlsx`;
+      } else {
+        showToast('Invalid report type', 'error');
+        setDownloading(false);
+        return;
+      }
+
       const response = await fetch(
-        `${API}/booking/provider/booking-report?startDate=${dateFilter.startDate}&endDate=${dateFilter.endDate}`,
+        url,
         {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -469,16 +458,15 @@ const ProviderBooking = () => {
       );
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || 'Failed to download report');
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to download report');
       }
 
-      // Handle the file download
       const blob = await response.blob();
       const downloadUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = downloadUrl;
-      a.download = `booking_report_${dateFilter.startDate}_to_${dateFilter.endDate}.xlsx`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -493,7 +481,6 @@ const ProviderBooking = () => {
     }
   }, [API, token, dateFilter, showToast]);
 
-  // Execute booking action (unchanged)
   const executeBookingAction = useCallback(async (bookingId, action, additionalData = {}) => {
     try {
       if (!bookingId) {
@@ -561,7 +548,6 @@ const ProviderBooking = () => {
       const result = await response.json();
       showToast(result.message || `Booking ${action}ed successfully`, 'success');
 
-      // Refresh the bookings to get updated data
       await Promise.all([
         fetchBookings('pending'),
         fetchBookings('accepted'),
@@ -579,9 +565,7 @@ const ProviderBooking = () => {
     }
   }, [API, token, selectedBooking, showToast, fetchBookings]);
 
-  // Booking action handler with optimistic updates (unchanged)
   const handleBookingAction = useCallback(async (bookingId, action, additionalData = {}) => {
-    // Show confirmation dialog for critical actions
     if (['reject', 'complete'].includes(action)) {
       setConfirmDialog({
         isOpen: true,
@@ -595,9 +579,7 @@ const ProviderBooking = () => {
       return;
     }
 
-    // For immediate actions (accept, start), update UI optimistically
     if (action === 'accept' || action === 'start') {
-      // Optimistic UI update
       setBookings(prev => {
         const updatedBookings = { ...prev };
 
@@ -626,7 +608,6 @@ const ProviderBooking = () => {
       });
     }
 
-    // Then make the API call
     await executeBookingAction(bookingId, action, additionalData);
   }, [executeBookingAction, user]);
 
@@ -676,7 +657,6 @@ const ProviderBooking = () => {
     return parts.join(', ') || 'Address not specified';
   }, []);
 
-  // Styling functions (unchanged)
   const getStatusColor = useCallback((status) => {
     switch (status?.toLowerCase()) {
       case 'pending': return 'bg-amber-100 text-amber-800';
@@ -703,14 +683,10 @@ const ProviderBooking = () => {
     switch (category?.toLowerCase()) {
       case 'electrical':
         return <Zap className="w-5 h-5 text-yellow-500" />;
-      case 'ac':
-        return <Plug className="w-5 h-5 text-blue-400" />;
       case 'appliance repair':
       case 'repair':
       case 'maintenance':
         return <Wrench className="w-5 h-5 text-orange-500" />;
-      case 'home':
-        return <Package className="w-5 h-5 text-green-500" />;
       default:
         return <Package className="w-5 h-5 text-gray-500" />;
     }
@@ -759,14 +735,11 @@ const ProviderBooking = () => {
     }).format(amount || 0);
   };
 
-  // Enhanced filtering with combined status and time filters
   const currentBookings = useMemo(() => {
-    // Get all bookings or specific status bookings
     let filtered = activeTab === 'all'
       ? Object.values(bookings).flat()
       : bookings[activeTab] || [];
 
-    // Apply search filter
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(booking =>
@@ -776,7 +749,6 @@ const ProviderBooking = () => {
         (booking._id?.toLowerCase().includes(query)));
     }
 
-    // Apply time-based filter
     const today = new Date();
     const todayString = today.toISOString().split('T')[0];
     if (filter === 'today') {
@@ -796,11 +768,22 @@ const ProviderBooking = () => {
       });
     }
 
-    // Sort by creation date (latest first)
     filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
     return filtered;
   }, [bookings, activeTab, searchQuery, filter]);
+
+  // Simple Loading State
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-transparent">
+        <div className="text-center">
+          <Loader className="w-12 h-12 text-primary animate-spin mx-auto mb-4" />
+          <p className="text-secondary text-lg">Loading bookings...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (error) {
     return (
@@ -869,7 +852,6 @@ const ProviderBooking = () => {
         <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 mb-6 border border-gray-200">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div className="flex flex-col sm:flex-row gap-3 flex-1">
-              {/* Search Input */}
               <div className="relative flex-1 min-w-[200px]">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Search className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" />
@@ -883,7 +865,6 @@ const ProviderBooking = () => {
                 />
               </div>
 
-              {/* Status Filter Dropdown */}
               <div className="relative">
                 <select
                   value={activeTab}
@@ -902,7 +883,6 @@ const ProviderBooking = () => {
                 </div>
               </div>
 
-              {/* Time Filter Dropdown */}
               <div className="relative">
                 <select
                   value={filter}
@@ -922,130 +902,120 @@ const ProviderBooking = () => {
           </div>
         </div>
 
-        {/* Loading State */}
-        {loading && (
-          <div className="flex justify-center items-center py-12">
-            <Loader className="w-8 h-8 text-primary animate-spin" />
-            <span className="ml-2 text-secondary">Loading bookings...</span>
-          </div>
-        )}
-
         {/* Bookings List */}
-        {!loading && (
-          <div className="space-y-4">
-            {currentBookings.length === 0 ? (
-              <div className="bg-white rounded-xl shadow-sm p-8 sm:p-12 text-center border border-gray-200">
-                <div className="text-gray-400 mb-4">
-                  <List className="w-12 h-12 sm:w-16 sm:h-16 mx-auto" />
-                </div>
-                <h3 className="text-lg sm:text-xl font-semibold text-secondary mb-2">
-                  No bookings found
-                </h3>
-                <p className="text-gray-500 max-w-md mx-auto text-sm">
-                  {activeTab === 'all'
-                    ? searchQuery
-                      ? `No bookings match your search "${searchQuery}".`
-                      : filter !== 'all'
-                        ? `No bookings found for the selected time filter "${filter}".`
-                        : "You don't have any bookings at the moment. New bookings will appear here."
-                    : activeTab === 'pending'
-                      ? "You don't have any pending bookings at the moment. New bookings will appear here."
-                      : activeTab === 'accepted'
-                        ? "You don't have any accepted bookings. Once you accept pending bookings, they'll appear here."
-                        : activeTab === 'in-progress'
-                          ? "No services are currently in progress. Start accepted bookings to see them here."
-                          : activeTab === 'completed'
-                            ? "You haven't completed any bookings yet. Completed services will be listed here."
-                            : "No cancelled bookings found."}
-                </p>
+        <div className="space-y-4">
+          {currentBookings.length === 0 ? (
+            <div className="bg-white rounded-xl shadow-sm p-8 sm:p-12 text-center border border-gray-200">
+              <div className="text-gray-400 mb-4">
+                <ClipboardList className="w-12 h-12 sm:w-16 sm:h-16 mx-auto" />
               </div>
-            ) : (
-              currentBookings.map((booking) => (
-                <div
-                  key={booking._id}
-                  className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all hover:shadow-md"
-                >
-                  <div className="p-4 sm:p-6">
-                    <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4 sm:gap-6">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 sm:gap-3 mb-3 flex-wrap">
-                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(booking.status)}`}>
-                            {getStatusIcon(booking.status)}
-                            <span className="ml-1 capitalize">{booking.status === 'in-progress' ? 'In Progress' : booking.status || 'unknown'}</span>
-                          </span>
-                          <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-md">
-                            ID: {booking._id.slice(-8)}
-                          </span>
-                          <button
-                            onClick={() => navigator.clipboard.writeText(booking._id)}
-                            className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
-                            title="Copy Booking ID"
-                          >
-                            <Copy className="w-3 h-3 sm:w-4 sm:h-4" />
-                          </button>
-                        </div>
+              <h3 className="text-lg sm:text-xl font-semibold text-secondary mb-2">
+                No bookings found
+              </h3>
+              <p className="text-gray-500 max-w-md mx-auto text-sm">
+                {activeTab === 'all'
+                  ? searchQuery
+                    ? `No bookings match your search "${searchQuery}".`
+                    : filter !== 'all'
+                      ? `No bookings found for the selected time filter "${filter}".`
+                      : "You don't have any bookings at the moment. New bookings will appear here."
+                  : activeTab === 'pending'
+                    ? "You don't have any pending bookings at the moment. New bookings will appear here."
+                    : activeTab === 'accepted'
+                      ? "You don't have any accepted bookings. Once you accept pending bookings, they'll appear here."
+                      : activeTab === 'in-progress'
+                        ? "No services are currently in progress. Start accepted bookings to see them here."
+                        : activeTab === 'completed'
+                          ? "You haven't completed any bookings yet. Completed services will be listed here."
+                          : "No cancelled bookings found."}
+              </p>
+            </div>
+          ) : (
+            currentBookings.map((booking) => (
+              <div
+                key={booking._id}
+                className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all hover:shadow-md"
+              >
+                <div className="p-4 sm:p-6">
+                  <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4 sm:gap-6">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 sm:gap-3 mb-3 flex-wrap">
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(booking.status)}`}>
+                          {getStatusIcon(booking.status)}
+                          <span className="ml-1 capitalize">{booking.status === 'in-progress' ? 'In Progress' : booking.status || 'unknown'}</span>
+                        </span>
+                        <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-md">
+                          ID: {booking._id.slice(-8)}
+                        </span>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(booking._id)}
+                          className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                          title="Copy Booking ID"
+                        >
+                          <Copy className="w-3 h-3 sm:w-4 sm:h-4" />
+                        </button>
+                      </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4">
-                          <div className="flex items-center text-gray-700">
-                            <div className="p-1 sm:p-2 bg-orange-100 rounded-lg mr-2 sm:mr-3">
-                              {getServiceIcon(booking.services?.[0]?.service?.category)}
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500">Service</p>
-                              <p className="font-medium text-sm sm:text-base">
-                                {booking.services?.map(s => s.service?.title).join(', ') || 'Service'}
-                              </p>
-                            </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4">
+                        <div className="flex items-center text-gray-700">
+                          <div className="p-1 sm:p-2 bg-orange-100 rounded-lg mr-2 sm:mr-3">
+                            {getServiceIcon(booking.services?.[0]?.service?.category)}
                           </div>
-                          <div className="flex items-center text-gray-700 sm:col-span-2">
-                            <div className="p-1 sm:p-2 bg-red-100 rounded-lg mr-2 sm:mr-3">
-                              <MapPin className="w-3 h-3 sm:w-4 sm:h-4 text-red-600" />
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500">Address</p>
-                              <p className="font-medium text-sm sm:text-base truncate">{formatAddress(booking.address)}</p>
-                            </div>
+                          <div>
+                            <p className="text-xs text-gray-500">Service</p>
+                            <p className="font-medium text-sm sm:text-base">
+                              {booking.services?.map(s => s.service?.title).join(', ') || 'Service'}
+                            </p>
                           </div>
                         </div>
-
-                        {/* Payment method indicator */}
-                        <div className="flex items-center gap-2 mb-2">
-                          {booking.paymentMethod === 'cash' ? (
-                            <div className="flex items-center text-green-600 text-xs bg-green-50 px-2 py-1 rounded-md">
-                              <Banknote className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-                              <span className="font-medium">Cash on Delivery</span>
-                            </div>
-                          ) : (
-                            <div className="flex items-center text-blue-600 text-xs bg-blue-50 px-2 py-1 rounded-md">
-                              <CreditCard className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-                              <span className="font-medium">Online Payment</span>
-                            </div>
-                          )}
-                          {booking.paymentStatus === 'paid' && (
-                            <CheckSquare className="w-3 h-3 sm:w-4 sm:h-4 text-green-500" />
-                          )}
+                        <div className="flex items-center text-gray-700 sm:col-span-2">
+                          <div className="p-1 sm:p-2 bg-red-100 rounded-lg mr-2 sm:mr-3">
+                            <MapPin className="w-3 h-3 sm:w-4 sm:h-4 text-red-600" />
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">Address</p>
+                            <p className="font-medium text-sm sm:text-base truncate">{formatAddress(booking.address)}</p>
+                          </div>
                         </div>
                       </div>
 
-                      <div className="flex flex-col space-y-2 min-w-[160px] sm:min-w-[200px]">
-                        <button
-                          onClick={() => getBookingDetails(booking._id)}
-                          className="inline-flex items-center justify-center px-3 py-2 border border-gray-300 shadow-sm text-xs sm:text-sm font-medium rounded-md text-secondary bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
-                        >
-                          <Eye className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                          View Details
-                        </button>
+                      <div className="flex items-center gap-2 mb-2">
+                        {booking.paymentMethod === 'cash' ? (
+                          <div className="flex items-center text-green-600 text-xs bg-green-50 px-2 py-1 rounded-md">
+                            <Banknote className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+                            <span className="font-medium">Cash on Delivery</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center text-blue-600 text-xs bg-blue-50 px-2 py-1 rounded-md">
+                            <CreditCard className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+                            <span className="font-medium">Online Payment</span>
+                          </div>
+                        )}
+                        {booking.paymentStatus === 'paid' && (
+                          <CheckSquare className="w-3 h-3 sm:w-4 sm:h-4 text-green-500" />
+                        )}
+                      </div>
+                    </div>
 
-                        {/* Action buttons based on status */}
-                        {booking.status === 'pending' && (!booking.provider || booking.provider === user?._id) && (
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => handleBookingAction(booking._id, 'accept')}
-                              className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-transparent text-xs sm:text-sm font-medium rounded-md text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
-                            >
-                              <Check className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                              Accept
-                            </button>
+                    <div className="flex flex-col space-y-2 min-w-[160px] sm:min-w-[200px]">
+                      <button
+                        onClick={() => getBookingDetails(booking._id)}
+                        className="inline-flex items-center justify-center px-3 py-2 border border-gray-300 shadow-sm text-xs sm:text-sm font-medium rounded-md text-secondary bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                      >
+                        <Eye className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                        View Details
+                      </button>
+
+                      {booking.status === 'pending' && (!booking.provider || booking.provider === user?._id) && (
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => handleBookingAction(booking._id, 'accept')}
+                            className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-transparent text-xs sm:text-sm font-medium rounded-md text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                          >
+                            <Check className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                            Accept
+                          </button>
+                          {booking.paymentStatus !== 'paid' && (
                             <button
                               onClick={() => handleBookingAction(booking._id, 'reject', { reason: 'Provider declined' })}
                               className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-transparent text-xs sm:text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
@@ -1053,49 +1023,49 @@ const ProviderBooking = () => {
                               <X className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
                               Reject
                             </button>
-                          </div>
-                        )}
+                          )}
+                        </div>
+                      )}
 
-                        {booking.status === 'accepted' && (
-                          <button
-                            onClick={() => handleBookingAction(booking._id, 'start')}
-                            className="inline-flex items-center justify-center px-3 py-2 border border-transparent text-xs sm:text-sm font-medium rounded-md text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
-                          >
-                            <Play className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                            Start Service
-                          </button>
-                        )}
+                      {booking.status === 'accepted' && (
+                        <button
+                          onClick={() => handleBookingAction(booking._id, 'start')}
+                          className="inline-flex items-center justify-center px-3 py-2 border border-transparent text-xs sm:text-sm font-medium rounded-md text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                        >
+                          <Play className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                          Start Service
+                        </button>
+                      )}
 
-                        {booking.status === 'in-progress' && (
-                          <button
-                            onClick={() => handleBookingAction(booking._id, 'complete')}
-                            className="w-full inline-flex items-center justify-center px-3 py-2 border border-transparent text-xs sm:text-sm font-medium rounded-md text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
-                          >
-                            <Check className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                            Complete Service
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-gray-50 px-4 sm:px-6 py-2 sm:py-3 border-t border-gray-200">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-0">
-                      <div className="text-xs text-gray-500">
-                        Created: {formatDate(booking.createdAt)}
-                      </div>
-                      <div className="text-sm font-medium text-secondary">
-                        Total: {formatCurrency(booking.totalAmount)}
-                      </div>
+                      {booking.status === 'in-progress' && (
+                        <button
+                          onClick={() => handleBookingAction(booking._id, 'complete')}
+                          className="w-full inline-flex items-center justify-center px-3 py-2 border border-transparent text-xs sm:text-sm font-medium rounded-md text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                        >
+                          <Check className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                          Complete Service
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
-              ))
-            )}
-          </div>
-        )}
+                <div className="bg-gray-50 px-4 sm:px-6 py-2 sm:py-3 border-t border-gray-200">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-0">
+                    <div className="text-xs text-gray-500">
+                      Created: {formatDate(booking.createdAt)}
+                    </div>
+                    <div className="text-sm font-medium text-secondary">
+                      Total: {formatCurrency(booking.totalAmount)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </div>
 
-      {/* Booking Details Modal (unchanged) */}
+      {/* Booking Details Modal */}
       {showModal && selectedBooking && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full border border-gray-200 max-h-[90vh] overflow-y-auto">
@@ -1194,11 +1164,8 @@ const ProviderBooking = () => {
 
                   {expandedSections.customer && (
                     <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-
-                      {/* ============== ACCEPTED / IN-PROGRESS / ASSIGNED ============== */}
                       {['accepted', 'in-progress', 'assigned'].includes(selectedBooking.status) && (
                         <>
-                          {/* Name */}
                           <div className="flex items-center">
                             <div className="p-2 bg-blue-100 rounded-lg mr-3">
                               <User className="w-5 h-5 text-primary" />
@@ -1211,7 +1178,6 @@ const ProviderBooking = () => {
                             </div>
                           </div>
 
-                          {/* Phone */}
                           <div className="flex items-center">
                             <div className="p-2 bg-green-100 rounded-lg mr-3">
                               <Phone className="w-5 h-5 text-green-600" />
@@ -1224,7 +1190,6 @@ const ProviderBooking = () => {
                             </div>
                           </div>
 
-                          {/* Email */}
                           <div className="flex items-center">
                             <div className="p-2 bg-red-100 rounded-lg mr-3">
                               <Mail className="w-5 h-5 text-red-600" />
@@ -1237,7 +1202,6 @@ const ProviderBooking = () => {
                             </div>
                           </div>
 
-                          {/* Customer Since */}
                           <div className="flex items-center">
                             <div className="p-2 bg-purple-100 rounded-lg mr-3">
                               <Star className="w-5 h-5 text-purple-600" />
@@ -1254,32 +1218,24 @@ const ProviderBooking = () => {
                         </>
                       )}
 
-                      {/* ============== PENDING ============== */}
                       {selectedBooking.status === "pending" && (
-                        <>
-                          <div className="col-span-full text-center py-4 text-gray-500">
-                            <p>
-                              Customer details will be visible after you accept the booking.
-                            </p>
-                          </div>
-                        </>
+                        <div className="col-span-full text-center py-4 text-gray-500">
+                          <p>
+                            Customer details will be visible after you accept the booking.
+                          </p>
+                        </div>
                       )}
 
-                      {/* ============== COMPLETED ============== */}
                       {selectedBooking.status === "completed" && (
-                        <>
-                          <div className="col-span-full text-center py-4 text-gray-500">
-                            <p>
-                              Customer information is hidden because the service has been completed for privacy reasons.
-                            </p>
-                          </div>
-                        </>
+                        <div className="col-span-full text-center py-4 text-gray-500">
+                          <p>
+                            Customer information is hidden because the service has been completed for privacy reasons.
+                          </p>
+                        </div>
                       )}
-
                     </div>
                   )}
                 </div>
-
 
                 {/* Service Information Section */}
                 <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
@@ -1335,7 +1291,6 @@ const ProviderBooking = () => {
                         </div>
                       ))}
 
-                      {/* Additional Instructions */}
                       {selectedBooking.notes && (
                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                           <div className="flex items-start">
@@ -1441,7 +1396,7 @@ const ProviderBooking = () => {
                       <div className="flex items-center justify-between mb-3">
                         <p className="font-medium">
                           {formatAddress(selectedBooking.address)}
-                        </p> 
+                        </p>
                       </div>
                     </div>
                   )}
