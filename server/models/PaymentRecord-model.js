@@ -74,6 +74,12 @@ const paymentRecordSchema = new Schema({
   processedAt: Date,
   completedAt: Date,
 
+  transactionReference: {
+    type: String,
+    unique: true,
+    sparse: true
+  },
+
   notes: String,
 
   emailSent: {
