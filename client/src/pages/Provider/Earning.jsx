@@ -60,6 +60,9 @@ const ProviderEarningsDashboard = () => {
     pageSize: 20,
     totalEarnings: 0
   });
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmMessage, setConfirmMessage] = useState('');
+  const [confirmAction, setConfirmAction] = useState(null);
 
   // Fetch earnings summary
   const fetchSummary = async () => {
@@ -324,8 +327,6 @@ const ProviderEarningsDashboard = () => {
   // Handle withdrawal request
   const handleWithdrawal = async () => {
     try {
-      setProcessingWithdrawal(true);
-
       if (!withdrawalForm.amount || withdrawalForm.amount < 500) {
         showToast('Minimum withdrawal amount is ₹500', 'error');
         return;
@@ -339,44 +340,56 @@ const ProviderEarningsDashboard = () => {
         return;
       }
 
-      const response = await fetch(`${API}/payment/withdraw`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          amount: parseFloat(withdrawalForm.amount)
-        })
-      });
+      showConfirmation(
+        `Are you sure you want to withdraw ₹${withdrawalForm.amount}? This action cannot be undone.`,
+        async () => {
+          try {
+            setProcessingWithdrawal(true);
 
-      const data = await response.json();
+            const response = await fetch(`${API}/payment/withdraw`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                amount: parseFloat(withdrawalForm.amount)
+              })
+            });
 
-      if (!response.ok) {
-        // If backend provides actual balance, use it
-        const actualBalance = data.availableBalance !== undefined ? data.availableBalance : summary.availableBalance;
+            const data = await response.json();
 
-        if (data.error?.includes('exceeds available balance')) {
-          showToast(`Insufficient balance. Available: ₹${actualBalance}`, 'error');
-        } else {
-          throw new Error(data?.error || data?.message || 'Failed to process withdrawal');
+            if (!response.ok) {
+              // If backend provides actual balance, use it
+              const actualBalance = data.availableBalance !== undefined ? data.availableBalance : summary.availableBalance;
+
+              if (data.error?.includes('exceeds available balance')) {
+                showToast(`Insufficient balance. Available: ₹${actualBalance}`, 'error');
+              } else {
+                throw new Error(data?.error || data?.message || 'Failed to process withdrawal');
+              }
+              return;
+            }
+
+            if (data.success) {
+              showToast('Withdrawal request submitted successfully!', 'success');
+              setShowWithdrawal(false);
+              setWithdrawalForm({ amount: '' });
+              await refreshData(); // Refresh all data
+            } else {
+              throw new Error(data.error || data.message || 'Failed to process withdrawal');
+            }
+          } catch (error) {
+            console.error('Error processing withdrawal:', error);
+            showToast(error.message, 'error');
+          } finally {
+            setProcessingWithdrawal(false);
+          }
         }
-        return;
-      }
-
-      if (data.success) {
-        showToast('Withdrawal request submitted successfully!', 'success');
-        setShowWithdrawal(false);
-        setWithdrawalForm({ amount: '' });
-        await refreshData(); // Refresh all data
-      } else {
-        throw new Error(data.error || data.message || 'Failed to process withdrawal');
-      }
+      );
     } catch (error) {
-      console.error('Error processing withdrawal:', error);
+      console.error('Error preparing withdrawal:', error);
       showToast(error.message, 'error');
-    } finally {
-      setProcessingWithdrawal(false);
     }
   };
 
@@ -452,6 +465,27 @@ const ProviderEarningsDashboard = () => {
       setDownloading(prev => ({ ...prev, [type]: false }));
     }
   };
+
+
+
+  // Show confirmation modal
+  const showConfirmation = (message, action) => {
+    setConfirmMessage(message);
+    setConfirmAction(() => action);
+    setShowConfirmModal(true);
+  };
+
+  // Handle confirmation
+  const handleConfirm = async () => {
+    if (confirmAction) {
+      await confirmAction();
+    }
+    setShowConfirmModal(false);
+    setConfirmMessage('');
+    setConfirmAction(null);
+  };
+
+
 
   // Refresh all data
   const refreshData = async () => {
@@ -852,6 +886,38 @@ const ProviderEarningsDashboard = () => {
           </div>
         )}
 
+        {/* Confirmation Modal */}
+        {showConfirmModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-background rounded-lg shadow-xl p-4 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+              <h3 className="text-lg sm:text-xl font-bold mb-4 text-secondary">Confirm Action</h3>
+
+              <p className="text-secondary mb-6">{confirmMessage}</p>
+
+              <div className="flex flex-col sm:flex-row justify-end gap-3">
+                <button
+                  onClick={() => setShowConfirmModal(false)}
+                  className="px-4 py-2 text-secondary border border-gray-300 rounded-md hover:bg-gray-50 order-2 sm:order-1"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirm}
+                  disabled={processingWithdrawal}
+                  className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 disabled:bg-primary/50 flex items-center justify-center gap-1 order-1 sm:order-2 mb-3 sm:mb-0"
+                >
+                  {processingWithdrawal ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      Processing...
+                    </>
+                  ) : 'Confirm'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Mobile Tab Selector */}
         <MobileTabSelector />
 
@@ -960,6 +1026,8 @@ const ProviderEarningsDashboard = () => {
                   </div>
                 </div>
 
+
+
                 {earningsReport.length > 0 ? (
                   <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
@@ -974,8 +1042,8 @@ const ProviderEarningsDashboard = () => {
                         </tr>
                       </thead>
                       <tbody className="bg-background divide-y divide-gray-200">
-                        {earningsReport.map((earning, index) => (
-                          <tr key={index}>
+                        {earningsReport.map((earning) => (
+                          <tr key={earning.booking}>
                             <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm font-medium text-secondary">#{earning.booking}</td>
                             <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(earning.createdAt)}</td>
                             <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatCurrency(earning.grossAmount)}</td>
@@ -1050,27 +1118,43 @@ const ProviderEarningsDashboard = () => {
                 {withdrawalReport.length > 0 ? (
                   <div className="space-y-3 sm:space-y-4">
                     {withdrawalReport.map((record, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 sm:p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
-                        <div className="flex items-center gap-3 max-w-[60%]">
-                          <div className="bg-accent/10 p-2 rounded-full flex-shrink-0">
-                            <ArrowDownLeft className="w-4 h-4 text-accent" />
+                      <div key={index} className="p-3 sm:p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3 max-w-[60%]">
+                            <div className="bg-accent/10 p-2 rounded-full flex-shrink-0">
+                              <ArrowDownLeft className="w-4 h-4 text-accent" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-secondary text-sm sm:text-base">Withdrawal Request</p>
+                              <p className="text-xs sm:text-sm text-gray-500 truncate">Ref: {record.transactionReference}</p>
+                              <p className="text-xs text-gray-400">{record.paymentMethod === 'bank_transfer' ? 'Bank Transfer' : record.paymentMethod}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-medium text-secondary text-sm sm:text-base">Withdrawal Request</p>
-                            <p className="text-xs sm:text-sm text-gray-500 truncate">Ref: {record.transactionReference}</p>
-                            <p className="text-xs text-gray-400">{record.paymentMethod === 'bank_transfer' ? 'Bank Transfer' : record.paymentMethod}</p>
+                          <div className="text-right">
+                            <p className="font-medium text-accent text-sm sm:text-base">
+                              {formatCurrency(record.amount)}
+                            </p>
+                            <p className="text-xs sm:text-sm text-gray-500">{formatDate(record.createdAt)}</p>
+                            <div className={`text-xs px-2 py-1 rounded-full inline-flex items-center gap-1 ${getStatusColor(record.status)}`}>
+                              {getStatusIcon(record.status)}
+                              <span className="hidden sm:inline">{record.status}</span>
+                            </div>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <p className="font-medium text-accent text-sm sm:text-base">
-                            {formatCurrency(record.amount)}
-                          </p>
-                          <p className="text-xs sm:text-sm text-gray-500">{formatDate(record.createdAt)}</p>
-                          <div className={`text-xs px-2 py-1 rounded-full inline-flex items-center gap-1 ${getStatusColor(record.status)}`}>
-                            {getStatusIcon(record.status)}
-                            <span className="hidden sm:inline">{record.status}</span>
+                        {record.status === 'rejected' && (record.rejectionReason || record.adminRemark) && (
+                          <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                            {record.rejectionReason && (
+                              <p className="text-sm text-red-700 mb-1">
+                                <strong>Rejection Reason:</strong> {record.rejectionReason}
+                              </p>
+                            )}
+                            {record.adminRemark && (
+                              <p className="text-sm text-red-700">
+                                <strong>Admin Remark:</strong> {record.adminRemark}
+                              </p>
+                            )}
                           </div>
-                        </div>
+                        )}
                       </div>
                     ))}
                   </div>

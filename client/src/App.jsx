@@ -46,6 +46,7 @@ import ServiceDetailPage from "./pages/Customer/Servicedetail";
 import UserProfile from "./pages/Customer/Profile";
 import CustomerBookingsPage from "./pages/Customer/CustomerBookingsPage";
 import AdminReports from "./pages/Admin/Earning-Reports";
+import AdminPayout from "./pages/Admin/Payout";
 import BookingConfirmation from "./pages/Customer/BookingConfirmation";
 import FeedbackManagement from "./pages/Customer/Feedback";
 import ComplaintsPage from "./pages/Customer/Complaint";
@@ -90,6 +91,7 @@ const App = () => {
             <Route path="complaints" element={<AdminComplaints />} />
             <Route path="feedback" element={<AdminServiceFeedback />} />
             <Route path="earning-reports" element={<AdminReports />} />
+            <Route path="payout" element={<AdminPayout />} />
           </Route>
         </Route>
 

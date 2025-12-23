@@ -159,8 +159,9 @@ const getEarningsSummary = async (req, res) => {
   }
 };
 
-// Provider - Request withdrawal (Only Bank Transfer)
-const requestWithdrawal = async (req, res) => {
+
+// Provider - Request bulk withdrawal
+const requestBulkWithdrawal = async (req, res) => {
   const session = await mongoose.startSession();
 
   try {
@@ -168,11 +169,12 @@ const requestWithdrawal = async (req, res) => {
       const providerId = req.provider._id;
       const { amount } = req.body;
 
+      // Validate amount
       if (!amount || isNaN(amount) || amount < 500) {
         throw new Error("Invalid amount. Minimum withdrawal is ₹500.");
       }
 
-      // First, get the current available balance (without deducting pending withdrawals)
+      // Calculate available balance
       const availableBalanceResult = await ProviderEarning.aggregate([
         {
           $match: {
@@ -197,17 +199,16 @@ const requestWithdrawal = async (req, res) => {
             totalCommission: { $sum: '$commissionAmount' }
           }
         }
-      ]);
+      ]).session(session);
 
       let baseAvailableBalance = 0;
       availableBalanceResult.forEach(item => {
         if (item._id === 'online') {
-          baseAvailableBalance += item.totalNet;
+          baseAvailableBalance += item.totalNet || 0;
         } else if (item._id === 'cash') {
-          baseAvailableBalance -= item.totalCommission;
+          baseAvailableBalance -= item.totalCommission || 0;
         }
       });
-
       baseAvailableBalance = Math.max(0, baseAvailableBalance);
 
       // Get total pending withdrawals
@@ -224,7 +225,7 @@ const requestWithdrawal = async (req, res) => {
             totalPendingWithdrawals: { $sum: '$amount' }
           }
         }
-      ]);
+      ]).session(session);
 
       const totalPendingWithdrawals = pendingWithdrawals.length > 0
         ? pendingWithdrawals[0].totalPendingWithdrawals
@@ -234,9 +235,10 @@ const requestWithdrawal = async (req, res) => {
       const actualAvailableBalance = Math.max(0, baseAvailableBalance - totalPendingWithdrawals);
 
       if (amount > actualAvailableBalance) {
-        throw new Error(`Requested ₹${amount} exceeds available balance ₹${actualAvailableBalance}`);
+        throw new Error('Insufficient balance for withdrawal');
       }
 
+      // Get provider bank details
       const provider = await Provider.findById(providerId)
         .select("bankDetails name")
         .session(session);
@@ -244,6 +246,36 @@ const requestWithdrawal = async (req, res) => {
       if (!provider) throw new Error("Provider not found.");
       if (!provider.bankDetails?.accountNo) throw new Error("Bank details missing.");
 
+      // Find eligible ProviderEarning records (latest first)
+      const eligibleEarnings = await ProviderEarning.find({
+        provider: providerId,
+        paymentRecord: { $exists: false },
+        isVisibleToProvider: true
+      })
+      .populate({
+        path: 'booking',
+        match: { status: 'completed' }
+      })
+      .sort({ createdAt: -1 }) // Latest first
+      .session(session);
+
+      // Filter earnings with completed bookings
+      const validEarnings = eligibleEarnings.filter(e => e.booking);
+
+      // Accumulate earnings until amount is covered
+      let accumulatedAmount = 0;
+      const selectedEarnings = [];
+      for (const earning of validEarnings) {
+        if (accumulatedAmount >= amount) break;
+        accumulatedAmount += earning.netAmount;
+        selectedEarnings.push(earning);
+      }
+
+      if (accumulatedAmount < amount) {
+        throw new Error('Insufficient eligible earnings for withdrawal');
+      }
+
+      // Create PaymentRecord
       const paymentRecord = new PaymentRecord({
         provider: providerId,
         amount,
@@ -255,22 +287,36 @@ const requestWithdrawal = async (req, res) => {
           ifscCode: provider.bankDetails.ifsc,
           bankName: provider.bankDetails.bankName,
         },
-        status: "requested",
+        status: 'processing',
+        withdrawalType: 'manual_bulk',
+        notes: "Manual bulk withdrawal",
         transactionReference: `WDL-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
       });
 
       await paymentRecord.save({ session });
 
+      // Link selected earnings to payment record
+      const selectedEarningIds = selectedEarnings.map(e => e._id);
+      await ProviderEarning.updateMany(
+        { _id: { $in: selectedEarningIds } },
+        { paymentRecord: paymentRecord._id },
+        { session }
+      );
+
+      // Calculate updated available balance
+      const updatedAvailableBalance = actualAvailableBalance - amount;
+
       res.json({
         success: true,
-        message: "Withdrawal requested successfully",
+        message: "Manual bulk withdrawal processed successfully",
         data: {
           reference: paymentRecord.transactionReference,
           amount: paymentRecord.amount,
           status: paymentRecord.status,
+          withdrawalType: paymentRecord.withdrawalType,
           method: paymentRecord.paymentMethod,
-          availableBalance: actualAvailableBalance - amount, // Return updated balance
           createdAt: paymentRecord.createdAt,
+          availableBalance: updatedAvailableBalance
         }
       });
     });
@@ -338,6 +384,13 @@ const downloadEarningsReport = async (req, res) => {
       {
         $addFields: {
           paymentMethod: "$bookingInfo.paymentMethod",
+          status: {
+            $cond: {
+              if: { $and: [{ $ne: ["$paymentInfo", null] }, { $eq: ["$paymentInfo.status", "completed"] }] },
+              then: "Withdrawn",
+              else: "Available"
+            }
+          }
         },
       },
       {
@@ -358,6 +411,7 @@ const downloadEarningsReport = async (req, res) => {
           netAmount: 1,
           createdAt: 1,
           paymentMethod: 1,
+          status: 1,
         },
       },
     ]);
@@ -391,6 +445,13 @@ const downloadEarningsReport = async (req, res) => {
         {
           $addFields: {
             paymentMethod: "$bookingInfo.paymentMethod",
+            status: {
+              $cond: {
+                if: { $and: [{ $ne: ["$paymentInfo", null] }, { $eq: ["$paymentInfo.status", "completed"] }] },
+                then: "Withdrawn",
+                else: "Available"
+              }
+            }
           },
         },
         {
@@ -405,6 +466,7 @@ const downloadEarningsReport = async (req, res) => {
             netAmount: 1,
             createdAt: 1,
             paymentMethod: 1,
+            status: 1,
           },
         },
       ]);
@@ -419,6 +481,7 @@ const downloadEarningsReport = async (req, res) => {
         { header: "Commission Amount (₹)", key: "commissionAmount", width: 20 },
         { header: "Net Amount (₹)", key: "netAmount", width: 20 },
         { header: "Payment Method", key: "paymentMethod", width: 15 },
+        { header: "Status", key: "status", width: 15 },
         { header: "Created At", key: "createdAt", width: 25 },
       ];
 
@@ -430,6 +493,7 @@ const downloadEarningsReport = async (req, res) => {
           commissionAmount: earning.commissionAmount || 0,
           netAmount: earning.netAmount || 0,
           paymentMethod: earning.paymentMethod || "unknown",
+          status: earning.status || "N/A",
           createdAt: earning.createdAt
             ? new Date(earning.createdAt).toISOString().slice(0, 19).replace("T", " ")
             : "N/A",
@@ -562,7 +626,7 @@ const downloadWithdrawalReport = async (req, res) => {
 // Admin - Get All withdrawal requests
 const getAllWithdrawalRequests = async (req, res) => {
   try {
-    let { status, page = 1, limit = 10, startDate, endDate } = req.query;
+    let { status, page = 1, limit = 10, startDate, endDate, providerSearch, sortBy } = req.query;
 
     const filter = {};
     if (status) filter.status = status; // requested / processing / completed / rejected
@@ -578,6 +642,7 @@ const getAllWithdrawalRequests = async (req, res) => {
       if (diffDays > 62) {
         return res.status(400).json({ success: false, error: "Maximum range is 2 months" });
       }
+      end.setHours(23, 59, 59, 999); // Include the entire end date
       filter.createdAt = {
         $gte: start,
         $lte: end
@@ -586,15 +651,132 @@ const getAllWithdrawalRequests = async (req, res) => {
 
     const skip = (page - 1) * limit;
 
-    const [records, total] = await Promise.all([
-      PaymentRecord.find(filter)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(parseInt(limit))
-        .populate("provider", "name email phone bankDetails")
-        .populate("admin", "name email"),
-      PaymentRecord.countDocuments(filter)
+    // Calculate one week ago
+    const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    // Build aggregation pipeline
+    let pipeline = [
+      { $match: filter },
+      {
+        $lookup: {
+          from: 'providerearnings',
+          localField: '_id',
+          foreignField: 'paymentRecord',
+          as: 'earnings'
+        }
+      },
+      {
+        $addFields: {
+          earningsCount: { $size: '$earnings' }
+        }
+      },
+      {
+        $lookup: {
+          from: 'providers',
+          localField: 'provider',
+          foreignField: '_id',
+          as: 'provider'
+        }
+      },
+      { $unwind: { path: '$provider', preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: 'admins',
+          localField: 'admin',
+          foreignField: '_id',
+          as: 'admin'
+        }
+      },
+      { $unwind: { path: '$admin', preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: 'bookings',
+          let: { providerId: '$provider._id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ['$provider', '$$providerId'] },
+                    { $eq: ['$status', 'completed'] },
+                    { $gte: ['$createdAt', oneWeekAgo] }
+                  ]
+                }
+              }
+            }
+          ],
+          as: 'bookingsLastWeek'
+        }
+      },
+      {
+        $addFields: {
+          bookingsLastWeekCount: { $size: '$bookingsLastWeek' }
+        }
+      }
+    ];
+
+    // Add provider search filter
+    if (providerSearch) {
+      pipeline.push({
+        $match: {
+          $or: [
+            { 'provider.name': { $regex: providerSearch, $options: 'i' } },
+            { 'provider._id': mongoose.isValidObjectId(providerSearch) ? new mongoose.Types.ObjectId(providerSearch) : null }
+          ].filter(Boolean)
+        }
+      });
+    }
+
+    // Add sorting
+    let sortStage = { $sort: { createdAt: -1 } }; // default: latest first
+    if (sortBy === 'amount_desc') {
+      sortStage = { $sort: { amount: -1, createdAt: -1 } }; // highest amount first, then latest
+    } else if (sortBy === 'amount_asc') {
+      sortStage = { $sort: { amount: 1, createdAt: -1 } }; // lowest amount first, then latest
+    } else if (sortBy === 'createdAt_desc') {
+      sortStage = { $sort: { createdAt: -1 } }; // newest first
+    } else if (sortBy === 'createdAt_asc') {
+      sortStage = { $sort: { createdAt: 1 } }; // oldest first
+    }
+    pipeline.push(sortStage);
+
+    // Add pagination
+    pipeline.push(
+      { $skip: skip },
+      { $limit: parseInt(limit) },
+      {
+        $project: {
+          'provider.password': 0,
+          'provider.createdAt': 0,
+          'provider.updatedAt': 0,
+          'admin.password': 0,
+          'admin.createdAt': 0,
+          'admin.updatedAt': 0
+        }
+      }
+    );
+
+    // Get total count (need to apply filters except pagination)
+    let countPipeline = pipeline.slice(0, -3); // Remove skip, limit, project
+    if (providerSearch) {
+      // Add search filter to count pipeline
+      countPipeline.push({
+        $match: {
+          $or: [
+            { 'provider.name': { $regex: providerSearch, $options: 'i' } },
+            { 'provider._id': mongoose.isValidObjectId(providerSearch) ? new mongoose.Types.ObjectId(providerSearch) : null }
+          ].filter(Boolean)
+        }
+      });
+    }
+    countPipeline.push({ $count: "total" });
+
+    const [records, countResult] = await Promise.all([
+      PaymentRecord.aggregate(pipeline),
+      PaymentRecord.aggregate(countPipeline)
     ]);
+
+    const total = countResult.length > 0 ? countResult[0].total : 0;
 
     return res.status(200).json({
       success: true,
@@ -622,7 +804,26 @@ const approveWithdrawalRequest = async (req, res) => {
 
   try {
     const { id } = req.params;
-    const { transactionReference, notes } = req.body;
+    const { transactionReference, notes, utrNo, transferDate, transferTime } = req.body;
+
+    // Validate required fields for approval
+    if (!transactionReference) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ success: false, message: "Transaction reference is required" });
+    }
+
+    if (!utrNo) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ success: false, message: "UTR number is required" });
+    }
+
+    if (!transferDate || !transferTime) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ success: false, message: "Transfer date and time are required" });
+    }
 
     // 1️⃣ Find PaymentRecord with provider populated
     let paymentRecord = await PaymentRecord.findById(id)
@@ -641,10 +842,14 @@ const approveWithdrawalRequest = async (req, res) => {
       return res.status(400).json({ success: false, message: `Cannot approve request with status: ${paymentRecord.status}` });
     }
 
-    // 2️⃣ Update payment record
+    // 2️⃣ Update payment record with new fields
     paymentRecord.status = "completed";
     paymentRecord.transactionReference = transactionReference;
+    paymentRecord.utrNo = utrNo;
+    paymentRecord.transferDate = new Date(transferDate);
+    paymentRecord.transferTime = transferTime;
     paymentRecord.adminRemark = notes || "";
+    paymentRecord.admin = req.admin._id;
     paymentRecord.completedAt = new Date();
     await paymentRecord.save({ session });
 
@@ -739,6 +944,7 @@ const rejectWithdrawalRequest = async (req, res) => {
     paymentRecord.status = "rejected";
     paymentRecord.rejectionReason = rejectionReason || "No reason provided";
     paymentRecord.adminRemark = adminRemark || "";
+    paymentRecord.admin = req.admin._id;
     paymentRecord.completedAt = new Date();
     await paymentRecord.save({ session });
 
@@ -854,6 +1060,8 @@ const generateWithdrawalReport = async (req, res) => {
       { header: 'Account Number (Masked)', key: 'accountNumber', width: 25 },
       { header: 'IFSC Code', key: 'ifscCode', width: 20 },
       { header: 'Bank Name', key: 'bankName', width: 25 },
+      { header: 'UTR No', key: 'utrNo', width: 25 },
+      { header: 'Transfer Date Time', key: 'transferDateTime', width: 25 },
       { header: 'Status', key: 'status', width: 15 },
       { header: 'Requested Date', key: 'requestedDate', width: 20 },
       { header: 'Completed Date', key: 'completedDate', width: 20 },
@@ -873,6 +1081,8 @@ const generateWithdrawalReport = async (req, res) => {
         accountNumber: maskedAccount,
         ifscCode: record.paymentDetails.ifscCode || '-',
         bankName: record.paymentDetails.bankName || '-',
+        utrNo: record.utrNo || '-',
+        transferDateTime: record.transferDate && record.transferTime ? new Date(`${record.transferDate.toISOString().split('T')[0]}T${record.transferTime}`).toLocaleString() : '-',
         status: record.status,
         requestedDate: record.createdAt.toLocaleString(),
         completedDate: record.completedAt ? record.completedAt.toLocaleString() : '-',
@@ -1561,12 +1771,12 @@ const outstandingBalanceReport = async (req, res) => {
 module.exports = {
   // Provider
   getEarningsSummary,
-  requestWithdrawal,
+  requestBulkWithdrawal,
   downloadEarningsReport,
   downloadWithdrawalReport,
 
 
-  // Admin 
+  // Admin
   getAllWithdrawalRequests,
   approveWithdrawalRequest,
   rejectWithdrawalRequest,

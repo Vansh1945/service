@@ -28,6 +28,7 @@ const AdminLayout = () => {
     { name: 'Complaint', path: '/admin/complaints', icon: <FiAlertCircle className="w-5 h-5" /> },
     { name: 'Feedback', path: '/admin/feedback', icon: <FiMessageCircle className="w-5 h-5" /> },
     { name: 'Earning Reports', path: '/admin/earning-reports', icon: <FiActivity className="w-5 h-5" /> },
+    { name: 'Payout', path: '/admin/payout', icon: <FiCreditCard className="w-5 h-5" /> },
   ];
 
   const isDashboardActive = location.pathname === '/admin' || location.pathname === '/admin/dashboard';

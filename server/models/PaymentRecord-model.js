@@ -45,8 +45,21 @@ const paymentRecordSchema = new Schema({
     bankName: String
   },
 
-  transactionReference: {
-    type: String // Admin approve karne ke baad fill hoga
+
+
+  // New fields for withdrawal types and admin approval details
+  utrNo: {
+    type: String
+  },
+  transferDate: {
+    type: Date
+  },
+  transferTime: {
+    type: String
+  },
+  withdrawalType: {
+    type: String,
+    enum: ['manual_bulk', 'auto']
   },
 
   status: {

@@ -5,6 +5,7 @@ const cron = require('node-cron');
 const crypto = require('crypto');
 const connectDB = require("./config/db");
 const Transaction = require("./models/Transaction-model");
+const { autoPayout } = require("./services/autoPayout-service");
 
 
 const frontend = process.env.FRONTEND_URL;
@@ -97,14 +98,14 @@ app.post('/razorpay-webhook', express.raw({ type: 'application/json' }), async (
   }
 });
 
-// Schedule weekly auto-withdrawals (localhost)
+// Schedule daily auto payout at 2 AM
 if (process.env.NODE_ENV !== 'test') {
-  cron.schedule('0 9 * * 1', async () => {
+  cron.schedule('0 2 * * *', async () => {
     try {
-      console.log('Running weekly auto-withdrawals...');
-      await Transaction.processAutoWithdrawals();
+      console.log('Running daily auto payout...');
+      await autoPayout();
     } catch (error) {
-      console.error('Auto-withdrawal error:', error);
+      console.error('Auto payout error:', error);
     }
   });
 }

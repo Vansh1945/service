@@ -508,6 +508,41 @@ const getDashboardStats = async (req, res) => {
 
         const totalRevenue = revenueStats[0]?.totalRevenue || 0;
 
+        // Get payment method statistics
+        const paymentMethodStats = await Transaction.aggregate([
+            { $match: { status: 'completed' } },
+            {
+                $group: {
+                    _id: '$paymentMethod',
+                    count: { $sum: 1 },
+                    totalAmount: { $sum: '$amount' }
+                }
+            },
+            {
+                $project: {
+                    paymentMethod: '$_id',
+                    count: 1,
+                    totalAmount: 1,
+                    _id: 0
+                }
+            }
+        ]);
+
+        // Get withdrawal statistics
+        const withdrawalStats = await Transaction.aggregate([
+            { $match: { type: 'withdrawal', status: 'completed' } },
+            {
+                $group: {
+                    _id: null,
+                    totalWithdrawals: { $sum: '$amount' },
+                    withdrawalCount: { $sum: 1 }
+                }
+            }
+        ]);
+
+        const totalWithdrawals = withdrawalStats[0]?.totalWithdrawals || 0;
+        const withdrawalCount = withdrawalStats[0]?.withdrawalCount || 0;
+
         const dashboardStats = {
             overview: {
                 totalUsers,
@@ -518,8 +553,11 @@ const getDashboardStats = async (req, res) => {
                 weeklyBookings,
                 monthlyBookings,
                 pendingProviders,
-                totalRevenue
-            }
+                totalRevenue,
+                totalWithdrawals,
+                withdrawalCount
+            },
+            paymentMethods: paymentMethodStats
         };
 
         res.json({

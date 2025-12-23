@@ -172,6 +172,9 @@ const providerSchema = new mongoose.Schema({
         type: Date,
         default: Date.now
     },
+
+    // Wallet Information
+    wallet: walletSchema,
 }, {
     timestamps: true,
     toJSON: {

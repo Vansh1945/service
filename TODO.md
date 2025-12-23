@@ -1,9 +1,16 @@
-# Add 'scheduled' status for bookings
+## Remove Bookings from Last Week
 
-## Tasks
-- [ ] Update Booking model enum to include 'scheduled'
-- [ ] Update pre-save hook in Booking model to handle 'scheduled' status change
-- [ ] Change confirmBooking function to set status to 'scheduled' instead of 'pending'
-- [ ] Update allowedTransitions in updateBookingStatus to include 'scheduled' transitions
-- [ ] Update getUserBookings to include 'scheduled' in upcoming statuses
-- [ ] Update getBookingsByStatus validStatuses to include 'scheduled'
+### 1. Add deleteLastWeekBookings controller function
+- [ ] Create function to calculate date range (7 days ago to now)
+- [ ] Find bookings created in last week
+- [ ] Delete associated transactions and earnings
+- [ ] Delete the bookings
+- [ ] Return count of deleted bookings
+
+### 2. Add admin route for bulk delete
+- [ ] Add DELETE /admin/bookings/last-week route
+- [ ] Connect to new controller function
+
+### 3. Testing
+- [ ] Test the new endpoint
+- [ ] Verify proper cleanup of related data

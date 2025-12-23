@@ -7,7 +7,7 @@ const adminAuthMiddleware = require('../middlewares/Admin-middleware');
 
 // Provider routes
 router.get('/summary', providerAuthMiddleware, paymentController.getEarningsSummary);
-router.post('/withdraw', providerAuthMiddleware, paymentController.requestWithdrawal);
+router.post('/withdraw', providerAuthMiddleware, paymentController.requestBulkWithdrawal);
 router.get("/earnings-report", providerAuthMiddleware, paymentController.downloadEarningsReport);
 router.get("/withdrawal-report", providerAuthMiddleware, paymentController.downloadWithdrawalReport);
 
