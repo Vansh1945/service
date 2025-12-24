@@ -1,13 +1,15 @@
+
 const Question = require('../models/AddQuestion-model');
 const ProviderTest = require('../models/Test-model');
 const Provider = require('../models/Provider-model');
+const { Category } = require('../models/SystemSetting');
 const { ObjectId } = require('mongoose').Types;
 
 // Test configuration
 const TEST_CONFIG = {
     TIME_LIMIT: 10 * 60 * 1000, // 10 minutes in milliseconds
     PASSING_SCORE: 70,
-    QUESTIONS_PER_TEST: 10,
+    MIN_QUESTIONS_PER_TEST: 5, // Minimum questions required to start a test
     MAX_ATTEMPTS: 3 // Maximum attempts allowed per category
 };
 
@@ -28,9 +30,8 @@ const getTestCategories = async (req, res) => {
     try {
         const provider = req.provider;
         
-        // Get all categories and subcategories
+        // Get all categories
         const categories = await Question.distinct('category');
-        const subcategories = await Question.distinct('subcategory');
 
         // Get passed tests to determine which categories are locked
         const passedTests = await ProviderTest.find({
@@ -60,7 +61,6 @@ const getTestCategories = async (req, res) => {
             success: true,
             data: {
                 categories,
-                subcategories,
                 lockedCategories: [...new Set(lockedCategories)], // Remove duplicates
                 attemptCounts
             }
@@ -80,7 +80,7 @@ const getTestCategories = async (req, res) => {
 const startTest = async (req, res) => {
     try {
         const provider = req.provider;
-        const { category, subcategory } = req.body;
+        const { category } = req.body;
 
         // Validate input
         if (!category) {
@@ -149,18 +149,20 @@ const startTest = async (req, res) => {
             category: category
         };
 
-        // Get random questions
-        const questions = await Question.aggregate([
-            { $match: query },
-            { $sample: { size: TEST_CONFIG.QUESTIONS_PER_TEST } }
-        ]);
+        // Get all available questions for the category
+        const allQuestions = await Question.find(query);
 
-        if (questions.length < TEST_CONFIG.QUESTIONS_PER_TEST) {
+        if (allQuestions.length < TEST_CONFIG.MIN_QUESTIONS_PER_TEST) {
             return res.status(400).json({
                 success: false,
-                message: 'Not enough questions available for selected criteria'
+                message: `At least ${TEST_CONFIG.MIN_QUESTIONS_PER_TEST} questions are required for this category. Currently only ${allQuestions.length} questions are available.`
             });
         }
+
+        // Randomly select questions (up to 10, or all available if fewer)
+        const numQuestions = Math.min(10, allQuestions.length);
+        const shuffled = allQuestions.sort(() => 0.5 - Math.random());
+        const questions = shuffled.slice(0, numQuestions);
 
         // Create new test with proper question structure
         const test = new ProviderTest({
@@ -176,7 +178,6 @@ const startTest = async (req, res) => {
             })),
             status: 'in-progress',
             testCategory: category,
-            testSubcategory: subcategory || 'all',
             startedAt: new Date(),
             expiresAt: new Date(Date.now() + TEST_CONFIG.TIME_LIMIT),
             attemptNumber: attemptCount + 1
@@ -190,7 +191,6 @@ const startTest = async (req, res) => {
             testId: test._id,
             totalQuestions: test.questions.length,
             testCategory: test.testCategory,
-            testSubcategory: test.testSubcategory,
             startedAt: test.startedAt,
             expiresAt: test.expiresAt,
             timeLimit: TEST_CONFIG.TIME_LIMIT,
@@ -321,7 +321,6 @@ const submitTest = async (req, res) => {
                 totalQuestions: test.questions.length,
                 timeTaken: test.timeTaken,
                 testCategory: test.testCategory,
-                testSubcategory: test.testSubcategory,
                 completedAt: test.completedAt,
                 performance: getPerformanceRating(score),
                 attemptNumber: test.attemptNumber,
@@ -346,7 +345,8 @@ const getTestResults = async (req, res) => {
 
         const results = await ProviderTest.find({ provider: provider._id })
             .sort({ completedAt: -1 })
-            .select('testCategory testSubcategory score passed completedAt timeTaken questionsAnswered status attemptNumber')
+            .select('testCategory score passed completedAt timeTaken questionsAnswered status attemptNumber')
+            .populate('testCategory', 'name')
             .lean();
 
         // Calculate attempts remaining for each category
@@ -366,10 +366,11 @@ const getTestResults = async (req, res) => {
         ]);
 
         const formattedResults = results.map(test => {
-            const categoryData = attemptsData.find(d => d.category === test.testCategory) || {};
+            const categoryData = attemptsData.find(d => d.category.toString() === test.testCategory._id.toString()) || {};
             return {
                 testId: test._id,
-                category: test.testCategory,
+
+                category: test.testCategory.name,
                 subcategory: test.testSubcategory,
                 score: test.score,
                 passed: test.passed,
@@ -447,7 +448,6 @@ const getTestDetails = async (req, res) => {
             score: test.score,
             passed: test.passed,
             category: test.testCategory,
-            subcategory: test.testSubcategory,
             startedAt: test.startedAt,
             completedAt: test.completedAt,
             expiresAt: test.expiresAt,

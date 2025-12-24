@@ -8,8 +8,10 @@
 - [x] Added delete route to Question-route.js
 - [x] Updated exports in Question-controller.js
 - [x] Updated client toggleStatus function to use new /toggle/:id endpoint
+- [x] Fixed bulk question upload 400 Bad Request error.
+- [x] Added a category selector for bulk question uploads on the frontend.
+- [x] Added backend validation for category on bulk question uploads.
+- [x] Improved error messages for bulk question uploads.
 
 ## Remaining Tasks
-- [ ] Test the delete functionality
-- [ ] Test the toggle status functionality
 - [ ] Verify all endpoints are working correctly

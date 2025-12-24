@@ -342,6 +342,12 @@ const createBulkQuestions = async (req, res) => {
     // Process each question to handle category conversion
     const processedQuestions = [];
     for (const question of questions) {
+      if (!question.category || typeof question.category !== 'string' || question.category.trim() === '') {
+        return res.status(400).json({
+          success: false,
+          message: `Category is required for question: ${question.questionText}`
+        });
+      }
       let categoryId = question.category;
 
       if (question.category && typeof question.category === 'string') {
@@ -374,7 +380,7 @@ const createBulkQuestions = async (req, res) => {
       });
     }
 
-    const result = await Question.insertMany(processedQuestions);
+    const result = await Question.insertMany(processedQuestions, { ordered: false });
 
     res.status(201).json({
       success: true,
@@ -382,6 +388,13 @@ const createBulkQuestions = async (req, res) => {
       count: result.length
     });
   } catch (error) {
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(val => val.message);
+      return res.status(400).json({
+        success: false,
+        message: `Validation error: ${messages.join(', ')}. Please check that all questions have a category and other required fields.`
+      });
+    }
     res.status(400).json({
       success: false,
       message: error.message

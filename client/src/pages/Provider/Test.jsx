@@ -210,13 +210,36 @@ const PerformanceAnalytics = ({ testResults, testHistory }) => {
   );
 };
 
+// Category Select Component
+const CategorySelect = ({ value, onChange, label, required, includeAll = false, categories }) => {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
+        {label} {required && '*'}
+      </label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        required={required}
+        className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+      >
+        {includeAll && <option value="">All Categories</option>}
+        {categories.map(category => (
+          <option key={category._id} value={category._id}>
+            {category.name}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+};
+
 const ProviderTestPage = () => {
   const { token, API, showToast } = useAuth();
   
   // State management
   const [activeTab, setActiveTab] = useState('start');
   const [selectedCategory, setSelectedCategory] = useState('');
-  const [selectedSubcategory, setSelectedSubcategory] = useState('');
   const [currentTest, setCurrentTest] = useState(null);
   const [testResults, setTestResults] = useState(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -225,6 +248,7 @@ const ProviderTestPage = () => {
   const [testAttemptsLeft, setTestAttemptsLeft] = useState(3);
   const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState('saved');
+  const [categories, setCategories] = useState([]);
 
   // Custom hooks
   const { timeLeft, formatTime, isWarning, setTimeLeft } = useTestTimer(
@@ -273,8 +297,8 @@ const ProviderTestPage = () => {
 
   // Start test handler
   const handleStartTest = useCallback(async () => {
-    if (!selectedCategory && !selectedSubcategory) {
-      showToast('Please select a category or subcategory', 'error');
+    if (!selectedCategory) {
+      showToast('Please select a category', 'error');
       return;
     }
 
@@ -291,8 +315,7 @@ const ProviderTestPage = () => {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          category: selectedCategory,
-          subcategory: selectedSubcategory
+          category: selectedCategory
         })
       });
 
@@ -305,7 +328,7 @@ const ProviderTestPage = () => {
           }
         });
         const testData = await testResponse.json();
-        
+
         if (testData.success) {
           setCurrentTest(testData.data);
           setCurrentQuestionIndex(0);
@@ -321,7 +344,7 @@ const ProviderTestPage = () => {
     } catch (error) {
       showToast('Error starting test', 'error');
     }
-  }, [selectedCategory, selectedSubcategory, testAttemptsLeft, API, token, showToast, setTimeLeft]);
+  }, [selectedCategory, testAttemptsLeft, API, token, showToast, setTimeLeft]);
 
   // Answer selection handler
   const handleAnswerSelect = useCallback((questionId, optionIndex) => {
@@ -387,6 +410,37 @@ const ProviderTestPage = () => {
   useEffect(() => {
     fetchTestHistory();
   }, [fetchTestHistory]);
+
+  // Fetch categories
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch(`${API}/system-setting/categories`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch categories');
+        }
+
+        const data = await response.json();
+        setCategories(data.data || []);
+      } catch (error) {
+        console.error('Fetch categories error:', error);
+        showToast(error.message || 'Failed to fetch categories', 'error');
+      }
+    };
+
+    fetchCategories();
+  }, [API, token, showToast]);
+
+  useEffect(() => {
+    if (categories.length > 0 && !selectedCategory) {
+      setSelectedCategory(categories[0]._id);
+    }
+  }, [categories, selectedCategory]);
 
   // Calculate attempts left
   useEffect(() => {
@@ -479,17 +533,10 @@ const ProviderTestPage = () => {
                   onChange={(value) => setSelectedCategory(value)}
                   label="Category"
                   required
+                  categories={categories}
                 />
               </div>
 
-              <div className="space-y-2">
-                <CategorySelect
-                  value={selectedSubcategory}
-                  onChange={(value) => setSelectedSubcategory(value)}
-                  label="Subcategory"
-                  required
-                />
-              </div>
             </div>
 
             <div className="bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 rounded-xl p-6 mb-8 backdrop-blur-sm">
@@ -500,7 +547,7 @@ const ProviderTestPage = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="flex items-center space-x-2">
                   <BookOpen className="w-4 h-4 text-primary" />
-                  <span className="text-sm text-primary">10 Questions</span>
+                  <span className="text-sm text-primary">5-10 Questions</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Clock className="w-4 h-4 text-primary" />
@@ -578,7 +625,7 @@ const ProviderTestPage = () => {
                   </h2>
                   <p className="text-secondary/80 flex items-center">
                     <BookOpen className="w-4 h-4 mr-2" />
-                    {currentTest.category} - {currentTest.subcategory}
+                    {currentTest.category}
                   </p>
                 </div>
                 <TimerDisplay 
@@ -856,7 +903,7 @@ const ProviderTestPage = () => {
                       <div className="flex-1">
                         <div className="flex items-center mb-2">
                           <h3 className="font-semibold text-secondary mr-3">
-                            {test.category} - {test.subcategory}
+                            {test.category}
                           </h3>
                           <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                             test.passed 
