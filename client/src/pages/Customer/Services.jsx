@@ -27,6 +27,26 @@ const ServiceListingPage = () => {
   const [retryCount, setRetryCount] = useState(0);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedRatings, setSelectedRatings] = useState([]);
+  const [categoriesData, setCategoriesData] = useState([]);
+
+  // Fetch categories from backend
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch(`${API}/system-setting/categories`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      if (data.success && Array.isArray(data.data)) {
+        setCategoriesData(data.data);
+      } else {
+        throw new Error(data.message || 'Invalid response format for categories');
+      }
+    } catch (error) {
+      console.error('Fetch categories error:', error);
+      toast.error('Failed to load categories.');
+    }
+  };
 
   // Fetch services from backend
   const fetchServices = async (showLoading = true) => {
@@ -48,9 +68,7 @@ const ServiceListingPage = () => {
       }
       
       const data = await response.json();
-      
-      console.log('API Response:', data); // Debug log
-      
+            
       if (data.success && Array.isArray(data.data)) {
         // Transform the data to ensure image field is properly handled
         const transformedServices = data.data.map(service => ({
@@ -92,6 +110,7 @@ const ServiceListingPage = () => {
   // Initial data fetch
   useEffect(() => {
     fetchServices();
+    fetchCategories();
   }, [API]);
 
   // Update URL when filters change
@@ -103,11 +122,17 @@ const ServiceListingPage = () => {
   }, [searchTerm, selectedCategory, setSearchParams]);
 
   // Derived state for categories
-  const categories = useMemo(() => {
-    if (services.length === 0) return ['All'];
-    const uniqueCategories = ['All', ...new Set(services.map(service => service.category))];
-    return uniqueCategories.filter(cat => cat); // Remove null/undefined
-  }, [services]);
+  const categoryMap = useMemo(() => {
+    if (categoriesData.length === 0) return {};
+    return categoriesData.reduce((acc, category) => {
+      acc[category._id] = category.name;
+      return acc;
+    }, {});
+  }, [categoriesData]);
+
+  const categoriesForFilter = useMemo(() => {
+    return [{ _id: 'All', name: 'All' }, ...categoriesData];
+  }, [categoriesData]);
 
   // Filtered and sorted services
   const filteredServices = useMemo(() => {
@@ -124,7 +149,7 @@ const ServiceListingPage = () => {
       results = results.filter(service =>
         service.title?.toLowerCase().includes(term) ||
         service.description?.toLowerCase().includes(term) ||
-        service.category?.toLowerCase().includes(term)
+        (categoryMap[service.category] && categoryMap[service.category].toLowerCase().includes(term))
       );
     }
 
@@ -146,7 +171,7 @@ const ServiceListingPage = () => {
       results = results.filter(service =>
         service.description?.toLowerCase().includes(locationTerm) ||
         service.title?.toLowerCase().includes(locationTerm) ||
-        service.category?.toLowerCase().includes(locationTerm)
+        (categoryMap[service.category] && categoryMap[service.category].toLowerCase().includes(locationTerm))
       );
     }
 
@@ -167,7 +192,7 @@ const ServiceListingPage = () => {
     });
 
     return results;
-  }, [services, selectedCategory, searchTerm, priceRange, locationSearch, sortBy, selectedRatings]);
+  }, [services, selectedCategory, searchTerm, priceRange, locationSearch, sortBy, selectedRatings, categoryMap]);
 
   // Handle booking navigation
   const handleBookNow = (serviceId, isActive) => {
@@ -230,7 +255,7 @@ const ServiceListingPage = () => {
           
           {/* Category Badge */}
           <div className="absolute top-3 left-3 bg-teal-500 text-white px-3 py-1 rounded-full text-xs font-bold capitalize">
-            {service.category || 'Service'}
+            {categoryMap[service.category] || 'Service'}
           </div>
 
           {/* Premium Badge */}
@@ -322,7 +347,7 @@ const ServiceListingPage = () => {
   const ActiveFilters = () => {
     const activeFilters = [];
     
-    if (selectedCategory !== 'All') activeFilters.push(`Category: ${selectedCategory}`);
+    if (selectedCategory !== 'All') activeFilters.push(`Category: ${categoryMap[selectedCategory] || selectedCategory}`);
     if (priceRange[0] > 0 || priceRange[1] < Math.max(...services.map(s => s.basePrice || 0))) {
       activeFilters.push(`Price: ₹${priceRange[0]} - ₹${priceRange[1]}`);
     }
@@ -472,9 +497,9 @@ const ServiceListingPage = () => {
                       onChange={(e) => setSelectedCategory(e.target.value)}
                       className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm bg-white transition-colors duration-200"
                     >
-                      {categories.map(category => (
-                        <option key={category} value={category}>
-                          {category}
+                      {categoriesForFilter.map(category => (
+                        <option key={category._id} value={category._id}>
+                          {category.name}
                         </option>
                       ))}
                     </select>
