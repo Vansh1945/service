@@ -969,36 +969,4 @@ exports.permanentDeleteAccount = async (req, res) => {
 };
 
 
-/**
- * @desc    Get all available service categories
- * @route   GET /api/providers/service-categories
- * @access  Public
- */
-exports.getServiceCategories = async (req, res) => {
-    try {
-        const { Category } = require('../models/SystemSetting');
-        const categories = await Category.find({ isActive: true }).select('_id name icon description');
 
-        // Format the response to match frontend expectations
-        const serviceCategories = categories.map(category => ({
-            _id: category._id,
-            title: category.name,
-            category: category.name,
-            icon: category.icon,
-            description: category.description
-        }));
-
-        res.status(200).json({
-            success: true,
-            message: 'Service categories retrieved successfully',
-            data: serviceCategories
-        });
-    } catch (error) {
-        console.error('Error fetching service categories:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch service categories',
-            error: process.env.NODE_ENV === 'development' ? error.message : undefined
-        });
-    }
-};

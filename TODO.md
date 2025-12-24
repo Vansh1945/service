@@ -1,7 +1,14 @@
-# TODO: Fix Search Loading Issue in ServiceListingPage
+# Provider Registration Category Update
 
-## Steps to Complete
-- [ ] Add debounced search term state and useEffect for debouncing (500ms delay)
-- [ ] Modify fetchServices function to accept showLoading parameter and adjust loading state logic
-- [ ] Update useEffects: separate for category (with loading) and debounced search (without loading)
-- [ ] Verify implementation: search should be continuous without loading spinner on typing
+## Tasks
+- [ ] Update frontend to fetch categories from systemsetting.js model
+- [ ] Change category selection from 1 to 1-3 categories
+- [ ] Update UI labels and validation logic
+- [ ] Test category loading and selection limits
+
+## Files to Edit
+- client/src/pages/Provider-Register.jsx
+
+## Backend Verification
+- [ ] Verify getServiceCategories endpoint works
+- [ ] Verify Provider model accepts array of category ObjectIds

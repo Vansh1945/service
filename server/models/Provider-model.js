@@ -61,7 +61,8 @@ const providerSchema = new mongoose.Schema({
     },
     services: [{
         type: mongoose.Schema.Types.ObjectId,
-        ref: "Category"
+        ref: "Category",
+        required: [true, 'Service is required'],
     }],
     experience: {
         type: Number,

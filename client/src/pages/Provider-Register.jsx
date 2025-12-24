@@ -77,11 +77,11 @@ const ProviderRegistration = () => {
   const [otpExpiryTime, setOtpExpiryTime] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedServices, setSelectedServices] = useState([]); // For UI selection
+  const [providerServices, setProviderServices] = useState([]);
+  const [providerServicesLoading, setProviderServicesLoading] = useState(true);
+  const [providerServicesError, setProviderServicesError] = useState(null);
 
-  // Fetch provider service categories when component mounts
-  useEffect(() => {
-    fetchProviderServiceCategories();
-  }, []);
+ 
 
   // Handle OTP resend countdown and expiry
   useEffect(() => {
@@ -110,6 +110,39 @@ const ProviderRegistration = () => {
     }
     return () => clearInterval(timer);
   }, [otpSentTime, otpExpiryTime]);
+
+  // Fetch service categories on component mount
+  useEffect(() => {
+    const fetchServiceCategories = async () => {
+      try {
+        setProviderServicesLoading(true);
+        const response = await fetch(`${API}/system-setting/categories`);
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || 'Failed to fetch service categories');
+        }
+
+        // Transform the data to match expected format
+        const transformedData = (data.data || []).map(category => ({
+          _id: category._id,
+          title: category.name,
+          category: category.name,
+          icon: category.icon,
+          description: category.description
+        }));
+        setProviderServices(transformedData);
+        setProviderServicesError(null);
+      } catch (error) {
+        console.error('Error fetching service categories:', error);
+        setProviderServicesError(error.message);
+      } finally {
+        setProviderServicesLoading(false);
+      }
+    };
+
+    fetchServiceCategories();
+  }, [API]);
 
   const handleServiceChange = (service) => {
     setSelectedServices(prev => {
@@ -948,7 +981,7 @@ const ProviderRegistration = () => {
                     name="resume"
                     onChange={handleFileChange('resume')}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    accept=".jpg,.jpeg,.png"
+                    accept=".pdf,.doc,.docx"
                     required
                   />
                   <div className="flex items-center justify-between px-4 py-4 bg-gradient-to-r from-primary/5 to-transparent border-2 border-gray-200 rounded-2xl hover:border-primary/50 transition-all duration-300 hover:shadow-md">
