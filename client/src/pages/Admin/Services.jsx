@@ -1749,6 +1749,7 @@ const CategorySelect = ({ value, onChange, label, required, includeAll = false, 
         required={required}
         className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
       >
+        <option value="" disabled hidden>Select Category</option>
         {includeAll && <option value="">All Categories</option>}
         {categories.map(category => (
           <option key={category._id} value={category._id}>

@@ -65,10 +65,13 @@ const createService = async (req, res) => {
             images: imageUrls
         });
 
+        // Populate the category field
+        const populatedService = await service.populate('category');
+
         res.status(201).json({
             success: true,
             message: 'Service created successfully',
-            data: service
+            data: populatedService
         });
     } catch (error) {
         console.error('Error creating service:', error);
@@ -156,10 +159,13 @@ const updateService = async (req, res) => {
 
         await service.save();
 
+        // Populate the category field
+        const populatedService = await service.populate('category');
+
         res.json({
             success: true,
             message: 'Service updated successfully',
-            data: service
+            data: populatedService
         });
     } catch (error) {
         console.error('Error updating service:', error);
