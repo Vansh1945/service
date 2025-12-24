@@ -17,8 +17,9 @@ const ServiceListingPage = () => {
 
   // State Management
   const [services, setServices] = useState([]);
-  const [initialLoading, setInitialLoading] = useState(true); // Only for initial load
-  const [searchLoading, setSearchLoading] = useState(false); // For search operations
+  const [allServices, setAllServices] = useState([]); // Store all services separately
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
   const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') || 'All');
@@ -52,21 +53,18 @@ const ServiceListingPage = () => {
     }
   };
 
-  // Fetch services from backend
-  const fetchServices = async (isSearchOperation = false) => {
+  // Fetch ALL services from backend (without filters)
+  const fetchAllServices = async (isSearchOperation = false) => {
     try {
-      // Only show loading for initial load, not for searches
       if (!isSearchOperation) {
         setInitialLoading(true);
       }
       setError(null);
 
-      // Build query parameters
+      // Don't add search or category filters here - fetch ALL services
       const params = new URLSearchParams();
-      if (searchTerm) params.append('search', searchTerm);
-      if (selectedCategory && selectedCategory !== 'All') params.append('category', selectedCategory);
       params.append('page', '1');
-      params.append('limit', '50');
+      params.append('limit', '100'); // Get all services
 
       const response = await fetch(`${API}/service/services?${params}`);
       
@@ -84,6 +82,10 @@ const ServiceListingPage = () => {
             : service.image 
         }));
         
+        // Store all services
+        setAllServices(transformedServices);
+        
+        // Also set services for initial display
         setServices(transformedServices);
         setRetryCount(0);
         
@@ -102,7 +104,7 @@ const ServiceListingPage = () => {
       if (retryCount < 2) {
         setTimeout(() => {
           setRetryCount(prev => prev + 1);
-          fetchServices(isSearchOperation);
+          fetchAllServices(isSearchOperation);
         }, 2000);
       } else {
         toast.error('Failed to load services. Please try again later.');
@@ -114,7 +116,7 @@ const ServiceListingPage = () => {
     }
   };
 
-  // Handle search with debouncing
+  // Handle search locally without API call
   const handleSearch = (value) => {
     setSearchTerm(value);
     
@@ -123,50 +125,76 @@ const ServiceListingPage = () => {
       clearTimeout(searchTimeoutRef.current);
     }
     
-    // Set new timeout for debouncing (300ms delay)
+    // Set new timeout for debouncing
     searchTimeoutRef.current = setTimeout(() => {
-      // Update URL immediately
+      // Update URL
       const params = {};
       if (value) params.search = value;
       if (selectedCategory && selectedCategory !== 'All') params.category = selectedCategory;
       setSearchParams(params);
       
-      // Fetch services without showing loading
-      fetchServices(true);
-    }, 100);
+      // Apply search filter locally
+      applyLocalFilters(value, selectedCategory);
+    }, 300);
   };
 
-  // Handle category change
+  // Handle category change locally
   const handleCategoryChange = (categoryId) => {
     setSelectedCategory(categoryId);
     
-    // Update URL immediately
+    // Update URL
     const params = {};
     if (searchTerm) params.search = searchTerm;
     if (categoryId && categoryId !== 'All') params.category = categoryId;
     setSearchParams(params);
     
-    // Fetch services without showing loading
-    fetchServices(true);
+    // Apply category filter locally
+    applyLocalFilters(searchTerm, categoryId);
+  };
+
+  // Apply filters locally (search and category)
+  const applyLocalFilters = (searchValue, categoryValue) => {
+    let filtered = [...allServices];
+    
+    // Apply search filter if search term exists
+    if (searchValue && searchValue.trim() !== '') {
+      const searchLower = searchValue.toLowerCase().trim();
+      filtered = filtered.filter(service => 
+        (service.title && service.title.toLowerCase().includes(searchLower)) ||
+        (service.description && service.description.toLowerCase().includes(searchLower)) ||
+        (categoryMap[service.category] && categoryMap[service.category].toLowerCase().includes(searchLower))
+      );
+    }
+    
+    // Apply category filter if not 'All'
+    if (categoryValue && categoryValue !== 'All') {
+      filtered = filtered.filter(service => 
+        service.category === categoryValue
+      );
+    }
+    
+    setServices(filtered);
   };
 
   // Initial fetch on component mount
   useEffect(() => {
     if (isInitialMount.current) {
-      fetchServices(false); // Show loading for initial load
+      fetchAllServices(false); // Fetch ALL services initially
       fetchCategories();
       isInitialMount.current = false;
     }
   }, []);
 
-  // Update URL when filters change (without triggering fetch)
+  // Update URL when filters change
   useEffect(() => {
-    // Don't fetch on URL changes from our own updates
     if (!isInitialMount.current) {
       const params = {};
       if (searchTerm) params.search = searchTerm;
       if (selectedCategory && selectedCategory !== 'All') params.category = selectedCategory;
       setSearchParams(params);
+      
+      // Apply filters locally
+      applyLocalFilters(searchTerm, selectedCategory);
     }
   }, [searchTerm, selectedCategory, setSearchParams]);
 
@@ -183,9 +211,9 @@ const ServiceListingPage = () => {
     return [{ _id: 'All', name: 'All' }, ...categoriesData];
   }, [categoriesData]);
 
-  // Filtered and sorted services
+  // Filtered and sorted services (client-side filtering)
   const filteredServices = useMemo(() => {
-    let results = [...services];
+    let results = [...services]; // Use locally filtered services
 
     // Apply price range filter
     results = results.filter(service => 
@@ -238,13 +266,21 @@ const ServiceListingPage = () => {
   const resetFilters = () => {
     setSearchTerm('');
     setSelectedCategory('All');
-    setPriceRange([0, Math.max(...services.map(s => s.basePrice || 0))]);
+    setPriceRange([0, Math.max(...allServices.map(s => s.basePrice || 0))]);
     setSortBy('popular');
     setSelectedRatings([]);
     setSearchParams({});
     
-    // Fetch services without showing loading
-    fetchServices(true);
+    // Reset to show all services
+    setServices(allServices);
+  };
+
+  // Clear search only
+  const clearSearch = () => {
+    setSearchTerm('');
+    setSelectedCategory('All');
+    setSearchParams({});
+    setServices(allServices); // Show all services
   };
 
   // Toggle rating filter
@@ -378,8 +414,9 @@ const ServiceListingPage = () => {
   const ActiveFilters = () => {
     const activeFilters = [];
     
+    if (searchTerm) activeFilters.push(`Search: "${searchTerm}"`);
     if (selectedCategory !== 'All') activeFilters.push(`Category: ${categoryMap[selectedCategory] || selectedCategory}`);
-    if (priceRange[0] > 0 || priceRange[1] < Math.max(...services.map(s => s.basePrice || 0))) {
+    if (priceRange[0] > 0 || priceRange[1] < Math.max(...allServices.map(s => s.basePrice || 0))) {
       activeFilters.push(`Price: ₹${priceRange[0]} - ₹${priceRange[1]}`);
     }
     if (selectedRatings.length > 0) {
@@ -390,20 +427,27 @@ const ServiceListingPage = () => {
 
     return (
       <div className="flex flex-wrap gap-2 mb-4 px-4 sm:px-6 lg:px-8">
-        {activeFilters.map((filter, index) => (
-          <div
-            key={index}
-            className="flex items-center gap-1 bg-teal-100 text-teal-800 px-3 py-1 rounded-full text-sm"
-          >
-            {filter}
-            <button
-              onClick={resetFilters}
-              className="hover:text-teal-900 ml-1"
+        {activeFilters.map((filter, index) => {
+          let onRemove = resetFilters;
+          if (filter.startsWith('Search:')) {
+            onRemove = clearSearch;
+          }
+          
+          return (
+            <div
+              key={index}
+              className="flex items-center gap-1 bg-teal-100 text-teal-800 px-3 py-1 rounded-full text-sm"
             >
-              <X size={14} />
-            </button>
-          </div>
-        ))}
+              {filter}
+              <button
+                onClick={onRemove}
+                className="hover:text-teal-900 ml-1"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          );
+        })}
         <button
           onClick={resetFilters}
           className="text-sm text-gray-600 hover:text-gray-800 underline"
@@ -429,7 +473,7 @@ const ServiceListingPage = () => {
   }
 
   // Error State
-  if (error && services.length === 0) {
+  if (error && allServices.length === 0) {
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="w-full px-4 sm:px-6 py-12">
@@ -440,7 +484,7 @@ const ServiceListingPage = () => {
               {error}
             </p>
             <button
-              onClick={() => fetchServices(false)}
+              onClick={() => fetchAllServices(false)}
               className="px-6 py-3 bg-teal-500 hover:bg-teal-600 text-white font-semibold rounded-lg transition-colors shadow-sm hover:shadow-md flex items-center gap-2 mx-auto"
             >
               <RefreshCw className="w-4 h-4" />
@@ -468,11 +512,11 @@ const ServiceListingPage = () => {
         </div>
       </div>
 
-      {/* Search Bar - Moved outside filters */}
+      {/* Search Bar */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
           <div className="flex flex-col md:flex-row md:items-center gap-4">
-            <div className="flex-1">
+            <div className="flex-1 relative">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
@@ -480,8 +524,16 @@ const ServiceListingPage = () => {
                   placeholder="Search services by name, description or category..."
                   value={searchTerm}
                   onChange={(e) => handleSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm bg-white transition-colors duration-200"
+                  className="w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm bg-white transition-colors duration-200"
                 />
+                {searchTerm && (
+                  <button
+                    onClick={clearSearch}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <X size={18} />
+                  </button>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-4">
@@ -534,7 +586,7 @@ const ServiceListingPage = () => {
                     <input
                       type="range"
                       min="0"
-                      max={Math.max(...services.map(s => s.basePrice || 0))}
+                      max={Math.max(...allServices.map(s => s.basePrice || 0))}
                       value={priceRange[0]}
                       onChange={(e) => setPriceRange([parseInt(e.target.value), priceRange[1]])}
                       className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-teal-500"
@@ -542,7 +594,7 @@ const ServiceListingPage = () => {
                     <input
                       type="range"
                       min="0"
-                      max={Math.max(...services.map(s => s.basePrice || 0))}
+                      max={Math.max(...allServices.map(s => s.basePrice || 0))}
                       value={priceRange[1]}
                       onChange={(e) => setPriceRange([priceRange[0], parseInt(e.target.value)])}
                       className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-teal-500"
@@ -550,7 +602,7 @@ const ServiceListingPage = () => {
                   </div>
                   <div className="flex justify-between text-xs text-gray-500">
                     <span>₹0</span>
-                    <span>₹{Math.max(...services.map(s => s.basePrice || 0)).toLocaleString()}</span>
+                    <span>₹{Math.max(...allServices.map(s => s.basePrice || 0)).toLocaleString()}</span>
                   </div>
                 </div>
               </div>
@@ -608,7 +660,7 @@ const ServiceListingPage = () => {
         {/* Results Count */}
         <div className="px-4 sm:px-6 lg:px-8 mb-6">
           <div className="text-sm text-gray-600">
-            Showing <span className="font-semibold">{filteredServices.length}</span> services
+            Showing <span className="font-semibold">{filteredServices.length}</span> of <span className="font-semibold">{allServices.length}</span> services
             {searchTerm && (
               <span> for "<span className="font-semibold">{searchTerm}</span>"</span>
             )}
