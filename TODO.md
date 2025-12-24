@@ -1,16 +1,15 @@
-## Remove Bookings from Last Week
+# Task Progress
 
-### 1. Add deleteLastWeekBookings controller function
-- [ ] Create function to calculate date range (7 days ago to now)
-- [ ] Find bookings created in last week
-- [ ] Delete associated transactions and earnings
-- [ ] Delete the bookings
-- [ ] Return count of deleted bookings
+## Completed Tasks
+- [x] Fixed category handling in updateQuestion to support string, object with _id, and object with name
+- [x] Added toggleQuestionStatus function to controller
+- [x] Added deleteQuestion function to controller
+- [x] Added toggle route to Question-route.js
+- [x] Added delete route to Question-route.js
+- [x] Updated exports in Question-controller.js
+- [x] Updated client toggleStatus function to use new /toggle/:id endpoint
 
-### 2. Add admin route for bulk delete
-- [ ] Add DELETE /admin/bookings/last-week route
-- [ ] Connect to new controller function
-
-### 3. Testing
-- [ ] Test the new endpoint
-- [ ] Verify proper cleanup of related data
+## Remaining Tasks
+- [ ] Test the delete functionality
+- [ ] Test the toggle status functionality
+- [ ] Verify all endpoints are working correctly

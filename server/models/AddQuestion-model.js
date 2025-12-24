@@ -4,12 +4,12 @@ const { Schema } = mongoose;
 const questionSchema = new Schema({
   questionText: {
     type: String,
-    required: true, 
+    required: true,
     trim: true
   },
   options: {
     type: [String],
-    required: true, 
+    required: true,
     validate: {
       validator: function(v) {
         return v.length >= 2 && v.length <= 5;
@@ -19,8 +19,8 @@ const questionSchema = new Schema({
   },
   correctAnswer: {
     type: Number,
-    required: true, 
-    min: 0, 
+    required: true,
+    min: 0,
     validate: {
       validator: function(v) {
         return v < this.options.length;
@@ -29,21 +29,13 @@ const questionSchema = new Schema({
     }
   },
   category: {
-    type: String,
-    required: true, 
-        enum: ['Electrical', 'Appliance Repair', 'Wiring'],
-    index: true
-  },
-  subcategory: {
-    type: String,
-    required: true,
-        enum: ['Electrical', 'Inverter ', 'Appliance Repair', 'Wiring', 'Fan'],
-    index: true
+    type: Schema.Types.ObjectId,
+    ref: 'Category',
+    required: true
   },
   createdBy: {
     type: Schema.Types.ObjectId,
-    ref: 'Admin',
-    required: true
+    ref: 'Admin'
   },
   isActive: {
     type: Boolean,
@@ -56,7 +48,7 @@ const questionSchema = new Schema({
 });
 
 // Indexes for better performance
-questionSchema.index({ category: 1, difficulty: 1 });
+questionSchema.index({ category: 1 });
 questionSchema.index({ isActive: 1 });
 
 const Question = mongoose.model('Question', questionSchema);

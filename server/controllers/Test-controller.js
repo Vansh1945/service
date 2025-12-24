@@ -146,8 +146,7 @@ const startTest = async (req, res) => {
         // Build question query
         const query = {
             isActive: true,
-            category: category,
-            ...(subcategory && { subcategory })
+            category: category
         };
 
         // Get random questions

@@ -4,9 +4,9 @@ import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { 
-  FileText, PlusCircle, Trash2, Edit2, Download, Upload, X, Check, 
-  Search, Filter, BarChart3, Eye, CheckSquare, Square, 
+import {
+  FileText, PlusCircle, Trash2, Edit2, Download, Upload, X, Check,
+  Search, Filter, BarChart3, Eye, CheckSquare, Square,
   TrendingUp, Users, Activity, AlertCircle, Loader2,
   ChevronDown, ChevronUp, Star, BookOpen, Zap
 } from 'lucide-react';
@@ -20,8 +20,7 @@ const AdminQuestions = () => {
     questionText: '',
     options: ['', ''],
     correctAnswer: 0,
-    category: 'electrical',
-    subcategory: 'wiring',
+    category: '',
     isActive: true
   });
 
@@ -34,7 +33,6 @@ const AdminQuestions = () => {
   const [filters, setFilters] = useState({
     search: '',
     category: '',
-    subcategory: '',
     isActive: ''
   });
 
@@ -48,6 +46,7 @@ const AdminQuestions = () => {
   const [sortBy, setSortBy] = useState('newest');
   const [showPreview, setShowPreview] = useState(false);
   const [previewQuestion, setPreviewQuestion] = useState(null);
+  const [categories, setCategories] = useState([]);
 
   // Check admin status
   useEffect(() => {
@@ -57,6 +56,32 @@ const AdminQuestions = () => {
     }
   }, [isAdmin, navigate, showToast, token]);
 
+  // Fetch categories
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch(`${API}/system-setting/categories`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch categories');
+      }
+
+      const data = await response.json();
+      setCategories(data.data || []);
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
+  };
+
+  useEffect(() => {
+    if (token) {
+      fetchCategories();
+    }
+  }, [token]);
+
   // Fetch questions
   const fetchQuestions = async () => {
     try {
@@ -65,7 +90,6 @@ const AdminQuestions = () => {
 
       if (filters.search) queryParams.append('search', filters.search);
       if (filters.category) queryParams.append('category', filters.category);
-      if (filters.subcategory) queryParams.append('subcategory', filters.subcategory);
       if (filters.isActive) queryParams.append('isActive', filters.isActive);
 
       const response = await fetch(`${API}/question/get?${queryParams.toString()}`, {
@@ -135,8 +159,7 @@ const AdminQuestions = () => {
       questionText: '',
       options: ['', ''],
       correctAnswer: 0,
-      category: 'electrical',
-      subcategory: 'wiring',
+      category: '',
       isActive: true
     });
     setEditingId(null);
@@ -222,8 +245,7 @@ const AdminQuestions = () => {
       questionText: question.questionText,
       options: question.options,
       correctAnswer: question.correctAnswer,
-      category: question.category,
-      subcategory: question.subcategory,
+      category: question.category?.name || question.category,
       isActive: question.isActive
     });
     setEditingId(question._id);
@@ -317,7 +339,6 @@ const AdminQuestions = () => {
           options,
           correctAnswer,
           category: formData.category,
-          subcategory: formData.subcategory,
           isActive: formData.isActive
         };
       }).filter(q => q !== null);
@@ -411,11 +432,13 @@ const AdminQuestions = () => {
     const active = questions.filter(q => q.isActive).length;
     const inactive = total - active;
     const byCategory = questions.reduce((acc, q) => {
-      acc[q.category] = (acc[q.category] || 0) + 1;
+      const categoryName = q.category?.name || 'Uncategorized';
+      acc[categoryName] = (acc[categoryName] || 0) + 1;
       return acc;
     }, {});
     const bySubcategory = questions.reduce((acc, q) => {
-      acc[q.subcategory] = (acc[q.subcategory] || 0) + 1;
+      const subcategoryName = q.subcategory || 'No Subcategory';
+      acc[subcategoryName] = (acc[subcategoryName] || 0) + 1;
       return acc;
     }, {});
 
@@ -542,60 +565,29 @@ const AdminQuestions = () => {
               </div>
             </div>
 
-            {/* Category and Subcategory Breakdown */}
-            <div className="grid grid-cols-2 lg:grid-cols-2 gap-4">
-              {/* Category Breakdown */}
-              <div className="bg-white rounded-xl shadow-md p-4 border border-gray-100">
-                <h3 className="text-lg font-semibold text-secondary mb-3 flex items-center gap-2">
-                  <BarChart3 className="text-primary" size={20} />
-                  Questions by Category
-                </h3>
-                <div className="space-y-2">
-                  {Object.entries(statistics.byCategory).map(([category, count]) => (
-                    <div key={category} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${
-                          category === 'electrical' ? 'bg-primary' : 'bg-accent'
-                        }`}></div>
-                        <span className="text-secondary text-sm capitalize font-medium">{category}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-secondary font-semibold">{count}</span>
-                        <span className="text-gray-500 text-xs">
-                          ({Math.round((count / statistics.total) * 100)}%)
-                        </span>
-                      </div>
+            {/* Category Breakdown */}
+            <div className="bg-white rounded-xl shadow-md p-4 border border-gray-100">
+              <h3 className="text-lg font-semibold text-secondary mb-3 flex items-center gap-2">
+                <BarChart3 className="text-primary" size={20} />
+                Questions by Category
+              </h3>
+              <div className="space-y-2">
+                {Object.entries(statistics.byCategory).map(([category, count]) => (
+                  <div key={category} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${
+                        category === 'electrical' ? 'bg-primary' : 'bg-accent'
+                      }`}></div>
+                      <span className="text-secondary text-sm capitalize font-medium">{category}</span>
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Subcategory Breakdown */}
-              <div className="bg-white rounded-xl shadow-md p-4 border border-gray-100">
-                <h3 className="text-lg font-semibold text-secondary mb-3 flex items-center gap-2">
-                  <Activity className="text-primary" size={20} />
-                  Questions by Subcategory
-                </h3>
-                <div className="space-y-2">
-                  {Object.entries(statistics.bySubcategory).map(([subcategory, count]) => (
-                    <div key={subcategory} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${
-                          subcategory === 'wiring' ? 'bg-primary' : 
-                          subcategory === 'ac' ? 'bg-accent' : 
-                          subcategory === 'repair' ? 'bg-secondary' : 'bg-gray-500'
-                        }`}></div>
-                        <span className="text-secondary text-sm capitalize font-medium">{subcategory}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-secondary font-semibold">{count}</span>
-                        <span className="text-gray-500 text-xs">
-                          ({Math.round((count / statistics.total) * 100)}%)
-                        </span>
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-secondary font-semibold">{count}</span>
+                      <span className="text-gray-500 text-xs">
+                        ({Math.round((count / statistics.total) * 100)}%)
+                      </span>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -680,36 +672,22 @@ const AdminQuestions = () => {
                   <p className="text-xs text-gray-500 mt-1">Minimum 2 options, maximum 5 options</p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-secondary mb-2 font-medium">Category *</label>
-                    <select
-                      name="category"
-                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                      value={formData.category}
-                      onChange={handleChange}
-                      required
-                    >
-                      <option value="electrical">Electrical</option>
-                      <option value="general">General</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-secondary mb-2 font-medium">Subcategory *</label>
-                    <select
-                      name="subcategory"
-                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                      value={formData.subcategory}
-                      onChange={handleChange}
-                      required
-                    >
-                      <option value="wiring">Wiring</option>
-                      <option value="ac">AC</option>
-                      <option value="repair">Repair</option>
-                      <option value="all">All</option>
-                    </select>
-                  </div>
+                <div>
+                  <label className="block text-secondary mb-2 font-medium">Category *</label>
+                  <select
+                    name="category"
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                    value={formData.category}
+                    onChange={handleChange}
+                    required
+                  >
+                    <option value="">Select Category</option>
+                    {categories.map((category) => (
+                      <option key={category._id} value={category.name}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="flex items-center">
@@ -828,7 +806,7 @@ Correct Answer: a`}
             <div className="bg-white rounded-xl shadow-md p-5 border border-gray-100">
               <h2 className="text-xl font-semibold mb-3 text-secondary">Filters</h2>
 
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-secondary mb-1 text-sm font-medium">Search</label>
                   <input
@@ -848,23 +826,11 @@ Correct Answer: a`}
                     onChange={(e) => setFilters({ ...filters, category: e.target.value })}
                   >
                     <option value="">All Categories</option>
-                    <option value="electrical">Electrical</option>
-                    <option value="general">General</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-secondary mb-1 text-sm font-medium">Subcategory</label>
-                  <select
-                    className="w-full px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                    value={filters.subcategory}
-                    onChange={(e) => setFilters({ ...filters, subcategory: e.target.value })}
-                  >
-                    <option value="">All Subcategories</option>
-                    <option value="wiring">Wiring</option>
-                    <option value="ac">AC</option>
-                    <option value="repair">Repair</option>
-                    <option value="all">All</option>
+                    {categories.map((category) => (
+                      <option key={category._id} value={category.name}>
+                        {category.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -938,11 +904,9 @@ Correct Answer: a`}
                               {question.isActive ? 'Active' : 'Inactive'}
                             </span>
                             <span className="px-2 py-0.5 bg-primary bg-opacity-10 text-primary rounded-full text-xs font-medium capitalize">
-                              {question.category}
+                              {question.category?.name || 'Uncategorized'}
                             </span>
-                            <span className="px-2 py-0.5 bg-secondary bg-opacity-10 text-secondary rounded-full text-xs font-medium capitalize">
-                              {question.subcategory}
-                            </span>
+
                           </div>
                         </div>
 
@@ -1056,36 +1020,22 @@ Correct Answer: a`}
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-secondary mb-2 font-medium">Category</label>
-                    <select
-                      name="category"
-                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                      value={formData.category}
-                      onChange={handleChange}
-                      required
-                    >
-                      <option value="electrical">Electrical</option>
-                      <option value="general">General</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-secondary mb-2 font-medium">Subcategory</label>
-                    <select
-                      name="subcategory"
-                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                      value={formData.subcategory}
-                      onChange={handleChange}
-                      required
-                    >
-                      <option value="wiring">Wiring</option>
-                      <option value="ac">AC</option>
-                      <option value="repair">Repair</option>
-                      <option value="all">All</option>
-                    </select>
-                  </div>
+                <div>
+                  <label className="block text-secondary mb-2 font-medium">Category</label>
+                  <select
+                    name="category"
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                    value={formData.category}
+                    onChange={handleChange}
+                    required
+                  >
+                    <option value="">Select Category</option>
+                    {categories.map((category) => (
+                      <option key={category._id} value={category.name}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="flex items-center">
