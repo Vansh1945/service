@@ -9,7 +9,7 @@ const { ObjectId } = require('mongoose').Types;
 const TEST_CONFIG = {
     TIME_LIMIT: 10 * 60 * 1000, // 10 minutes in milliseconds
     PASSING_SCORE: 70,
-    MIN_QUESTIONS_PER_TEST: 5, // Minimum questions required to start a test
+    MIN_QUESTIONS_PER_TEST: 10, // Minimum questions required to start a test
     MAX_ATTEMPTS: 3 // Maximum attempts allowed per category
 };
 
@@ -398,6 +398,94 @@ const getTestResults = async (req, res) => {
 };
 
 /**
+ * Get active test details - Provider
+ */
+const getActiveTest = async (req, res) => {
+    try {
+        const provider = req.provider;
+
+        const activeTest = await ProviderTest.findOne({
+            provider: provider._id,
+            status: 'in-progress'
+        }).lean();
+
+        if (!activeTest) {
+            return res.json({
+                success: true,
+                data: null,
+                message: 'No active test found'
+            });
+        }
+
+        // Check if test has expired
+        const now = new Date();
+        if (now > activeTest.expiresAt) {
+            // Auto-submit expired test
+            activeTest.status = 'completed';
+            activeTest.passed = false;
+            activeTest.completedAt = now;
+            activeTest.timeTaken = TEST_CONFIG.TIME_LIMIT / 1000; // Convert to seconds
+            await ProviderTest.findByIdAndUpdate(activeTest._id, activeTest);
+
+            return res.json({
+                success: true,
+                data: null,
+                message: 'Test has expired and been auto-submitted',
+                expired: true
+            });
+        }
+
+        // Get attempts data for this category
+        const attemptsData = await ProviderTest.aggregate([
+            { $match: {
+                provider: provider._id,
+                testCategory: activeTest.testCategory
+            }},
+            { $group: {
+                _id: null,
+                attempts: { $sum: 1 },
+                passed: { $max: { $cond: ["$passed", 1, 0] } }
+            }},
+            { $project: {
+                attempts: 1,
+                passed: { $cond: ["$passed", true, false] },
+                attemptsLeft: { $subtract: [TEST_CONFIG.MAX_ATTEMPTS, "$attempts"] }
+            }}
+        ]);
+
+        const timeRemaining = Math.max(0, Math.floor((activeTest.expiresAt - now) / 1000));
+
+        const response = {
+            testId: activeTest._id,
+            status: activeTest.status,
+            category: activeTest.testCategory,
+            startedAt: activeTest.startedAt,
+            expiresAt: activeTest.expiresAt,
+            timeRemaining,
+            questions: activeTest.questions.map(q => ({
+                questionId: q.questionId,
+                questionText: q.questionText,
+                options: q.options,
+                selectedOption: q.selectedOption
+            })),
+            attemptNumber: activeTest.attemptNumber,
+            attemptsRemaining: attemptsData[0]?.attemptsLeft || 0
+        };
+
+        res.json({
+            success: true,
+            data: response
+        });
+    } catch (error) {
+        console.error('Error getting active test:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch active test'
+        });
+    }
+};
+
+/**
  * Get specific test details - Provider
  */
 const getTestDetails = async (req, res) => {
@@ -426,11 +514,11 @@ const getTestDetails = async (req, res) => {
 
         // Get attempts data for this category
         const attemptsData = await ProviderTest.aggregate([
-            { $match: { 
+            { $match: {
                 provider: provider._id,
-                testCategory: test.testCategory 
+                testCategory: test.testCategory
             }},
-            { $group: { 
+            { $group: {
                 _id: null,
                 attempts: { $sum: 1 },
                 passed: { $max: { $cond: ["$passed", 1, 0] } }
@@ -483,5 +571,6 @@ module.exports = {
     startTest,
     submitTest,
     getTestResults,
+    getActiveTest,
     getTestDetails
 };

@@ -406,10 +406,45 @@ const ProviderTestPage = () => {
     }
   }, [currentTest, answers, API, token, showToast, fetchTestHistory]);
 
-  // Load data on mount
+  // Load data on mount and check for active test
   useEffect(() => {
+    const checkActiveTest = async () => {
+      try {
+        const response = await fetch(`${API}/test/active`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        const data = await response.json();
+
+        if (data.success && data.data) {
+          // Active test found, resume it
+          const activeTest = data.data;
+          setCurrentTest(activeTest);
+          setCurrentQuestionIndex(0);
+          setTimeLeft(activeTest.timeRemaining);
+          setActiveTab('test');
+
+          // Load saved answers
+          const savedAnswers = localStorage.getItem(`test_answers_${activeTest.testId}`);
+          if (savedAnswers) {
+            setAnswers(JSON.parse(savedAnswers));
+          }
+
+          showToast('Resumed your active test!', 'info');
+        } else if (data.expired) {
+          showToast('Your previous test has expired and been submitted.', 'warning');
+          fetchTestHistory();
+        }
+      } catch (error) {
+        console.error('Error checking active test:', error);
+      }
+    };
+
     fetchTestHistory();
-  }, [fetchTestHistory]);
+    checkActiveTest();
+  }, [API, token, showToast, fetchTestHistory]);
 
   // Fetch categories
   useEffect(() => {
@@ -625,7 +660,7 @@ const ProviderTestPage = () => {
                   </h2>
                   <p className="text-secondary/80 flex items-center">
                     <BookOpen className="w-4 h-4 mr-2" />
-                    {currentTest.category}
+                    {categories.find(cat => cat._id === currentTest.category)?.name || currentTest.category}
                   </p>
                 </div>
                 <TimerDisplay 

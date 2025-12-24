@@ -13,6 +13,7 @@ router.get('/categories', providerAuthMiddleware, testController.getTestCategori
 router.post('/start', providerAuthMiddleware, testController.startTest);
 router.post('/submit', providerAuthMiddleware, testController.submitTest);
 router.get('/results', providerAuthMiddleware, testController.getTestResults);
+router.get('/active', providerAuthMiddleware, testController.getActiveTest);
 router.get('/details/:testId', providerAuthMiddleware, testController.getTestDetails);
 
 module.exports = router;
