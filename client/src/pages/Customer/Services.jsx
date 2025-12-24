@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
-  Search, Filter, Clock, IndianRupee, ChevronRight, 
-  CheckCircle, Loader2, AlertCircle, RefreshCw, MapPin, 
-  Sliders, ChevronDown, ChevronUp, Star, X
+  Search, Filter, Clock, IndianRupee, CheckCircle, 
+  Loader2, AlertCircle, RefreshCw, Sliders, 
+  ChevronDown, ChevronUp, Star, X
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
@@ -17,17 +17,21 @@ const ServiceListingPage = () => {
 
   // State Management
   const [services, setServices] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true); // Only for initial load
+  const [searchLoading, setSearchLoading] = useState(false); // For search operations
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
   const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') || 'All');
   const [priceRange, setPriceRange] = useState([0, 10000]);
-  const [locationSearch, setLocationSearch] = useState('');
   const [sortBy, setSortBy] = useState('popular');
   const [retryCount, setRetryCount] = useState(0);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedRatings, setSelectedRatings] = useState([]);
   const [categoriesData, setCategoriesData] = useState([]);
+  
+  // Refs for debouncing
+  const searchTimeoutRef = useRef(null);
+  const isInitialMount = useRef(true);
 
   // Fetch categories from backend
   const fetchCategories = async () => {
@@ -49,9 +53,12 @@ const ServiceListingPage = () => {
   };
 
   // Fetch services from backend
-  const fetchServices = async (showLoading = true) => {
+  const fetchServices = async (isSearchOperation = false) => {
     try {
-      if (showLoading) setLoading(true);
+      // Only show loading for initial load, not for searches
+      if (!isSearchOperation) {
+        setInitialLoading(true);
+      }
       setError(null);
 
       // Build query parameters
@@ -59,7 +66,7 @@ const ServiceListingPage = () => {
       if (searchTerm) params.append('search', searchTerm);
       if (selectedCategory && selectedCategory !== 'All') params.append('category', selectedCategory);
       params.append('page', '1');
-      params.append('limit', '50'); // Get all services for filtering
+      params.append('limit', '50');
 
       const response = await fetch(`${API}/service/services?${params}`);
       
@@ -70,13 +77,11 @@ const ServiceListingPage = () => {
       const data = await response.json();
             
       if (data.success && Array.isArray(data.data)) {
-        // Transform the data to ensure image field is properly handled
         const transformedServices = data.data.map(service => ({
           ...service,
-          // Use the first image from images array, or fallback to image field, or default image
           displayImage: service.images && service.images.length > 0 
             ? service.images[0] 
-            : service.image || 'https://via.placeholder.com/400x300?text=No+Image'
+            : service.image 
         }));
         
         setServices(transformedServices);
@@ -97,28 +102,72 @@ const ServiceListingPage = () => {
       if (retryCount < 2) {
         setTimeout(() => {
           setRetryCount(prev => prev + 1);
-          fetchServices(false);
+          fetchServices(isSearchOperation);
         }, 2000);
       } else {
         toast.error('Failed to load services. Please try again later.');
       }
     } finally {
-      if (showLoading) setLoading(false);
+      if (!isSearchOperation) {
+        setInitialLoading(false);
+      }
     }
   };
 
-  // Initial data fetch
-  useEffect(() => {
-    fetchServices();
-    fetchCategories();
-  }, [API]);
+  // Handle search with debouncing
+  const handleSearch = (value) => {
+    setSearchTerm(value);
+    
+    // Clear previous timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    
+    // Set new timeout for debouncing (300ms delay)
+    searchTimeoutRef.current = setTimeout(() => {
+      // Update URL immediately
+      const params = {};
+      if (value) params.search = value;
+      if (selectedCategory && selectedCategory !== 'All') params.category = selectedCategory;
+      setSearchParams(params);
+      
+      // Fetch services without showing loading
+      fetchServices(true);
+    }, 100);
+  };
 
-  // Update URL when filters change
-  useEffect(() => {
+  // Handle category change
+  const handleCategoryChange = (categoryId) => {
+    setSelectedCategory(categoryId);
+    
+    // Update URL immediately
     const params = {};
     if (searchTerm) params.search = searchTerm;
-    if (selectedCategory && selectedCategory !== 'All') params.category = selectedCategory;
+    if (categoryId && categoryId !== 'All') params.category = categoryId;
     setSearchParams(params);
+    
+    // Fetch services without showing loading
+    fetchServices(true);
+  };
+
+  // Initial fetch on component mount
+  useEffect(() => {
+    if (isInitialMount.current) {
+      fetchServices(false); // Show loading for initial load
+      fetchCategories();
+      isInitialMount.current = false;
+    }
+  }, []);
+
+  // Update URL when filters change (without triggering fetch)
+  useEffect(() => {
+    // Don't fetch on URL changes from our own updates
+    if (!isInitialMount.current) {
+      const params = {};
+      if (searchTerm) params.search = searchTerm;
+      if (selectedCategory && selectedCategory !== 'All') params.category = selectedCategory;
+      setSearchParams(params);
+    }
   }, [searchTerm, selectedCategory, setSearchParams]);
 
   // Derived state for categories
@@ -138,21 +187,6 @@ const ServiceListingPage = () => {
   const filteredServices = useMemo(() => {
     let results = [...services];
 
-    // Apply category filter
-    if (selectedCategory !== 'All') {
-      results = results.filter(service => service.category === selectedCategory);
-    }
-
-    // Apply search filter
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase().trim();
-      results = results.filter(service =>
-        service.title?.toLowerCase().includes(term) ||
-        service.description?.toLowerCase().includes(term) ||
-        (categoryMap[service.category] && categoryMap[service.category].toLowerCase().includes(term))
-      );
-    }
-
     // Apply price range filter
     results = results.filter(service => 
       service.basePrice >= priceRange[0] && service.basePrice <= priceRange[1]
@@ -162,16 +196,6 @@ const ServiceListingPage = () => {
     if (selectedRatings.length > 0) {
       results = results.filter(service => 
         selectedRatings.includes(Math.floor(service.averageRating || 0))
-      );
-    }
-
-    // Apply location filter
-    if (locationSearch.trim()) {
-      const locationTerm = locationSearch.toLowerCase().trim();
-      results = results.filter(service =>
-        service.description?.toLowerCase().includes(locationTerm) ||
-        service.title?.toLowerCase().includes(locationTerm) ||
-        (categoryMap[service.category] && categoryMap[service.category].toLowerCase().includes(locationTerm))
       );
     }
 
@@ -192,7 +216,7 @@ const ServiceListingPage = () => {
     });
 
     return results;
-  }, [services, selectedCategory, searchTerm, priceRange, locationSearch, sortBy, selectedRatings, categoryMap]);
+  }, [services, priceRange, sortBy, selectedRatings, categoryMap]);
 
   // Handle booking navigation
   const handleBookNow = (serviceId, isActive) => {
@@ -215,10 +239,12 @@ const ServiceListingPage = () => {
     setSearchTerm('');
     setSelectedCategory('All');
     setPriceRange([0, Math.max(...services.map(s => s.basePrice || 0))]);
-    setLocationSearch('');
     setSortBy('popular');
     setSelectedRatings([]);
     setSearchParams({});
+    
+    // Fetch services without showing loading
+    fetchServices(true);
   };
 
   // Toggle rating filter
@@ -229,6 +255,15 @@ const ServiceListingPage = () => {
         : [...prev, rating]
     );
   };
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Service Card Component
   const ServiceCard = ({ service }) => {
@@ -331,11 +366,7 @@ const ServiceListingPage = () => {
                   : 'bg-gray-100 text-gray-400 cursor-not-allowed'
               }`}
             >
-              {isServiceAvailable ? (
-                <>
-                  Book Now
-                </>
-              ) : 'Unavailable'}
+              {isServiceAvailable ? 'Book Now' : 'Unavailable'}
             </button>
           </div>
         </div>
@@ -354,7 +385,6 @@ const ServiceListingPage = () => {
     if (selectedRatings.length > 0) {
       activeFilters.push(`Ratings: ${selectedRatings.map(r => `${r}+`).join(', ')}`);
     }
-    if (locationSearch) activeFilters.push(`Location: ${locationSearch}`);
 
     if (activeFilters.length === 0) return null;
 
@@ -384,8 +414,8 @@ const ServiceListingPage = () => {
     );
   };
 
-  // Loading State
-  if (loading) {
+  // Loading State - Only show for initial load
+  if (initialLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="w-full px-4 sm:px-6 py-12">
@@ -410,7 +440,7 @@ const ServiceListingPage = () => {
               {error}
             </p>
             <button
-              onClick={() => fetchServices()}
+              onClick={() => fetchServices(false)}
               className="px-6 py-3 bg-teal-500 hover:bg-teal-600 text-white font-semibold rounded-lg transition-colors shadow-sm hover:shadow-md flex items-center gap-2 mx-auto"
             >
               <RefreshCw className="w-4 h-4" />
@@ -438,172 +468,150 @@ const ServiceListingPage = () => {
         </div>
       </div>
 
+      {/* Search Bar - Moved outside filters */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+          <div className="flex flex-col md:flex-row md:items-center gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search services by name, description or category..."
+                  value={searchTerm}
+                  onChange={(e) => handleSearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm bg-white transition-colors duration-200"
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <select
+                value={selectedCategory}
+                onChange={(e) => handleCategoryChange(e.target.value)}
+                className="px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm bg-white transition-colors duration-200 min-w-[150px]"
+              >
+                {categoriesForFilter.map(category => (
+                  <option key={category._id} value={category._id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className="flex items-center gap-2 px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors duration-200"
+              >
+                <Sliders className="w-4 h-4" />
+                <span className="text-sm font-medium">Filters</span>
+                {showFilters ? (
+                  <ChevronUp className="w-4 h-4" />
+                ) : (
+                  <ChevronDown className="w-4 h-4" />
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto py-8">
+      <div className="max-w-7xl mx-auto pb-8">
         {/* Active Filters */}
         <ActiveFilters />
 
-        {/* Filter Bar */}
-        <div className="mb-8 px-4 sm:px-6 lg:px-8">
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className="w-full flex items-center justify-between p-6 text-left hover:bg-gray-50 transition-all duration-300 rounded-xl"
-            >
-              <div className="flex items-center gap-3">
-                <Sliders className="w-5 h-5 text-teal-500" />
-                <span className="text-lg font-semibold text-gray-800">Filters & Search</span>
-                <span className="text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
-                  {filteredServices.length} services found
-                </span>
+        {/* Collapsible Filter Content */}
+        <div className={`overflow-hidden transition-all duration-500 ease-in-out px-4 sm:px-6 lg:px-8 ${
+          showFilters ? 'max-h-[400px] opacity-100 mb-6' : 'max-h-0 opacity-0'
+        }`}>
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Price Range Filter */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Price Range: ₹{priceRange[0].toLocaleString()} - ₹{priceRange[1].toLocaleString()}
+                </label>
+                <div className="space-y-3">
+                  <div className="flex gap-4 items-center">
+                    <input
+                      type="range"
+                      min="0"
+                      max={Math.max(...services.map(s => s.basePrice || 0))}
+                      value={priceRange[0]}
+                      onChange={(e) => setPriceRange([parseInt(e.target.value), priceRange[1]])}
+                      className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-teal-500"
+                    />
+                    <input
+                      type="range"
+                      min="0"
+                      max={Math.max(...services.map(s => s.basePrice || 0))}
+                      value={priceRange[1]}
+                      onChange={(e) => setPriceRange([priceRange[0], parseInt(e.target.value)])}
+                      className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-teal-500"
+                    />
+                  </div>
+                  <div className="flex justify-between text-xs text-gray-500">
+                    <span>₹0</span>
+                    <span>₹{Math.max(...services.map(s => s.basePrice || 0)).toLocaleString()}</span>
+                  </div>
+                </div>
               </div>
-              {showFilters ? (
-                <ChevronUp className="w-5 h-5 text-gray-500 transition-transform duration-300" />
-              ) : (
-                <ChevronDown className="w-5 h-5 text-gray-500 transition-transform duration-300" />
-              )}
-            </button>
-            
-            {/* Collapsible Filter Content */}
-            <div className={`overflow-hidden transition-all duration-500 ease-in-out ${
-              showFilters ? 'max-h-[800px] opacity-100' : 'max-h-0 opacity-0'
-            }`}>
-              <div className="p-6 pt-0 border-t border-gray-100">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-                  {/* Search Filter */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Search Services
-                    </label>
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                      <input
-                        type="text"
-                        placeholder="Search services..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm bg-white transition-colors duration-200"
-                      />
-                    </div>
-                  </div>
 
-                  {/* Category Filter */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Category
-                    </label>
-                    <select
-                      value={selectedCategory}
-                      onChange={(e) => setSelectedCategory(e.target.value)}
-                      className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm bg-white transition-colors duration-200"
+              {/* Rating Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Customer Rating
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {[5, 4, 3, 2, 1].map(rating => (
+                    <button
+                      key={rating}
+                      onClick={() => toggleRating(rating)}
+                      className={`flex items-center gap-1 px-3 py-2 rounded-lg border transition-all duration-200 ${
+                        selectedRatings.includes(rating)
+                          ? 'bg-orange-100 border-orange-300 text-orange-700'
+                          : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                      }`}
                     >
-                      {categoriesForFilter.map(category => (
-                        <option key={category._id} value={category._id}>
-                          {category.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Price Range Filter */}
-                  <div className="lg:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Price Range: ₹{priceRange[0].toLocaleString()} - ₹{priceRange[1].toLocaleString()}
-                    </label>
-                    <div className="space-y-3">
-                      <div className="flex gap-4 items-center">
-                        <input
-                          type="range"
-                          min="0"
-                          max={Math.max(...services.map(s => s.basePrice || 0))}
-                          value={priceRange[0]}
-                          onChange={(e) => setPriceRange([parseInt(e.target.value), priceRange[1]])}
-                          className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-teal-500"
-                        />
-                        <input
-                          type="range"
-                          min="0"
-                          max={Math.max(...services.map(s => s.basePrice || 0))}
-                          value={priceRange[1]}
-                          onChange={(e) => setPriceRange([priceRange[0], parseInt(e.target.value)])}
-                          className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-teal-500"
-                        />
-                      </div>
-                      <div className="flex justify-between text-xs text-gray-500">
-                        <span>₹0</span>
-                        <span>₹{Math.max(...services.map(s => s.basePrice || 0)).toLocaleString()}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                  {/* Rating Filter */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-3">
-                      Customer Rating
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      {[5, 4, 3, 2, 1].map(rating => (
-                        <button
-                          key={rating}
-                          onClick={() => toggleRating(rating)}
-                          className={`flex items-center gap-1 px-3 py-2 rounded-lg border transition-all duration-200 ${
-                            selectedRatings.includes(rating)
-                              ? 'bg-orange-100 border-orange-300 text-orange-700'
-                              : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
-                          }`}
-                        >
-                          <Star className="w-4 h-4 fill-current" />
-                          <span className="text-sm font-medium">{rating}+</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Location Filter */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Location
-                    </label>
-                    <div className="relative">
-                      <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                      <input
-                        type="text"
-                        placeholder="Search by location..."
-                        value={locationSearch}
-                        onChange={(e) => setLocationSearch(e.target.value)}
-                        className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm bg-white transition-colors duration-200"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Filter Actions */}
-                <div className="flex flex-wrap items-center justify-between pt-6 border-t border-gray-100">
-                  <button
-                    onClick={resetFilters}
-                    className="px-6 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 transition-all duration-200 hover:bg-gray-100 rounded-lg"
-                  >
-                    Reset All Filters
-                  </button>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-medium text-gray-700">Sort by:</span>
-                    <select
-                      value={sortBy}
-                      onChange={(e) => setSortBy(e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm font-medium transition-colors duration-200"
-                    >
-                      <option value="popular">Most Recent</option>
-                      <option value="rating">Top Rated</option>
-                      <option value="price-low">Price: Low to High</option>
-                      <option value="price-high">Price: High to Low</option>
-                      <option value="name">Alphabetical</option>
-                    </select>
-                  </div>
+                      <Star className="w-4 h-4 fill-current" />
+                      <span className="text-sm font-medium">{rating}+</span>
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
+
+            {/* Filter Actions */}
+            <div className="flex flex-wrap items-center justify-between pt-6 border-t border-gray-100 mt-6">
+              <button
+                onClick={resetFilters}
+                className="px-6 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 transition-all duration-200 hover:bg-gray-100 rounded-lg"
+              >
+                Reset All Filters
+              </button>
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium text-gray-700">Sort by:</span>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm font-medium transition-colors duration-200"
+                >
+                  <option value="popular">Most Recent</option>
+                  <option value="rating">Top Rated</option>
+                  <option value="price-low">Price: Low to High</option>
+                  <option value="price-high">Price: High to Low</option>
+                  <option value="name">Alphabetical</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Results Count */}
+        <div className="px-4 sm:px-6 lg:px-8 mb-6">
+          <div className="text-sm text-gray-600">
+            Showing <span className="font-semibold">{filteredServices.length}</span> services
+            {searchTerm && (
+              <span> for "<span className="font-semibold">{searchTerm}</span>"</span>
+            )}
           </div>
         </div>
 

@@ -1,17 +1,7 @@
-# Task Progress
+# TODO: Fix Search Loading Issue in ServiceListingPage
 
-## Completed Tasks
-- [x] Fixed category handling in updateQuestion to support string, object with _id, and object with name
-- [x] Added toggleQuestionStatus function to controller
-- [x] Added deleteQuestion function to controller
-- [x] Added toggle route to Question-route.js
-- [x] Added delete route to Question-route.js
-- [x] Updated exports in Question-controller.js
-- [x] Updated client toggleStatus function to use new /toggle/:id endpoint
-- [x] Fixed bulk question upload 400 Bad Request error.
-- [x] Added a category selector for bulk question uploads on the frontend.
-- [x] Added backend validation for category on bulk question uploads.
-- [x] Improved error messages for bulk question uploads.
-
-## Remaining Tasks
-- [ ] Verify all endpoints are working correctly
+## Steps to Complete
+- [ ] Add debounced search term state and useEffect for debouncing (500ms delay)
+- [ ] Modify fetchServices function to accept showLoading parameter and adjust loading state logic
+- [ ] Update useEffects: separate for category (with loading) and debounced search (without loading)
+- [ ] Verify implementation: search should be continuous without loading spinner on typing
