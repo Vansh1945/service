@@ -5,7 +5,7 @@ const adminAuthMiddleware = require('../middlewares/Admin-middleware');
 const { uploadProfilePic } = require('../middlewares/upload'); // Import the specific upload instance
 
 // Public routes
-router.post('/register', adminController.registerAdmin);
+router.post('/register', uploadProfilePic.single('profilePic'), adminController.registerAdmin);
 
 // Protected routes
 router.use(adminAuthMiddleware);

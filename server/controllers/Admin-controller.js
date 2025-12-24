@@ -20,7 +20,7 @@ const cloudinary = require('../services/cloudinary');
  */
 const registerAdmin = async (req, res) => {
     try {
-        const { name, email, password } = req.body;
+        const { name, email, password } = req.body || {};
 
         // Validate input
         if (!name || !email || !password) {
@@ -47,7 +47,7 @@ const registerAdmin = async (req, res) => {
         }
 
         let profilePicUrl = '';
-        
+
         // Try to upload default profile pic to Cloudinary
         try {
             const defaultImagePath = path.join(__dirname, '../assets/Profile.png');
@@ -635,7 +635,7 @@ const updateAdminProfile = async (req, res) => {
         }
 
         admin.name = name || admin.name;
-        
+
         if (email && email !== admin.email) {
             const emailExists = await Admin.findOne({ email });
             if (emailExists) {
@@ -685,7 +685,7 @@ const updateAdminProfile = async (req, res) => {
 const deleteAdmin = async (req, res) => {
     try {
         const adminId = req.params.id;
-        
+
         // Prevent self-deletion
         if (adminId === req.admin._id.toString()) {
             return res.status(400).json({

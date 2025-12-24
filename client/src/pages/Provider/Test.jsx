@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../../store/auth';
-import { 
-  Clock, CheckCircle, XCircle, Play, RotateCcw, Award, AlertCircle, 
-  BookOpen, Target, TrendingUp, Calendar, User, ChevronLeft, 
+import {
+  Clock, CheckCircle, XCircle, Play, RotateCcw, Award, AlertCircle,
+  BookOpen, Target, TrendingUp, Calendar, User, ChevronLeft,
   ChevronRight, Bookmark, BookmarkCheck, RefreshCw, Download,
   Timer, Zap, Star, Trophy, BarChart3, Activity
 } from 'lucide-react';
@@ -37,27 +37,7 @@ const useTestTimer = (initialTime, isActive, onTimeUp) => {
 };
 
 const useTestData = (token, API, showToast) => {
-  const [categories, setCategories] = useState([]);
-  const [subcategories, setSubcategories] = useState([]);
   const [testHistory, setTestHistory] = useState([]);
-
-  const fetchCategories = useCallback(async () => {
-    try {
-      const response = await fetch(`${API}/test/categories`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      const data = await response.json();
-      if (data.success) {
-        setCategories(data.data.categories);
-        setSubcategories(data.data.subcategories);
-      }
-    } catch (error) {
-      showToast('Error fetching categories', 'error');
-    }
-  }, [API, token, showToast]);
 
   const fetchTestHistory = useCallback(async () => {
     try {
@@ -77,10 +57,7 @@ const useTestData = (token, API, showToast) => {
   }, [API, token, showToast]);
 
   return {
-    categories,
-    subcategories,
     testHistory,
-    fetchCategories,
     fetchTestHistory
   };
 };
@@ -257,10 +234,7 @@ const ProviderTestPage = () => {
   );
   
   const {
-    categories,
-    subcategories,
     testHistory,
-    fetchCategories,
     fetchTestHistory
   } = useTestData(token, API, showToast);
 
@@ -411,9 +385,8 @@ const ProviderTestPage = () => {
 
   // Load data on mount
   useEffect(() => {
-    fetchCategories();
     fetchTestHistory();
-  }, [fetchCategories, fetchTestHistory]);
+  }, [fetchTestHistory]);
 
   // Calculate attempts left
   useEffect(() => {
@@ -501,39 +474,21 @@ const ProviderTestPage = () => {
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-secondary">
-                  Category
-                </label>
-                <select
+                <CategorySelect
                   value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300/70 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200 bg-white/50 backdrop-blur-sm"
-                >
-                  <option value="">Select Category</option>
-                  {categories.map((category) => (
-                    <option key={category} value={category}>
-                      {category}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => setSelectedCategory(value)}
+                  label="Category"
+                  required
+                />
               </div>
 
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-secondary">
-                  Subcategory
-                </label>
-                <select
+                <CategorySelect
                   value={selectedSubcategory}
-                  onChange={(e) => setSelectedSubcategory(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300/70 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200 bg-white/50 backdrop-blur-sm"
-                >
-                  <option value="">Select Subcategory</option>
-                  {subcategories.map((subcategory) => (
-                    <option key={subcategory} value={subcategory}>
-                      {subcategory}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => setSelectedSubcategory(value)}
+                  label="Subcategory"
+                  required
+                />
               </div>
             </div>
 
@@ -588,7 +543,6 @@ const ProviderTestPage = () => {
               {testAttemptsLeft > 0 && (
                 <button
                   onClick={() => {
-                    fetchCategories();
                     fetchTestHistory();
                   }}
                   className="px-6 py-4 border border-gray-300/70 rounded-lg font-medium text-secondary hover:bg-white/50 transition-all duration-200 flex items-center justify-center space-x-2 backdrop-blur-sm"

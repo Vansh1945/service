@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../store/auth';
-import useServices from '../../hooks/useServices';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { Loader2, AlertCircle } from 'lucide-react';
@@ -79,12 +78,6 @@ const ProviderProfile = () => {
     passbookImage: null
   });
 
-  const { 
-    providerServices, 
-    providerServicesLoading, 
-    providerServicesError, 
-    fetchProviderServiceCategories,
-  } = useServices();
 
   // Fetch provider profile data
   useEffect(() => {

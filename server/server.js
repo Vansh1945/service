@@ -13,6 +13,8 @@ const frontend = process.env.FRONTEND_URL;
 // Initialize express app
 const app = express();
 
+app.use(express.json());
+
 const corsOptions = {
   origin: [frontend, 'http://localhost:5175', 'http://localhost:5174'],
   credentials: true, // Allow credentials (cookies)
@@ -23,7 +25,6 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // Middleware
-app.use(express.json());
 
 // Test Route 
 app.get('/api/test-route', (req, res) => {
@@ -51,6 +52,7 @@ const complaintRoutes = require("./routes/complaintRoutes");
 const feedbackRoutes = require("./routes/feedback-routes");
 const commissionRoutes = require('./routes/commissionRoutes');
 const paymentRoutes = require('./routes/payment-routes');
+const systemSettingRoutes = require('./routes/SystemSetting-routes');
 
 // Routes
 app.use("/api/auth", authRoutes);
@@ -67,6 +69,7 @@ app.use('/api/complaint', complaintRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/commission', commissionRoutes);
 app.use('/api/payment', paymentRoutes);
+app.use('/api/system-setting', systemSettingRoutes);
 
 
 

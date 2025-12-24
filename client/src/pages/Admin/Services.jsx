@@ -32,12 +32,12 @@ import {
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useAuth } from '../../store/auth';
-import useServices from '../../hooks/useServices';
+
+
 
 
 const AdminServices = () => {
   const { token, API } = useAuth();
-  const { providerServices, fetchProviderServiceCategories } = useServices();
 
   // State management
   const [services, setServices] = useState([]);
@@ -48,10 +48,11 @@ const AdminServices = () => {
   const [showViewModal, setShowViewModal] = useState(false);
   const [showBulkImportModal, setShowBulkImportModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
+  const [categories, setCategories] = useState([]);
   const [stats, setStats] = useState({
     total: 0,
     active: 0,
@@ -63,7 +64,7 @@ const AdminServices = () => {
   // Form states
   const [createForm, setCreateForm] = useState({
     title: '',
-    category: 'Electrical',
+    category: '',
     description: '',
     basePrice: '',
     duration: '',
@@ -85,13 +86,10 @@ const AdminServices = () => {
   const editFileInputRef = useRef(null);
   const bulkFileInputRef = useRef(null);
 
-  // Categories from useServices hook
-  const categories = providerServices.map(service => service.category);
-
   // Check admin access
   useEffect(() => {
     fetchServices();
-    fetchProviderServiceCategories();
+    fetchCategories();
   }, []);
 
   // Filter and search services
@@ -103,13 +101,13 @@ const AdminServices = () => {
       filtered = filtered.filter(service =>
         service.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         service.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        service.category?.toLowerCase().includes(searchTerm.toLowerCase())
+        (typeof service.category === 'object' ? service.category.name : service.category)?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
     // Apply category filter
-    if (categoryFilter !== 'all') {
-      filtered = filtered.filter(service => service.category === categoryFilter);
+    if (categoryFilter !== '') {
+      filtered = filtered.filter(service => service.category?._id === categoryFilter || service.category === categoryFilter);
     }
 
     // Apply status filter
@@ -163,6 +161,27 @@ const AdminServices = () => {
     } catch (error) {
       console.error('Fetch services error:', error);
       toast.error(error.message || 'Failed to fetch services');
+    }
+  };
+
+  // Fetch categories
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch(`${API}/system-setting/categories`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch categories');
+      }
+
+      const data = await response.json();
+      setCategories(data.data || []);
+    } catch (error) {
+      console.error('Fetch categories error:', error);
+      toast.error(error.message || 'Failed to fetch categories');
     }
   };
 
@@ -566,7 +585,7 @@ const AdminServices = () => {
   const resetCreateForm = () => {
     setCreateForm({
       title: '',
-      category: 'Electrical',
+      category: '',
       description: '',
       basePrice: '',
       duration: '',
@@ -585,7 +604,7 @@ const AdminServices = () => {
     setSelectedService(service);
     setEditForm({
       title: service.title,
-      category: service.category,
+      category: service.category?._id || service.category,
       description: service.description,
       basePrice: service.basePrice,
       duration: service.duration,
@@ -776,16 +795,7 @@ const AdminServices = () => {
             </div>
             <div className="flex items-center gap-2 md:gap-3">
               <Filter className="text-gray-400 w-4 h-4 md:w-5 md:h-5" />
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-              >
-                <option value="all">All Categories</option>
-                {categories.map(category => (
-                  <option key={category} value={category}>{category}</option>
-                ))}
-              </select>
+              
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
@@ -806,7 +816,7 @@ const AdminServices = () => {
               <Package className="w-12 h-12 md:w-16 md:h-16 text-gray-400 mx-auto mb-3 md:mb-4" />
               <p className="text-gray-600 text-md md:text-lg">No services found</p>
               <p className="text-gray-400 text-sm mt-1 md:mt-2">
-                {searchTerm || categoryFilter !== 'all' || statusFilter !== 'all'
+                {searchTerm || categoryFilter !== '' || statusFilter !== 'all'
                   ? 'Try adjusting your search or filters'
                   : 'Create your first service to get started'}
               </p>
@@ -857,7 +867,7 @@ const AdminServices = () => {
                         </td>
                         <td className="px-4 md:px-6 py-4 whitespace-nowrap">
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-800">
-                            {service.category}
+                            {service.category?.name || service.category}
                           </span>
                         </td>
                         <td className="px-4 md:px-6 py-4 whitespace-nowrap">
@@ -1007,22 +1017,13 @@ const AdminServices = () => {
                     placeholder="Enter service title"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Category *
-                  </label>
-                  <select
-                    name="category"
-                    value={createForm.category}
-                    onChange={handleCreateFormChange}
-                    required
-                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    {categories.map(category => (
-                      <option key={category} value={category}>{category}</option>
-                    ))}
-                  </select>
-                </div>
+                <CategorySelect
+                  value={createForm.category}
+                  onChange={(value) => setCreateForm(prev => ({ ...prev, category: value }))}
+                  label="Category"
+                  required
+                  categories={categories}
+                />
               </div>
 
               <div>
@@ -1244,22 +1245,13 @@ const AdminServices = () => {
                     placeholder="Enter service title"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Category *
-                  </label>
-                  <select
-                    name="category"
-                    value={editForm.category}
-                    onChange={handleEditFormChange}
-                    required
-                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    {categories.map(category => (
-                      <option key={category} value={category}>{category}</option>
-                    ))}
-                  </select>
-                </div>
+                <CategorySelect
+                  value={editForm.category}
+                  onChange={(value) => setEditForm(prev => ({ ...prev, category: value }))}
+                  label="Category"
+                  required
+                  categories={categories}
+                />
               </div>
 
               <div>
@@ -1740,6 +1732,30 @@ const AdminServices = () => {
           </Modal>
         )}
       </div>
+    </div>
+  );
+};
+
+// Category Select Component
+const CategorySelect = ({ value, onChange, label, required, includeAll = false, categories }) => {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
+        {label} {required && '*'}
+      </label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        required={required}
+        className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+      >
+        {includeAll && <option value="">All Categories</option>}
+        {categories.map(category => (
+          <option key={category._id} value={category._id}>
+            {category.name}
+          </option>
+        ))}
+      </select>
     </div>
   );
 };

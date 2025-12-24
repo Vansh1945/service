@@ -976,20 +976,16 @@ exports.permanentDeleteAccount = async (req, res) => {
  */
 exports.getServiceCategories = async (req, res) => {
     try {
-        const categories = Service.schema.path('category').enumValues;
-
-        if (!categories) {
-            return res.status(500).json({
-                success: false,
-                message: 'Service categories not defined in schema'
-            });
-        }
+        const { Category } = require('../models/SystemSetting');
+        const categories = await Category.find({ isActive: true }).select('_id name icon description');
 
         // Format the response to match frontend expectations
-        const serviceCategories = categories.map(service => ({
-            _id: service.toLowerCase().replace(/\s+/g, '-'), // Create a slug-like ID
-            title: service,
-            category: service
+        const serviceCategories = categories.map(category => ({
+            _id: category._id,
+            title: category.name,
+            category: category.name,
+            icon: category.icon,
+            description: category.description
         }));
 
         res.status(200).json({

@@ -32,22 +32,13 @@ import {
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/auth';
-import useServices from '../hooks/useServices';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 const ProviderRegistration = () => {
   const navigate = useNavigate();
   const { API } = useAuth();
-  
-  // Fetch provider service categories from backend
-  const { 
-    providerServices, 
-    providerServicesLoading, 
-    providerServicesError, 
-    fetchProviderServiceCategories,
-    getProviderServiceCategories 
-  } = useServices();
+
 
   const [formData, setFormData] = useState({
     // Step 1: Email

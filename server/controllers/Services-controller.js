@@ -14,7 +14,25 @@ const cloudinary = require('../services/cloudinary');
 const createService = async (req, res) => {
     try {
         const { title, category, description, basePrice, duration, specialNotes, materialsUsed } = req.body;
-        
+
+        // Handle category conversion from string to ObjectId
+        let categoryId = category;
+        if (typeof category === 'string') {
+            const { Category } = require('../models/SystemSetting');
+            // First try to find by _id, then by name
+            let categoryDoc = await Category.findById(category);
+            if (!categoryDoc) {
+                categoryDoc = await Category.findOne({ name: new RegExp('^' + category + '$', 'i') });
+            }
+            if (!categoryDoc) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Invalid category'
+                });
+            }
+            categoryId = categoryDoc._id;
+        }
+
         let imageUrls;
         if (req.files && req.files.length > 0) {
             const uploadPromises = req.files.map(file => cloudinary.uploader.upload(file.path));
@@ -38,7 +56,7 @@ const createService = async (req, res) => {
 
         const service = await Service.createService(req.adminID, {
             title,
-            category,
+            category: categoryId,
             description,
             basePrice,
             duration,
@@ -90,9 +108,26 @@ const updateService = async (req, res) => {
         if (updates.specialNotes && typeof updates.specialNotes === 'string') {
             updates.specialNotes = JSON.parse(updates.specialNotes);
         }
-        
+
         if (updates.materialsUsed && typeof updates.materialsUsed === 'string') {
             updates.materialsUsed = JSON.parse(updates.materialsUsed);
+        }
+
+        // Handle category conversion from string to ObjectId
+        if (updates.category && typeof updates.category === 'string') {
+            const { Category } = require('../models/SystemSetting');
+            // First try to find by _id, then by name
+            let categoryDoc = await Category.findById(updates.category);
+            if (!categoryDoc) {
+                categoryDoc = await Category.findOne({ name: new RegExp('^' + updates.category + '$', 'i') });
+            }
+            if (!categoryDoc) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Invalid category'
+                });
+            }
+            updates.category = categoryDoc._id;
         }
 
         // Find and update service
@@ -214,7 +249,8 @@ const getAllServices = async (req, res) => {
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(parseInt(limit))
-            .populate('createdBy', 'name email');
+            .populate('createdBy', 'name email')
+            .populate('category', 'name');
 
         const total = await Service.countDocuments(query);
 
@@ -592,8 +628,16 @@ const bulkImportServices = async (req, res) => {
                     throw new Error('Invalid category');
                 }
 
+                // Handle category conversion from string to ObjectId
+                const { Category } = require('../models/SystemSetting');
+                const categoryDoc = await Category.findOne({ name: new RegExp('^' + serviceData.category + '$', 'i') });
+                if (!categoryDoc) {
+                    throw new Error('Invalid category');
+                }
+                serviceData.category = categoryDoc._id;
+
                 // Create service
-                const service = await Service.create(serviceData);
+                const service = await Service.createService(req.adminID, serviceData);
                 services.push(service);
                 successCount++;
             } catch (error) {

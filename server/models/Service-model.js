@@ -12,10 +12,9 @@ const serviceSchema = new Schema({
     maxlength: 100,
   },
   category: {
-    type: String,
-    required: true,
-    enum: ['Electrical', 'Inverter ', 'Appliance Repair', 'Wiring', 'Fan', 'Other'],
-    default: 'Other'
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Category",
+    required: true
   },
   description: {
     type: String,

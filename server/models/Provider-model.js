@@ -60,8 +60,8 @@ const providerSchema = new mongoose.Schema({
         default: 'standard'
     },
     services: [{
-        type: String,
-        enum: ['Electrical', 'Inverter ', 'Appliance ', 'Wiring', 'Fan', 'Other'],
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Category"
     }],
     experience: {
         type: Number,
