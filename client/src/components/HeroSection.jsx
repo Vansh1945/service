@@ -114,16 +114,12 @@ const HeroSection = () => {
             </div>
 
             {/* Main Content */}
-            <div className="relative z-10 w-full px-0 py-20 text-center flex items-center justify-center min-h-screen">
+            <div className="relative z-10 w-full px-4 py-20 text-center flex items-center justify-center min-h-screen">
               <div className="max-w-7xl mx-auto">
                 <header className="space-y-6 md:space-y-8">
                 {/* Main Headline */}
-                <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-7xl font-extrabold leading-tight text-white font-poppins animate-fadeInDown" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.7)' }}>
-                  {banner.title.split(' ').map((word, i) => (
-                    <span key={i} className={`block ${i === 1 ? 'text-primary' : i === 2 ? 'text-accent' : ''}`}>
-                      {word}
-                    </span>
-                  ))}
+                <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold leading-tight text-white font-poppins animate-fadeInDown" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.7)' }}>
+                  {banner.title}
                 </h1>
 
                 {/* Subheading */}
