@@ -414,6 +414,7 @@ const getActiveServices = async (req, res) => {
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(parseInt(limit))
+            .populate('category', 'name') // Populate the category field
             .lean(); // Convert to plain JavaScript objects
 
         // Manually calculate durationFormatted and ensure averageRating is correct

@@ -38,9 +38,7 @@ const ServiceListingPage = () => {
   const fetchCategories = async () => {
     try {
       const response = await fetch(`${API}/system-setting/categories`);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+     
       const data = await response.json();
       if (data.success && Array.isArray(data.data)) {
         setCategoriesData(data.data);

@@ -70,7 +70,7 @@ const Services = ({ limit }) => {
     const ServiceCard = ({ service }) => {
         const imageUrl = service.displayImage ||
           (service.images && service.images.length > 0 ? service.images[0] :
-           service.image || '/placeholder-service.jpg');
+           service.image );
 
         const isServiceAvailable = service.isActive !== false;
 
@@ -82,10 +82,6 @@ const Services = ({ limit }) => {
                 src={imageUrl}
                 alt={service.title || 'Service'}
                 className="w-full h-full object-cover"
-                onError={(e) => {
-                  e.target.onerror = null;
-                  e.target.src = '/placeholder-service.jpg';
-                }}
               />
 
               {/* Status Badge */}
@@ -110,9 +106,9 @@ const Services = ({ limit }) => {
 
               {/* Category Badge */}
               <div className="absolute bottom-3 left-3 bg-white/95 backdrop-blur-sm text-secondary px-2 py-1 rounded-full text-xs font-semibold shadow-sm">
-                {service.category || 'Service'}
+                {service.category?.name || 'Service'}
               </div>
-            </div>
+            </div> 
 
             {/* Service Details */}
             <div className="flex flex-col flex-grow p-4">
