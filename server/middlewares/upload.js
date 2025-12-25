@@ -65,6 +65,29 @@ const uploadServicesFile = multer({
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
 });
 
+// Upload instances for System Settings
+const uploadSystemLogo = multer({
+  storage: createCloudinaryStorage('systemLogo', 'image', ['jpg', 'jpeg', 'png']),
+  limits: { fileSize: 3 * 1024 * 1024 }, // 3MB
+});
+
+const uploadSystemFavicon = multer({
+  storage: createCloudinaryStorage('systemFavicon', 'image', ['jpg', 'jpeg', 'png', 'ico']),
+  limits: { fileSize: 1 * 1024 * 1024 }, // 1MB
+});
+
+// Upload instance for Category Icon
+const uploadCategoryIcon = multer({
+  storage: createCloudinaryStorage('categoryIcon', 'image', ['jpg', 'jpeg', 'png', 'svg']),
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB
+});
+
+// Upload instance for Banner Image
+const uploadBannerImage = multer({
+  storage: createCloudinaryStorage('bannerImage', 'image', ['jpg', 'jpeg', 'png']),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+});
+
 // Error handler middleware
 const handleUploadErrors = (err, req, res, next) => {
   if (err instanceof multer.MulterError) {
@@ -96,5 +119,9 @@ module.exports = {
   uploadComplaintImage,
   uploadPassbookImg,
   uploadServicesFile,
+  uploadSystemLogo,
+  uploadSystemFavicon,
+  uploadCategoryIcon,
+  uploadBannerImage,
   handleUploadErrors,
 };

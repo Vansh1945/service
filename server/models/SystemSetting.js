@@ -20,8 +20,7 @@ const bannerSchema = new mongoose.Schema(
     },
     startDate: Date,
     endDate: Date,
-  },
-  { _id: false }
+  }
 );
 
 const systemConfigSchema = new mongoose.Schema(
@@ -41,7 +40,6 @@ const systemConfigSchema = new mongoose.Schema(
     favicon: {
       type: String, // image url
     },
-    banners: [bannerSchema],
     promoMessage: {
       type: String,
       trim: true,
@@ -78,6 +76,12 @@ const categorySchema = new mongoose.Schema(
 );
 
 /* ===============================
+   Banner Schema
+================================ */
+
+const Banner = mongoose.model("Banner", bannerSchema);
+
+/* ===============================
    Models Export
 ================================ */
 
@@ -87,4 +91,5 @@ const Category = mongoose.model("Category", categorySchema);
 module.exports = {
   SystemConfig,
   Category,
+  Banner,
 };

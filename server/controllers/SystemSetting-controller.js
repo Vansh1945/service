@@ -1,4 +1,4 @@
-const { SystemConfig, Category } = require('../models/SystemSetting');
+const { SystemConfig, Category, Banner } = require('../models/SystemSetting');
 
 // 1. Get System Setting
 const getSystemSetting = async (req, res) => {
@@ -24,17 +24,25 @@ const getSystemSetting = async (req, res) => {
 // 2. Update System Setting (Admin Only)
 const updateSystemSetting = async (req, res) => {
   try {
-    const { companyName, tagline, logo, favicon, banners, promoMessage } = req.body;
+    const { companyName, tagline, promoMessage } = req.body;
     let config = await SystemConfig.findOne();
     if (!config) {
       config = new SystemConfig();
     }
     config.companyName = companyName || config.companyName;
     config.tagline = tagline || config.tagline;
-    config.logo = logo || config.logo;
-    config.favicon = favicon || config.favicon;
-    config.banners = banners || config.banners;
     config.promoMessage = promoMessage || config.promoMessage;
+
+    // Handle logo upload
+    if (req.files && req.files.logo && req.files.logo[0]) {
+      config.logo = req.files.logo[0].path; // Cloudinary URL
+    }
+
+    // Handle favicon upload
+    if (req.files && req.files.favicon && req.files.favicon[0]) {
+      config.favicon = req.files.favicon[0].path; // Cloudinary URL
+    }
+
     await config.save();
     res.status(200).json({
       success: true,
@@ -53,7 +61,7 @@ const updateSystemSetting = async (req, res) => {
 // 3. Create Category (Admin)
 const createCategory = async (req, res) => {
   try {
-    const { name, icon, description } = req.body;
+    const { name, description } = req.body;
     const existingCategory = await Category.findOne({ name });
     if (existingCategory) {
       return res.status(400).json({
@@ -61,7 +69,15 @@ const createCategory = async (req, res) => {
         message: 'Category with this name already exists'
       });
     }
-    const category = new Category({ name, icon, description });
+
+    const categoryData = { name, description };
+
+    // Handle icon upload
+    if (req.files && req.files.icon && req.files.icon[0]) {
+      categoryData.icon = req.files.icon[0].path; // Cloudinary URL
+    }
+
+    const category = new Category(categoryData);
     await category.save();
     res.status(201).json({
       success: true,
@@ -115,18 +131,25 @@ const getActiveCategories = async (req, res) => {
 const updateCategory = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, icon, description, isActive } = req.body;
-    const category = await Category.findByIdAndUpdate(
-      id,
-      { name, icon, description, isActive },
-      { new: true, runValidators: true }
-    );
+    const { name, description, isActive } = req.body;
+    const category = await Category.findById(id);
     if (!category) {
       return res.status(404).json({
         success: false,
         message: 'Category not found'
       });
     }
+
+    category.name = name || category.name;
+    category.description = description || category.description;
+    if (isActive !== undefined) category.isActive = isActive;
+
+    // Handle icon upload
+    if (req.files && req.files.icon && req.files.icon[0]) {
+      category.icon = req.files.icon[0].path; // Cloudinary URL
+    }
+
+    await category.save();
     res.status(200).json({
       success: true,
       message: 'Category updated successfully',
@@ -192,6 +215,122 @@ const toggleCategoryStatus = async (req, res) => {
   }
 };
 
+// 9. Get Banners (Public)
+const getBanners = async (req, res) => {
+  try {
+    const banners = await Banner.find();
+    res.status(200).json({
+      success: true,
+      data: banners
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch banners',
+      error: error.message
+    });
+  }
+};
+
+// 10. Create Banner (Admin)
+const createBanner = async (req, res) => {
+  try {
+    const { title, subtitle, startDate, endDate } = req.body;
+
+    const bannerData = { title, subtitle, startDate, endDate };
+
+    // Handle image upload
+    if (req.files && req.files.image && req.files.image[0]) {
+      bannerData.image = req.files.image[0].path; // Cloudinary URL
+    }
+
+    const banner = new Banner(bannerData);
+    await banner.save();
+    res.status(201).json({
+      success: true,
+      message: 'Banner created successfully',
+      data: banner
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create banner',
+      error: error.message
+    });
+  }
+};
+
+// 11. Get All Banners Admin (Admin)
+const getAllBannersAdmin = async (req, res) => {
+  try {
+    const banners = await Banner.find();
+    res.status(200).json({
+      success: true,
+      data: banners
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch banners',
+      error: error.message
+    });
+  }
+};
+
+// 12. Update Banner (Admin)
+const updateBanner = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { image, title, subtitle, startDate, endDate } = req.body;
+    const banner = await Banner.findByIdAndUpdate(
+      id,
+      { image, title, subtitle, startDate, endDate },
+      { new: true, runValidators: true }
+    );
+    if (!banner) {
+      return res.status(404).json({
+        success: false,
+        message: 'Banner not found'
+      });
+    }
+    res.status(200).json({
+      success: true,
+      message: 'Banner updated successfully',
+      data: banner
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update banner',
+      error: error.message
+    });
+  }
+};
+
+// 13. Delete Banner (Admin)
+const deleteBanner = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const banner = await Banner.findByIdAndDelete(id);
+    if (!banner) {
+      return res.status(404).json({
+        success: false,
+        message: 'Banner not found'
+      });
+    }
+    res.status(200).json({
+      success: true,
+      message: 'Banner deleted successfully'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete banner',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getSystemSetting,
   updateSystemSetting,
@@ -200,5 +339,10 @@ module.exports = {
   getActiveCategories,
   updateCategory,
   deleteCategory,
-  toggleCategoryStatus
+  toggleCategoryStatus,
+  getBanners,
+  createBanner,
+  getAllBannersAdmin,
+  updateBanner,
+  deleteBanner
 };
