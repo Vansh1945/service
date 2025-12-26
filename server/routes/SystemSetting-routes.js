@@ -19,7 +19,7 @@ const uploadSystemSettings = multer({
     cloudinary: cloudinary,
     params: (req, file) => {
       let folder = 'systemLogo';
-      let allowedFormats = ['jpg', 'jpeg', 'png'];
+      let allowedFormats = ['jpg', 'jpeg', 'png', 'gif'];
       let fileSizeLimit = 3 * 1024 * 1024; // 3MB
 
       if (file.fieldname === 'favicon') {

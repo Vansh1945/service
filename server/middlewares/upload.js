@@ -67,7 +67,7 @@ const uploadServicesFile = multer({
 
 // Upload instances for System Settings
 const uploadSystemLogo = multer({
-  storage: createCloudinaryStorage('systemLogo', 'image', ['jpg', 'jpeg', 'png']),
+  storage: createCloudinaryStorage('systemLogo', 'image', ['jpg', 'jpeg', 'png', 'gif']),
   limits: { fileSize: 3 * 1024 * 1024 }, // 3MB
 });
 
@@ -84,7 +84,7 @@ const uploadCategoryIcon = multer({
 
 // Upload instance for Banner Image
 const uploadBannerImage = multer({
-  storage: createCloudinaryStorage('bannerImage', 'image', ['jpg', 'jpeg', 'png']),
+  storage: createCloudinaryStorage('bannerImage', 'image', ['jpg', 'jpeg', 'png', 'gif']),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
 });
 

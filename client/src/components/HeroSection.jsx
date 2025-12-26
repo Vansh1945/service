@@ -48,12 +48,12 @@ const HeroSection = () => {
 
   if (loading) {
     return (
-      <div className="mt-[64px] sm:mt-0 w-full h-[220px] sm:h-screen bg-gray-200 animate-pulse" />
+      <div className="mt-16 md:mt-18 lg:mt-20 w-full h-[220px] sm:h-screen bg-gray-200 animate-pulse" />
     );
   }
 
   return (
-    <section className="w-full overflow-hidden mt-[64px] sm:mt-0">
+    <section className="w-full overflow-hidden mt-16 md:mt-18 lg:mt-20">
       <Swiper
         modules={[Autoplay]}
         autoplay={{ delay: 4000, disableOnInteraction: false }}
@@ -71,7 +71,7 @@ const HeroSection = () => {
                 <img
                   src={banner.image}
                   alt=""
-                  className="absolute inset-0 w-full h-full object-cover blur-2xl scale-110"
+                  className="absolute inset-0 w-full h-full object-cover blur-3xl scale-110 opacity-60"
                 />
 
                 {/* Main image */}
@@ -84,9 +84,9 @@ const HeroSection = () => {
                 {/* Overlay ONLY if text exists */}
                 {hasText && (
                   <>
-                    <div className="absolute inset-0 z-20" />
+                    <div className="absolute inset-0 z-20 bg-black/20" />
 
-                    {/* Desktop text */}
+                    {/* Desktop text - Centered */}
                     <div className="hidden sm:flex absolute inset-0 z-30 items-center justify-center text-center px-4">
                       <div className="max-w-5xl space-y-4">
                         {banner.title && (
@@ -96,6 +96,22 @@ const HeroSection = () => {
                         )}
                         {banner.subtitle && (
                           <p className="text-lg md:text-xl text-gray-200 font-poppins">
+                            {banner.subtitle}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Mobile text - Centered */}
+                    <div className="sm:hidden absolute inset-0 z-30 flex items-center justify-center text-center px-4">
+                      <div className="space-y-3 max-w-md p-5 rounded-2xl">
+                        {banner.title && (
+                          <h1 className="text-xl font-bold text-accent/90 font-poppins leading-tight">
+                            {banner.title}
+                          </h1>
+                        )}
+                        {banner.subtitle && (
+                          <p className="text-sm text-gray-200 font-poppins">
                             {banner.subtitle}
                           </p>
                         )}
