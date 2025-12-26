@@ -94,10 +94,16 @@ const CategoryBanner = () => {
       const categoriesData = await categoriesRes.json();
       const bannersData = await bannersRes.json();
 
-      setSystemSettings(settingsData.data || {});
+      setSystemSettings({
+        companyName: settingsData.data?.companyName || '',
+        tagline: settingsData.data?.tagline || '',
+        logo: settingsData.data?.logo || '',
+        favicon: settingsData.data?.favicon || '',
+        promoMessage: settingsData.data?.promoMessage || ''
+      });
       setCategories(categoriesData.data || []);
       setBanners(bannersData.data || []);
-      
+
       // Set previews from fetched data
       if (settingsData.data?.logo) setPreviewLogo(settingsData.data.logo);
       if (settingsData.data?.favicon) setPreviewFavicon(settingsData.data.favicon);

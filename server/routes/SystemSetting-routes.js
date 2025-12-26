@@ -43,7 +43,7 @@ const uploadSystemSettings = multer({
 ]);
 
 // PUBLIC ROUTES
-router.get('/system-setting', systemSettingController.getSystemSetting);
+router.get('/system-data', systemSettingController.getSystemSetting);
 router.get('/categories', systemSettingController.getActiveCategories);
 router.get('/banners', systemSettingController.getBanners);
 

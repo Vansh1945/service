@@ -1,19 +1,45 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   FiMenu, FiX, FiHome, FiCheckCircle, FiUsers, FiCalendar, FiMessageCircle,
-  FiDollarSign, FiTag, FiPlus, FiTool, FiAlertCircle, FiChevronDown, 
+  FiDollarSign, FiTag, FiPlus, FiTool, FiAlertCircle, FiChevronDown,
   FiLogOut, FiUser, FiBell, FiSettings, FiCreditCard, FiActivity, FiFileText
 } from 'react-icons/fi';
 import { useAuth } from '../store/auth';
-import Logo from './Logo';
 
 const AdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const [systemSettings, setSystemSettings] = useState({
+    companyName: '',
+    logo: null
+  });
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logoutUser } = useAuth();
+  const { user, logoutUser, API, token } = useAuth();
+
+  useEffect(() => {
+    const fetchSystemSettings = async () => {
+      try {
+        const response = await fetch(`${API}/system-setting/system-data`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setSystemSettings({
+            companyName: data.data?.companyName || '',
+            logo: data.data?.logo 
+          });
+        }
+      } catch (error) {
+        console.error('Failed to fetch system settings:', error);
+      }
+    };
+
+    if (token) {
+      fetchSystemSettings();
+    }
+  }, [API, token]);
 
   const menuItems = [
     { name: 'Dashboard', path: '/admin/dashboard', icon: <FiHome className="w-5 h-5" /> },
@@ -65,7 +91,18 @@ const AdminLayout = () => {
         }`}>
           {/* Mobile header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-            <Logo className="h-8 w-auto text-primary" />
+            <div className="flex items-center">
+              {systemSettings.logo && (
+                <img
+                  src={systemSettings.logo}
+                  alt={systemSettings.companyName}
+                  className="h-8 w-auto object-contain mr-3"
+                />
+              )}
+              <span className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter">
+                {systemSettings.companyName || 'Raj Electrical Services'}
+              </span>
+            </div>
             <button
               onClick={() => setSidebarOpen(false)}
               className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-secondary transition-colors"
@@ -103,7 +140,18 @@ const AdminLayout = () => {
         <div className="flex flex-col w-72 bg-white border-r border-gray-200 shadow-sm">
           {/* Desktop header */}
           <div className="flex items-center px-6 py-6 border-b border-gray-200">
-            <Logo className="h-10 w-auto text-primary" />
+            <div className="flex items-center">
+              {systemSettings.logo && (
+                <img
+                  src={systemSettings.logo}
+                  alt={systemSettings.companyName}
+                  className="h-10 w-auto object-contain mr-3"
+                />
+              )}
+              <span className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter">
+                {systemSettings.companyName || 'Raj Electrical Services'}
+              </span>
+            </div>
           </div>
 
           {/* Desktop navigation */}
@@ -156,7 +204,7 @@ const AdminLayout = () => {
               </button>
               
               {/* Page title on mobile */}
-              <h1 className="ml-3 text-xl font-semibold text-secondary lg:hidden">
+              <h1 className="ml-3 text-xl font-semibold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter lg:hidden">
                 {menuItems.find(item => item.path === location.pathname)?.name || 'Dashboard'}
               </h1>
             </div>
@@ -196,15 +244,15 @@ const AdminLayout = () => {
                       className="w-8 h-8 rounded-full object-cover ring-2 ring-primary/20"
                     />
                   ) : (
-                    <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white font-semibold text-sm">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-r from-primary to-accent flex items-center justify-center text-white font-semibold text-sm">
                       {getUserInitials()}
                     </div>
                   )}
                   <div className="hidden md:block text-left">
-                    <p className="text-sm font-medium text-secondary">
+                    <p className="text-sm font-medium text-secondary font-inter">
                       {user?.name || 'Admin'}
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-gray-500 font-inter">
                       {user?.email || 'admin@example.com'}
                     </p>
                   </div>
@@ -219,10 +267,10 @@ const AdminLayout = () => {
                 {profileDropdownOpen && (
                   <div className="absolute right-0 mt-3 w-56 bg-white rounded-xl shadow-lg py-2 z-20 border border-gray-200 animate-in slide-in-from-top-2 duration-200">
                     <div className="px-4 py-3 border-b border-gray-100">
-                      <p className="text-sm font-medium text-secondary">
+                      <p className="text-sm font-medium text-secondary font-inter">
                         {user?.name || 'Admin'}
                       </p>
-                      <p className="text-xs text-gray-500 truncate">
+                      <p className="text-xs text-gray-500 truncate font-inter">
                         {user?.email || 'admin@example.com'}
                       </p>
                     </div>
@@ -233,7 +281,7 @@ const AdminLayout = () => {
                       onClick={() => setProfileDropdownOpen(false)}
                     >
                       <FiUser className="w-4 h-4 mr-3" />
-                      Profile Settings
+                      <span className="font-inter">Profile Settings</span>
                     </Link>
                     
                     <Link
@@ -242,7 +290,7 @@ const AdminLayout = () => {
                       onClick={() => setProfileDropdownOpen(false)}
                     >
                       <FiSettings className="w-4 h-4 mr-3" />
-                      Account Settings
+                      <span className="font-inter">Account Settings</span>
                     </Link>
                     
                     <hr className="my-2 border-gray-100" />
@@ -252,7 +300,7 @@ const AdminLayout = () => {
                       className="w-full flex items-center px-4 py-3 text-sm text-red-600 hover:bg-red-50 transition-colors"
                     >
                       <FiLogOut className="w-4 h-4 mr-3" />
-                      Sign Out
+                      <span className="font-inter">Sign Out</span>
                     </button>
                   </div>
                 )}
