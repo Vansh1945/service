@@ -11,13 +11,15 @@ import {
   FiMail
 } from 'react-icons/fi';
 import { Link, useLocation } from 'react-router-dom';
-import Logo from './Logo';
+import { useAuth } from '../store/auth';
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [systemSettings, setSystemSettings] = useState({ companyName: '', logo: null });
   const location = useLocation();
   const menuRef = useRef(null);
+  const { API } = useAuth();
 
   // Handle scroll effect with smoother transition
   useEffect(() => {
@@ -52,6 +54,26 @@ const Navbar = () => {
     };
   }, [isOpen]);
 
+  // Fetch system settings
+  useEffect(() => {
+    const fetchSystemSettings = async () => {
+      try {
+        const response = await fetch(`${API}/system-setting/system-data`);
+        if (response.ok) {
+          const data = await response.json();
+          setSystemSettings({
+            companyName: data.data?.companyName || '',
+            logo: data.data?.logo || null
+          });
+        }
+      } catch (error) {
+        console.error('Failed to fetch system settings:', error);
+      }
+    };
+
+    fetchSystemSettings();
+  }, [API]);
+
   // Navigation links data with icons
   const navLinks = [
     { text: "Home", path: "/", icon: <FiHome className="mr-2 text-sm" /> },
@@ -65,7 +87,11 @@ const Navbar = () => {
     <nav
       role="navigation"
       aria-label="Main navigation"
-      className="fixed w-full top-0 z-50 bg-white border-b border-gray-200 transition-all duration-500 ease-out shadow-lg"
+      className={`fixed w-full top-0 z-50 transition-all duration-500 ease-out ${
+        scrolled 
+          ? 'bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-lg' 
+          : 'bg-white border-b border-gray-100'
+      }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16 md:h-18 lg:h-20 items-center">
@@ -76,7 +102,18 @@ const Navbar = () => {
               className="transition-all duration-300 focus:outline-none rounded-lg p-1"
                 aria-label="Go to homepage"
               >
-                <Logo size="text-xl md:text-2xl lg:text-3xl" />
+                <div className="flex items-center">
+                  {systemSettings.logo && (
+                    <img
+                      src={systemSettings.logo}
+                      alt={systemSettings.companyName || 'Raj Electrical Services'}
+                      className="h-8 md:h-10 lg:h-12 w-auto object-contain mr-3"
+                    />
+                  )}
+                  <span className="font-extrabold text-xl md:text-2xl lg:text-3xl bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter tracking-tight">
+                    {systemSettings.companyName || 'Raj Electrical Services'}
+                  </span>
+                </div>
               </Link>
 
             {/* Desktop Navigation */}
@@ -137,7 +174,7 @@ const Navbar = () => {
           isOpen
             ? 'max-h-screen opacity-100 visible'
             : 'max-h-0 opacity-0 invisible'
-        } bg-background/98 backdrop-blur-xl border-t border-gray-200/20 shadow-xl`}
+        } bg-white/98 backdrop-blur-xl border-t border-gray-200 shadow-xl`}
       >
         <div className="px-6 py-8 space-y-6">
           {/* Mobile Navigation Links */}
@@ -239,7 +276,7 @@ const ActionButton = ({ icon, text, variant = 'primary', fullWidth = false, path
 
   const variantClasses = {
     primary: "bg-accent text-white hover:bg-primary hover:shadow-lg focus:ring-accent/50",
-    secondary: "bg-background text-secondary border border-gray-300 hover:border-primary/30 hover:shadow-md focus:ring-primary/30"
+    secondary: "bg-white text-secondary border border-gray-300 hover:border-primary/30 hover:shadow-md focus:ring-primary/30"
   };
 
   return (
