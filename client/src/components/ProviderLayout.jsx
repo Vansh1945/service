@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
     FiMenu, FiX, FiHome, FiCalendar, FiDollarSign,
@@ -7,14 +7,43 @@ import {
     FiActivity, FiSettings
 } from 'react-icons/fi';
 import { useAuth } from '../store/auth';
-import Logo from './Logo';
+
 
 const ProviderLayout = () => {
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+    const [systemSettings, setSystemSettings] = useState({
+        companyName: '',
+        logo: null,
+        tagline: ''
+    });
     const location = useLocation();
     const navigate = useNavigate();
-    const { user, logoutUser } = useAuth();
+    const { user, logoutUser, API, token } = useAuth();
+
+    useEffect(() => {
+        const fetchSystemSettings = async () => {
+            try {
+                const response = await fetch(`${API}/system-setting/system-data`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    setSystemSettings({
+                        companyName: data.data?.companyName || '',
+                        logo: data.data?.logo,
+                        tagline: data.data?.tagline || ''
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to fetch system settings:', error);
+            }
+        };
+
+        if (token) {
+            fetchSystemSettings();
+        }
+    }, [API, token]);
 
     const menuItems = [
         { name: 'Dashboard', path: '/provider/dashboard', icon: <FiHome className="w-5 h-5" /> },
@@ -57,7 +86,18 @@ const ProviderLayout = () => {
                 }`}>
                     {/* Mobile header */}
                     <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-                        <Logo className="h-8 w-auto text-primary" />
+                        <div className="flex items-center">
+                            {systemSettings.logo && (
+                                <img
+                                    src={systemSettings.logo}
+                                    alt={systemSettings.companyName}
+                                    className="h-8 w-auto object-contain mr-3"
+                                />
+                            )}
+                            <span className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter">
+                                {systemSettings.companyName || 'SAFEVOLT SOLUTIONS'}
+                            </span>
+                        </div>
                         <button
                             onClick={() => setSidebarOpen(false)}
                             className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-secondary transition-colors"
@@ -95,7 +135,18 @@ const ProviderLayout = () => {
                 <div className="flex flex-col w-72 bg-white border-r border-gray-200 shadow-sm">
                     {/* Desktop header */}
                     <div className="flex items-center px-6 py-6 border-b border-gray-200">
-                        <Logo className="h-10 w-auto text-primary" />
+                        <div className="flex items-center">
+                            {systemSettings.logo && (
+                                <img
+                                    src={systemSettings.logo}
+                                    alt={systemSettings.companyName}
+                                    className="h-10 w-auto object-contain mr-3"
+                                />
+                            )}
+                            <span className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter">
+                                {systemSettings.companyName || 'SAFEVOLT SOLUTIONS'}
+                            </span>
+                        </div>
                     </div>
 
                     {/* Desktop navigation */}

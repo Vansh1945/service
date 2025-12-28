@@ -100,7 +100,7 @@ const AdminLayout = () => {
                 />
               )}
               <span className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter">
-                {systemSettings.companyName || 'Raj Electrical Services'}
+                {systemSettings.companyName || 'SAFEVOLT SOLUTIONS'}
               </span>
             </div>
             <button
@@ -149,7 +149,7 @@ const AdminLayout = () => {
                 />
               )}
               <span className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter">
-                {systemSettings.companyName || 'Raj Electrical Services'}
+                {systemSettings.companyName || 'SAFEVOLT SOLUTIONS'}
               </span>
             </div>
           </div>

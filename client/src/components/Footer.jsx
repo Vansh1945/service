@@ -1,13 +1,40 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { FaFacebook, FaTwitter, FaInstagram, FaLinkedin, FaMapMarkerAlt, FaPhone, FaEnvelope } from 'react-icons/fa';
-import Logo from './Logo';
+import { useAuth } from '../store/auth';
 
 const Footer = () => {
+  const { API } = useAuth();
+  const [systemData, setSystemData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchSystemData = async () => {
+      try {
+        const response = await fetch(`${API}/system-setting/system-data`);
+        const data = await response.json();
+        if (data.success) {
+          setSystemData(data.data);
+        } else {
+          setError('Failed to load system data');
+        }
+      } catch (err) {
+        setError('Failed to load system data');
+        console.error('Footer fetch error:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSystemData();
+  }, [API]);
+
   // Dynamic data
   const footerData = {
     company: {
-      name: "SafeVolt Solutions",
-      description: "Providing reliable electrical solutions with certified expertise and cutting-edge technology for homes and businesses.",
+      name: systemData?.companyName || "SafeVolt Solutions",
+      description: systemData?.tagline || "Providing reliable electrical solutions with certified expertise and cutting-edge technology for homes and businesses.",
+      logo: systemData?.logo,
       socialLinks: [
         { Icon: FaFacebook, href: "#", label: "Facebook" },
         { Icon: FaTwitter, href: "#", label: "Twitter" },
@@ -28,9 +55,9 @@ const Footer = () => {
       { name: 'Emergency Repairs', href: '/services' }
     ],
     contact: {
-      address: "Urban Phase 1 , Jalandhar, Punjab, India 144005",
-      phone: "+91 9625333919",
-      email: "rajelectricalservice25@gmail.com"
+      address: systemData?.address || "Urban Phase 1, Jalandhar, Punjab, India 144005",
+      phone: systemData?.phone || "+91 9625333919",
+      email: systemData?.email || "rajelectricalservice25@gmail.com"
     },
     legalLinks: [
       { name: 'Privacy Policy', href: '/privacy' },
@@ -41,6 +68,19 @@ const Footer = () => {
 
   const currentYear = new Date().getFullYear();
 
+  if (loading) {
+    return (
+      <footer className="bg-secondary text-white pt-12 pb-6 sm:pt-16 sm:pb-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
+            <p className="text-gray-300 mt-4">Loading footer...</p>
+          </div>
+        </div>
+      </footer>
+    );
+  }
+
   return (
     <footer className="bg-secondary text-white pt-12 pb-6 sm:pt-16 sm:pb-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -48,7 +88,27 @@ const Footer = () => {
           {/* Brand Column */}
           <div className="space-y-4 sm:space-y-6 lg:col-span-1">
             <div className="flex items-center">
-              <Logo withIcon={true} size="text-xl sm:text-2xl" isDark={true} />
+              {footerData.company.logo ? (
+                <>
+                  <img
+                    src={footerData.company.logo}
+                    alt="Company Logo"
+                    className="h-10 w-10 sm:h-12 sm:w-12 object-contain mr-3"
+                  />
+                  <span className="font-bold text-xl sm:text-2xl bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter">
+                    {footerData.company.name}
+                  </span>
+                </>
+              ) : (
+                <div className="flex items-center">
+                  <div className="flex items-center justify-center h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-gradient-to-r from-primary to-accent shadow-lg mr-3">
+                    <span className="text-white font-bold text-lg sm:text-xl">S</span>
+                  </div>
+                  <span className="font-bold text-xl sm:text-2xl bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter">
+                    {footerData.company.name}
+                  </span>
+                </div>
+              )}
             </div>
             <p className="text-gray-300 leading-relaxed text-sm sm:text-base">
               {footerData.company.description}
@@ -73,8 +133,8 @@ const Footer = () => {
             <ul className="space-y-2 sm:space-y-3">
               {footerData.quickLinks.map((item, index) => (
                 <li key={index}>
-                  <a 
-                    href={item.href} 
+                  <a
+                    href={item.href}
                     className="text-gray-300 hover:text-accent transition-colors duration-300 flex items-center group text-sm sm:text-base"
                   >
                     <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-accent rounded-full mr-2 sm:mr-3 opacity-70 group-hover:opacity-100 transition-opacity duration-300"></span>
@@ -91,8 +151,8 @@ const Footer = () => {
             <ul className="space-y-2 sm:space-y-3">
               {footerData.services.map((item, index) => (
                 <li key={index}>
-                  <a 
-                    href={item.href} 
+                  <a
+                    href={item.href}
                     className="text-gray-300 hover:text-accent transition-colors duration-300 flex items-center group text-sm sm:text-base"
                   >
                     <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-accent rounded-full mr-2 sm:mr-3 opacity-70 group-hover:opacity-100 transition-opacity duration-300"></span>
@@ -133,13 +193,13 @@ const Footer = () => {
         {/* Copyright */}
         <div className="flex flex-col sm:flex-row justify-between items-center text-gray-400 text-xs sm:text-sm space-y-4 sm:space-y-0">
           <p className="text-center sm:text-left">
-            © {currentYear} {footerData.company.name}. All rights reserved.
+            © {currentYear} <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter font-semibold">{footerData.company.name}</span>. All rights reserved.
           </p>
           <div className="flex flex-wrap justify-center sm:justify-end space-x-4 sm:space-x-6">
             {footerData.legalLinks.map((link, index) => (
-              <a 
+              <a
                 key={index}
-                href={link.href} 
+                href={link.href}
                 className="hover:text-accent transition-colors duration-300"
               >
                 {link.name}

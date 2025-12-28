@@ -400,7 +400,7 @@ const BookingConfirmation = () => {
         key: key,
         amount: order.amount,
         currency: order.currency || 'INR',
-        name: 'Raj Electrical Services',
+        name: 'SAFEVOLT SOLUTIONS',
         description: `Payment for ${serviceDetails?.title || bookingDetails?.services?.[0]?.serviceDetails?.title || 'service'}`,
         image: '/logo.png',
         order_id: order.id,

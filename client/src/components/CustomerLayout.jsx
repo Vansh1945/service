@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
     FiHome, FiCalendar, FiCreditCard, FiMessageSquare,
@@ -12,9 +12,38 @@ const CustomerLayout = () => {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [systemSettings, setSystemSettings] = useState({
+        companyName: '',
+        logo: null,
+        tagline: ''
+    });
     const location = useLocation();
     const navigate = useNavigate();
-    const { user, logoutUser } = useAuth();
+    const { user, logoutUser, API, token } = useAuth();
+
+    useEffect(() => {
+        const fetchSystemSettings = async () => {
+            try {
+                const response = await fetch(`${API}/system-setting/system-data`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    setSystemSettings({
+                        companyName: data.data?.companyName || '',
+                        logo: data.data?.logo,
+                        tagline: data.data?.tagline || ''
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to fetch system settings:', error);
+            }
+        };
+
+        if (token) {
+            fetchSystemSettings();
+        }
+    }, [API, token]);
 
     const navigationItems = [
         { name: 'Services', path: '/customer/services', icon: <FiShoppingBag className="w-5 h-5" /> },
@@ -57,12 +86,27 @@ const CustomerLayout = () => {
                         {/* Logo Section */}
                         <div className="flex items-center space-x-3">
                             <Link to="/customer/services" className="flex items-center space-x-2 transition-transform duration-200 hover:scale-105">
-                                <div className="flex items-center justify-center h-10 w-10 rounded-full bg-primary shadow-lg">
-                                    <FaBolt className="h-5 w-5 text-accent" />
+                                {systemSettings.logo ? (
+                                    <img
+                                        src={systemSettings.logo}
+                                        alt={systemSettings.companyName}
+                                        className="h-10 w-auto object-contain mr-2"
+                                    />
+                                ) : (
+                                    <div className="flex items-center justify-center h-10 w-10 rounded-full bg-primary shadow-lg">
+                                        <FaBolt className="h-5 w-5 text-accent" />
+                                    </div>
+                                )}
+                                <div className="flex flex-col">
+                                    <span className="font-bold text-xl lg:text-2xl bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                                        {systemSettings.companyName || 'SAFEVOLT SOLUTIONS'}
+                                    </span>
+                                    {systemSettings.tagline && (
+                                        <span className="text-sm text-gray-600 font-medium">
+                                            {systemSettings.tagline}
+                                        </span>
+                                    )}
                                 </div>
-                                <span className="font-bold text-xl lg:text-2xl text-secondary">
-                                    SAFEVOLT <span className="text-accent">SOLUTIONS</span>
-                                </span>
                             </Link>
                         </div>
 
