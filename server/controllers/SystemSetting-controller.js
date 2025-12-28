@@ -24,14 +24,37 @@ const getSystemSetting = async (req, res) => {
 // 2. Update System Setting (Admin Only)
 const updateSystemSetting = async (req, res) => {
   try {
-    const { companyName, tagline, promoMessage } = req.body;
+    const { companyName, tagline, promoMessage, address, phone, email, socialLinks } = req.body;
     let config = await SystemConfig.findOne();
     if (!config) {
       config = new SystemConfig();
     }
-    config.companyName = companyName || config.companyName;
-    config.tagline = tagline || config.tagline;
-    config.promoMessage = promoMessage || config.promoMessage;
+    if (companyName !== undefined) config.companyName = companyName;
+    if (tagline !== undefined) config.tagline = tagline;
+    if (promoMessage !== undefined) config.promoMessage = promoMessage;
+    if (address !== undefined) config.address = address;
+    if (phone !== undefined) config.phone = phone;
+    if (email !== undefined) config.email = email;
+
+    // Handle socialLinks merge
+    let parsedSocialLinks = socialLinks;
+    if (typeof socialLinks === 'string') {
+      try {
+        parsedSocialLinks = JSON.parse(socialLinks);
+      } catch (error) {
+        console.error('Error parsing socialLinks:', error);
+        parsedSocialLinks = {};
+      }
+    }
+
+    if (parsedSocialLinks !== undefined) {
+      if (!config.socialLinks) config.socialLinks = {};
+      if (parsedSocialLinks.facebook !== undefined) config.socialLinks.facebook = parsedSocialLinks.facebook;
+      if (parsedSocialLinks.instagram !== undefined) config.socialLinks.instagram = parsedSocialLinks.instagram;
+      if (parsedSocialLinks.twitter !== undefined) config.socialLinks.twitter = parsedSocialLinks.twitter;
+      if (parsedSocialLinks.linkedin !== undefined) config.socialLinks.linkedin = parsedSocialLinks.linkedin;
+      if (parsedSocialLinks.youtube !== undefined) config.socialLinks.youtube = parsedSocialLinks.youtube;
+    }
 
     // Handle logo upload
     if (req.files && req.files.logo && req.files.logo[0]) {

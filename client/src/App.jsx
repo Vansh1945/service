@@ -51,6 +51,7 @@ import CategoryBanner from "./pages/Admin/CategoryBanner";
 import BookingConfirmation from "./pages/Customer/BookingConfirmation";
 import FeedbackManagement from "./pages/Customer/Feedback";
 import ComplaintsPage from "./pages/Customer/Complaint";
+import SystemSetting from "./pages/Admin/System-Setting";
 
 const App = () => {
   const location = useLocation();
@@ -94,6 +95,7 @@ const App = () => {
             <Route path="earning-reports" element={<AdminReports />} />
             <Route path="payout" element={<AdminPayout />} />
             <Route path="category-banner" element={<CategoryBanner />} />
+            <Route path="settings" element={<SystemSetting />} />
           </Route>
         </Route>
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FaFacebook, FaTwitter, FaInstagram, FaLinkedin, FaMapMarkerAlt, FaPhone, FaEnvelope } from 'react-icons/fa';
+import { FaFacebook, FaTwitter, FaInstagram, FaLinkedin, FaYoutube, FaMapMarkerAlt, FaPhone, FaEnvelope } from 'react-icons/fa';
 import { useAuth } from '../store/auth';
 
 const Footer = () => {
@@ -29,18 +29,34 @@ const Footer = () => {
     fetchSystemData();
   }, [API]);
 
+  // Helper function to get dynamic social links
+  const getSocialLinks = () => {
+    const links = [];
+    if (systemData?.socialLinks?.facebook) {
+      links.push({ Icon: FaFacebook, href: systemData.socialLinks.facebook, label: "Facebook" });
+    }
+    if (systemData?.socialLinks?.twitter) {
+      links.push({ Icon: FaTwitter, href: systemData.socialLinks.twitter, label: "Twitter" });
+    }
+    if (systemData?.socialLinks?.instagram) {
+      links.push({ Icon: FaInstagram, href: systemData.socialLinks.instagram, label: "Instagram" });
+    }
+    if (systemData?.socialLinks?.linkedin) {
+      links.push({ Icon: FaLinkedin, href: systemData.socialLinks.linkedin, label: "LinkedIn" });
+    }
+    if (systemData?.socialLinks?.youtube) {
+      links.push({ Icon: FaYoutube, href: systemData.socialLinks.youtube, label: "YouTube" });
+    }
+    return links;
+  };
+
   // Dynamic data
   const footerData = {
     company: {
       name: systemData?.companyName || "SafeVolt Solutions",
       description: systemData?.tagline || "Providing reliable electrical solutions with certified expertise and cutting-edge technology for homes and businesses.",
       logo: systemData?.logo,
-      socialLinks: [
-        { Icon: FaFacebook, href: "#", label: "Facebook" },
-        { Icon: FaTwitter, href: "#", label: "Twitter" },
-        { Icon: FaInstagram, href: "#", label: "Instagram" },
-        { Icon: FaLinkedin, href: "#", label: "LinkedIn" }
-      ]
+      socialLinks: getSocialLinks()
     },
     quickLinks: [
       { name: 'Home', href: '/' },

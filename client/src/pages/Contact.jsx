@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Phone,
@@ -10,16 +10,24 @@ import {
   User,
   Shield,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  MapPin
 } from 'lucide-react';
+import { useAuth } from '../store/auth';
 
 const Contact = () => {
+  const { API } = useAuth();
+  const [systemData, setSystemData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
   // Dynamic contact information data
   const contactInfo = {
-    primaryPhone: '+91-9625333919',
-    emergencyPhone: '+91-9625333919',
-    ctaPhone: '+91-9625333919',
-    email: 'rajelectricalservice25@gmail.com',
+    primaryPhone: systemData?.phone || '',
+    emergencyPhone: systemData?.phone || '',
+    ctaPhone: systemData?.phone || '',
+    email: systemData?.email || '',
+    address: systemData?.address || '',
     businessHours: {
       weekdays: '8:00 AM - 6:00 PM',
       sunday: '9:00 AM - 5:00 PM'
@@ -35,6 +43,27 @@ const Contact = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+
+  useEffect(() => {
+    const fetchSystemData = async () => {
+      try {
+        const response = await fetch(`${API}/system-setting/system-data`);
+        const data = await response.json();
+        if (data.success) {
+          setSystemData(data.data);
+        } else {
+          setError('Failed to load system data');
+        }
+      } catch (err) {
+        setError('Failed to load system data');
+        console.error('Contact fetch error:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSystemData();
+  }, [API]);
 
   const handleChange = (e) => {
     setFormData({
@@ -336,6 +365,24 @@ const Contact = () => {
                       <h3 className="text-lg font-semibold text-secondary mb-1">Email Addresses</h3>
                       <p className="text-secondary">{contactInfo.email}</p>
                       <p className="text-accent text-sm font-medium mt-1">Response within 2 hours</p>
+                    </div>
+                  </motion.div>
+
+                  {/* Address */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: 0.25 }}
+                    viewport={{ once: true }}
+                    className="flex items-start space-x-4 p-4 rounded-xl bg-primary/5 cursor-pointer"
+                  >
+                    <div className="flex-shrink-0 w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
+                      <MapPin className="w-4 h-4 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-secondary mb-1">Our Address</h3>
+                      <p className="text-secondary">{contactInfo.address}</p>
+                      <p className="text-accent text-sm font-medium mt-1">Visit us anytime</p>
                     </div>
                   </motion.div>
 
