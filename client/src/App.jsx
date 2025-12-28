@@ -30,6 +30,7 @@ import AdminComplaints from "./pages/Admin/Complaint";
 import AdminServiceFeedback from "./pages/Admin/Feedback";
 import AdminProfile from "./pages/Admin/Profile";
 import AdminDashboard from "./pages/Admin/Dashboard";
+import UserContacts from "./pages/Admin/User-Contacts";
 
 // Provider Pages
 import ProviderBookingDashboard from "./pages/Provider/Provider-Booking";
@@ -96,6 +97,7 @@ const App = () => {
             <Route path="payout" element={<AdminPayout />} />
             <Route path="category-banner" element={<CategoryBanner />} />
             <Route path="settings" element={<SystemSetting />} />
+            <Route path="user-contacts" element={<UserContacts />} />
           </Route>
         </Route>
 

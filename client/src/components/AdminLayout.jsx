@@ -53,6 +53,7 @@ const AdminLayout = () => {
     { name: 'Add Services', path: '/admin/add-services', icon: <FiTool className="w-5 h-5" /> },
     { name: 'Complaint', path: '/admin/complaints', icon: <FiAlertCircle className="w-5 h-5" /> },
     { name: 'Feedback', path: '/admin/feedback', icon: <FiMessageCircle className="w-5 h-5" /> },
+    { name: 'User Contacts', path: '/admin/user-contacts', icon: <FiMessageCircle className="w-5 h-5" /> },
     { name: 'Earning Reports', path: '/admin/earning-reports', icon: <FiActivity className="w-5 h-5" /> },
     { name: 'Payout', path: '/admin/payout', icon: <FiCreditCard className="w-5 h-5" /> },
     { name: 'Category & Banner', path: '/admin/category-banner', icon: <FiFileText className="w-5 h-5" /> },
