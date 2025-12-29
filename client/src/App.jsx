@@ -11,6 +11,7 @@ import CustomerLayout from "./components/CustomerLayout";
 import ProviderLayout from "./components/ProviderLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import PWAInstallPrompt from "./components/PWAInstallPrompt";
+import PWAUpdatePrompt from "./components/PWAUpdatePrompt";
 
 // Public Pages
 import Home from "./pages/Home";
@@ -67,6 +68,7 @@ const App = () => {
     companyName: "",
     favicon: null,
   });
+  const [showUpdatePrompt, setShowUpdatePrompt] = useState(false);
 
   // Check if current route is a protected/dashboard route
   const isDashboardRoute = /^\/(admin|customer|provider)/.test(
@@ -84,6 +86,13 @@ const App = () => {
             companyName: data.data?.companyName || "SAFEVOLT SOLUTIONS",
             favicon: data.data?.favicon || null,
           };
+
+          // Check if settings have changed
+          const hasChanged = JSON.stringify(settings) !== JSON.stringify(systemSettings);
+          if (hasChanged && systemSettings.companyName) {
+            setShowUpdatePrompt(true);
+          }
+
           setSystemSettings(settings);
 
           // Update document title
@@ -191,6 +200,11 @@ const App = () => {
 
       {/* PWA Install Prompt */}
       <PWAInstallPrompt />
+
+      {/* PWA Update Prompt */}
+      {showUpdatePrompt && (
+        <PWAUpdatePrompt onUpdate={handleUpdate} onReinstall={handleReinstall} />
+      )}
     </>
   );
 };
