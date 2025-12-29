@@ -1,13 +1,12 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from "./App";
-import { AuthProvider } from "./store/auth";
+import { AuthProvider } from "../src/store/auth"; 
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "./index.css";
-import { updateMetaTags } from "./utils/metaUpdater"; // Import the meta updater
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -18,9 +17,6 @@ const queryClient = new QueryClient({
   },
 });
 
-// Update meta tags when the app initializes
-updateMetaTags();
-
 const root = ReactDOM.createRoot(document.getElementById("root"));
 
 root.render(
@@ -29,7 +25,7 @@ root.render(
       <BrowserRouter>
         <AuthProvider>
           <App />
-          <ToastContainer
+          <ToastContainer 
             position="top-right"
             autoClose={3000}
             hideProgressBar={false}
@@ -39,7 +35,6 @@ root.render(
             pauseOnFocusLoss
             draggable
             pauseOnHover
-            theme="light"
           />
         </AuthProvider>
       </BrowserRouter>

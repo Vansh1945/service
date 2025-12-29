@@ -354,49 +354,6 @@ const deleteBanner = async (req, res) => {
   }
 };
 
-// 14. Get Dynamic Manifest
-const getManifest = async (req, res) => {
-  try {
-    let config = await SystemConfig.findOne();
-    if (!config) {
-      config = new SystemConfig({ companyName: 'Default Company' });
-      await config.save();
-    }
-
-    const manifest = {
-      name: config.companyName || 'Service App',
-      short_name: config.companyName ? config.companyName.substring(0, 12) : 'ServiceApp',
-      description: config.tagline || 'A service booking application',
-      theme_color: '#ffffff',
-      icons: [
-        {
-          src: config.favicon || '/favicon.ico',
-          sizes: '192x192',
-          type: 'image/png'
-        },
-        {
-          src: config.logo || '/pwa-192x192.png',
-          sizes: '192x192',
-          type: 'image/png'
-        },
-        {
-          src: config.logo || '/pwa-512x512.png',
-          sizes: '512x512',
-          type: 'image/png'
-        }
-      ]
-    };
-
-    res.setHeader('Content-Type', 'application/manifest+json');
-    res.status(200).json(manifest);
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch manifest',
-      error: error.message
-    });
-  }
-};
 
 module.exports = {
   getSystemSetting,
@@ -411,6 +368,5 @@ module.exports = {
   createBanner,
   getAllBannersAdmin,
   updateBanner,
-  deleteBanner,
-  getManifest
+  deleteBanner
 };

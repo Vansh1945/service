@@ -46,7 +46,6 @@ const uploadSystemSettings = multer({
 router.get('/system-data', systemSettingController.getSystemSetting);
 router.get('/categories', systemSettingController.getActiveCategories);
 router.get('/banners', systemSettingController.getBanners);
-router.get('/manifest.json', systemSettingController.getManifest);
 
 // ADMIN ROUTES (protected by adminAuth middleware)
 router.use('/admin', adminAuthMiddleware);
