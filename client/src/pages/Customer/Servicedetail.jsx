@@ -4,24 +4,17 @@ import { useAuth } from '../../store/auth';
 import {
   MdStar,
   MdAccessTime,
-  MdVerified,
   MdSecurity,
-  MdPerson,
-  MdExpandMore,
   MdCheck,
   MdCurrencyRupee,
   MdChevronRight,
   MdError,
-  MdChat,
-  MdPhone,
-  MdBuild,
-  MdFlashOn,
-  MdHome,
-  MdCalendarToday,
   MdShare,
   MdArrowBack,
   MdArrowForward,
-  MdPhoto
+  MdPhoto,
+  MdHome,
+  MdCalendarToday
 } from 'react-icons/md';
 import {
   StarIcon as StarIconSolid,
@@ -30,17 +23,15 @@ import {
   WrenchIcon,
   UserIcon,
   ClockIcon,
-  ChevronDownIcon,
-  ChatBubbleLeftEllipsisIcon,
   ChevronRightIcon,
   CheckIcon,
-  CurrencyRupeeIcon
+  ChatBubbleLeftEllipsisIcon
 } from '@heroicons/react/24/outline';
 
 const ServiceDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { API, showToast, user, isAuthenticated, token } = useAuth();
+  const { API, showToast, isAuthenticated } = useAuth();
 
   // State management
   const [service, setService] = useState(null);
@@ -52,26 +43,30 @@ const ServiceDetailPage = () => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [imageLoading, setImageLoading] = useState(true);
   const [allImages, setAllImages] = useState([]);
+  const [categories, setCategories] = useState([]);
 
-  // Category icons mapping
-  const getCategoryIcon = (category) => {
-    const icons = {
-      'Electrical': MdFlashOn,
-      'AC': MdBuild,
-      'Appliance Repair': MdBuild,
-      'Other': MdBuild
+  // Fetch categories
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch(`${API}/system-setting/categories`);
+        if (!response.ok) throw new Error('Failed to fetch categories');
+        const data = await response.json();
+        if (data.success) {
+          setCategories(data.categories || []);
+        }
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+      }
     };
-    return icons[category] || MdBuild;
-  };
+    fetchCategories();
+  }, [API]);
 
   // Fetch service data
   const fetchServiceData = async () => {
     try {
       setLoading(true);
       setError(null);
-
-      // Simulate API delay for better UX
-      await new Promise(resolve => setTimeout(resolve, 800));
 
       const serviceResponse = await fetch(`${API}/service/services/${id}`);
       const serviceData = await serviceResponse.json();
@@ -87,30 +82,29 @@ const ServiceDetailPage = () => {
       const serviceDetails = serviceData.data;
       setService(serviceDetails);
 
-      // Process all images from the service
+      // Process images
       const images = serviceDetails.images || [];
-      setAllImages(images);
-
-      // Set default image if no images available
-      if (images.length === 0) {
-        setAllImages(['https://images.unsplash.com/photo-1581093458791-8a0a1ac4e8e8?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80']);
-      }
+      setAllImages(images.length > 0 ? images : [
+        'https://images.unsplash.com/photo-1581093458791-8a0a1ac4e8e8?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'
+      ]);
 
       // Fetch related services
-      try {
-        const relatedResponse = await fetch(
-          `${API}/service/services/category/${serviceDetails.category}?limit=4`
-        );
-        const relatedData = await relatedResponse.json();
-
-        if (relatedResponse.ok && relatedData.success) {
-          const filteredRelated = relatedData.data.filter(
-            s => s._id !== serviceDetails._id
+      if (serviceDetails.category) {
+        try {
+          const relatedResponse = await fetch(
+            `${API}/service/services/category/${serviceDetails.category}?limit=4`
           );
-          setRelatedServices(filteredRelated);
+          const relatedData = await relatedResponse.json();
+
+          if (relatedResponse.ok && relatedData.success) {
+            const filteredRelated = relatedData.data.filter(
+              s => s._id !== serviceDetails._id
+            );
+            setRelatedServices(filteredRelated);
+          }
+        } catch (relatedError) {
+          console.log('Failed to fetch related services:', relatedError);
         }
-      } catch (relatedError) {
-        console.log('Failed to fetch related services:', relatedError);
       }
     } catch (err) {
       setError(err.message);
@@ -121,10 +115,71 @@ const ServiceDetailPage = () => {
   };
 
   useEffect(() => {
-    if (id) {
-      fetchServiceData();
-    }
+    if (id) fetchServiceData();
   }, [id]);
+
+  // Get category name
+  const categoryName = useMemo(() => {
+    if (!service?.category) return 'Uncategorized';
+    
+    // If category is an object with name property
+    if (typeof service.category === 'object' && service.category.name) {
+      return service.category.name;
+    }
+    
+    // If category is a string ID, find in categories array
+    if (typeof service.category === 'string' && categories.length > 0) {
+      const category = categories.find(cat => cat._id === service.category);
+      return category ? category.name : 'Uncategorized';
+    }
+    
+    // If category is an object with _id, find by _id
+    if (typeof service.category === 'object' && service.category._id && categories.length > 0) {
+      const category = categories.find(cat => cat._id === service.category._id);
+      return category ? category.name : 'Uncategorized';
+    }
+    
+    return 'Uncategorized';
+  }, [service, categories]);
+
+  // Get category ID for navigation
+  const getCategoryId = useMemo(() => {
+    if (!service?.category) return '';
+    
+    if (typeof service.category === 'object' && service.category._id) {
+      return service.category._id;
+    }
+    
+    if (typeof service.category === 'string') {
+      return service.category;
+    }
+    
+    return '';
+  }, [service]);
+
+  // Get related service category name
+  const getRelatedCategoryName = (relatedCategory) => {
+    if (!relatedCategory) return 'Uncategorized';
+    
+    // If relatedCategory is an object with name
+    if (typeof relatedCategory === 'object' && relatedCategory.name) {
+      return relatedCategory.name;
+    }
+    
+    // If relatedCategory is a string ID
+    if (typeof relatedCategory === 'string' && categories.length > 0) {
+      const category = categories.find(cat => cat._id === relatedCategory);
+      return category ? category.name : 'Uncategorized';
+    }
+    
+    // If relatedCategory is an object with _id
+    if (typeof relatedCategory === 'object' && relatedCategory._id && categories.length > 0) {
+      const category = categories.find(cat => cat._id === relatedCategory._id);
+      return category ? category.name : 'Uncategorized';
+    }
+    
+    return 'Uncategorized';
+  };
 
   const handleBookNow = () => {
     if (!isAuthenticated) {
@@ -132,7 +187,6 @@ const ServiceDetailPage = () => {
       navigate('/login', { state: { from: `/customer/services/${id}` } });
       return;
     }
-
     navigate(`/customer/book-service/${id}`, {
       state: { serviceDetails: service }
     });
@@ -246,11 +300,10 @@ const ServiceDetailPage = () => {
     );
   }
 
-  const CategoryIcon = getCategoryIcon(service.category);
-  const specialNotes = service.specialNotes;
-  const materialsUsed = service.materialsUsed;
+  const specialNotes = service.specialNotes || [];
+  const materialsUsed = service.materialsUsed || [];
 
-  // Desktop Booking Card
+  // Desktop Booking Card Component
   const DesktopBookingCard = (
     <div className="sticky top-8 space-y-8">
       <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-xl">
@@ -267,7 +320,6 @@ const ServiceDetailPage = () => {
           </p>
         </div>
 
-        {/* Service Features */}
         <div className="space-y-4 mb-6">
           <div className="flex items-center p-3 bg-white rounded-lg border border-gray-200 shadow-sm">
             <MdAccessTime className="w-5 h-5 text-teal-600 mr-3" />
@@ -286,7 +338,6 @@ const ServiceDetailPage = () => {
           </div>
         </div>
 
-        {/* Enhanced Action Buttons */}
         <div className="grid grid-cols-3 gap-3">
           <button
             onClick={handleBookNow}
@@ -304,37 +355,10 @@ const ServiceDetailPage = () => {
           </button>
         </div>
 
-        {/* Contact Info */}
         <div className="mt-6 pt-6 border-t border-gray-200 text-center">
-          <p className="text-sm text-gray-600 mb-4">Need help? <Link to="/contact" className="text-teal-600 hover:text-teal-800 font-medium transition-colors duration-300">Contact us</Link></p>
-        </div>
-      </div>
-
-      {/* Desktop Only - Peace of Mind Card */}
-      <div className="hidden lg:block bg-white rounded-2xl p-6 border border-gray-200 shadow-xl">
-        <h4 className="font-semibold text-gray-800 mb-4 text-lg flex items-center">
-          <ShieldCheckIcon className="w-6 h-6 text-teal-600 mr-3" />
-          Peace of Mind
-        </h4>
-        <div className="space-y-4">
-          <div className="flex items-start">
-            <div className="w-6 h-6 bg-teal-100 rounded-full flex items-center justify-center mr-3 mt-0.5 flex-shrink-0">
-              <CheckIcon className="w-4 h-4 text-teal-600" />
-            </div>
-            <span className="text-gray-600"><strong>Expert Professionals:</strong> All our service providers are verified and trained.</span>
-          </div>
-          <div className="flex items-start">
-            <div className="w-6 h-6 bg-teal-100 rounded-full flex items-center justify-center mr-3 mt-0.5 flex-shrink-0">
-              <CheckIcon className="w-4 h-4 text-teal-600" />
-            </div>
-            <span className="text-gray-600"><strong>Transparent Pricing:</strong> No hidden costs. What you see is what you pay.</span>
-          </div>
-          <div className="flex items-start">
-            <div className="w-6 h-6 bg-teal-100 rounded-full flex items-center justify-center mr-3 mt-0.5 flex-shrink-0">
-              <CheckIcon className="w-4 h-4 text-teal-600" />
-            </div>
-            <span className="text-gray-600"><strong>Service Warranty:</strong> We stand by our work with a 30-day warranty.</span>
-          </div>
+          <p className="text-sm text-gray-600 mb-4">
+            Need help? <Link to="/contact" className="text-teal-600 hover:text-teal-800 font-medium">Contact us</Link>
+          </p>
         </div>
       </div>
     </div>
@@ -350,7 +374,7 @@ const ServiceDetailPage = () => {
               <li>
                 <button
                   onClick={() => navigate('/customer/services')}
-                  className="inline-flex items-center text-sm font-medium text-gray-500 hover:text-teal-600 transition-colors duration-300"
+                  className="inline-flex items-center text-sm font-medium text-gray-500 hover:text-teal-600"
                 >
                   <MdHome className="w-4 h-4 mr-2" />
                   Services
@@ -360,10 +384,10 @@ const ServiceDetailPage = () => {
                 <div className="flex items-center">
                   <MdChevronRight className="w-4 h-4 text-gray-400 mx-1" />
                   <button
-                    onClick={() => navigate(`/customer/services?category=${service.category}`)}
-                    className="text-sm font-medium text-gray-500 hover:text-teal-600 transition-colors duration-300"
+                    onClick={() => navigate(`/customer/services?category=${getCategoryId}`)}
+                    className="text-sm font-medium text-gray-500 hover:text-teal-600"
                   >
-                    {service.category}
+                    {categoryName}
                   </button>
                 </div>
               </li>
@@ -384,9 +408,9 @@ const ServiceDetailPage = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
           <div className="grid grid-cols-1 lg:grid-cols-3 lg:gap-8 p-6 lg:p-8">
-            {/* Left Column - Images & Basic Info */}
+            {/* Left Column */}
             <div className="lg:col-span-2">
-              {/* Enhanced Image Gallery */}
+              {/* Image Gallery */}
               <div className="mb-6 lg:mb-8">
                 <div className="relative h-64 sm:h-80 lg:h-96 rounded-xl overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 group">
                   {imageLoading && (
@@ -399,8 +423,7 @@ const ServiceDetailPage = () => {
                     <img
                       src={allImages[currentImageIndex]}
                       alt={`${service.title} - Image ${currentImageIndex + 1}`}
-                      className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoading ? 'opacity-0' : 'opacity-100'
-                        }`}
+                      className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoading ? 'opacity-0' : 'opacity-100'}`}
                       onLoad={handleImageLoad}
                       onError={(e) => {
                         e.target.onerror = null;
@@ -417,23 +440,21 @@ const ServiceDetailPage = () => {
                     </div>
                   )}
 
-                  {/* Image Navigation */}
                   {allImages.length > 1 && (
                     <>
                       <button
                         onClick={prevImage}
-                        className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-white/90 backdrop-blur-sm rounded-full p-3 shadow-lg hover:bg-white hover:scale-110 transition-all duration-300 opacity-0 group-hover:opacity-100"
+                        className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-white/90 rounded-full p-3 shadow-lg hover:bg-white hover:scale-110 transition-all duration-300 opacity-0 group-hover:opacity-100"
                       >
                         <MdArrowBack className="w-5 h-5 text-gray-600" />
                       </button>
                       <button
                         onClick={nextImage}
-                        className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-white/90 backdrop-blur-sm rounded-full p-3 shadow-lg hover:bg-white hover:scale-110 transition-all duration-300 opacity-0 group-hover:opacity-100"
+                        className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-white/90 rounded-full p-3 shadow-lg hover:bg-white hover:scale-110 transition-all duration-300 opacity-0 group-hover:opacity-100"
                       >
                         <MdArrowForward className="w-5 h-5 text-gray-600" />
                       </button>
 
-                      {/* Image Counter */}
                       <div className="absolute top-4 left-4 bg-black/70 text-white px-3 py-1 rounded-full text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                         {currentImageIndex + 1} / {allImages.length}
                       </div>
@@ -441,19 +462,18 @@ const ServiceDetailPage = () => {
                   )}
                 </div>
 
-                {/* Enhanced Thumbnail Strip */}
                 {allImages.length > 1 && (
                   <div className="mt-4">
                     <h4 className="text-sm font-medium text-gray-600 mb-3 flex items-center">
                       <MdPhoto className="w-4 h-4 mr-2" />
                       All Service Images ({allImages.length})
                     </h4>
-                    <div className="flex space-x-2 sm:space-x-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+                    <div className="flex space-x-2 sm:space-x-3 overflow-x-auto pb-2">
                       {allImages.map((image, index) => (
                         <button
                           key={index}
                           onClick={() => handleThumbnailClick(index)}
-                          className={`flex-shrink-0 w-16 h-12 sm:w-20 sm:h-16 lg:w-24 lg:h-20 rounded-lg overflow-hidden border-2 transition-all duration-300 transform hover:scale-105 ${index === currentImageIndex
+                          className={`flex-shrink-0 w-16 h-12 sm:w-20 sm:h-16 lg:w-24 lg:h-20 rounded-lg overflow-hidden border-2 transition-all duration-300 ${index === currentImageIndex
                             ? 'border-teal-500 ring-2 ring-teal-500/20 scale-105'
                             : 'border-gray-200 hover:border-gray-300'
                             }`}
@@ -467,10 +487,6 @@ const ServiceDetailPage = () => {
                               e.target.src = 'https://images.unsplash.com/photo-1581093458791-8a0a1ac4e8e8?ixlib=rb-4.0.3&auto=format&fit=crop&w=100&q=80';
                             }}
                           />
-                          {/* Thumbnail overlay for active state */}
-                          {index === currentImageIndex && (
-                            <div className="absolute inset-0 bg-teal-500/20 border-2 border-teal-500 rounded-lg"></div>
-                          )}
                         </button>
                       ))}
                     </div>
@@ -484,8 +500,7 @@ const ServiceDetailPage = () => {
                   <div className="flex-1">
                     <div className="flex items-center mb-2">
                       <span className="flex items-center text-xs sm:text-sm font-medium text-teal-600 bg-teal-50 px-2 sm:px-3 py-1 rounded-full border border-teal-200">
-                        <CategoryIcon className="w-3 h-3 sm:w-4 sm:h-4 mr-2" />
-                        {service.category}
+                        {categoryName}
                       </span>
                     </div>
                     <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-3">
@@ -493,7 +508,6 @@ const ServiceDetailPage = () => {
                     </h1>
                   </div>
 
-                  {/* Rating Badge - Hidden on mobile, shown on desktop */}
                   <div className="hidden lg:block text-right">
                     <div className="flex items-center bg-yellow-50 px-3 py-2 rounded-lg border border-yellow-200">
                       <StarIconSolid className="w-5 h-5 text-yellow-400 mr-1" />
@@ -511,7 +525,6 @@ const ServiceDetailPage = () => {
                   {service.description}
                 </p>
 
-                {/* Mobile Rating - Only shown on mobile */}
                 <div className="lg:hidden flex items-center mt-4">
                   <StarIconSolid className="w-5 h-5 text-yellow-400 mr-1" />
                   <span className="font-semibold text-gray-800">
@@ -539,7 +552,6 @@ const ServiceDetailPage = () => {
                     </p>
                   </div>
 
-                  {/* Service Features */}
                   <div className="space-y-4 mb-6">
                     <div className="flex items-center p-3 bg-white rounded-lg border border-gray-200 shadow-sm">
                       <MdAccessTime className="w-5 h-5 text-teal-600 mr-3" />
@@ -558,11 +570,10 @@ const ServiceDetailPage = () => {
                     </div>
                   </div>
 
-                  {/* Enhanced Action Buttons */}
                   <div className="grid grid-cols-3 gap-3">
                     <button
                       onClick={handleBookNow}
-                      className="col-span-2 bg-orange-500 text-white py-3 px-4 rounded-xl font-bold hover:bg-orange-600 transition-all duration-300 transform hover:scale-105 flex items-center justify-center shadow-lg hover:shadow-xl text-sm"
+                      className="col-span-2 bg-orange-500 text-white py-3 px-4 rounded-xl font-bold hover:bg-orange-600 transition-all duration-300 flex items-center justify-center shadow-lg hover:shadow-xl text-sm"
                     >
                       <MdCalendarToday className="w-4 h-4 mr-2" />
                       Book Service
@@ -570,15 +581,16 @@ const ServiceDetailPage = () => {
 
                     <button
                       onClick={handleShare}
-                      className="flex items-center justify-center py-2 px-2 border border-gray-300 rounded-xl hover:bg-gray-50 transition-all duration-300 transform hover:scale-105 shadow-sm"
+                      className="flex items-center justify-center py-2 px-2 border border-gray-300 rounded-xl hover:bg-gray-50 transition-all duration-300 shadow-sm"
                     >
                       <MdShare className="w-4 h-4 text-gray-600" />
                     </button>
                   </div>
 
-                  {/* Contact Info */}
                   <div className="mt-6 pt-6 border-t border-gray-200 text-center">
-                    <p className="text-sm text-gray-600 mb-4">Need help? <Link to="/contact" className="text-teal-600 hover:text-teal-800 font-medium transition-colors duration-300">Contact us</Link></p>
+                    <p className="text-sm text-gray-600 mb-4">
+                      Need help? <Link to="/contact" className="text-teal-600 hover:text-teal-800 font-medium">Contact us</Link>
+                    </p>
                   </div>
                 </div>
               </div>
@@ -594,7 +606,7 @@ const ServiceDetailPage = () => {
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
-                      className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-300 ${activeTab === tab.id
+                      className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === tab.id
                         ? 'border-teal-600 text-teal-600'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                         }`}
@@ -616,7 +628,7 @@ const ServiceDetailPage = () => {
                           Service Inclusions
                         </h4>
                         <ul className="text-gray-600 space-y-3">
-                          {specialNotes && specialNotes.length > 0 ? specialNotes.map((note, index) => (
+                          {specialNotes.length > 0 ? specialNotes.map((note, index) => (
                             <li key={index} className="flex items-start">
                               <div className="w-6 h-6 bg-teal-600 rounded-full flex items-center justify-center mr-3 mt-0.5 flex-shrink-0">
                                 <CheckIcon className="w-3 h-3 text-white" />
@@ -633,7 +645,7 @@ const ServiceDetailPage = () => {
                           Tools & Equipment
                         </h4>
                         <ul className="text-gray-600 space-y-3">
-                          {materialsUsed && materialsUsed.length > 0 ? materialsUsed.map((material, index) => (
+                          {materialsUsed.length > 0 ? materialsUsed.map((material, index) => (
                             <li key={index} className="flex items-start">
                               <div className="w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center mr-3 mt-0.5 flex-shrink-0">
                                 <CheckIcon className="w-3 h-3 text-white" />
@@ -645,7 +657,6 @@ const ServiceDetailPage = () => {
                       </div>
                     </div>
 
-                    {/* Service Benefits */}
                     <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-6 border border-gray-200">
                       <h4 className="font-semibold text-gray-800 mb-4 text-lg">
                         Why Choose Raj Electrical Service
@@ -692,10 +703,9 @@ const ServiceDetailPage = () => {
 
                           <div className="flex justify-between items-center py-3 border-b border-gray-200">
                             <span className="font-medium text-gray-600 flex items-center">
-                              <CategoryIcon className="w-4 h-4 mr-2" />
-                              Service Category
+                              Category
                             </span>
-                            <span className="text-gray-800 font-semibold">{service.category}</span>
+                            <span className="text-gray-800 font-semibold">{categoryName}</span>
                           </div>
 
                           <div className="flex justify-between items-center py-3 border-b border-gray-200">
@@ -719,7 +729,6 @@ const ServiceDetailPage = () => {
                     </div>
 
                     <div className="lg:col-span-3">
-                      {/* FAQ Section */}
                       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
                         <h4 className="font-semibold text-gray-800 p-6 text-lg border-b border-gray-200 bg-gray-50">
                           Frequently Asked Questions
@@ -737,22 +746,23 @@ const ServiceDetailPage = () => {
                             {
                               question: "Are your electricians certified?",
                               answer: "Yes, all our electricians are certified professionals with extensive experience in electrical services and safety protocols."
-                            },
-                            {
-                              question: "How do I prepare for the electrical service?",
-                              answer: "Ensure the service area is accessible and clear. Make sure the main power is accessible. Our professional electrician will guide you through any specific preparations needed for safety."
                             }
                           ].map((faq, index) => (
                             <div key={index} className="group">
                               <button
-                                className="flex justify-between items-center w-full p-6 text-left hover:bg-gray-50 transition-colors duration-300"
+                                className="flex justify-between items-center w-full p-6 text-left hover:bg-gray-50"
                                 onClick={() => toggleAccordion(index)}
                               >
                                 <span className="font-medium text-gray-800 pr-4">{faq.question}</span>
-                                <ChevronDownIcon
-                                  className={`w-5 h-5 text-gray-500 transition-transform duration-300 flex-shrink-0 ${openAccordion === index ? 'transform rotate-180' : ''
+                                <svg
+                                  className={`w-5 h-5 text-gray-500 transition-transform ${openAccordion === index ? 'transform rotate-180' : ''
                                     }`}
-                                />
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
                               </button>
                               {openAccordion === index && (
                                 <div className="px-6 pb-6 bg-gray-50">
@@ -769,7 +779,6 @@ const ServiceDetailPage = () => {
 
                 {activeTab === 'reviews' && (
                   <div className="space-y-6">
-                    {/* Rating Summary */}
                     <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl p-6 border border-yellow-200">
                       <div className="flex flex-col lg:flex-row items-center justify-between">
                         <div className="text-center lg:text-left mb-6 lg:mb-0">
@@ -814,7 +823,6 @@ const ServiceDetailPage = () => {
                       </div>
                     </div>
 
-                    {/* Reviews List */}
                     <div className="space-y-4">
                       {service.feedback?.length > 0 ? (
                         service.feedback.slice(0, 10).map((review, index) => (
@@ -874,24 +882,24 @@ const ServiceDetailPage = () => {
           </div>
         </div>
 
-        {/* Enhanced Related Services */}
+        {/* Related Services */}
         {relatedServices.length > 0 && (
           <div className="mt-16">
             <div className="flex items-center justify-between mb-8">
-              <h2 className="text-3xl font-bold text-gray-800">Related Services</h2>
+              <h2 className="text-3xl font-bold text-gray-800">Related {categoryName} Services</h2>
               <button
-                onClick={() => navigate(`/customer/services?category=${service.category}`)}
-                className="text-teal-600 hover:text-teal-700 font-medium flex items-center transition-colors duration-300"
+                onClick={() => navigate(`/customer/services?category=${getCategoryId}`)}
+                className="text-teal-600 hover:text-teal-700 font-medium flex items-center"
               >
-                View all
+                View all {categoryName}
                 <ChevronRightIcon className="w-4 h-4 ml-1" />
               </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {relatedServices.map((relatedService) => {
-                const RelatedCategoryIcon = getCategoryIcon(relatedService.category);
                 const relatedImages = relatedService.images || [];
+                const relatedCategoryName = getRelatedCategoryName(relatedService.category);
 
                 return (
                   <div
@@ -910,17 +918,10 @@ const ServiceDetailPage = () => {
                         }}
                       />
                       <div className="absolute top-3 left-3">
-                        <span className="text-xs font-medium text-teal-600 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-full border border-teal-200">
-                          {relatedService.category}
+                        <span className="text-xs font-medium text-teal-600 bg-white/90 px-2 py-1 rounded-full border border-teal-200">
+                          {relatedCategoryName}
                         </span>
                       </div>
-                      {relatedImages.length > 1 && (
-                        <div className="absolute top-3 right-3">
-                          <span className="text-xs font-medium text-white bg-black/70 backdrop-blur-sm px-2 py-1 rounded-full">
-                            +{relatedImages.length - 1} more
-                          </span>
-                        </div>
-                      )}
                     </div>
 
                     <div className="p-5">

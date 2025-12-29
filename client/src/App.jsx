@@ -10,6 +10,7 @@ import AdminLayout from "./components/AdminLayout";
 import CustomerLayout from "./components/CustomerLayout";
 import ProviderLayout from "./components/ProviderLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
+import PWAInstallPrompt from "./components/PWAInstallPrompt";
 
 // Public Pages
 import Home from "./pages/Home";
@@ -187,6 +188,9 @@ const App = () => {
 
       {/* Only show Footer for public routes */}
       {!isDashboardRoute && <Footer />}
+
+      {/* PWA Install Prompt */}
+      <PWAInstallPrompt />
     </>
   );
 };

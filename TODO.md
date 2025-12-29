@@ -1,8 +1,6 @@
-# Add PWA Functionality
+# PWA Setup Tasks
 
-## Tasks
-- [x] Configure Vite PWA plugin in vite.config.js
-- [x] Create web app manifest.json in client/public/ (handled by VitePWA plugin)
-- [x] Update index.html with PWA meta tags
-- [x] Register service worker in main.jsx if needed (handled by VitePWA plugin)
-- [x] Build the app and test PWA features
+- [x] Update vite.config.js to enable web app manifest with PWA details (dynamic from system settings)
+- [ ] Add necessary icons to client/public/ folder (favicon.ico, apple-touch-icon.png, pwa-192x192.png, pwa-512x512.png)
+- [x] Add install prompt logic to show custom install button
+- [ ] Test PWA installation and auto-updates

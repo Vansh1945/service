@@ -6,6 +6,7 @@ const excelJS = require('exceljs');
 const fs = require('fs');
 const path = require('path');
 const cloudinary = require('../services/cloudinary');
+
 /**
  * ADMIN CONTROLLERS
  */
@@ -475,6 +476,7 @@ const getPublicServiceById = async (req, res) => {
         // First get the service with basic info
         const service = await Service.findById(id)
             .select('title category description images basePrice duration isActive averageRating ratingCount specialNotes materialsUsed')
+            .populate('category', 'name')
             .lean();
 
         if (!service) {
