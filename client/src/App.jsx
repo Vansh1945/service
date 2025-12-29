@@ -1,9 +1,18 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Routes, Route, useLocation } from "react-router-dom";
 import "./index.css";
+import { useAuth } from "./store/auth";
+
+// Components
 import Navbar from "./components/Navbar";
-import Home from "./pages/Home";
 import Footer from "./components/Footer";
+import AdminLayout from "./components/AdminLayout";
+import CustomerLayout from "./components/CustomerLayout";
+import ProviderLayout from "./components/ProviderLayout";
+import ProtectedRoute from "./components/ProtectedRoute";
+
+// Public Pages
+import Home from "./pages/Home";
 import AboutPage from "./pages/About";
 import ServicesPage from "./pages/Service";
 import CareersPage from "./pages/Careers";
@@ -12,12 +21,10 @@ import LoginPage from "./pages/Login";
 import ForgotPassword from "./pages/ForgetPassword";
 import CustomerRegistration from "./pages/Customer-Register";
 import ProviderRegistration from "./pages/Provider-Register";
-import AdminLayout from "./components/AdminLayout";
-import CustomerLayout from "./components/CustomerLayout";
-import ProviderLayout from "./components/ProviderLayout";
-import ProtectedRoute from "./components/ProtectedRoute";
 
 // Admin Pages
+import AdminDashboard from "./pages/Admin/Dashboard";
+import AdminProfile from "./pages/Admin/Profile";
 import ProviderList from "./pages/Admin/Approved-Provider";
 import AdminProvidersPage from "./pages/Admin/Providers";
 import AdminCustomersView from "./pages/Admin/Customer";
@@ -28,36 +35,80 @@ import AdminQuestions from "./pages/Admin/Question";
 import AdminServices from "./pages/Admin/Services";
 import AdminComplaints from "./pages/Admin/Complaint";
 import AdminServiceFeedback from "./pages/Admin/Feedback";
-import AdminProfile from "./pages/Admin/Profile";
-import AdminDashboard from "./pages/Admin/Dashboard";
-
-// Provider Pages
-import ProviderBookingDashboard from "./pages/Provider/Provider-Booking";
-import ProviderEarning from "./pages/Provider/Earning";
-import ProviderDashboard from "./pages/Provider/Dashboard";
-import ProviderTestPage from "./pages/Provider/Test";
-import ProviderProfile from "./pages/Provider/Profile";
-import ProviderFeedback from "./pages/Provider/Feedback";
-
-// Customer Pages
-import BookService from "./pages/Customer/Book-Service";
-import ServiceListingPage from "./pages/Customer/Services";
-import ServiceDetailPage from "./pages/Customer/Servicedetail";
-import UserProfile from "./pages/Customer/Profile";
-import CustomerBookingsPage from "./pages/Customer/CustomerBookingsPage";
 import AdminReports from "./pages/Admin/Earning-Reports";
 import AdminPayout from "./pages/Admin/Payout";
 import CategoryBanner from "./pages/Admin/CategoryBanner";
+import SystemSetting from "./pages/Admin/System-Setting";
+import UserContacts from "./pages/Admin/User-Contacts";
+
+// Customer Pages
+import ServiceListingPage from "./pages/Customer/Services";
+import ServiceDetailPage from "./pages/Customer/Servicedetail";
+import BookService from "./pages/Customer/Book-Service";
+import UserProfile from "./pages/Customer/Profile";
+import CustomerBookingsPage from "./pages/Customer/CustomerBookingsPage";
 import BookingConfirmation from "./pages/Customer/BookingConfirmation";
 import FeedbackManagement from "./pages/Customer/Feedback";
 import ComplaintsPage from "./pages/Customer/Complaint";
-import SystemSetting from "./pages/Admin/System-Setting";
+
+// Provider Pages
+import ProviderDashboard from "./pages/Provider/Dashboard";
+import ProviderProfile from "./pages/Provider/Profile";
+import ProviderBookingDashboard from "./pages/Provider/Provider-Booking";
+import ProviderEarning from "./pages/Provider/Earning";
+import ProviderTestPage from "./pages/Provider/Test";
+import ProviderFeedback from "./pages/Provider/Feedback";
 
 const App = () => {
   const location = useLocation();
+  const { API } = useAuth();
+  const [systemSettings, setSystemSettings] = useState({
+    companyName: "",
+    favicon: null,
+  });
 
   // Check if current route is a protected/dashboard route
-  const isDashboardRoute = /^\/(admin|customer|provider)/.test(location.pathname);
+  const isDashboardRoute = /^\/(admin|customer|provider)/.test(
+    location.pathname
+  );
+
+  // Fetch system settings and update document title and favicon
+  useEffect(() => {
+    const fetchSystemSettings = async () => {
+      try {
+        const response = await fetch(`${API}/system-setting/system-data`);
+        if (response.ok) {
+          const data = await response.json();
+          const settings = {
+            companyName: data.data?.companyName || "SAFEVOLT SOLUTIONS",
+            favicon: data.data?.favicon || null,
+          };
+          setSystemSettings(settings);
+
+          // Update document title
+          document.title = settings.companyName;
+
+          // Update favicon
+          if (settings.favicon) {
+            const faviconLink = document.querySelector("link[rel='icon']");
+            if (faviconLink) {
+              faviconLink.href = settings.favicon;
+            } else {
+              // Create new favicon link if it doesn't exist
+              const newFavicon = document.createElement("link");
+              newFavicon.rel = "icon";
+              newFavicon.href = settings.favicon;
+              document.head.appendChild(newFavicon);
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching system settings:", error);
+      }
+    };
+
+    fetchSystemSettings();
+  }, [API]);
 
   return (
     <>
@@ -77,7 +128,7 @@ const App = () => {
         <Route path="/forgot-password" element={<ForgotPassword />} />
 
         {/* Protected admin routes */}
-        <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
+        <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<AdminDashboard />} />
             <Route path="profile" element={<AdminProfile />} />
@@ -96,27 +147,30 @@ const App = () => {
             <Route path="payout" element={<AdminPayout />} />
             <Route path="category-banner" element={<CategoryBanner />} />
             <Route path="settings" element={<SystemSetting />} />
+            <Route path="user-contacts" element={<UserContacts />} />
           </Route>
         </Route>
 
         {/* Protected customer routes */}
-        <Route element={<ProtectedRoute allowedRoles={['customer']} />}>
+        <Route element={<ProtectedRoute allowedRoles={["customer"]} />}>
           <Route path="/customer" element={<CustomerLayout />}>
             <Route path="profile" element={<UserProfile />} />
             <Route path="services" element={<ServiceListingPage />} />
-
             {/* service in detail */}
             <Route path="services/:id" element={<ServiceDetailPage />} />
             <Route path="book-service/:serviceId" element={<BookService />} />
             <Route path="bookings" element={<CustomerBookingsPage />} />
-            <Route path="booking-confirm/:bookingId" element={<BookingConfirmation />} />
+            <Route
+              path="booking-confirm/:bookingId"
+              element={<BookingConfirmation />}
+            />
             <Route path="feedback" element={<FeedbackManagement />} />
             <Route path="complaints" element={<ComplaintsPage />} />
           </Route>
         </Route>
 
         {/* Protected provider routes */}
-        <Route element={<ProtectedRoute allowedRoles={['provider']} requireApproval />}>
+        <Route element={<ProtectedRoute allowedRoles={["provider"]} requireApproval />}>
           <Route path="/provider" element={<ProviderLayout />}>
             <Route path="profile" element={<ProviderProfile />} />
             <Route path="dashboard" element={<ProviderDashboard />} />
@@ -124,7 +178,6 @@ const App = () => {
             <Route path="test" element={<ProviderTestPage />} />
             <Route path="earnings" element={<ProviderEarning />} />
             <Route path="feedbacks" element={<ProviderFeedback />} />
-
           </Route>
         </Route>
 
