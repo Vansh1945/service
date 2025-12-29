@@ -1,13 +1,34 @@
-# TODO: Fix Favicon and Title from System Settings
+# Branding System Implementation TODO
 
-## Completed Tasks
-- [x] Analyzed the issue: Favicon and title are hardcoded in index.html but should come from systemsettings.js model
-- [x] Examined SystemSetting model: Has favicon and companyName fields
-- [x] Examined routes and controllers: Public API available at /system-setting/system-data
-- [x] Updated App.jsx: Added logic to fetch system settings and dynamically set document.title and favicon
-- [x] Updated index.html: Removed hardcoded favicon and title
+## Backend Updates
+- [ ] Update SystemSetting model to include appName, description, appleTouchIcon
+- [ ] Update SystemSetting controller to handle new fields in updateSystemSetting
 
-## Next Steps
-- [ ] Test the implementation by running the application
-- [ ] Verify that favicon and title update when system settings are changed
-- [ ] Check for any console errors or issues
+## Client-side API Integration
+- [ ] Create client/src/utils/systemSetting.js for API fetch utility
+
+## Global State Management
+- [ ] Implement SystemSettingContext.jsx with React Context for global branding state
+- [ ] Include fallback defaults if API fails
+
+## App Integration
+- [ ] Wrap App.jsx with context provider
+- [ ] Fetch and apply settings on app mount/install/refresh
+
+## Dynamic Head Updates
+- [ ] Modify index.html to support dynamic title, favicon, apple-touch-icon updates
+
+## PWA Manifest
+- [ ] Create client/public/site.webmanifest with dynamic strategy
+
+## Theme Colors
+- [ ] Update tailwind.config.js to use CSS custom properties for colors
+- [ ] Dynamically set CSS variables from API data
+
+## Example Component
+- [ ] Modify HeroSection.jsx to demonstrate theme color usage without inline styles
+
+## Testing
+- [ ] Test PWA install on Android, iOS, Desktop
+- [ ] Verify dynamic updates on refresh
+- [ ] Ensure no hardcoded colors in components
