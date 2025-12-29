@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Routes, Route, useLocation } from "react-router-dom";
 import "./index.css";
+import { useAuth } from "./store/auth";
 import Navbar from "./components/Navbar";
 import Home from "./pages/Home";
 import Footer from "./components/Footer";
@@ -56,9 +57,49 @@ import SystemSetting from "./pages/Admin/System-Setting";
 
 const App = () => {
   const location = useLocation();
+  const { API } = useAuth();
+  const [systemSettings, setSystemSettings] = useState({ companyName: '', favicon: null });
 
   // Check if current route is a protected/dashboard route
   const isDashboardRoute = /^\/(admin|customer|provider)/.test(location.pathname);
+
+  // Fetch system settings and update document title and favicon
+  useEffect(() => {
+    const fetchSystemSettings = async () => {
+      try {
+        const response = await fetch(`${API}/system-setting/system-data`);
+        if (response.ok) {
+          const data = await response.json();
+          const settings = {
+            companyName: data.data?.companyName || 'SAFEVOLT SOLUTIONS',
+            favicon: data.data?.favicon || null
+          };
+          setSystemSettings(settings);
+
+          // Update document title
+          document.title = settings.companyName;
+
+          // Update favicon
+          if (settings.favicon) {
+            const faviconLink = document.querySelector("link[rel='icon']");
+            if (faviconLink) {
+              faviconLink.href = settings.favicon;
+            } else {
+              // Create new favicon link if it doesn't exist
+              const newFavicon = document.createElement('link');
+              newFavicon.rel = 'icon';
+              newFavicon.href = settings.favicon;
+              document.head.appendChild(newFavicon);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching system settings:', error);
+      }
+    };
+
+    fetchSystemSettings();
+  }, [API]);
 
   return (
     <>

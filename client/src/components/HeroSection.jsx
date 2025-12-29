@@ -65,27 +65,23 @@ const HeroSection = () => {
 
           return (
             <SwiperSlide key={index}>
-              <div className="relative w-full h-[220px] sm:h-screen overflow-hidden">
+              <div className="relative w-full h-[220px] sm:h-screen overflow-hidden bg-black">
 
-                {/* Blurred background */}
-                <img
-                  src={banner.image}
-                  alt=""
-                  className="absolute inset-0 w-full h-full object-cover blur-3xl scale-110 opacity-60"
-                />
-
-                {/* Main image */}
-                <img
-                  src={banner.image}
-                  alt={banner.title || "banner"}
-                  className="relative z-10 w-full h-full object-contain"
-                />
+                {/* Main image - Full width and height */}
+                <div className="relative w-full h-full">
+                  <img
+                    src={banner.image}
+                    alt={banner.title || "banner"}
+                    className="w-full h-full object-cover"
+                  />
+                  
+                  {/* Gradient overlay for better text readability */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/40 to-transparent" />
+                </div>
 
                 {/* Overlay ONLY if text exists */}
                 {hasText && (
                   <>
-                    <div className="absolute inset-0 z-20 bg-black/20" />
-
                     {/* Desktop text - Centered */}
                     <div className="hidden sm:flex absolute inset-0 z-30 items-center justify-center text-center px-4">
                       <div className="max-w-5xl space-y-4">

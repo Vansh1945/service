@@ -1,20 +1,13 @@
-# User-Contacts Page Implementation
+# TODO: Fix Favicon and Title from System Settings
 
-## Tasks
-- [x] Create User-Contacts.jsx page with admin UI
-- [x] Implement getAllContacts functionality with pagination
-- [x] Add filters for status and search
-- [x] Create stats cards (Total, New, Replied)
-- [x] Build contacts table with columns: Name, Email, Subject, Status, Created Date, Actions
-- [x] Implement contact details modal with getContactById
-- [x] Add reply functionality with replyToContact
-- [x] Ensure UI consistency with other admin pages
-- [ ] Test all functionalities
+## Completed Tasks
+- [x] Analyzed the issue: Favicon and title are hardcoded in index.html but should come from systemsettings.js model
+- [x] Examined SystemSetting model: Has favicon and companyName fields
+- [x] Examined routes and controllers: Public API available at /system-setting/system-data
+- [x] Updated App.jsx: Added logic to fetch system settings and dynamically set document.title and favicon
+- [x] Updated index.html: Removed hardcoded favicon and title
 
-## Progress
-- Backend APIs are ready (getAllContacts, getContactById, replyToContact)
-- Contact model structure understood
-- UI patterns from other admin pages analyzed
-- User-Contacts.jsx page created with full functionality
-- All admin functions implemented: getAllContacts, getContactById, replyToContact
-- UI matches other admin pages (Dashboard, Customer, Complaint)
+## Next Steps
+- [ ] Test the implementation by running the application
+- [ ] Verify that favicon and title update when system settings are changed
+- [ ] Check for any console errors or issues
