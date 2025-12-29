@@ -605,7 +605,7 @@ const BookService = () => {
                     <h2 className="text-xl font-poppins font-bold text-gray-900 mb-3">{service.title}</h2>
                     <div className="flex items-center space-x-4 mb-4">
                       <span className="inline-flex items-center px-3 py-1 rounded-full bg-primary/20 text-primary text-sm font-semibold tracking-wide">
-                        {service.category}
+                        {typeof service.category === 'object' ? service.category.name : service.category}
                       </span>
                       <div className="flex items-center text-yellow-500 space-x-1">
                         <Star className="w-4 h-4 fill-current" />

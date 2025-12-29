@@ -91,8 +91,9 @@ const ServiceDetailPage = () => {
       // Fetch related services
       if (serviceDetails.category) {
         try {
+          const categoryId = typeof serviceDetails.category === 'object' ? serviceDetails.category._id : serviceDetails.category;
           const relatedResponse = await fetch(
-            `${API}/service/services/category/${serviceDetails.category}?limit=4`
+            `${API}/service/services/category/${categoryId}?limit=4`
           );
           const relatedData = await relatedResponse.json();
 
