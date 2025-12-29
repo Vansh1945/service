@@ -618,7 +618,21 @@ exports.updateProviderProfile = async (req, res) => {
 
         if (!updateType || updateType === 'professional') {
             // Professional Information Updates
-            if (services) updates.services = services;
+            if (services) {
+                let parsedServices = services;
+                if (typeof services === 'string') {
+                    try {
+                        parsedServices = JSON.parse(services);
+                    } catch (e) {
+                        console.error('Error parsing services:', e);
+                        return res.status(400).json({
+                            success: false,
+                            message: 'Invalid services format'
+                        });
+                    }
+                }
+                updates.services = parsedServices;
+            }
             if (experience !== undefined) updates.experience = experience;
             if (serviceArea) updates.serviceArea = serviceArea;
         }

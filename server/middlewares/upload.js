@@ -73,7 +73,7 @@ const uploadSystemLogo = multer({
 
 const uploadSystemFavicon = multer({
   storage: createCloudinaryStorage('systemFavicon', 'image', ['jpg', 'jpeg', 'png', 'ico']),
-  limits: { fileSize: 1 * 1024 * 1024 }, // 1MB
+  limits: { fileSize: 2 * 1024 * 1024 }, // 1MB
 });
 
 // Upload instance for Category Icon

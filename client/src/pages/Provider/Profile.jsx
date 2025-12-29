@@ -78,11 +78,23 @@ const ProviderProfile = () => {
     passbookImage: null
   });
 
+  // Provider services state
+  const [providerServices, setProviderServices] = useState([]);
+  const [providerServicesLoading, setProviderServicesLoading] = useState(true);
+  const [providerServicesError, setProviderServicesError] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  // Service map for displaying names
+  const serviceMap = providerServices.reduce((acc, s) => {
+    acc[s._id] = s.name;
+    return acc;
+  }, {});
 
   // Fetch provider profile data
   useEffect(() => {
     const fetchProfile = async () => {
       try {
+        setLoading(true);
         const response = await fetch(`${API}/provider/profile`, {
           headers: {
             'Authorization': `Bearer ${token}`
@@ -97,6 +109,7 @@ const ProviderProfile = () => {
         if (data.success) {
           setProfileData({
             ...data.provider,
+            services: Array.isArray(data.provider.services) ? data.provider.services : [],
             address: data.provider.address || {
               street: '',
               city: '',
@@ -120,27 +133,48 @@ const ProviderProfile = () => {
         }
       } catch (error) {
         showToast(error.message, 'error');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const fetchProviderServiceCategories = async () => {
+      try {
+        setProviderServicesLoading(true);
+        const response = await fetch(`${API}/system-setting/categories`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch service categories');
+        }
+        const data = await response.json();
+        if (data.success) {
+          setProviderServices(data.data || []);
+        } else {
+          throw new Error(data.message || 'Failed to process service categories');
+        }
+      } catch (error) {
+        setProviderServicesError(error.message);
+        showToast(error.message, 'error');
+      } finally {
+        setProviderServicesLoading(false);
       }
     };
 
     fetchProfile();
-    fetchProviderServiceCategories(); // Fetch service categories
-  }, [token, API, showToast, fetchProviderServiceCategories]);
+    fetchProviderServiceCategories();
+  }, [token, API, showToast]);
 
-  // Handle service changes (for multi-select)
-  const handleServiceChange = (service) => {
+  // Handle service changes
+  const handleServiceChange = (serviceId) => {
     setProfileData(prev => {
       const currentServices = Array.isArray(prev.services) ? prev.services : [];
-      if (currentServices.includes(service)) {
-        // Remove service if already selected
-        return { ...prev, services: currentServices.filter(s => s !== service) };
+      if (currentServices.includes(serviceId)) {
+        return { ...prev, services: currentServices.filter(s => s !== serviceId) };
       } else {
-        // Add service if not selected, but only if limit not reached
         if (currentServices.length < 3) {
-          return { ...prev, services: [...currentServices, service] };
+          return { ...prev, services: [...currentServices, serviceId] };
         } else {
           toast.error('You can select a maximum of 3 services.');
-          return prev; // Do not update if limit exceeded
+          return prev;
         }
       }
     });
@@ -150,14 +184,7 @@ const ProviderProfile = () => {
   const handleChange = (e, section) => {
     const { name, value } = e.target;
 
-    if (name === 'services') { // Handle services separately
-      // This case should ideally be handled by handleServiceChange directly
-      // but keeping it here for completeness if a select element is still used elsewhere
-      setProfileData(prev => ({
-        ...prev,
-        services: Array.isArray(value) ? value : [value] // Ensure it's an array
-      }));
-    } else if (section === 'address') {
+    if (section === 'address') {
       setProfileData(prev => ({
         ...prev,
         address: {
@@ -193,7 +220,6 @@ const ProviderProfile = () => {
   const updateProfile = async (updateType) => {
     try {
       const formData = new FormData();
-
       formData.append('updateType', updateType);
 
       switch (updateType) {
@@ -207,7 +233,7 @@ const ProviderProfile = () => {
           break;
 
         case 'professional':
-          formData.append('services', profileData.services);
+          formData.append('services', JSON.stringify(profileData.services));
           formData.append('experience', profileData.experience);
           formData.append('serviceArea', profileData.serviceArea);
           if (fileUploads.resume) {
@@ -370,7 +396,7 @@ const ProviderProfile = () => {
       profileData.name,
       profileData.phone,
       profileData.dateOfBirth,
-      profileData.services,
+      profileData.services && profileData.services.length > 0,
       profileData.experience,
       profileData.serviceArea,
       profileData.address.street,
@@ -384,9 +410,28 @@ const ProviderProfile = () => {
       profileData.bankDetails.passbookImage
     ];
 
-    const completedFields = fields.filter(field => field && field !== '').length;
+    const completedFields = fields.filter(field => 
+      field !== '' && field !== null && field !== undefined && field !== false
+    ).length;
     return Math.round((completedFields / fields.length) * 100);
   };
+
+  // Format services display
+  const formatServices = (services) => {
+    if (!services || !Array.isArray(services)) return 'Not provided';
+    return services.map(serviceId => serviceMap[serviceId] || serviceId).join(', ');
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-teal-600 mx-auto" />
+          <p className="mt-4 text-gray-600">Loading profile...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
@@ -452,11 +497,11 @@ const ProviderProfile = () => {
               <div className="p-6">
                 <div className="grid grid-cols-2 gap-6">
                   <div className="text-center p-4 bg-teal-50 rounded-lg">
-                    <div className="text-3xl font-bold text-teal-600">{profileData.completedBookings}</div>
+                    <div className="text-3xl font-bold text-teal-600">{profileData.completedBookings || 0}</div>
                     <div className="text-sm text-gray-600 mt-1">Completed Bookings</div>
                   </div>
                   <div className="text-center p-4 bg-orange-50 rounded-lg">
-                    <div className="text-3xl font-bold text-orange-600">{profileData.canceledBookings}</div>
+                    <div className="text-3xl font-bold text-orange-600">{profileData.canceledBookings || 0}</div>
                     <div className="text-sm text-gray-600 mt-1">Canceled Bookings</div>
                   </div>
                 </div>
@@ -486,7 +531,7 @@ const ProviderProfile = () => {
                       <span className={`text-sm font-medium ${profileData.kycStatus === 'approved' ? 'text-green-600' :
                         profileData.kycStatus === 'rejected' ? 'text-red-600' : 'text-yellow-500'
                         }`}>
-                        {profileData.kycStatus.charAt(0).toUpperCase() + profileData.kycStatus.slice(1)}
+                        {profileData.kycStatus ? profileData.kycStatus.charAt(0).toUpperCase() + profileData.kycStatus.slice(1) : 'Pending'}
                       </span>
                     </div>
                   </div>
@@ -563,7 +608,7 @@ const ProviderProfile = () => {
                       {[1, 2, 3, 4, 5].map((star) => (
                         <svg
                           key={star}
-                          className={`w-6 h-6 ${star <= (profileData.averageRating || 0) ? 'text-yellow-400' : 'text-gray-300'}`}
+                          className={`w-6 h-6 ${star <= Math.round(profileData.averageRating || 0) ? 'text-yellow-400' : 'text-gray-300'}`}
                           fill="currentColor"
                           viewBox="0 0 20 20"
                         >
@@ -845,9 +890,9 @@ const ProviderProfile = () => {
                       </svg>
                     </div>
                   </div>
-                  <h3 className="text-xl font-bold text-gray-900">{profileData.name}</h3>
+                  <h3 className="text-xl font-bold text-gray-900">{profileData.name || 'Not provided'}</h3>
                   <p className="text-teal-600">{profileData.email}</p>
-                  <p className="text-gray-600 mt-1">{profileData.phone}</p>
+                  <p className="text-gray-600 mt-1">{profileData.phone || 'Not provided'}</p>
                 </div>
 
                 <div className="mt-6 border-t border-gray-200 pt-4">
@@ -864,7 +909,7 @@ const ProviderProfile = () => {
                       <span className={`text-sm font-medium ${profileData.kycStatus === 'approved' ? 'text-green-600' :
                         profileData.kycStatus === 'rejected' ? 'text-red-600' : 'text-yellow-500'
                         }`}>
-                        {profileData.kycStatus.charAt(0).toUpperCase() + profileData.kycStatus.slice(1)}
+                        {profileData.kycStatus ? profileData.kycStatus.charAt(0).toUpperCase() + profileData.kycStatus.slice(1) : 'Pending'}
                       </span>
                     </div>
                     <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md">
@@ -981,7 +1026,7 @@ const ProviderProfile = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="p-4 bg-gray-50 rounded-lg">
                       <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Full Name</h3>
-                      <p className="mt-1 text-sm font-medium text-gray-900">{profileData.name}</p>
+                      <p className="mt-1 text-sm font-medium text-gray-900">{profileData.name || 'Not provided'}</p>
                     </div>
 
                     <div className="p-4 bg-gray-50 rounded-lg">
@@ -1050,35 +1095,27 @@ const ProviderProfile = () => {
                               Failed to load services. Using fallback.
                             </div>
                           ) : (
-                            (providerServices.length > 0 ? providerServices : [
-                              { _id: 'electrical', title: 'Electrical', category: 'Electrical' },
-                              { _id: 'ac', title: 'AC', category: 'AC' },
-                              { _id: 'appliance-repair', title: 'Appliance Repair', category: 'Appliance Repair' },
-                              { _id: 'other', title: 'Other', category: 'Other' },
-                            ]).map(service => (
+                            providerServices.map(service => (
                               <div key={service._id} className="flex items-center">
                                 <input
                                   type="checkbox"
                                   id={`service-${service._id}`}
-                                  value={service.category}
-                                  checked={profileData.services.includes(service.category)}
-                                  onChange={() => handleServiceChange(service.category)}
+                                  value={service._id}
+                                  checked={(profileData.services || []).includes(service._id)}
+                                  onChange={() => handleServiceChange(service._id)}
                                   className="h-4 w-4 text-teal-600 focus:ring-teal-500 border-gray-300 rounded"
-                                  disabled={profileData.services.length >= 3 && !profileData.services.includes(service.category)}
+                                  disabled={(profileData.services || []).length >= 3 && !(profileData.services || []).includes(service._id)}
                                 />
                                 <label htmlFor={`service-${service._id}`} className="ml-2 text-sm text-gray-700">
-                                  {service.title}
+                                  {service.name}
                                 </label>
                               </div>
                             ))
                           )}
                         </div>
-                        {profileData.services.length > 3 && (
-                          <p className="mt-2 text-sm text-red-600 flex items-center">
-                            <AlertCircle className="w-4 h-4 mr-1" />
-                            You can select a maximum of 3 services.
-                          </p>
-                        )}
+                        <p className="text-xs text-gray-500 mt-2">
+                          Selected: {(profileData.services || []).length}/3 services
+                        </p>
                       </div>
 
                       <div>
@@ -1126,7 +1163,7 @@ const ProviderProfile = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="p-4 bg-gray-50 rounded-lg">
                       <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Service Type</h3>
-                      <p className="mt-1 text-sm font-medium text-gray-900">{profileData.services || 'Not provided'}</p>
+                      <p className="mt-1 text-sm font-medium text-gray-900">{formatServices(profileData.services)}</p>
                     </div>
 
                     <div className="p-4 bg-gray-50 rounded-lg">
@@ -1386,12 +1423,12 @@ const ProviderProfile = () => {
                     </div>
 
                     <div className="p-4 bg-gray-50 rounded-lg">
-                      <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Account Holder Name</h3>
+                      <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Bank Name</h3>
                       <p className="mt-1 text-sm font-medium text-gray-900">{profileData.bankDetails.bankName || 'Not provided'}</p>
                     </div>
 
                     <div className="p-4 bg-gray-50 rounded-lg">
-                      <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Bank Name</h3>
+                      <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Account Holder Name</h3>
                       <p className="mt-1 text-sm font-medium text-gray-900">{profileData.bankDetails.accountName || 'Not provided'}</p>
                     </div>
 
