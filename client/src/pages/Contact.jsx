@@ -171,7 +171,7 @@ const Contact = () => {
                       transition={{ duration: 0.5, delay: 0.1 }}
                       viewport={{ once: true }}
                     >
-                      <label htmlFor="name" className="block text-sm font-semibold text-secondary mb-3 flex items-center">
+                      <label htmlFor="name" className="block text-sm font-semibold text-secondary mb-3 items-center">
                         <User className="w-4 h-4 mr-2 text-primary" />
                         Full Name *
                       </label>
@@ -194,7 +194,7 @@ const Contact = () => {
                       transition={{ duration: 0.5, delay: 0.2 }}
                       viewport={{ once: true }}
                     >
-                      <label htmlFor="email" className="block text-sm font-semibold text-secondary mb-3 flex items-center">
+                      <label htmlFor="email" className="block text-sm font-semibold text-secondary mb-3 items-center">
                         <Mail className="w-4 h-4 mr-2 text-primary" />
                         Email Address *
                       </label>
@@ -217,7 +217,7 @@ const Contact = () => {
                       transition={{ duration: 0.5, delay: 0.3 }}
                       viewport={{ once: true }}
                     >
-                      <label htmlFor="phone" className="block text-sm font-semibold text-secondary mb-3 flex items-center">
+                      <label htmlFor="phone" className="block text-sm font-semibold text-secondary mb-3 items-center">
                         <Phone className="w-4 h-4 mr-2 text-primary" />
                         Phone Number *
                       </label>
@@ -239,7 +239,7 @@ const Contact = () => {
                       transition={{ duration: 0.5, delay: 0.35 }}
                       viewport={{ once: true }}
                     >
-                      <label htmlFor="subject" className="block text-sm font-semibold text-secondary mb-3 flex items-center">
+                      <label htmlFor="subject" className="block text-sm font-semibold text-secondary mb-3 items-center">
                         <MessageSquare className="w-4 h-4 mr-2 text-primary" />
                         Subject *
                       </label>
@@ -262,7 +262,7 @@ const Contact = () => {
                       transition={{ duration: 0.5, delay: 0.4 }}
                       viewport={{ once: true }}
                     >
-                      <label htmlFor="message" className="block text-sm font-semibold text-secondary mb-3 flex items-center">
+                      <label htmlFor="message" className="block text-sm font-semibold text-secondary mb-3 items-center">
                         <MessageSquare className="w-4 h-4 mr-2 text-primary" />
                         Message *
                       </label>
