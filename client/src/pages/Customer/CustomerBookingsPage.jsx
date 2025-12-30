@@ -535,12 +535,24 @@ const CustomerBookingsPage = () => {
                     <span className="font-medium text-green-600">-₹{booking.totalDiscount}</span>
                   </div>
                 )}
-                {booking.couponApplied && (
+                {booking.couponApplied && booking.couponApplied.isValid && (
                   <div className="flex justify-between">
                     <span className="text-gray-600">Coupon Applied:</span>
                     <span className="font-medium text-blue-600">{booking.couponApplied.code}</span>
                   </div>
                 )}
+                {booking.totalDiscount > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Total Discount:</span>
+                    <span className="font-medium text-green-600">-₹{booking.totalDiscount}</span>
+                  </div>
+                )}
+              {booking.couponApplied && booking.couponApplied.isValid && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Coupon Applied:</span>
+                  <span className="font-medium text-blue-600">{booking.couponApplied.code}</span>
+                </div>
+              )}
                 <div className="border-t border-gray-300 pt-2 mt-2">
                   <div className="flex justify-between font-semibold text-secondary">
                     <span>Total Amount:</span>
@@ -882,7 +894,7 @@ const CustomerBookingsPage = () => {
                     <span className="font-medium text-green-600">-₹{booking.totalDiscount}</span>
                   </div>
                 )}
-              {booking.couponApplied && (
+              {booking.couponApplied && booking.couponApplied.isValid && (
                 <div className="flex justify-between">
                   <span className="text-gray-600">Coupon Applied:</span>
                   <span className="font-medium text-blue-600">{booking.couponApplied.code}</span>

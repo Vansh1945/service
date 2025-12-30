@@ -824,7 +824,7 @@ const BookingConfirmation = () => {
                     <h2 className="text-lg font-poppins font-bold text-gray-900 mb-2">{serviceInfo.title}</h2>
                     <div className="flex items-center space-x-3 mb-3">
                       <span className="inline-flex items-center px-2 py-1 rounded-full bg-primary/20 text-primary text-xs font-semibold tracking-wide">
-                        {serviceInfo.category}
+                        {serviceInfo.category?.name}
                       </span>
                       <div className="flex items-center text-yellow-500 space-x-1">
                         <FaStar className="w-3 h-3 fill-current" />
@@ -860,7 +860,7 @@ const BookingConfirmation = () => {
                   {/* Service Features */}
                   <div className="mt-4 pt-4 border-t border-gray-200">
                     <h3 className="font-semibold text-gray-900 mb-2 text-sm">Service Includes:</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-gray-700">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-gray-700">
                       <div className="flex items-center space-x-2">
                         <FaCheckCircle className="w-3 h-3 text-green-600" />
                         <span>Professional service provider</span>
@@ -876,6 +876,10 @@ const BookingConfirmation = () => {
                       <div className="flex items-center space-x-2">
                         <FaCheckCircle className="w-3 h-3 text-green-600" />
                         <span>Customer support</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <FaCheckCircle className="w-3 h-3 text-green-600" />
+                        <span>Free visiting charges</span>
                       </div>
                     </div>
                   </div>
@@ -1145,8 +1149,8 @@ const BookingConfirmation = () => {
 
                       <div className="flex justify-between items-center">
                         <span className="text-gray-600">Visiting Charges</span>
-                        <span className="font-semibold text-gray-800">
-                          ₹{visitingCharges.toFixed(2)}
+                        <span className="font-semibold text-green-600">
+                          Free Visiting
                         </span>
                       </div>
 
@@ -1164,7 +1168,7 @@ const BookingConfirmation = () => {
                             </span>
                           </div>
                           <div className="text-xs text-green-600 space-y-1">
-                            {bookingDetails.couponApplied.code && (
+                            {bookingDetails.couponApplied && typeof bookingDetails.couponApplied.code === 'string' && bookingDetails.couponApplied.code && (
                               <div>Coupon: <span className="font-medium">{bookingDetails.couponApplied.code}</span>
                                 {bookingDetails.couponApplied.discountType && bookingDetails.couponApplied.discountValue && (
                                   <div>Discount: <span className="font-medium">

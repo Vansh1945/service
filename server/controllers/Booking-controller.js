@@ -144,7 +144,7 @@ const createBooking = async (req, res) => {
       coupon.usedBy.push(req.user._id);
     }
 
-    const totalAmount = subtotal - totalDiscount + visitingCharge;
+    const totalAmount = subtotal - totalDiscount;
 
     // Create booking
     const booking = new Booking({
@@ -168,7 +168,6 @@ const createBooking = async (req, res) => {
       couponApplied: couponDetails,
       totalDiscount,
       subtotal,
-      visitingCharge,
       totalAmount,
       paymentMethod, // Add the missing paymentMethod field
       status: 'pending',
