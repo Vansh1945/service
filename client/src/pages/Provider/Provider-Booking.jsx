@@ -1432,6 +1432,12 @@ const ProviderBooking = () => {
                           <span className="text-gray-600">Subtotal:</span>
                           <span className="font-medium">{formatCurrency(calculateSubtotal(selectedBooking))}</span>
                         </div>
+                        {selectedBooking.booking?.visitingCharge > 0 && (
+                          <div className="flex justify-between py-2">
+                            <span className="text-gray-600">Visiting Charge:</span>
+                            <span className="font-medium text-orange-600">+{formatCurrency(selectedBooking.booking.visitingCharge)}</span>
+                          </div>
+                        )}
                         {selectedBooking.commission?.amount > 0 && (
                           <div className="flex justify-between py-2 text-gray-600">
                             <span>Platform Commission ({selectedBooking.commission?.rule?.type === 'percentage' ? `${selectedBooking.commission?.rule?.value || 0}%` : `₹${selectedBooking.commission?.rule?.value || 0}`}):</span>

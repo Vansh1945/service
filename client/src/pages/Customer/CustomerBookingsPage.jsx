@@ -528,7 +528,7 @@ const CustomerBookingsPage = () => {
                 <div className="flex justify-between">
                   <span className="text-gray-600">Subtotal:</span>
                   <span className="font-medium">₹{booking.subtotal || 0}</span>
-                </div>
+                </div>     
                 {booking.totalDiscount > 0 && (
                   <div className="flex justify-between">
                     <span className="text-gray-600">Total Discount:</span>

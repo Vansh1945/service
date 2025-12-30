@@ -61,6 +61,11 @@ const AdminServices = () => {
     avgRating: 0
   });
 
+  // Visiting charge states
+  const [visitingCharge, setVisitingCharge] = useState(0);
+  const [newVisitingCharge, setNewVisitingCharge] = useState('');
+  const [showVisitingChargeModal, setShowVisitingChargeModal] = useState(false);
+
   // Form states
   const [createForm, setCreateForm] = useState({
     title: '',
@@ -90,6 +95,7 @@ const AdminServices = () => {
   useEffect(() => {
     fetchServices();
     fetchCategories();
+    fetchVisitingCharge();
   }, []);
 
   // Filter and search services
@@ -184,6 +190,7 @@ const AdminServices = () => {
       toast.error(error.message || 'Failed to fetch categories');
     }
   };
+
 
   // Handle create form changes
   const handleCreateFormChange = (e) => {
@@ -704,6 +711,13 @@ const AdminServices = () => {
           </div>
           <div className="flex flex-wrap gap-2 w-full md:w-auto">
             <button
+              onClick={() => setShowVisitingChargeModal(true)}
+              className="flex items-center bg-green-600 hover:bg-green-700 text-white px-3 py-2 md:px-4 md:py-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 text-sm"
+            >
+              <Settings className="w-4 h-4 md:w-5 md:h-5 mr-1 md:mr-2" />
+              Visiting Charge
+            </button>
+            <button
               onClick={() => setShowBulkImportModal(true)}
               className="flex items-center bg-primary hover:bg-teal-800 text-white px-3 py-2 md:px-4 md:py-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 text-sm"
             >
@@ -867,7 +881,7 @@ const AdminServices = () => {
                         </td>
                         <td className="px-4 md:px-6 py-4 whitespace-nowrap">
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-800">
-                            {service.category?.name || service.category}
+                            {typeof service.category === 'object' ? service.category.name : service.category}
                           </span>
                         </td>
                         <td className="px-4 md:px-6 py-4 whitespace-nowrap">
@@ -1512,7 +1526,7 @@ const AdminServices = () => {
 
                   <div className="flex flex-wrap gap-2 mb-4">
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-teal-100 text-teal-800">
-                      {selectedService.category}
+                      {typeof selectedService.category === 'object' ? selectedService.category.name : selectedService.category}
                     </span>
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                       <Clock className="w-3 h-3 mr-1" />

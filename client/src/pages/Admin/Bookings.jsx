@@ -1042,6 +1042,12 @@ const AdminBookingsView = () => {
                                                     <span className="text-sm font-medium text-red-500">- {formatCurrency(selectedBooking.payment.totalDiscount)}</span>
                                                 </div>
                                             )}
+                                            {selectedBooking.booking?.visitingCharge > 0 && (
+                                                <div className="flex justify-between">
+                                                    <span className="text-sm text-gray-600">Visiting Charge</span>
+                                                    <span className="text-sm font-medium text-orange-600">+ {formatCurrency(selectedBooking.booking.visitingCharge)}</span>
+                                                </div>
+                                            )}
                                             <div className="border-t border-gray-200 my-2"></div>
                                             <div className="flex justify-between items-center">
                                                 <span className="text-sm font-bold text-secondary">Total Amount Paid</span>

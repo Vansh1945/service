@@ -22,7 +22,6 @@ import {
   FaPhone,
   FaEnvelope
 } from 'react-icons/fa';
-import razorpayLogo from '../../assets/razorpay.png';
 
 const BookingConfirmation = () => {
   const { bookingId } = useParams();
