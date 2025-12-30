@@ -61,11 +61,6 @@ const AdminServices = () => {
     avgRating: 0
   });
 
-  // Visiting charge states
-  const [visitingCharge, setVisitingCharge] = useState(0);
-  const [newVisitingCharge, setNewVisitingCharge] = useState('');
-  const [showVisitingChargeModal, setShowVisitingChargeModal] = useState(false);
-
   // Form states
   const [createForm, setCreateForm] = useState({
     title: '',
@@ -95,7 +90,6 @@ const AdminServices = () => {
   useEffect(() => {
     fetchServices();
     fetchCategories();
-    fetchVisitingCharge();
   }, []);
 
   // Filter and search services
@@ -710,13 +704,6 @@ const AdminServices = () => {
             <p className="text-gray-600 mt-1">Manage all your services and offerings</p>
           </div>
           <div className="flex flex-wrap gap-2 w-full md:w-auto">
-            <button
-              onClick={() => setShowVisitingChargeModal(true)}
-              className="flex items-center bg-green-600 hover:bg-green-700 text-white px-3 py-2 md:px-4 md:py-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 text-sm"
-            >
-              <Settings className="w-4 h-4 md:w-5 md:h-5 mr-1 md:mr-2" />
-              Visiting Charge
-            </button>
             <button
               onClick={() => setShowBulkImportModal(true)}
               className="flex items-center bg-primary hover:bg-teal-800 text-white px-3 py-2 md:px-4 md:py-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 text-sm"

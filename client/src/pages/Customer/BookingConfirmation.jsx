@@ -824,7 +824,7 @@ const BookingConfirmation = () => {
                     <h2 className="text-lg font-poppins font-bold text-gray-900 mb-2">{serviceInfo.title}</h2>
                     <div className="flex items-center space-x-3 mb-3">
                       <span className="inline-flex items-center px-2 py-1 rounded-full bg-primary/20 text-primary text-xs font-semibold tracking-wide">
-                        {serviceInfo.category?.name}
+                        {typeof serviceInfo.category === 'object' ? serviceInfo.category?.name : serviceInfo.category || 'General Service'}
                       </span>
                       <div className="flex items-center text-yellow-500 space-x-1">
                         <FaStar className="w-3 h-3 fill-current" />

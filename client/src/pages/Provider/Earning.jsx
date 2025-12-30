@@ -509,6 +509,13 @@ const ProviderEarningsDashboard = () => {
 
   useEffect(() => {
     refreshData();
+
+    // Set up auto-refresh every 30 seconds to check for balance updates
+    const autoRefreshInterval = setInterval(() => {
+      fetchSummary();
+    }, 5000); // 5 seconds
+
+    return () => clearInterval(autoRefreshInterval);
   }, []);
 
   useEffect(() => {
@@ -612,6 +619,14 @@ const ProviderEarningsDashboard = () => {
                 <p className="text-gray-600 mt-1 sm:mt-2 text-sm sm:text-base">Track your earnings and manage withdrawals</p>
               </div>
             </div>
+            <button
+              onClick={refreshData}
+              disabled={loading}
+              className="p-2 rounded-md text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Refresh data"
+            >
+              <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+            </button>
           </div>
         </div>
 

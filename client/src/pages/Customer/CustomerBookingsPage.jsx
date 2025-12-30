@@ -40,6 +40,9 @@ const CustomerBookingsPage = () => {
   const [showModal, setShowModal] = useState(false);
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [bookingToReschedule, setBookingToReschedule] = useState(null);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [bookingToCancel, setBookingToCancel] = useState(null);
+  const [cancelReason, setCancelReason] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pagination, setPagination] = useState({});
 
@@ -132,18 +135,23 @@ const CustomerBookingsPage = () => {
     }
   };
 
-  const handleCancelBooking = async (bookingId) => {
-    if (!window.confirm('Are you sure you want to cancel this booking?')) return;
+  const handleCancelBooking = (booking) => {
+    setBookingToCancel(booking);
+    setShowCancelModal(true);
+  };
+
+  const handleCancelConfirm = async () => {
+    if (!bookingToCancel) return;
 
     try {
-      const response = await fetch(`${API}/booking/bookings/${bookingId}/cancel`, {
+      const response = await fetch(`${API}/booking/bookings/${bookingToCancel._id}/cancel`, {
         method: 'PATCH',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          reason: 'Customer requested cancellation',
+          reason: cancelReason.trim(),
         }),
       });
 
@@ -153,6 +161,9 @@ const CustomerBookingsPage = () => {
       }
 
       showToast('Booking cancelled successfully', 'success');
+      setShowCancelModal(false);
+      setBookingToCancel(null);
+      setCancelReason('');
       fetchBookings();
     } catch (error) {
       console.error('Cancel booking error:', error.message);
@@ -361,8 +372,8 @@ const CustomerBookingsPage = () => {
             booking.paymentStatus === 'paid'
               ? `Payment of ₹${booking.totalAmount} completed via ${booking.paymentMethod}`
               : booking.paymentMethod === 'cash'
-              ? 'Pay after service completion'
-              : 'Payment is pending',
+                ? 'Pay after service completion'
+                : 'Payment is pending',
           time: booking.paymentDate || getStatusTimestamp('payment_pending'),
         },
         {
@@ -422,18 +433,16 @@ const CustomerBookingsPage = () => {
             {steps.map((step) => (
               <div key={step.key} className="relative flex items-start space-x-4">
                 <div
-                  className={`relative z-10 w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 ${
-                    step.completed ? 'bg-primary text-white shadow-lg' : step.active ? 'bg-accent text-white animate-pulse' : 'bg-gray-100 text-gray-400'
-                  }`}
+                  className={`relative z-10 w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 ${step.completed ? 'bg-primary text-white shadow-lg' : step.active ? 'bg-accent text-white animate-pulse' : 'bg-gray-100 text-gray-400'
+                    }`}
                 >
                   <step.icon className="w-5 h-5" />
                 </div>
 
                 <div className="flex-1 min-w-0 pb-4">
                   <h5
-                    className={`text-sm font-semibold ${
-                      step.completed ? 'text-primary' : step.active ? 'text-accent' : 'text-gray-500'
-                    }`}
+                    className={`text-sm font-semibold ${step.completed ? 'text-primary' : step.active ? 'text-accent' : 'text-gray-500'
+                      }`}
                   >
                     {step.label}
                   </h5>
@@ -447,7 +456,7 @@ const CustomerBookingsPage = () => {
       </div>
     );
   };
-  
+
   // Re-add BookingTimeline to BookingModal
   const BookingModal = ({ booking, onClose }) => (
     <>
@@ -476,7 +485,7 @@ const CustomerBookingsPage = () => {
                   Service Details
                 </h4>
                 <div className="space-y-3">
-                      {booking.services.map((serviceItem, index) => (
+                  {booking.services.map((serviceItem, index) => (
                     <div key={index} className="bg-white rounded-lg p-3 border border-gray-200">
                       <div className="flex justify-between items-start mb-2">
                         <h5 className="font-medium text-secondary">
@@ -528,7 +537,7 @@ const CustomerBookingsPage = () => {
                 <div className="flex justify-between">
                   <span className="text-gray-600">Subtotal:</span>
                   <span className="font-medium">₹{booking.subtotal || 0}</span>
-                </div>     
+                </div>
                 {booking.totalDiscount > 0 && (
                   <div className="flex justify-between">
                     <span className="text-gray-600">Total Discount:</span>
@@ -541,18 +550,6 @@ const CustomerBookingsPage = () => {
                     <span className="font-medium text-blue-600">{booking.couponApplied.code}</span>
                   </div>
                 )}
-                {booking.totalDiscount > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Total Discount:</span>
-                    <span className="font-medium text-green-600">-₹{booking.totalDiscount}</span>
-                  </div>
-                )}
-              {booking.couponApplied && booking.couponApplied.isValid && (
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Coupon Applied:</span>
-                  <span className="font-medium text-blue-600">{booking.couponApplied.code}</span>
-                </div>
-              )}
                 <div className="border-t border-gray-300 pt-2 mt-2">
                   <div className="flex justify-between font-semibold text-secondary">
                     <span>Total Amount:</span>
@@ -683,13 +680,12 @@ const CustomerBookingsPage = () => {
   const BookingCard = ({ booking }) => (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden">
       {/* Status Banner */}
-      <div className={`h-1 ${
-        booking.status === 'completed' ? 'bg-primary' :
-        booking.status === 'cancelled' ? 'bg-red-500' :
-        booking.status === 'in_progress' || booking.status === 'in-progress' ? 'bg-accent' :
-        booking.status === 'accepted' ? 'bg-blue-500' :
-        'bg-amber-500'
-      }`}></div>
+      <div className={`h-1 ${booking.status === 'completed' ? 'bg-primary' :
+          booking.status === 'cancelled' ? 'bg-red-500' :
+            booking.status === 'in_progress' || booking.status === 'in-progress' ? 'bg-accent' :
+              booking.status === 'accepted' ? 'bg-blue-500' :
+                'bg-amber-500'
+        }`}></div>
 
       <div className="p-4">
         <div className="flex flex-col sm:flex-row justify-between items-start mb-3 gap-4">
@@ -818,7 +814,7 @@ const CustomerBookingsPage = () => {
 
           {canCancelBooking(booking) && (
             <button
-              onClick={() => handleCancelBooking(booking._id)}
+              onClick={() => handleCancelBooking(booking)}
               className="text-sm font-medium text-red-600 hover:text-red-800 px-3 py-2 rounded-lg hover:bg-red-50 transition-colors border border-red-200"
             >
               Cancel
@@ -894,41 +890,41 @@ const CustomerBookingsPage = () => {
                     <span className="font-medium text-green-600">-₹{booking.totalDiscount}</span>
                   </div>
                 )}
-              {booking.couponApplied && booking.couponApplied.isValid && (
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Coupon Applied:</span>
-                  <span className="font-medium text-blue-600">{booking.couponApplied.code}</span>
-                </div>
-              )}
-              <div className="border-t border-gray-300 pt-2 mt-2">
-                <div className="flex justify-between font-semibold text-secondary">
-                  <span>Total Amount:</span>
-                  <span>₹{booking.totalAmount || 0}</span>
-                </div>
-              </div>
-              {booking.transactionId && (
-                <div className="mt-3 pt-3 border-t border-gray-300">
-                  <h5 className="font-medium text-secondary mb-2">Transaction Information</h5>
-                  <div className="space-y-1 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Transaction ID:</span>
-                      <span className="font-mono">{booking.transactionId}</span>
-                    </div>
-                    {booking.razorpayPaymentId && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Payment ID:</span>
-                        <span className="font-mono">{booking.razorpayPaymentId}</span>
-                      </div>
-                    )}
-                    {booking.paymentDate && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Payment Date:</span>
-                        <span>{new Date(booking.paymentDate).toLocaleString()}</span>
-                      </div>
-                    )}
+                {booking.couponApplied && booking.couponApplied.isValid && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Coupon Applied:</span>
+                    <span className="font-medium text-blue-600">{booking.couponApplied.code}</span>
+                  </div>
+                )}
+                <div className="border-t border-gray-300 pt-2 mt-2">
+                  <div className="flex justify-between font-semibold text-secondary">
+                    <span>Total Amount:</span>
+                    <span>₹{booking.totalAmount || 0}</span>
                   </div>
                 </div>
-              )}
+                {booking.transactionId && (
+                  <div className="mt-3 pt-3 border-t border-gray-300">
+                    <h5 className="font-medium text-secondary mb-2">Transaction Information</h5>
+                    <div className="space-y-1 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Transaction ID:</span>
+                        <span className="font-mono">{booking.transactionId}</span>
+                      </div>
+                      {booking.razorpayPaymentId && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Payment ID:</span>
+                          <span className="font-mono">{booking.razorpayPaymentId}</span>
+                        </div>
+                      )}
+                      {booking.paymentDate && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Payment Date:</span>
+                          <span>{new Date(booking.paymentDate).toLocaleString()}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1063,13 +1059,56 @@ const CustomerBookingsPage = () => {
     );
   };
 
+  // Cancel Modal
+  const CancelModal = ({ booking, onClose, onConfirm }) => {
+    const [reason, setReason] = useState('');
+
+    const handleSubmit = () => {
+      setCancelReason(reason.trim());
+      onConfirm();
+    };
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-xl max-w-md w-full">
+          <div className="p-6 border-b border-gray-200">
+            <h2 className="text-xl font-bold text-secondary">Cancel Booking</h2>
+          </div>
+
+          {/* Added confirmation message */}
+          <div className="p-6">
+            <p className="text-gray-600 mb-2">Are you sure you want to cancel this booking?</p>
+            <p className="text-sm text-gray-500">
+              This action cannot be undone. Any payment made will be processed according to our refund policy.
+            </p>
+          </div>
+
+          <div className="px-6 py-4 bg-gray-50 flex justify-end space-x-3 rounded-b-xl">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100"
+            >
+              Keep Booking
+            </button>
+            <button
+              onClick={handleSubmit}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+            >
+              Confirm Cancellation
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
 
 
   // Loading Component
   if (loading) {
-  return (
-    <div className="min-h-screen bg-background p-4 md:p-6 font-inter">
-      <div className="max-w-6xl mx-auto">
+    return (
+      <div className="min-h-screen bg-background p-4 md:p-6 font-inter">
+        <div className="max-w-6xl mx-auto">
           <div className="animate-pulse space-y-6">
             <div className="h-8 bg-gray-200 rounded w-1/4"></div>
             <div className="h-20 bg-gray-200 rounded"></div>
@@ -1087,15 +1126,15 @@ const CustomerBookingsPage = () => {
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-        <div className="flex flex-col sm:flex-row items-center justify-between mb-4">
-          <div>
-            <h1 className="text-3xl font-bold text-secondary">My Bookings</h1>
-            <p className="text-gray-600 mt-1">
-              {filteredBookings.length} of {pagination.totalBookings || 0} {pagination.totalBookings === 1 ? 'booking' : 'total bookings'} shown
-            </p>
+          <div className="flex flex-col sm:flex-row items-center justify-between mb-4">
+            <div>
+              <h1 className="text-3xl font-bold text-secondary">My Bookings</h1>
+              <p className="text-gray-600 mt-1">
+                {filteredBookings.length} of {pagination.totalBookings || 0} {pagination.totalBookings === 1 ? 'booking' : 'total bookings'} shown
+              </p>
+            </div>
           </div>
         </div>
-      </div>
 
         {/* Filters */}
         <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6 shadow-sm">
@@ -1206,10 +1245,17 @@ const CustomerBookingsPage = () => {
         <BookingModal booking={selectedBooking} onClose={() => setShowModal(false)} />
       )}
       {showRescheduleModal && bookingToReschedule && (
-        <RescheduleModal 
-            booking={bookingToReschedule}
-            onClose={() => setShowRescheduleModal(false)}
-            onConfirm={handleRescheduleSubmit}
+        <RescheduleModal
+          booking={bookingToReschedule}
+          onClose={() => setShowRescheduleModal(false)}
+          onConfirm={handleRescheduleSubmit}
+        />
+      )}
+      {showCancelModal && bookingToCancel && (
+        <CancelModal
+          booking={bookingToCancel}
+          onClose={() => setShowCancelModal(false)}
+          onConfirm={handleCancelConfirm}
         />
       )}
     </div>

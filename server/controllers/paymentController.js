@@ -101,6 +101,23 @@ const getEarningsSummary = async (req, res) => {
       { $unwind: '$booking' },
       { $match: { 'booking.status': 'completed' } },
       {
+        $lookup: {
+          from: 'paymentrecords',
+          localField: 'paymentRecord',
+          foreignField: '_id',
+          as: 'paymentInfo'
+        }
+      },
+      { $unwind: { path: '$paymentInfo', preserveNullAndEmptyArrays: true } },
+      {
+        $match: {
+          $or: [
+            { 'paymentInfo': { $exists: false } },
+            { 'paymentInfo.status': { $ne: 'completed' } }
+          ]
+        }
+      },
+      {
         $group: {
           _id: '$booking.paymentMethod',
           totalNet: { $sum: '$netAmount' },
@@ -179,16 +196,38 @@ const requestBulkWithdrawal = async (req, res) => {
         {
           $match: {
             provider: new mongoose.Types.ObjectId(providerId),
-            isVisibleToProvider: true
-          }
+            isVisibleToProvider: true,
+          },
+        },
+        {
+          $lookup: {
+            from: 'paymentrecords',
+            localField: 'paymentRecord',
+            foreignField: '_id',
+            as: 'paymentInfo',
+          },
+        },
+        {
+          $unwind: {
+            path: '$paymentInfo',
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $match: {
+            $or: [
+              { paymentInfo: null },
+              { 'paymentInfo.status': { $ne: 'completed' } },
+            ],
+          },
         },
         {
           $lookup: {
             from: 'bookings',
             localField: 'booking',
             foreignField: '_id',
-            as: 'booking'
-          }
+            as: 'booking',
+          },
         },
         { $unwind: '$booking' },
         { $match: { 'booking.status': 'completed' } },
@@ -196,9 +235,9 @@ const requestBulkWithdrawal = async (req, res) => {
           $group: {
             _id: '$booking.paymentMethod',
             totalNet: { $sum: '$netAmount' },
-            totalCommission: { $sum: '$commissionAmount' }
-          }
-        }
+            totalCommission: { $sum: '$commissionAmount' },
+          },
+        },
       ]).session(session);
 
       let baseAvailableBalance = 0;
@@ -947,19 +986,6 @@ const rejectWithdrawalRequest = async (req, res) => {
     paymentRecord.admin = req.admin._id;
     paymentRecord.completedAt = new Date();
     await paymentRecord.save({ session });
-
-    // Release associated earnings
-    await ProviderEarning.updateMany(
-      { paymentRecord: paymentRecord._id },
-      { $unset: { paymentRecord: "" } },
-      { session }
-    );
-
-    // Refund amount to provider's wallet
-    provider.wallet.availableBalance += paymentRecord.amount;
-    provider.wallet.totalWithdrawn -= paymentRecord.amount;
-    provider.wallet.lastUpdated = new Date();
-    await provider.save({ session });
 
     await session.commitTransaction();
     session.endSession();

@@ -18,8 +18,8 @@ router.post('/:id/payment', userAuthMiddleware, bookingController.updateBookingP
 router.get('/providers/:id', userAuthMiddleware, bookingController.getProviderById);
 router.get('/services/:id', userAuthMiddleware, bookingController.getServiceById);
 router.get('/:id', userAuthMiddleware, bookingController.getBooking);
-router.patch('/user/:id/cancel', userAuthMiddleware, bookingController.cancelBooking);
-router.patch('/user/:id/reschedule', userAuthMiddleware, bookingController.userUpdateBookingDateTime);
+router.patch('/bookings/:id/cancel', userAuthMiddleware, bookingController.cancelBooking);
+router.patch('/bookings/:id/reschedule', userAuthMiddleware, bookingController.userUpdateBookingDateTime);
 
 // PROVIDER ROUTES
 router.get('/provider-booking/:id', providerAuthMiddleware, bookingController.getProviderBookingById);
