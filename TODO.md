@@ -1,23 +1,18 @@
-# Global Visiting Charge Implementation
+# PWA Conversion Tasks
 
-## Backend Changes
-- [x] Add static visitingCharge field to Service-model.js (default ₹100)
-- [x] Add visitingCharge field to Booking-model.js schema
-- [x] Update createBooking in Booking-controller.js to fetch global visitingCharge from Service model
-- [x] Add admin endpoint in Services-controller.js to update global visiting charge
+## Frontend (React/Vite)
+- [x] Update client/public/manifest.json with PWA fields (name, short_name, start_url, display, theme_color, background_color, icons)
+- [x] Add manifest link and theme-color meta to client/index.html
+- [x] Add vite-plugin-pwa to client/vite.config.js for service worker setup
+- [x] Verify service worker registration (handled by Vite PWA)
 
-## Frontend Changes
-- [ ] Update admin/booking.jsx to show visiting charge in payment breakdown
-- [ ] Update admin/service.jsx to show and add,update visiting charge in payment breakdown
-- [ ] Update provider/provider-booking.jsx to show visiting charge in payment breakdown
-- [ ] Update customer/booking-service.jsx to show visiting charge in payment breakdown
-- [ ] Update customer/bookingconfirmation.jsx to show visiting charge in payment breakdown
-- [ ] Update customer/customerbookingpage.jsx to show visiting charge in payment breakdown
-- [ ] Update customer/servicedetail.jsx to show visiting charge in payment breakdown
-- [ ] Update customer/service.jsx to show visiting charge in payment breakdown
+## Backend (Node/Express)
+- [x] Ensure HTTPS compatibility (deployment level)
+- [x] Add headers for service worker caching
+- [x] Confirm CORS is enabled (already present)
+- [x] Ensure GET APIs are cache-safe
 
 ## Testing
-- [ ] Test booking creation with subtotal < 100 (should apply visiting charge)
-- [ ] Test booking creation with subtotal >= 100 (should not apply visiting charge)
-- [ ] Verify admin can update visiting charge via admin endpoint
-- [ ] Ensure frontend displays visiting charge correctly (only when > 0)
+- [ ] Test "Add to Home Screen" functionality
+- [ ] Verify standalone mode
+- [ ] Check offline caching
