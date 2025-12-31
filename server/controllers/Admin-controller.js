@@ -828,7 +828,7 @@ const getDashboardSummary = async (req, res) => {
  */
 const getDashboardRevenue = async (req, res) => {
     try {
-        const { period = '30d' } = req.query;
+        const { period = '30d', city, serviceCategory } = req.query;
         let days, format;
 
         if (period === '7d') {
@@ -848,12 +848,57 @@ const getDashboardRevenue = async (req, res) => {
 
         const startDate = moment().subtract(days, 'days').startOf('day');
 
+        // Build match conditions
+        let matchConditions = {
+            status: 'completed',
+            createdAt: { $gte: startDate.toDate() }
+        };
+
+        if (city) {
+            matchConditions['address.city'] = { $regex: city, $options: 'i' };
+        }
+
+        if (serviceCategory) {
+            // Find service IDs that match the category name
+            const serviceIds = await Service.aggregate([
+                {
+                    $lookup: {
+                        from: 'categories',
+                        localField: 'category',
+                        foreignField: '_id',
+                        as: 'cat'
+                    }
+                },
+                {
+                    $unwind: '$cat'
+                },
+                {
+                    $match: {
+                        'cat.name': { $regex: serviceCategory, $options: 'i' }
+                    }
+                },
+                {
+                    $project: {
+                        _id: 1
+                    }
+                }
+            ]);
+
+            const ids = serviceIds.map(s => s._id);
+            if (ids.length > 0) {
+                matchConditions['services.service'] = { $in: ids };
+            } else {
+                // No services found for this category, return empty data
+                return res.status(200).json({
+                    success: true,
+                    data: []
+                });
+            }
+        }
+
         const revenueData = await Booking.aggregate([
             {
-                $match: {
-                    status: 'completed',
-                    createdAt: { $gte: startDate.toDate() }
-                }
+                $match: matchConditions
             },
             {
                 $group: {
@@ -986,6 +1031,7 @@ const getDashboardTopProviders = async (req, res) => {
                     _id: 0,
                     providerId: '$_id',
                     providerName: '$providerInfo.name',
+                    providerEmail: '$providerInfo.email',
                     totalEarnings: 1,
                     totalBookings: 1,
                     averageRating: { $round: ['$averageRating', 1] }
@@ -1129,14 +1175,14 @@ const getDashboardRecentActivity = async (req, res) => {
             .populate('user', 'name')
             .sort({ createdAt: -1 })
             .limit(5)
-            .select('type amount status createdAt user');
+            .select('paymentMethod paymentStatus amount createdAt user');
 
         recentPayments.forEach(payment => {
             activities.push({
                 type: 'payment',
-                message: `${payment.type} of ₹${payment.amount} by ${payment.user?.name || 'User'}`,
+                message: `${payment.paymentMethod} of ₹${payment.amount} by ${payment.user?.name || 'User'}`,
                 amount: payment.amount,
-                status: payment.status,
+                status: payment.paymentStatus,
                 timestamp: payment.createdAt
             });
         });
@@ -1146,14 +1192,13 @@ const getDashboardRecentActivity = async (req, res) => {
             .populate('provider', 'name')
             .sort({ createdAt: -1 })
             .limit(5)
-            .select('amount status createdAt provider');
+            .select('netAmount createdAt provider');
 
         recentPayouts.forEach(payout => {
             activities.push({
                 type: 'payout',
-                message: `Payout of ₹${payout.amount} to ${payout.provider?.name || 'Provider'}`,
-                amount: payout.amount,
-                status: payout.status,
+                message: `Payout of ₹${payout.netAmount} to ${payout.provider?.name || 'Provider'}`,
+                amount: payout.netAmount,
                 timestamp: payout.createdAt
             });
         });

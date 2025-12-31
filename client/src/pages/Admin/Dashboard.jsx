@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../store/auth';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import LoadingSpinner from '../../components/Loader';
 import {
   FiCalendar, FiDollarSign, FiUsers, FiUser,
   FiTrendingUp, FiPieChart, FiArrowUp, FiClock,
@@ -15,7 +16,8 @@ import {
 
 const AdminDashboard = () => {
   const { user, API } = useAuth();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [summary, setSummary] = useState({});
   const [revenueData, setRevenueData] = useState([]);
   const [bookingsStatus, setBookingsStatus] = useState([]);
@@ -24,18 +26,19 @@ const AdminDashboard = () => {
   const [liveStats, setLiveStats] = useState({});
   const [recentActivity, setRecentActivity] = useState([]);
   const [filters, setFilters] = useState({
-    dateRange: '30d',
+    period: '30d',
     city: '',
     serviceCategory: ''
   });
-
   useEffect(() => {
-    fetchDashboardData();
-  }, [filters]);
+    fetchDashboardData(true);
+  }, []);
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = async (isInitialLoad = false) => {
     try {
-      setLoading(true);
+      if (isInitialLoad) {
+        setInitialLoading(true);
+      }
       const [
         summaryRes,
         revenueRes,
@@ -48,7 +51,7 @@ const AdminDashboard = () => {
         fetch(`${API}/admin/dashboard/summary`, {
           headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         }),
-        fetch(`${API}/admin/dashboard/revenue?period=${filters.dateRange}`, {
+        fetch(`${API}/admin/dashboard/revenue?period=${filters.period}&city=${filters.city}&serviceCategory=${filters.serviceCategory}`, {
           headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         }),
         fetch(`${API}/admin/dashboard/bookings-status`, {
@@ -97,11 +100,18 @@ const AdminDashboard = () => {
     } catch (error) {
       toast.error(error.message || 'Failed to load dashboard');
     } finally {
-      setLoading(false);
+      if (isInitialLoad) {
+        setInitialLoading(false);
+      }
     }
   };
 
-  const formatCurrency = (amount) => `₹${amount.toLocaleString()}`;
+  const formatCurrency = (amount) => {
+    if (typeof amount !== 'number' || amount === null) {
+      return '₹0';
+    }
+    return `₹${amount.toLocaleString()}`;
+  };
   const formatDate = (date) => new Date(date).toLocaleDateString();
 
   const statusColors = {
@@ -111,15 +121,8 @@ const AdminDashboard = () => {
     cancelled: '#EF4444'
   };
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-2 text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
+  if (initialLoading) {
+    return <LoadingSpinner/>
   }
 
   return (
@@ -142,35 +145,52 @@ const AdminDashboard = () => {
       </div>
 
       {/* Filters */}
-      <div className="mb-6 bg-white p-4 rounded-lg shadow-sm border">
+      <div className="bg-white p-4 rounded-lg shadow-sm border mb-6">
         <div className="flex items-center mb-4">
           <FiFilter className="text-primary mr-2" />
           <h3 className="font-semibold text-gray-900">Filters</h3>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <select
-            value={filters.dateRange}
-            onChange={(e) => setFilters({...filters, dateRange: e.target.value})}
-            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Period</label>
+            <select
+              value={filters.period}
+              onChange={(e) => setFilters(prev => ({ ...prev, period: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary"
+            >
+              <option value="7d">Last 7 days</option>
+              <option value="30d">Last 30 days</option>
+              <option value="90d">Last 90 days</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+            <input
+              type="text"
+              value={filters.city}
+              onChange={(e) => setFilters(prev => ({ ...prev, city: e.target.value }))}
+              placeholder="Enter city name"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Service Category</label>
+            <input
+              type="text"
+              value={filters.serviceCategory}
+              onChange={(e) => setFilters(prev => ({ ...prev, serviceCategory: e.target.value }))}
+              placeholder="Enter service category"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary"
+            />
+          </div>
+        </div>
+        <div className="mt-4 flex justify-end">
+          <button
+            onClick={() => fetchDashboardData()}
+            className="px-4 py-2 bg-primary text-white rounded-md hover:bg-teal-700 focus:ring-2 focus:ring-primary focus:ring-offset-2"
           >
-            <option value="7d">Last 7 days</option>
-            <option value="30d">Last 30 days</option>
-            <option value="90d">Last 90 days</option>
-          </select>
-          <input
-            type="text"
-            placeholder="City"
-            value={filters.city}
-            onChange={(e) => setFilters({...filters, city: e.target.value})}
-            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-          />
-          <input
-            type="text"
-            placeholder="Service Category"
-            value={filters.serviceCategory}
-            onChange={(e) => setFilters({...filters, serviceCategory: e.target.value})}
-            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-          />
+            Apply Filters
+          </button>
         </div>
       </div>
 
@@ -284,6 +304,7 @@ const AdminDashboard = () => {
             <thead className="bg-gray-50">
               <tr>
                 <th className="p-3 text-left text-sm font-medium text-gray-600">Provider</th>
+                <th className="p-3 text-left text-sm font-medium text-gray-600">Email</th>
                 <th className="p-3 text-left text-sm font-medium text-gray-600">Total Earnings</th>
                 <th className="p-3 text-left text-sm font-medium text-gray-600">Bookings</th>
                 <th className="p-3 text-left text-sm font-medium text-gray-600">Rating</th>
@@ -293,6 +314,7 @@ const AdminDashboard = () => {
               {topProviders.map((provider, index) => (
                 <tr key={index} className="border-t">
                   <td className="p-3 text-sm text-gray-900">{provider.providerName}</td>
+                  <td className="p-3 text-sm text-gray-900">{provider.providerEmail}</td>
                   <td className="p-3 text-sm font-medium text-gray-900">{formatCurrency(provider.totalEarnings)}</td>
                   <td className="p-3 text-sm text-gray-600">{provider.totalBookings}</td>
                   <td className="p-3 text-sm text-gray-600">{provider.averageRating.toFixed(1)} ⭐</td>
@@ -370,7 +392,8 @@ const AdminDashboard = () => {
 
       {/* Recent Activity Feed */}
       <div className="bg-white rounded-lg shadow-sm border">
-        <div className="p-4 border-b">
+        <div className="p-4 border-b flex items-center">
+          <FiActivity className="text-primary mr-2" />
           <h3 className="font-semibold text-gray-900">Recent Activity</h3>
         </div>
         <div className="max-h-96 overflow-y-auto">
@@ -389,13 +412,21 @@ const AdminDashboard = () => {
                       {formatCurrency(activity.amount)}
                     </span>
                   )}
-                  <span className={`px-2 py-1 rounded-full text-xs ${
-                    activity.status === 'completed' ? 'bg-green-100 text-green-800' :
-                    activity.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-gray-100 text-gray-800'
-                  }`}>
-                    {activity.status}
-                  </span>
+                  {activity.status && (
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs ${
+                        {
+                          completed: 'bg-green-100 text-green-800',
+                          pending: 'bg-yellow-100 text-yellow-800',
+                          confirmed: 'bg-blue-100 text-blue-800',
+                          cancelled: 'bg-red-100 text-red-800',
+                          failed: 'bg-red-100 text-red-800',
+                        }[activity.status] || 'bg-gray-100 text-gray-800'
+                      }`}
+                    >
+                      {activity.status}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
