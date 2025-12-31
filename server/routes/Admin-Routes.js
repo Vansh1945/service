@@ -28,4 +28,5 @@ router.get('/providers/:id', adminController.getProviderDetails);
 
 // Dashboard
 router.get('/dashboard/stats', adminController.getDashboardStats);
+
 module.exports = router;
