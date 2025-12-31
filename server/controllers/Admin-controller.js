@@ -10,6 +10,7 @@ const Complaint = require('../models/Complaint-model');
 const Transaction = require('../models/Transaction-model');
 const Coupon = require('../models/Coupon-model');
 const ProviderEarning = require('../models/ProviderEarning-model');
+const PaymentRecord = require('../models/PaymentRecord-model');
 const moment = require('moment');
 const path = require('path');
 const fs = require('fs');
@@ -716,6 +717,465 @@ const deleteAdmin = async (req, res) => {
     }
 };
 
+/**
+ * Get dashboard summary with KPIs
+ */
+const getDashboardSummary = async (req, res) => {
+    try {
+        const today = moment().startOf('day');
+        const currentMonth = moment().startOf('month');
+
+        // Total bookings
+        const totalBookings = await Booking.countDocuments();
+
+        // Today's bookings
+        const todayBookings = await Booking.countDocuments({
+            createdAt: { $gte: today.toDate() }
+        });
+
+        // Ongoing bookings (in-progress or accepted)
+        const ongoingBookings = await Booking.countDocuments({
+            status: { $in: ['in-progress', 'accepted', 'scheduled'] }
+        });
+
+        // Cancelled bookings
+        const cancelledBookings = await Booking.countDocuments({
+            status: 'cancelled'
+        });
+
+        // Total customers
+        const totalCustomers = await User.countDocuments({ role: 'customer' });
+
+        // Total providers
+        const totalProviders = await Provider.countDocuments({ approved: true });
+
+        // Today's revenue
+        const todayRevenueResult = await Booking.aggregate([
+            {
+                $match: {
+                    status: 'completed',
+                    createdAt: { $gte: today.toDate() }
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: '$totalAmount' }
+                }
+            }
+        ]);
+        const todayRevenue = todayRevenueResult[0]?.total || 0;
+
+        // Monthly revenue
+        const monthlyRevenueResult = await Booking.aggregate([
+            {
+                $match: {
+                    status: 'completed',
+                    createdAt: { $gte: currentMonth.toDate() }
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: '$totalAmount' }
+                }
+            }
+        ]);
+        const monthlyRevenue = monthlyRevenueResult[0]?.total || 0;
+
+        // Pending payout amount (from provider earnings)
+        const pendingPayoutResult = await ProviderEarning.aggregate([
+            {
+                $match: {
+                    status: { $in: ['pending', 'processing'] }
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: '$amount' }
+                }
+            }
+        ]);
+        const pendingPayoutAmount = pendingPayoutResult[0]?.total || 0;
+
+        res.status(200).json({
+            success: true,
+            data: {
+                totalBookings,
+                todayBookings,
+                ongoingBookings,
+                cancelledBookings,
+                totalCustomers,
+                totalProviders,
+                todayRevenue,
+                monthlyRevenue,
+                pendingPayoutAmount
+            }
+        });
+
+    } catch (error) {
+        console.error('Get dashboard summary error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error while fetching dashboard summary'
+        });
+    }
+};
+
+/**
+ * Get dashboard revenue data
+ */
+const getDashboardRevenue = async (req, res) => {
+    try {
+        const { period = '30d' } = req.query;
+        let days, format;
+
+        if (period === '7d') {
+            days = 7;
+            format = '%Y-%m-%d';
+        } else if (period === '30d') {
+            days = 30;
+            format = '%Y-%m-%d';
+        } else if (period === '90d') {
+            days = 90;
+            format = '%Y-%m-%d';
+        } else {
+            // Default to 30d
+            days = 30;
+            format = '%Y-%m-%d';
+        }
+
+        const startDate = moment().subtract(days, 'days').startOf('day');
+
+        const revenueData = await Booking.aggregate([
+            {
+                $match: {
+                    status: 'completed',
+                    createdAt: { $gte: startDate.toDate() }
+                }
+            },
+            {
+                $group: {
+                    _id: {
+                        $dateToString: {
+                            format: format,
+                            date: '$createdAt'
+                        }
+                    },
+                    revenue: { $sum: '$totalAmount' },
+                    count: { $sum: 1 }
+                }
+            },
+            {
+                $sort: { '_id': 1 }
+            },
+            {
+                $project: {
+                    _id: 0,
+                    date: '$_id',
+                    revenue: 1,
+                    count: 1
+                }
+            }
+        ]);
+
+        res.status(200).json({
+            success: true,
+            data: revenueData
+        });
+
+    } catch (error) {
+        console.error('Get dashboard revenue error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error while fetching revenue data'
+        });
+    }
+};
+
+/**
+ * Get dashboard bookings status distribution
+ */
+const getDashboardBookingsStatus = async (req, res) => {
+    try {
+        const statusData = await Booking.aggregate([
+            {
+                $group: {
+                    _id: '$status',
+                    count: { $sum: 1 }
+                }
+            },
+            {
+                $project: {
+                    _id: 0,
+                    status: '$_id',
+                    count: 1
+                }
+            },
+            {
+                $sort: { count: -1 }
+            }
+        ]);
+
+        res.status(200).json({
+            success: true,
+            data: statusData
+        });
+
+    } catch (error) {
+        console.error('Get dashboard bookings status error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error while fetching bookings status'
+        });
+    }
+};
+
+/**
+ * Get dashboard top providers
+ */
+const getDashboardTopProviders = async (req, res) => {
+    try {
+        const topProviders = await Booking.aggregate([
+            {
+                $match: {
+                    status: 'completed',
+                    provider: { $ne: null }
+                }
+            },
+            {
+                $group: {
+                    _id: '$provider',
+                    totalEarnings: { $sum: '$providerEarnings' },
+                    totalBookings: { $sum: 1 }
+                }
+            },
+            {
+                $lookup: {
+                    from: 'providers',
+                    localField: '_id',
+                    foreignField: '_id',
+                    as: 'providerInfo'
+                }
+            },
+            {
+                $unwind: '$providerInfo'
+            },
+            {
+                $lookup: {
+                    from: 'feedbacks',
+                    localField: '_id',
+                    foreignField: 'providerFeedback.provider',
+                    as: 'feedbacks'
+                }
+            },
+            {
+                $addFields: {
+                    averageRating: {
+                        $cond: {
+                            if: { $gt: [{ $size: '$feedbacks' }, 0] },
+                            then: { $avg: '$feedbacks.providerFeedback.rating' },
+                            else: 0
+                        }
+                    }
+                }
+            },
+            {
+                $project: {
+                    _id: 0,
+                    providerId: '$_id',
+                    providerName: '$providerInfo.name',
+                    totalEarnings: 1,
+                    totalBookings: 1,
+                    averageRating: { $round: ['$averageRating', 1] }
+                }
+            },
+            {
+                $sort: { totalEarnings: -1 }
+            },
+            {
+                $limit: 10
+            }
+        ]);
+
+        res.status(200).json({
+            success: true,
+            data: topProviders
+        });
+
+    } catch (error) {
+        console.error('Get dashboard top providers error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error while fetching top providers'
+        });
+    }
+};
+
+/**
+ * Get dashboard pending actions
+ */
+const getDashboardPendingActions = async (req, res) => {
+    try {
+        // Pending provider verifications
+        const pendingVerifications = await Provider.countDocuments({
+            approved: false,
+            kycStatus: 'pending'
+        });
+
+        // Pending withdrawal requests (from PaymentRecord model)
+        const pendingWithdrawals = await PaymentRecord.countDocuments({
+            status: { $in: ['requested', 'processing'] }
+        });
+
+        // Pending disputes (complaints that are unresolved)
+        const pendingDisputes = await Complaint.countDocuments({
+            status: { $in: ['Open', 'In-Progress'] }
+        });
+
+        // Pending refunds (bookings with refund in progress)
+        const pendingRefunds = await Booking.countDocuments({
+            'cancellationProgress.status': 'processing_refund'
+        });
+
+        res.status(200).json({
+            success: true,
+            data: {
+                pendingVerifications,
+                pendingWithdrawals,
+                pendingDisputes,
+                pendingRefunds
+            }
+        });
+
+    } catch (error) {
+        console.error('Get dashboard pending actions error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error while fetching pending actions'
+        });
+    }
+};
+
+/**
+ * Get dashboard live stats
+ */
+const getDashboardLiveStats = async (req, res) => {
+    try {
+        // Ongoing bookings (in-progress or accepted)
+        const ongoingBookings = await Booking.countDocuments({
+            status: { $in: ['in-progress', 'accepted', 'scheduled'] }
+        });
+
+        // Active providers (approved and not blocked)
+        const activeProviders = await Provider.countDocuments({
+            approved: true,
+            isActive: true,
+            blockedTill: { $lte: new Date() }
+        });
+
+        // Delayed bookings (SLA based - bookings that should have been completed but aren't)
+        const delayedBookings = await Booking.countDocuments({
+            status: { $in: ['scheduled', 'accepted'] },
+            date: { $lt: moment().subtract(1, 'hours').toDate() }
+        });
+
+        res.status(200).json({
+            success: true,
+            data: {
+                ongoingBookings,
+                activeProviders,
+                delayedBookings
+            }
+        });
+
+    } catch (error) {
+        console.error('Get dashboard live stats error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error while fetching live stats'
+        });
+    }
+};
+
+/**
+ * Get dashboard recent activity
+ */
+const getDashboardRecentActivity = async (req, res) => {
+    try {
+        const activities = [];
+
+        // Recent bookings
+        const recentBookings = await Booking.find()
+            .populate('customer', 'name')
+            .populate('provider', 'name')
+            .sort({ createdAt: -1 })
+            .limit(5)
+            .select('status totalAmount createdAt customer provider');
+
+        recentBookings.forEach(booking => {
+            activities.push({
+                type: 'booking',
+                message: `New booking by ${booking.customer?.name || 'Customer'} ${booking.provider ? `assigned to ${booking.provider.name}` : ''}`,
+                amount: booking.totalAmount,
+                status: booking.status,
+                timestamp: booking.createdAt
+            });
+        });
+
+        // Recent payments
+        const recentPayments = await Transaction.find()
+            .populate('user', 'name')
+            .sort({ createdAt: -1 })
+            .limit(5)
+            .select('type amount status createdAt user');
+
+        recentPayments.forEach(payment => {
+            activities.push({
+                type: 'payment',
+                message: `${payment.type} of ₹${payment.amount} by ${payment.user?.name || 'User'}`,
+                amount: payment.amount,
+                status: payment.status,
+                timestamp: payment.createdAt
+            });
+        });
+
+        // Recent payouts
+        const recentPayouts = await ProviderEarning.find()
+            .populate('provider', 'name')
+            .sort({ createdAt: -1 })
+            .limit(5)
+            .select('amount status createdAt provider');
+
+        recentPayouts.forEach(payout => {
+            activities.push({
+                type: 'payout',
+                message: `Payout of ₹${payout.amount} to ${payout.provider?.name || 'Provider'}`,
+                amount: payout.amount,
+                status: payout.status,
+                timestamp: payout.createdAt
+            });
+        });
+
+        // Sort all activities by timestamp and take top 20
+        activities.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        const recentActivities = activities.slice(0, 20);
+
+        res.status(200).json({
+            success: true,
+            data: recentActivities
+        });
+
+    } catch (error) {
+        console.error('Get dashboard recent activity error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error while fetching recent activity'
+        });
+    }
+};
+
 module.exports = {
     registerAdmin,
     getAdminProfile,
@@ -723,10 +1183,17 @@ module.exports = {
     deleteAdmin,
     getAllAdmins,
     getAllCustomers,
-    getCustomerById, // Add this line
+    getCustomerById,
     approveProvider,
     getPendingProviders,
     getAllProviders,
     getProviderDetails,
-    getDashboardStats
+    getDashboardStats,
+    getDashboardSummary,
+    getDashboardRevenue,
+    getDashboardBookingsStatus,
+    getDashboardTopProviders,
+    getDashboardPendingActions,
+    getDashboardLiveStats,
+    getDashboardRecentActivity
 };

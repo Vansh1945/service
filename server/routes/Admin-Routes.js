@@ -28,5 +28,12 @@ router.get('/providers/:id', adminController.getProviderDetails);
 
 // Dashboard
 router.get('/dashboard/stats', adminController.getDashboardStats);
+router.get('/dashboard/summary', adminController.getDashboardSummary);
+router.get('/dashboard/revenue', adminController.getDashboardRevenue);
+router.get('/dashboard/bookings-status', adminController.getDashboardBookingsStatus);
+router.get('/dashboard/top-providers', adminController.getDashboardTopProviders);
+router.get('/dashboard/pending-actions', adminController.getDashboardPendingActions);
+router.get('/dashboard/live-stats', adminController.getDashboardLiveStats);
+router.get('/dashboard/recent-activity', adminController.getDashboardRecentActivity);
 
 module.exports = router;
