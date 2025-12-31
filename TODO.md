@@ -1,15 +1,7 @@
-# Admin Dashboard Filtering Implementation
+# TODO: Optimize PWA App for No Loading on Open or Search
 
-## Backend Updates
-- [ ] Update getDashboardSummary to accept and apply city/serviceCategory filters
-- [ ] Update getDashboardBookingsStatus to accept and apply city/serviceCategory filters
-- [ ] Update getDashboardTopProviders to accept and apply city/serviceCategory filters
-- [ ] Update getDashboardPendingActions to accept and apply city filters
-- [ ] Update getDashboardLiveStats to accept and apply city filters
-- [ ] Update getDashboardRecentActivity to accept and apply city/serviceCategory filters
-
-## Frontend Updates
-- [ ] Update fetchDashboardData in Dashboard.jsx to pass city and serviceCategory to all API calls
-
-## Testing
-- [ ] Test filtering functionality by applying filters and verifying data updates
+## Steps to Complete
+- [ ] Implement lazy loading for all route components in App.jsx using React.lazy
+- [ ] Wrap routes with Suspense and use Loader component for loading states
+- [ ] Optimize system settings fetch in App.jsx (add caching or reduce API calls)
+- [ ] Test the app to ensure no loading delays on open or search

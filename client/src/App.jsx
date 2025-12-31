@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, Suspense, lazy } from "react";
 import { Routes, Route, useLocation } from "react-router-dom";
 import "./index.css";
 import { useAuth } from "./store/auth";
@@ -58,6 +58,7 @@ import ProviderBookingDashboard from "./pages/Provider/Provider-Booking";
 import ProviderEarning from "./pages/Provider/Earning";
 import ProviderTestPage from "./pages/Provider/Test";
 import ProviderFeedback from "./pages/Provider/Feedback";
+import LoadingSpinner from "./components/Loader";
 
 const App = () => {
   const location = useLocation();
@@ -72,9 +73,33 @@ const App = () => {
     location.pathname
   );
 
-  // Fetch system settings and update document title and favicon
+  // Fetch system settings and update document title and favicon with caching
   useEffect(() => {
     const fetchSystemSettings = async () => {
+      const cacheKey = 'systemSettings';
+      const cachedSettings = localStorage.getItem(cacheKey);
+      const cacheExpiry = 24 * 60 * 60 * 1000; // 24 hours
+
+      if (cachedSettings) {
+        const { data, timestamp } = JSON.parse(cachedSettings);
+        if (Date.now() - timestamp < cacheExpiry) {
+          setSystemSettings(data);
+          document.title = data.companyName;
+          if (data.favicon) {
+            const faviconLink = document.querySelector("link[rel='icon']");
+            if (faviconLink) {
+              faviconLink.href = data.favicon;
+            } else {
+              const newFavicon = document.createElement("link");
+              newFavicon.rel = "icon";
+              newFavicon.href = data.favicon;
+              document.head.appendChild(newFavicon);
+            }
+          }
+          return;
+        }
+      }
+
       try {
         const response = await fetch(`${API}/system-setting/system-data`);
         if (response.ok) {
@@ -85,6 +110,9 @@ const App = () => {
           };
           setSystemSettings(settings);
 
+          // Cache the settings
+          localStorage.setItem(cacheKey, JSON.stringify({ data: settings, timestamp: Date.now() }));
+
           // Update document title
           document.title = settings.companyName;
 
@@ -94,7 +122,6 @@ const App = () => {
             if (faviconLink) {
               faviconLink.href = settings.favicon;
             } else {
-              // Create new favicon link if it doesn't exist
               const newFavicon = document.createElement("link");
               newFavicon.rel = "icon";
               newFavicon.href = settings.favicon;
@@ -111,7 +138,7 @@ const App = () => {
   }, [API]);
 
   return (
-    <>
+    <Suspense fallback={<LoadingSpinner />}>
       {/* Only show Navbar for public routes */}
       {!isDashboardRoute && <Navbar />}
 
@@ -186,7 +213,7 @@ const App = () => {
 
       {/* Only show Footer for public routes */}
       {!isDashboardRoute && <Footer />}
-    </>
+    </Suspense>
   );
 };
 

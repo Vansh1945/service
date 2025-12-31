@@ -13,9 +13,7 @@ const Home = () => {
 
 
       {/* Limited Services Section */}
-      <section className="max-w-10xl mx-auto px-4 sm:px-6 lg:px-8 mt-2 bg-transparent">
           <Services/>
-      </section>
 
      
     </div>

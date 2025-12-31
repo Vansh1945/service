@@ -9,6 +9,7 @@ import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useAuth } from '../store/auth';
 import Rating from '@mui/material/Rating';
+import LoadingSpinner from '../components/Loader';
 
 const Services = ({ limit }) => {
   const [services, setServices] = useState([]);
@@ -185,14 +186,7 @@ const Services = ({ limit }) => {
   );
 
   if (loading) {
-    return (
-      <section className="py-20 px-6 sm:px-10 lg:px-16 bg-transparent min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-xl text-gray-600">Loading services...</p>
-        </div>
-      </section>
-    );
+    return <LoadingSpinner/>
   }
 
   if (error) {
@@ -245,15 +239,6 @@ const Services = ({ limit }) => {
   return (
     <section className="py-20 px-6 sm:px-10 lg:px-16 bg-transparent min-h-screen">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-20">
-          <h3 className="text-3xl font-extrabold text-primary mb-2 font-poppins">
-            Our Electrical Services
-          </h3>
-          <p className="text-lg text-secondary max-w-3xl mx-auto leading-relaxed font-inter">
-            Explore our wide range of electrical services designed to meet your needs.
-          </p>
-        </div>
 
         {/* Services Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6">
