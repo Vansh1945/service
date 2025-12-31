@@ -5,24 +5,40 @@ import {
   FiTrendingUp, FiClock, FiUser, FiMapPin,
   FiPhone, FiMail, FiEye, FiCheck, FiX,
   FiPlay, FiAlertCircle, FiCreditCard,
-  FiPieChart, FiBriefcase
+  FiPieChart, FiBriefcase, FiFilter
 } from 'react-icons/fi';
+import {
+  LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+} from 'recharts';
+import Loader from '../../components/Loader';
 import { useAuth } from '../../store/auth';
 
 const Dashboard = () => {
   const { token, API, showToast } = useAuth();
+
+  // Format currency in Indian Rupees
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 2
+    }).format(amount || 0);
+  };
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [dateRange, setDateRange] = useState({
+    startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    endDate: new Date().toISOString().split('T')[0]
+  });
   const [dashboardData, setDashboardData] = useState({
-    profile: null,
-    recentBookings: [],
-    stats: {
-      totalEarnings: 0,
-      availableBalance: 0,
-      completedBookings: 0,
-      pendingBookings: 0,
-      averageRating: 0,
-      totalWithdrawals: 0
-    }
+    summary: null,
+    earnings: null,
+    bookings: null,
+    analytics: null,
+    wallet: null,
+    ratings: null,
+    profile: null
   });
   const [actionLoading, setActionLoading] = useState({});
 
@@ -46,87 +62,77 @@ const Dashboard = () => {
   const fetchDashboardData = useCallback(async () => {
     try {
       setLoading(true);
+      setError(null);
 
-      // Calculate current month start and end dates
-      const currentDate = new Date();
-      const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-      const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-      endOfMonth.setHours(23, 59, 59, 999);
-
-      const startDate = startOfMonth.toISOString().split('T')[0];
-      const endDate = endOfMonth.toISOString().split('T')[0];
-
-      // Fetch profile, earnings, and bookings in parallel
-      const [profileResponse, summaryResponse, pendingResponse, acceptedResponse, completedResponse, withdrawalsResponse] = await Promise.all([
+      // Fetch all dashboard data in parallel
+      const [
+        summaryRes, earningsRes, bookingsRes, analyticsRes, walletRes, ratingsRes, profileRes
+      ] = await Promise.all([
+        fetch(`${API}/provider/dashboard/summary`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch(`${API}/provider/dashboard/earnings?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch(`${API}/provider/dashboard/bookings`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch(`${API}/provider/dashboard/analytics`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch(`${API}/provider/dashboard/wallet`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch(`${API}/provider/dashboard/ratings`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
         fetch(`${API}/provider/profile`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }),
-        fetch(`${API}/payment/summary?startDate=${startDate}&endDate=${endDate}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }),
-        fetch(`${API}/booking/provider/status/pending?limit=5`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }),
-        fetch(`${API}/booking/provider/status/accepted?limit=3`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }),
-        fetch(`${API}/booking/provider/status/completed?limit=3`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }),
-        fetch(`${API}/payment/withdrawal-report?limit=5`, {
           headers: { 'Authorization': `Bearer ${token}` }
         })
       ]);
 
       // Process responses
-      const profileData = profileResponse.ok ? await profileResponse.json() : { provider: null };
-      const summaryData = summaryResponse.ok ? await summaryResponse.json() : { data: { totalEarnings: 0, availableBalance: 0 } };
-      const pendingData = pendingResponse.ok ? await pendingResponse.json() : { data: [] };
-      const acceptedData = acceptedResponse.ok ? await acceptedResponse.json() : { data: [] };
-      const completedData = completedResponse.ok ? await completedResponse.json() : { data: [] };
-      const withdrawalsData = withdrawalsResponse.ok ? await withdrawalsResponse.json() : { records: [] };
+      const summary = summaryRes.ok ? await summaryRes.json() : null;
+      const earnings = earningsRes.ok ? await earningsRes.json() : null;
+      const bookings = bookingsRes.ok ? await bookingsRes.json() : null;
+      const analytics = analyticsRes.ok ? await analyticsRes.json() : null;
+      const wallet = walletRes.ok ? await walletRes.json() : null;
+      const ratings = ratingsRes.ok ? await ratingsRes.json() : null;
+      const profile = profileRes.ok ? await profileRes.json() : null;
 
-      if (!profileResponse.ok) {
-        console.error('Failed to fetch profile data');
+      // Check for errors
+      const errors = [];
+      if (!summaryRes.ok) errors.push('summary');
+      if (!earningsRes.ok) errors.push('earnings');
+      if (!bookingsRes.ok) errors.push('bookings');
+      if (!analyticsRes.ok) errors.push('analytics');
+      if (!walletRes.ok) errors.push('wallet');
+      if (!ratingsRes.ok) errors.push('ratings');
+      if (!profileRes.ok) errors.push('profile');
+
+      if (errors.length > 0) {
+        console.error('Failed to fetch data for:', errors);
+        setError(`Failed to load data for: ${errors.join(', ')}`);
       }
-      if (!summaryResponse.ok) {
-        console.error('Failed to fetch earnings summary');
-      }
-
-      // Combine recent bookings
-      const recentBookings = [
-        ...(pendingData.data || []),
-        ...(acceptedData.data || []),
-        ...(completedData.data || [])
-      ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 8);
-
-      // Calculate stats
-      const totalWithdrawals = withdrawalsData.records 
-        ? withdrawalsData.records.reduce((sum, record) => sum + (record.amount || 0), 0)
-        : 0;
-
-      const stats = {
-        totalEarnings: summaryData.data?.totalEarnings || 0,
-        availableBalance: summaryData.data?.availableBalance || 0,
-        completedBookings: profileData.provider?.completedBookings || 0,
-        pendingBookings: pendingData.data?.length || 0,
-        averageRating: parseFloat(profileData.provider?.averageRating || 0),
-        totalWithdrawals
-      };
 
       setDashboardData({
-        profile: profileData.provider,
-        recentBookings,
-        stats
+        summary: summary?.data || null,
+        earnings: earnings?.data || null,
+        bookings: bookings?.data || null,
+        analytics: analytics?.data || null,
+        wallet: wallet?.data || null,
+        ratings: ratings?.data || null,
+        profile: profile?.provider || null
       });
 
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
+      setError('Failed to load dashboard data');
       showToast('Failed to load dashboard data', 'error');
     } finally {
       setLoading(false);
     }
-  }, [API, token, showToast]);
+  }, [API, token, showToast, dateRange]);
 
   // Handle booking actions
   const handleBookingAction = async (bookingId, action, additionalData = {}) => {
@@ -166,15 +172,12 @@ const Dashboard = () => {
     fetchDashboardData();
   }, [fetchDashboardData]);
 
+  // Loading state
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
-    );
+    return <Loader />;
   }
 
-  const { profile, recentBookings, stats } = dashboardData;
+  const { summary, earnings, bookings, analytics, wallet, ratings, profile } = dashboardData;
 
   return (
     <div className="space-y-6 p-4 md:p-6">
@@ -203,7 +206,7 @@ const Dashboard = () => {
             <div className="ml-3 sm:ml-4">
               <p className="text-xs sm:text-sm font-medium text-gray-600">Total Earnings</p>
               <p className="text-lg sm:text-xl md:text-2xl font-bold text-secondary">
-                ₹{stats.totalEarnings.toLocaleString()}
+                {formatCurrency(earnings?.totalEarnings || 0)}
               </p>
             </div>
           </div>
@@ -218,7 +221,7 @@ const Dashboard = () => {
             <div className="ml-3 sm:ml-4">
               <p className="text-xs sm:text-sm font-medium text-gray-600">Available Balance</p>
               <p className="text-lg sm:text-xl md:text-2xl font-bold text-secondary">
-                ₹{stats.availableBalance.toLocaleString()}
+                {formatCurrency(wallet?.currentBalance || 0)}
               </p>
             </div>
           </div>
@@ -232,7 +235,7 @@ const Dashboard = () => {
             </div>
             <div className="ml-3 sm:ml-4">
               <p className="text-xs sm:text-sm font-medium text-gray-600">Completed Jobs</p>
-              <p className="text-lg sm:text-xl md:text-2xl font-bold text-secondary">{stats.completedBookings}</p>
+              <p className="text-lg sm:text-xl md:text-2xl font-bold text-secondary">{summary?.completedJobs || 0}</p>
             </div>
           </div>
         </div>
@@ -246,10 +249,80 @@ const Dashboard = () => {
             <div className="ml-3 sm:ml-4">
               <p className="text-xs sm:text-sm font-medium text-gray-600">Average Rating</p>
               <p className="text-lg sm:text-xl md:text-2xl font-bold text-secondary">
-                {stats.averageRating > 0 ? stats.averageRating.toFixed(1) : 'N/A'}
+                {(ratings?.averageRating || 0) > 0 ? (ratings.averageRating).toFixed(1) : 'N/A'}
               </p>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Charts Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Earnings Chart */}
+        <div className="bg-background rounded-xl shadow-md p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-secondary flex items-center">
+              <FiTrendingUp className="mr-2 text-primary" />
+              Earnings Overview
+            </h3>
+            <div className="flex items-center space-x-2">
+              <FiFilter className="text-gray-500" />
+              <select
+                value={`${dateRange.startDate}_${dateRange.endDate}`}
+                onChange={(e) => {
+                  const [start, end] = e.target.value.split('_');
+                  setDateRange({ startDate: start, endDate: end });
+                }}
+                className="text-sm border border-gray-300 rounded-md px-2 py-1"
+              >
+                <option value={`${new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}_${new Date().toISOString().split('T')[0]}`}>
+                  Last 7 days
+                </option>
+                <option value={`${new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}_${new Date().toISOString().split('T')[0]}`}>
+                  Last 30 days
+                </option>
+                <option value={`${new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}_${new Date().toISOString().split('T')[0]}`}>
+                  Last 3 months
+                </option>
+              </select>
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={earnings?.chartData || []}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="date" />
+              <YAxis />
+              <Tooltip formatter={(value) => [`₹${value}`, 'Earnings']} />
+              <Line type="monotone" dataKey="earnings" stroke="#3B82F6" strokeWidth={2} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Bookings Breakdown Pie Chart */}
+        <div className="bg-background rounded-xl shadow-md p-6">
+          <h3 className="text-lg font-semibold text-secondary flex items-center mb-4">
+            <FiPieChart className="mr-2 text-primary" />
+            Bookings Breakdown
+          </h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie
+                data={bookings?.pieChartData || []}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                outerRadius={80}
+                fill="#8884d8"
+                dataKey="value"
+              >
+                {(bookings?.pieChartData || []).map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'][index % 5]} />
+                ))}
+              </Pie>
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
         </div>
       </div>
 
@@ -265,7 +338,7 @@ const Dashboard = () => {
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-base md:text-lg font-semibold text-secondary">Pending Requests</h3>
-                <p className="text-2xl md:text-3xl font-bold text-accent mt-1 md:mt-2">{stats.pendingBookings}</p>
+                <p className="text-2xl md:text-3xl font-bold text-accent mt-1 md:mt-2">{summary?.pendingBookings || 0}</p>
                 <p className="text-xs md:text-sm text-gray-600 mt-1">Awaiting your response</p>
               </div>
               <div className="p-2 md:p-3 bg-accent/10 rounded-lg">
@@ -283,7 +356,7 @@ const Dashboard = () => {
               <div>
                 <h3 className="text-base md:text-lg font-semibold text-secondary">Active Jobs</h3>
                 <p className="text-2xl md:text-3xl font-bold text-primary mt-1 md:mt-2">
-                  {recentBookings.filter(b => ['accepted', 'in-progress'].includes(b.status)).length}
+                  {(analytics?.todayJobs?.length || 0) + (analytics?.upcomingJobs?.length || 0)}
                 </p>
                 <p className="text-xs md:text-sm text-gray-600 mt-1">Currently in progress</p>
               </div>
@@ -302,7 +375,7 @@ const Dashboard = () => {
               <div>
                 <h3 className="text-base md:text-lg font-semibold text-secondary">Available Earnings</h3>
                 <p className="text-2xl md:text-3xl font-bold text-green-600 mt-1 md:mt-2">
-                  ₹{stats.availableBalance.toLocaleString()}
+                  {formatCurrency(wallet?.currentBalance || 0)}
                 </p>
                 <p className="text-xs md:text-sm text-gray-600 mt-1">Ready to withdraw</p>
               </div>
@@ -348,7 +421,8 @@ const Dashboard = () => {
           </div>
 
           <div className="p-4 md:p-6">
-            {recentBookings.length === 0 ? (
+            {(!analytics?.todayJobs || analytics.todayJobs.length === 0) &&
+             (!analytics?.upcomingJobs || analytics.upcomingJobs.length === 0) ? (
               <div className="text-center py-6 md:py-8">
                 <FiCalendar className="mx-auto h-8 w-8 md:h-12 md:w-12 text-gray-400" />
                 <h3 className="mt-2 text-sm font-medium text-gray-900">No recent bookings</h3>
@@ -358,136 +432,84 @@ const Dashboard = () => {
               </div>
             ) : (
               <div className="space-y-3 md:space-y-4">
-                {recentBookings.map((booking) => (
-                  <div
-                    key={booking._id}
-                    className="border border-gray-200 rounded-lg p-3 md:p-4 hover:shadow-md transition-shadow"
-                  >
-                    <div className="flex items-start justify-between">
+                {/* Today's Jobs */}
+                {analytics?.todayJobs?.map((booking) => (
+                  <div key={booking._id} className="bg-gray-50 rounded-lg p-3 md:p-4">
+                    <div className="flex items-center justify-between">
                       <div className="flex-1">
-                        <div className="flex items-center space-x-2 md:space-x-3">
-                          <div className="flex-shrink-0">
-                            <div className="w-8 h-8 md:w-10 md:h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                              <FiUser className="w-3 h-3 md:w-5 md:h-5 text-primary" />
-                            </div>
+                        <div className="flex items-center space-x-3">
+                          <div className="p-2 bg-primary/10 rounded-lg">
+                            <FiUser className="h-4 w-4 text-primary" />
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs md:text-sm font-medium text-secondary truncate">
+                          <div>
+                            <h4 className="text-sm font-medium text-secondary">
                               {booking.customer?.name || 'Customer'}
-                            </p>
-                            <p className="text-xs text-gray-500 truncate">
-                              {booking.services?.[0]?.service?.title || 'Service'}
+                            </h4>
+                            <p className="text-xs text-gray-600">
+                              {new Date(booking.date).toLocaleDateString()} at {booking.time}
                             </p>
                           </div>
                         </div>
-
-                        <div className="mt-2 md:mt-3 flex flex-wrap items-center gap-2 md:gap-4 text-xs md:text-sm text-gray-500">
-                          <div className="flex items-center">
-                            <FiCalendar className="mr-1 h-3 w-3 md:h-4 md:w-4" />
-                            {new Date(booking.date).toLocaleDateString()}
-                          </div>
-                          {booking.time && (
-                            <div className="flex items-center">
-                              <FiClock className="mr-1 h-3 w-3 md:h-4 md:w-4" />
-                              {booking.time}
-                            </div>
-                          )}
-                          <div className="flex items-center">
-                            <FiDollarSign className="mr-1 h-3 w-3 md:h-4 md:w-4" />
-                            ₹{booking.totalAmount}
-                          </div>
+                        <div className="mt-2 flex items-center justify-between">
+                          <span className="text-xs text-gray-500">
+                            {formatAddress(booking.location)}
+                          </span>
+                          <span className="text-sm font-semibold text-primary">
+                            {formatCurrency(booking.totalAmount)}
+                          </span>
                         </div>
-
-                        {booking.address && (
-                          <div className="mt-1 md:mt-2 flex items-center text-xs md:text-sm text-gray-500">
-                            <FiMapPin className="mr-1 h-3 w-3 md:h-4 md:w-4 flex-shrink-0" />
-                            <span className="truncate">{formatAddress(booking.address)}</span>
-                          </div>
-                        )}
                       </div>
+                      <div className="flex space-x-2 ml-4">
+                        <button
+                          onClick={() => handleBookingAction(booking._id, 'accept')}
+                          disabled={actionLoading[booking._id] === 'accept'}
+                          className="px-3 py-1 bg-green-500 text-white text-xs rounded-md hover:bg-green-600 disabled:opacity-50"
+                        >
+                          {actionLoading[booking._id] === 'accept' ? '...' : 'Accept'}
+                        </button>
+                        <button
+                          onClick={() => handleBookingAction(booking._id, 'reject')}
+                          disabled={actionLoading[booking._id] === 'reject'}
+                          className="px-3 py-1 bg-red-500 text-white text-xs rounded-md hover:bg-red-600 disabled:opacity-50"
+                        >
+                          {actionLoading[booking._id] === 'reject' ? '...' : 'Reject'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
 
-                      <div className="flex flex-col items-end space-y-1 md:space-y-2 ml-2 md:ml-4">
-                        {/* Status Badge */}
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                          booking.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                          booking.status === 'accepted' ? 'bg-blue-100 text-blue-800' :
-                          booking.status === 'in-progress' ? 'bg-purple-100 text-purple-800' :
-                          booking.status === 'completed' ? 'bg-green-100 text-green-800' :
-                          'bg-red-100 text-red-800'
-                        }`}>
-                          {booking.status.charAt(0).toUpperCase() + booking.status.slice(1).replace('-', ' ')}
-                        </span>
-
-                        {/* Action Buttons */}
-                        <div className="flex space-x-1">
-                          {booking.status === 'pending' && (
-                            <>
-                              <button
-                                onClick={() => handleBookingAction(booking._id, 'accept')}
-                                disabled={actionLoading[booking._id] === 'accept'}
-                                className="p-1 text-green-600 hover:bg-green-100 rounded-full disabled:opacity-50 transition-colors"
-                                title="Accept Booking"
-                              >
-                                {actionLoading[booking._id] === 'accept' ? (
-                                  <div className="animate-spin h-3 w-3 md:h-4 md:w-4 border-2 border-green-600 border-t-transparent rounded-full"></div>
-                                ) : (
-                                  <FiCheck className="h-3 w-3 md:h-4 md:w-4" />
-                                )}
-                              </button>
-                              <button
-                                onClick={() => handleBookingAction(booking._id, 'reject', { reason: 'Provider declined' })}
-                                disabled={actionLoading[booking._id] === 'reject'}
-                                className="p-1 text-red-600 hover:bg-red-100 rounded-full disabled:opacity-50 transition-colors"
-                                title="Reject Booking"
-                              >
-                                {actionLoading[booking._id] === 'reject' ? (
-                                  <div className="animate-spin h-3 w-3 md:h-4 md:w-4 border-2 border-red-600 border-t-transparent rounded-full"></div>
-                                ) : (
-                                  <FiX className="h-3 w-3 md:h-4 md:w-4" />
-                                )}
-                              </button>
-                            </>
-                          )}
-
-                          {booking.status === 'accepted' && (
-                            <button
-                              onClick={() => handleBookingAction(booking._id, 'start')}
-                              disabled={actionLoading[booking._id] === 'start'}
-                              className="p-1 text-blue-600 hover:bg-blue-100 rounded-full disabled:opacity-50 transition-colors"
-                              title="Start Job"
-                            >
-                              {actionLoading[booking._id] === 'start' ? (
-                                <div className="animate-spin h-3 w-3 md:h-4 md:w-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
-                              ) : (
-                                <FiPlay className="h-3 w-3 md:h-4 md:w-4" />
-                              )}
-                            </button>
-                          )}
-
-                          {booking.status === 'in-progress' && (
-                            <button
-                              onClick={() => handleBookingAction(booking._id, 'complete')}
-                              disabled={actionLoading[booking._id] === 'complete'}
-                              className="p-1 text-green-600 hover:bg-green-100 rounded-full disabled:opacity-50 transition-colors"
-                              title="Complete Job"
-                            >
-                              {actionLoading[booking._id] === 'complete' ? (
-                                <div className="animate-spin h-3 w-3 md:h-4 md:w-4 border-2 border-green-600 border-t-transparent rounded-full"></div>
-                              ) : (
-                                <FiCheckCircle className="h-3 w-3 md:h-4 md:w-4" />
-                              )}
-                            </button>
-                          )}
-
-                          {/* View Details Button */}
-                          <Link
-                            to={`/provider/booking/${booking._id}`}
-                            className="p-1 text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
-                            title="View Details"
-                          >
-                            <FiEye className="h-3 w-3 md:h-4 md:w-4" />
-                          </Link>
+                {/* Upcoming Jobs */}
+                {analytics?.upcomingJobs?.map((booking) => (
+                  <div key={booking._id} className="bg-blue-50 rounded-lg p-3 md:p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-3">
+                          <div className="p-2 bg-blue-100 rounded-lg">
+                            <FiCalendar className="h-4 w-4 text-blue-600" />
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-medium text-secondary">
+                              {booking.customer?.name || 'Customer'}
+                            </h4>
+                            <p className="text-xs text-gray-600">
+                              {new Date(booking.date).toLocaleDateString()} at {booking.time}
+                            </p>
+                          </div>
                         </div>
+                        <div className="mt-2 flex items-center justify-between">
+                          <span className="text-xs text-gray-500">
+                            {formatAddress(booking.location)}
+                          </span>
+                          <span className="text-sm font-semibold text-blue-600">
+                            {formatCurrency(booking.totalAmount)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="ml-4">
+                        <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                          Scheduled
+                        </span>
                       </div>
                     </div>
                   </div>

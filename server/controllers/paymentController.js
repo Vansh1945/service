@@ -288,12 +288,15 @@ const requestBulkWithdrawal = async (req, res) => {
       // Find eligible ProviderEarning records (latest first)
       const eligibleEarnings = await ProviderEarning.find({
         provider: providerId,
-        paymentRecord: { $exists: false },
         isVisibleToProvider: true
       })
       .populate({
         path: 'booking',
         match: { status: 'completed' }
+      })
+      .populate({
+        path: 'paymentRecord',
+        match: { status: { $ne: 'completed' } }
       })
       .sort({ createdAt: -1 }) // Latest first
       .session(session);

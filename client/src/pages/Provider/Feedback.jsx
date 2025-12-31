@@ -408,10 +408,8 @@ const ProviderFeedback = () => {
         );
     };
 
-    if (error) return <div className="min-h-screen bg-slate-50 p-4 sm:p-6"><ErrorMessage /></div>;
-    
     return (
-        <div className="min-h-screen bg-slate-50 p-4 sm:p-6 lg:p-8">
+        <div className="min-h-screen bg-transparent p-4 sm:p-6 lg:p-8">
             <div className="max-w-7xl mx-auto">
                 <div className="mb-8">
                     <h1 className="text-4xl font-bold text-secondary mb-1">
@@ -429,8 +427,15 @@ const ProviderFeedback = () => {
                     </div>
                 </div>
                 
-                {isLoading ? <LoadingSkeleton /> : (
-                    activeTab === 'feedback' ? <FeedbackView /> : <RatingsTracker />
+                {/* Show error message if there's an error */}
+                {error ? (
+                    <ErrorMessage />
+                ) : isLoading ? (
+                    <LoadingSkeleton />
+                ) : activeTab === 'feedback' ? (
+                    <FeedbackView />
+                ) : (
+                    <RatingsTracker />
                 )}
             </div>
         </div>

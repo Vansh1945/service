@@ -43,4 +43,12 @@ router.get('/document/:type', providerAuthMiddleware, providerController.viewDoc
 router.delete('/profile', providerAuthMiddleware, providerController.deleteAccount);
 router.delete('/:id/permanent', adminAuthMiddleware, providerController.permanentDeleteAccount);
 
-module.exports = router; 
+// Dashboard Routes
+router.get('/dashboard/summary', providerAuthMiddleware, providerController.getDashboardSummary);
+router.get('/dashboard/earnings', providerAuthMiddleware, providerController.getEarningsAnalytics);
+router.get('/dashboard/bookings', providerAuthMiddleware, providerController.getBookingStatusBreakdown);
+router.get('/dashboard/analytics', providerAuthMiddleware, providerController.getDashboardAnalytics);
+router.get('/dashboard/wallet', providerAuthMiddleware, providerController.getWalletInfo);
+router.get('/dashboard/ratings', providerAuthMiddleware, providerController.getPerformanceRatings);
+
+module.exports = router;

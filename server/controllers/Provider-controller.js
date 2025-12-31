@@ -1,5 +1,6 @@
 const Provider = require('../models/Provider-model');
 const ProviderEarning = require('../models/ProviderEarning-model');
+const PaymentRecord = require('../models/PaymentRecord-model');
 const { sendOTP, verifyOTP, clearOTP } = require('../utils/otpSend');
 const { uploadProfilePic, uploadResume, uploadPassbookImg } = require('../middlewares/upload');
 const bcrypt = require('bcryptjs');
@@ -8,6 +9,9 @@ const fs = require('fs');
 const path = require('path');
 const cloudinary = require('../services/cloudinary');
 const Service = require('../models/Service-model');
+const mongoose = require('mongoose');
+const Booking = require('../models/Booking-model');
+const Feedback = require('../models/Feedback-model');
 
 // Helper function to delete file from Cloudinary
 const deleteFile = async (publicId) => {
@@ -982,5 +986,522 @@ exports.permanentDeleteAccount = async (req, res) => {
     }
 };
 
+/**
+ * @desc    Get provider dashboard summary
+ * @route   GET /api/provider/dashboard/summary
+ * @access  Private (Provider)
+ */
+exports.getDashboardSummary = async (req, res) => {
+    try {
+        const providerId = req.providerId;
+
+        // Get current date for today's earnings
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        // Parallel aggregation queries for better performance
+        const [
+            bookingStats,
+            todayEarnings,
+            ratingStats
+        ] = await Promise.all([
+            // Booking statistics
+            Booking.aggregate([
+                { $match: { provider: new mongoose.Types.ObjectId(providerId) } },
+                {
+                    $group: {
+                        _id: '$status',
+                        count: { $sum: 1 }
+                    }
+                }
+            ]),
+
+            // Today's earnings
+            ProviderEarning.aggregate([
+                {
+                    $match: {
+                        provider: new mongoose.Types.ObjectId(providerId),
+                        createdAt: { $gte: today, $lt: tomorrow }
+                    }
+                },
+                {
+                    $group: {
+                        _id: null,
+                        totalEarnings: { $sum: '$netAmount' }
+                    }
+                }
+            ]),
+
+            // Average rating
+            Feedback.aggregate([
+                { $match: { 'providerFeedback.provider': new mongoose.Types.ObjectId(providerId) } },
+                {
+                    $group: {
+                        _id: null,
+                        averageRating: { $avg: '$providerFeedback.rating' },
+                        totalReviews: { $sum: 1 }
+                    }
+                }
+            ])
+        ]);
+
+        // Process booking stats
+        const stats = {
+            totalBookings: 0,
+            pendingBookings: 0,
+            completedJobs: 0,
+            cancelledJobs: 0
+        };
+
+        bookingStats.forEach(stat => {
+            stats.totalBookings += stat.count;
+            switch (stat._id) {
+                case 'pending':
+                    stats.pendingBookings = stat.count;
+                    break;
+                case 'completed':
+                    stats.completedJobs = stat.count;
+                    break;
+                case 'cancelled':
+                    stats.cancelledJobs = stat.count;
+                    break;
+            }
+        });
+
+        // Process today's earnings
+        const todaysEarnings = todayEarnings.length > 0 ? todayEarnings[0].totalEarnings : 0;
+
+        // Process rating stats
+        const averageRating = ratingStats.length > 0 ? parseFloat(ratingStats[0].averageRating.toFixed(1)) : 0;
+
+        res.status(200).json({
+            success: true,
+            data: {
+                totalBookings: stats.totalBookings,
+                pendingBookings: stats.pendingBookings,
+                completedJobs: stats.completedJobs,
+                cancelledJobs: stats.cancelledJobs,
+                todaysEarnings,
+                averageRating
+            }
+        });
+
+    } catch (error) {
+        console.error('Dashboard summary error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch dashboard summary',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
+/**
+ * @desc    Get provider earnings analytics
+ * @route   GET /api/providers/dashboard/earnings
+ * @access  Private (Provider)
+ */
+exports.getEarningsAnalytics = async (req, res) => {
+    try {
+        const providerId = req.providerId;
+        const { startDate, endDate, period = 'daily' } = req.query;
+
+        // Default to last 30 days if no dates provided
+        const end = endDate ? new Date(endDate) : new Date();
+        const start = startDate ? new Date(startDate) : new Date(end.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+        // Ensure dates are valid
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid date format'
+            });
+        }
+
+        const [
+            earningsData,
+            monthlyData
+        ] = await Promise.all([
+            // Earnings chart data (daily/weekly)
+            ProviderEarning.aggregate([
+                {
+                    $match: {
+                        provider: new mongoose.Types.ObjectId(providerId),
+                        createdAt: { $gte: start, $lte: end }
+                    }
+                },
+                {
+                    $group: {
+                        _id: {
+                            $dateToString: {
+                                format: period === 'weekly' ? '%Y-%U' : '%Y-%m-%d',
+                                date: '$createdAt'
+                            }
+                        },
+                        earnings: { $sum: '$netAmount' },
+                        count: { $sum: 1 }
+                    }
+                },
+                {
+                    $sort: { '_id': 1 }
+                },
+                {
+                    $project: {
+                        date: '$_id',
+                        earnings: 1,
+                        count: 1,
+                        _id: 0
+                    }
+                }
+            ]),
+
+            // Monthly completed jobs data
+            Booking.aggregate([
+                {
+                    $match: {
+                        provider: new mongoose.Types.ObjectId(providerId),
+                        status: 'completed',
+                        updatedAt: { $gte: start, $lte: end }
+                    }
+                },
+                {
+                    $group: {
+                        _id: {
+                            $dateToString: {
+                                format: '%Y-%m',
+                                date: '$updatedAt'
+                            }
+                        },
+                        completedJobs: { $sum: 1 }
+                    }
+                },
+                {
+                    $sort: { '_id': 1 }
+                },
+                {
+                    $project: {
+                        month: '$_id',
+                        completedJobs: 1,
+                        _id: 0
+                    }
+                }
+            ])
+        ]);
+
+        res.status(200).json({
+            success: true,
+            data: {
+                chartData: earningsData,
+                monthlyData,
+                dateRange: {
+                    start: start.toISOString().split('T')[0],
+                    end: end.toISOString().split('T')[0]
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('Earnings analytics error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch earnings analytics',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
+/**
+ * @desc    Get booking status breakdown
+ * @route   GET /api/providers/dashboard/bookings
+ * @access  Private (Provider)
+ */
+exports.getBookingStatusBreakdown = async (req, res) => {
+    try {
+        const providerId = req.providerId;
+
+        const bookingStats = await Booking.aggregate([
+            { $match: { provider: new mongoose.Types.ObjectId(providerId) } },
+            {
+                $group: {
+                    _id: '$status',
+                    count: { $sum: 1 }
+                }
+            }
+        ]);
+
+        // Process data for pie chart
+        const statusBreakdown = {};
+        const pieChartData = [];
+
+        const statusLabels = {
+            completed: 'Completed',
+            cancelled: 'Cancelled',
+            'in-progress': 'In Progress',
+            pending: 'Pending',
+            accepted: 'Accepted',
+            'no-show': 'No Show'
+        };
+
+        bookingStats.forEach(stat => {
+            const label = statusLabels[stat._id] || stat._id.charAt(0).toUpperCase() + stat._id.slice(1);
+            statusBreakdown[stat._id] = stat.count;
+            pieChartData.push({
+                name: label,
+                value: stat.count,
+                status: stat._id
+            });
+        });
+
+        res.status(200).json({
+            success: true,
+            data: {
+                statusBreakdown,
+                pieChartData
+            }
+        });
+
+    } catch (error) {
+        console.error('Booking status breakdown error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch booking status breakdown',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
+/**
+ * @desc    Get today and upcoming jobs
+ * @route   GET /api/providers/dashboard/analytics
+ * @access  Private (Provider)
+ */
+exports.getDashboardAnalytics = async (req, res) => {
+    try {
+        const providerId = req.providerId;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        const [
+            todayJobs,
+            upcomingJobs
+        ] = await Promise.all([
+            // Today's jobs
+            Booking.find({
+                provider: providerId,
+                date: { $gte: today, $lt: tomorrow },
+                status: { $in: ['accepted', 'in-progress', 'scheduled'] }
+            })
+            .populate('customer', 'name phone')
+            .populate('services.service', 'title')
+            .sort({ date: 1, time: 1 })
+            .limit(10),
+
+            // Upcoming jobs (next 7 days)
+            Booking.find({
+                provider: providerId,
+                date: { $gte: tomorrow, $lt: new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000) },
+                status: { $in: ['accepted', 'scheduled'] }
+            })
+            .populate('customer', 'name phone')
+            .populate('services.service', 'title')
+            .sort({ date: 1, time: 1 })
+            .limit(10)
+        ]);
+
+        res.status(200).json({
+            success: true,
+            data: {
+                todayJobs: todayJobs.map(job => ({
+                    _id: job._id,
+                    customer: job.customer,
+                    services: job.services,
+                    date: job.date,
+                    time: job.time,
+                    location: job.address,
+                    status: job.status,
+                    totalAmount: job.totalAmount
+                })),
+                upcomingJobs: upcomingJobs.map(job => ({
+                    _id: job._id,
+                    customer: job.customer,
+                    services: job.services,
+                    date: job.date,
+                    time: job.time,
+                    location: job.address,
+                    status: job.status,
+                    totalAmount: job.totalAmount
+                }))
+            }
+        });
+
+    } catch (error) {
+        console.error('Dashboard analytics error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch dashboard analytics',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
+/**
+ * @desc    Get wallet and payout information
+ * @route   GET /api/providers/dashboard/wallet
+ * @access  Private (Provider)
+ */
+exports.getWalletInfo = async (req, res) => {
+    try {
+        const providerId = req.providerId;
+
+        // Get provider with wallet information
+        const provider = await Provider.findById(providerId).select('bankDetails wallet');
+        if (!provider) {
+            return res.status(404).json({
+                success: false,
+                message: 'Provider not found'
+            });
+        }
+
+        // Get available balance from provider wallet
+        const availableBalance = provider.wallet?.availableBalance || 0;
+
+        // Get pending payouts (if any payment records exist)
+        const PaymentRecord = mongoose.model('PaymentRecord');
+        const pendingPayouts = await PaymentRecord.aggregate([
+            {
+                $match: {
+                    provider: new mongoose.Types.ObjectId(providerId),
+                    status: { $in: ['pending', 'processing'] }
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalPending: { $sum: '$amount' }
+                }
+            }
+        ]);
+
+        // Get last payout date
+        const lastPayout = await PaymentRecord.findOne({
+            provider: providerId,
+            status: 'completed'
+        }).sort({ updatedAt: -1 });
+
+        // Check if provider can withdraw (has valid bank details and minimum balance)
+        const canWithdraw = provider?.bankDetails?.verified &&
+                           availableBalance >= 500 && // Minimum withdrawal amount
+                           provider?.bankDetails?.accountNo &&
+                           provider?.bankDetails?.ifsc;
+
+        res.status(200).json({
+            success: true,
+            data: {
+                currentBalance: availableBalance,
+                pendingPayout: pendingPayouts.length > 0 ? pendingPayouts[0].totalPending : 0,
+                lastPayoutDate: lastPayout ? lastPayout.updatedAt : null,
+                canWithdraw
+            }
+        });
+
+    } catch (error) {
+        console.error('Wallet info error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch wallet information',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
+/**
+ * @desc    Get performance and ratings information
+ * @route   GET /api/providers/dashboard/ratings
+ * @access  Private (Provider)
+ */
+exports.getPerformanceRatings = async (req, res) => {
+    try {
+        const providerId = req.providerId;
+
+        const [
+            ratingStats,
+            completionStats
+        ] = await Promise.all([
+            // Rating statistics
+            Feedback.aggregate([
+                { $match: { 'providerFeedback.provider': new mongoose.Types.ObjectId(providerId) } },
+                {
+                    $group: {
+                        _id: null,
+                        averageRating: { $avg: '$providerFeedback.rating' },
+                        totalReviews: { $sum: 1 },
+                        ratingDistribution: {
+                            $push: '$providerFeedback.rating'
+                        }
+                    }
+                }
+            ]),
+
+            // Completion rate
+            Booking.aggregate([
+                { $match: { provider: new mongoose.Types.ObjectId(providerId) } },
+                {
+                    $group: {
+                        _id: '$status',
+                        count: { $sum: 1 }
+                    }
+                }
+            ])
+        ]);
+
+        // Process rating stats
+        const ratingData = ratingStats.length > 0 ? ratingStats[0] : { averageRating: 0, totalReviews: 0 };
+        const averageRating = ratingData.averageRating ? parseFloat(ratingData.averageRating.toFixed(1)) : 0;
+
+        // Process completion stats
+        let totalBookings = 0;
+        let completedBookings = 0;
+        completionStats.forEach(stat => {
+            totalBookings += stat.count;
+            if (stat._id === 'completed') {
+                completedBookings = stat.count;
+            }
+        });
+
+        const completionRate = totalBookings > 0 ? parseFloat(((completedBookings / totalBookings) * 100).toFixed(1)) : 0;
+
+        // Determine performance badge
+        let performanceBadge = 'Bronze';
+        if (averageRating >= 4.5 && completionRate >= 95) {
+            performanceBadge = 'Platinum';
+        } else if (averageRating >= 4.0 && completionRate >= 90) {
+            performanceBadge = 'Gold';
+        } else if (averageRating >= 3.5 && completionRate >= 85) {
+            performanceBadge = 'Silver';
+        }
+
+        res.status(200).json({
+            success: true,
+            data: {
+                averageRating,
+                totalReviews: ratingData.totalReviews || 0,
+                completionRate,
+                performanceBadge
+            }
+        });
+
+    } catch (error) {
+        console.error('Performance ratings error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch performance ratings',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
 
 

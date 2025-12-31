@@ -170,16 +170,6 @@ const ProviderLayout = () => {
                         })}
                     </nav>
 
-                    {/* Desktop sidebar footer */}
-                    <div className="px-4 py-4 border-t border-gray-200">
-                        <Link
-                            to="/provider/settings"
-                            className="flex items-center px-4 py-3 text-sm font-medium text-secondary hover:bg-primary/10 hover:text-primary rounded-xl transition-all duration-200"
-                        >
-                            <FiSettings className="w-5 h-5 mr-3" />
-                            Settings
-                        </Link>
-                    </div>
                 </div>
             </div>
 
@@ -279,14 +269,6 @@ const ProviderLayout = () => {
                                             Profile Settings
                                         </Link>
                                         
-                                        <Link
-                                            to="/provider/settings"
-                                            className="flex items-center px-4 py-3 text-sm text-secondary hover:bg-primary/10 hover:text-primary transition-colors"
-                                            onClick={() => setProfileDropdownOpen(false)}
-                                        >
-                                            <FiSettings className="w-4 h-4 mr-3" />
-                                            Account Settings
-                                        </Link>
                                         
                                         <hr className="my-2 border-gray-100" />
                                         

@@ -12,7 +12,6 @@ import {
   XCircle,
   Calendar,
   Filter,
-  RefreshCw,
   ArrowDownLeft,
   ChevronDown,
   ChevronUp,
@@ -32,7 +31,8 @@ const ProviderEarningsDashboard = () => {
     totalEarnings: 0,
     cashReceived: 0,
     commissionPending: 0,
-    availableBalance: 0
+    availableBalance: 0,
+    totalPendingWithdrawals: 0
   });
   const [earningsReport, setEarningsReport] = useState([]);
   const [withdrawalReport, setWithdrawalReport] = useState([]);
@@ -96,7 +96,8 @@ const ProviderEarningsDashboard = () => {
           totalEarnings: data.totalEarnings || 0,
           cashReceived: data.cashReceived || 0,
           commissionPending: data.commissionPending || 0,
-          availableBalance: data.availableBalance || 0
+          availableBalance: data.availableBalance || 0,
+          totalPendingWithdrawals: data.pendingWithdrawals || 0
         });
       } else {
         throw new Error(data.error || data.message || 'Failed to fetch earnings summary');
@@ -466,8 +467,6 @@ const ProviderEarningsDashboard = () => {
     }
   };
 
-
-
   // Show confirmation modal
   const showConfirmation = (message, action) => {
     setConfirmMessage(message);
@@ -484,8 +483,6 @@ const ProviderEarningsDashboard = () => {
     setConfirmMessage('');
     setConfirmAction(null);
   };
-
-
 
   // Refresh all data
   const refreshData = async () => {
@@ -602,14 +599,14 @@ const ProviderEarningsDashboard = () => {
   );
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-transparent font-inter">
       <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 lg:py-8">
         {/* Header */}
         <div className="mb-6 sm:mb-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center">
               <button
-                className="md:hidden mr-2 p-2 rounded-md text-gray-700"
+                className="md:hidden mr-2 p-2 rounded-md text-secondary"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               >
                 {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -619,19 +616,11 @@ const ProviderEarningsDashboard = () => {
                 <p className="text-gray-600 mt-1 sm:mt-2 text-sm sm:text-base">Track your earnings and manage withdrawals</p>
               </div>
             </div>
-            <button
-              onClick={refreshData}
-              disabled={loading}
-              className="p-2 rounded-md text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Refresh data"
-            >
-              <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
-            </button>
           </div>
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 sm:gap-6 mb-6 sm:mb-8">
           {/* Total Earnings Card */}
           <div className="bg-background rounded-xl shadow-sm p-4 sm:p-6 border border-gray-200 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
@@ -692,6 +681,22 @@ const ProviderEarningsDashboard = () => {
               </div>
               <div className="bg-yellow-100 p-2 sm:p-3 rounded-full">
                 <Clock className="w-5 sm:w-6 h-5 sm:h-6 text-yellow-600" />
+              </div>
+            </div>
+          </div>
+
+          {/* Total Pending Withdrawals Card */}
+          <div className="bg-background rounded-xl shadow-sm p-4 sm:p-6 border border-gray-200 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Pending Withdrawals</p>
+                <p className="text-lg sm:text-xl font-bold text-orange-600">
+                  {formatCurrency(summary.totalPendingWithdrawals)}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">Awaiting processing</p>
+              </div>
+              <div className="bg-orange-100 p-2 sm:p-3 rounded-full">
+                <Clock className="w-5 sm:w-6 h-5 sm:h-6 text-orange-600" />
               </div>
             </div>
           </div>
@@ -831,7 +836,7 @@ const ProviderEarningsDashboard = () => {
               setShowWithdrawal(true);
             }}
             disabled={summary.availableBalance < 500}
-            className="w-full sm:w-auto bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary text-white px-4 sm:px-6 py-3 rounded-lg font-medium flex items-center justify-center gap-2 transition-all disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed"
+            className="w-full sm:w-auto bg-gradient-to-r from-accent to-accent/90 hover:from-accent/90 hover:to-accent text-white px-4 sm:px-6 py-3 rounded-lg font-medium flex items-center justify-center gap-2 transition-all disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed"
           >
             <DollarSign className="w-4 sm:w-5 h-4 sm:h-5" />
             Request Withdrawal
@@ -858,7 +863,7 @@ const ProviderEarningsDashboard = () => {
                     ...withdrawalForm,
                     amount: e.target.value
                   })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
                   placeholder="500 minimum"
                   min="500"
                   max={summary.availableBalance}
@@ -887,14 +892,9 @@ const ProviderEarningsDashboard = () => {
                 <button
                   onClick={handleWithdrawal}
                   disabled={processingWithdrawal || loading}
-                  className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 disabled:bg-primary/50 flex items-center justify-center gap-1 order-1 sm:order-2 mb-3 sm:mb-0"
+                  className="px-4 py-2 bg-accent text-white rounded-md hover:bg-accent/90 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-1 order-1 sm:order-2 mb-3 sm:mb-0"
                 >
-                  {processingWithdrawal ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                      Processing...
-                    </>
-                  ) : 'Request Withdrawal'}
+                  {processingWithdrawal ? 'Processing...' : 'Request Withdrawal'}
                 </button>
               </div>
             </div>
@@ -919,14 +919,9 @@ const ProviderEarningsDashboard = () => {
                 <button
                   onClick={handleConfirm}
                   disabled={processingWithdrawal}
-                  className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 disabled:bg-primary/50 flex items-center justify-center gap-1 order-1 sm:order-2 mb-3 sm:mb-0"
+                  className="px-4 py-2 bg-accent text-white rounded-md hover:bg-accent/90 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-1 order-1 sm:order-2 mb-3 sm:mb-0"
                 >
-                  {processingWithdrawal ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                      Processing...
-                    </>
-                  ) : 'Confirm'}
+                  {processingWithdrawal ? 'Processing...' : 'Confirm'}
                 </button>
               </div>
             </div>
@@ -971,7 +966,7 @@ const ProviderEarningsDashboard = () => {
                     {withdrawalReport.slice(0, 5).map((record, index) => (
                       <div key={index} className="flex items-center justify-between p-3 sm:p-4 bg-gray-50 rounded-lg">
                         <div className="flex items-center gap-3">
-                          <div className="bg-primary/10 p-2 rounded-full">
+                          <div className="bg-accent/10 p-2 rounded-full">
                             <ArrowDownLeft className="w-4 h-4 text-accent" />
                           </div>
                           <div className="max-w-[60%]">
@@ -1040,8 +1035,6 @@ const ProviderEarningsDashboard = () => {
                     </button>
                   </div>
                 </div>
-
-
 
                 {earningsReport.length > 0 ? (
                   <div className="overflow-x-auto">
@@ -1239,11 +1232,7 @@ const ProviderEarningsDashboard = () => {
                       disabled={!dateFilter.startDate || !dateFilter.endDate || downloading.earnings}
                       className="w-full bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-md text-sm flex items-center justify-center gap-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
                     >
-                      {downloading.earnings ? (
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Download className="w-4 h-4" />
-                      )}
+                      <Download className="w-4 h-4" />
                       {downloading.earnings ? 'Downloading...' : 'Download Excel'}
                     </button>
                   </div>
@@ -1263,11 +1252,7 @@ const ProviderEarningsDashboard = () => {
                       disabled={!dateFilter.startDate || !dateFilter.endDate || downloading.withdrawals}
                       className="w-full bg-accent hover:bg-accent/90 text-white px-4 py-2 rounded-md text-sm flex items-center justify-center gap-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
                     >
-                      {downloading.withdrawals ? (
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Download className="w-4 h-4" />
-                      )}
+                      <Download className="w-4 h-4" />
                       {downloading.withdrawals ? 'Downloading...' : 'Download Excel'}
                     </button>
                   </div>
