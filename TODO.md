@@ -1,8 +1,15 @@
-# TODO: Add Filters to Admin/Dashboard.jsx
+# Admin Dashboard Filtering Implementation
 
-## Tasks to Complete:
-- [ ] Add filter state variables (period, city, serviceCategory) to Dashboard.jsx
-- [ ] Modify fetchDashboardData function to accept filters and pass them to the revenue API call
-- [ ] Add filter UI components (dropdown for period, inputs for city and category) in the header section
-- [ ] Add event handlers for filter changes to refetch data
-- [ ] Test that the revenue chart updates correctly with filters
+## Backend Updates
+- [ ] Update getDashboardSummary to accept and apply city/serviceCategory filters
+- [ ] Update getDashboardBookingsStatus to accept and apply city/serviceCategory filters
+- [ ] Update getDashboardTopProviders to accept and apply city/serviceCategory filters
+- [ ] Update getDashboardPendingActions to accept and apply city filters
+- [ ] Update getDashboardLiveStats to accept and apply city filters
+- [ ] Update getDashboardRecentActivity to accept and apply city/serviceCategory filters
+
+## Frontend Updates
+- [ ] Update fetchDashboardData in Dashboard.jsx to pass city and serviceCategory to all API calls
+
+## Testing
+- [ ] Test filtering functionality by applying filters and verifying data updates

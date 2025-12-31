@@ -722,37 +722,102 @@ const deleteAdmin = async (req, res) => {
  */
 const getDashboardSummary = async (req, res) => {
     try {
+        const { city, serviceCategory } = req.query;
         const today = moment().startOf('day');
         const currentMonth = moment().startOf('month');
 
+        // Build match conditions for bookings
+        let bookingMatchConditions = {};
+        if (city) {
+            bookingMatchConditions['address.city'] = { $regex: city, $options: 'i' };
+        }
+        if (serviceCategory) {
+            // Find service IDs that match the category name
+            const serviceIds = await Service.aggregate([
+                {
+                    $lookup: {
+                        from: 'categories',
+                        localField: 'category',
+                        foreignField: '_id',
+                        as: 'cat'
+                    }
+                },
+                {
+                    $unwind: '$cat'
+                },
+                {
+                    $match: {
+                        'cat.name': { $regex: serviceCategory, $options: 'i' }
+                    }
+                },
+                {
+                    $project: {
+                        _id: 1
+                    }
+                }
+            ]);
+            const ids = serviceIds.map(s => s._id);
+            if (ids.length > 0) {
+                bookingMatchConditions['services.service'] = { $in: ids };
+            } else {
+                // No services found, return zeros
+                return res.status(200).json({
+                    success: true,
+                    data: {
+                        totalBookings: 0,
+                        todayBookings: 0,
+                        ongoingBookings: 0,
+                        cancelledBookings: 0,
+                        totalCustomers: 0,
+                        totalProviders: 0,
+                        todayRevenue: 0,
+                        monthlyRevenue: 0,
+                        pendingPayoutAmount: 0
+                    }
+                });
+            }
+        }
+
         // Total bookings
-        const totalBookings = await Booking.countDocuments();
+        const totalBookings = await Booking.countDocuments(bookingMatchConditions);
 
         // Today's bookings
         const todayBookings = await Booking.countDocuments({
+            ...bookingMatchConditions,
             createdAt: { $gte: today.toDate() }
         });
 
         // Ongoing bookings (in-progress or accepted)
         const ongoingBookings = await Booking.countDocuments({
+            ...bookingMatchConditions,
             status: { $in: ['in-progress', 'accepted', 'scheduled'] }
         });
 
         // Cancelled bookings
         const cancelledBookings = await Booking.countDocuments({
+            ...bookingMatchConditions,
             status: 'cancelled'
         });
 
-        // Total customers
-        const totalCustomers = await User.countDocuments({ role: 'customer' });
+        // Total customers - filter by city if provided (assuming customers have address)
+        let customerMatch = { role: 'customer' };
+        if (city) {
+            customerMatch['address.city'] = { $regex: city, $options: 'i' };
+        }
+        const totalCustomers = await User.countDocuments(customerMatch);
 
-        // Total providers
-        const totalProviders = await Provider.countDocuments({ approved: true });
+        // Total providers - filter by city if provided
+        let providerMatch = { approved: true };
+        if (city) {
+            providerMatch['address.city'] = { $regex: city, $options: 'i' };
+        }
+        const totalProviders = await Provider.countDocuments(providerMatch);
 
         // Today's revenue
         const todayRevenueResult = await Booking.aggregate([
             {
                 $match: {
+                    ...bookingMatchConditions,
                     status: 'completed',
                     createdAt: { $gte: today.toDate() }
                 }
@@ -770,6 +835,7 @@ const getDashboardSummary = async (req, res) => {
         const monthlyRevenueResult = await Booking.aggregate([
             {
                 $match: {
+                    ...bookingMatchConditions,
                     status: 'completed',
                     createdAt: { $gte: currentMonth.toDate() }
                 }
@@ -783,12 +849,18 @@ const getDashboardSummary = async (req, res) => {
         ]);
         const monthlyRevenue = monthlyRevenueResult[0]?.total || 0;
 
-        // Pending payout amount (from provider earnings)
+        // Pending payout amount (from provider earnings) - filter by city if provided
+        let payoutMatch = {
+            status: { $in: ['pending', 'processing'] }
+        };
+        if (city) {
+            // Assuming provider earnings can be linked to provider's city
+            const providerIds = await Provider.find({ 'address.city': { $regex: city, $options: 'i' } }).select('_id');
+            payoutMatch.provider = { $in: providerIds.map(p => p._id) };
+        }
         const pendingPayoutResult = await ProviderEarning.aggregate([
             {
-                $match: {
-                    status: { $in: ['pending', 'processing'] }
-                }
+                $match: payoutMatch
             },
             {
                 $group: {
@@ -944,7 +1016,54 @@ const getDashboardRevenue = async (req, res) => {
  */
 const getDashboardBookingsStatus = async (req, res) => {
     try {
+        const { city, serviceCategory } = req.query;
+
+        // Build match conditions
+        let matchConditions = {};
+        if (city) {
+            matchConditions['address.city'] = { $regex: city, $options: 'i' };
+        }
+        if (serviceCategory) {
+            // Find service IDs that match the category name
+            const serviceIds = await Service.aggregate([
+                {
+                    $lookup: {
+                        from: 'categories',
+                        localField: 'category',
+                        foreignField: '_id',
+                        as: 'cat'
+                    }
+                },
+                {
+                    $unwind: '$cat'
+                },
+                {
+                    $match: {
+                        'cat.name': { $regex: serviceCategory, $options: 'i' }
+                    }
+                },
+                {
+                    $project: {
+                        _id: 1
+                    }
+                }
+            ]);
+            const ids = serviceIds.map(s => s._id);
+            if (ids.length > 0) {
+                matchConditions['services.service'] = { $in: ids };
+            } else {
+                // No services found, return empty data
+                return res.status(200).json({
+                    success: true,
+                    data: []
+                });
+            }
+        }
+
         const statusData = await Booking.aggregate([
+            {
+                $match: matchConditions
+            },
             {
                 $group: {
                     _id: '$status',
@@ -982,12 +1101,62 @@ const getDashboardBookingsStatus = async (req, res) => {
  */
 const getDashboardTopProviders = async (req, res) => {
     try {
-        const topProviders = await Booking.aggregate([
-            {
-                $match: {
-                    status: 'completed',
-                    provider: { $ne: null }
+        const { city, serviceCategory } = req.query;
+
+        // Build match conditions for bookings
+        let bookingMatchConditions = {
+            status: 'completed',
+            provider: { $ne: null }
+        };
+        if (city) {
+            bookingMatchConditions['address.city'] = { $regex: city, $options: 'i' };
+        }
+        if (serviceCategory) {
+            // Find service IDs that match the category name
+            const serviceIds = await Service.aggregate([
+                {
+                    $lookup: {
+                        from: 'categories',
+                        localField: 'category',
+                        foreignField: '_id',
+                        as: 'cat'
+                    }
+                },
+                {
+                    $unwind: '$cat'
+                },
+                {
+                    $match: {
+                        'cat.name': { $regex: serviceCategory, $options: 'i' }
+                    }
+                },
+                {
+                    $project: {
+                        _id: 1
+                    }
                 }
+            ]);
+            const ids = serviceIds.map(s => s._id);
+            if (ids.length > 0) {
+                bookingMatchConditions['services.service'] = { $in: ids };
+            } else {
+                // No services found, return empty data
+                return res.status(200).json({
+                    success: true,
+                    data: []
+                });
+            }
+        }
+
+        // Additional filter for providers by city if specified
+        let providerFilter = {};
+        if (city) {
+            providerFilter['address.city'] = { $regex: city, $options: 'i' };
+        }
+
+        let pipeline = [
+            {
+                $match: bookingMatchConditions
             },
             {
                 $group: {
@@ -1006,7 +1175,18 @@ const getDashboardTopProviders = async (req, res) => {
             },
             {
                 $unwind: '$providerInfo'
-            },
+            }
+        ];
+
+        if (city) {
+            pipeline.push({
+                $match: {
+                    'providerInfo.address.city': { $regex: city, $options: 'i' }
+                }
+            });
+        }
+
+        pipeline.push(
             {
                 $lookup: {
                     from: 'feedbacks',
@@ -1043,7 +1223,9 @@ const getDashboardTopProviders = async (req, res) => {
             {
                 $limit: 10
             }
-        ]);
+        );
+
+        const topProviders = await Booking.aggregate(pipeline);
 
         res.status(200).json({
             success: true,
