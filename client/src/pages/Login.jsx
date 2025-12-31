@@ -164,7 +164,7 @@ const LoginPage = () => {
                       : 'border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 hover:border-primary/50'
                   }`}
                   placeholder="Enter your email address"
-                  required
+                
                 />
               </div>
               {errors.email && (
@@ -194,7 +194,6 @@ const LoginPage = () => {
                   }`}
                   placeholder="Enter your password"
                   minLength="6"
-                  required
                 />
                 <button
                   type="button"
