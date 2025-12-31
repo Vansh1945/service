@@ -7,6 +7,7 @@ import { useAuth } from "../store/auth";
 import "swiper/css";
 
 import ServiceImg from "../assets/ServiceImg.png";
+import LoadingSpinner from "./Loader";
 
 const HeroSection = () => {
   const { API } = useAuth();
@@ -47,9 +48,7 @@ const HeroSection = () => {
   }, [API]);
 
   if (loading) {
-    return (
-      <div className="mt-16 md:mt-18 lg:mt-20 w-full h-[220px] sm:h-screen bg-gray-200 animate-pulse" />
-    );
+    return <LoadingSpinner/>
   }
 
   return (
@@ -74,9 +73,6 @@ const HeroSection = () => {
                     alt={banner.title || "banner"}
                     className="w-full h-full object-cover"
                   />
-                  
-                  {/* Gradient overlay for better text readability */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/40 to-transparent" />
                 </div>
 
                 {/* Overlay ONLY if text exists */}

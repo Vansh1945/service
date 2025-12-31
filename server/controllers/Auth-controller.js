@@ -90,8 +90,6 @@ exports.Login = async (req, res) => {
       });
     }
 
-    console.log(`User found in ${userType} collection`);
-    console.log("Stored password hash:", user.password);
 
     // Verify password
     let isMatch;
@@ -126,7 +124,7 @@ exports.Login = async (req, res) => {
     const token = jwt.sign(
       tokenPayload,
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRE || '30d' }
+      { expiresIn: process.env.JWT_EXPIRE || '7d' }
     );
 
     // Prepare response data

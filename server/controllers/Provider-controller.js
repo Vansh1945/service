@@ -12,6 +12,8 @@ const Service = require('../models/Service-model');
 const mongoose = require('mongoose');
 const Booking = require('../models/Booking-model');
 const Feedback = require('../models/Feedback-model');
+const User = require('../models/User-model');
+const Admin = require('../models/Admin-model');
 
 // Helper function to delete file from Cloudinary
 const deleteFile = async (publicId) => {
@@ -55,24 +57,41 @@ exports.initiateRegistration = async (req, res) => {
             isDeleted: false
         });
 
-        if (existingProvider) {
-            if (existingProvider.approved && existingProvider.profileComplete) {
-                // Fully registered & approved
+        // Check if email is already registered with user or admin
+        const emailExistsInUser = await User.findOne({
+            email: email.trim().toLowerCase()
+        });
+
+        const emailExistsInAdmin = await Admin.findOne({
+            email: email.trim().toLowerCase()
+        });
+
+        if (existingProvider || emailExistsInUser || emailExistsInAdmin) {
+            if (existingProvider) {
+                if (existingProvider.approved && existingProvider.profileComplete) {
+                    // Fully registered & approved
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Provider with this email already exists'
+                    });
+                } else if (!existingProvider.approved) {
+                    // Pending approval
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Provider registration with this email is pending approval'
+                    });
+                } else if (!existingProvider.profileComplete) {
+                    // Profile incomplete
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Provider profile is incomplete. Please login complete it to continue.'
+                    });
+                }
+            } else {
+                // Email exists in user or admin collections
                 return res.status(400).json({
                     success: false,
-                    message: 'Provider with this email already exists'
-                });
-            } else if (!existingProvider.approved) {
-                // Pending approval
-                return res.status(400).json({
-                    success: false,
-                    message: 'Provider registration with this email is pending approval'
-                });
-            } else if (!existingProvider.profileComplete) {
-                // Profile incomplete
-                return res.status(400).json({
-                    success: false,
-                    message: 'Provider profile is incomplete. Please login complete it to continue.'
+                    message: 'Email is already registered. Please use a different email address.'
                 });
             }
         }

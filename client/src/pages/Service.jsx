@@ -9,6 +9,7 @@ import {
     ArrowRight,
     Phone,
 } from 'lucide-react';
+import Wiring from '../assets/Service1.png';
 
 const ServicesPage = () => {
     const navigate = useNavigate();
@@ -26,7 +27,7 @@ const ServicesPage = () => {
             price: 'Starting at ₹5,000',
             rating: 4.8,
             features: ['Certified electricians', 'Quality materials', 'Safety guaranteed'],
-            image: '/placeholder-service.jpg'
+            image: Wiring
         },
         {
             _id: '2',
@@ -77,7 +78,7 @@ const ServicesPage = () => {
 
     const handleBookNow = (service) => {
         // Assuming user auth check and navigation logic here
-        navigate(`/customer/services/${service._id}`);
+        navigate(`/customer/services`);
     };
 
     return (

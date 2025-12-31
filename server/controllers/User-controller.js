@@ -5,6 +5,8 @@ const Complaint = require('../models/Complaint-model');
 const Transaction = require('../models/Transaction-model');
 const Coupon = require('../models/Coupon-model');
 const User = require('../models/User-model');
+const Provider = require('../models/Provider-model');
+const Admin = require('../models/Admin-model');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { uploadProfilePic } = require('../middlewares/upload'); 
@@ -103,11 +105,13 @@ const validateAddress = (address) => {
         errors['address.city'] = "City can only contain letters and spaces";
     }
 
-    // Validate pincode
-    if (!address.pincode || typeof address.pincode !== 'string') {
-        errors['address.pincode'] = "Pincode is required";
-    } else if (!/^\d{6}$/.test(address.pincode.trim())) {
-        errors['address.pincode'] = "Pincode must be a valid 6-digit number";
+    // Validate postalCode (optional)
+    if (address.postalCode !== undefined && address.postalCode !== null && address.postalCode !== '') {
+        if (typeof address.postalCode !== 'string') {
+            errors['address.postalCode'] = "Postal code must be a number";
+        } else if (!/^\d{6}$/.test(address.postalCode.trim())) {
+            errors['address.postalCode'] = "Postal code must be a valid 6-digit number";
+        }
     }
 
     return Object.keys(errors).length > 0 ? errors : null;
@@ -158,7 +162,7 @@ const register = async (req, res) => {
             });
         }
 
-        // Check if user already exists
+        // Check if user already exists (including cross-user-type email check)
         const userExists = await User.findOne({
             $or: [
                 { email: email.trim().toLowerCase() },
@@ -166,12 +170,26 @@ const register = async (req, res) => {
             ]
         });
 
-        if (userExists) {
+        // Check if email is already registered with provider or admin
+        const emailExistsInProvider = await Provider.findOne({
+            email: { $regex: new RegExp(`^${email.trim().toLowerCase()}$`, 'i') },
+            isDeleted: false
+        });
+
+        const emailExistsInAdmin = await Admin.findOne({
+            email: email.trim().toLowerCase()
+        });
+
+        if (userExists || emailExistsInProvider || emailExistsInAdmin) {
             const errors = {};
-            if (userExists.email === email.trim().toLowerCase()) {
+            if (userExists && userExists.email === email.trim().toLowerCase()) {
+                errors.email = "Email is already registered";
+            } else if (emailExistsInProvider) {
+                errors.email = "Email is already registered";
+            } else if (emailExistsInAdmin) {
                 errors.email = "Email is already registered";
             }
-            if (userExists.phone === phone.trim().replace(/\s+/g, '')) {
+            if (userExists && userExists.phone === phone.trim().replace(/\s+/g, '')) {
                 errors.phone = "Phone number is already registered";
             }
 
@@ -188,14 +206,18 @@ const register = async (req, res) => {
             email: email.trim().toLowerCase(),
             password: password,
             phone: phone.trim().replace(/\s+/g, ''),
-            address: {
-                street: address.street.trim(),
-                city: address.city.trim(),
-                pincode: address.pincode.trim()
-            },
             profilePicUrl,
             role: 'customer'
         };
+
+        // Add address if provided
+        if (address) {
+            userData.address = {
+                street: address.street.trim(),
+                city: address.city.trim(),
+                postalCode: address.postalCode ? address.postalCode.trim() : undefined
+            };
+        }
 
         const user = await User.create(userData);
 
