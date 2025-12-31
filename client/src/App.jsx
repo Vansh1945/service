@@ -160,7 +160,9 @@ const App = () => {
             <Route path="services/:id" element={<ServiceDetailPage />} />
             <Route path="book-service/:serviceId" element={<BookService />} />
             <Route path="bookings" element={<CustomerBookingsPage />} />
-            <Route path="booking-confirm/:bookingId" element={<BookingConfirmation />}/>
+            <Route path="booking-confirm/:bookingId"
+              element={<BookingConfirmation />}
+            />
             <Route path="feedback" element={<FeedbackManagement />} />
             <Route path="complaints" element={<ComplaintsPage />} />
           </Route>

@@ -89,7 +89,7 @@ const Navbar = () => {
       aria-label="Main navigation"
       className={`fixed w-full top-0 z-50 transition-all duration-500 ease-out ${
         scrolled 
-          ? 'bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-lg' 
+          ? 'bg-white/70 backdrop-blur-md border-b border-gray-200 shadow-lg' 
           : 'bg-white border-b border-gray-100'
       }`}
     >
