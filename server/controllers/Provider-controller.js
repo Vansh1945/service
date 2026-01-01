@@ -8,7 +8,6 @@ const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
 const cloudinary = require('../services/cloudinary');
-const Service = require('../models/Service-model');
 const mongoose = require('mongoose');
 const Booking = require('../models/Booking-model');
 const Feedback = require('../models/Feedback-model');
@@ -395,7 +394,66 @@ exports.completeProfile = async (req, res) => {
         }
 
         // Update professional info
-        provider.services = services;
+        // Parse and validate categories - convert category names or ObjectIds to ObjectIds
+        let categoryObjectIds = [];
+
+        if (services) {
+            // Ensure services is an array
+            let servicesArray = Array.isArray(services) ? services : [services];
+
+            for (const service of servicesArray) {
+                let categoryId = null;
+
+                if (typeof service === 'string') {
+                    // Check if it's already a valid ObjectId
+                    if (mongoose.Types.ObjectId.isValid(service.trim())) {
+                        categoryId = new mongoose.Types.ObjectId(service.trim());
+                    } else {
+                        // Try to find category by name
+                        const { Category } = require('../models/SystemSetting');
+                        const foundCategory = await Category.findOne({
+                            name: { $regex: new RegExp(`^${service.trim()}$`, 'i') },
+                            isActive: true
+                        });
+                        if (foundCategory) {
+                            categoryId = foundCategory._id;
+                        } else {
+                            return res.status(400).json({
+                                success: false,
+                                message: `Invalid service: "${service}". Service not found or inactive.`
+                            });
+                        }
+                    }
+                } else if (service instanceof mongoose.Types.ObjectId) {
+                    categoryId = service;
+                } else {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Invalid service format. Services must be ObjectIds or valid service names.'
+                    });
+                }
+
+                // Check for duplicates
+                if (categoryObjectIds.some(id => id.equals(categoryId))) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `Duplicate service detected: "${service}"`
+                    });
+                }
+
+                categoryObjectIds.push(categoryId);
+            }
+        }
+
+        // Ensure at least one category is provided
+        if (categoryObjectIds.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'At least one valid service must be provided'
+            });
+        }
+
+        provider.services = categoryObjectIds;
         provider.experience = experience;
         provider.serviceArea = serviceArea;
 
@@ -642,19 +700,66 @@ exports.updateProviderProfile = async (req, res) => {
         if (!updateType || updateType === 'professional') {
             // Professional Information Updates
             if (services) {
-                let parsedServices = services;
-                if (typeof services === 'string') {
-                    try {
-                        parsedServices = JSON.parse(services);
-                    } catch (e) {
-                        console.error('Error parsing services:', e);
-                        return res.status(400).json({
-                            success: false,
-                            message: 'Invalid services format'
-                        });
+                // Parse and validate categories - convert category names or ObjectIds to ObjectIds
+                let categoryObjectIds = [];
+
+                if (services) {
+                    // Ensure services is an array
+                    let servicesArray = Array.isArray(services) ? services : [services];
+
+                    for (const service of servicesArray) {
+                        let categoryId = null;
+
+                        if (typeof service === 'string') {
+                            // Check if it's already a valid ObjectId
+                            if (mongoose.Types.ObjectId.isValid(service.trim())) {
+                                categoryId = new mongoose.Types.ObjectId(service.trim());
+                            } else {
+                                // Try to find category by name
+                                const { Category } = require('../models/SystemSetting');
+                                const foundCategory = await Category.findOne({
+                                    name: { $regex: new RegExp(`^${service.trim()}$`, 'i') },
+                                    isActive: true
+                                });
+                                if (foundCategory) {
+                                    categoryId = foundCategory._id;
+                                } else {
+                                    return res.status(400).json({
+                                        success: false,
+                                        message: `Invalid service: "${service}". Service not found or inactive.`
+                                    });
+                                }
+                            }
+                        } else if (service instanceof mongoose.Types.ObjectId) {
+                            categoryId = service;
+                        } else {
+                            return res.status(400).json({
+                                success: false,
+                                message: 'Invalid service format. Services must be ObjectIds or valid service names.'
+                            });
+                        }
+
+                        // Check for duplicates
+                        if (categoryObjectIds.some(id => id.equals(categoryId))) {
+                            return res.status(400).json({
+                                success: false,
+                                message: `Duplicate service detected: "${service}"`
+                            });
+                        }
+
+                        categoryObjectIds.push(categoryId);
                     }
                 }
-                updates.services = parsedServices;
+
+                // Ensure at least one category is provided
+                if (categoryObjectIds.length === 0) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'At least one valid service must be provided'
+                    });
+                }
+
+                updates.services = categoryObjectIds;
             }
             if (experience !== undefined) updates.experience = experience;
             if (serviceArea) updates.serviceArea = serviceArea;

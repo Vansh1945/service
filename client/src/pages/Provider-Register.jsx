@@ -126,6 +126,7 @@ const ProviderRegistration = () => {
         // Transform the data to match expected format
         const transformedData = (data.data || []).map(category => ({
           _id: category._id,
+          name: category.name,
           title: category.name,
           category: category.name,
           icon: category.icon,
@@ -145,13 +146,18 @@ const ProviderRegistration = () => {
   }, [API]);
 
   const handleServiceChange = (service) => {
+    const serviceId = service.id || service._id;
     setSelectedServices(prev => {
-      if (prev.includes(service)) {
+      if (prev.includes(serviceId)) {
         // If the service is already selected, deselect it
-        return [];
+        return prev.filter(id => id !== serviceId);
       } else {
-        // If a new service is selected, make it the only selected service
-        return [service];
+        // If a new service is selected, add it if less than 3
+        if (prev.length < 3) {
+          return [...prev, serviceId];
+        } else {
+          return prev; // Don't add if already 3
+        }
       }
     });
   };
@@ -309,6 +315,13 @@ const ProviderRegistration = () => {
   const handleCompleteProfile = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
+
+    // Validate minimum 1 service category
+    if (selectedServices.length < 1) {
+      toast.error('Please select at least one service category.');
+      setIsSubmitting(false);
+      return;
+    }
 
     // Use selectedServices array directly as backend expects array
     const formDataWithServices = {
@@ -882,45 +895,95 @@ const ProviderRegistration = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="group">
                 <label className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                  Service Categories (Select only 1) *
+                  Service Categories (Select 1-3) *
                 </label>
-                <div className="grid grid-cols-2 gap-3">
-                  {providerServicesLoading ? (
-                    <div className="col-span-2 flex items-center text-secondary/70">
-                      <Loader2 className="w-5 h-5 text-primary animate-spin mr-2" />
-                      Loading service categories...
+
+                {/* Service Categories Selection */}
+                {providerServicesLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                    <span className="ml-3 text-secondary/70">Loading service categories...</span>
+                  </div>
+                ) : providerServicesError ? (
+                  <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
+                    <div className="flex items-center">
+                      <AlertCircle className="w-5 h-5 text-red-500 mr-2" />
+                      <span className="text-red-700 text-sm">Failed to load service categories. Please try again.</span>
                     </div>
-                  ) : providerServicesError ? (
-                    <div className="col-span-2 text-sm text-red-600 flex items-center">
-                      <AlertCircle className="w-4 h-4 mr-1" />
-                      Failed to load service categories. Using fallback options.
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-64 overflow-y-auto">
+                      {providerServices.map((service) => (
+                        <div
+                          key={service._id}
+                          onClick={() => handleServiceChange(service)}
+                          className={`relative p-4 rounded-2xl border-2 cursor-pointer transition-all duration-300 hover:shadow-md ${
+                            selectedServices.includes(service._id)
+                              ? 'border-primary bg-primary/5 shadow-lg'
+                              : 'border-gray-200 hover:border-primary/50'
+                          } ${selectedServices.length >= 3 && !selectedServices.includes(service._id) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          <div className="flex items-start space-x-3">
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                              selectedServices.includes(service._id)
+                                ? 'bg-primary text-white'
+                                : 'bg-gray-100 text-secondary/60'
+                            }`}>
+                              {service.icon ? (
+                                <img src={service.icon} alt={service.name} className="w-6 h-6 object-contain" />
+                              ) : (
+                                <Briefcase className="w-5 h-5" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className={`font-semibold text-sm truncate ${
+                                selectedServices.includes(service._id) ? 'text-primary' : 'text-secondary'
+                              }`}>
+                                {service.name}
+                              </h4>
+                              {service.description && (
+                                <p className="text-xs text-secondary/60 mt-1 line-clamp-2">
+                                  {service.description}
+                                </p>
+                              )}
+                            </div>
+                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                              selectedServices.includes(service._id)
+                                ? 'border-primary bg-primary'
+                                : 'border-gray-300'
+                            }`}>
+                              {selectedServices.includes(service._id) && (
+                                <CheckCircle className="w-4 h-4 text-white" />
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ) : (
-                    (providerServices.length > 0 ? providerServices : [
-                      { _id: 'electrical', title: 'Electrical', category: 'Electrical' },
-                      { _id: 'ac', title: 'AC', category: 'AC' },
-                      { _id: 'appliance-repair', title: 'Appliance Repair', category: 'Appliance Repair' },
-                      { _id: 'other', title: 'Other', category: 'Other' },
-                    ]).map(service => (
-                      <div key={service._id} className="flex items-center">
-                        <input
-                          type="checkbox"
-                          id={`service-${service._id}`}
-                          name="services"
-                          value={service.category}
-                          checked={selectedServices.includes(service.category)}
-                          onChange={() => handleServiceChange(service.category)}
-                          className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-                          disabled={selectedServices.length >= 1 && !selectedServices.includes(service.category)}
-                        />
-                        <label htmlFor={`service-${service._id}`} className="ml-2 text-sm text-secondary">
-                          {service.title}
-                        </label>
+
+                    {selectedServices.length > 0 && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-secondary/70">
+                          {selectedServices.length} of 3 categories selected
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedServices([])}
+                          className="text-accent hover:text-accent/80 font-medium"
+                        >
+                          Clear all
+                        </button>
                       </div>
-                    ))
-                  )}
-                </div>
-                
+                    )}
+
+                    {providerServices.length === 0 && (
+                      <div className="text-center py-8 text-secondary/60">
+                        No service categories available at the moment.
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="group">
