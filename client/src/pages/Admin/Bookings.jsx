@@ -131,7 +131,7 @@ const AdminBookingsView = () => {
                 setProviders(data.providers || data.data || []);
             } else {
                 const errorData = await response.json();
-                throw new Error(errorData.message || 'Failed to fetch providers');
+                throw new Error(errorData.message);
             }
         } catch (error) {
             console.error('Error fetching providers:', error);
@@ -166,7 +166,7 @@ const AdminBookingsView = () => {
             if (response.ok) {
                 const data = await response.json();
                 const fetchedBookings = data.data || [];
-                
+
                 setBookings(fetchedBookings);
                 setPagination(prev => ({
                     ...prev,
@@ -178,7 +178,7 @@ const AdminBookingsView = () => {
                 calculateStats(fetchedBookings);
             } else {
                 const errorData = await response.json();
-                throw new Error(errorData.message || 'Failed to fetch bookings');
+                throw new Error(errorData.message);
             }
         } catch (error) {
             console.error('Error fetching bookings:', error);
@@ -228,7 +228,7 @@ const AdminBookingsView = () => {
                 setShowModal(true);
             } else {
                 const errorData = await response.json();
-                throw new Error(errorData.message || 'Failed to fetch booking details');
+                throw new Error(errorData.message);
             }
         } catch (error) {
             console.error('Error fetching booking details:', error);
@@ -257,7 +257,7 @@ const AdminBookingsView = () => {
                 setShowModal(false);
             } else {
                 const errorData = await response.json();
-                throw new Error(errorData.message || 'Failed to delete booking');
+                throw new Error(errorData.message);
             }
         } catch (error) {
             console.error('Error deleting booking:', error);
@@ -286,7 +286,7 @@ const AdminBookingsView = () => {
                 setShowModal(false);
             } else {
                 const errorData = await response.json();
-                throw new Error(errorData.message || 'Failed to delete user booking');
+                throw new Error(errorData.message);
             }
         } catch (error) {
             console.error('Error deleting user booking:', error);
@@ -318,7 +318,7 @@ const AdminBookingsView = () => {
                 }
             } else {
                 const errorData = await response.json();
-                throw new Error(errorData.message || 'Failed to assign provider');
+                throw new Error(errorData.message);
             }
         } catch (error) {
             console.error('Error assigning provider:', error);
@@ -352,7 +352,7 @@ const AdminBookingsView = () => {
                 setShowModal(false);
             } else {
                 const errorData = await response.json();
-                throw new Error(errorData.message || 'Failed to reschedule booking');
+                throw new Error(errorData.message);
             }
         } catch (error) {
             console.error('Error rescheduling booking:', error);
@@ -391,11 +391,11 @@ const AdminBookingsView = () => {
                 a.click();
                 document.body.removeChild(a);
                 window.URL.revokeObjectURL(url);
-                
+
                 showToast('Report downloaded successfully', 'success');
             } else {
                 const errorData = await response.json();
-                throw new Error(errorData.message || 'Failed to download report');
+                throw new Error(errorData.message);
             }
         } catch (error) {
             console.error('Error downloading report:', error);
@@ -479,13 +479,7 @@ const AdminBookingsView = () => {
     // Render table content based on loading and data state
     const renderTableContent = () => {
         if (loading) {
-            return (
-                <tr>
-                    <td colSpan="7" className="px-4 py-8">
-                        <Loader />
-                    </td>
-                </tr>
-            );
+            return ( <Loader />);
         }
 
         if (bookings.length === 0) {
@@ -958,42 +952,94 @@ const AdminBookingsView = () => {
                                     {/* Provider Information */}
                                     {selectedBooking.provider && (
                                         <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
-                                            <h3 className="font-semibold text-secondary mb-3">Provider Information</h3>
-                                            <div className="space-y-2">
-                                                <div>
-                                                    <span className="text-sm text-gray-600">Business Name:</span>
-                                                    <p className="font-medium">{selectedBooking.provider.businessName || selectedBooking.provider.name || 'N/A'}</p>
+                                            <h3 className="font-semibold text-secondary mb-3 flex items-center">
+                                                <User className="w-4 h-4 mr-2" />
+                                                Provider Information
+                                            </h3>
+                                            <div className="space-y-3">
+                                                {/* Provider Header */}
+                                                <div className="flex items-center space-x-3 pb-3 border-b border-gray-200">
+                                                    <div className="w-12 h-12 bg-gradient-to-r from-primary to-teal-600 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0">
+                                                        {selectedBooking.provider.profilePicUrl && selectedBooking.provider.profilePicUrl !== 'default-provider.jpg' ? (
+                                                            <img
+                                                                src={selectedBooking.provider.profilePicUrl}
+                                                                alt="Provider"
+                                                                className="w-full h-full object-cover"
+                                                            />
+                                                        ) : (
+                                                            <User className="w-6 h-6 text-white" />
+                                                        )}
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-semibold text-secondary">
+                                                            {selectedBooking.provider.businessName || selectedBooking.provider.name || 'N/A'}
+                                                        </p>
+                                                        <p className="text-sm text-gray-600 flex items-center">
+                                                            <Mail className="w-3 h-3 mr-1" />
+                                                            {selectedBooking.provider.email || 'N/A'}
+                                                        </p>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <span className="text-sm text-gray-600">Email:</span>
-                                                    <p className="font-medium">{selectedBooking.provider.email || 'N/A'}</p>
+
+                                                {/* Provider Details */}
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <span className="text-sm text-gray-600">Phone:</span>
+                                                        <p className="font-medium flex items-center">
+                                                            <Phone className="w-3 h-3 mr-1" />
+                                                            {selectedBooking.provider.phone || 'N/A'}
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-sm text-gray-600">Experience:</span>
+                                                        <p className="font-medium">{selectedBooking.provider.experience || '0'} years</p>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-sm text-gray-600">Service Area:</span>
+                                                        <p className="font-medium">{selectedBooking.provider.serviceArea || 'N/A'}</p>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-sm text-gray-600">Rating:</span>
+                                                        <p className="font-medium flex items-center">
+                                                            <Star className="w-3 h-3 mr-1 text-yellow-500" />
+                                                            {selectedBooking.provider.rating || 'N/A'}
+                                                        </p>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <span className="text-sm text-gray-600">Phone:</span>
-                                                    <p className="font-medium">{selectedBooking.provider.phone || 'N/A'}</p>
+
+                                                {/* Services Offered */}
+                                                {selectedBooking.provider.services && selectedBooking.provider.services.length > 0 && (
+                                                    <div>
+                                                        <span className="text-sm text-gray-600">Services Offered:</span>
+                                                        <div className="flex flex-wrap gap-1 mt-1">
+                                                            {selectedBooking.provider.services.slice(0, 3).map((service, index) => (
+                                                                <span key={index} className="px-2 py-1 bg-primary/10 text-primary text-xs rounded-full">
+                                                                    {service.name || service}
+                                                                </span>
+                                                            ))}
+                                                            {selectedBooking.provider.services.length > 3 && (
+                                                                <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
+                                                                    +{selectedBooking.provider.services.length - 3} more
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Bank Verification Status */}
+                                                <div className="flex items-center justify-between pt-2 border-t border-gray-200">
+                                                    <span className="text-sm text-gray-600">Bank Verified:</span>
+                                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                                        selectedBooking.provider.bankDetails?.verified
+                                                            ? 'bg-green-100 text-green-800'
+                                                            : 'bg-yellow-100 text-yellow-800'
+                                                    }`}>
+                                                        {selectedBooking.provider.bankDetails?.verified ? 'Verified' : 'Pending'}
+                                                    </span>
                                                 </div>
                                             </div>
                                         </div>
                                     )}
-
-                                    {/* Service Information */}
-                                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
-                                        <h3 className="font-semibold text-secondary mb-3">Service Information</h3>
-                                        {selectedBooking.services?.map((serviceItem, index) => (
-                                            <div key={index} className="mb-3 last:mb-0">
-                                                <div className="font-medium">{serviceItem.service?.title || 'N/A'}</div>
-                                                <div className="text-sm text-gray-600">
-                                                    Category: {serviceItem.service?.category?.name || 'N/A'}
-                                                </div>
-                                                <div className="text-sm text-gray-600">
-                                                    Quantity: {serviceItem.quantity || 1}
-                                                </div>
-                                                <div className="text-sm text-gray-600">
-                                                    Price: {formatCurrency(serviceItem.price)}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
                                 </div>
 
                                 {/* Right Column */}
@@ -1061,6 +1107,25 @@ const AdminBookingsView = () => {
                                                 )}
                                             </div>
                                         </div>
+                                    </div>
+
+                                    {/* Service Information */}
+                                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                                        <h3 className="font-semibold text-secondary mb-3">Service Information</h3>
+                                        {selectedBooking.services?.map((serviceItem, index) => (
+                                            <div key={index} className="mb-3 last:mb-0">
+                                                <div className="font-medium">{serviceItem.service?.title || 'N/A'}</div>
+                                                <div className="text-sm text-gray-600">
+                                                    Category: {serviceItem.service?.category?.name || 'N/A'}
+                                                </div>
+                                                <div className="text-sm text-gray-600">
+                                                    Quantity: {serviceItem.quantity || 1}
+                                                </div>
+                                                <div className="text-sm text-gray-600">
+                                                    Price: {formatCurrency(serviceItem.price)}
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
 
                                     {/* Booking Status Flow */}

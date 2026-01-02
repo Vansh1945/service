@@ -2321,7 +2321,14 @@ const getBookingDetails = async (req, res) => {
 
     const booking = await Booking.findById(id)
       .populate('customer', 'name email phone')
-      .populate('provider', 'name email phone')
+      .populate({
+        path: 'provider',
+        select: 'name email phone  experience serviceArea rating services profilePicUrl bankDetails',
+        populate: {
+          path: 'services',
+          select: 'name'
+        }
+      })
       .populate({
         path: 'services.service',
         select: 'title category description basePrice duration image',

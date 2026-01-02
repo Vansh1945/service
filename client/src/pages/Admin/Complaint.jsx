@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../store/auth';
 import axios from 'axios';
+import Loader from '../../components/Loader';
 import {
   Search,
   Filter,
@@ -621,19 +622,9 @@ const ComplaintsPage = () => {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-secondary">Complaint Management</h1>
-              <p className="text-gray-600 mt-1">Manage and track customer complaints efficiently</p>
-            </div>
-            <button
-              onClick={fetchComplaints}
-              disabled={loading}
-              className="flex items-center space-x-2 bg-primary text-white px-4 py-2 rounded-lg hover:bg-teal-700 disabled:opacity-50 transition-colors"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              <span>{loading ? 'Loading...' : 'Refresh'}</span>
-            </button>
+          <div className="mb-6">
+            <h1 className="text-2xl md:text-3xl font-bold text-secondary">Complaint Management</h1>
+            <p className="text-gray-600 mt-1">Manage and track customer complaints efficiently</p>
           </div>
 
           {/* Stats Cards */}
@@ -776,34 +767,7 @@ const ComplaintsPage = () => {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {loading ? (
-                  Array.from({ length: 5 }).map((_, index) => (
-                    <tr key={index} className="animate-pulse">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="h-4 bg-gray-200 rounded w-20"></div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="h-4 bg-gray-200 rounded w-32"></div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="h-4 bg-gray-200 rounded w-24"></div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="h-6 bg-gray-200 rounded w-16"></div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="h-6 bg-gray-200 rounded w-16"></div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="h-4 bg-gray-200 rounded w-20"></div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="h-4 bg-gray-200 rounded w-20"></div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="h-8 bg-gray-200 rounded w-16"></div>
-                      </td>
-                    </tr>
-                  ))
+                      <Loader />
                 ) : complaints.length === 0 ? (
                   <tr>
                     <td colSpan="8" className="px-6 py-8 text-center">

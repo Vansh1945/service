@@ -367,6 +367,20 @@ const getPendingProviders = async (req, res) => {
         const providers = await Provider.aggregate(providersPipeline);
         const total = await Provider.countDocuments(filter);
 
+        // Calculate age for each provider since aggregation doesn't include virtuals
+        providers.forEach(provider => {
+            if (provider.dateOfBirth) {
+                const today = new Date();
+                const birthDate = new Date(provider.dateOfBirth);
+                let age = today.getFullYear() - birthDate.getFullYear();
+                const monthDiff = today.getMonth() - birthDate.getMonth();
+                if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                    age--;
+                }
+                provider.age = age;
+            }
+        });
+
         res.status(200).json({
             success: true,
             count: providers.length,
@@ -454,6 +468,20 @@ const getAllProviders = async (req, res) => {
         const providers = await Provider.aggregate(providersPipeline);
         const total = await Provider.countDocuments(filter);
 
+        // Calculate age for each provider since aggregation doesn't include virtuals
+        providers.forEach(provider => {
+            if (provider.dateOfBirth) {
+                const today = new Date();
+                const birthDate = new Date(provider.dateOfBirth);
+                let age = today.getFullYear() - birthDate.getFullYear();
+                const monthDiff = today.getMonth() - birthDate.getMonth();
+                if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                    age--;
+                }
+                provider.age = age;
+            }
+        });
+
         res.status(200).json({
             success: true,
             count: providers.length,
@@ -529,9 +557,23 @@ const getProviderDetails = async (req, res) => {
             });
         }
 
+        const provider = providers[0];
+
+        // Calculate age dynamically since aggregation doesn't include virtuals
+        if (provider.dateOfBirth) {
+            const today = new Date();
+            const birthDate = new Date(provider.dateOfBirth);
+            let age = today.getFullYear() - birthDate.getFullYear();
+            const monthDiff = today.getMonth() - birthDate.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                age--;
+            }
+            provider.age = age;
+        }
+
         res.status(200).json({
             success: true,
-            provider: providers[0]
+            provider
         });
 
     } catch (error) {
@@ -1460,10 +1502,11 @@ const getDashboardRecentActivity = async (req, res) => {
             .select('paymentMethod paymentStatus amount createdAt user');
 
         recentPayments.forEach(payment => {
+            const displayAmount = payment.paymentMethod === 'online' ? payment.amount / 100 : payment.amount;
             activities.push({
                 type: 'payment',
-                message: `${payment.paymentMethod} of ₹${payment.amount} by ${payment.user?.name || 'User'}`,
-                amount: payment.amount,
+                message: `${payment.paymentMethod} of ₹${displayAmount} by ${payment.user?.name || 'User'}`,
+                amount: displayAmount,
                 status: payment.paymentStatus,
                 timestamp: payment.createdAt
             });

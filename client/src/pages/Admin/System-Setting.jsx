@@ -24,7 +24,7 @@ const SystemSetting = () => {
   const [logoFile, setLogoFile] = useState(null);
   const [faviconFile, setFaviconFile] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState('');
+
   const [previewLogo, setPreviewLogo] = useState('');
   const [previewFavicon, setPreviewFavicon] = useState('');
   
@@ -87,7 +87,7 @@ const SystemSetting = () => {
         if (settingsData.data.favicon) setPreviewFavicon(settingsData.data.favicon);
       }
     } catch (error) {
-      setMessage('Error fetching system settings');
+      showToast('Error fetching system settings', 'error');
       console.error('Fetch error:', error);
     } finally {
       setLoading(false);
@@ -168,11 +168,7 @@ const SystemSetting = () => {
           <p className="text-gray-600 mt-2 font-inter">Configure your company details and branding</p>
         </div>
 
-        {message && (
-          <div className={`mb-6 p-4 rounded-xl font-inter border ${message.includes('Error') ? 'bg-red-50 border-red-200 text-red-700' : 'bg-green-50 border-green-200 text-green-700'}`}>
-            {message}
-          </div>
-        )}
+
 
         {/* Main Settings Card */}
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
