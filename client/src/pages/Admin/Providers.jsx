@@ -541,23 +541,15 @@ const AdminProvidersPage = () => {
             <Clock className="w-3 h-3 mr-1" />
             {daysPending} days
           </div>
+
         </td>
+
         <td className="p-4">
+
           <div className="flex items-center gap-2">
-            <div className={`p-2 rounded-lg transition-colors ${provider.resume ? 'text-green-600 bg-green-50 border border-green-200' : 'text-gray-400 bg-gray-100'}`}>
-              <FileText className="w-4 h-4" />
-            </div>
-            <div className={`p-2 rounded-lg transition-colors ${provider.bankDetails?.passbookImage ? 'text-green-600 bg-green-50 border border-green-200' : 'text-gray-400 bg-gray-100'}`}>
-              <FileImage className="w-4 h-4" />
-            </div>
-            <div className={`p-2 rounded-lg transition-colors ${provider.bankDetails?.verified ? 'text-green-600 bg-green-50 border border-green-200' : 'text-gray-400 bg-gray-100'}`}>
-              <CreditCard className="w-4 h-4" />
-            </div>
-          </div>
-        </td>
-        <td className="p-4">
-          <div className="flex items-center gap-2">
+
             <button
+
               onClick={() => onViewDetails(provider._id)}
               className="p-2 bg-gradient-to-r from-primary to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-primary transition-all duration-200 shadow-sm hover:shadow-md transform hover:scale-105"
               title="View Details"
@@ -795,6 +787,12 @@ const AdminProvidersPage = () => {
                 <div className="space-y-3">
                   {selectedProvider.bankDetails ? (
                     <>
+                    <div className="flex justify-between items-center py-2 border-b border-teal-50">
+                        <span className="text-sm text-gray-600">Bank Name</span>
+                        <span className="font-medium text-secondary">
+                          {selectedProvider.bankDetails.accountName || 'N/A'}
+                        </span>
+                      </div>
                       <div className="flex justify-between items-center py-2 border-b border-teal-50">
                         <span className="text-sm text-gray-600">Account Number</span>
                         <span className="font-medium text-secondary font-mono">
@@ -1144,7 +1142,7 @@ const AdminProvidersPage = () => {
                 <table className="w-full">
                   <thead className="bg-gradient-to-r from-primary to-teal-600">
                     <tr>
-                      {['Provider', 'Phone', 'Location', 'Services', 'Experience', 'Registered', 'Days Pending', 'Documents', 'Actions'].map((header) => (
+                      {['Provider', 'Phone', 'Location', 'Services', 'Experience', 'Registered', 'Days Pending', 'Actions'].map((header) => (
                         <th key={header} className="p-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
                           {header}
                         </th>
