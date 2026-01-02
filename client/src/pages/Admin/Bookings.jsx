@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../store/auth';
+import Loader from '../../components/Loader';
 import {
     Search,
     Calendar,
@@ -475,6 +476,134 @@ const AdminBookingsView = () => {
         return bookings.length;
     }, [bookings]);
 
+    // Render table content based on loading and data state
+    const renderTableContent = () => {
+        if (loading) {
+            return (
+                <tr>
+                    <td colSpan="7" className="px-4 py-8">
+                        <Loader />
+                    </td>
+                </tr>
+            );
+        }
+
+        if (bookings.length === 0) {
+            return (
+                <tr>
+                    <td colSpan="7" className="px-4 py-8 text-center text-gray-500">
+                        <Calendar className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                        <p>No bookings found</p>
+                        <p className="text-sm">Try adjusting your filters</p>
+                    </td>
+                </tr>
+            );
+        }
+
+        return bookings.map((booking) => (
+            <tr key={booking._id} className="hover:bg-gray-50">
+                <td className="px-4 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-secondary">
+                        #{booking._id?.substring(booking._id.length - 8) || 'N/A'}
+                    </div>
+                </td>
+                <td className="px-4 py-4 whitespace-nowrap">
+                    <div>
+                        <div className="text-sm font-medium text-secondary">
+                            {booking.customer?.name || 'N/A'}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                            {booking.customer?.email || 'N/A'}
+                        </div>
+                    </div>
+                </td>
+                <td className="px-4 py-4 whitespace-nowrap hidden md:table-cell">
+                    <div>
+                        <div className="text-sm font-medium text-secondary">
+                            {booking.provider?.name || 'Unassigned'}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                            {booking.provider?.email || 'N/A'}
+                        </div>
+                    </div>
+                </td>
+                <td className="px-4 py-4 whitespace-nowrap">
+                    <div>
+                        <div className="text-sm font-medium text-secondary">
+                            {booking.services?.[0]?.service?.title || 'N/A'}
+                        </div>
+                        <div className="text-sm font-bold text-primary">
+                            {formatCurrency(booking.totalAmount)}
+                        </div>
+                    </div>
+                </td>
+                <td className="px-4 py-4 whitespace-nowrap hidden lg:table-cell">
+                    <div>
+                        <div className="text-sm text-secondary">
+                            {formatDate(booking.date)}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                            {booking.time || 'Not specified'}
+                        </div>
+                    </div>
+                </td>
+                <td className="px-4 py-4 whitespace-nowrap">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(booking.status)}`}>
+                        {getStatusIcon(booking.status)}
+                        <span className="ml-1 capitalize">{booking.status}</span>
+                    </span>
+                </td>
+                <td className="px-4 py-4 whitespace-nowrap">
+                    <div className="flex items-center space-x-2">
+                        <button
+                            onClick={() => fetchBookingDetails(booking._id)}
+                            className="p-1 text-primary hover:text-teal-700"
+                            title="View Details"
+                        >
+                            <Eye className="w-4 h-4" />
+                        </button>
+
+                        <button
+                            onClick={() => {
+                                setSelectedBooking(booking);
+                                setShowRescheduleModal(true);
+                            }}
+                            className="p-1 text-blue-600 hover:text-blue-800"
+                            title="Update Date/Time"
+                        >
+                            <Calendar className="w-4 h-4" />
+                        </button>
+
+                        {booking.status === 'pending' && !booking.provider && (
+                            <button
+                                onClick={() => {
+                                    setSelectedBooking(booking);
+                                    setShowAssignProviderModal(true);
+                                }}
+                                className="p-1 text-green-600 hover:text-green-800"
+                                title="Assign Provider"
+                            >
+                                <UserCheck className="w-4 h-4" />
+                            </button>
+                        )}
+
+                        <button
+                            onClick={() => setDeleteConfirm({
+                                id: booking._id,
+                                userId: booking.customer?._id,
+                                type: 'booking'
+                            })}
+                            className="p-1 text-red-600 hover:text-red-800"
+                            title="Delete Booking"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        ));
+    };
+
     // Fetch data on component mount and when filters/pagination change
     useEffect(() => {
         fetchBookings();
@@ -727,145 +856,7 @@ const AdminBookingsView = () => {
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                            {loading ? (
-                                // Loading skeleton
-                                Array.from({ length: 5 }).map((_, index) => (
-                                    <tr key={index} className="animate-pulse">
-                                        <td className="px-4 py-4">
-                                            <div className="h-4 bg-gray-200 rounded w-20"></div>
-                                        </td>
-                                        <td className="px-4 py-4">
-                                            <div className="h-4 bg-gray-200 rounded w-24"></div>
-                                        </td>
-                                        <td className="px-4 py-4 hidden md:table-cell">
-                                            <div className="h-4 bg-gray-200 rounded w-20"></div>
-                                        </td>
-                                        <td className="px-4 py-4">
-                                            <div className="h-4 bg-gray-200 rounded w-32"></div>
-                                        </td>
-                                        <td className="px-4 py-4 hidden lg:table-cell">
-                                            <div className="h-4 bg-gray-200 rounded w-24"></div>
-                                        </td>
-                                        <td className="px-4 py-4">
-                                            <div className="h-6 bg-gray-200 rounded-full w-16"></div>
-                                        </td>
-                                        <td className="px-4 py-4">
-                                            <div className="h-8 bg-gray-200 rounded w-20"></div>
-                                        </td>
-                                    </tr>
-                                ))
-                            ) : bookings.length === 0 ? (
-                                <tr>
-                                    <td colSpan="7" className="px-4 py-8 text-center text-gray-500">
-                                        <Calendar className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-                                        <p>No bookings found</p>
-                                        <p className="text-sm">Try adjusting your filters</p>
-                                    </td>
-                                </tr>
-                            ) : (
-                                bookings.map((booking) => (
-                                    <tr key={booking._id} className="hover:bg-gray-50">
-                                        <td className="px-4 py-4 whitespace-nowrap">
-                                            <div className="text-sm font-medium text-secondary">
-                                                #{booking._id?.substring(booking._id.length - 8) || 'N/A'}
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-4 whitespace-nowrap">
-                                            <div>
-                                                <div className="text-sm font-medium text-secondary">
-                                                    {booking.customer?.name || 'N/A'}
-                                                </div>
-                                                <div className="text-sm text-gray-500">
-                                                    {booking.customer?.email || 'N/A'}
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-4 whitespace-nowrap hidden md:table-cell">
-                                            <div>
-                                                <div className="text-sm font-medium text-secondary">
-                                                    {booking.provider?.name || 'Unassigned'}
-                                                </div>
-                                                <div className="text-sm text-gray-500">
-                                                    {booking.provider?.email || 'N/A'}
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-4 whitespace-nowrap">
-                                            <div>
-                                                <div className="text-sm font-medium text-secondary">
-                                                    {booking.services?.[0]?.service?.title || 'N/A'}
-                                                </div>
-                                                <div className="text-sm font-bold text-primary">
-                                                    {formatCurrency(booking.totalAmount)}
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-4 whitespace-nowrap hidden lg:table-cell">
-                                            <div>
-                                                <div className="text-sm text-secondary">
-                                                    {formatDate(booking.date)}
-                                                </div>
-                                                <div className="text-sm text-gray-500">
-                                                    {booking.time || 'Not specified'}
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-4 whitespace-nowrap">
-                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(booking.status)}`}>
-                                                {getStatusIcon(booking.status)}
-                                                <span className="ml-1 capitalize">{booking.status}</span>
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-4 whitespace-nowrap">
-                                            <div className="flex items-center space-x-2">
-                                                <button
-                                                    onClick={() => fetchBookingDetails(booking._id)}
-                                                    className="p-1 text-primary hover:text-teal-700"
-                                                    title="View Details"
-                                                >
-                                                    <Eye className="w-4 h-4" />
-                                                </button>
-
-                                                <button
-                                                    onClick={() => {
-                                                        setSelectedBooking(booking);
-                                                        setShowRescheduleModal(true);
-                                                    }}
-                                                    className="p-1 text-blue-600 hover:text-blue-800"
-                                                    title="Update Date/Time"
-                                                >
-                                                    <Calendar className="w-4 h-4" />
-                                                </button>
-
-                                                {booking.status === 'pending' && !booking.provider && (
-                                                    <button
-                                                        onClick={() => {
-                                                            setSelectedBooking(booking);
-                                                            setShowAssignProviderModal(true);
-                                                        }}
-                                                        className="p-1 text-green-600 hover:text-green-800"
-                                                        title="Assign Provider"
-                                                    >
-                                                        <UserCheck className="w-4 h-4" />
-                                                    </button>
-                                                )}
-
-                                                <button
-                                                    onClick={() => setDeleteConfirm({
-                                                        id: booking._id,
-                                                        userId: booking.customer?._id,
-                                                        type: 'booking'
-                                                    })}
-                                                    className="p-1 text-red-600 hover:text-red-800"
-                                                    title="Delete Booking"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
+                            {renderTableContent()}
                         </tbody>
                     </table>
                 </div>
@@ -992,7 +983,7 @@ const AdminBookingsView = () => {
                                             <div key={index} className="mb-3 last:mb-0">
                                                 <div className="font-medium">{serviceItem.service?.title || 'N/A'}</div>
                                                 <div className="text-sm text-gray-600">
-                                                    Category: {serviceItem.service?.category || 'N/A'}
+                                                    Category: {serviceItem.service?.category?.name || 'N/A'}
                                                 </div>
                                                 <div className="text-sm text-gray-600">
                                                     Quantity: {serviceItem.quantity || 1}

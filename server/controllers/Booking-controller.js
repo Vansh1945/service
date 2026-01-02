@@ -2324,7 +2324,11 @@ const getBookingDetails = async (req, res) => {
       .populate('provider', 'name email phone')
       .populate({
         path: 'services.service',
-        select: 'title category description basePrice duration image'
+        select: 'title category description basePrice duration image',
+        populate: {
+          path: 'category',
+          select: 'name'
+        }
       })
       .populate('feedback')
       .populate('complaint')
@@ -2465,7 +2469,7 @@ const assignProvider = async (req, res) => {
 
     const updatedBooking = await Booking.findByIdAndUpdate(
       id,
-      { provider: providerId, status: 'assigned' },
+      { provider: providerId, status: 'scheduled' },
       { new: true, runValidators: true }
     );
 
@@ -2495,7 +2499,7 @@ const deleteBooking = async (req, res) => {
       });
     }
 
-    if (['completed', 'cancelled', 'in-progress'].includes(booking.status)) {
+    if (['completed', 'in-progress'].includes(booking.status)) {
       return res.status(400).json({
         success: false,
         message: `Cannot delete ${booking.status} booking`
@@ -2504,7 +2508,6 @@ const deleteBooking = async (req, res) => {
 
     // Get customer details for email notification
     const customer = await User.findById(booking.customer);
-    const service = await Service.findById(booking.service);
 
     await Booking.findByIdAndDelete(id);
 
@@ -2514,7 +2517,7 @@ const deleteBooking = async (req, res) => {
         <h2>Booking Deleted</h2>
         <p>Your booking has been deleted by the administrator.</p>
         <p><strong>Booking ID:</strong> ${booking._id}</p>
-        <p><strong>Service:</strong> ${service.title}</p>
+        <p><strong>Service:</strong> ${booking.services[0]?.serviceDetails?.title || 'Service'}</p>
         <p><strong>Date:</strong> ${booking.date.toDateString()}</p>
         <p>If you believe this was a mistake, please contact our support team.</p>
       `;

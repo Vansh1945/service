@@ -15,6 +15,7 @@ const moment = require('moment');
 const path = require('path');
 const fs = require('fs');
 const cloudinary = require('../services/cloudinary');
+const mongoose = require('mongoose');
 
 /**
  * Register a new admin
@@ -309,7 +310,7 @@ const getPendingProviders = async (req, res) => {
         const skip = (page - 1) * limit;
         const search = req.query.search || '';
 
-        const query = {
+        const filter = {
             approved: false,
             isDeleted: false,
             ...(search && {
@@ -320,13 +321,51 @@ const getPendingProviders = async (req, res) => {
             })
         };
 
-        const providers = await Provider.find(query)
-            .select('-password -__v')
-            .skip(skip)
-            .limit(limit)
-            .sort({ createdAt: -1 });
+        const providersPipeline = [
+            { $match: filter },
+            {
+                $lookup: {
+                    from: 'categories',
+                    localField: 'services',
+                    foreignField: '_id',
+                    as: 'serviceCategories'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'feedbacks',
+                    localField: '_id',
+                    foreignField: 'providerFeedback.provider',
+                    as: 'feedback'
+                }
+            },
+            {
+                $addFields: {
+                    averageRating: { $ifNull: [{ $avg: '$feedback.providerFeedback.rating' }, 0] },
+                    services: {
+                        $map: {
+                            input: '$serviceCategories',
+                            as: 'category',
+                            in: '$$category.name'
+                        }
+                    }
+                }
+            },
+            {
+                $project: {
+                    password: 0,
+                    __v: 0,
+                    feedback: 0, // Exclude the feedback array from the final output
+                    serviceCategories: 0 // Exclude the populated categories array
+                }
+            },
+            { $sort: { createdAt: -1 } },
+            { $skip: skip },
+            { $limit: limit }
+        ];
 
-        const total = await Provider.countDocuments(query);
+        const providers = await Provider.aggregate(providersPipeline);
+        const total = await Provider.countDocuments(filter);
 
         res.status(200).json({
             success: true,
@@ -373,6 +412,14 @@ const getAllProviders = async (req, res) => {
             { $match: filter },
             {
                 $lookup: {
+                    from: 'categories',
+                    localField: 'services',
+                    foreignField: '_id',
+                    as: 'serviceCategories'
+                }
+            },
+            {
+                $lookup: {
                     from: 'feedbacks',
                     localField: '_id',
                     foreignField: 'providerFeedback.provider',
@@ -381,14 +428,22 @@ const getAllProviders = async (req, res) => {
             },
             {
                 $addFields: {
-                    averageRating: { $ifNull: [{ $avg: '$feedback.providerFeedback.rating' }, 0] }
+                    averageRating: { $ifNull: [{ $avg: '$feedback.providerFeedback.rating' }, 0] },
+                    services: {
+                        $map: {
+                            input: '$serviceCategories',
+                            as: 'category',
+                            in: '$$category.name'
+                        }
+                    }
                 }
             },
             {
                 $project: {
                     password: 0,
                     __v: 0,
-                    feedback: 0 // Exclude the feedback array from the final output
+                    feedback: 0, // Exclude the feedback array from the final output
+                    serviceCategories: 0 // Exclude the populated categories array
                 }
             },
             { $sort: { createdAt: -1 } },
@@ -417,15 +472,57 @@ const getAllProviders = async (req, res) => {
     }
 };
 
+
 /**
  * Get provider details
  */
 const getProviderDetails = async (req, res) => {
     try {
         const providerId = req.params.id;
-        const provider = await Provider.findById(providerId).select('-password -__v');
 
-        if (!provider) {
+        const providerPipeline = [
+            { $match: { _id: new mongoose.Types.ObjectId(providerId) } },
+            {
+                $lookup: {
+                    from: 'categories',
+                    localField: 'services',
+                    foreignField: '_id',
+                    as: 'serviceCategories'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'feedbacks',
+                    localField: '_id',
+                    foreignField: 'providerFeedback.provider',
+                    as: 'feedback'
+                }
+            },
+            {
+                $addFields: {
+                    averageRating: { $ifNull: [{ $avg: '$feedback.providerFeedback.rating' }, 0] },
+                    services: {
+                        $map: {
+                            input: '$serviceCategories',
+                            as: 'category',
+                            in: '$$category.name'
+                        }
+                    }
+                }
+            },
+            {
+                $project: {
+                    password: 0,
+                    __v: 0,
+                    feedback: 0, // Exclude the feedback array from the final output
+                    serviceCategories: 0 // Exclude the populated categories array
+                }
+            }
+        ];
+
+        const providers = await Provider.aggregate(providerPipeline);
+
+        if (!providers || providers.length === 0) {
             return res.status(404).json({
                 success: false,
                 message: 'Provider not found'
@@ -434,7 +531,7 @@ const getProviderDetails = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            provider
+            provider: providers[0]
         });
 
     } catch (error) {
@@ -446,6 +543,9 @@ const getProviderDetails = async (req, res) => {
     }
 };
 
+/**
+ * Get customer details
+ */
 const getCustomerById = async (req, res) => {
     try {
         const customerId = req.params.id;

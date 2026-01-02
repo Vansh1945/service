@@ -640,16 +640,7 @@ const AdminCustomersDashboard = () => {
                                         <p className="text-sm font-medium text-gray-700 mb-2">Registration Date</p>
                                         <p className="text-sm text-gray-900">{formatDate(selectedCustomer.createdAt)}</p>
                                     </div>
-                                    <div>
-                                        <p className="text-sm font-medium text-gray-700 mb-2">Account Verified</p>
-                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                            selectedCustomer.isVerified 
-                                                ? 'bg-green-100 text-green-800' 
-                                                : 'bg-yellow-100 text-yellow-800'
-                                        }`}>
-                                            {selectedCustomer.isVerified ? 'Verified' : 'Pending Verification'}
-                                        </span>
-                                    </div>
+
                                 </div>
                             </div>
 

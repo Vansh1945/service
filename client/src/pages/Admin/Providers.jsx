@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  Users, 
-  Search, 
-  Eye, 
-  CheckCircle, 
-  XCircle, 
-  Clock, 
-  MapPin, 
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import {
+  Users,
+  Search,
+  Eye,
+  CheckCircle,
+  XCircle,
+  Clock,
+  MapPin,
   Phone,
   Mail,
   Calendar,
@@ -39,6 +39,7 @@ import {
   Loader
 } from 'lucide-react';
 import { useAuth } from '../../store/auth';
+import LoadingSpinner from '../../components/Loader';
 
 const AdminProvidersPage = () => {
   const { API, showToast } = useAuth();
@@ -51,6 +52,9 @@ const AdminProvidersPage = () => {
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [approvalAction, setApprovalAction] = useState('');
   const [approvalRemarks, setApprovalRemarks] = useState('');
+  const [approvalConfirmation, setApprovalConfirmation] = useState('');
+  const [processingAction, setProcessingAction] = useState(null);
+
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
   const [showFilters, setShowFilters] = useState(false);
@@ -59,8 +63,7 @@ const AdminProvidersPage = () => {
     type: '',
     url: ''
   });
-  const [processingAction, setProcessingAction] = useState(null);
-  
+
   // Advanced Filters
   const [filters, setFilters] = useState({
     services: '',
@@ -352,16 +355,48 @@ const AdminProvidersPage = () => {
     }
   };
 
-  const handleApproveReject = async () => {
-    if (!selectedProvider) return;
+
+
+  const openApprovalModal = (action, provider) => {
+    setSelectedProvider(provider);
+    setApprovalAction(action);
+    setApprovalRemarks('');
+    setApprovalConfirmation('');
+    setShowApprovalModal(true);
+  };
+
+  const closeModal = () => {
+    setSelectedProvider(null);
+    setApprovalRemarks('');
+    setApprovalConfirmation('');
+    setShowApprovalModal(false);
+  };
+
+  const handleRemarksChange = (e) => {
+    setApprovalRemarks(e.target.value);
+  };
+
+  const handleModalConfirm = async () => {
+    if (!selectedProvider || !approvalAction) return;
 
     if (approvalAction === 'rejected' && !approvalRemarks.trim()) {
-      showToast('Please provide rejection reason', 'error');
+      showToast('Please provide a reason for rejection', 'error');
+      return;
+    }
+
+    if (approvalAction === 'approved' && approvalConfirmation !== 'APPROVE') {
+      showToast('Please type "APPROVE" to confirm', 'error');
+      return;
+    }
+
+    if (approvalAction === 'rejected' && approvalConfirmation !== 'REJECT') {
+      showToast('Please type "REJECT" to confirm', 'error');
       return;
     }
 
     try {
       setProcessingAction(approvalAction);
+
       const response = await fetch(`${API}/admin/providers/${selectedProvider._id}/status`, {
         method: 'PUT',
         headers: {
@@ -373,16 +408,20 @@ const AdminProvidersPage = () => {
           remarks: approvalRemarks
         })
       });
-      
+
       const data = await response.json();
+
       if (data.success) {
-        showToast(`Provider ${approvalAction} successfully!`, 'success');
+        showToast(`Provider ${approvalAction} successfully`, 'success');
+        // Refresh the providers list
+        fetchProviders();
+        // Close modal and reset states
         setShowApprovalModal(false);
-        setApprovalRemarks('');
         setSelectedProvider(null);
-        await fetchProviders(); // Refresh data
+        setApprovalRemarks('');
+        setApprovalConfirmation('');
       } else {
-        showToast(data.message || 'Operation failed', 'error');
+        showToast(data.message || 'Failed to update provider status', 'error');
       }
     } catch (error) {
       console.error('Error updating provider status:', error);
@@ -392,16 +431,10 @@ const AdminProvidersPage = () => {
     }
   };
 
-  const openApprovalModal = (action, provider) => {
-    setSelectedProvider(provider);
-    setApprovalAction(action);
+  const handleModalCancel = () => {
+    setShowApprovalModal(false);
     setApprovalRemarks('');
-    setShowApprovalModal(true);
-  };
-
-  const closeModal = () => {
-    setSelectedProvider(null);
-    setApprovalRemarks('');
+    setApprovalConfirmation('');
   };
 
   const viewDocument = (provider, docType) => {
@@ -551,6 +584,42 @@ const AdminProvidersPage = () => {
     );
   });
 
+
+  // Document View Modal
+  const DocumentViewModal = React.memo(() => (
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden transform transition-all duration-300 scale-100">
+        <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-white">
+          <h3 className="text-lg font-semibold text-secondary">
+            {documentView.type === 'image' ? 'Image Preview' : 'Document View'}
+          </h3>
+          <button
+            onClick={closeDocumentView}
+            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+        <div className="p-4 flex items-center justify-center bg-gray-50 min-h-[400px]">
+          {documentView.type === 'image' ? (
+            <img 
+              src={documentView.url} 
+              alt="Document" 
+              className="max-w-full max-h-[calc(90vh-100px)] object-contain rounded-lg shadow-sm"
+            />
+          ) : (
+            <iframe 
+              src={documentView.url} 
+              className="w-full h-[calc(90vh-100px)] min-h-[400px] border-0 bg-white rounded-lg shadow-sm"
+              title="Document"
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  ));
+
+  // Provider Details Modal Component
   const ProviderDetailsModal = () => {
     if (!selectedProvider) return null;
     const status = getProviderStatus(selectedProvider);
@@ -659,7 +728,7 @@ const AdminProvidersPage = () => {
                     <div className="flex flex-wrap gap-2 mt-2">
                       {selectedProvider.services?.map((service, index) => (
                         <span key={index} className="px-3 py-1 bg-gradient-to-r from-primary to-teal-600 text-white rounded-full text-xs font-medium">
-                          {service}
+                          {service.name || service}
                         </span>
                       )) || <span className="text-secondary text-sm">N/A</span>}
                     </div>
@@ -879,115 +948,6 @@ const AdminProvidersPage = () => {
     );
   };
 
-  const ApprovalModal = ({ show, action, providerName, remarks, onRemarksChange, onConfirm, onCancel, processing }) => {
-    if (!show) return null;
-
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full transform transition-all duration-300 scale-100">
-          <div className="p-6">
-            <div className="flex items-center mb-4">
-              <div className={`p-3 rounded-full ${action === 'approved' ? 'bg-green-100' : 'bg-red-100'} mr-4`}>
-                <AlertCircle className={`w-6 h-6 ${action === 'approved' ? 'text-green-600' : 'text-red-600'}`} />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-secondary">
-                  {action === 'approved' ? 'Approve Provider' : 'Reject Provider'}
-                </h3>
-                <p className="text-sm text-gray-600 mt-1">Confirm your action</p>
-              </div>
-            </div>
-            
-            <div className="mb-1">
-              <p className="text-sm text-gray-700 mb-4">
-                You are about to <span className={`font-semibold ${action === 'approved' ? 'text-green-600' : 'text-red-600'}`}>
-                  {action}
-                </span> the provider <span className="font-semibold text-secondary">{providerName}</span>.
-              </p>
-            </div>
-            
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                {action === 'rejected' ? 'Rejection Reason *' : 'Remarks (Optional)'}
-              </label>
-              <textarea
-                value={remarks}
-                onChange={(e) => onRemarksChange(e.target.value)}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200 resize-none"
-                rows="4"
-                placeholder={action === 'rejected' ? 'Please provide a reason for rejection...' : 'Add any remarks...'}
-              />
-              {action === 'rejected' && !remarks.trim() && (
-                <p className="text-red-500 text-xs mt-1">Rejection reason is required</p>
-              )}
-            </div>
-            
-            <div className="flex gap-3">
-              <button
-                onClick={onCancel}
-                disabled={processing}
-                className="flex-1 py-3 px-4 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all duration-200 font-medium disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={onConfirm}
-                disabled={(action === 'rejected' && !remarks.trim()) || processing}
-                className={`flex-1 py-3 px-4 rounded-lg text-white font-medium transition-all duration-200 flex items-center justify-center ${
-                  action === 'approved' 
-                    ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 disabled:from-green-400 disabled:to-green-500' 
-                    : 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 disabled:from-red-400 disabled:to-red-500'
-                } ${(action === 'rejected' && !remarks.trim()) || processing ? 'cursor-not-allowed opacity-75' : 'shadow-sm hover:shadow-md'}`}
-              >
-                {processing ? (
-                  <>
-                    <Loader className="w-4 h-4 animate-spin mr-2" />
-                    Processing...
-                  </>
-                ) : (
-                  `Confirm ${action === 'approved' ? 'Approval' : 'Rejection'}`
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const DocumentViewModal = () => (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden transform transition-all duration-300 scale-100">
-        <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-white">
-          <h3 className="text-lg font-semibold text-secondary">
-            {documentView.type === 'image' ? 'Image Preview' : 'Document View'}
-          </h3>
-          <button
-            onClick={closeDocumentView}
-            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-        <div className="p-4 flex items-center justify-center bg-gray-50 min-h-[400px]">
-          {documentView.type === 'image' ? (
-            <img 
-              src={documentView.url} 
-              alt="Document" 
-              className="max-w-full max-h-[calc(90vh-100px)] object-contain rounded-lg shadow-sm"
-            />
-          ) : (
-            <iframe 
-              src={documentView.url} 
-              className="w-full h-[calc(90vh-100px)] min-h-[400px] border-0 bg-white rounded-lg shadow-sm"
-              title="Document"
-            />
-          )}
-        </div>
-      </div>
-    </div>
-  );
-
   const Pagination = () => (
     <div className="flex flex-col sm:flex-row items-center justify-between mt-8 gap-4">
       <div className="text-sm text-gray-600">
@@ -1166,9 +1126,7 @@ const AdminProvidersPage = () => {
 
         {/* Content */}
         {loading ? (
-          <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-          </div>
+          <LoadingSpinner />
         ) : filteredProviders.length === 0 ? (
           <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-12 text-center hover:shadow-xl transition-shadow duration-300">
             <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
@@ -1213,20 +1171,123 @@ const AdminProvidersPage = () => {
 
         {/* Modals */}
         {selectedProvider && !showApprovalModal && <ProviderDetailsModal />}
-        <ApprovalModal 
+        <ApprovalModal
           show={showApprovalModal}
           action={approvalAction}
           providerName={selectedProvider?.name}
           remarks={approvalRemarks}
-          onRemarksChange={setApprovalRemarks}
-          onConfirm={handleApproveReject}
-          onCancel={() => {
-            setShowApprovalModal(false);
-            setApprovalRemarks('');
-          }}
+          onRemarksChange={handleRemarksChange}
+          onConfirm={handleModalConfirm}
+          onCancel={handleModalCancel}
           processing={processingAction === approvalAction}
+          confirmation={approvalConfirmation}
+          onConfirmationChange={setApprovalConfirmation}
         />
         {documentView.visible && <DocumentViewModal />}
+      </div>
+    </div>
+  );
+};
+
+// Approval Modal Component
+const ApprovalModal = ({
+  show,
+  action,
+  providerName,
+  remarks,
+  onRemarksChange,
+  onConfirm,
+  onCancel,
+  processing,
+  confirmation,
+  onConfirmationChange
+}) => {
+  if (!show) return null;
+
+  const isApprove = action === 'approved';
+  const isReject = action === 'rejected';
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+        <div className="p-6">
+          <div className="flex items-center justify-center mb-4">
+            {isApprove ? (
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+                <CheckCircle className="w-8 h-8 text-green-600" />
+              </div>
+            ) : (
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
+                <XCircle className="w-8 h-8 text-red-600" />
+              </div>
+            )}
+          </div>
+
+          <h3 className="text-xl font-bold text-center text-secondary mb-2">
+            {isApprove ? 'Approve Provider' : 'Reject Provider'}
+          </h3>
+
+          <p className="text-center text-gray-600 mb-6">
+            Are you sure you want to {isApprove ? 'approve' : 'reject'} <strong>{providerName}</strong>?
+          </p>
+
+          {isReject && (
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Reason for Rejection <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={remarks}
+                onChange={onRemarksChange}
+                placeholder="Please provide a reason for rejection..."
+                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-200 resize-none"
+                rows={3}
+                required
+              />
+            </div>
+          )}
+
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Type <strong>{isApprove ? 'APPROVE' : 'REJECT'}</strong> to confirm
+            </label>
+            <textarea
+              type="text"
+              value={confirmation}
+              onChange={(e) => onConfirmationChange(e.target.value)}
+              placeholder={isApprove ? 'APPROVE' : 'REJECT'}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200 font-mono "
+            />
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              onClick={onCancel}
+              disabled={processing}
+              className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-semibold"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={onConfirm}
+              disabled={processing || (isApprove && confirmation !== 'APPROVE') || (isReject && confirmation !== 'REJECT')}
+              className={`flex-1 px-4 py-3 text-white rounded-lg transition-all duration-200 font-semibold ${
+                isApprove
+                  ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 disabled:opacity-50'
+                  : 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 disabled:opacity-50'
+              } disabled:cursor-not-allowed`}
+            >
+              {processing ? (
+                <div className="flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Processing...
+                </div>
+              ) : (
+                isApprove ? 'Approve' : 'Reject'
+              )}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
