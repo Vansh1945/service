@@ -1,7 +1,5 @@
 import React from 'react';
 import HeroSection from '../components/HeroSection';
-import WhyChooseUs from '../components/WhyChooseus';
-import { motion } from 'framer-motion';
 import Services from './Services';
 
 const Home = () => {
