@@ -24,14 +24,13 @@ const getSystemSetting = async (req, res) => {
 // 2. Update System Setting (Admin Only)
 const updateSystemSetting = async (req, res) => {
   try {
-    const { companyName, tagline, promoMessage, address, phone, email, socialLinks } = req.body;
+    const { companyName, tagline, address, phone, email, socialLinks } = req.body;
     let config = await SystemConfig.findOne();
     if (!config) {
       config = new SystemConfig();
     }
     if (companyName !== undefined) config.companyName = companyName;
     if (tagline !== undefined) config.tagline = tagline;
-    if (promoMessage !== undefined) config.promoMessage = promoMessage;
     if (address !== undefined) config.address = address;
     if (phone !== undefined) config.phone = phone;
     if (email !== undefined) config.email = email;

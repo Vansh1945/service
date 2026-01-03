@@ -9,7 +9,6 @@ const SystemSetting = () => {
     tagline: '',
     logo: '',
     favicon: '',
-    promoMessage: '',
     address: '',
     phone: '',
     email: '',
@@ -69,7 +68,6 @@ const SystemSetting = () => {
           tagline: settingsData.data.tagline || '',
           logo: settingsData.data.logo || '',
           favicon: settingsData.data.favicon || '',
-          promoMessage: settingsData.data.promoMessage || '',
           address: settingsData.data.address || '',
           phone: settingsData.data.phone || '',
           email: settingsData.data.email || '',
@@ -105,7 +103,6 @@ const SystemSetting = () => {
       const formData = new FormData();
       formData.append('companyName', systemSettings.companyName);
       formData.append('tagline', systemSettings.tagline);
-      formData.append('promoMessage', systemSettings.promoMessage);
       formData.append('address', systemSettings.address);
       formData.append('phone', systemSettings.phone);
       formData.append('email', systemSettings.email);
@@ -214,22 +211,6 @@ const SystemSetting = () => {
                   placeholder="Enter tagline"
                 />
               </div>
-
-              {/* Promotional Message */}
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-2 font-inter">
-                  Promotional Message
-                </label>
-                <textarea
-                  name="promoMessage"
-                  value={systemSettings.promoMessage}
-                  onChange={handleSystemSettingsChange}
-                  rows="4"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all font-inter"
-                  placeholder="Enter promotional message for homepage"
-                />
-              </div>
-
               {/* Address */}
               <div>
                 <label className="block text-sm font-medium text-secondary mb-2 font-inter">

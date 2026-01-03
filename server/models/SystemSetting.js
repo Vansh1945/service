@@ -40,10 +40,6 @@ const systemConfigSchema = new mongoose.Schema(
     favicon: {
       type: String, // image url
     },
-    promoMessage: {
-      type: String,
-      trim: true,
-    },
     address: {
       type: String,
       trim: true,
