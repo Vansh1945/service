@@ -422,6 +422,7 @@ const ProviderProfile = () => {
     return services.map(serviceId => serviceMap[serviceId] || serviceId).join(', ');
   };
 
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -1439,6 +1440,27 @@ const ProviderProfile = () => {
                         {profileData.bankDetails.verified ? 'Verified' : 'Pending Verification'}
                       </p>
                     </div>
+
+                    {profileData.bankDetails.lastUpdatedAt && (
+                      <div className="p-4 bg-blue-50 rounded-lg md:col-span-2 border border-blue-200">
+                        <h3 className="text-xs font-medium text-blue-800 uppercase tracking-wider">Next Update Availability</h3>
+                        <p className="mt-1 text-sm text-blue-700">
+                          {(() => {
+                            const lastUpdate = new Date(profileData.bankDetails.lastUpdatedAt);
+                            const nextUpdate = new Date(lastUpdate);
+                            nextUpdate.setDate(nextUpdate.getDate() + 30);
+                            const now = new Date();
+                            const daysRemaining = Math.ceil((nextUpdate - now) / (1000 * 60 * 60 * 24));
+
+                            if (daysRemaining <= 0) {
+                              return 'Bank details can be updated now';
+                            } else {
+                              return `Bank details can be updated again in ${daysRemaining} day${daysRemaining === 1 ? '' : 's'} (${nextUpdate.toLocaleDateString()})`;
+                            }
+                          })()}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

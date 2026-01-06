@@ -117,6 +117,10 @@ const providerSchema = new mongoose.Schema({
         verifiedAt: {
             type: Date,
             default: null
+        },
+        lastUpdatedAt: {
+            type: Date,
+            default: null
         }
     },
 

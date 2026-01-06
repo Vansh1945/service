@@ -473,7 +473,8 @@ exports.completeProfile = async (req, res) => {
             passbookImage: req.files && req.files['passbookImage'] ? req.files['passbookImage'][0].path : undefined,
             passbookImagePublicId: req.files && req.files['passbookImage'] ? req.files['passbookImage'][0].filename : undefined,
             verified: false,
-            submittedAt: new Date()
+            submittedAt: new Date(),
+            lastUpdatedAt: new Date()
         };
 
         // Update profile picture if uploaded
@@ -783,6 +784,21 @@ exports.updateProviderProfile = async (req, res) => {
         if (!updateType || updateType === 'bank') {
             // Bank Details Updates
             if (accountNo !== undefined || ifsc !== undefined || bankName !== undefined || accountName !== undefined) {
+                // Check if bank details were updated within the last 30 days
+                if (currentProvider.bankDetails?.lastUpdatedAt) {
+                    const lastUpdate = new Date(currentProvider.bankDetails.lastUpdatedAt);
+                    const now = new Date();
+                    const daysSinceLastUpdate = Math.floor((now - lastUpdate) / (1000 * 60 * 60 * 24));
+
+                    if (daysSinceLastUpdate < 30) {
+                        const remainingDays = 30 - daysSinceLastUpdate;
+                        return res.status(400).json({
+                            success: false,
+                            message: `Bank details can only be updated once every 30 days. You can update again in ${remainingDays} days.`
+                        });
+                    }
+                }
+
                 // Validate IFSC if provided
                 if (ifsc !== undefined && ifsc !== '' && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) {
                     return res.status(400).json({
@@ -805,7 +821,8 @@ exports.updateProviderProfile = async (req, res) => {
                     ...(ifsc !== undefined && { ifsc }),
                     ...(bankName !== undefined && { bankName }),
                     ...(accountName !== undefined && { accountName }),
-                    verified: false // Reset verification when details change
+                    verified: false, // Reset verification when details change
+                    lastUpdatedAt: new Date() // Update the timestamp
                 };
             }
         }
