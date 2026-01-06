@@ -156,7 +156,7 @@ const Dashboard = () => {
 
       const result = await response.json();
       showToast(result.message || `Booking ${action}ed successfully`, 'success');
-      
+
       // Refresh dashboard data
       fetchDashboardData();
 
@@ -181,6 +181,36 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-6 p-4 md:p-6">
+
+      {/* Profile Status Alert */}
+      {profile && (!profile.approved || !profile.testPassed) && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 md:p-4">
+          <div className="flex">
+            <FiAlertCircle className="h-4 w-4 md:h-5 md:w-5 text-yellow-400 flex-shrink-0 mt-0.5" />
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-yellow-800">
+                Account Setup Required
+              </h3>
+              <div className="mt-1 md:mt-2 text-xs md:text-sm text-yellow-700">
+                <ul className="list-disc list-inside space-y-1">
+                  {!profile.approved && (
+                    <li>Your account is pending approval from admin</li>
+                  )}
+                  {!profile.testPassed && (
+                    <li>
+                      Complete your test to start earning
+                      <Link to="/provider/test" className="ml-1 md:ml-2 text-yellow-800 underline">
+                        Take Test Now
+                      </Link>
+                    </li>
+                  )}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="bg-background rounded-xl shadow-md p-4 md:p-6">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between">
@@ -221,7 +251,7 @@ const Dashboard = () => {
             <div className="ml-3 sm:ml-4">
               <p className="text-xs sm:text-sm font-medium text-gray-600">Available Balance</p>
               <p className="text-lg sm:text-xl md:text-2xl font-bold text-secondary">
-                {formatCurrency(wallet?.currentBalance || 0)}
+                {formatCurrency(wallet?.availableBalance || 0)}
               </p>
             </div>
           </div>
@@ -375,7 +405,7 @@ const Dashboard = () => {
               <div>
                 <h3 className="text-base md:text-lg font-semibold text-secondary">Available Earnings</h3>
                 <p className="text-2xl md:text-3xl font-bold text-green-600 mt-1 md:mt-2">
-                  {formatCurrency(wallet?.currentBalance || 0)}
+                  {formatCurrency(wallet?.availableBalance || 0)}
                 </p>
                 <p className="text-xs md:text-sm text-gray-600 mt-1">Ready to withdraw</p>
               </div>
@@ -422,7 +452,7 @@ const Dashboard = () => {
 
           <div className="p-4 md:p-6">
             {(!analytics?.todayJobs || analytics.todayJobs.length === 0) &&
-             (!analytics?.upcomingJobs || analytics.upcomingJobs.length === 0) ? (
+              (!analytics?.upcomingJobs || analytics.upcomingJobs.length === 0) ? (
               <div className="text-center py-6 md:py-8">
                 <FiCalendar className="mx-auto h-8 w-8 md:h-12 md:w-12 text-gray-400" />
                 <h3 className="mt-2 text-sm font-medium text-gray-900">No recent bookings</h3>
@@ -520,34 +550,6 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Profile Status Alert */}
-      {profile && (!profile.approved || !profile.testPassed) && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 md:p-4">
-          <div className="flex">
-            <FiAlertCircle className="h-4 w-4 md:h-5 md:w-5 text-yellow-400 flex-shrink-0 mt-0.5" />
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-yellow-800">
-                Account Setup Required
-              </h3>
-              <div className="mt-1 md:mt-2 text-xs md:text-sm text-yellow-700">
-                <ul className="list-disc list-inside space-y-1">
-                  {!profile.approved && (
-                    <li>Your account is pending approval from admin</li>
-                  )}
-                  {!profile.testPassed && (
-                    <li>
-                      Complete your skill test to start accepting bookings
-                      <Link to="/provider/test" className="ml-1 md:ml-2 text-yellow-800 underline">
-                        Take Test
-                      </Link>
-                    </li>
-                  )}
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

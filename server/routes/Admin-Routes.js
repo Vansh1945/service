@@ -23,6 +23,8 @@ router.get('/customers/:id', adminController.getCustomerById);
 // Provider management
 router.get('/providers/pending', adminController.getPendingProviders);
 router.put('/providers/:id/status', adminController.approveProvider);
+router.get('/providers/pending-bank-verifications',adminController.getPendingBankVerifications);
+router.put('/providers/:id/bank-verification',adminController.updateBankVerificationStatus);
 router.get('/providers', adminController.getAllProviders);
 router.get('/providers/:id', adminController.getProviderDetails);
 

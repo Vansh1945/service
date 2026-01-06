@@ -1,3 +1,4 @@
+
 const Admin = require('../models/Admin-model');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -223,6 +224,7 @@ const approveProvider = async (req, res) => {
             provider.isActive = true;
             if (provider.bankDetails) {
                 provider.bankDetails.verified = true;
+                provider.markModified('bankDetails.verified');
             }
 
             await provider.save();
@@ -301,7 +303,7 @@ const approveProvider = async (req, res) => {
 };
 
 /**
- * Get pending providers
+ * Get pending providers (for initial approval)
  */
 const getPendingProviders = async (req, res) => {
     try {
@@ -397,6 +399,108 @@ const getPendingProviders = async (req, res) => {
         });
     }
 };
+
+/**
+ * Get providers with pending bank verification 
+ */
+const getPendingBankVerifications = async (req, res) => {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+        const search = req.query.search || '';
+
+        const filter = {
+            approved: true,
+            isDeleted: false,
+            $or: [
+                { 'bankDetails.verified': false },
+                { 'bankDetails.verified': { $exists: false } }
+            ],
+            ...(search && {
+                $or: [
+                    { name: { $regex: search, $options: 'i' } },
+                    { email: { $regex: search, $options: 'i' } }
+                ]
+            })
+        };
+
+        const providersPipeline = [
+            { $match: filter },
+            {
+                $lookup: {
+                    from: 'categories',
+                    localField: 'services',
+                    foreignField: '_id',
+                    as: 'serviceCategories'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'feedbacks',
+                    localField: '_id',
+                    foreignField: 'providerFeedback.provider',
+                    as: 'feedback'
+                }
+            },
+            {
+                $addFields: {
+                    averageRating: { $ifNull: [{ $avg: '$feedback.providerFeedback.rating' }, 0] },
+                    services: {
+                        $map: {
+                            input: '$serviceCategories',
+                            as: 'category',
+                            in: '$$category.name'
+                        }
+                    }
+                }
+            },
+            {
+                $project: {
+                    password: 0,
+                    __v: 0,
+                    feedback: 0,
+                    serviceCategories: 0
+                }
+            },
+            { $sort: { 'bankDetails.submittedAt': -1, updatedAt: -1 } },
+            { $skip: skip },
+            { $limit: limit }
+        ];
+
+        const providers = await Provider.aggregate(providersPipeline);
+        const total = await Provider.countDocuments(filter);
+
+        providers.forEach(provider => {
+            if (provider.dateOfBirth) {
+                const today = new Date();
+                const birthDate = new Date(provider.dateOfBirth);
+                let age = today.getFullYear() - birthDate.getFullYear();
+                const monthDiff = today.getMonth() - birthDate.getMonth();
+                if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                    age--;
+                }
+                provider.age = age;
+            }
+        });
+
+        res.status(200).json({
+            success: true,
+            count: providers.length,
+            total,
+            page,
+            pages: Math.ceil(total / limit),
+            providers
+        });
+    } catch (error) {
+        console.error('Get pending bank verifications error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error while fetching pending bank verifications'
+        });
+    }
+};
+
 
 /**
  * Get all providers
@@ -1546,6 +1650,118 @@ const getDashboardRecentActivity = async (req, res) => {
     }
 };
 
+/**
+ * Update bank verification status for a provider
+ */
+const updateBankVerificationStatus = async (req, res) => {
+    try {
+        const providerId = req.params.id;
+        const { status, remarks } = req.body;
+
+        if (!['verified', 'rejected'].includes(status)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid status. Must be "verified" or "rejected"'
+            });
+        }
+
+        const provider = await Provider.findById(providerId);
+        if (!provider) {
+            return res.status(404).json({
+                success: false,
+                message: 'Provider not found'
+            });
+        }
+
+        if (!provider.bankDetails) {
+            return res.status(400).json({
+                success: false,
+                message: 'Provider has no bank details to verify'
+            });
+        }
+
+        if (status === 'verified') {
+            provider.bankDetails.verified = true;
+            provider.bankDetails.verificationRemarks = remarks || '';
+            provider.markModified('bankDetails.verified');
+            provider.markModified('bankDetails.verificationRemarks');
+
+            await provider.save();
+
+            // Send verification success email
+            try {
+                const emailTemplate = `
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                        <h2 style="color: #2563eb;">Bank Details Verified</h2>
+                        <p>Dear ${provider.name},</p>
+                        <p>Your bank details have been successfully verified.</p>
+                        ${remarks ? `<p><strong>Remarks:</strong> ${remarks}</p>` : ''}
+                        <p>You can now receive payouts for your services.</p>
+                    </div>
+                `;
+
+                await sendEmail({
+                    to: provider.email,
+                    subject: 'Your Bank Details Have Been Verified',
+                    html: emailTemplate
+                });
+            } catch (emailError) {
+                console.error('Failed to send verification email:', emailError);
+            }
+
+            return res.status(200).json({
+                success: true,
+                message: 'Bank details verified successfully',
+                provider: provider.toJSON()
+            });
+        }
+
+        if (status === 'rejected') {
+            provider.bankDetails.verified = false;
+            provider.bankDetails.verificationRemarks = remarks || 'Bank details verification failed';
+            provider.markModified('bankDetails.verified');
+            provider.markModified('bankDetails.verificationRemarks');
+
+            await provider.save();
+
+            // Send rejection email
+            try {
+                const emailTemplate = `
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                        <h2 style="color: #dc2626;">Bank Details Rejected</h2>
+                        <p>Dear ${provider.name},</p>
+                        <p>Your bank details verification has been rejected.</p>
+                        <p><strong>Reason:</strong> ${provider.bankDetails.verificationRemarks}</p>
+                        <p>Please update your bank details and submit again.</p>
+                    </div>
+                `;
+
+                await sendEmail({
+                    to: provider.email,
+                    subject: 'Your Bank Details Verification Has Been Rejected',
+                    html: emailTemplate
+                });
+            } catch (emailError) {
+                console.error('Failed to send rejection email:', emailError);
+            }
+
+            return res.status(200).json({
+                success: true,
+                message: 'Bank details rejected successfully',
+                provider: provider.toJSON()
+            });
+        }
+
+    } catch (error) {
+        console.error('Update bank verification status error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error while updating bank verification status',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     registerAdmin,
     getAdminProfile,
@@ -1556,6 +1772,8 @@ module.exports = {
     getCustomerById,
     approveProvider,
     getPendingProviders,
+    getPendingBankVerifications,
+    updateBankVerificationStatus,
     getAllProviders,
     getProviderDetails,
     getDashboardStats,

@@ -109,6 +109,14 @@ const providerSchema = new mongoose.Schema({
         verified: {
             type: Boolean,
             default: false
+        },
+        submittedAt: {
+            type: Date,
+            default: null
+        },
+        verifiedAt: {
+            type: Date,
+            default: null
         }
     },
 

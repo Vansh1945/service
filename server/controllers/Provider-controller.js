@@ -472,7 +472,8 @@ exports.completeProfile = async (req, res) => {
             ifsc,
             passbookImage: req.files && req.files['passbookImage'] ? req.files['passbookImage'][0].path : undefined,
             passbookImagePublicId: req.files && req.files['passbookImage'] ? req.files['passbookImage'][0].filename : undefined,
-            verified: false
+            verified: false,
+            submittedAt: new Date()
         };
 
         // Update profile picture if uploaded
@@ -781,9 +782,9 @@ exports.updateProviderProfile = async (req, res) => {
 
         if (!updateType || updateType === 'bank') {
             // Bank Details Updates
-            if (accountNo || ifsc) {
+            if (accountNo !== undefined || ifsc !== undefined || bankName !== undefined || accountName !== undefined) {
                 // Validate IFSC if provided
-                if (ifsc && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) {
+                if (ifsc !== undefined && ifsc !== '' && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) {
                     return res.status(400).json({
                         success: false,
                         message: 'Please enter a valid IFSC code'
@@ -791,7 +792,7 @@ exports.updateProviderProfile = async (req, res) => {
                 }
 
                 // Validate account number if provided
-                if (accountNo && !/^[0-9]{9,18}$/.test(accountNo)) {
+                if (accountNo !== undefined && accountNo !== '' && !/^[0-9]{9,18}$/.test(accountNo)) {
                     return res.status(400).json({
                         success: false,
                         message: 'Please enter a valid account number (9-18 digits)'
@@ -800,10 +801,10 @@ exports.updateProviderProfile = async (req, res) => {
 
                 updates.bankDetails = {
                     ...currentProvider.bankDetails,
-                    ...(accountNo && { accountNo }),
-                    ...(ifsc && { ifsc }),
-                    ...(bankName && { bankName }),
-                    ...(accountName && { accountName }),
+                    ...(accountNo !== undefined && { accountNo }),
+                    ...(ifsc !== undefined && { ifsc }),
+                    ...(bankName !== undefined && { bankName }),
+                    ...(accountName !== undefined && { accountName }),
                     verified: false // Reset verification when details change
                 };
             }
@@ -1525,7 +1526,7 @@ exports.getWalletInfo = async (req, res) => {
         res.status(200).json({
             success: true,
             data: {
-                currentBalance: availableBalance,
+                availableBalance: availableBalance,
                 pendingPayout: pendingPayouts.length > 0 ? pendingPayouts[0].totalPending : 0,
                 lastPayoutDate: lastPayout ? lastPayout.updatedAt : null,
                 canWithdraw
