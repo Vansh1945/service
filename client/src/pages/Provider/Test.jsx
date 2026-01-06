@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../../store/auth';
+import LoadingSpinner from '../../components/Loader';
 import {
   Clock, CheckCircle, XCircle, Play, RotateCcw, Award, AlertCircle,
   BookOpen, Target, TrendingUp, Calendar, User, ChevronLeft,
@@ -36,7 +37,7 @@ const useTestTimer = (initialTime, isActive, onTimeUp) => {
   return { timeLeft, formatTime, isWarning, setTimeLeft };
 };
 
-const useTestData = (token, API, showToast) => {
+const useTestData = (token, API, showToast, setLockedCategories) => {
   const [testHistory, setTestHistory] = useState([]);
 
   const fetchTestHistory = useCallback(async () => {
@@ -50,11 +51,13 @@ const useTestData = (token, API, showToast) => {
       const data = await response.json();
       if (data.success) {
         setTestHistory(data.data);
+        const passedCategories = data.data.filter(test => test.passed).map(test => test.category);
+        setLockedCategories(passedCategories);
       }
     } catch (error) {
       showToast('Error fetching test history', 'error');
     }
-  }, [API, token, showToast]);
+  }, [API, token, showToast, setLockedCategories]);
 
   return {
     testHistory,
@@ -235,11 +238,10 @@ const CategorySelect = ({ value, onChange, label, required, includeAll = false, 
 };
 
 const ProviderTestPage = () => {
-  const { token, API, showToast } = useAuth();
-  
+  const { token, API, showToast, user } = useAuth();
+
   // State management
   const [activeTab, setActiveTab] = useState('start');
-  const [selectedCategory, setSelectedCategory] = useState('');
   const [currentTest, setCurrentTest] = useState(null);
   const [testResults, setTestResults] = useState(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -249,6 +251,13 @@ const ProviderTestPage = () => {
   const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState('saved');
   const [categories, setCategories] = useState([]);
+  const [lockedCategories, setLockedCategories] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [loadingCategories, setLoadingCategories] = useState(false);
+
+  // Filter categories to only show those in user's services
+  const filteredCategories = categories.filter(category => user.services?.includes(category._id));
 
   // Custom hooks
   const { timeLeft, formatTime, isWarning, setTimeLeft } = useTestTimer(
@@ -260,7 +269,7 @@ const ProviderTestPage = () => {
   const {
     testHistory,
     fetchTestHistory
-  } = useTestData(token, API, showToast);
+  } = useTestData(token, API, showToast, setLockedCategories);
 
   // Auto-save answers
   useEffect(() => {
@@ -295,18 +304,14 @@ const ProviderTestPage = () => {
     return colors[performance] || 'text-secondary';
   }, []);
 
-  // Start test handler
+  // Start test handler - now tests all categories simultaneously
   const handleStartTest = useCallback(async () => {
-    if (!selectedCategory) {
-      showToast('Please select a category', 'error');
-      return;
-    }
-
     if (testAttemptsLeft <= 0) {
       showToast('You have used all 3 lifetime test attempts', 'error');
       return;
     }
 
+    setLoading(true);
     try {
       const response = await fetch(`${API}/test/start`, {
         method: 'POST',
@@ -314,9 +319,7 @@ const ProviderTestPage = () => {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          category: selectedCategory
-        })
+        body: JSON.stringify({}) // No category needed since we test all provider's categories
       });
 
       const data = await response.json();
@@ -343,8 +346,10 @@ const ProviderTestPage = () => {
       }
     } catch (error) {
       showToast('Error starting test', 'error');
+    } finally {
+      setLoading(false);
     }
-  }, [selectedCategory, testAttemptsLeft, API, token, showToast, setTimeLeft]);
+  }, [testAttemptsLeft, API, token, showToast, setTimeLeft]);
 
   // Answer selection handler
   const handleAnswerSelect = useCallback((questionId, optionIndex) => {
@@ -471,11 +476,7 @@ const ProviderTestPage = () => {
     fetchCategories();
   }, [API, token, showToast]);
 
-  useEffect(() => {
-    if (categories.length > 0 && !selectedCategory) {
-      setSelectedCategory(categories[0]._id);
-    }
-  }, [categories, selectedCategory]);
+
 
   // Calculate attempts left
   useEffect(() => {
@@ -561,17 +562,17 @@ const ProviderTestPage = () => {
               <h2 className="text-2xl font-semibold text-secondary">Start New Test</h2>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-              <div className="space-y-2">
-                <CategorySelect
-                  value={selectedCategory}
-                  onChange={(value) => setSelectedCategory(value)}
-                  label="Category"
-                  required
-                  categories={categories}
-                />
+            <div className="mb-8">
+              <div className="bg-blue-50/80 border border-blue-200/50 rounded-xl p-6 backdrop-blur-sm">
+                <h3 className="font-semibold text-blue-800 mb-2 flex items-center">
+                  <Target className="w-5 h-5 mr-2" />
+                  Test Coverage
+                </h3>
+                <p className="text-blue-700">
+                  This test will cover questions from all your registered service categories simultaneously.
+                  You need to score at least 70% to pass and become a verified provider.
+                </p>
               </div>
-
             </div>
 
             <div className="bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 rounded-xl p-6 mb-8 backdrop-blur-sm">
@@ -600,27 +601,39 @@ const ProviderTestPage = () => {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-4">
-              <button
-                onClick={handleStartTest}
-                disabled={testAttemptsLeft <= 0}
-                className={`flex-1 sm:flex-none px-8 py-4 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center space-x-2 transform hover:scale-105 ${
-                  testAttemptsLeft <= 0
-                    ? 'bg-red-500 text-white cursor-not-allowed opacity-75'
-                    : 'bg-primary text-white hover:bg-primary/90 hover:shadow-lg'
-                }`}
-              >
-                {testAttemptsLeft <= 0 ? (
-                  <>
-                    <XCircle className="w-5 h-5" />
-                    <span>No Attempts Remaining</span>
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-5 h-5" />
-                    <span>Start Test</span>
-                  </>
-                )}
-              </button>
+              {loading ? (
+                <div className="flex-1 sm:flex-none px-8 py-4 rounded-lg bg-primary text-white flex items-center justify-center space-x-2">
+                  <LoadingSpinner />
+                  <span>Starting Test...</span>
+                </div>
+              ) : (
+                <button
+                  onClick={handleStartTest}
+                  disabled={testAttemptsLeft <= 0 || user.testPassed}
+                  className={`flex-1 sm:flex-none px-8 py-4 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center space-x-2 transform hover:scale-105 ${
+                    testAttemptsLeft <= 0 || user.testPassed
+                      ? 'bg-red-500 text-white cursor-not-allowed opacity-75'
+                      : 'bg-primary text-white hover:bg-primary/90 hover:shadow-lg'
+                  }`}
+                >
+                  {testAttemptsLeft <= 0 ? (
+                    <>
+                      <XCircle className="w-5 h-5" />
+                      <span>No Attempts Remaining</span>
+                    </>
+                  ) : user.testPassed ? (
+                    <>
+                      <CheckCircle className="w-5 h-5" />
+                      <span>Test Already Passed</span>
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-5 h-5" />
+                      <span>Start Test</span>
+                    </>
+                  )}
+                </button>
+              )}
 
               {testAttemptsLeft > 0 && (
                 <button
@@ -660,7 +673,12 @@ const ProviderTestPage = () => {
                   </h2>
                   <p className="text-secondary/80 flex items-center">
                     <BookOpen className="w-4 h-4 mr-2" />
-                    {categories.find(cat => cat._id === currentTest.category)?.name || currentTest.category}
+                    {currentTest.category}
+                    {currentTest.testCategories && currentTest.testCategories.length > 1 && (
+                      <span className="ml-2 text-xs bg-primary/10 text-primary px-2 py-1 rounded-full">
+                        Multi-Category Test
+                      </span>
+                    )}
                   </p>
                 </div>
                 <TimerDisplay 
@@ -847,6 +865,15 @@ const ProviderTestPage = () => {
                 Performance: {testResults.performance}
               </div>
 
+              <div className="text-secondary/80 mb-4">
+                Test Category: <span className="font-semibold">{testResults.category}</span>
+                {testResults.testCategories && testResults.testCategories.length > 1 && (
+                  <span className="ml-2 text-xs bg-primary/10 text-primary px-2 py-1 rounded-full">
+                    Multi-Category Test
+                  </span>
+                )}
+              </div>
+
               <div className="text-secondary/80 mb-8">
                 Attempts remaining: <span className="font-semibold">{testAttemptsLeft}</span>
               </div>
@@ -873,14 +900,14 @@ const ProviderTestPage = () => {
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <button
                   onClick={() => setActiveTab('start')}
-                  disabled={testAttemptsLeft <= 0}
+                  disabled={testAttemptsLeft <= 0 || user.testPassed}
                   className={`px-8 py-3 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 ${
-                    testAttemptsLeft <= 0
+                    testAttemptsLeft <= 0 || user.testPassed
                       ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                       : 'bg-primary text-white hover:bg-primary/90 hover:shadow-lg'
                   }`}
                 >
-                  {testAttemptsLeft <= 0 ? 'No Attempts Remaining' : 'Take Another Test'}
+                  {testAttemptsLeft <= 0 ? 'No Attempts Remaining' : user.testPassed ? 'Test Already Passed' : 'Take Another Test'}
                 </button>
                 
                 <button

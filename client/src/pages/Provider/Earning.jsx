@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 
 const ProviderEarningsDashboard = () => {
-  const { token, API, showToast, user } = useAuth();
+  const { token, API, showToast } = useAuth();
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState({
     totalEarnings: 0,
@@ -64,21 +64,11 @@ const ProviderEarningsDashboard = () => {
   const [confirmMessage, setConfirmMessage] = useState('');
   const [confirmAction, setConfirmAction] = useState(null);
 
-  // Fetch earnings summary
+  // Fetch earnings summary from provider profile wallet
   const fetchSummary = async () => {
     try {
       setLoading(true);
-
-      // Calculate current month start and end dates
-      const currentDate = new Date();
-      const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-      const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-      endOfMonth.setHours(23, 59, 59, 999);
-
-      const startDate = startOfMonth.toISOString().split('T')[0];
-      const endDate = endOfMonth.toISOString().split('T')[0];
-
-      const response = await fetch(`${API}/payment/summary?startDate=${startDate}&endDate=${endDate}`, {
+      const response = await fetch(`${API}/provider/profile`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -87,20 +77,22 @@ const ProviderEarningsDashboard = () => {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData?.error || errorData?.message || 'Failed to fetch earnings summary');
+        throw new Error(errorData?.error || errorData?.message || 'Failed to fetch provider profile');
       }
 
       const data = await response.json();
-      if (data.success) {
+      if (data.success && data.provider) {
+        const wallet = data.provider.wallet || {};
         setSummary({
-          totalEarnings: data.totalEarnings || 0,
-          cashReceived: data.cashReceived || 0,
-          commissionPending: data.commissionPending || 0,
-          availableBalance: data.availableBalance || 0,
-          totalPendingWithdrawals: data.pendingWithdrawals || 0
+          totalEarnings: wallet.totalEarnings || 0,
+          cashReceived: wallet.cashReceived || 0,
+          commissionPending: wallet.commissionPending || 0,
+          availableBalance: wallet.availableBalance || 0,
+          totalPendingWithdrawals: wallet.totalPendingWithdrawals || 0
         });
+        setProviderBankDetails(data.provider.bankDetails);
       } else {
-        throw new Error(data.error || data.message || 'Failed to fetch earnings summary');
+        throw new Error(data.error || data.message || 'Failed to fetch provider profile');
       }
     } catch (error) {
       console.error('Error fetching summary:', error);
@@ -108,111 +100,6 @@ const ProviderEarningsDashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  // Fetch weekly/monthly earnings data
-  const fetchWeeklyMonthlyData = async () => {
-    try {
-      // Generate weekly data for current month
-      const currentDate = new Date();
-      const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-      const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-
-      const weeklyResponse = await fetch(
-        `${API}/payment/earnings-report?startDate=${startOfMonth.toISOString().split('T')[0]}&endDate=${endOfMonth.toISOString().split('T')[0]}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      if (weeklyResponse.ok) {
-        const weeklyData = await weeklyResponse.json();
-        if (weeklyData.success && weeklyData.earnings) {
-          processWeeklyData(weeklyData.earnings);
-        }
-      }
-
-      // Generate monthly data for current year
-      const startOfYear = new Date(currentDate.getFullYear(), 0, 1);
-      const endOfYear = new Date(currentDate.getFullYear(), 11, 31);
-
-      const monthlyResponse = await fetch(
-        `${API}/payment/earnings-report?startDate=${startOfYear.toISOString().split('T')[0]}&endDate=${endOfYear.toISOString().split('T')[0]}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      if (monthlyResponse.ok) {
-        const monthlyData = await monthlyResponse.json();
-        if (monthlyData.success && monthlyData.earnings) {
-          processMonthlyData(monthlyData.earnings);
-        }
-      }
-
-    } catch (error) {
-      console.error('Error fetching weekly/monthly data:', error);
-    }
-  };
-
-  // Process weekly data
-  const processWeeklyData = (earnings) => {
-    const weeks = [];
-    const currentDate = new Date();
-    const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-
-    // Generate 4 weeks for current month
-    for (let i = 0; i < 4; i++) {
-      const weekStart = new Date(startOfMonth);
-      weekStart.setDate(startOfMonth.getDate() + (i * 7));
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 6);
-
-      const weekEarnings = earnings.filter(earning => {
-        const earningDate = new Date(earning.createdAt);
-        return earningDate >= weekStart && earningDate <= weekEnd;
-      });
-
-      weeks.push({
-        week: `Week ${i + 1}`,
-        startDate: weekStart,
-        endDate: weekEnd,
-        earnings: weekEarnings.reduce((sum, e) => sum + (e.netAmount || 0), 0),
-        count: weekEarnings.length
-      });
-    }
-
-    setWeeklyData(weeks);
-  };
-
-  // Process monthly data
-  const processMonthlyData = (earnings) => {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
-
-    const monthlyEarnings = months.map((month, index) => {
-      const monthEarnings = earnings.filter(earning => {
-        const earningDate = new Date(earning.createdAt);
-        return earningDate.getMonth() === index;
-      });
-
-      return {
-        month,
-        earnings: monthEarnings.reduce((sum, e) => sum + (e.netAmount || 0), 0),
-        count: monthEarnings.length,
-        commission: monthEarnings.reduce((sum, e) => sum + (e.commissionAmount || 0), 0)
-      };
-    });
-
-    setMonthlyData(monthlyEarnings);
   };
 
   // Fetch earnings report
@@ -296,35 +183,6 @@ const ProviderEarningsDashboard = () => {
     }
   };
 
-  // Fetch provider profile for bank details
-  const fetchProviderProfile = async () => {
-    try {
-      const response = await fetch(`${API}/provider/profile`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData?.error || errorData?.message || 'Failed to fetch provider profile');
-      }
-
-      const data = await response.json();
-      if (data.provider && data.provider.bankDetails) {
-        setProviderBankDetails(data.provider.bankDetails);
-        return data.provider.bankDetails;
-      } else {
-        throw new Error('No bank details found in profile');
-      }
-    } catch (error) {
-      console.error('Error fetching provider profile:', error);
-      showToast(error.message, 'error');
-      return null;
-    }
-  };
-
   // Handle withdrawal request
   const handleWithdrawal = async () => {
     try {
@@ -332,9 +190,6 @@ const ProviderEarningsDashboard = () => {
         showToast('Minimum withdrawal amount is ₹500', 'error');
         return;
       }
-
-      // Refresh balance to ensure we have the latest data
-      await fetchSummary();
 
       if (withdrawalForm.amount > summary.availableBalance) {
         showToast(`Insufficient balance. Available: ₹${summary.availableBalance}`, 'error');
@@ -361,22 +216,14 @@ const ProviderEarningsDashboard = () => {
             const data = await response.json();
 
             if (!response.ok) {
-              // If backend provides actual balance, use it
-              const actualBalance = data.availableBalance !== undefined ? data.availableBalance : summary.availableBalance;
-
-              if (data.error?.includes('exceeds available balance')) {
-                showToast(`Insufficient balance. Available: ₹${actualBalance}`, 'error');
-              } else {
-                throw new Error(data?.error || data?.message || 'Failed to process withdrawal');
-              }
-              return;
+              throw new Error(data?.error || data?.message || 'Failed to process withdrawal');
             }
 
             if (data.success) {
               showToast('Withdrawal request submitted successfully!', 'success');
               setShowWithdrawal(false);
               setWithdrawalForm({ amount: '' });
-              await refreshData(); // Refresh all data
+              await refreshData();
             } else {
               throw new Error(data.error || data.message || 'Failed to process withdrawal');
             }
@@ -404,33 +251,7 @@ const ProviderEarningsDashboard = () => {
         return;
       }
 
-      // First, check if there is data to download
-      const checkParams = new URLSearchParams();
-      checkParams.append('startDate', dateFilter.startDate);
-      checkParams.append('endDate', dateFilter.endDate);
-
       const endpoint = type === 'earnings' ? 'earnings-report' : 'withdrawal-report';
-      const checkResponse = await fetch(`${API}/payment/${endpoint}?${checkParams.toString()}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!checkResponse.ok) {
-        const errorData = await checkResponse.json();
-        throw new Error(errorData?.error || errorData?.message || `Failed to check for ${type} report data`);
-      }
-
-      const checkData = await checkResponse.json();
-      const records = type === 'earnings' ? checkData.earnings : checkData.records;
-
-      if (!records || records.length === 0) {
-        showToast(`No ${type} data found for the selected period.`, 'info');
-        return;
-      }
-
-      // If data exists, proceed with download
       const downloadParams = new URLSearchParams();
       downloadParams.append('startDate', dateFilter.startDate);
       downloadParams.append('endDate', dateFilter.endDate);
@@ -447,7 +268,6 @@ const ProviderEarningsDashboard = () => {
         throw new Error(errorData?.error || errorData?.message || `Failed to download ${type} report`);
       }
 
-      // Handle file download
       const blob = await downloadResponse.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -488,10 +308,7 @@ const ProviderEarningsDashboard = () => {
   const refreshData = async () => {
     try {
       setLoading(true);
-      await Promise.all([
-        fetchSummary(),
-        fetchWeeklyMonthlyData()
-      ]);
+      await fetchSummary();
       if (activeTab === 'earnings') {
         await fetchEarningsReport();
       } else if (activeTab === 'withdrawals') {
@@ -506,13 +323,6 @@ const ProviderEarningsDashboard = () => {
 
   useEffect(() => {
     refreshData();
-
-    // Set up auto-refresh every 30 seconds to check for balance updates
-    const autoRefreshInterval = setInterval(() => {
-      fetchSummary();
-    }, 5000); // 5 seconds
-
-    return () => clearInterval(autoRefreshInterval);
   }, []);
 
   useEffect(() => {
@@ -573,15 +383,6 @@ const ProviderEarningsDashboard = () => {
     }));
   };
 
-  const getTrend = (current, previous) => {
-    if (previous === 0) return { trend: 'neutral', percentage: 0 };
-    const change = ((current - previous) / previous) * 100;
-    return {
-      trend: change > 0 ? 'up' : change < 0 ? 'down' : 'neutral',
-      percentage: Math.abs(change).toFixed(1)
-    };
-  };
-
   // Mobile tab navigation
   const MobileTabSelector = () => (
     <div className="md:hidden mb-4">
@@ -605,12 +406,6 @@ const ProviderEarningsDashboard = () => {
         <div className="mb-6 sm:mb-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center">
-              <button
-                className="md:hidden mr-2 p-2 rounded-md text-secondary"
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              >
-                {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-              </button>
               <div>
                 <h1 className="text-2xl sm:text-3xl font-bold text-secondary">Earnings Dashboard</h1>
                 <p className="text-gray-600 mt-1 sm:mt-2 text-sm sm:text-base">Track your earnings and manage withdrawals</p>
@@ -702,139 +497,10 @@ const ProviderEarningsDashboard = () => {
           </div>
         </div>
 
-        {/* Weekly & Monthly Stats */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8">
-          {/* Weekly Stats */}
-          <div className="bg-background rounded-xl shadow-sm border border-gray-200">
-            <div className="p-4 sm:p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="bg-primary/10 p-2 rounded-full">
-                    <BarChart3 className="w-4 sm:w-5 h-4 sm:h-5 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="text-base sm:text-lg font-semibold text-secondary">Weekly Overview</h3>
-                    <p className="text-xs sm:text-sm text-gray-500">Current month breakdown</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => toggleCardExpansion('weekly')}
-                  className="p-1 sm:p-2 hover:bg-gray-100 rounded-full transition-colors"
-                >
-                  {expandedCards.weekly ?
-                    <ChevronUp className="w-4 sm:w-5 h-4 sm:h-5 text-gray-500" /> :
-                    <ChevronDown className="w-4 sm:w-5 h-4 sm:h-5 text-gray-500" />
-                  }
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                {weeklyData.slice(0, 4).map((week, index) => (
-                  <div key={week.week} className="bg-gray-50 p-2 sm:p-3 rounded-lg">
-                    <p className="text-xs font-medium text-gray-600">{week.week}</p>
-                    <p className="text-sm font-bold text-secondary">
-                      {formatCurrency(week.earnings)}
-                    </p>
-                    <p className="text-xs text-gray-500">{week.count} bookings</p>
-                  </div>
-                ))}
-              </div>
-
-              {expandedCards.weekly && (
-                <div className="mt-4 pt-4 border-t">
-                  <div className="space-y-2">
-                    {weeklyData.map((week) => (
-                      <div key={week.week} className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">{week.week}</span>
-                        <span className="text-sm font-medium text-secondary">
-                          {formatCurrency(week.earnings)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Monthly Stats */}
-          <div className="bg-background rounded-xl shadow-sm border border-gray-200">
-            <div className="p-4 sm:p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="bg-accent/10 p-2 rounded-full">
-                    <Activity className="w-4 sm:w-5 h-4 sm:h-5 text-accent" />
-                  </div>
-                  <div>
-                    <h3 className="text-base sm:text-lg font-semibold text-secondary">Monthly Overview</h3>
-                    <p className="text-xs sm:text-sm text-gray-500">Current year performance</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => toggleCardExpansion('monthly')}
-                  className="p-1 sm:p-2 hover:bg-gray-100 rounded-full transition-colors"
-                >
-                  {expandedCards.monthly ?
-                    <ChevronUp className="w-4 sm:w-5 h-4 sm:h-5 text-gray-500" /> :
-                    <ChevronDown className="w-4 sm:w-5 h-4 sm:h-5 text-gray-500" />
-                  }
-                </button>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2 sm:gap-3">
-                {monthlyData.slice(0, 6).map((month, index) => {
-                  const prevMonth = index > 0 ? monthlyData[index - 1] : null;
-                  const trend = prevMonth ? getTrend(month.earnings, prevMonth.earnings) : { trend: 'neutral', percentage: 0 };
-
-                  return (
-                    <div key={month.month} className="bg-gray-50 p-2 rounded-lg">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-medium text-gray-600">{month.month}</span>
-                        {trend.trend !== 'neutral' && (
-                          <div className={`flex items-center gap-1 ${trend.trend === 'up' ? 'text-primary' : 'text-red-600'}`}>
-                            {trend.trend === 'up' ?
-                              <TrendingUp className="w-3 h-3" /> :
-                              <TrendingDown className="w-3 h-3" />
-                            }
-                          </div>
-                        )}
-                      </div>
-                      <p className="text-xs font-bold text-secondary">
-                        {formatCurrency(month.earnings)}
-                      </p>
-                      <p className="text-xs text-gray-500">{month.count} bookings</p>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {expandedCards.monthly && (
-                <div className="mt-4 pt-4 border-t">
-                  <div className="grid grid-cols-2 gap-3">
-                    {monthlyData.map((month) => (
-                      <div key={month.month} className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">{month.month}</span>
-                        <span className="text-sm font-medium text-secondary">
-                          {formatCurrency(month.earnings)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
         {/* Withdrawal Button */}
         <div className="mb-6 sm:mb-8">
           <button
-            onClick={() => {
-              if (!providerBankDetails) {
-                fetchProviderProfile();
-              }
-              setShowWithdrawal(true);
-            }}
+            onClick={() => setShowWithdrawal(true)}
             disabled={summary.availableBalance < 500}
             className="w-full sm:w-auto bg-gradient-to-r from-accent to-accent/90 hover:from-accent/90 hover:to-accent text-white px-4 sm:px-6 py-3 rounded-lg font-medium flex items-center justify-center gap-2 transition-all disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed"
           >

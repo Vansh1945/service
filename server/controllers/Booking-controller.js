@@ -1440,11 +1440,19 @@ const acceptBooking = async (req, res) => {
     }
 
     // Check if provider exists and get their services
-    const provider = await Provider.findById(providerId).select('services name');
+    const provider = await Provider.findById(providerId).select('services name testPassed');
     if (!provider) {
       return res.status(404).json({
         success: false,
         message: 'Provider not found'
+      });
+    }
+
+    // Check if provider has passed the test
+    if (!provider.testPassed) {
+      return res.status(403).json({
+        success: false,
+        message: 'You must complete the test before accepting bookings'
       });
     }
 

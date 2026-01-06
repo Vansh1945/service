@@ -1088,7 +1088,7 @@ const ProviderBooking = () => {
                           View Details
                         </button>
 
-                        {booking.status === 'pending' && (!booking.provider || booking.provider === user?._id) && (
+                        {booking.status === 'pending' && (!booking.provider || booking.provider === user?._id) && user.testPassed && (
                           <div className="flex space-x-2">
                             <button
                               onClick={() => handleBookingAction(booking._id, 'accept')}
@@ -1457,7 +1457,7 @@ const ProviderBooking = () => {
               {/* Action Buttons */}
               <div className="mt-8 pt-6 border-t border-gray-200">
                 <div className="flex flex-col sm:flex-row gap-3">
-                  {selectedBooking.status === 'pending' && (
+                  {selectedBooking.status === 'pending' && user.testPassed && (
                     <>
                       <button
                         onClick={() => handleBookingAction(selectedBooking._id, 'accept')}

@@ -161,6 +161,18 @@ const getEarningsSummary = async (req, res) => {
       commissionPending: 0
     };
 
+    // Update wallet fields in provider document
+    await Provider.findByIdAndUpdate(req.provider._id, {
+      $set: {
+        'wallet.totalEarnings': result.totalEarnings || 0,
+        'wallet.cashReceived': result.cashReceived || 0,
+        'wallet.commissionPending': result.commissionPending || 0,
+        'wallet.availableBalance': settlement.availableBalance,
+        'wallet.pendingWithdrawals': totalPendingWithdrawals,
+        'wallet.lastUpdated': new Date()
+      }
+    });
+
     res.json({
       success: true,
       totalEarnings: result.totalEarnings || 0,

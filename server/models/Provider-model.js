@@ -8,6 +8,26 @@ const walletSchema = new mongoose.Schema({
         default: 0,
         min: 0
     },
+    totalEarnings: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
+    cashReceived: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
+    commissionPending: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
+    pendingWithdrawals: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
     totalWithdrawn: {
         type: Number,
         default: 0

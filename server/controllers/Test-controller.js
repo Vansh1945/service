@@ -75,45 +75,29 @@ const getTestCategories = async (req, res) => {
 };
 
 /**
- * Start a new test with selected category - Provider
+ * Start a new test covering all provider's service categories simultaneously - Provider
  */
 const startTest = async (req, res) => {
     try {
         const provider = req.provider;
-        const { category } = req.body;
 
-        // Validate input
-        if (!category) {
+        // Check if provider has already passed the overall test
+        if (provider.testPassed) {
             return res.status(400).json({
                 success: false,
-                message: 'Category is required'
+                message: 'You have already passed the provider test'
             });
         }
 
-        // Check if provider has already passed this category
-        const alreadyPassed = await ProviderTest.findOne({
-            provider: provider._id,
-            testCategory: category,
-            passed: true
+        // Check global attempt count (across all categories)
+        const totalAttempts = await ProviderTest.countDocuments({
+            provider: provider._id
         });
 
-        if (alreadyPassed) {
+        if (totalAttempts >= TEST_CONFIG.MAX_ATTEMPTS) {
             return res.status(400).json({
                 success: false,
-                message: 'You have already passed this category test'
-            });
-        }
-
-        // Check attempt count for this category
-        const attemptCount = await ProviderTest.countDocuments({
-            provider: provider._id,
-            testCategory: category
-        });
-
-        if (attemptCount >= TEST_CONFIG.MAX_ATTEMPTS) {
-            return res.status(400).json({
-                success: false,
-                message: `You have reached the maximum of ${TEST_CONFIG.MAX_ATTEMPTS} attempts for this category`
+                message: `You have reached the maximum of ${TEST_CONFIG.MAX_ATTEMPTS} attempts for the provider test`
             });
         }
 
@@ -143,19 +127,28 @@ const startTest = async (req, res) => {
             }
         }
 
-        // Build question query
+        // Get provider's service categories
+        const providerServices = provider.services || [];
+        if (providerServices.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'No service categories found for your profile'
+            });
+        }
+
+        // Build question query for all provider's categories
         const query = {
             isActive: true,
-            category: category
+            category: { $in: providerServices }
         };
 
-        // Get all available questions for the category
+        // Get all available questions for the provider's categories
         const allQuestions = await Question.find(query);
 
         if (allQuestions.length < TEST_CONFIG.MIN_QUESTIONS_PER_TEST) {
             return res.status(400).json({
                 success: false,
-                message: `At least ${TEST_CONFIG.MIN_QUESTIONS_PER_TEST} questions are required for this category. Currently only ${allQuestions.length} questions are available.`
+                message: `At least ${TEST_CONFIG.MIN_QUESTIONS_PER_TEST} questions are required across your service categories. Currently only ${allQuestions.length} questions are available.`
             });
         }
 
@@ -165,6 +158,7 @@ const startTest = async (req, res) => {
         const questions = shuffled.slice(0, numQuestions);
 
         // Create new test with proper question structure
+        // Note: testCategory will be set to the first category for backward compatibility
         const test = new ProviderTest({
             provider: provider._id,
             questions: questions.map(q => ({
@@ -177,10 +171,10 @@ const startTest = async (req, res) => {
                 status: 'unanswered'
             })),
             status: 'in-progress',
-            testCategory: category,
+            testCategory: providerServices[0], // Primary category for reference
             startedAt: new Date(),
             expiresAt: new Date(Date.now() + TEST_CONFIG.TIME_LIMIT),
-            attemptNumber: attemptCount + 1
+            attemptNumber: totalAttempts + 1
         });
 
         await test.save();
@@ -190,7 +184,7 @@ const startTest = async (req, res) => {
             message: 'Test started successfully',
             testId: test._id,
             totalQuestions: test.questions.length,
-            testCategory: test.testCategory,
+            testCategories: providerServices, // All categories being tested
             startedAt: test.startedAt,
             expiresAt: test.expiresAt,
             timeLimit: TEST_CONFIG.TIME_LIMIT,
@@ -302,9 +296,10 @@ const submitTest = async (req, res) => {
             await Provider.findByIdAndUpdate(
                 provider._id,
                 {
-                    $addToSet: { passedTestCategories: test.testCategory },
+                    testPassed: true,
                     testScore: score,
-                    testCompletionDate: new Date()
+                    testCompletionDate: new Date(),
+                    $addToSet: { passedTestCategories: { $each: provider.services } } // Mark all provider's service categories as passed
                 },
                 { new: true }
             );
@@ -455,10 +450,15 @@ const getActiveTest = async (req, res) => {
 
         const timeRemaining = Math.max(0, Math.floor((activeTest.expiresAt - now) / 1000));
 
+        // Get provider's services to determine if this is a multi-category test
+        const providerData = await Provider.findById(activeTest.provider).select('services');
+        const isMultiCategory = providerData.services && providerData.services.length > 1;
+
         const response = {
             testId: activeTest._id,
             status: activeTest.status,
-            category: activeTest.testCategory,
+            category: isMultiCategory ? 'All Service Categories' : activeTest.testCategory,
+            testCategories: providerData.services, // Include all categories for reference
             startedAt: activeTest.startedAt,
             expiresAt: activeTest.expiresAt,
             timeRemaining,
@@ -530,12 +530,17 @@ const getTestDetails = async (req, res) => {
             }}
         ]);
 
+        // Get provider's services to determine if this is a multi-category test
+        const providerData = await Provider.findById(test.provider).select('services');
+        const isMultiCategory = providerData.services && providerData.services.length > 1;
+
         const response = {
             testId: test._id,
             status: test.status,
             score: test.score,
             passed: test.passed,
-            category: test.testCategory,
+            category: isMultiCategory ? 'All Service Categories' : test.testCategory,
+            testCategories: providerData.services, // Include all categories for reference
             startedAt: test.startedAt,
             completedAt: test.completedAt,
             expiresAt: test.expiresAt,
