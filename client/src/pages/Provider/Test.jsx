@@ -4,7 +4,7 @@ import LoadingSpinner from '../../components/Loader';
 import {
   Clock, CheckCircle, XCircle, Play, RotateCcw, Award, AlertCircle,
   BookOpen, Target, TrendingUp, Calendar, User, ChevronLeft,
-  ChevronRight, Bookmark, BookmarkCheck, RefreshCw, Download,
+  ChevronRight, Bookmark, BookmarkCheck, Download,
   Timer, Zap, Star, Trophy, BarChart3, Activity
 } from 'lucide-react';
 
@@ -213,30 +213,6 @@ const PerformanceAnalytics = ({ testResults, testHistory }) => {
   );
 };
 
-// Category Select Component
-const CategorySelect = ({ value, onChange, label, required, includeAll = false, categories }) => {
-  return (
-    <div>
-      <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-        {label} {required && '*'}
-      </label>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        required={required}
-        className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-      >
-        {includeAll && <option value="">All Categories</option>}
-        {categories.map(category => (
-          <option key={category._id} value={category._id}>
-            {category.name}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-};
-
 const ProviderTestPage = () => {
   const { token, API, showToast, user } = useAuth();
 
@@ -250,14 +226,9 @@ const ProviderTestPage = () => {
   const [testAttemptsLeft, setTestAttemptsLeft] = useState(3);
   const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState('saved');
-  const [categories, setCategories] = useState([]);
   const [lockedCategories, setLockedCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
-  const [loadingCategories, setLoadingCategories] = useState(false);
-
-  // Filter categories to only show those in user's services
-  const filteredCategories = categories.filter(category => user.services?.includes(category._id));
 
   // Custom hooks
   const { timeLeft, formatTime, isWarning, setTimeLeft } = useTestTimer(
@@ -451,33 +422,6 @@ const ProviderTestPage = () => {
     checkActiveTest();
   }, [API, token, showToast, fetchTestHistory]);
 
-  // Fetch categories
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const response = await fetch(`${API}/system-setting/categories`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to fetch categories');
-        }
-
-        const data = await response.json();
-        setCategories(data.data || []);
-      } catch (error) {
-        console.error('Fetch categories error:', error);
-        showToast(error.message || 'Failed to fetch categories', 'error');
-      }
-    };
-
-    fetchCategories();
-  }, [API, token, showToast]);
-
-
-
   // Calculate attempts left
   useEffect(() => {
     const attemptsUsed = testHistory.length;
@@ -580,10 +524,10 @@ const ProviderTestPage = () => {
                 <AlertCircle className="w-5 h-5 mr-2" />
                 Test Information
               </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div className="flex items-center space-x-2">
                   <BookOpen className="w-4 h-4 text-primary" />
-                  <span className="text-sm text-primary">5-10 Questions</span>
+                  <span className="text-sm text-primary">10-20 Questions</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Clock className="w-4 h-4 text-primary" />
@@ -593,20 +537,10 @@ const ProviderTestPage = () => {
                   <Target className="w-4 h-4 text-primary" />
                   <span className="text-sm text-primary">70% to Pass</span>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <RefreshCw className="w-4 h-4 text-primary" />
-                  <span className="text-sm text-primary">{testAttemptsLeft} Attempts Left</span>
-                </div>
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-4">
-              {loading ? (
-                <div className="flex-1 sm:flex-none px-8 py-4 rounded-lg bg-primary text-white flex items-center justify-center space-x-2">
-                  <LoadingSpinner />
-                  <span>Starting Test...</span>
-                </div>
-              ) : (
+            <div className="flex flex-col sm:flex-row gap-4">  
                 <button
                   onClick={handleStartTest}
                   disabled={testAttemptsLeft <= 0 || user.testPassed}
@@ -633,19 +567,6 @@ const ProviderTestPage = () => {
                     </>
                   )}
                 </button>
-              )}
-
-              {testAttemptsLeft > 0 && (
-                <button
-                  onClick={() => {
-                    fetchTestHistory();
-                  }}
-                  className="px-6 py-4 border border-gray-300/70 rounded-lg font-medium text-secondary hover:bg-white/50 transition-all duration-200 flex items-center justify-center space-x-2 backdrop-blur-sm"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                  <span>Refresh</span>
-                </button>
-              )}
             </div>
 
             {testAttemptsLeft <= 0 && (

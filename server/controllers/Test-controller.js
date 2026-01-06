@@ -9,7 +9,7 @@ const { ObjectId } = require('mongoose').Types;
 const TEST_CONFIG = {
     TIME_LIMIT: 10 * 60 * 1000, // 10 minutes in milliseconds
     PASSING_SCORE: 70,
-    MIN_QUESTIONS_PER_TEST: 10, // Minimum questions required to start a test
+    MIN_QUESTIONS_PER_TEST: 20, // Minimum questions required to start a test
     MAX_ATTEMPTS: 3 // Maximum attempts allowed per category
 };
 
