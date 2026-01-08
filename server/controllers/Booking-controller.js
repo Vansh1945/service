@@ -9,6 +9,7 @@ const Transaction = require('../models/Transaction-model');
 const ProviderEarning = require('../models/ProviderEarning-model');
 const sendEmail = require('../utils/sendEmail');
 const ExcelJS = require('exceljs');
+const razorpayService = require('../services/razorpay-service');
 
 
 
@@ -394,30 +395,34 @@ const confirmBooking = async (req, res) => {
 // Helper function to process online payments
 async function processOnlinePayment({ amount, bookingId, paymentDetails, userId }, session) {
   try {
+    // Create Razorpay order
+    const order = await razorpayService.createOrder({
+      amount: amount,
+      bookingId: bookingId,
+      currency: 'INR',
+      notes: { userId }
+    });
 
+    // Create transaction
+    const transaction = new Transaction({
+      booking: bookingId,
+      user: userId,
+      amount: amount,
+      paymentMethod: 'online',
+      paymentStatus: 'pending',
+      transactionId: `TXN-${Date.now()}`,
+      razorpayOrderId: order.id,
+      currency: 'INR'
+    });
 
-    // Validate payment details
-    if (!paymentDetails || !paymentDetails.cardNumber || !paymentDetails.expiry || !paymentDetails.cvv) {
-      return { success: false, message: 'Card details are required for online payment' };
-    }
+    await transaction.save({ session });
 
-    // Simulate payment processing
-    const paymentSuccess = Math.random() > 0.1; // 90% success rate
-
-    if (paymentSuccess) {
-      return {
-        success: true,
-        transactionId: `TXN-${Date.now()}`,
-        razorpayOrderId: `ORDER-${Date.now()}`,
-        razorpayPaymentId: `PAY-${Date.now()}`,
-        paymentStatus: 'paid'
-      };
-    } else {
-      return {
-        success: false,
-        message: 'Payment declined by bank'
-      };
-    }
+    return {
+      success: true,
+      transactionId: transaction.transactionId,
+      razorpayOrderId: order.id,
+      paymentStatus: 'pending'
+    };
   } catch (error) {
     console.error('Payment processing error:', error);
     return {

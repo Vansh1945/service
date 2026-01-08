@@ -91,7 +91,7 @@ const createOrder = async (req, res) => {
 
     // Create Razorpay order with better error handling
     const options = {
-      amount: amount, // Convert to paise
+      amount: amount, // Amount in rupees, conversion to paise handled by razorpay-service.js
       currency: 'INR',
       receipt: `booking_${bookingId}`,
       payment_capture: 1,

@@ -17,7 +17,7 @@ const transactionSchema = new Schema({
   amount: {
     type: Number,
     required: true,
-    min: 0
+    min: 0 // Amount stored in rupees for both online and cash payments
   },
   paymentStatus: {
     type: String,
@@ -68,23 +68,7 @@ transactionSchema.pre('save', function(next) {
   next();
 });
 
-// Create Razorpay order
-transactionSchema.statics.createRazorpayOrder = async function(amount, currency, receipt, notes) {
-  const options = {
-    amount: Math.round(amount * 100), // Convert to paise
-    currency: currency || 'INR',
-    receipt: receipt,
-    payment_capture: 1,
-    notes: notes
-  };
 
-  try {
-    return await razorpay.orders.create(options);
-  } catch (err) {
-    console.error('Razorpay order creation failed:', err);
-    throw new Error(err.error.description || 'Payment processing failed');
-  }
-};
 
 // Verify Razorpay signature
 transactionSchema.statics.verifySignature = function(orderId, paymentId, signature) {

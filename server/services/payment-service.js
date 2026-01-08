@@ -36,7 +36,7 @@ module.exports = {
     // Handle online payment
     let razorpayOrder;
     if (paymentMethod === 'online') {
-      razorpayOrder = await razorpayService.createOrder(amount, `Payment for booking ${bookingId}`);
+      razorpayOrder = await razorpayService.createOrder({ amount, currency: 'INR', bookingId }, `Payment for booking ${bookingId}`);
       transaction.razorpayOrderId = razorpayOrder.id;
     }
 

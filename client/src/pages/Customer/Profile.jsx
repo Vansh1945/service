@@ -17,7 +17,6 @@ const UserProfile = () => {
         profilePicUrl: '',
         firstBookingUsed: false,
         totalBookings: 0,
-        totalSpent: 0,
         customDiscount: 0
     });
     const [isEditing, setIsEditing] = useState(false);
@@ -207,10 +206,6 @@ const UserProfile = () => {
                                     <div className="flex justify-between items-center mb-2">
                                         <span className="text-sm font-inter text-gray-600">Total Bookings:</span>
                                         <span className="text-sm font-poppins font-medium text-primary">{profile.totalBookings}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center mb-2">
-                                        <span className="text-sm font-inter text-gray-600">Total Spent:</span>
-                                        <span className="text-sm font-poppins font-medium text-primary">${(profile.totalSpent || 0).toFixed(2)}</span>
                                     </div>
                                     <div className="flex justify-between items-center">
                                         <span className="text-sm font-inter text-gray-600">Custom Discount:</span>
