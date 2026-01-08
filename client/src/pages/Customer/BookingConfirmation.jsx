@@ -37,6 +37,7 @@ const BookingConfirmation = () => {
   const [serviceDetails, setServiceDetails] = useState(null);
   const [razorpayLoaded, setRazorpayLoaded] = useState(false);
   const [error, setError] = useState(null);
+  const [showCashConfirmModal, setShowCashConfirmModal] = useState(false);
 
   // Load Razorpay script
   useEffect(() => {
@@ -200,18 +201,13 @@ const BookingConfirmation = () => {
       }
 
       try {
-        // Use data from location state if available (from booking creation)
-        if (location.state?.booking) {
-          console.log('Using booking details from location state');
-          setBookingDetails(location.state.booking);
-          setServiceDetails(location.state.service);
+        // Always fetch full booking details from API to ensure complete data
+        console.log('Fetching booking details from API');
+        await fetchBookingDetails();
 
-          if (location.state.booking.paymentMethod) {
-            setPaymentMethod(location.state.booking.paymentMethod);
-          }
-        } else {
-          console.log('Fetching booking details from API');
-          await fetchBookingDetails();
+        // Set payment method from location state if available
+        if (location.state?.booking?.paymentMethod) {
+          setPaymentMethod(location.state.booking.paymentMethod);
         }
       } catch (error) {
         console.error('Error during initialization:', error);
@@ -251,23 +247,17 @@ const BookingConfirmation = () => {
 
     const serviceInfo = getServiceInfo();
 
-    // Show confirmation dialog for cash payment
-    const confirmCashPayment = window.confirm(
-      `Confirm Cash Payment?\n\n` +
-      `Service: ${serviceInfo.title}\n` +
-      `Amount: ₹${bookingDetails.totalAmount.toFixed(2)}\n` +
-      `Date: ${formatDate(bookingDetails.date)}\n\n` +
-      `You will pay cash after service completion.\n` +
-      `Do you want to confirm this booking?`
-    );
+    // Show custom modal instead of window.confirm
+    setShowCashConfirmModal(true);
+  };
 
-    if (!confirmCashPayment) {
-      return;
-    }
+  const confirmCashPayment = async () => {
+    setShowCashConfirmModal(false);
+
+    const serviceInfo = getServiceInfo();
 
     try {
-      // Show processing toast
-      showToast('Confirming your booking...', 'info');
+
 
       // For cash payments, we only update the booking payment method and status
       // NO transaction record should be created for cash payments
@@ -301,7 +291,7 @@ const BookingConfirmation = () => {
       }
 
       // Success message with more details
-      showToast('✅ Booking confirmed! You can pay cash after service completion.', 'success');
+      showToast('Booking confirmed! You can pay cash after service completion.', 'success');
 
       // Navigate with enhanced state
       setTimeout(() => {
@@ -355,9 +345,6 @@ const BookingConfirmation = () => {
         return;
       }
 
-      // Show payment processing toast
-      const processingToast = showToast('Initializing secure payment...', 'info');
-
       const orderResponse = await axios.post(
         `${API}/transaction/create-order`,
         {
@@ -391,9 +378,6 @@ const BookingConfirmation = () => {
       if (!order?.id || !key) {
         throw new Error('Invalid payment order data received');
       }
-
-      // Update toast
-      showToast('Opening secure payment gateway...', 'info');
 
       const options = {
         key: key,
@@ -439,7 +423,7 @@ const BookingConfirmation = () => {
             }
 
             // Success animation and redirect
-            showToast('🎉 Payment successful! Booking confirmed.', 'success');
+            showToast('Payment successful! Booking confirmed.', 'success');
 
             setTimeout(() => {
               navigate('/customer/bookings', {
@@ -451,7 +435,7 @@ const BookingConfirmation = () => {
                   showSuccessAnimation: true
                 }
               });
-            }, 2000);
+            }, 5000);
 
           } catch (verificationError) {
             console.error('Payment verification error:', verificationError);
@@ -1252,6 +1236,57 @@ const BookingConfirmation = () => {
           </div>
         </div>
       </div>
+
+      {/* Custom Cash Payment Confirmation Modal */}
+      {showCashConfirmModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-accent/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                <FaMoneyBillWave className="w-8 h-8 text-accent" />
+              </div>
+              <h2 className="text-xl font-poppins font-bold text-gray-900 mb-2">Confirm Cash Payment</h2>
+              <p className="text-sm text-gray-600">Please review your booking details before confirming</p>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                <span className="text-sm font-medium text-gray-600">Service:</span>
+                <span className="text-sm font-semibold text-gray-900">{serviceInfo.title}</span>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                <span className="text-sm font-medium text-gray-600">Amount:</span>
+                <span className="text-sm font-semibold text-gray-900">₹{bookingDetails.totalAmount.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                <span className="text-sm font-medium text-gray-600">Date:</span>
+                <span className="text-sm font-semibold text-gray-900">{formatDate(bookingDetails.date)}</span>
+              </div>
+            </div>
+
+            <div className="p-4 bg-accent/5 rounded-lg border border-accent/20 mb-6">
+              <p className="text-sm text-gray-700 text-center leading-relaxed">
+                You will pay cash after service completion. Do you want to confirm this booking?
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCashConfirmModal(false)}
+                className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-all duration-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmCashPayment}
+                className="flex-1 px-4 py-3 bg-accent text-white rounded-xl font-semibold hover:bg-accent/90 transition-all duration-200"
+              >
+                Confirm Booking
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

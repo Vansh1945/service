@@ -4,12 +4,12 @@ import { useAuth } from '../../store/auth';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import axios from 'axios';
-import { toast } from 'react-toastify';
 import { ArrowLeft, CheckCircle, Plus, Minus, Tag, Clock, Calendar, Shield, Lock, Star, IndianRupee, Truck, RotateCcw, Check, CalendarDays } from 'lucide-react';
+import Loader from '../../components/Loader';
 
 const BookService = () => {
   const { serviceId } = useParams();
-  const { user, token, API } = useAuth();
+  const { user, token, API, showToast } = useAuth();
   const navigate = useNavigate();
 
   // State declarations
@@ -106,7 +106,7 @@ const BookService = () => {
       return response.data.data;
     } catch (err) {
       console.error('Error fetching service:', err);
-      toast.error(err.response?.data?.message || 'Failed to load service details');
+      showToast(err.response?.data?.message || 'Failed to load service details', 'error');
       throw err;
     }
   };
@@ -120,7 +120,7 @@ const BookService = () => {
       return response.data.user.address ? [response.data.user.address] : [];
     } catch (err) {
       console.error('Error fetching user addresses:', err);
-      toast.error('Failed to load your saved address');
+      showToast('Failed to load your saved address', 'error');
       return [];
     }
   };
@@ -152,12 +152,12 @@ const BookService = () => {
   // Apply coupon function
   const applyCoupon = async () => {
     if (!formData.couponCode.trim()) {
-      toast.error('Please enter a coupon code');
+      showToast('Please enter a coupon code', 'error');
       return;
     }
 
     if (!service?.basePrice) {
-      toast.error('Service price not loaded yet');
+      showToast('Service price not loaded yet', 'error');
       return;
     }
 
@@ -192,10 +192,10 @@ const BookService = () => {
         couponCode: couponData.code
       }));
 
-      toast.success('Coupon applied successfully!');
+      showToast('Coupon applied successfully!', 'success');
     } catch (err) {
       console.error('Coupon error:', err);
-      toast.error(err.response?.data?.message || err.message || 'Failed to apply coupon');
+      showToast(err.response?.data?.message || err.message || 'Failed to apply coupon', 'error');
     }
   };
 
@@ -258,7 +258,7 @@ const BookService = () => {
     const initializeData = async () => {
       try {
         if (!token) {
-          toast.error('Please login to book a service');
+          showToast('Please login to book a service', 'error');
           navigate('/login');
           return;
         }
@@ -354,39 +354,39 @@ const BookService = () => {
   // Validate form
   const validateForm = () => {
     if (!service) {
-      toast.error('Service information is not loaded');
+      showToast('Service information is not loaded', 'error');
       return false;
     }
-    
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const selectedDate = new Date(formData.date);
     selectedDate.setHours(0, 0, 0, 0);
 
     if (!formData.date || selectedDate < today || selectedDate > maxDate) {
-      toast.error('Please select a valid date within the next 3 days');
+      showToast('Please select a valid date within the next 3 days', 'error');
       return false;
     }
 
     if (!formData.time) {
-      toast.error('Please select a time');
+      showToast('Please select a time', 'error');
       return false;
     }
 
     if (!formData.useCustomAddress && addresses.length === 0) {
-      toast.error('Please add an address to continue');
+      showToast('Please add an address to continue', 'error');
       return false;
     }
 
     if (formData.useCustomAddress) {
       const { street, city, state, postalCode } = formData.customAddress;
       if (!street?.trim() || !city?.trim() || !state?.trim() || !postalCode?.trim()) {
-        toast.error('Please fill all address fields');
+        showToast('Please fill all address fields', 'error');
         return false;
       }
 
       if (!/^\d{6}$/.test(postalCode.trim())) {
-        toast.error('Please enter a valid 6-digit postal code');
+        showToast('Please enter a valid 6-digit postal code', 'error');
         return false;
       }
     }
@@ -401,7 +401,6 @@ const BookService = () => {
     if (!validateForm()) return;
 
     setIsSubmitting(true);
-    const toastId = toast.loading('Creating your booking...');
 
     try {
       let addressData;
@@ -470,12 +469,7 @@ const BookService = () => {
         await markCouponUsed(formData.appliedCoupon.code, baseAmount);
       }
 
-      toast.update(toastId, {
-        render: 'Booking created successfully! Redirecting to payment...',
-        type: 'success',
-        isLoading: false,
-        autoClose: 2000
-      });
+      showToast('Booking created successfully! Redirecting to payment...', 'success');
 
       const navigationBookingData = {
         ...response.data.data,
@@ -526,12 +520,7 @@ const BookService = () => {
         errorMessage = err.message;
       }
 
-      toast.update(toastId, {
-        render: errorMessage,
-        type: 'error',
-        isLoading: false,
-        autoClose: 5000
-      });
+      showToast(errorMessage, 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -543,14 +532,7 @@ const BookService = () => {
 
   // Loading state
   if (isLoading || !service) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p className="mt-4 text-secondary/70">Loading service details...</p>
-        </div>
-      </div>
-    );
+    return <Loader />;
   }
 
   return (

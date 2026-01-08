@@ -1,15 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../store/auth';
+import Loader from '../../components/Loader';
 import {
   MdStar,
   MdAccessTime,
   MdSecurity,
-  MdCheck,
   MdCurrencyRupee,
   MdChevronRight,
-  MdError,
-  MdShare,
   MdArrowBack,
   MdArrowForward,
   MdPhoto,
@@ -71,12 +69,21 @@ const ServiceDetailPage = () => {
       const serviceResponse = await fetch(`${API}/service/services/${id}`);
       const serviceData = await serviceResponse.json();
 
+      // Show backend messages of success/error
+      if (serviceData.message) {
+        if (serviceData.success) {
+          showToast(serviceData.message, 'success');
+        } else {
+          showToast(serviceData.message, 'error');
+        }
+      }
+
       if (!serviceResponse.ok) {
         throw new Error(serviceData.message || 'Failed to fetch service');
       }
 
       if (!serviceData.success || !serviceData.data) {
-        throw new Error('Service not found');
+        throw new Error(serviceData.message || 'Service not found');
       }
 
       const serviceDetails = serviceData.data;
@@ -97,6 +104,15 @@ const ServiceDetailPage = () => {
           );
           const relatedData = await relatedResponse.json();
 
+          // Show related services fetch messages
+          if (relatedData.message) {
+            if (relatedData.success) {
+              showToast(relatedData.message, 'success');
+            } else {
+              showToast(relatedData.message, 'error');
+            }
+          }
+
           if (relatedResponse.ok && relatedData.success) {
             const filteredRelated = relatedData.data.filter(
               s => s._id !== serviceDetails._id
@@ -105,6 +121,7 @@ const ServiceDetailPage = () => {
           }
         } catch (relatedError) {
           console.log('Failed to fetch related services:', relatedError);
+          showToast('Failed to fetch related services', 'error');
         }
       }
     } catch (err) {
@@ -158,30 +175,6 @@ const ServiceDetailPage = () => {
     return '';
   }, [service]);
 
-  // Get related service category name
-  const getRelatedCategoryName = (relatedCategory) => {
-    if (!relatedCategory) return 'Uncategorized';
-    
-    // If relatedCategory is an object with name
-    if (typeof relatedCategory === 'object' && relatedCategory.name) {
-      return relatedCategory.name;
-    }
-    
-    // If relatedCategory is a string ID
-    if (typeof relatedCategory === 'string' && categories.length > 0) {
-      const category = categories.find(cat => cat._id === relatedCategory);
-      return category ? category.name : 'Uncategorized';
-    }
-    
-    // If relatedCategory is an object with _id
-    if (typeof relatedCategory === 'object' && relatedCategory._id && categories.length > 0) {
-      const category = categories.find(cat => cat._id === relatedCategory._id);
-      return category ? category.name : 'Uncategorized';
-    }
-    
-    return 'Uncategorized';
-  };
-
   const handleBookNow = () => {
     if (!isAuthenticated) {
       showToast('Please login to book services', 'error');
@@ -193,28 +186,7 @@ const ServiceDetailPage = () => {
     });
   };
 
-  const handleShare = async () => {
-    const shareData = {
-      title: service?.title,
-      text: `Check out this ${service?.title} service from Raj Electrical Service`,
-      url: window.location.href,
-    };
 
-    if (navigator.share) {
-      try {
-        await navigator.share(shareData);
-      } catch (err) {
-        console.log('Error sharing:', err);
-      }
-    } else {
-      try {
-        await navigator.clipboard.writeText(window.location.href);
-        showToast('Link copied to clipboard!', 'success');
-      } catch (err) {
-        console.log('Error copying to clipboard:', err);
-      }
-    }
-  };
 
   const toggleAccordion = (index) => {
     setOpenAccordion(openAccordion === index ? null : index);
@@ -262,50 +234,11 @@ const ServiceDetailPage = () => {
     return distribution;
   }, [service?.feedback]);
 
-  // Loading State
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-flex items-center space-x-2 mb-4">
-            <div className="w-3 h-3 bg-teal-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-            <div className="w-3 h-3 bg-teal-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-            <div className="w-3 h-3 bg-teal-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-          </div>
-          <p className="text-gray-600 font-medium">Loading service details...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Error State
-  if (error || !service) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="text-center max-w-md bg-white rounded-2xl p-8 shadow-xl border border-gray-200">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <MdError className="w-8 h-8 text-red-600" />
-          </div>
-          <h3 className="text-xl font-bold text-gray-800 mb-2">Service Not Found</h3>
-          <p className="text-gray-600 mb-6">
-            {error || 'The service you\'re looking for doesn\'t exist.'}
-          </p>
-          <button
-            onClick={() => navigate('/customer/services')}
-            className="px-6 py-3 bg-orange-500 text-white font-medium rounded-lg hover:bg-orange-600 transition-all duration-300 shadow-lg hover:shadow-xl"
-          >
-            Browse Services
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const specialNotes = service.specialNotes || [];
-  const materialsUsed = service.materialsUsed || [];
+  const specialNotes = service?.specialNotes || [];
+  const materialsUsed = service?.materialsUsed || [];
 
   // Desktop Booking Card Component
-  const DesktopBookingCard = (
+  const DesktopBookingCard = service ? (
     <div className="sticky top-8 space-y-8">
       <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-xl">
         <div className="text-center mb-6">
@@ -339,20 +272,13 @@ const ServiceDetailPage = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           <button
             onClick={handleBookNow}
-            className="col-span-2 bg-orange-500 text-white py-4 px-6 rounded-xl font-bold hover:bg-orange-600 transition-all duration-300 transform hover:scale-105 flex items-center justify-center shadow-lg hover:shadow-xl"
+            className="bg-orange-500 text-white py-4 px-6 rounded-xl font-bold hover:bg-orange-600 transition-all duration-300 transform hover:scale-105 flex items-center justify-center shadow-lg hover:shadow-xl"
           >
             <MdCalendarToday className="w-5 h-5 mr-3" />
             Book Service
-          </button>
-
-          <button
-            onClick={handleShare}
-            className="flex items-center justify-center py-2 px-3 border border-gray-300 rounded-xl hover:bg-gray-50 transition-all duration-300 transform hover:scale-105 shadow-sm"
-          >
-            <MdShare className="w-5 h-5 text-gray-600" />
           </button>
         </div>
 
@@ -363,7 +289,24 @@ const ServiceDetailPage = () => {
         </div>
       </div>
     </div>
+  ) : null;
+
+  if (loading) return <Loader />;
+  if (error) return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="text-center">
+        <h2 className="text-2xl font-bold text-gray-800 mb-4">Service Not Found</h2>
+        <p className="text-gray-600 mb-6">{error}</p>
+        <button
+          onClick={() => navigate('/customer/services')}
+          className="bg-teal-600 text-white px-6 py-2 rounded-lg hover:bg-teal-700"
+        >
+          Back to Services
+        </button>
+      </div>
+    </div>
   );
+  if (!service) return <Loader />;
 
   return (
     <div className="min-h-screen bg-gray-50 font-inter">
@@ -426,11 +369,7 @@ const ServiceDetailPage = () => {
                       alt={`${service.title} - Image ${currentImageIndex + 1}`}
                       className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoading ? 'opacity-0' : 'opacity-100'}`}
                       onLoad={handleImageLoad}
-                      onError={(e) => {
-                        e.target.onerror = null;
-                        e.target.src = 'https://images.unsplash.com/photo-1581093458791-8a0a1ac4e8e8?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80';
-                        setImageLoading(false);
-                      }}
+                      
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-200 to-gray-300">
@@ -483,10 +422,7 @@ const ServiceDetailPage = () => {
                             src={image}
                             alt={`${service.title} - Thumbnail ${index + 1}`}
                             className="w-full h-full object-cover"
-                            onError={(e) => {
-                              e.target.onerror = null;
-                              e.target.src = 'https://images.unsplash.com/photo-1581093458791-8a0a1ac4e8e8?ixlib=rb-4.0.3&auto=format&fit=crop&w=100&q=80';
-                            }}
+                      
                           />
                         </button>
                       ))}
@@ -571,20 +507,13 @@ const ServiceDetailPage = () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 gap-3">
                     <button
                       onClick={handleBookNow}
-                      className="col-span-2 bg-orange-500 text-white py-3 px-4 rounded-xl font-bold hover:bg-orange-600 transition-all duration-300 flex items-center justify-center shadow-lg hover:shadow-xl text-sm"
+                      className="bg-orange-500 text-white py-3 px-4 rounded-xl font-bold hover:bg-orange-600 transition-all duration-300 flex items-center justify-center shadow-lg hover:shadow-xl text-sm"
                     >
                       <MdCalendarToday className="w-4 h-4 mr-2" />
                       Book Service
-                    </button>
-
-                    <button
-                      onClick={handleShare}
-                      className="flex items-center justify-center py-2 px-2 border border-gray-300 rounded-xl hover:bg-gray-50 transition-all duration-300 shadow-sm"
-                    >
-                      <MdShare className="w-4 h-4 text-gray-600" />
                     </button>
                   </div>
 
@@ -598,23 +527,25 @@ const ServiceDetailPage = () => {
 
               {/* Service Details Tabs */}
               <div className="border-b border-gray-200 mb-6">
-                <nav className="-mb-px flex space-x-8">
-                  {[
-                    { id: 'overview', label: 'Service Overview' },
-                    { id: 'specifications', label: 'Specifications' },
-                    { id: 'reviews', label: `Reviews (${service.ratingCount || 0})` }
-                  ].map((tab) => (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === tab.id
-                        ? 'border-teal-600 text-teal-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                        }`}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
+                <nav className="-mb-px flex overflow-x-auto scrollbar-hide">
+                  <div className="flex space-x-6 sm:space-x-8 min-w-max">
+                    {[
+                      { id: 'overview', label: 'Service Overview' },
+                      { id: 'specifications', label: 'Specifications' },
+                      { id: 'reviews', label: `Reviews (${service.ratingCount || 0})` }
+                    ].map((tab) => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${activeTab === tab.id
+                          ? 'border-teal-600 text-teal-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                          }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
                 </nav>
               </div>
 
@@ -685,94 +616,88 @@ const ServiceDetailPage = () => {
                 )}
 
                 {activeTab === 'specifications' && (
-                  <div className="grid gap-8 lg:grid-cols-5">
-                    <div className="lg:col-span-2">
-                      <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-6 border border-gray-200">
-                        <h4 className="font-semibold text-gray-800 mb-4 text-lg">
-                          Service Specifications
-                        </h4>
-                        <div className="space-y-4">
-                          <div className="flex justify-between items-center py-3 border-b border-gray-200">
-                            <span className="font-medium text-gray-600 flex items-center">
-                              <ClockIcon className="w-4 h-4 mr-2" />
-                              Service Duration
-                            </span>
-                            <span className="text-gray-800 font-semibold bg-orange-100 px-3 py-1 rounded-full border border-orange-200">
-                              {formatDuration(service.duration)}
-                            </span>
-                          </div>
+                  <div className="space-y-6">
+                    <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-4 sm:p-6 border border-gray-200">
+                      <h4 className="font-semibold text-gray-800 mb-4 text-lg">
+                        Service Specifications
+                      </h4>
+                      <div className="space-y-4">
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-3 border-b border-gray-200 gap-2">
+                          <span className="font-medium text-gray-600 flex items-center">
+                            <ClockIcon className="w-4 h-4 mr-2" />
+                            Service Duration
+                          </span>
+                          <span className="text-gray-800 font-semibold bg-orange-100 px-3 py-1 rounded-full border border-orange-200 text-sm">
+                            {formatDuration(service.duration)}
+                          </span>
+                        </div>
 
-                          <div className="flex justify-between items-center py-3 border-b border-gray-200">
-                            <span className="font-medium text-gray-600 flex items-center">
-                              Category
-                            </span>
-                            <span className="text-gray-800 font-semibold">{categoryName}</span>
-                          </div>
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-3 border-b border-gray-200 gap-2">
+                          <span className="font-medium text-gray-600">Category</span>
+                          <span className="text-gray-800 font-semibold">{categoryName}</span>
+                        </div>
 
-                          <div className="flex justify-between items-center py-3 border-b border-gray-200">
-                            <span className="font-medium text-gray-600">Service Status</span>
-                            <span className={`font-semibold px-3 py-1 rounded-full border ${service.isActive
-                              ? 'bg-green-100 text-green-800 border-green-200'
-                              : 'bg-red-100 text-red-800 border-red-200'
-                              }`}>
-                              {service.isActive ? 'Active' : 'Inactive'}
-                            </span>
-                          </div>
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-3 border-b border-gray-200 gap-2">
+                          <span className="font-medium text-gray-600">Service Status</span>
+                          <span className={`font-semibold px-3 py-1 rounded-full border text-sm ${service.isActive
+                            ? 'bg-green-100 text-green-800 border-green-200'
+                            : 'bg-red-100 text-red-800 border-red-200'
+                            }`}>
+                            {service.isActive ? 'Active' : 'Inactive'}
+                          </span>
+                        </div>
 
-                          <div className="flex justify-between items-center py-3">
-                            <span className="font-medium text-gray-600">Total Images</span>
-                            <span className="text-gray-800 font-semibold bg-teal-100 px-3 py-1 rounded-full border border-teal-200">
-                              {allImages.length} photos
-                            </span>
-                          </div>
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-3 gap-2">
+                          <span className="font-medium text-gray-600">Total Images</span>
+                          <span className="text-gray-800 font-semibold bg-teal-100 px-3 py-1 rounded-full border border-teal-200 text-sm">
+                            {allImages.length} photos
+                          </span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="lg:col-span-3">
-                      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                        <h4 className="font-semibold text-gray-800 p-6 text-lg border-b border-gray-200 bg-gray-50">
-                          Frequently Asked Questions
-                        </h4>
-                        <div className="divide-y divide-gray-200">
-                          {[
-                            {
-                              question: "What's included in the service cost?",
-                              answer: "The service cost includes professional labor, basic materials, standard tools, and transportation. Material cost from local market is not included in the service charge."
-                            },
-                            {
-                              question: "Do you provide service warranty?",
-                              answer: "Yes, we provide a 30-day service warranty on all our electrical repairs and installations. This covers any issues arising from the service provided."
-                            },
-                            {
-                              question: "Are your electricians certified?",
-                              answer: "Yes, all our electricians are certified professionals with extensive experience in electrical services and safety protocols."
-                            }
-                          ].map((faq, index) => (
-                            <div key={index} className="group">
-                              <button
-                                className="flex justify-between items-center w-full p-6 text-left hover:bg-gray-50"
-                                onClick={() => toggleAccordion(index)}
+                    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                      <h4 className="font-semibold text-gray-800 p-4 sm:p-6 text-lg border-b border-gray-200 bg-gray-50">
+                        Frequently Asked Questions
+                      </h4>
+                      <div className="divide-y divide-gray-200">
+                        {[
+                          {
+                            question: "What's included in the service cost?",
+                            answer: "The service cost includes professional labor, basic materials, standard tools, and transportation. Material cost from local market is not included in the service charge."
+                          },
+                          {
+                            question: "Do you provide service warranty?",
+                            answer: "Yes, we provide a 30-day service warranty on all our electrical repairs and installations. This covers any issues arising from the service provided."
+                          },
+                          {
+                            question: "Are your electricians certified?",
+                            answer: "Yes, all our electricians are certified professionals with extensive experience in electrical services and safety protocols."
+                          }
+                        ].map((faq, index) => (
+                          <div key={index} className="group">
+                            <button
+                              className="flex justify-between items-center w-full p-4 sm:p-6 text-left hover:bg-gray-50"
+                              onClick={() => toggleAccordion(index)}
+                            >
+                              <span className="font-medium text-gray-800 pr-4 text-sm sm:text-base">{faq.question}</span>
+                              <svg
+                                className={`w-5 h-5 text-gray-500 transition-transform flex-shrink-0 ${openAccordion === index ? 'transform rotate-180' : ''
+                                  }`}
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
                               >
-                                <span className="font-medium text-gray-800 pr-4">{faq.question}</span>
-                                <svg
-                                  className={`w-5 h-5 text-gray-500 transition-transform ${openAccordion === index ? 'transform rotate-180' : ''
-                                    }`}
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                </svg>
-                              </button>
-                              {openAccordion === index && (
-                                <div className="px-6 pb-6 bg-gray-50">
-                                  <p className="text-gray-600 leading-relaxed">{faq.answer}</p>
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </button>
+                            {openAccordion === index && (
+                              <div className="px-4 sm:px-6 pb-4 sm:pb-6 bg-gray-50">
+                                <p className="text-gray-600 leading-relaxed text-sm sm:text-base">{faq.answer}</p>
+                              </div>
+                            )}
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
@@ -900,7 +825,6 @@ const ServiceDetailPage = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {relatedServices.map((relatedService) => {
                 const relatedImages = relatedService.images || [];
-                const relatedCategoryName = getRelatedCategoryName(relatedService.category);
 
                 return (
                   <div
@@ -913,16 +837,8 @@ const ServiceDetailPage = () => {
                         src={relatedImages[0] || 'https://images.unsplash.com/photo-1581093458791-8a0a1ac4e8e8?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80'}
                         alt={relatedService.title}
                         className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                        onError={(e) => {
-                          e.target.onerror = null;
-                          e.target.src = 'https://images.unsplash.com/photo-1581093458791-8a0a1ac4e8e8?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80';
-                        }}
+                    
                       />
-                      <div className="absolute top-3 left-3">
-                        <span className="text-xs font-medium text-teal-600 bg-white/90 px-2 py-1 rounded-full border border-teal-200">
-                          {relatedCategoryName}
-                        </span>
-                      </div>
                     </div>
 
                     <div className="p-5">
