@@ -314,7 +314,7 @@ const ServiceDetailPage = () => {
       <div className="bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <nav className="flex" aria-label="Breadcrumb">
-            <ol className="inline-flex items-center space-x-1 md:space-x-3">
+            <ol className="inline-flex items-center space-x-2 md:space-x-3">
               <li>
                 <button
                   onClick={() => navigate('/customer/services')}
@@ -338,7 +338,7 @@ const ServiceDetailPage = () => {
               <li aria-current="page">
                 <div className="flex items-center">
                   <MdChevronRight className="w-4 h-4 text-gray-400 mx-1" />
-                  <span className="text-sm font-medium text-teal-600 truncate max-w-xs">
+                  <span className="text-sm font-medium text-teal-600">
                     {service.title}
                   </span>
                 </div>

@@ -1341,7 +1341,7 @@ const getBookingsByStatus = async (req, res) => {
     }
 
     const provider = await Provider.findById(providerId)
-      .select('services performanceTier');
+      .select('services performanceTier address serviceArea');
 
     if (!provider) {
       return res.status(404).json({
@@ -1361,18 +1361,43 @@ const getBookingsByStatus = async (req, res) => {
 
     const serviceIds = servicesInCategory.map(s => s._id);
 
+    // Address matching condition
+    const addressCondition = {
+      $or: [
+        // Same address as provider
+        {
+          'address.street': provider.address?.street,
+          'address.city': provider.address?.city,
+          'address.state': provider.address?.state,
+          'address.postalCode': provider.address?.postalCode
+        },
+        // Service area matches customer's city or state
+        {
+          $or: [
+            { 'address.city': provider.serviceArea },
+            { 'address.state': provider.serviceArea }
+          ]
+        }
+      ]
+    };
+
     const query = {
-      status,
-      'services.service': { $in: serviceIds }
+      $and: [
+        { status },
+        { 'services.service': { $in: serviceIds } },
+        addressCondition
+      ]
     };
 
     if (status === 'pending') {
-      query.$or = [
-        { provider: { $exists: false } },
-        { provider: providerId }
-      ];
+      query.$and.push({
+        $or: [
+          { provider: { $exists: false } },
+          { provider: providerId }
+        ]
+      });
     } else {
-      query.provider = providerId;
+      query.$and.push({ provider: providerId });
     }
 
     const bookings = await Booking.find(query)

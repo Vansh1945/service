@@ -144,6 +144,7 @@ const BookService = () => {
     } catch (err) {
       console.error('Error fetching coupons:', err);
       setCoupons([]);
+      showToast(err.response?.data?.message || err.message || 'Failed to load available coupons', 'error');
     } finally {
       setIsFetchingCoupons(false);
     }
