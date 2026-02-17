@@ -1,0 +1,172 @@
+[33mfaa1e17[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m Add code
+[33m8ecb260[m[33m ([m[1;32maudit-version[m[33m)[m Add code
+[33md7a2b6d[m Update
+[33m751ad85[m Add code
+[33m208496a[m Add code
+[33mef4a0a1[m Add code
+[33mb68a601[m Add code
+[33me9d6405[m Add code
+[33mf8c5f2d[m Add code
+[33mc1c33c9[m Add code
+[33m4a2d396[m Add code
+[33m5c882cb[m Add code
+[33mb4626e7[m Add code
+[33m2861867[m Add code
+[33me228fcd[m Add code
+[33mbc7c75b[m Add code
+[33mae4aa3d[m Add code
+[33m9f17173[m Add code
+[33m198ba72[m Add code
+[33m79b8299[m Add code
+[33md0ad8af[m Add code
+[33m3fe482b[m Add code
+[33m2937df9[m Add code
+[33md8b4add[m Add code
+[33m7fb32e4[m Add code
+[33m5730eea[m Add code
+[33m2998a93[m Add code
+[33mca1bf1d[m Add code
+[33m9d7535a[m Add code
+[33mb2e505a[m Add code
+[33md3e2c79[m Add code
+[33m5f5faef[m Add code
+[33m5b6dbfa[m Add code
+[33mbdb7bfb[m Add code
+[33mdc3eb79[m Add code
+[33ma8c325f[m Add code
+[33m886d430[m Add code
+[33mc6e0db9[m Add code
+[33m1922855[m Add code
+[33m5584021[m Add code
+[33md4d1f22[m Add code
+[33mb13dd26[m Add code
+[33mb2088ff[m Add code
+[33m6a94099[m Add code
+[33mafa6213[m Add code
+[33mf910b26[m Add code
+[33md809f53[m Add code
+[33mcd526b4[m Add code
+[33m9b2976d[m Add code
+[33maeba4e4[m Add code
+[33m427fff7[m Add code
+[33md42df48[m Add code
+[33mafccdbe[m Add code
+[33m46ae9db[m Add code
+[33md838299[m Add code
+[33m69dd499[m Add code
+[33mcb5c1ec[m Add code
+[33mfb3872e[m Add code
+[33ma311ee7[m Add code
+[33mf9bf7a4[m Add code
+[33mee2768f[m Add code
+[33mca665bc[m Add code
+[33m3a32949[m Add code
+[33ma6bb188[m Add code
+[33m14dae7d[m Add code
+[33m2232479[m Add code
+[33m235335c[m Add code
+[33me7983f9[m Add code
+[33m6aef928[m Add code
+[33m4b20368[m Add code
+[33m7e70d94[m Add code
+[33m2c22994[m Add code
+[33mb7b9a36[m correct provider booking
+[33md3db18b[m correct provider booking
+[33mc1eeb34[m correct provider booking
+[33mf6786bc[m correct provider booking
+[33m97f93c2[m correct booking and commission detuct
+[33m4a25920[m add all code
+[33m42473e8[m add all code
+[33m942b757[m update  code
+[33m48660dc[m update  code
+[33m2319a3b[m update  code
+[33m189f7bf[m update  code
+[33m6495fce[m update  code
+[33m280345e[m update otp frontend code
+[33m1889412[m update otp frontend code
+[33m8c9430a[m update otp frontend code
+[33m208f670[m update otp frontend code
+[33mf54b92c[m update otp frontend code
+[33m896b255[m update otp frontend code
+[33m279ccda[m update  frontend code
+[33m22e99c2[m update  frontend code
+[33m1797219[m update  frontend code
+[33m8f07389[m Delete server.js
+[33m7f1cf65[m Delete package.json
+[33m7ffb51b[m Delete package-lock.json
+[33mbccf274[m Delete coupon.json
+[33md68cc9d[m Delete booking.json
+[33mc5f1dee[m Delete test-razorpay.js
+[33mabac6bb[m Delete .gitignore
+[33m93cccf7[m Delete .env
+[33m13e6e38[m Delete providerregister.json
+[33ma7acb77[m Delete utils directory
+[33m610863c[m Delete services directory
+[33me19592f[m Delete routes directory
+[33m39edcab[m Delete models directory
+[33mb82ed82[m Delete controllers directory
+[33mf78dea5[m Delete config directory
+[33m7d7de90[m Delete assets directory
+[33m4e3d160[m Delete middlewares directory
+[33m6c4c97d[m update   code
+[33md0fb5ad[m update   code
+[33m361d799[m update   code
+[33m7a1c6bf[m update   code
+[33m9c4f7fb[m update   code
+[33mcd5373b[m update   code
+[33m13b330e[m update   code
+[33m01a5617[m update   code
+[33m1cb637a[m update   code
+[33m8e7f5a2[m update   code
+[33m6761563[m update   code
+[33md4eef9d[m update   code
+[33mf3e93fb[m update   code
+[33m78d30fb[m update   code
+[33m264c59f[m update   code
+[33m89e36a8[m update   code
+[33mb0c5b18[m update   code
+[33md14bdc2[m update   code
+[33mfcd3c9b[m update   code
+[33m7967d8f[m update   code
+[33m48fcff6[m update   code
+[33mcc355b7[m update   code
+[33m9452311[m update   code
+[33m25d9a1c[m update about, service , careers , contact  frontend  code
+[33m19759c0[m update about, service , careers , contact  frontend  code
+[33me342d99[m update customer feedback , detail frontend  code
+[33m6e48af0[m update customer feedback , detail frontend  code
+[33m6155c26[m update customer feedback , detail frontend  code
+[33m5560072[m update customer profile ,service list , detail frontend  code
+[33m282c57f[m update customer profile ,service list , detail frontend  code
+[33m8767db8[m update customer profile ,service list , detail frontend  code
+[33mf3d4513[m update customer profile ,service list , detail frontend  code
+[33mb716256[m update customer profile ,service list , detail frontend  code
+[33mc9e0862[m update customer service list , detail frontend  code
+[33m8b9bbef[m update customer service list , detail frontend  code
+[33mc1a7b8f[m update customer service list , detail frontend  code
+[33mfe96721[m update customer service list , detail frontend  code
+[33m2f38302[m update customer service list , detail frontend  code
+[33m4c8c6b7[m update admin complaint code
+[33m8575152[m update admin complaint code
+[33m85ef024[m update admin complaint code
+[33mef98326[m update admin provider,customer, feedback, code
+[33m89684f5[m update admin provider,customer, feedback, code
+[33m1178460[m update admin commision code
+[33mc21588f[m update admin commision code
+[33m142b59e[m update admin commision code
+[33m9b02fff[m update admin commision code
+[33m2581365[m update admin commision code
+[33m015583d[m update admin coupon code
+[33m1568ca3[m update admin profile / test etc admin code
+[33m4f523d5[m update admin service /setup services image cloudnary
+[33me5af6c1[m update provider-profile/setup cloudinary
+[33me1e01d2[m update earning.jsx
+[33mbd5db17[m update earning.jsx
+[33mdd23687[m update earning.jsx
+[33m658d15b[m Remove server submodule reference and add as normal folder
+[33mfae3c20[m first commit
+[33mbb06475[m first commit
+[33m53088d9[m first commit
+[33m32740c9[m Update server submodule pointer
+[33md9151e9[m Update
+[33m3bd5439[m Update
