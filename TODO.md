@@ -1,1 +1,0 @@
-- [x] Modify Home.jsx to fetch system config and display promotional message

@@ -59,8 +59,9 @@ const paymentRecordSchema = new Schema({
   },
   withdrawalType: {
     type: String,
-    enum: ['manual_bulk', 'auto']
+    enum: ['manual_bulk']
   },
+
 
   status: {
     type: String,

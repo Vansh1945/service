@@ -57,16 +57,9 @@ const AdminEarningReports = () => {
       color: 'bg-indigo-100 text-indigo-600'
     },
     {
-      id: 'payout-history',
-      title: 'Payout History',
-      description: 'Completed payouts details',
-      icon: <FiUsers className="w-5 h-5" />,
-      color: 'bg-teal-100 text-teal-600'
-    },
-    {
       id: 'outstanding-balance',
       title: 'Outstanding Balance',
-      description: 'Pending payout amounts',
+      description: 'Pending withdrawal amounts',
       icon: <FiClock className="w-5 h-5" />,
       color: 'bg-rose-100 text-rose-600'
     }
@@ -144,9 +137,6 @@ const AdminEarningReports = () => {
         case 'earnings-summary':
           url = `${API}/payment/admin/earnings-summary-report`;
           params.groupBy = groupBy;
-          break;
-        case 'payout-history':
-          url = `${API}/payment/admin/payout-history-report`;
           break;
         case 'outstanding-balance':
           url = `${API}/payment/admin/outstanding-balance-report`;

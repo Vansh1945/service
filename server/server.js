@@ -1,14 +1,12 @@
 require('dotenv').config();
 const express = require("express");
 const cors = require("cors");
-const cron = require('node-cron');
 const crypto = require('crypto');
+
 const connectDB = require("./config/db");
 const Transaction = require("./models/Transaction-model");
-const { autoPayout } = require("./services/autoPayout-service");
-
-
 const frontend = process.env.FRONTEND_URL;
+
 
 // Initialize express app
 const app = express();
@@ -103,19 +101,8 @@ app.post('/razorpay-webhook', express.raw({ type: 'application/json' }), async (
   }
 });
 
-// Schedule daily auto payout at 2 AM
-if (process.env.NODE_ENV !== 'test') {
-  cron.schedule('0 2 * * *', async () => {
-    try {
-      console.log('Running daily auto payout...');
-      await autoPayout();
-    } catch (error) {
-      console.error('Auto payout error:', error);
-    }
-  });
-}
-
 // Health check endpoint
+
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', timestamp: new Date() });
 });
