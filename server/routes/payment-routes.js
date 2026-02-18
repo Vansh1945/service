@@ -5,7 +5,12 @@ const paymentController = require('../controllers/paymentController');
 const { providerAuthMiddleware } = require('../middlewares/Provider-middleware');
 const adminAuthMiddleware = require('../middlewares/Admin-middleware');
 
+// Webhook route - must use express.raw() for signature verification
+// This route is PUBLIC - no authentication required
+router.post('/webhook', express.raw({ type: 'application/json' }), paymentController.handleWebhook);
+
 // Provider routes
+
 router.get('/summary', providerAuthMiddleware, paymentController.getEarningsSummary);
 router.post('/withdraw', providerAuthMiddleware, paymentController.requestBulkWithdrawal);
 router.get("/earnings-report", providerAuthMiddleware, paymentController.downloadEarningsReport);
@@ -25,4 +30,3 @@ router.get('/admin/payout-history-report', adminAuthMiddleware, paymentControlle
 router.get('/admin/outstanding-balance-report', adminAuthMiddleware, paymentController.outstandingBalanceReport);
 
 module.exports = router;
-

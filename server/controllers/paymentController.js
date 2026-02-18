@@ -1,15 +1,138 @@
 // controllers/paymentController.js
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 const ProviderEarning = require('../models/ProviderEarning-model');
 const PaymentRecord = require('../models/PaymentRecord-model');
 const Provider = require('../models/Provider-model');
 const Booking = require('../models/Booking-model');
+const Transaction = require('../models/Transaction-model');
 const sendEmail = require('../utils/sendEmail');
 const ExcelJS = require('exceljs');
 
 
+
+// Handle Razorpay Webhook
+const handleWebhook = async (req, res) => {
+  try {
+    const signature = req.headers['x-razorpay-signature'];
+    const body = req.body;
+
+    if (!signature) {
+      console.error('Webhook Error: Missing signature header');
+      return res.status(400).json({ error: 'Missing signature header' });
+    }
+
+    // Verify signature
+    const expectedSignature = crypto
+      .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET)
+      .update(body)
+      .digest('hex');
+
+    if (signature !== expectedSignature) {
+      console.error('Webhook Error: Invalid signature');
+      return res.status(400).json({ error: 'Invalid signature' });
+    }
+
+    const payload = JSON.parse(body);
+    const event = payload.event;
+    const payment = payload.payload?.payment?.entity;
+
+    if (!payment) {
+      console.error('Webhook Error: Missing payment entity');
+      return res.status(400).json({ error: 'Invalid payload structure' });
+    }
+
+    console.log(`Webhook received: ${event}, Payment ID: ${payment.id}`);
+
+    switch (event) {
+      case 'payment.captured':
+        await handlePaymentCaptured(payment);
+        break;
+      case 'payment.failed':
+        await handlePaymentFailed(payment);
+        break;
+      default:
+        console.log(`Unhandled webhook event: ${event}`);
+    }
+
+    // Always return 200 to acknowledge receipt
+    res.status(200).json({ status: 'success' });
+  } catch (error) {
+    console.error('Webhook processing error:', error);
+    res.status(500).json({ error: 'Webhook processing failed' });
+  }
+};
+
+// Handle successful payment
+const handlePaymentCaptured = async (payment) => {
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      // Update Transaction status
+      const transaction = await Transaction.findOneAndUpdate(
+        { razorpayOrderId: payment.order_id },
+        {
+          paymentStatus: 'completed',
+          razorpayPaymentId: payment.id,
+          updatedAt: new Date()
+        },
+        { session, new: true }
+      );
+
+      if (!transaction) {
+        console.error(`Transaction not found for order: ${payment.order_id}`);
+        throw new Error('Transaction not found');
+      }
+
+      // Update Booking status to confirmed
+      await Booking.findByIdAndUpdate(
+        transaction.booking,
+        {
+          paymentStatus: 'paid',
+          status: 'confirmed',
+          updatedAt: new Date()
+        },
+        { session }
+      );
+
+      console.log(`Payment captured: ${payment.id}, Transaction: ${transaction._id}`);
+    });
+  } catch (error) {
+    console.error('Error handling payment.captured:', error);
+    throw error;
+  } finally {
+    await session.endSession();
+  }
+};
+
+// Handle failed payment
+const handlePaymentFailed = async (payment) => {
+  try {
+    // Update Transaction status to failed
+    const transaction = await Transaction.findOneAndUpdate(
+      { razorpayOrderId: payment.order_id },
+      {
+        paymentStatus: 'failed',
+        updatedAt: new Date()
+      },
+      { new: true }
+    );
+
+    if (!transaction) {
+      console.error(`Transaction not found for order: ${payment.order_id}`);
+      return;
+    }
+
+    console.log(`Payment failed: ${payment.id}, Transaction: ${transaction._id}`);
+  } catch (error) {
+    console.error('Error handling payment.failed:', error);
+    throw error;
+  }
+};
+
 // Helper function to calculate payment settlement
 const calculatePaymentSettlement = (availableBalanceResult) => {
+
   return availableBalanceResult.reduce(
     (settlement, item) => {
       if (item._id === 'online') {
@@ -1798,14 +1921,17 @@ const outstandingBalanceReport = async (req, res) => {
 
 
 module.exports = {
+  // Webhook
+  handleWebhook,
+
   // Provider
   getEarningsSummary,
   requestBulkWithdrawal,
   downloadEarningsReport,
   downloadWithdrawalReport,
 
-
   // Admin
+
   getAllWithdrawalRequests,
   approveWithdrawalRequest,
   rejectWithdrawalRequest,

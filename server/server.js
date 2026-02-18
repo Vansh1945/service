@@ -1,11 +1,10 @@
 require('dotenv').config();
 const express = require("express");
 const cors = require("cors");
-const crypto = require('crypto');
 
 const connectDB = require("./config/db");
-const Transaction = require("./models/Transaction-model");
 const frontend = process.env.FRONTEND_URL;
+
 
 
 // Initialize express app
@@ -71,37 +70,8 @@ app.use('/api/payment', paymentRoutes);
 app.use('/api/system-setting', systemSettingRoutes);
 app.use('/api/contact', contactRoutes);
 
-
-
-// Razorpay Webhook (localhost configuration)
-app.post('/razorpay-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
-  try {
-    const signature = req.headers['x-razorpay-signature'];
-    const body = req.body.toString();
-
-    const expectedSignature = crypto
-      .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET)
-      .update(body)
-      .digest('hex');
-
-    if (signature !== expectedSignature) {
-      return res.status(400).send('Invalid signature');
-    }
-
-    const event = JSON.parse(body).event;
-    if (event === 'payment.captured') {
-      const payload = JSON.parse(body).payload.payment.entity;
-      await Transaction.verifyPayment(payload.order_id, payload.id, signature);
-    }
-
-    res.status(200).send('OK');
-  } catch (error) {
-    console.error('Webhook error:', error);
-    res.status(500).send('Webhook processing failed');
-  }
-});
-
 // Health check endpoint
+
 
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', timestamp: new Date() });
