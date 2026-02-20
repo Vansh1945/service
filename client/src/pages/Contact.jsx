@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
 import {
   Phone,
   Mail,
@@ -16,12 +15,11 @@ import {
 import { useAuth } from '../store/auth';
 
 const Contact = () => {
-  const { API , showToast} = useAuth();
+  const { API, showToast } = useAuth();
   const [systemData, setSystemData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Dynamic contact information data
   const contactInfo = {
     primaryPhone: systemData?.phone || '',
     emergencyPhone: systemData?.phone || '',
@@ -108,16 +106,9 @@ const Contact = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Hero Section */}
       <section className="py-16 sm:py-20 lg:py-24">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Section Header */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="text-center mb-12 sm:mb-16"
-          >
+          <div className="text-center mb-12 sm:mb-16">
             <div className="inline-flex items-center bg-primary/10 px-6 py-3 rounded-full border border-primary/20 mb-6">
               <MessageSquare className="w-5 h-5 text-primary mr-2" />
               <span className="text-primary font-medium">Contact Us</span>
@@ -131,25 +122,15 @@ const Contact = () => {
               Ready to solve your electrical needs? Our certified professionals across Himachal Pradesh and Punjab
               are here to provide reliable, safe, and efficient electrical solutions for your home or business.
             </p>
-          </motion.div>
-
+          </div>
         </div>
       </section>
 
-      {/* Main Contact Section */}
       <section className="py-8 sm:py-12 lg:py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 items-start">
-            {/* Contact Form */}
-            <motion.div
-              initial={{ opacity: 0, x: -30 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.7 }}
-              viewport={{ once: true }}
-              className="relative"
-            >
+            <div className="relative">
               <div className="bg-white rounded-2xl shadow-2xl p-8 lg:p-10 border border-gray-100 relative overflow-hidden">
-                {/* Decorative gradient */}
                 <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary via-accent to-primary"></div>
 
                 <div className="relative z-10">
@@ -164,13 +145,7 @@ const Contact = () => {
                   </div>
 
                   <form onSubmit={handleSubmit} className="space-y-4">
-                    {/* Name Field */}
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.5, delay: 0.1 }}
-                      viewport={{ once: true }}
-                    >
+                    <div>
                       <label htmlFor="name" className="block text-sm font-semibold text-secondary mb-3 items-center">
                         <User className="w-4 h-4 mr-2 text-primary" />
                         Full Name *
@@ -185,15 +160,9 @@ const Contact = () => {
                         className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary text-secondary placeholder-gray-400"
                         placeholder="Enter your full name"
                       />
-                    </motion.div>
+                    </div>
 
-                    {/* Email Field */}
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.5, delay: 0.2 }}
-                      viewport={{ once: true }}
-                    >
+                    <div>
                       <label htmlFor="email" className="block text-sm font-semibold text-secondary mb-3 items-center">
                         <Mail className="w-4 h-4 mr-2 text-primary" />
                         Email Address *
@@ -208,15 +177,9 @@ const Contact = () => {
                         className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary text-secondary placeholder-gray-400"
                         placeholder="Enter your email address"
                       />
-                    </motion.div>
+                    </div>
 
-                    {/* Phone Field */}
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.5, delay: 0.3 }}
-                      viewport={{ once: true }}
-                    >
+                    <div>
                       <label htmlFor="phone" className="block text-sm font-semibold text-secondary mb-3 items-center">
                         <Phone className="w-4 h-4 mr-2 text-primary" />
                         Phone Number *
@@ -230,15 +193,9 @@ const Contact = () => {
                         className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary text-secondary placeholder-gray-400"
                         placeholder="Enter your phone number"
                       />
-                    </motion.div>
+                    </div>
 
-                    {/* Subject Field */}
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.5, delay: 0.35 }}
-                      viewport={{ once: true }}
-                    >
+                    <div>
                       <label htmlFor="subject" className="block text-sm font-semibold text-secondary mb-3 items-center">
                         <MessageSquare className="w-4 h-4 mr-2 text-primary" />
                         Subject *
@@ -253,15 +210,9 @@ const Contact = () => {
                         className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary text-secondary placeholder-gray-400"
                         placeholder="Enter subject of your message"
                       />
-                    </motion.div>
+                    </div>
 
-                    {/* Message Field */}
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.5, delay: 0.4 }}
-                      viewport={{ once: true }}
-                    >
+                    <div>
                       <label htmlFor="message" className="block text-sm font-semibold text-secondary mb-3 items-center">
                         <MessageSquare className="w-4 h-4 mr-2 text-primary" />
                         Message *
@@ -274,19 +225,14 @@ const Contact = () => {
                         required
                         rows="5"
                         className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary text-secondary placeholder-gray-400 resize-vertical"
-                        placeholder="Tell us about your electrical service needs, project details, or any questions you have..."
+                        placeholder="Tell us about your electrical service needs..."
                       ></textarea>
-                    </motion.div>
+                    </div>
 
-                    {/* Submit Button */}
-                    <motion.button
-                      initial={{ opacity: 0, y: 20 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.5, delay: 0.5 }}
-                      viewport={{ once: true }}
+                    <button
                       type="submit"
                       disabled={isSubmitting}
-                      className="w-full bg-gradient-to-r from-accent to-accent/90 text-white font-bold py-4 px-8 rounded-xl shadow-lg flex items-center justify-center group disabled:opacity-50"
+                      className="w-full bg-gradient-to-r from-accent to-accent/90 text-white font-bold py-4 px-8 rounded-xl shadow-lg flex items-center justify-center group disabled:opacity-50 hover:shadow-xl transition-all duration-300"
                     >
                       {isSubmitting ? (
                         <>
@@ -300,17 +246,10 @@ const Contact = () => {
                           <Zap className="w-5 h-5 ml-3" />
                         </>
                       )}
-                    </motion.button>
+                    </button>
                   </form>
 
-                  {/* Trust indicators */}
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    whileInView={{ opacity: 1 }}
-                    transition={{ duration: 0.5, delay: 0.6 }}
-                    viewport={{ once: true }}
-                    className="mt-4 flex items-center justify-center space-x-6 text-sm text-secondary/70"
-                  >
+                  <div className="mt-4 flex items-center justify-center space-x-6 text-sm text-secondary/70">
                     <div className="flex items-center">
                       <CheckCircle className="w-4 h-4 text-primary mr-2" />
                       <span>Quick Response</span>
@@ -319,20 +258,12 @@ const Contact = () => {
                       <Shield className="w-4 h-4 text-primary mr-2" />
                       <span>Secure & Private</span>
                     </div>
-                  </motion.div>
+                  </div>
                 </div>
               </div>
-            </motion.div>
+            </div>
 
-            {/* Contact Information & Service Areas */}
-            <motion.div
-              initial={{ opacity: 0, x: 30 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.7, delay: 0.2 }}
-              viewport={{ once: true }}
-              className="space-y-4"
-            >
-              {/* Contact Details Card */}
+            <div className="space-y-4">
               <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100 relative overflow-hidden">
                 <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary to-accent"></div>
 
@@ -344,14 +275,7 @@ const Contact = () => {
                 </div>
 
                 <div className="space-y-4">
-                  {/* Phone */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: 0.1 }}
-                    viewport={{ once: true }}
-                    className="flex items-start space-x-4 p-4 rounded-xl bg-primary/5 cursor-pointer"
-                  >
+                  <div className="flex items-start space-x-4 p-4 rounded-xl bg-primary/5 cursor-pointer hover:bg-primary/10 transition-colors duration-300">
                     <div className="flex-shrink-0 w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
                       <Phone className="w-4 h-4 text-white" />
                     </div>
@@ -360,16 +284,9 @@ const Contact = () => {
                       <p className="text-primary font-medium">{contactInfo.primaryPhone}</p>
                       <p className="text-accent text-sm font-medium mt-1">24/7 Emergency Available</p>
                     </div>
-                  </motion.div>
+                  </div>
 
-                  {/* Email */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: 0.2 }}
-                    viewport={{ once: true }}
-                    className="flex items-start space-x-4 p-4 rounded-xl bg-accent/5 cursor-pointer"
-                  >
+                  <div className="flex items-start space-x-4 p-4 rounded-xl bg-accent/5 cursor-pointer hover:bg-accent/10 transition-colors duration-300">
                     <div className="flex-shrink-0 w-10 h-10 bg-accent rounded-xl flex items-center justify-center">
                       <Mail className="w-4 h-4 text-white" />
                     </div>
@@ -378,16 +295,9 @@ const Contact = () => {
                       <p className="text-secondary">{contactInfo.email}</p>
                       <p className="text-accent text-sm font-medium mt-1">Response within 2 hours</p>
                     </div>
-                  </motion.div>
+                  </div>
 
-                  {/* Address */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: 0.25 }}
-                    viewport={{ once: true }}
-                    className="flex items-start space-x-4 p-4 rounded-xl bg-primary/5 cursor-pointer"
-                  >
+                  <div className="flex items-start space-x-4 p-4 rounded-xl bg-primary/5 cursor-pointer hover:bg-primary/10 transition-colors duration-300">
                     <div className="flex-shrink-0 w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
                       <MapPin className="w-4 h-4 text-white" />
                     </div>
@@ -396,16 +306,9 @@ const Contact = () => {
                       <p className="text-secondary">{contactInfo.address}</p>
                       <p className="text-accent text-sm font-medium mt-1">Visit us anytime</p>
                     </div>
-                  </motion.div>
+                  </div>
 
-                  {/* Business Hours */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: 0.3 }}
-                    viewport={{ once: true }}
-                    className="p-4 rounded-xl bg-primary/5 cursor-pointer"
-                  >
+                  <div className="p-4 rounded-xl bg-primary/5 cursor-pointer hover:bg-primary/10 transition-colors duration-300">
                     <div className="flex items-center mb-2">
                       <Clock className="w-5 h-5 text-primary mr-2" />
                       <h3 className="text-lg font-semibold text-secondary">Business Hours</h3>
@@ -415,23 +318,16 @@ const Contact = () => {
                         <span className="text-secondary font-medium">Monday - Saturday</span>
                         <span className="text-primary font-medium">{contactInfo.businessHours.weekdays}</span>
                       </div>
-                      <div className="flex justify-between items-center ">
+                      <div className="flex justify-between items-center">
                         <span className="text-secondary font-medium">Sunday</span>
                         <span className="text-accent font-medium">{contactInfo.businessHours.sunday}</span>
                       </div>
                     </div>
-                  </motion.div>
+                  </div>
                 </div>
               </div>
 
-              {/* Emergency Contact Card */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.4 }}
-                viewport={{ once: true }}
-                className="bg-gradient-to-r from-accent to-accent/90 rounded-2xl shadow-xl p-6 text-white relative overflow-hidden"
-              >
+              <div className="bg-gradient-to-r from-accent to-accent/90 rounded-2xl shadow-xl p-6 text-white relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
                 <div className="relative z-10">
                   <div className="flex items-center mb-4">
@@ -452,21 +348,15 @@ const Contact = () => {
                     </div>
                   </div>
                 </div>
-              </motion.div>
-            </motion.div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Call to Action Section */}
       <section className="py-12 sm:py-16 lg:py-20 bg-gradient-to-r from-primary to-primary/90">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            viewport={{ once: true }}
-          >
+          <div>
             <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-4">
               Ready to Get Started?
             </h2>
@@ -476,35 +366,26 @@ const Contact = () => {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                className="bg-accent text-white font-bold py-4 px-8 rounded-xl shadow-2xl inline-flex items-center group"
+              <button
+                className="bg-accent text-white font-bold py-4 px-8 rounded-xl shadow-2xl inline-flex items-center group hover:scale-105 transition-transform duration-300"
               >
                 <Phone className="w-5 h-5 mr-3" />
                 Call Now: {contactInfo.ctaPhone}
-              </motion.button>
+              </button>
 
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                className="bg-white/10 backdrop-blur-md text-white font-bold py-4 px-8 border-2 border-white/30 rounded-xl inline-flex items-center"
+              <button
+                className="bg-white/10 backdrop-blur-md text-white font-bold py-4 px-8 border-2 border-white/30 rounded-xl inline-flex items-center hover:bg-white/20 transition-colors duration-300"
               >
                 <Mail className="w-5 h-5 mr-3" />
                 Get Free Quote
-              </motion.button>
+              </button>
             </div>
 
-            {/* Trust Badge */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              whileInView={{ opacity: 1 }}
-              transition={{ delay: 0.5 }}
-              viewport={{ once: true }}
-              className="mt-4 inline-flex items-center bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/20"
-            >
+            <div className="mt-4 inline-flex items-center bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/20">
               <Shield className="w-5 h-5 text-white mr-3" />
               <span className="text-white font-medium">Licensed & Insured Professionals</span>
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
         </div>
       </section>
     </div>

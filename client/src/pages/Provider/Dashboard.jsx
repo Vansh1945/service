@@ -41,6 +41,7 @@ const Dashboard = () => {
     profile: null
   });
   const [actionLoading, setActionLoading] = useState({});
+  const [availabilityStatus, setAvailabilityStatus] = useState(null);
 
   // Format address object to string
   const formatAddress = useCallback((address) => {

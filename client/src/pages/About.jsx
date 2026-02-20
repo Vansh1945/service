@@ -1,5 +1,4 @@
 import React from 'react';
-import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { 
   Zap, 
@@ -18,12 +17,7 @@ const AboutPage = () => {
       <section className="py-16 sm:py-20 lg:py-24">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Section Header */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="text-center mb-12 sm:mb-16"
-          >
+          <div className="text-center mb-12 sm:mb-16">
             <div className="inline-flex items-center bg-primary/10 px-6 py-3 rounded-full border border-primary/20 mb-6">
               <Zap className="w-5 h-5 text-primary mr-2" />
               <span className="text-primary font-medium">About Us</span>
@@ -35,17 +29,12 @@ const AboutPage = () => {
             <p className="text-lg sm:text-xl text-secondary/80 max-w-3xl mx-auto">
               Bringing reliable electrical solutions to homes and businesses across the beautiful regions of Himachal Pradesh and Punjab
             </p>
-          </motion.div>
+          </div>
 
           {/* Main Content Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
             {/* Content Section */}
-            <motion.div
-              initial={{ opacity: 0, x: -30 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.7, delay: 0.2 }}
-              className="space-y-6"
-            >
+            <div className="space-y-6">
               {/* Business Introduction */}
               <div className="space-y-4">
                 <h2 className="text-2xl sm:text-3xl font-bold text-primary">
@@ -99,11 +88,8 @@ const AboutPage = () => {
                 ].map((feature, index) => {
                   const IconComponent = feature.icon;
                   return (
-                    <motion.div
+                    <div
                       key={index}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.5, delay: 0.4 + index * 0.1 }}
                       className="flex items-start space-x-3 p-4 rounded-lg bg-primary/5 border border-primary/10"
                     >
                       <div className="p-2 rounded-lg bg-primary text-background">
@@ -113,18 +99,13 @@ const AboutPage = () => {
                         <h4 className="font-semibold text-primary text-base">{feature.title}</h4>
                         <p className="text-secondary/70 text-base">{feature.description}</p>
                       </div>
-                    </motion.div>
+                    </div>
                   );
                 })}
               </div>
 
               {/* Contact Button */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.8 }}
-                className="pt-6"
-              >
+              <div className="pt-6">
                 <Link
                   to="/contact"
                   className="inline-flex items-center bg-accent hover:bg-accent/90 text-background font-semibold px-8 py-4 rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
@@ -132,16 +113,11 @@ const AboutPage = () => {
                   <Phone className="w-5 h-5 mr-2" />
                   Contact Us
                 </Link>
-              </motion.div>
-            </motion.div>
+              </div>
+            </div>
 
             {/* Image Section */}
-            <motion.div
-              initial={{ opacity: 0, x: 30 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.7, delay: 0.4 }}
-              className="relative"
-            >
+            <div className="relative">
               <div className="relative rounded-2xl overflow-hidden shadow-2xl">
                 {/* Main Image */}
                 <img
@@ -168,16 +144,11 @@ const AboutPage = () => {
               {/* Decorative elements */}
               <div className="absolute -top-4 -right-4 w-24 h-24 bg-accent/20 rounded-full blur-xl"></div>
               <div className="absolute -bottom-4 -left-4 w-32 h-32 bg-primary/20 rounded-full blur-xl"></div>
-            </motion.div>
+            </div>
           </div>
 
           {/* Additional Info Section */}
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 1 }}
-            className="mt-16 sm:mt-20 text-center"
-          >
+          <div className="mt-16 sm:mt-20 text-center">
             <div className="bg-gradient-to-r from-primary/5 to-accent/5 rounded-2xl p-8 sm:p-12 border border-primary/10">
               <h3 className="text-2xl sm:text-3xl font-bold text-primary mb-4">
                 Why Choose Our Services?
@@ -190,7 +161,7 @@ const AboutPage = () => {
                 that honors the trusted traditions of our communities.
               </p>
             </div>
-          </motion.div>
+          </div>
         </div>
       </section>
     </div>

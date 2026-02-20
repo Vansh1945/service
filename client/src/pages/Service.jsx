@@ -1,5 +1,4 @@
 import React from 'react';
-import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import {
     Zap,
@@ -85,13 +84,7 @@ const ServicesPage = () => {
         <div className="min-h-screen bg-background py-16 sm:py-20 lg:py-24">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 {/* Section Header */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ duration: 0.6 }}
-                    className="text-center mb-12 sm:mb-16"
-                >
+                <div className="text-center mb-12 sm:mb-16">
                     <div className="inline-flex items-center bg-primary/10 px-6 py-3 rounded-full border border-primary/20 mb-6">
                         <Zap className="w-5 h-5 text-primary mr-2" />
                         <span className="text-primary font-medium">Our Services</span>
@@ -104,17 +97,13 @@ const ServicesPage = () => {
                         Comprehensive electrical services tailored to meet your specific needs with quality,
                         reliability, and competitive pricing
                     </p>
-                </motion.div>
+                </div>
 
                 {/* Services Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
                     {services.map((service, index) => (
-                        <motion.div
+                        <div
                             key={service._id || index}
-                            initial={{ opacity: 0, y: 30 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true }}
-                            transition={{ duration: 0.6, delay: index * 0.1 }}
                             className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100 transition-all duration-300 group hover:shadow-xl hover:border-accent/20"
                         >
                             {/* Service Image */}
@@ -165,29 +154,21 @@ const ServicesPage = () => {
                                 </div>
 
                                 {/* Book Button */}
-                                <motion.button
-                                    whileHover={{ scale: 1.02 }}
-                                    whileTap={{ scale: 0.98 }}
+                                <button
                                     onClick={() => handleBookNow(service)}
                                     className="w-full bg-gradient-to-r from-primary to-primary/90 hover:from-accent hover:to-accent/90 text-background font-semibold py-3 px-6 rounded-xl transition-all duration-300 flex items-center justify-center shadow-lg hover:shadow-xl group"
                                 >
                                     <Zap className="w-4 h-4 mr-2 group-hover:animate-pulse" />
                                     Book This Service
                                     <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-                                </motion.button>
+                                </button>
                             </div>
-                        </motion.div>
+                        </div>
                     ))}
                 </div>
 
                 {/* Call to Action Section */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ duration: 0.6, delay: 0.3 }}
-                    className="text-center mt-16 sm:mt-20"
-                >
+                <div className="text-center mt-16 sm:mt-20">
                     <div className="bg-gradient-to-r from-primary/10 to-accent/10 rounded-2xl p-8 sm:p-12 border border-primary/20">
                         <h3 className="text-2xl sm:text-3xl font-bold text-primary mb-4">
                             Can't Find What You're Looking For?
@@ -196,26 +177,22 @@ const ServicesPage = () => {
                             Contact us directly for custom electrical solutions and specialized services tailored to your unique requirements.
                         </p>
                         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                            <motion.button
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
+                            <button
                                 onClick={() => window.location.href = `tel:${phoneNumber}`}
                                 className="bg-primary text-background px-8 py-3 rounded-xl font-semibold flex items-center justify-center hover:bg-primary/90 transition-colors"
                             >
                                 <Phone className="w-5 h-5 mr-2" />
                                 Call Now
-                            </motion.button>
-                            <motion.button
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
+                            </button>
+                            <button
                                 onClick={() => navigate(consultationLink)}
                                 className="border-2 border-primary text-primary px-8 py-3 rounded-xl font-semibold hover:bg-primary hover:text-background transition-colors"
                             >
                                 Get Free Consultation
-                            </motion.button>
+                            </button>
                         </div>
                     </div>
-                </motion.div>
+                </div>
             </div>
         </div>
     );

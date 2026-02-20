@@ -1,5 +1,4 @@
 import React from 'react';
-import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import {
   DollarSign,
@@ -61,17 +60,11 @@ const CareersPage = () => {
 
   return (
     <div className="bg-background min-h-screen">
-      {/* Main Hero Section - Two Column Layout */}
       <section className="py-16 lg:py-24">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
             {/* Text Content */}
-            <motion.div
-              initial={{ opacity: 0, x: -30 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.6 }}
-              className="order-2 lg:order-1"
-            >
+            <div className="order-2 lg:order-1">
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-primary mb-6 leading-tight">
                 Join Our Network of 
                 <span className="block text-accent">Electrical Service Providers</span>
@@ -88,11 +81,8 @@ const CareersPage = () => {
                 {additionalBenefits.map((benefit, index) => {
                   const IconComponent = benefit.icon;
                   return (
-                    <motion.div
+                    <div
                       key={index}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.5, delay: index * 0.1 }}
                       className="flex items-center space-x-3"
                     >
                       <div className="bg-accent/10 p-2 rounded-full">
@@ -102,16 +92,12 @@ const CareersPage = () => {
                         <h3 className="font-semibold text-primary">{benefit.title}</h3>
                         <p className="text-secondary text-sm">{benefit.description}</p>
                       </div>
-                    </motion.div>
+                    </div>
                   );
                 })}
               </div>
 
-              <motion.div
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="inline-block"
-              >
+              <div className="inline-block">
                 <Link
                   to="/register-provider"
                   className="bg-accent hover:bg-accent/90 text-white font-bold py-4 px-8 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 inline-flex items-center group focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
@@ -119,18 +105,12 @@ const CareersPage = () => {
                   Apply Now
                   <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform duration-300" />
                 </Link>
-              </motion.div>
-            </motion.div>
+              </div>
+            </div>
 
             {/* Image/Illustration */}
-            <motion.div
-              initial={{ opacity: 0, x: 30 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.6, delay: 0.2 }}
-              className="order-1 lg:order-2"
-            >
+            <div className="order-1 lg:order-2">
               <div className="relative">
-                {/* Placeholder for electrician image */}
                 <div className="bg-gradient-to-br from-primary/10 to-accent/10 rounded-2xl p-8 lg:p-12 border border-primary/20">
                   <div className="bg-gradient-to-br from-primary to-accent/80 rounded-xl p-8 text-white text-center">
                     <Wrench className="w-16 h-16 lg:w-24 lg:h-24 mx-auto mb-4 opacity-90" />
@@ -139,11 +119,10 @@ const CareersPage = () => {
                   </div>
                 </div>
                 
-                {/* Decorative elements */}
                 <div className="absolute -top-4 -right-4 w-24 h-24 bg-accent/20 rounded-full blur-xl"></div>
                 <div className="absolute -bottom-4 -left-4 w-32 h-32 bg-primary/20 rounded-full blur-xl"></div>
               </div>
-            </motion.div>
+            </div>
           </div>
         </div>
       </section>
@@ -151,32 +130,21 @@ const CareersPage = () => {
       {/* Key Benefits Grid Section */}
       <section className="py-20 lg:py-24 bg-primary/5">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            viewport={{ once: true }}
-            className="text-center mb-12 lg:mb-16"
-          >
+          <div className="text-center mb-12 lg:mb-16">
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-primary mb-4">
               Why Choose Our Platform?
             </h2>
             <p className="text-lg text-secondary max-w-3xl mx-auto">
               We provide everything you need to build a successful electrical service business
             </p>
-          </motion.div>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
             {benefits.map((benefit, index) => {
               const IconComponent = benefit.icon;
               return (
-                <motion.div
+                <div
                   key={index}
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: index * 0.1 }}
-                  viewport={{ once: true }}
-                  whileHover={{ y: -8, scale: 1.02 }}
                   className="bg-white rounded-2xl shadow-lg overflow-hidden border border-primary/10 transition-all duration-300 hover:shadow-2xl group cursor-pointer"
                 >
                   <div className={`h-2 bg-gradient-to-r ${benefit.color}`}></div>
@@ -191,7 +159,7 @@ const CareersPage = () => {
                       {benefit.description}
                     </p>
                   </div>
-                </motion.div>
+                </div>
               );
             })}
           </div>
@@ -201,12 +169,7 @@ const CareersPage = () => {
       {/* Call to Action Section */}
       <section className="py-16 lg:py-20 bg-gradient-to-r from-primary to-primary/90">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            viewport={{ once: true }}
-          >
+          <div>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-6">
               Ready to Start Earning?
             </h2>
@@ -216,32 +179,22 @@ const CareersPage = () => {
             </p>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-              <motion.div
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
+              <Link
+                to="/register-provider"
+                className="bg-accent hover:bg-accent/90 text-white font-bold py-4 px-8 rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 inline-flex items-center group focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
               >
-                <Link
-                  to="/register-provider"
-                  className="bg-accent hover:bg-accent/90 text-white font-bold py-4 px-8 rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 inline-flex items-center group focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
-                >
-                  Join Today
-                  <ArrowRight className="ml-2 group-hover:translate-x-1 transition-transform duration-300" />
-                </Link>
-              </motion.div>
+                Join Today
+                <ArrowRight className="ml-2 group-hover:translate-x-1 transition-transform duration-300" />
+              </Link>
               
-              <motion.div
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
+              <Link
+                to="/contact"
+                className="bg-white/10 hover:bg-white/20 text-white font-bold py-4 px-8 rounded-xl border-2 border-white/30 hover:border-white/50 transition-all duration-300 inline-flex items-center backdrop-blur-sm focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2"
               >
-                <Link
-                  to="/contact"
-                  className="bg-white/10 hover:bg-white/20 text-white font-bold py-4 px-8 rounded-xl border-2 border-white/30 hover:border-white/50 transition-all duration-300 inline-flex items-center backdrop-blur-sm focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2"
-                >
-                  Learn More
-                </Link>
-              </motion.div>
+                Learn More
+              </Link>
             </div>
-          </motion.div>
+          </div>
         </div>
       </section>
 
@@ -249,38 +202,20 @@ const CareersPage = () => {
       <section className="py-12 lg:py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              viewport={{ once: true }}
-              className="p-6"
-            >
+            <div className="p-6">
               <div className="text-4xl lg:text-5xl font-bold text-primary mb-2">500+</div>
               <div className="text-secondary font-medium">Active Providers</div>
-            </motion.div>
+            </div>
             
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-              viewport={{ once: true }}
-              className="p-6"
-            >
+            <div className="p-6">
               <div className="text-4xl lg:text-5xl font-bold text-accent mb-2">₹100</div>
               <div className="text-secondary font-medium">Average Hourly Rate</div>
-            </motion.div>
+            </div>
             
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              viewport={{ once: true }}
-              className="p-6"
-            >
+            <div className="p-6">
               <div className="text-4xl lg:text-5xl font-bold text-primary mb-2">98%</div>
               <div className="text-secondary font-medium">Customer Satisfaction</div>
-            </motion.div>
+            </div>
           </div>
         </div>
       </section>

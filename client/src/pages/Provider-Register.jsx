@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
 import {
   User, 
   Mail, 
@@ -39,21 +38,15 @@ const ProviderRegistration = () => {
   const navigate = useNavigate();
   const { API } = useAuth();
 
-
   const [formData, setFormData] = useState({
-    // Step 1: Email
     email: '',
-
-    // Step 2: OTP and Basic Details
     otp: '',
     name: '',
     phone: '',
     password: '',
     confirmPassword: '',
     dateOfBirth: '',
-
-    // Step 4: Professional Details
-    services: '', // Changed to string
+    services: '',
     experience: '',
     serviceArea: '',
     resume: null,
@@ -76,14 +69,11 @@ const ProviderRegistration = () => {
   const [resendCountdown, setResendCountdown] = useState(60);
   const [otpExpiryTime, setOtpExpiryTime] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedServices, setSelectedServices] = useState([]); // For UI selection
+  const [selectedServices, setSelectedServices] = useState([]);
   const [providerServices, setProviderServices] = useState([]);
   const [providerServicesLoading, setProviderServicesLoading] = useState(true);
   const [providerServicesError, setProviderServicesError] = useState(null);
 
- 
-
-  // Handle OTP resend countdown and expiry
   useEffect(() => {
     let timer;
     if (otpSentTime) {
@@ -91,7 +81,6 @@ const ProviderRegistration = () => {
         const now = Date.now();
         const secondsSinceSent = Math.round((now - otpSentTime) / 1000);
 
-        // Handle resend countdown (60 seconds)
         if (secondsSinceSent < 60) {
           setResendCountdown(60 - secondsSinceSent);
           setCanResendOtp(false);
@@ -99,7 +88,6 @@ const ProviderRegistration = () => {
           setCanResendOtp(true);
         }
 
-        // Handle OTP expiry (5 minutes)
         if (secondsSinceSent >= 300) {
           setOtpExpiryTime(null);
           clearInterval(timer);
@@ -111,7 +99,6 @@ const ProviderRegistration = () => {
     return () => clearInterval(timer);
   }, [otpSentTime, otpExpiryTime]);
 
-  // Fetch service categories on component mount
   useEffect(() => {
     const fetchServiceCategories = async () => {
       try {
@@ -123,7 +110,6 @@ const ProviderRegistration = () => {
           throw new Error(data.message || 'Failed to fetch service categories');
         }
 
-        // Transform the data to match expected format
         const transformedData = (data.data || []).map(category => ({
           _id: category._id,
           name: category.name,
@@ -149,14 +135,12 @@ const ProviderRegistration = () => {
     const serviceId = service.id || service._id;
     setSelectedServices(prev => {
       if (prev.includes(serviceId)) {
-        // If the service is already selected, deselect it
         return prev.filter(id => id !== serviceId);
       } else {
-        // If a new service is selected, add it if less than 3
         if (prev.length < 3) {
           return [...prev, serviceId];
         } else {
-          return prev; // Don't add if already 3
+          return prev;
         }
       }
     });
@@ -171,7 +155,6 @@ const ProviderRegistration = () => {
     setFormData(prev => ({ ...prev, [field]: e.target.files[0] }));
   };
 
-  // Step 1: Initiate Registration (Send OTP)
   const handleInitiateRegistration = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -192,7 +175,7 @@ const ProviderRegistration = () => {
 
         const sentTime = Date.now();
         setOtpSentTime(sentTime);
-        setOtpExpiryTime(new Date(sentTime + 300000)); // 5 minutes from now
+        setOtpExpiryTime(new Date(sentTime + 300000));
         setCanResendOtp(false);
         setResendCountdown(60);
         setStep(2);
@@ -206,18 +189,11 @@ const ProviderRegistration = () => {
 
     toast.promise(promise, {
       pending: 'Sending OTP...',
-      success: {
-        render({ data }) { return data; },
-        autoClose: 3000
-      },
-      error: {
-        render({ data }) { return data; },
-        autoClose: 3000
-      }
+      success: { render({ data }) { return data; }, autoClose: 3000 },
+      error: { render({ data }) { return data; }, autoClose: 3000 }
     });
   };
 
-  // Step 2: Complete Registration (Verify OTP and create account)
   const handleCompleteRegistration = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -255,18 +231,11 @@ const ProviderRegistration = () => {
 
     toast.promise(promise, {
       pending: 'Registering...',
-      success: {
-        render({ data }) { return data; },
-        autoClose: 3000
-      },
-      error: {
-        render({ data }) { return data; },
-        autoClose: 3000
-      }
+      success: { render({ data }) { return data; }, autoClose: 3000 },
+      error: { render({ data }) { return data; }, autoClose: 3000 }
     });
   };
 
-  // Step 3: Login for profile completion
   const handleLogin = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -300,33 +269,24 @@ const ProviderRegistration = () => {
 
     toast.promise(promise, {
       pending: 'Logging in...',
-      success: {
-        render({ data }) { return data; },
-        autoClose: 3000
-      },
-      error: {
-        render({ data }) { return data; },
-        autoClose: 3000
-      }
+      success: { render({ data }) { return data; }, autoClose: 3000 },
+      error: { render({ data }) { return data; }, autoClose: 3000 }
     });
   };
 
-  // Step 4: Complete Profile
   const handleCompleteProfile = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    // Validate minimum 1 service category
     if (selectedServices.length < 1) {
       toast.error('Please select at least one service category.');
       setIsSubmitting(false);
       return;
     }
 
-    // Use selectedServices array directly as backend expects array
     const formDataWithServices = {
       ...formData,
-      services: selectedServices // Send as array, not comma-separated string
+      services: selectedServices
     };
 
     const promise = new Promise(async (resolve, reject) => {
@@ -338,7 +298,6 @@ const ProviderRegistration = () => {
             if (key === 'resume' || key === 'passbookImage' || key === 'profilePic') {
               if (value) formDataToSend.append(key, value);
             } else if (key === 'services') {
-              // Handle services array
               value.forEach(service => formDataToSend.append('services', service));
             } else {
               formDataToSend.append(key, value);
@@ -371,18 +330,11 @@ const ProviderRegistration = () => {
 
     toast.promise(promise, {
       pending: 'Completing profile...',
-      success: {
-        render({ data }) { return data; },
-        autoClose: 3000
-      },
-      error: {
-        render({ data }) { return data; },
-        autoClose: 3000
-      }
+      success: { render({ data }) { return data; }, autoClose: 3000 },
+      error: { render({ data }) { return data; }, autoClose: 3000 }
     });
   };
 
-  // Resend OTP
   const handleResendOTP = async () => {
     if (!canResendOtp) return;
 
@@ -403,7 +355,7 @@ const ProviderRegistration = () => {
 
         const sentTime = Date.now();
         setOtpSentTime(sentTime);
-        setOtpExpiryTime(new Date(sentTime + 300000)); // 5 minutes from now
+        setOtpExpiryTime(new Date(sentTime + 300000));
         setCanResendOtp(false);
         setResendCountdown(60);
         resolve('New OTP sent successfully!');
@@ -416,151 +368,122 @@ const ProviderRegistration = () => {
 
     toast.promise(promise, {
       pending: 'Resending OTP...',
-      success: {
-        render({ data }) { return data; },
-        autoClose: 3000
-      },
-      error: {
-        render({ data }) { return data; },
-        autoClose: 3000
-      }
+      success: { render({ data }) { return data; }, autoClose: 3000 },
+      error: { render({ data }) { return data; }, autoClose: 3000 }
     });
   };
 
-  // Format expiry time for display
   const formatExpiryTime = (date) => {
     if (!date) return '';
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  // Progress Steps Component
   const ProgressIndicator = () => (
-            <div className="mb-10">
-              <div className="flex items-center justify-between mb-6">
-                {[1, 2, 3, 4].map((stepNumber) => (
-                  <div key={stepNumber} className="flex items-center">
-                    <div
-                      className={`relative w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-500 transform ${
-                        stepNumber <= step
-                          ? 'bg-primary text-white shadow-lg shadow-primary/30 scale-110'
-                          : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
-                      }`}
-                    >
-                      {stepNumber < step ? (
-                        <CheckCircle className="w-6 h-6 animate-pulse" />
-                      ) : (
-                        <span className="font-bold">{stepNumber}</span>
-                      )}
-                      {stepNumber <= step && (
-                        <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping"></div>
-                      )}
-                    </div>
-                    {stepNumber < 4 && (
-                      <div className="flex-1 mx-3 h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full transition-all duration-700 ease-out ${
-                            stepNumber < step 
-                              ? 'w-full bg-primary' 
-                              : 'w-0 bg-gray-300'
-                          }`}
-                        />
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <div className="text-center">
-                <p className="text-sm text-secondary/60 font-medium tracking-wide">
-                  Step {step} of 4
-                </p>
-                <div className="mt-2 text-xs text-primary font-semibold">
-                  {step === 1 && "Email Verification"}
-                  {step === 2 && "Personal Details"}
-                  {step === 3 && "Account Login"}
-                  {step === 4 && "Professional Profile"}
-                </div>
-              </div>
+    <div className="mb-10">
+      <div className="flex items-center justify-between mb-6">
+        {[1, 2, 3, 4].map((stepNumber) => (
+          <div key={stepNumber} className="flex items-center">
+            <div className={`relative w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-500 transform ${stepNumber <= step ? 'bg-primary text-white shadow-lg shadow-primary/30 scale-110' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}>
+              {stepNumber < step ? (
+                <CheckCircle className="w-6 h-6" />
+              ) : (
+                <span className="font-bold">{stepNumber}</span>
+              )}
             </div>
+            {stepNumber < 4 && (
+              <div className="flex-1 mx-3 h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div className={`h-full transition-all duration-700 ease-out ${stepNumber < step ? 'w-full bg-primary' : 'w-0 bg-gray-300'}`} />
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="text-center">
+        <p className="text-sm text-secondary/60 font-medium tracking-wide">Step {step} of 4</p>
+        <div className="mt-2 text-xs text-primary font-semibold">
+          {step === 1 && "Email Verification"}
+          {step === 2 && "Personal Details"}
+          {step === 3 && "Account Login"}
+          {step === 4 && "Professional Profile"}
+        </div>
+      </div>
+    </div>
   );
 
-  // Benefits Section Component
   const BenefitsSection = () => (
-        <div className="space-y-8">
-          {/* Hero Section */}
-          <div className="text-center space-y-6">
-            <div className="inline-flex items-center px-4 py-2 bg-gray-100 rounded-full mb-4">
-              <Sparkles className="w-4 h-4 text-primary mr-2" />
-              <span className="text-sm font-semibold text-secondary">Join 2,000+ Trusted Providers</span>
-            </div>
-            
-            <h1 className="text-5xl lg:text-6xl font-bold text-secondary leading-tight">
-              Become a <span className="text-primary">SafeVolt</span>
-              <br />
-              <span className="text-3xl lg:text-4xl font-semibold text-secondary/80">Trusted Provider!</span>
-            </h1>
-            
-            <p className="text-xl text-secondary/70 max-w-md mx-auto leading-relaxed">
-              Join our network of verified electrical professionals and 
-              <span className="font-semibold text-primary"> start earning more today!</span>
-            </p>
-          </div>
-
-      {/* Benefits Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-          <div className="group bg-white rounded-2xl p-6 border border-primary/20 hover:border-primary/40 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10">
-            <div className="flex items-center mb-4">
-              <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                <DollarSign className="w-6 h-6 text-primary" />
-              </div>
-              <div className="ml-4">
-                <h3 className="font-bold text-secondary">Earn More Income</h3>
-                <p className="text-sm text-secondary/60">Flexible earnings</p>
-              </div>
-            </div>
-            <p className="text-sm text-secondary/70">Set your own rates and work schedule. Earn 20-40% more than traditional employment with verified leads.</p>
-          </div>
-
-          <div className="group bg-white rounded-2xl p-6 border border-accent/20 hover:border-accent/40 transition-all duration-300 hover:shadow-lg hover:shadow-accent/10">
-            <div className="flex items-center mb-4">
-              <div className="w-12 h-12 bg-accent/10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                <Shield className="w-6 h-6 text-accent" />
-              </div>
-              <div className="ml-4">
-                <h3 className="font-bold text-secondary">Get Verified</h3>
-                <p className="text-sm text-secondary/60">Build trust & credibility</p>
-              </div>
-            </div>
-            <p className="text-sm text-secondary/70">Complete verification process increases customer trust and booking rates by up to 300%.</p>
-          </div>
-
-          <div className="group bg-white rounded-2xl p-6 border border-primary/20 hover:border-primary/40 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10">
-            <div className="flex items-center mb-4">
-              <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                <Zap className="w-6 h-6 text-primary" />
-              </div>
-              <div className="ml-4">
-                <h3 className="font-bold text-secondary">Instant Payments</h3>
-                <p className="text-sm text-secondary/60">Secure & fast</p>
-              </div>
-            </div>
-            <p className="text-sm text-secondary/70">Get paid instantly after job completion through our secure payment system. No waiting periods.</p>
-          </div>
-
-          <div className="group bg-white rounded-2xl p-6 border border-accent/20 hover:border-accent/40 transition-all duration-300 hover:shadow-lg hover:shadow-accent/10">
-            <div className="flex items-center mb-4">
-              <div className="w-12 h-12 bg-accent/10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                <Calendar className="w-6 h-6 text-accent" />
-              </div>
-              <div className="ml-4">
-                <h3 className="font-bold text-secondary">Flexible Hours</h3>
-                <p className="text-sm text-secondary/60">Work on your terms</p>
-              </div>
-            </div>
-            <p className="text-sm text-secondary/70">Choose your working hours and service areas. Perfect for full-time professionals or side income.</p>
-          </div>
+    <div className="space-y-8">
+      <div className="text-center space-y-6">
+        <div className="inline-flex items-center px-4 py-2 bg-gray-100 rounded-full mb-4">
+          <Sparkles className="w-4 h-4 text-primary mr-2" />
+          <span className="text-sm font-semibold text-secondary">Join 2,000+ Trusted Providers</span>
+        </div>
+        
+        <h1 className="text-5xl lg:text-6xl font-bold text-secondary leading-tight">
+          Become a <span className="text-primary">SafeVolt</span>
+          <br />
+          <span className="text-3xl lg:text-4xl font-semibold text-secondary/80">Trusted Provider!</span>
+        </h1>
+        
+        <p className="text-xl text-secondary/70 max-w-md mx-auto leading-relaxed">
+          Join our network of verified electrical professionals and 
+          <span className="font-semibold text-primary"> start earning more today!</span>
+        </p>
       </div>
 
-      {/* How It Works */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <div className="group bg-white rounded-2xl p-6 border border-primary/20 hover:border-primary/40 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10">
+          <div className="flex items-center mb-4">
+            <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+              <DollarSign className="w-6 h-6 text-primary" />
+            </div>
+            <div className="ml-4">
+              <h3 className="font-bold text-secondary">Earn More Income</h3>
+              <p className="text-sm text-secondary/60">Flexible earnings</p>
+            </div>
+          </div>
+          <p className="text-sm text-secondary/70">Set your own rates and work schedule. Earn 20-40% more than traditional employment with verified leads.</p>
+        </div>
+
+        <div className="group bg-white rounded-2xl p-6 border border-accent/20 hover:border-accent/40 transition-all duration-300 hover:shadow-lg hover:shadow-accent/10">
+          <div className="flex items-center mb-4">
+            <div className="w-12 h-12 bg-accent/10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+              <Shield className="w-6 h-6 text-accent" />
+            </div>
+            <div className="ml-4">
+              <h3 className="font-bold text-secondary">Get Verified</h3>
+              <p className="text-sm text-secondary/60">Build trust & credibility</p>
+            </div>
+          </div>
+          <p className="text-sm text-secondary/70">Complete verification process increases customer trust and booking rates by up to 300%.</p>
+        </div>
+
+        <div className="group bg-white rounded-2xl p-6 border border-primary/20 hover:border-primary/40 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10">
+          <div className="flex items-center mb-4">
+            <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+              <Zap className="w-6 h-6 text-primary" />
+            </div>
+            <div className="ml-4">
+              <h3 className="font-bold text-secondary">Instant Payments</h3>
+              <p className="text-sm text-secondary/60">Secure & fast</p>
+            </div>
+          </div>
+          <p className="text-sm text-secondary/70">Get paid instantly after job completion through our secure payment system. No waiting periods.</p>
+        </div>
+
+        <div className="group bg-white rounded-2xl p-6 border border-accent/20 hover:border-accent/40 transition-all duration-300 hover:shadow-lg hover:shadow-accent/10">
+          <div className="flex items-center mb-4">
+            <div className="w-12 h-12 bg-accent/10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+              <Calendar className="w-6 h-6 text-accent" />
+            </div>
+            <div className="ml-4">
+              <h3 className="font-bold text-secondary">Flexible Hours</h3>
+              <p className="text-sm text-secondary/60">Work on your terms</p>
+            </div>
+          </div>
+          <p className="text-sm text-secondary/70">Choose your working hours and service areas. Perfect for full-time professionals or side income.</p>
+        </div>
+      </div>
+
       <div className="bg-white rounded-2xl p-8 border border-primary/20">
         <h3 className="text-2xl font-bold text-secondary mb-6 text-center flex items-center justify-center">
           <Award className="w-6 h-6 text-primary mr-2" />
@@ -591,7 +514,6 @@ const ProviderRegistration = () => {
         </div>
       </div>
 
-      {/* Trust Points */}
       <div className="bg-white rounded-2xl p-6 border border-accent/20">
         <h3 className="text-xl font-bold text-secondary mb-4 flex items-center">
           <Users className="w-5 h-5 text-accent mr-2" />
@@ -615,7 +537,6 @@ const ProviderRegistration = () => {
     </div>
   );
 
-  // Form Content Renderer
   const renderStepContent = () => {
     switch (step) {
       case 1:
@@ -633,7 +554,7 @@ const ProviderRegistration = () => {
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                  <Mail className="text-primary w-5 h-5 group-focus-within:scale-110 transition-transform duration-200" />
+                  <Mail className="text-primary w-5 h-5" />
                 </div>
                 <input
                   type="email"
@@ -659,28 +580,19 @@ const ProviderRegistration = () => {
               <div className="w-16 h-1 bg-gradient-to-r from-primary to-accent mx-auto mt-4 rounded-full"></div>
             </div>
 
-            {/* OTP Section */}
             <div className="bg-gradient-to-r from-primary/10 to-accent/10 rounded-2xl p-6 border border-primary/20">
               <div className="text-center">
                 <div className="bg-green-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
                   <CheckCircle className="w-8 h-8 text-green-600" />
                 </div>
-                <p className="text-secondary/80 mb-2">
-                  Verification code sent to:
-                </p>
+                <p className="text-secondary/80 mb-2">Verification code sent to:</p>
                 <p className="font-semibold text-secondary">{formData.email}</p>
                 <p className="text-sm text-secondary/60 mt-2">
                   {otpExpiryTime ? (
                     <>
                       Code expires at {formatExpiryTime(otpExpiryTime)} •
                       {canResendOtp ? (
-                        <button
-                          onClick={handleResendOTP}
-                          className="ml-1 text-accent hover:text-accent/80 font-medium"
-                          disabled={isSubmitting}
-                        >
-                          Resend now
-                        </button>
+                        <button onClick={handleResendOTP} className="ml-1 text-accent hover:text-accent/80 font-medium" disabled={isSubmitting}>Resend now</button>
                       ) : (
                         <span className="ml-1">Resend in {resendCountdown}s</span>
                       )}
@@ -719,12 +631,10 @@ const ProviderRegistration = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="group">
-                <label htmlFor="name" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                  Full Name *
-                </label>
+                <label htmlFor="name" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Full Name *</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                    <User className="text-primary w-5 h-5 group-focus-within:scale-110 transition-transform duration-200" />
+                    <User className="text-primary w-5 h-5" />
                   </div>
                   <input
                     type="text"
@@ -740,12 +650,10 @@ const ProviderRegistration = () => {
               </div>
 
               <div className="group">
-                <label htmlFor="phone" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                  Phone Number *
-                </label>
+                <label htmlFor="phone" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Phone Number *</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                    <Phone className="text-primary w-5 h-5 group-focus-within:scale-110 transition-transform duration-200" />
+                    <Phone className="text-primary w-5 h-5" />
                   </div>
                   <input
                     type="tel"
@@ -763,12 +671,10 @@ const ProviderRegistration = () => {
             </div>
 
             <div className="group">
-              <label htmlFor="dateOfBirth" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                Date of Birth *
-              </label>
+              <label htmlFor="dateOfBirth" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Date of Birth *</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                  <Calendar className="text-primary w-5 h-5 group-focus-within:scale-110 transition-transform duration-200" />
+                  <Calendar className="text-primary w-5 h-5" />
                 </div>
                 <input
                   type="date"
@@ -784,12 +690,10 @@ const ProviderRegistration = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="group">
-                <label htmlFor="password" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                  Create Password *
-                </label>
+                <label htmlFor="password" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Create Password *</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                    <Lock className="text-primary w-5 h-5 group-focus-within:scale-110 transition-transform duration-200" />
+                    <Lock className="text-primary w-5 h-5" />
                   </div>
                   <input
                     type="password"
@@ -806,12 +710,10 @@ const ProviderRegistration = () => {
               </div>
 
               <div className="group">
-                <label htmlFor="confirmPassword" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                  Confirm Password *
-                </label>
+                <label htmlFor="confirmPassword" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Confirm Password *</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                    <Lock className="text-primary w-5 h-5 group-focus-within:scale-110 transition-transform duration-200" />
+                    <Lock className="text-primary w-5 h-5" />
                   </div>
                   <input
                     type="password"
@@ -839,12 +741,10 @@ const ProviderRegistration = () => {
             </div>
 
             <div className="group">
-              <label htmlFor="email" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                Email Address *
-              </label>
+              <label htmlFor="email" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Email Address *</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                  <Mail className="text-primary w-5 h-5 group-focus-within:scale-110 transition-transform duration-200" />
+                  <Mail className="text-primary w-5 h-5" />
                 </div>
                 <input
                   type="email"
@@ -860,12 +760,10 @@ const ProviderRegistration = () => {
             </div>
 
             <div className="group">
-              <label htmlFor="password" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                Password *
-              </label>
+              <label htmlFor="password" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Password *</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                  <Lock className="text-primary w-5 h-5 group-focus-within:scale-110 transition-transform duration-200" />
+                  <Lock className="text-primary w-5 h-5" />
                 </div>
                 <input
                   type="password"
@@ -877,7 +775,7 @@ const ProviderRegistration = () => {
                   placeholder="Enter your password"
                   required
                 />
-                </div>
+              </div>
             </div>
           </div>
         );
@@ -891,14 +789,10 @@ const ProviderRegistration = () => {
               <div className="w-16 h-1 bg-gradient-to-r from-primary to-accent mx-auto mt-4 rounded-full"></div>
             </div>
 
-            {/* Professional Details */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="group">
-                <label className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                  Service Categories (Select 1-3) *
-                </label>
+                <label className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Service Categories (Select 1-3) *</label>
 
-                {/* Service Categories Selection */}
                 {providerServicesLoading ? (
                   <div className="flex items-center justify-center py-8">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -918,18 +812,10 @@ const ProviderRegistration = () => {
                         <div
                           key={service._id}
                           onClick={() => handleServiceChange(service)}
-                          className={`relative p-4 rounded-2xl border-2 cursor-pointer transition-all duration-300 hover:shadow-md ${
-                            selectedServices.includes(service._id)
-                              ? 'border-primary bg-primary/5 shadow-lg'
-                              : 'border-gray-200 hover:border-primary/50'
-                          } ${selectedServices.length >= 3 && !selectedServices.includes(service._id) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          className={`relative p-4 rounded-2xl border-2 cursor-pointer transition-all duration-300 hover:shadow-md ${selectedServices.includes(service._id) ? 'border-primary bg-primary/5 shadow-lg' : 'border-gray-200 hover:border-primary/50'} ${selectedServices.length >= 3 && !selectedServices.includes(service._id) ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                           <div className="flex items-start space-x-3">
-                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                              selectedServices.includes(service._id)
-                                ? 'bg-primary text-white'
-                                : 'bg-gray-100 text-secondary/60'
-                            }`}>
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${selectedServices.includes(service._id) ? 'bg-primary text-white' : 'bg-gray-100 text-secondary/60'}`}>
                               {service.icon ? (
                                 <img src={service.icon} alt={service.name} className="w-6 h-6 object-contain" />
                               ) : (
@@ -937,25 +823,11 @@ const ProviderRegistration = () => {
                               )}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <h4 className={`font-semibold text-sm truncate ${
-                                selectedServices.includes(service._id) ? 'text-primary' : 'text-secondary'
-                              }`}>
-                                {service.name}
-                              </h4>
-                              {service.description && (
-                                <p className="text-xs text-secondary/60 mt-1 line-clamp-2">
-                                  {service.description}
-                                </p>
-                              )}
+                              <h4 className={`font-semibold text-sm truncate ${selectedServices.includes(service._id) ? 'text-primary' : 'text-secondary'}`}>{service.name}</h4>
+                              {service.description && <p className="text-xs text-secondary/60 mt-1 line-clamp-2">{service.description}</p>}
                             </div>
-                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                              selectedServices.includes(service._id)
-                                ? 'border-primary bg-primary'
-                                : 'border-gray-300'
-                            }`}>
-                              {selectedServices.includes(service._id) && (
-                                <CheckCircle className="w-4 h-4 text-white" />
-                              )}
+                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${selectedServices.includes(service._id) ? 'border-primary bg-primary' : 'border-gray-300'}`}>
+                              {selectedServices.includes(service._id) && <CheckCircle className="w-4 h-4 text-white" />}
                             </div>
                           </div>
                         </div>
@@ -964,35 +836,23 @@ const ProviderRegistration = () => {
 
                     {selectedServices.length > 0 && (
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-secondary/70">
-                          {selectedServices.length} of 3 categories selected
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedServices([])}
-                          className="text-accent hover:text-accent/80 font-medium"
-                        >
-                          Clear all
-                        </button>
+                        <span className="text-secondary/70">{selectedServices.length} of 3 categories selected</span>
+                        <button type="button" onClick={() => setSelectedServices([])} className="text-accent hover:text-accent/80 font-medium">Clear all</button>
                       </div>
                     )}
 
                     {providerServices.length === 0 && (
-                      <div className="text-center py-8 text-secondary/60">
-                        No service categories available at the moment.
-                      </div>
+                      <div className="text-center py-8 text-secondary/60">No service categories available at the moment.</div>
                     )}
                   </div>
                 )}
               </div>
 
               <div className="group">
-                <label htmlFor="experience" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                  Years of Experience *
-                </label>
+                <label htmlFor="experience" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Years of Experience *</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                    <Award className="text-primary w-5 h-5 group-focus-within:scale-110 transition-transform duration-200" />
+                    <Award className="text-primary w-5 h-5" />
                   </div>
                   <input
                     type="number"
@@ -1011,12 +871,10 @@ const ProviderRegistration = () => {
             </div>
 
             <div className="group">
-              <label htmlFor="serviceArea" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                Service Area *
-              </label>
+              <label htmlFor="serviceArea" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Service Area *</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                  <MapPin className="text-primary w-5 h-5 group-focus-within:scale-110 transition-transform duration-200" />
+                  <MapPin className="text-primary w-5 h-5" />
                 </div>
                 <input
                   type="text"
@@ -1025,18 +883,15 @@ const ProviderRegistration = () => {
                   value={formData.serviceArea}
                   onChange={handleChange}
                   className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
-                  placeholder="Cities or pincodes you serve (e.g., Mumbai, 400001, 400002)"
+                  placeholder="Cities or pincodes you serve (e.g., Mumbai, 400001)"
                   required
                 />
               </div>
             </div>
 
-            {/* File Uploads */}
             <div className="space-y-6">
               <div className="group">
-                <label htmlFor="resume" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                  Professional Resume *
-                </label>
+                <label htmlFor="resume" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Professional Resume *</label>
                 <div className="relative">
                   <input
                     type="file"
@@ -1048,19 +903,15 @@ const ProviderRegistration = () => {
                     required
                   />
                   <div className="flex items-center justify-between px-4 py-4 bg-gradient-to-r from-primary/5 to-transparent border-2 border-gray-200 rounded-2xl hover:border-primary/50 transition-all duration-300 hover:shadow-md">
-                    <span className="text-secondary/70 truncate">
-                      {formData.resume ? formData.resume.name : 'Choose PDF/DOC file...'}
-                    </span>
+                    <span className="text-secondary/70 truncate">{formData.resume ? formData.resume.name : 'Choose PDF/DOC file...'}</span>
                     <FileText className="text-primary w-5 h-5" />
                   </div>
                 </div>
-                <p className="mt-2 text-sm text-secondary/60">Upload your professional resume highlighting electrical experience (PDF or DOC format)</p>
+                <p className="mt-2 text-sm text-secondary/60">Upload your professional resume (PDF or DOC format)</p>
               </div>
 
               <div className="group">
-                <label htmlFor="profilePic" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                  Profile Picture *
-                </label>
+                <label htmlFor="profilePic" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Profile Picture *</label>
                 <div className="relative">
                   <input
                     type="file"
@@ -1072,17 +923,14 @@ const ProviderRegistration = () => {
                     required
                   />
                   <div className="flex items-center justify-between px-4 py-4 bg-gradient-to-r from-primary/5 to-transparent border-2 border-gray-200 rounded-2xl hover:border-primary/50 transition-all duration-300 hover:shadow-md">
-                    <span className="text-secondary/70 truncate">
-                      {formData.profilePic ? formData.profilePic.name : 'Choose image file...'}
-                    </span>
+                    <span className="text-secondary/70 truncate">{formData.profilePic ? formData.profilePic.name : 'Choose image file...'}</span>
                     <Camera className="text-primary w-5 h-5" />
                   </div>
                 </div>
-                <p className="mt-2 text-sm text-secondary/60">Upload a clear, professional photo of yourself</p>
+                <p className="mt-2 text-sm text-secondary/60">Upload a clear, professional photo</p>
               </div>
             </div>
 
-            {/* Address Information */}
             <div className="border-t border-gray-200 pt-6 mt-6">
               <h3 className="text-lg font-bold text-secondary mb-4 flex items-center">
                 <Home className="mr-2 text-primary w-5 h-5" />
@@ -1091,74 +939,29 @@ const ProviderRegistration = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="group">
-                  <label htmlFor="street" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                    Street Address *
-                  </label>
-                  <input
-                    type="text"
-                    id="street"
-                    name="street"
-                    value={formData.street}
-                    onChange={handleChange}
-                    className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
-                    placeholder="123 Main Street"
-                    required
-                  />
+                  <label htmlFor="street" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Street Address *</label>
+                  <input type="text" id="street" name="street" value={formData.street} onChange={handleChange} className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="123 Main Street" required />
                 </div>
 
                 <div className="group">
-                  <label htmlFor="city" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                    City *
-                  </label>
-                  <input
-                    type="text"
-                    id="city"
-                    name="city"
-                    value={formData.city}
-                    onChange={handleChange}
-                    className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
-                    placeholder="Your city"
-                    required
-                  />
+                  <label htmlFor="city" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">City *</label>
+                  <input type="text" id="city" name="city" value={formData.city} onChange={handleChange} className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="Your city" required />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
                 <div className="group">
-                  <label htmlFor="state" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                    State *
-                  </label>
-                  <input
-                    type="text"
-                    id="state"
-                    name="state"
-                    value={formData.state}
-                    onChange={handleChange}
-                    className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
-                    placeholder="Your state"
-                    required
-                  />
+                  <label htmlFor="state" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">State *</label>
+                  <input type="text" id="state" name="state" value={formData.state} onChange={handleChange} className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="Your state" required />
                 </div>
 
                 <div className="group">
-                  <label htmlFor="postalCode" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                    Postal Code *
-                  </label>
-                  <input
-                    type="text"
-                    id="postalCode"
-                    name="postalCode"
-                    value={formData.postalCode}
-                    onChange={handleChange}
-                    className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
-                    placeholder="123456"
-                    required
-                  />
+                  <label htmlFor="postalCode" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Postal Code *</label>
+                  <input type="text" id="postalCode" name="postalCode" value={formData.postalCode} onChange={handleChange} className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="123456" required />
                 </div>
               </div>
             </div>
 
-            {/* Bank Details */}
             <div className="border-t border-gray-200 pt-6 mt-6">
               <h3 className="text-lg font-bold text-secondary mb-4 flex items-center">
                 <CreditCard className="mr-2 text-primary w-5 h-5" />
@@ -1167,92 +970,38 @@ const ProviderRegistration = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="group">
-                  <label htmlFor="accountNo" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                    Account Number *
-                  </label>
-                  <input
-                    type="text"
-                    id="accountNo"
-                    name="accountNo"
-                    value={formData.accountNo}
-                    onChange={handleChange}
-                    className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
-                    placeholder="1234567890"
-                    required
-                  />
+                  <label htmlFor="accountNo" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Account Number *</label>
+                  <input type="text" id="accountNo" name="accountNo" value={formData.accountNo} onChange={handleChange} className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="1234567890" required />
                 </div>
 
                 <div className="group">
-                  <label htmlFor="ifsc" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                    IFSC Code *
-                  </label>
-                  <input
-                    type="text"
-                    id="ifsc"
-                    name="ifsc"
-                    value={formData.ifsc}
-                    onChange={handleChange}
-                    className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
-                    placeholder="ABCD0123456"
-                    required
-                  />
+                  <label htmlFor="ifsc" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">IFSC Code *</label>
+                  <input type="text" id="ifsc" name="ifsc" value={formData.ifsc} onChange={handleChange} className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="ABCD0123456" required />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
                 <div className="group">
-                  <label htmlFor="bankName" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                    Bank Name
-                  </label>
-                  <input
-                    type="text"
-                    id="bankName"
-                    name="bankName"
-                    value={formData.bankName}
-                    onChange={handleChange}
-                    className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
-                    placeholder="e.g., State Bank of India"
-                  />
+                  <label htmlFor="bankName" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Bank Name</label>
+                  <input type="text" id="bankName" name="bankName" value={formData.bankName} onChange={handleChange} className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="e.g., State Bank of India" />
                 </div>
 
                 <div className="group">
-                  <label htmlFor="accountName" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                    Account Holder Name
-                  </label>
-                  <input
-                    type="text"
-                    id="accountName"
-                    name="accountName"
-                    value={formData.accountName}
-                    onChange={handleChange}
-                    className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
-                    placeholder="Name as per bank records"
-                  />
+                  <label htmlFor="accountName" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Account Holder Name</label>
+                  <input type="text" id="accountName" name="accountName" value={formData.accountName} onChange={handleChange} className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="Name as per bank records" />
                 </div>
               </div>
 
               <div className="mt-4 group">
-                <label htmlFor="passbookImage" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                  Bank Passbook Image *
-                </label>
+                <label htmlFor="passbookImage" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Bank Passbook Image *</label>
                 <div className="relative">
-                  <input
-                    type="file"
-                    id="passbookImage"
-                    name="passbookImage"
-                    onChange={handleFileChange('passbookImage')}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    accept="image/*"
-                    required
-                  />
+                  <input type="file" id="passbookImage" name="passbookImage" onChange={handleFileChange('passbookImage')} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept="image/*" required />
                   <div className="flex items-center justify-between px-4 py-4 bg-gradient-to-r from-primary/5 to-transparent border-2 border-gray-200 rounded-2xl hover:border-primary/50 transition-all duration-300 hover:shadow-md">
-                    <span className="text-secondary/70 truncate">
-                      {formData.passbookImage ? formData.passbookImage.name : 'Choose passbook image...'}
-                    </span>
+                    <span className="text-secondary/70 truncate">{formData.passbookImage ? formData.passbookImage.name : 'Choose passbook image...'}</span>
                     <Camera className="text-primary w-5 h-5" />
                   </div>
                 </div>
-                <p className="mt-2 text-sm text-secondary/60">Upload clear image of your bank passbook for verification</p>
+                <p className="mt-2 text-sm text-secondary/60">Upload clear image of your bank passbook</p>
               </div>
             </div>
           </div>
@@ -1265,35 +1014,25 @@ const ProviderRegistration = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 pt-28 bg-background relative overflow-hidden">
-      {/* Animated Background Elements */}
       <div className="absolute inset-0 opacity-10">
-        <div className="absolute top-20 left-20 w-32 h-32 bg-accent/30 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-20 right-20 w-48 h-48 bg-primary/30 rounded-full blur-3xl animate-pulse delay-1000"></div>
-        <div className="absolute top-1/2 left-1/4 w-24 h-24 bg-accent/30 rounded-full blur-2xl animate-pulse delay-500"></div>
+        <div className="absolute top-20 left-20 w-32 h-32 bg-accent/30 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-20 right-20 w-48 h-48 bg-primary/30 rounded-full blur-3xl"></div>
+        <div className="absolute top-1/2 left-1/4 w-24 h-24 bg-accent/30 rounded-full blur-2xl"></div>
       </div>
 
-      {/* Main Container - Desktop: Grid Layout, Mobile: Single Column */}
       <div className="w-full max-w-7xl relative z-10 lg:grid lg:grid-cols-2 lg:gap-12 lg:items-start">
         
-        {/* Benefits Section - Hidden on mobile, Left side on desktop */}
         <div className="hidden lg:block lg:sticky lg:top-8">
           <BenefitsSection />
         </div>
         
-        {/* Form Container - Full width on mobile, Right side on desktop */}
         <div className="w-full max-w-lg mx-auto lg:mx-0">
           <div className="bg-background/95 backdrop-blur-sm rounded-3xl shadow-2xl p-8 border border-primary/20 shadow-primary/10">
             <ProgressIndicator />
             
-            <form onSubmit={
-              step === 1 ? handleInitiateRegistration :
-                step === 2 ? handleCompleteRegistration :
-                  step === 3 ? handleLogin :
-                    handleCompleteProfile
-            }>
+            <form onSubmit={step === 1 ? handleInitiateRegistration : step === 2 ? handleCompleteRegistration : step === 3 ? handleLogin : handleCompleteProfile}>
               {renderStepContent()}
 
-              {/* Navigation Buttons */}
               <div className="flex justify-between mt-8 space-x-4">
                 {step > 1 && (
                   <button
@@ -1310,9 +1049,7 @@ const ProviderRegistration = () => {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className={`flex items-center justify-center px-8 py-3 rounded-2xl font-semibold transition-all duration-300 transform hover:scale-[1.02] disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none ${
-                    step === 1 ? 'w-full' : 'flex-1'
-                  } bg-accent text-background shadow-lg hover:shadow-xl`}
+                  className={`flex items-center justify-center px-8 py-3 rounded-2xl font-semibold transition-all duration-300 transform hover:scale-[1.02] disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none ${step === 1 ? 'w-full' : 'flex-1'} bg-accent text-background shadow-lg hover:shadow-xl`}
                 >
                   {isSubmitting ? (
                     <div className="flex items-center">
@@ -1320,26 +1057,14 @@ const ProviderRegistration = () => {
                       <span>Processing...</span>
                     </div>
                   ) : (
-                    <>
-                      <span className="mr-2">
-                        {step === 1 ? 'Send Verification Code' :
-                          step === 2 ? 'Complete Registration' :
-                            step === 3 ? 'Login & Continue' :
-                              'Register & Start Earning'}
-                      </span>
-                      <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                    </>
+                    <span>{step === 1 ? 'Send Verification Code' : step === 2 ? 'Complete Registration' : step === 3 ? 'Login & Continue' : 'Register & Start Earning'}</span>
                   )}
                 </button>
               </div>
             </form>
 
-            {/* Login Link */}
             <div className="text-center mt-6">
-              <Link
-                to="/login"
-                className="text-accent hover:text-accent/80 font-semibold transition-colors duration-300"
-              >
+              <Link to="/login" className="text-accent hover:text-accent/80 font-semibold transition-colors duration-300">
                 Already registered? Sign in to your provider account
               </Link>
             </div>

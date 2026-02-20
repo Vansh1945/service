@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Award, DollarSign, Shield, Star, CheckCircle2, Heart, Clock } from 'lucide-react';
-import { motion } from 'framer-motion';
 
 const WhyChooseUs = () => {
   const [visibleCards, setVisibleCards] = useState(new Set());
@@ -106,13 +105,7 @@ const WhyChooseUs = () => {
       </div>
 
       <div ref={sectionRef} className="relative z-10 max-w-7xl mx-auto px-6 sm:px-8 lg:px-12">
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, ease: "easeInOut" }}
-          viewport={{ once: true }}
-          className="text-center mb-14 sm:mb-20"
-        >
+        <div className="text-center mb-14 sm:mb-20">
           <div className="inline-flex items-center bg-white bg-opacity-20 backdrop-blur-md px-5 py-3 rounded-full shadow-md border border-primary/30 mb-6">
             <Star className="w-4 h-4 text-accent mr-3" />
             <span className="text-primary font-semibold text-md tracking-wide">Why Choose Us</span>
@@ -123,7 +116,7 @@ const WhyChooseUs = () => {
           <p className="text-lg sm:text-xl text-secondary/90 max-w-4xl mx-auto px-4 leading-relaxed">
             We provide top-tier electrical services with unmatched reliability, safety, and customer care.
           </p>
-        </motion.div>
+        </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 px-2">
           {features.map((feature, index) => {
@@ -131,13 +124,10 @@ const WhyChooseUs = () => {
             const isVisible = visibleCards.has(index);
             
             return (
-              <motion.div
+              <div
                 key={index}
                 data-index={index}
-                initial={{ opacity: 0, y: 40 }}
-                animate={isVisible ? { opacity: 1, y: 0 } : {}}
-                transition={{ duration: 0.6, delay: index * 0.15, ease: "easeInOut" }}
-                className="relative rounded-3xl transform-gpu"
+                className={`relative rounded-3xl transform-gpu transition-all duration-500 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}
               >
                 <div className={`absolute inset-0 bg-gradient-to-r ${feature.gradient} rounded-3xl opacity-0 blur-3xl transition-opacity duration-500 pointer-events-none`}></div>
                 <div className={`h-full p-1 bg-gradient-to-r ${feature.gradient} rounded-3xl shadow-lg transition-all duration-500`}>
@@ -149,17 +139,13 @@ const WhyChooseUs = () => {
                     <p className="text-secondary/80 flex-grow leading-relaxed">{feature.description}</p>
                   </div>
                 </div>
-              </motion.div>
+              </div>
             );
           })}
         </div>
 
-        <motion.div
+        <div
           data-stats
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.9, delay: 0.5, ease: "easeInOut" }}
-          viewport={{ once: true }}
           className="mt-12 sm:mt-16 mx-4 bg-gradient-to-r from-primary to-primary/80 rounded-3xl p-8 text-white shadow-2xl"
         >
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 text-center">
@@ -168,7 +154,7 @@ const WhyChooseUs = () => {
               const currentValue = stat.key === 'service' ? 24 : countUp[stat.key] || 0;
               
               return (
-                <motion.div key={index} className="">
+                <div key={index}>
                   <div className="w-12 h-12 bg-gradient-to-br from-accent to-accent/90 rounded-3xl flex items-center justify-center mx-auto mb-3 transition-transform duration-500">
                     <IconComponent className="w-6 h-6 text-background" />
                   </div>
@@ -176,11 +162,11 @@ const WhyChooseUs = () => {
                     {currentValue}{stat.suffix}
                   </p>
                   <p className="text-white text-sm font-semibold tracking-wide">{stat.label}</p>
-                </motion.div>
+                </div>
               );
             })}
           </div>
-        </motion.div>
+        </div>
       </div>
     </section>
   );

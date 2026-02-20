@@ -1,5 +1,4 @@
 import React from 'react';
-import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { 
   FaDollarSign, 
@@ -8,7 +7,8 @@ import {
   FaMapMarkerAlt,
   FaArrowRight,
   FaTools,
-  FaBolt
+  FaBolt,
+  FaZap
 } from 'react-icons/fa';
 
 const CareerSection = () => {
@@ -41,65 +41,32 @@ const CareerSection = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
           
           {/* Text Content */}
-          <motion.div
-            initial={{ opacity: 0, x: -50 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.6 }}
-            viewport={{ once: true }}
-            className="order-2 lg:order-1"
-          >
+          <div className="order-2 lg:order-1">
 
-          <div className="inline-flex items-center bg-primary/10 px-6 py-3 rounded-full border border-primary/20 mb-6">
-                        <Zap className="w-5 h-5 text-primary mr-2" />
-                        <span className="text-primary font-medium">Career </span>
-                      </div>
-                      
+            <div className="inline-flex items-center bg-primary/10 px-6 py-3 rounded-full border border-primary/20 mb-6">
+              <FaZap className="w-5 h-5 text-primary mr-2" />
+              <span className="text-primary font-medium">Career</span>
+            </div>
 
             {/* Headline */}
             <div className="mb-8">
-              <motion.h2 
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.1 }}
-                viewport={{ once: true }}
-                className="text-3xl sm:text-4xl lg:text-5xl font-bold text-primary mb-4 leading-tight"
-              >
+              <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-primary mb-4 leading-tight">
                 Join Our Network of 
                 <span className="block text-primary">Electrical Service Providers</span>
-              </motion.h2>
+              </h2>
               
-              <motion.p 
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.2 }}
-                viewport={{ once: true }}
-                className="text-lg text-secondary leading-relaxed max-w-xl"
-              >
+              <p className="text-lg text-secondary leading-relaxed max-w-xl">
                 Build a rewarding career with steady jobs, flexible scheduling, and timely payments. 
                 Join our growing network of certified electrical professionals and unlock new growth opportunities 
                 in your local community.
-              </motion.p>
+              </p>
             </div>
 
             {/* Benefits Grid */}
-            <motion.div 
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.3 }}
-              viewport={{ once: true }}
-              className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8"
-            >
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
               {benefits.map((benefit, index) => (
-                <motion.div
+                <div
                   key={index}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: 0.4 + index * 0.1 }}
-                  viewport={{ once: true }}
-                  whileHover={{ 
-                    y: -5,
-                    transition: { duration: 0.2 }
-                  }}
                   className="bg-white p-6 rounded-xl shadow-md border border-gray-100 hover:shadow-lg transition-all duration-300 group cursor-pointer"
                 >
                   <div className="flex items-start space-x-4">
@@ -115,17 +82,12 @@ const CareerSection = () => {
                       </p>
                     </div>
                   </div>
-                </motion.div>
+                </div>
               ))}
-            </motion.div>
+            </div>
 
             {/* Call to Action Button */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.8 }}
-              viewport={{ once: true }}
-            >
+            <div>
               <Link 
                 to="/provider-register"
                 className="group inline-flex items-center px-8 py-4 bg-accent text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 hover:bg-accent/90"
@@ -137,17 +99,11 @@ const CareerSection = () => {
               <p className="text-sm text-secondary/70 mt-3">
                 Start your application in less than 5 minutes
               </p>
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
 
           {/* Image/Illustration Placeholder */}
-          <motion.div
-            initial={{ opacity: 0, x: 50 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-            viewport={{ once: true }}
-            className="order-1 lg:order-2"
-          >
+          <div className="order-1 lg:order-2">
             <div className="relative">
               {/* Main Image Placeholder */}
               <div className="bg-gradient-to-br from-primary/10 to-accent/10 rounded-2xl p-8 lg:p-12 shadow-xl">
@@ -188,38 +144,15 @@ const CareerSection = () => {
               </div>
               
               {/* Floating Elements */}
-              <motion.div
-                animate={{ 
-                  y: [0, -10, 0],
-                  rotate: [0, 5, 0]
-                }}
-                transition={{ 
-                  duration: 3,
-                  repeat: Infinity,
-                  ease: "easeInOut"
-                }}
-                className="absolute -top-4 -left-4 w-16 h-16 bg-accent/20 rounded-full flex items-center justify-center backdrop-blur-sm"
-              >
+              <div className="absolute -top-4 -left-4 w-16 h-16 bg-accent/20 rounded-full flex items-center justify-center backdrop-blur-sm animate-pulse">
                 <FaBolt className="text-accent text-xl" />
-              </motion.div>
+              </div>
               
-              <motion.div
-                animate={{ 
-                  y: [0, 10, 0],
-                  rotate: [0, -5, 0]
-                }}
-                transition={{ 
-                  duration: 4,
-                  repeat: Infinity,
-                  ease: "easeInOut",
-                  delay: 1
-                }}
-                className="absolute -bottom-4 -right-4 w-12 h-12 bg-primary/20 rounded-full flex items-center justify-center backdrop-blur-sm"
-              >
+              <div className="absolute -bottom-4 -right-4 w-12 h-12 bg-primary/20 rounded-full flex items-center justify-center backdrop-blur-sm animate-pulse">
                 <FaTools className="text-primary text-sm" />
-              </motion.div>
+              </div>
             </div>
-          </motion.div>
+          </div>
         </div>
       </div>
     </section>
