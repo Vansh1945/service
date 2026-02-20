@@ -276,7 +276,7 @@ const bookingSchema = new Schema({
 });
 
 // Pre-save hook to calculate commission and totals
-bookingSchema.pre('save', async function (next) {
+bookingSchema.pre('save', async function () {
   this.updatedAt = Date.now();
 
   // Track status changes
@@ -316,7 +316,7 @@ bookingSchema.pre('save', async function (next) {
     this.statusHistory.push(statusChange);
   }
 
-  // Commission calculation
+  // Commission calculation 
   if (this.provider && (this.isModified('transaction') || this.isModified('provider') || this.isNew || this.isModified('totalAmount'))) {
     try {
       const CommissionRule = mongoose.model('CommissionRule');
@@ -345,8 +345,6 @@ bookingSchema.pre('save', async function (next) {
     const User = mongoose.model('User');
     await User.findByIdAndUpdate(this.customer, { $inc: { totalBookings: 1 } });
   }
-
-  next();
 });
 
 // Payment confirmation will be handled through Transaction model updates

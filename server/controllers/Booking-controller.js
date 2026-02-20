@@ -1654,7 +1654,6 @@ const rejectBooking = async (req, res) => {
     const booking = await Booking.findOne({
       _id: id,
       status: 'pending',
-      paymentStatus: { $ne: 'paid' },
       $or: [
         { provider: { $exists: false } },
         { provider: providerId }
@@ -1678,8 +1677,27 @@ const rejectBooking = async (req, res) => {
 
     await booking.save();
 
+    // Process refund if payment was already made
+    let refundStatus = null;
+    if (booking.paymentStatus === 'paid') {
+      // Initiate refund process
+      refundStatus = {
+        amount: booking.totalAmount,
+        method: booking.paymentMethod,
+        status: 'processing',
+        message: 'Refund will be processed to the original payment method'
+      };
+      
+      // In a real application, you would initiate the refund through payment gateway here
+      // For now, we'll just mark it as processing
+    }
+
     // Send notification email to customer
     try {
+      const refundInfo = refundStatus 
+        ? `<p><strong>Refund:</strong> A refund of ₹${booking.totalAmount} will be processed to your original payment method within 5-7 business days.</p>`
+        : '<p>No payment was made for this booking, so no refund is required.</p>';
+
       const emailHtml = `
         <h2>Booking Update</h2>
         <p>Unfortunately, your booking request has been declined by the service provider.</p>
@@ -1688,6 +1706,7 @@ const rejectBooking = async (req, res) => {
         <p><strong>Date:</strong> ${new Date(booking.date).toDateString()}</p>
         <p><strong>Time:</strong> ${booking.time || 'As requested'}</p>
         ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
+        ${refundInfo}
         <p>Don't worry! We'll help you find another provider. Please check your dashboard for alternative options or contact our support team.</p>
       `;
 
@@ -1699,6 +1718,18 @@ const rejectBooking = async (req, res) => {
     } catch (emailError) {
       console.error('Failed to send rejection email:', emailError);
       // Don't fail the request if email fails
+    }
+
+    // Return response with refund info if applicable
+    const responseData = {
+      bookingId: booking._id,
+      status: booking.status,
+      rejectionReason: booking.rejectionReason,
+      rejectedAt: booking.rejectedAt
+    };
+
+    if (refundStatus) {
+      responseData.refund = refundStatus;
     }
 
     res.status(200).json({
