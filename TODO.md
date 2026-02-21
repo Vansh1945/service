@@ -90,7 +90,6 @@
 - [ ] Add admin response field
 
 ### Create Admin Disputes Page
-- [ ] Full dispute management
 - [ ] Filter by status
 - [ ] Investigation notes
 - [ ] Approve refund integration
