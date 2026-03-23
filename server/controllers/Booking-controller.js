@@ -1345,20 +1345,10 @@ const acceptBooking = async (req, res) => {
       .populate('services.service', 'title description price');
 
 
-    res.status(200).json({
-      success: true,
-      message: 'Booking accepted successfully',
-      data: {
-        ...populatedBooking.toObject(),
-        paymentStatus: booking.paymentStatus,
-        paymentMethod: booking.paymentMethod
-      }
-    });
-
     // Real-time notification for customer
     try {
       if (populatedBooking.customer) {
-        sendNotification(
+        await sendNotification(
           populatedBooking.customer._id,
           'customer',
           'Booking Accepted',
@@ -1370,6 +1360,16 @@ const acceptBooking = async (req, res) => {
     } catch (fcmError) {
       console.error('FCM Notification Error (Booking Accepted):', fcmError);
     }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Booking accepted successfully',
+      data: {
+        ...populatedBooking.toObject(),
+        paymentStatus: booking.paymentStatus,
+        paymentMethod: booking.paymentMethod
+      }
+    });
 
   } catch (error) {
     console.error('Error accepting booking:', error);
@@ -1421,20 +1421,10 @@ const startBooking = async (req, res) => {
 
     await booking.save();
 
-    res.status(200).json({
-      success: true,
-      message: 'Service started successfully',
-      data: {
-        bookingId: booking._id,
-        status: booking.status,
-        startedAt: booking.startedAt
-      }
-    });
-
     // Real-time notification for customer
     try {
       if (booking.customer) {
-        sendNotification(
+        await sendNotification(
           booking.customer._id,
           'customer',
           'Service Started',
@@ -1446,6 +1436,16 @@ const startBooking = async (req, res) => {
     } catch (fcmError) {
       console.error('FCM Notification Error (Service Started):', fcmError);
     }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Service started successfully',
+      data: {
+        bookingId: booking._id,
+        status: booking.status,
+        startedAt: booking.startedAt
+      }
+    });
   } catch (error) {
     console.error('Error starting booking:', error);
     res.status(500).json({
@@ -1747,6 +1747,28 @@ const completeBooking = async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
+    // Real-time notifications for customer and admins
+    try {
+      if (booking.customer) {
+        await sendNotification(
+          booking.customer,
+          'customer',
+          'Booking Completed',
+          `Your booking has been completed successfully.`,
+          'booking',
+          booking._id
+        );
+      }
+      await notifyAdmins(
+        'Booking Completed',
+        `Booking ${booking._id} has been completed by the provider.`,
+        'booking',
+        booking._id
+      );
+    } catch (fcmError) {
+      console.error('FCM Notification Error (Booking Completed):', fcmError);
+    }
+
     return res.json({
       success: true,
       message: "Booking completed successfully.",
@@ -1758,28 +1780,6 @@ const completeBooking = async (req, res) => {
         netAmount
       }
     });
-
-    // Real-time notifications for customer and admins
-    try {
-      if (booking.customer) {
-        sendNotification(
-          booking.customer,
-          'customer',
-          'Booking Completed',
-          `Your booking has been completed successfully.`,
-          'booking',
-          booking._id
-        );
-      }
-      notifyAdmins(
-        'Booking Completed',
-        `Booking ${booking._id} has been completed by the provider.`,
-        'booking',
-        booking._id
-      );
-    } catch (fcmError) {
-      console.error('FCM Notification Error (Booking Completed):', fcmError);
-    }
 
   } catch (error) {
     await session.abortTransaction();
