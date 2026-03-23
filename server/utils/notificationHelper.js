@@ -41,8 +41,8 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
                 });
             }
 
-            // 2. Send Push Notification via FCM
             try {
+                console.log(`[NotificationHelper] Calling notifyUser for: ${userId}, role: ${role}`);
                 await notificationService.notifyUser(userId, role, {
                     title,
                     body: message,
@@ -53,7 +53,7 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
                     }
                 });
             } catch (fcmError) {
-                console.error('FCM Error in notificationHelper:', fcmError);
+                console.error(`[NotificationHelper] FCM Error:`, fcmError);
             }
         } else if (role && _io) {
             // If no userId but role is provided, broadcast to the role room (real-time only)

@@ -23,12 +23,21 @@ const sendPushNotification = async (tokens, payload) => {
             tokens: validTokens,
         };
 
+        console.log(`[NotificationService] Sending FCM to ${validTokens.length} tokens for title: ${payload.title}`);
         const response = await admin.messaging().sendEachForMulticast(message);
-        console.log('FCM Notification sent:', response.successCount, 'successes,', response.failureCount, 'failures');
+        console.log(`[NotificationService] FCM Result: ${response.successCount} success, ${response.failureCount} failure`);
+        
+        if (response.failureCount > 0) {
+            response.responses.forEach((resp, idx) => {
+                if (!resp.success) {
+                    console.error(`[NotificationService] Token failure [${idx}]:`, resp.error);
+                }
+            });
+        }
 
         return response;
     } catch (error) {
-        console.error('Error sending multicast FCM notification:', error);
+        console.error('[NotificationService] Error sending multicast FCM notification:', error);
     }
 };
 
@@ -47,7 +56,10 @@ const notifyUser = async (userId, role, payload) => {
         }
 
         if (user && user.fcmTokens && user.fcmTokens.length > 0) {
+            console.log(`[NotificationService] User ${userId} (${role}) has ${user.fcmTokens.length} FCM tokens`);
             await sendPushNotification(user.fcmTokens, payload);
+        } else {
+            console.log(`[NotificationService] User ${userId} (${role}) has NO FCM tokens`);
         }
     } catch (error) {
         console.error(`Error notifying user ${userId}:`, error);
