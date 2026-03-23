@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 import { app } from '../../firebase';
 import { useAuth } from './auth';
@@ -9,74 +9,100 @@ export const NotificationProvider = ({ children }) => {
     const { token, isAuthenticated, API } = useAuth();
     const [fcmToken, setFcmToken] = useState(null);
     const [notificationPermission, setNotificationPermission] = useState(Notification.permission);
+    const savedTokenRef = useRef(null); // Track last saved token to avoid duplicates
 
     const messaging = getMessaging(app);
 
-    // Request permission and get token
+    // Save token to backend
+    const saveTokenToBackend = async (newToken, authToken) => {
+        if (!newToken || !authToken) return;
+        // Avoid saving the same token twice
+        if (savedTokenRef.current === newToken) return;
+        try {
+            const res = await fetch(`${API}/notifications/save-token`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authToken}`
+                },
+                body: JSON.stringify({ token: newToken })
+            });
+            if (res.ok) {
+                savedTokenRef.current = newToken;
+                console.log('[FCM] Token saved to backend successfully.');
+            }
+        } catch (err) {
+            console.error('[FCM] Failed to save token to backend:', err);
+        }
+    };
+
+    // Generate FCM token and save it
+    const initFCMToken = async (authToken) => {
+        try {
+            const permission = Notification.permission;
+            setNotificationPermission(permission);
+
+            if (permission !== 'granted') return;
+
+            const currentToken = await getToken(messaging, {
+                vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY
+            });
+
+            if (currentToken) {
+                setFcmToken(currentToken);
+                console.log('[FCM] Token:', currentToken);
+                await saveTokenToBackend(currentToken, authToken);
+            } else {
+                console.warn('[FCM] No token available — permission not granted or SW not registered.');
+            }
+        } catch (err) {
+            console.error('[FCM] Error generating token:', err);
+        }
+    };
+
+    // Request notification permission from user
     const requestPermission = async () => {
         try {
             const permission = await Notification.requestPermission();
             setNotificationPermission(permission);
             if (permission === 'granted') {
-                const currentToken = await getToken(messaging, {
-                    vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY
-                });
-                if (currentToken) {
-                    setFcmToken(currentToken);
-                    console.log('FCM Token Generated Successfully:', currentToken);
-                    return currentToken;
-                } else {
-                    console.log('No registration token available. Request permission to generate one.');
-                }
+                await initFCMToken(token);
             }
         } catch (err) {
-            console.error('An error occurred while retrieving token. ', err);
+            console.error('[FCM] Permission request failed:', err);
         }
     };
 
-    // Save token to backend
-    const saveTokenToBackend = async (newToken) => {
-        if (!isAuthenticated || !newToken) return;
-        try {
-            await fetch(`${API}/notifications/save-token`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ token: newToken })
-            });
-            console.log('FCM Token synchronized with backend successfully.');
-        } catch (err) {
-            console.error('Failed to save FCM token to backend:', err);
-        }
-    };
-
-    // Initialize FCM
+    // Run on login or page reload when authenticated
     useEffect(() => {
-        if (isAuthenticated && notificationPermission === 'granted') {
-            requestPermission().then(saveTokenToBackend);
+        if (!isAuthenticated || !token) return;
+
+        if (Notification.permission === 'granted') {
+            // Already granted — just fetch & save token
+            initFCMToken(token);
+        } else if (Notification.permission === 'default') {
+            // Ask for permission
+            requestPermission();
         }
+        // If 'denied', do nothing
 
         // Handle foreground messages
         const unsubscribe = onMessage(messaging, (payload) => {
-            console.log('Message received. ', payload);
-            // Show a custom toast or browser notification if the app is in foreground
-            new Notification(payload.notification.title, {
-                body: payload.notification.body,
-                icon: payload.notification.icon || '/logo.png'
-            });
+            console.log('[FCM] Foreground message received:', payload);
+            if (payload.notification) {
+                try {
+                    new Notification(payload.notification.title, {
+                        body: payload.notification.body,
+                        icon: payload.notification.icon || '/logo.png'
+                    });
+                } catch (e) {
+                    console.warn('[FCM] Could not show notification:', e);
+                }
+            }
         });
 
         return () => unsubscribe();
-    }, [isAuthenticated, notificationPermission]);
-
-    // Handle initial permission request
-    useEffect(() => {
-        if (isAuthenticated && notificationPermission === 'default') {
-            requestPermission();
-        }
-    }, [isAuthenticated]);
+    }, [isAuthenticated, token]); // Re-run when token changes (login/logout)
 
     const contextValue = {
         fcmToken,

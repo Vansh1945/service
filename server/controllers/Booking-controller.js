@@ -1562,7 +1562,7 @@ const completeBooking = async (req, res) => {
       _id: id,
       provider: providerId,
       status: { $in: ['accepted', 'in-progress'] }
-    }).session(session);
+    }).populate('customer', '_id name').session(session);
 
     if (!booking) {
       const currentBooking = await Booking.findById(id).select('status commissionProcessed').lean();
@@ -1750,8 +1750,9 @@ const completeBooking = async (req, res) => {
     // Real-time notifications for customer and admins
     try {
       if (booking.customer) {
+        const customerId = booking.customer._id || booking.customer;
         await sendNotification(
-          booking.customer,
+          customerId,
           'customer',
           'Booking Completed',
           `Your booking has been completed successfully.`,

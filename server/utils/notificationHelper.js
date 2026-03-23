@@ -30,7 +30,10 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
 
             // 1. Emit real-time event via Socket.io
             if (_io) {
-                _io.to(userId.toString()).emit('new_notification', {
+                const room = userId.toString();
+                const socketsInRoom = await _io.in(room).fetchSockets();
+                console.log(`[Socket] Emitting to room "${room}" — ${socketsInRoom.length} socket(s) connected`);
+                _io.to(room).emit('new_notification', {
                     _id: notification._id,
                     title,
                     message,
@@ -39,6 +42,8 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
                     isRead: false,
                     createdAt: notification.createdAt
                 });
+            } else {
+                console.warn('[Socket] _io not set — socket notification skipped');
             }
 
             try {
