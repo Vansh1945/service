@@ -36,7 +36,7 @@ import {
 } from 'lucide-react';
 
 // Static option arrays outside component — never change between renders
-const STATUS_OPTIONS = [
+const statusOptions = [
     { value: '', label: 'All Status' },
     { value: 'pending', label: 'Pending' },
     { value: 'accepted', label: 'Accepted' },
@@ -45,7 +45,7 @@ const STATUS_OPTIONS = [
     { value: 'cancelled', label: 'Cancelled' }
 ];
 
-const PAYMENT_STATUS_OPTIONS = [
+const paymentStatusOptions = [
     { value: '', label: 'All Payment Status' },
     { value: 'pending', label: 'Pending' },
     { value: 'paid', label: 'Paid' },
