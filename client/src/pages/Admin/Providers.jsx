@@ -43,7 +43,7 @@ import { useAuth } from '../../context/auth';
 import LoadingSpinner from '../../components/Loader';
 
 const AdminProvidersPage = () => {
-  const { API, showToast } = useAuth();
+  const { token, API, showToast } = useAuth();
   const [allProviders, setAllProviders] = useState([]);
   const [pendingProviders, setPendingProviders] = useState([]);
   const [filteredProviders, setFilteredProviders] = useState([]);
@@ -139,7 +139,13 @@ const AdminProvidersPage = () => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
-      const response = await getPendingProviders();
+      const response = await fetch(`${API}/admin/providers/pending`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        signal: controller.signal
+      });
 
       clearTimeout(timeoutId);
       const data = await response.json();
@@ -334,10 +340,15 @@ const AdminProvidersPage = () => {
 
   const fetchProviderDetails = useCallback(async (providerId) => {
     try {
-      const response = await getProviderDetails();
+      const response = await fetch(`${API}/admin/providers/${providerId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
       const data = await response.json();
       if (data.success) {
-        setSelectedProvider(data.provider);
+        setSelectedProvider(data.provider || data.data);
       } else {
         showToast('Failed to fetch provider details', 'error');
       }
@@ -392,7 +403,17 @@ const AdminProvidersPage = () => {
     try {
       setProcessingAction(approvalAction);
 
-      const response = await approveProvider();
+      const response = await fetch(`${API}/admin/providers/${selectedProvider._id}/status`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ 
+          status: approvalAction,
+          rejectionReason: approvalRemarks 
+        })
+      });
 
       const data = await response.json();
 

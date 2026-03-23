@@ -145,10 +145,15 @@ const AdminProviders = () => {
   const fetchProviders = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await getAllProviders();
+      const response = await fetch(`${API}/admin/providers`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
       if (!response.ok) throw new Error(`Failed to fetch providers: ${response.status}`);
       const data = await response.json();
-      setProviders(data.providers || []);
+      setProviders(data.providers || data.data || []);
     } catch (error) {
       console.error('Fetch providers error:', error);
       toast.error(error.message || 'Failed to fetch providers');
