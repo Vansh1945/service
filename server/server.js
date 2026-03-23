@@ -1,0 +1,136 @@
+require('dotenv').config();
+const express = require("express");
+const cors = require("cors");
+
+const connectDB = require("./config/db");
+const frontend = process.env.FRONTEND_URL;
+
+
+
+// Initialize express app
+const app = express();
+
+app.use(express.json());
+
+const corsOptions = {
+  origin: [frontend, 'http://localhost:5175', 'http://localhost:5174', 'http://localhost:5173'],
+  credentials: true, // Allow credentials (cookies)
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+};
+
+app.use(cors(corsOptions));
+
+// Middleware
+
+// Test Route 
+app.get('/api/test-route', (req, res) => {
+  res.send('Raj Electrical Service API is running!');
+});
+
+app.use(express.urlencoded({ extended: true }));
+app.use("/uploads", express.static("uploads"));
+app.use("/assets", express.static("assets"));
+
+const rateLimit = require('express-rate-limit');
+
+// Global API Rate Limiter
+// const globalLimiter = rateLimit({
+//   windowMs: 15 * 60 * 1000, // 15 minutes
+//   max: 100, // Limit each IP to 100 requests per window
+//   message: {
+//     success: false,
+//     message: "Too many requests from this IP, Please try again after 15 minutes",
+//     error: "RATE_LIMIT_EXCEEDED"
+//   },
+//   standardHeaders: true,
+//   legacyHeaders: false,
+// });
+
+// Apply rate limiting to all API routes
+// app.use('/api', globalLimiter);
+
+// Route imports
+const adminRoutes = require("./routes/Admin-Routes");
+const providerRoutes = require("./routes/Provider-Routes");
+const customerRoutes = require("./routes/User-Routes");
+const authRoutes = require("./routes/Auth-routes");
+const questionRoutes = require("./routes/Question-route");
+const testRoutes = require("./routes/Test-route");
+const serviceRoutes = require("./routes/Service-route");
+const couponRoutes = require("./routes/Coupon-route");
+const bookingRoutes = require("./routes/Booking-route");
+const transactionRoutes = require("./routes/Transaction-route");
+const complaintRoutes = require("./routes/complaintRoutes");
+const feedbackRoutes = require("./routes/feedback-routes");
+const commissionRoutes = require('./routes/commissionRoutes');
+const paymentRoutes = require('./routes/payment-routes');
+const systemSettingRoutes = require('./routes/SystemSetting-routes');
+const contactRoutes = require('./routes/Contact-routes');
+const notificationRoutes = require('./routes/notification-routes');
+
+// Routes
+app.use("/api/auth", authRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/api/provider", providerRoutes);
+app.use("/api/customer", customerRoutes);
+app.use("/api/question", questionRoutes);
+app.use("/api/test", testRoutes);
+app.use("/api/service", serviceRoutes);
+app.use("/api/coupon", couponRoutes);
+app.use("/api/booking", bookingRoutes);
+app.use('/api/transaction', transactionRoutes);
+app.use('/api/complaint', complaintRoutes);
+app.use('/api/feedback', feedbackRoutes);
+app.use('/api/commission', commissionRoutes);
+app.use('/api/payment', paymentRoutes);
+app.use('/api/system-setting', systemSettingRoutes);
+app.use('/api/contact', contactRoutes);
+app.use('/api/notifications', notificationRoutes);
+
+// Health check endpoint
+
+
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'OK', timestamp: new Date() });
+});
+
+
+// Catch-all 404 handler for unknown routes
+app.use((req, res, next) => {
+  res.status(404).json({
+    success: false,
+    message: "Resource not found",
+    error: "NOT_FOUND"
+  });
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error("Error:", err.message, err.stack);
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || "Internal server error",
+    error: process.env.NODE_ENV === "development" ? err.stack : undefined
+  });
+});
+
+
+
+// Connect to MongoDB
+connectDB();
+
+
+// Create HTTP server (required for Socket.io)
+const http = require('http');
+const { initSocket } = require('./socket/socketServer');
+const server = http.createServer(app);
+
+// Initialize Socket.io
+initSocket(server);
+
+// Start server
+const PORT = process.env.PORT || 5000;
+server.listen(PORT, () => {
+  console.log(`Server running on ${PORT}`);
+});

@@ -1,0 +1,40 @@
+const express = require('express');
+const router = express.Router();
+const notificationController = require('../controllers/notificationController');
+const jwt = require('jsonwebtoken');
+
+// Flexible auth that works for customer, provider, and admin
+const flexAuth = (req, res, next) => {
+    const token = req.header('Authorization');
+    if (!token || !token.startsWith('Bearer ')) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+    try {
+        const decoded = jwt.verify(token.replace('Bearer ', '').trim(), process.env.JWT_SECRET);
+        req.userID = decoded.id;
+        req.role = decoded.role || 'customer';
+        next();
+    } catch {
+        return res.status(401).json({ success: false, message: 'Invalid token' });
+    }
+};
+
+// GET /api/notifications — get all with unread count
+router.get('/', flexAuth, notificationController.getNotifications);
+
+// GET /api/notifications/unread-count
+router.get('/unread-count', flexAuth, notificationController.getUnreadCount);
+
+// PATCH /api/notifications/read-all — mark all as read
+router.patch('/read-all', flexAuth, notificationController.markAllRead);
+
+// PATCH /api/notifications/read/:id — mark one as read
+router.patch('/read/:id', flexAuth, notificationController.markRead);
+
+// POST /api/notifications/save-token
+router.post('/save-token', flexAuth, notificationController.saveToken);
+
+// POST /api/notifications/remove-token
+router.post('/remove-token', flexAuth, notificationController.removeToken);
+
+module.exports = router;

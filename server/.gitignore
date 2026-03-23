@@ -1,0 +1,12 @@
+node_modules/
+.DS_Store
+*.log
+npm-debug.log*
+dist/
+build/
+
+# env files
+.env
+.env.*z
+serviceAccountKey.json
+.env
