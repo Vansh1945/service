@@ -592,8 +592,8 @@ const AdminBookingsView = () => {
         }
 
         return bookings.map((booking) => (
-            <BookingRow 
-                key={booking._id} 
+            <BookingRow
+                key={booking._id}
                 booking={booking}
                 onDetails={fetchBookingDetails}
                 onReschedule={(b) => { setSelectedBooking(b); setShowRescheduleModal(true); }}
@@ -630,8 +630,8 @@ const AdminBookingsView = () => {
                     key={i}
                     onClick={() => goToPage(i)}
                     className={`px-3 py-1 rounded-lg ${pagination.page === i
-                            ? 'bg-primary text-white'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        ? 'bg-primary text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                         }`}
                 >
                     {i}
@@ -1038,8 +1038,8 @@ const AdminBookingsView = () => {
                                                 <div className="flex items-center justify-between pt-2 border-t border-gray-200">
                                                     <span className="text-sm text-gray-600">Bank Verified:</span>
                                                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${selectedBooking.provider.bankDetails?.verified
-                                                            ? 'bg-green-100 text-green-800'
-                                                            : 'bg-yellow-100 text-yellow-800'
+                                                        ? 'bg-green-100 text-green-800'
+                                                        : 'bg-yellow-100 text-yellow-800'
                                                         }`}>
                                                         {selectedBooking.provider.bankDetails?.verified ? 'Verified' : 'Pending'}
                                                     </span>

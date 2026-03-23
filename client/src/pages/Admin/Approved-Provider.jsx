@@ -110,10 +110,10 @@ const AdminProviders = () => {
   // ─── Derived state via useMemo (replaces two separate useEffects) ────────────────
   const filteredProviders = useMemo(() => {
     let filtered = [...providers];
-    if (statusFilter === 'approved')       filtered = filtered.filter(p => p.approved);
-    else if (statusFilter === 'pending')   filtered = filtered.filter(p => !p.approved && p.kycStatus === 'pending');
-    else if (statusFilter === 'rejected')  filtered = filtered.filter(p => p.kycStatus === 'rejected');
-    else if (statusFilter === 'active')    filtered = filtered.filter(p => p.isActive);
+    if (statusFilter === 'approved') filtered = filtered.filter(p => p.approved);
+    else if (statusFilter === 'pending') filtered = filtered.filter(p => !p.approved && p.kycStatus === 'pending');
+    else if (statusFilter === 'rejected') filtered = filtered.filter(p => p.kycStatus === 'rejected');
+    else if (statusFilter === 'active') filtered = filtered.filter(p => p.isActive);
 
     if (searchTerm) {
       const lower = searchTerm.toLowerCase();

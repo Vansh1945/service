@@ -409,9 +409,9 @@ const AdminProvidersPage = () => {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           status: approvalAction,
-          rejectionReason: approvalRemarks 
+          rejectionReason: approvalRemarks
         })
       });
 
