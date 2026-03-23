@@ -11,33 +11,63 @@ const sendPushNotification = async (tokens, payload) => {
 
     // Filter out empty or null tokens
     const validTokens = tokens.filter(token => token && token.trim() !== '');
-    if (validTokens.length === 0) return;
+    if (validTokens.length === 0) {
+        console.log('[NotificationService] No valid FCM tokens to send to');
+        return;
+    }
 
     try {
+        // ✅ FCM requires ALL data values to be strings
+        const dataPayload = {};
+        if (payload.data) {
+            Object.entries(payload.data).forEach(([key, value]) => {
+                dataPayload[key] = value !== null && value !== undefined ? String(value) : '';
+            });
+        }
+
         const message = {
             notification: {
                 title: payload.title,
                 body: payload.body,
             },
-            data: payload.data || {},
+            data: dataPayload,
             tokens: validTokens,
+            // ✅ Android specific config for better delivery
+            android: {
+                priority: 'high',
+                notification: {
+                    sound: 'default',
+                    channelId: 'booking_notifications'
+                }
+            },
+            // ✅ Web push config
+            webpush: {
+                headers: {
+                    Urgency: 'high'
+                },
+                notification: {
+                    icon: '/icon-192.png',
+                    badge: '/icon-192.png',
+                    requireInteraction: false
+                }
+            }
         };
 
-        console.log(`[NotificationService] Sending FCM to ${validTokens.length} tokens for title: ${payload.title}`);
+        console.log(`[NotificationService] Sending FCM to ${validTokens.length} token(s) — "${payload.title}"`);
         const response = await admin.messaging().sendEachForMulticast(message);
         console.log(`[NotificationService] FCM Result: ${response.successCount} success, ${response.failureCount} failure`);
         
         if (response.failureCount > 0) {
             response.responses.forEach((resp, idx) => {
                 if (!resp.success) {
-                    console.error(`[NotificationService] Token failure [${idx}]:`, resp.error);
+                    console.error(`[NotificationService] Token[${idx}] failed:`, resp.error?.code, resp.error?.message);
                 }
             });
         }
 
         return response;
     } catch (error) {
-        console.error('[NotificationService] Error sending multicast FCM notification:', error);
+        console.error('[NotificationService] Error sending FCM:', error);
     }
 };
 

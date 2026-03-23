@@ -7,30 +7,23 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      // Use 'injectManifest' so we control the SW file ourselves
+      // This lets firebase-messaging-sw.js handle push notifications
+      strategies: 'injectManifest',
+      srcDir: 'public',
+      filename: 'firebase-messaging-sw.js',
       registerType: 'autoUpdate',
       manifestFilename: 'manifest.json',
       devOptions: {
-        enabled: true
+        enabled: true,
+        type: 'module'
       },
-      workbox: {
-        disableDevLogs: true,
-        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // 10 MB
-        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
-        runtimeCaching: [
-          {
-            urlPattern: /\/api\/.*/,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api-cache',
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24 * 1 // 1 days
-              }
-            }
-          }
-        ]
+      injectManifest: {
+        // Don't inject workbox precache into firebase-messaging-sw.js
+        // to avoid conflicts with firebase messaging
+        injectionPoint: undefined
       },
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg', 'logo.png'],
       manifest: {
         name: 'Raj Electrical Service',
         short_name: 'Raj Service',
@@ -62,4 +55,4 @@ export default defineConfig({
   css: {
     postcss: './postcss.config.js'
   }
-})
+})

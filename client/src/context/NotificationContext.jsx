@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { getMessaging, getToken, onMessage } from 'firebase/messaging';
-import { app } from '../../firebase';
+import { getToken, onMessage } from 'firebase/messaging';
+import { messaging } from '../../firebase';
 import { useAuth } from './auth';
 
 const NotificationContext = createContext(null);
@@ -10,8 +10,6 @@ export const NotificationProvider = ({ children }) => {
     const [fcmToken, setFcmToken] = useState(null);
     const [notificationPermission, setNotificationPermission] = useState(Notification.permission);
     const savedTokenRef = useRef(null); // Track last saved token to avoid duplicates
-
-    const messaging = getMessaging(app);
 
     // Save token to backend
     const saveTokenToBackend = async (newToken, authToken) => {
