@@ -51,7 +51,11 @@ const userSchema = new mongoose.Schema({
     min: 0,
     max: 100
   },
-  fcmTokens: [String]
+  fcmTokens: [{
+    token: { type: String, required: true },
+    deviceId: { type: String, required: true },
+    lastActive: { type: Date, default: Date.now }
+  }]
 }, {
   timestamps: true
 });

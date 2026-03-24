@@ -56,7 +56,7 @@ const sendPushNotification = async (tokens, payload) => {
         console.log(`[NotificationService] Sending FCM to ${validTokens.length} token(s) — "${payload.title}"`);
         const response = await admin.messaging().sendEachForMulticast(message);
         console.log(`[NotificationService] FCM Result: ${response.successCount} success, ${response.failureCount} failure`);
-        
+
         if (response.failureCount > 0) {
             response.responses.forEach((resp, idx) => {
                 if (!resp.success) {
@@ -86,10 +86,12 @@ const notifyUser = async (userId, role, payload) => {
         }
 
         if (user && user.fcmTokens && user.fcmTokens.length > 0) {
-            console.log(`[NotificationService] User ${userId} (${role}) has ${user.fcmTokens.length} FCM tokens`);
-            await sendPushNotification(user.fcmTokens, payload);
+            // Collect unique tokens
+            const tokens = [...new Set(user.fcmTokens.map(t => t.token))];
+            console.log(`[NotificationService] Sending to ${tokens.length} tokens for user ${userId} (${role})`);
+            await sendPushNotification(tokens, payload);
         } else {
-            console.log(`[NotificationService] User ${userId} (${role}) has NO FCM tokens`);
+            console.log(`[NotificationService] User ${userId} (${role}) has NO active FCM tokens`);
         }
     } catch (error) {
         console.error(`Error notifying user ${userId}:`, error);
@@ -102,15 +104,18 @@ const notifyUser = async (userId, role, payload) => {
 const notifyAllAdmins = async (payload) => {
     try {
         const admins = await Admin.find({ isActive: true });
-        const allTokens = admins.reduce((tokens, admin) => {
-            if (admin.fcmTokens) {
-                return tokens.concat(admin.fcmTokens);
+        
+        let allTokens = [];
+        admins.forEach(admin => {
+            if (admin.fcmTokens && admin.fcmTokens.length > 0) {
+                admin.fcmTokens.forEach(t => allTokens.push(t.token));
             }
-            return tokens;
-        }, []);
+        });
 
-        if (allTokens.length > 0) {
-            await sendPushNotification(allTokens, payload);
+        const uniqueTokens = [...new Set(allTokens)];
+
+        if (uniqueTokens.length > 0) {
+            await sendPushNotification(uniqueTokens, payload);
         }
     } catch (error) {
         console.error('Error notifying all admins:', error);

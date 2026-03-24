@@ -44,14 +44,6 @@ const NotificationBell = () => {
         const handleNew = (notification) => {
             setNotifications(prev => [notification, ...prev].slice(0, 15));
             setUnreadCount(c => c + 1);
-
-            // Browser push notification
-            if (Notification.permission === 'granted') {
-                new Notification(notification.title, {
-                    body: notification.message,
-                    icon: '/favicon.ico'
-                });
-            }
         };
 
         socket.on('new_notification', handleNew);

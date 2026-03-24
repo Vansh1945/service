@@ -197,7 +197,11 @@ const providerSchema = new mongoose.Schema({
 
     // Wallet Information
     wallet: walletSchema,
-    fcmTokens: [String],
+    fcmTokens: [{
+        token: { type: String, required: true },
+        deviceId: { type: String, required: true },
+        lastActive: { type: Date, default: Date.now }
+    }],
 }, {
     timestamps: true,
     toJSON: {

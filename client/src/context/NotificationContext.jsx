@@ -14,8 +14,13 @@ export const NotificationProvider = ({ children }) => {
     // Save token to backend
     const saveTokenToBackend = async (newToken, authToken) => {
         if (!newToken || !authToken) return;
-        // Avoid saving the same token twice
-        if (savedTokenRef.current === newToken) return;
+        
+        // Prevent duplicate API call using localStorage
+        if (localStorage.getItem("fcmToken") === newToken) {
+            console.log('[FCM] Token already saved in this session.');
+            return;
+        }
+
         try {
             const res = await fetch(`${API}/notifications/save-token`, {
                 method: 'POST',
@@ -26,7 +31,7 @@ export const NotificationProvider = ({ children }) => {
                 body: JSON.stringify({ token: newToken })
             });
             if (res.ok) {
-                savedTokenRef.current = newToken;
+                localStorage.setItem("fcmToken", newToken);
                 console.log('[FCM] Token saved to backend successfully.');
             }
         } catch (err) {
@@ -87,15 +92,16 @@ export const NotificationProvider = ({ children }) => {
         // Handle foreground messages
         const unsubscribe = onMessage(messaging, (payload) => {
             console.log('[FCM] Foreground message received:', payload);
-            if (payload.notification) {
-                try {
-                    new Notification(payload.notification.title, {
-                        body: payload.notification.body,
-                        icon: payload.notification.icon || '/logo.png'
-                    });
-                } catch (e) {
-                    console.warn('[FCM] Could not show notification:', e);
-                }
+            
+            // ✅ DO NOT manually show notification if notification key exists (Firebase handles it)
+            if (payload.notification) return;
+
+            // Only show custom notification for data messages (if needed)
+            if (payload.data && payload.data.title) {
+                new Notification(payload.data.title, {
+                    body: payload.data.body,
+                    icon: '/logo.png'
+                });
             }
         });
 

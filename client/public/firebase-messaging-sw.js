@@ -23,8 +23,12 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
     console.log('[SW] Background message received:', payload);
 
-    const title = payload.notification?.title || payload.data?.title || 'New Notification';
-    const body = payload.notification?.body || payload.data?.body || '';
+    // ✅ DO NOT manually show notification if notification key exists
+    // Let Firebase handle the notification automatically to prevent duplicates
+    if (payload.notification) return;
+
+    const title = payload.data?.title || 'New Notification';
+    const body = payload.data?.body || '';
     const icon = '/icon-192.png';
     const badge = '/icon-192.png';
 

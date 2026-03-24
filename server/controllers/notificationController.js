@@ -106,6 +106,7 @@ const saveToken = async (req, res) => {
         const { token } = req.body;
         const userId = req.userID;
         const role = req.role;
+        const deviceId = req.headers['user-agent'] || 'unknown_device';
 
         if (!token) {
             return res.status(400).json({ success: false, message: 'Token is required' });
@@ -116,10 +117,37 @@ const saveToken = async (req, res) => {
         else if (role === 'provider') Model = Provider;
         else Model = User;
 
-        await Model.findByIdAndUpdate(userId, {
-            $addToSet: { fcmTokens: token }
-        });
+        const user = await Model.findById(userId);
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
 
+        // 1. Check if this exact token already exists for this user
+        const existingTokenIndex = user.fcmTokens.findIndex(t => t.token === token);
+
+        if (existingTokenIndex !== -1) {
+            // Already exists -> Update lastActive and deviceId (just in case)
+            user.fcmTokens[existingTokenIndex].lastActive = new Date();
+            user.fcmTokens[existingTokenIndex].deviceId = deviceId;
+        } else {
+            // New token -> 1. Remove any old token for this same deviceId
+            user.fcmTokens = user.fcmTokens.filter(t => t.deviceId !== deviceId);
+
+            // 2. Add new token
+            user.fcmTokens.push({
+                token,
+                deviceId,
+                lastActive: new Date()
+            });
+
+            // 3. Keep only most recent 3 devices (Optional Best Practice)
+            if (user.fcmTokens.length > 3) {
+                user.fcmTokens.sort((a, b) => b.lastActive - a.lastActive);
+                user.fcmTokens = user.fcmTokens.slice(0, 3);
+            }
+        }
+
+        await user.save();
         return res.status(200).json({ success: true, message: 'Token saved' });
     } catch (error) {
         console.error('saveToken error:', error);
@@ -136,17 +164,13 @@ const removeToken = async (req, res) => {
         const userId = req.userID;
         const role = req.role;
 
-        if (!token) {
-            return res.status(400).json({ success: false, message: 'Token is required' });
-        }
-
         let Model;
         if (role === 'admin') Model = Admin;
         else if (role === 'provider') Model = Provider;
         else Model = User;
 
         await Model.findByIdAndUpdate(userId, {
-            $pull: { fcmTokens: token }
+            $pull: { fcmTokens: { token: token } }
         });
 
         return res.status(200).json({ success: true, message: 'Token removed' });
