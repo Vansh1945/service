@@ -75,14 +75,24 @@ const CustomerRegistration = () => {
 
   // Helper function to handle backend validation errors
   const handleValidationErrors = (backendErrors) => {
+    console.log("Backend errors received:", backendErrors);
     if (backendErrors && typeof backendErrors === 'object') {
       setErrors(backendErrors);
 
       // Show toast for the first error
-      const firstError = Object.values(backendErrors)[0];
-      if (firstError) {
+      const errorValues = Object.values(backendErrors);
+      const firstError = errorValues[0];
+      
+      console.log("First error to toast:", firstError);
+      if (typeof firstError === 'string') {
         showToast(firstError, 'error');
+      } else if (firstError && firstError.message) {
+        showToast(firstError.message, 'error');
+      } else {
+        showToast('Validation failed. Please check form inputs.', 'error');
       }
+    } else {
+      showToast('Validation failed. Registration rejected.', 'error');
     }
   };
 
@@ -101,12 +111,14 @@ const CustomerRegistration = () => {
       console.error('Registration error:', err);
       
       const errorData = err.response?.data;
+      console.log('Error Data Structure:', errorData);
+      
       const errorMsg = errorData?.message || err.message || 'Registration failed';
 
       if (errorData?.errors) {
         handleValidationErrors(errorData.errors);
       } else {
-        showToast(errorMsg, 'error');
+        showToast(typeof errorMsg === 'string' ? errorMsg : 'Registration failed with status code 400', 'error');
       }
     } finally {
       setIsLoading(false);
