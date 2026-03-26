@@ -16,7 +16,7 @@ export default defineConfig({
       manifestFilename: 'manifest.json',
       devOptions: {
         enabled: true,
-        type: 'module'
+        type: 'classic'
       },
       injectManifest: {
         // Don't inject workbox precache into firebase-messaging-sw.js

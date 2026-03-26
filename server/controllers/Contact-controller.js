@@ -1,8 +1,5 @@
 const Contact = require('../models/Contact-model');
-const { sendNotification } = require('../utils/notificationHelper');
-const User = require('../models/User-model');
-const Provider = require('../models/Provider-model');
-const Admin = require('../models/Admin-model');
+const { sendMail } = require('../utils/sendmail');
 
 /**
  * @desc    Submit contact form
@@ -213,26 +210,6 @@ exports.replyToContact = async (req, res) => {
       });
     }
 
-    // Send push notification instead of email if user is registered
-    try {
-      const registeredUser = await User.findOne({ email: contact.email }) ||
-                             await Provider.findOne({ email: contact.email }) ||
-                             await Admin.findOne({ email: contact.email });
-
-      if (registeredUser) {
-        await sendNotification(
-          registeredUser._id,
-          registeredUser.role || (registeredUser.isAdmin ? 'admin' : 'customer'),
-          `Reply: ${contact.subject}`,
-          `Admin responded: ${message}`,
-          'contact_reply',
-          contact._id
-        );
-      }
-    } catch (fcmError) {
-      console.error('Failed to send FCM reply notification:', fcmError);
-    }
-
     // Update contact with reply using updateOne to avoid validation issues
     await Contact.updateOne(
       { _id: req.params.id },
@@ -252,10 +229,42 @@ exports.replyToContact = async (req, res) => {
     const updatedContact = await Contact.findById(req.params.id)
       .populate('adminReply.repliedBy', 'name email');
 
+    // Send reply email to contact form submitter
+    try {
+      await sendMail({
+        to: contact.email,
+        subject: `Re: ${contact.subject}`,
+        html: `
+          <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;">
+            <div style="background:#4f46e5;padding:24px;text-align:center;">
+              <h2 style="color:#ffffff;margin:0;">Reply to Your Message</h2>
+            </div>
+            <div style="padding:28px 32px;background:#ffffff;">
+              <p style="color:#374151;font-size:15px;">Hi <strong>${contact.name}</strong>,</p>
+              <p style="color:#374151;font-size:15px;">Thank you for reaching out. Here is our response to your inquiry:</p>
+              <div style="background:#f3f4f6;border-left:4px solid #4f46e5;padding:16px 20px;border-radius:4px;margin:20px 0;">
+                <p style="margin:0;color:#1f2937;font-size:15px;white-space:pre-line;">${message.trim()}</p>
+              </div>
+              <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;"/>
+              <p style="color:#6b7280;font-size:13px;margin-bottom:4px;"><strong>Your original message:</strong></p>
+              <p style="color:#6b7280;font-size:13px;font-style:italic;white-space:pre-line;">${contact.message}</p>
+              <p style="color:#374151;font-size:14px;margin-top:24px;">If you have further questions, feel free to contact us again.</p>
+              <p style="color:#374151;font-size:14px;margin:0;">Regards,<br/><strong>Support Team</strong></p>
+            </div>
+            <div style="background:#f9fafb;padding:16px;text-align:center;">
+              <p style="color:#9ca3af;font-size:12px;margin:0;">This is an automated email. Please do not reply directly to this message.</p>
+            </div>
+          </div>
+        `,
+      });
+    } catch (mailError) {
+      console.error('Failed to send reply email:', mailError.message);
+    }
+
     res.status(200).json({
       success: true,
       message: 'Reply sent successfully',
-      data: contact
+      data: updatedContact
     });
 
   } catch (error) {
