@@ -20,6 +20,7 @@ import {
   Award,
   Flag
 } from 'lucide-react';
+import AddressSelector from '../components/AddressSelector';
 
 const CustomerRegistration = () => {
   const [formData, setFormData] = useState({
@@ -75,14 +76,24 @@ const CustomerRegistration = () => {
 
   // Helper function to handle backend validation errors
   const handleValidationErrors = (backendErrors) => {
+    console.log("Backend errors received:", backendErrors);
     if (backendErrors && typeof backendErrors === 'object') {
       setErrors(backendErrors);
 
       // Show toast for the first error
-      const firstError = Object.values(backendErrors)[0];
-      if (firstError) {
+      const errorValues = Object.values(backendErrors);
+      const firstError = errorValues[0];
+
+      console.log("First error to toast:", firstError);
+      if (typeof firstError === 'string') {
         showToast(firstError, 'error');
+      } else if (firstError && firstError.message) {
+        showToast(firstError.message, 'error');
+      } else {
+        showToast('Validation failed. Please check form inputs.', 'error');
       }
+    } else {
+      showToast('Validation failed. Registration rejected.', 'error');
     }
   };
 
@@ -99,14 +110,16 @@ const CustomerRegistration = () => {
 
     } catch (err) {
       console.error('Registration error:', err);
-      
+
       const errorData = err.response?.data;
+      console.log('Error Data Structure:', errorData);
+
       const errorMsg = errorData?.message || err.message || 'Registration failed';
 
       if (errorData?.errors) {
         handleValidationErrors(errorData.errors);
       } else {
-        showToast(errorMsg, 'error');
+        showToast(typeof errorMsg === 'string' ? errorMsg : 'Registration failed with status code 400', 'error');
       }
     } finally {
       setIsLoading(false);
@@ -340,7 +353,7 @@ const CustomerRegistration = () => {
                     value={formData.phone}
                     onChange={handleChange}
                     className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
-                    placeholder="+1 (123) 456-7890"
+                    placeholder="+91 98765-32100"
                     required
                   />
 
@@ -382,68 +395,33 @@ const CustomerRegistration = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                <div className="group">
-                  <label htmlFor="city" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                    City *
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                      <Building className="text-primary w-5 h-5 group-focus-within:scale-110 transition-transform duration-200" />
-                    </div>
-                    <input
-                      type="text"
-                      id="city"
-                      name="address.city"
-                      value={formData.address.city}
-                      onChange={handleChange}
-                      className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
-                      placeholder="Your city"
-                      required
-                    />
-                  </div>
-                </div>
+              <div className="group">
+                <AddressSelector
+                  selectedState={formData.address.state}
+                  selectedCity={formData.address.city}
+                  onStateChange={(value) => handleChange({ target: { name: 'address.state', value } })}
+                  onCityChange={(value) => handleChange({ target: { name: 'address.city', value } })}
+                />
+              </div>
 
-                <div className="group">
-                  <label htmlFor="state" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                    State *
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                      <Flag className="text-primary w-5 h-5 group-focus-within:scale-110 transition-transform duration-200" />
-                    </div>
-                    <input
-                      type="text"
-                      id="state"
-                      name="address.state"
-                      value={formData.address.state}
-                      onChange={handleChange}
-                      className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
-                      placeholder="Your state"
-                      required
-                    />
+              <div className="group">
+                <label htmlFor="postalCode" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
+                  Postal Code *
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
+                    <MapPin className="text-primary w-5 h-5 group-focus-within:scale-110 transition-transform duration-200" />
                   </div>
-                </div>
-
-                <div className="group">
-                  <label htmlFor="postalCode" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                    Postal Code *
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                      <MapPin className="text-primary w-5 h-5 group-focus-within:scale-110 transition-transform duration-200" />
-                    </div>
-                    <input
-                      type="text"
-                      id="postalCode"
-                      name="address.postalCode"
-                      value={formData.address.postalCode}
-                      onChange={handleChange}
-                      className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
-                      placeholder="12345"
-                      required
-                    />
-                  </div>
+                  <input
+                    type="text"
+                    id="postalCode"
+                    name="address.postalCode"
+                    value={formData.address.postalCode}
+                    onChange={handleChange}
+                    className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
+                    placeholder="12345"
+                    required
+                  />
                 </div>
               </div>
             </div>

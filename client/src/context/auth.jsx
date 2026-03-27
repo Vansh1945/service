@@ -147,6 +147,9 @@ export const AuthProvider = ({ children }) => {
                         setUser(userObj);
                         localStorage.setItem("user", JSON.stringify(userObj));
                     }
+                } else if (response.status === 401) {
+                    // Token is invalid/expired - clear session
+                    logoutUser();
                 }
             } catch (error) {
                 console.error("Failed to restore session data:", error);

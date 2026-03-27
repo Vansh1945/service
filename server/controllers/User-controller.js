@@ -182,15 +182,24 @@ const register = async (req, res) => {
 
     if (userExists || emailExistsInProvider || emailExistsInAdmin) {
       const errors = {};
-      if (userExists && userExists.email === email.trim().toLowerCase()) {
+      
+      const checkEmail = email.trim().toLowerCase();
+      
+      if (userExists && userExists.email && userExists.email.toLowerCase() === checkEmail) {
         errors.email = "Email is already registered";
       } else if (emailExistsInProvider) {
         errors.email = "Email is already registered";
       } else if (emailExistsInAdmin) {
         errors.email = "Email is already registered";
       }
+      
       if (userExists && userExists.phone === phone.trim().replace(/\s+/g, '')) {
         errors.phone = "Phone number is already registered";
+      }
+
+      // Fallback if no specific field was matched
+      if (Object.keys(errors).length === 0) {
+        errors.email = "Email or Phone is already registered";
       }
 
       return res.status(400).json({

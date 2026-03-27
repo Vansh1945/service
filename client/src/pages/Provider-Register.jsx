@@ -29,6 +29,7 @@ import {
   Loader2,
   AlertCircle
 } from 'lucide-react';
+import AddressSelector from '../components/AddressSelector';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/auth';
 import { toast } from 'react-toastify';
@@ -944,21 +945,18 @@ const ProviderRegistration = () => {
                 </div>
 
                 <div className="group">
-                  <label htmlFor="city" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">City *</label>
-                  <input type="text" id="city" name="city" value={formData.city} onChange={handleChange} className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="Your city" required />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-                <div className="group">
-                  <label htmlFor="state" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">State *</label>
-                  <input type="text" id="state" name="state" value={formData.state} onChange={handleChange} className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="Your state" required />
-                </div>
-
-                <div className="group">
                   <label htmlFor="postalCode" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Postal Code *</label>
                   <input type="text" id="postalCode" name="postalCode" value={formData.postalCode} onChange={handleChange} className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="123456" required />
                 </div>
+              </div>
+
+              <div className="mt-6">
+                <AddressSelector
+                  selectedState={formData.state}
+                  selectedCity={formData.city}
+                  onStateChange={(value) => handleChange({ target: { name: 'state', value } })}
+                  onCityChange={(value) => handleChange({ target: { name: 'city', value } })}
+                />
               </div>
             </div>
 
