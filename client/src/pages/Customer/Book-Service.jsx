@@ -6,6 +6,8 @@ import 'react-datepicker/dist/react-datepicker.css';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { ArrowLeft, CheckCircle, Plus, Minus, Tag, Clock, Calendar, Shield, Lock, Star, IndianRupee, Truck, RotateCcw, Check, CalendarDays } from 'lucide-react';
+import AddressSelector from '../../components/AddressSelector';
+
 
 const BookService = () => {
   const { serviceId } = useParams();
@@ -806,59 +808,34 @@ const BookService = () => {
                                 required
                               />
                             </div>
-                            <div className="grid md:grid-cols-2 gap-4">
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">City *</label>
-                                <input
-                                  type="text"
-                                  name="city"
-                                  value={formData.customAddress.city}
-                                  onChange={handleAddressChange}
-                                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-200"
-                                  placeholder="City"
-                                  required
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">State *</label>
-                                <input
-                                  type="text"
-                                  name="state"
-                                  value={formData.customAddress.state}
-                                  onChange={handleAddressChange}
-                                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-200"
-                                  placeholder="State"
-                                  required
-                                />
-                              </div>
+                            <AddressSelector
+                              selectedState={formData.customAddress.state}
+                              selectedCity={formData.customAddress.city}
+                              onStateChange={(state) => setFormData(prev => ({
+                                ...prev,
+                                customAddress: { ...prev.customAddress, state, city: '' }
+                              }))}
+                              onCityChange={(city) => setFormData(prev => ({
+                                ...prev,
+                                customAddress: { ...prev.customAddress, city }
+                              }))}
+                            />
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">Postal Code *</label>
+                              <input
+                                type="text"
+                                name="postalCode"
+                                value={formData.customAddress.postalCode}
+                                onChange={handleAddressChange}
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-200"
+                                placeholder="6-digit postal code"
+                                pattern="\d{6}"
+                                maxLength="6"
+                                required
+                              />
                             </div>
-                            <div className="grid md:grid-cols-2 gap-4">
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Postal Code *</label>
-                                <input
-                                  type="text"
-                                  name="postalCode"
-                                  value={formData.customAddress.postalCode}
-                                  onChange={handleAddressChange}
-                                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-200"
-                                  placeholder="6-digit postal code"
-                                  pattern="\d{6}"
-                                  maxLength="6"
-                                  required
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Country</label>
-                                <input
-                                  type="text"
-                                  name="country"
-                                  value={formData.customAddress.country}
-                                  onChange={handleAddressChange}
-                                  className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-200"
-                                  disabled
-                                />
-                              </div>
-                            </div>
+
                           </div>
                         )}
                       </div>
