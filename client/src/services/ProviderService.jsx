@@ -1,7 +1,7 @@
 import axiosInstance from "../api/axiosInstance";
 
-export const registerInitiate = () => {
-    return axiosInstance.get("/provider/register/initiate");
+export const registerInitiate = (data) => {
+    return axiosInstance.post("/provider/register/initiate", data);
 };
 
 export const registerComplete = (data) => {

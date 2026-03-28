@@ -3,7 +3,7 @@ import { useAuth } from '../../context/auth';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { Loader2, AlertCircle } from 'lucide-react';
-import { registerInitiate } from '../../services/ProviderService';
+import * as ProviderService from '../../services/ProviderService';
 
 const ProviderProfile = () => {
   const { token, API, showToast, logoutUser } = useAuth();
@@ -96,7 +96,7 @@ const ProviderProfile = () => {
     const fetchProfile = async () => {
       try {
         setLoading(true);
-        const response = await registerInitiate()
+        const response = await ProviderService.getProfile()
         const data = response.data;
         if (data.success) {
           setProfileData({
@@ -266,7 +266,7 @@ const ProviderProfile = () => {
           break;
       }
 
-      const response = await updateProfile(formData);
+      const response = await ProviderService.updateProfile(formData);
       const data = response.data;
 
       if (data.success) {
@@ -292,7 +292,7 @@ const ProviderProfile = () => {
   // View document function
   const viewDocument = async (type) => {
     try {
-      const response = await viewDocument(type);
+      const response = await ProviderService.viewDocument(type);
       const data = response.data;
 
       if (data.success) {
@@ -337,7 +337,7 @@ const ProviderProfile = () => {
     }
 
     try {
-      const response = await deleteAccount()
+      const response = await ProviderService.deleteAccount()
       const data = response.data;
 
       if (data.success) {
