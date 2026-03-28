@@ -437,7 +437,7 @@ const ServiceListingPage = () => {
     if (activeFilters.length === 0) return null;
 
     return (
-      <div className="flex flex-wrap gap-2 mb-4 px-4 sm:px-6 lg:px-8">
+      <div className="flex flex-wrap gap-2 mb-4 px-4 w-full">
         {activeFilters.map((filter, index) => {
           let onRemove = resetFilters;
           if (filter.startsWith('Search:')) {
@@ -505,7 +505,7 @@ const ServiceListingPage = () => {
       <HeroSection noMargin />
 
       {/* Search Bar */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div className="w-full py-6 px-4">
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
           <div className="flex flex-col md:flex-row md:items-center gap-4">
             <div className="flex-1 relative">
@@ -558,12 +558,12 @@ const ServiceListingPage = () => {
       </div>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto pb-8">
+      <div className="w-full pb-8">
         {/* Active Filters */}
         <ActiveFilters />
 
         {/* Collapsible Filter Content */}
-        <div className={`overflow-hidden transition-all duration-500 ease-in-out px-4 sm:px-6 lg:px-8 ${showFilters ? 'max-h-[400px] opacity-100 mb-6' : 'max-h-0 opacity-0'
+        <div className={`overflow-hidden transition-all duration-500 ease-in-out px-4 w-full ${showFilters ? 'max-h-[400px] opacity-100 mb-6' : 'max-h-0 opacity-0'
           }`}>
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -648,7 +648,7 @@ const ServiceListingPage = () => {
         </div>
 
         {/* Results Count */}
-        <div className="px-4 sm:px-6 lg:px-8 mb-6">
+        <div className="px-4 w-full mb-6">
           <div className="text-sm text-gray-600">
             Showing <span className="font-semibold">{filteredServices.length}</span> of <span className="font-semibold">{allServices.length}</span> services
             {searchTerm && (
@@ -675,7 +675,7 @@ const ServiceListingPage = () => {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4 px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4 px-4 w-full">
             {filteredServices.map((service) => (
               <ServiceCard key={service._id} service={service} />
             ))}
