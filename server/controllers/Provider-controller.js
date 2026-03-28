@@ -1589,7 +1589,6 @@ exports.getPerformanceRatings = async (req, res) => {
                     }
                 }
             ]),
-
             // Completion rate
             Booking.aggregate([
                 { $match: { provider: new mongoose.Types.ObjectId(providerId) } },
