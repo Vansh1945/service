@@ -13,10 +13,25 @@ const app = express();
 app.use(express.json());
 
 const corsOptions = {
-  origin: [frontend, 'http://localhost:5175', 'http://localhost:5174', 'http://localhost:5173'],
-  credentials: true, // Allow credentials (cookies)
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  origin: function (origin, callback) {
+    const allowedOrigins = [
+      process.env.FRONTEND_URL,
+      'https://rajelectricalservices.vercel.app',
+      'http://localhost:5175',
+      'http://localhost:5174',
+      'http://localhost:5173'
+    ];
+
+    // allow requests with no origin (mobile apps, postman)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 };
 
 app.use(cors(corsOptions));

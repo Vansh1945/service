@@ -823,70 +823,53 @@ const ProviderRegistration = () => {
                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
                         <Briefcase className="text-primary w-5 h-5" />
                       </div>
-                      <div 
-                        onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
-                        className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 bg-gradient-to-r from-primary/5 to-transparent cursor-pointer flex justify-between items-center hover:border-primary/50 transition-all duration-300 min-h-[60px]"
+                      <select
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val && !selectedServices.includes(val) && selectedServices.length < 3) {
+                            handleServiceChange({ _id: val });
+                          }
+                          e.target.value = '';
+                        }}
+                        className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary font-medium appearance-none cursor-pointer"
+                        defaultValue=""
                       >
-                        <div className="flex flex-wrap gap-2 flex-1">
-                          {selectedServices.length === 0 ? (
-                            <span className="text-secondary/50 font-medium tracking-wide">Select categories...</span>
-                          ) : (
-                            selectedServices.map(id => {
-                              const svc = providerServices.find(s => s._id === id) || { name: 'Unknown' };
-                              return (
-                                <span key={id} className="inline-flex items-center px-3 py-1.5 bg-primary text-white rounded-full text-sm font-semibold shadow-sm">
-                                  {svc.name}
-                                  <button 
-                                    type="button"
-                                    onClick={(e) => { e.stopPropagation(); handleServiceChange({_id: id}); }}
-                                    className="ml-2 focus:outline-none hover:text-white/80 transition-colors"
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </button>
-                                </span>
-                              );
-                            })
-                          )}
-                        </div>
-                        <ChevronDown className={`w-5 h-5 text-secondary/60 transition-transform duration-300 ml-2 flex-shrink-0 ${isCategoryDropdownOpen ? 'rotate-180' : ''}`} />
-                      </div>
-
-                      {isCategoryDropdownOpen && (
-                        <div className="absolute z-50 w-full mt-2 bg-white rounded-2xl border-2 border-gray-100 shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-                          <div className="max-h-64 overflow-y-auto w-full custom-scrollbar">
-                            {providerServices.map((service) => (
-                              <div
-                                key={service._id}
-                                onClick={() => handleServiceChange(service)}
-                                className={`flex items-center space-x-4 p-4 cursor-pointer transition-colors duration-200 hover:bg-gray-50 border-b border-gray-50 last:border-0 ${selectedServices.includes(service._id) ? 'bg-primary/5' : ''} ${selectedServices.length >= 3 && !selectedServices.includes(service._id) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                              >
-                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${selectedServices.includes(service._id) ? 'bg-primary text-white shadow-md shadow-primary/20' : 'bg-gray-100 text-secondary/60'}`}>
-                                  {service.icon ? (
-                                    <img src={service.icon} alt={service.name} className="w-7 h-7 object-contain" />
-                                  ) : (
-                                    <Briefcase className="w-6 h-6" />
-                                  )}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <h4 className={`font-semibold text-base truncate ${selectedServices.includes(service._id) ? 'text-primary' : 'text-secondary'}`}>
-                                    {service.name}
-                                  </h4>
-                                  {service.description && (
-                                    <p className="text-xs text-secondary/60 mt-1 truncate">{service.description}</p>
-                                  )}
-                                </div>
-                                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all duration-300 ${selectedServices.includes(service._id) ? 'border-primary bg-primary scale-110' : 'border-gray-300'}`}>
-                                  {selectedServices.includes(service._id) && <CheckCircle className="w-4 h-4 text-white" />}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                        <option value="" disabled>Select a category...</option>
+                        {providerServices.map((service) => (
+                          <option 
+                            key={service._id} 
+                            value={service._id}
+                            disabled={selectedServices.includes(service._id)}
+                          >
+                            {service.name}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-secondary/60 pointer-events-none" />
                     </div>
 
                     {selectedServices.length > 0 && (
-                      <div className="flex items-center justify-between text-sm mt-2 px-1">
+                      <div className="flex flex-wrap gap-2 mt-3">
+                        {selectedServices.map(id => {
+                          const svc = providerServices.find(s => s._id === id) || { name: 'Unknown' };
+                          return (
+                            <span key={id} className="inline-flex items-center px-4 py-1.5 bg-primary/10 text-primary border border-primary/20 rounded-full text-sm font-semibold shadow-sm">
+                              {svc.name}
+                              <button 
+                                type="button"
+                                onClick={() => handleServiceChange({_id: id})}
+                                className="ml-2 focus:outline-none hover:text-primary/70 transition-colors"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {selectedServices.length > 0 && (
+                      <div className="flex items-center justify-between text-sm mt-3 px-1">
                         <span className="text-secondary/70 font-medium">{selectedServices.length} of 3 categories selected</span>
                         <button type="button" onClick={() => setSelectedServices([])} className="text-accent hover:text-accent/80 font-bold transition-colors">Clear all</button>
                       </div>
@@ -1015,7 +998,10 @@ const ProviderRegistration = () => {
                   selectedState={formData.state}
                   selectedCity={formData.city}
                   onStateChange={(value) => handleChange({ target: { name: 'state', value } })}
-                  onCityChange={(value) => handleChange({ target: { name: 'city', value } })}
+                  onCityChange={(value) => {
+                    handleChange({ target: { name: 'city', value } });
+                    handleChange({ target: { name: 'serviceArea', value } });
+                  }}
                 />
               </div>
             </div>
