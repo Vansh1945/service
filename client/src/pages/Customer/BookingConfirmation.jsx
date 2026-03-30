@@ -255,7 +255,7 @@ const BookingConfirmation = () => {
     const confirmCashPayment = window.confirm(
       `Confirm Cash Payment?\n\n` +
       `Service: ${serviceInfo.title}\n` +
-      `Amount: â‚¹${bookingDetails.totalAmount.toFixed(2)}\n` +
+      `Amount: ${bookingDetails.totalAmount.toFixed(2)}\n` +
       `Date: ${formatDate(bookingDetails.date)}\n\n` +
       `You will pay cash after service completion.\n` +
       `Do you want to confirm this booking?`
@@ -1135,7 +1135,7 @@ const BookingConfirmation = () => {
                       <div className="flex justify-between items-center">
                         <span className="text-gray-600">Service Price</span>
                         <span className="font-semibold text-gray-800">
-                          â‚¹{originalPrice.toFixed(2)}
+                          ₹{bookingDetails.subtotal?.toFixed(2) || 0}
                         </span>
                       </div>
 
@@ -1165,7 +1165,7 @@ const BookingConfirmation = () => {
                               </span>
                             </div>
                             <span className="font-semibold text-green-700">
-                              -â‚¹{discount.toFixed(2)}
+                              -₹{discount.toFixed(2)}
                             </span>
                           </div>
                           <div className="text-xs text-green-600 space-y-1">
@@ -1175,7 +1175,7 @@ const BookingConfirmation = () => {
                                   <div>Discount: <span className="font-medium">
                                     {bookingDetails.couponApplied.discountType === 'percent'
                                       ? `${bookingDetails.couponApplied.discountValue}%`
-                                      : `â‚¹${bookingDetails.couponApplied.discountValue}`}
+                                      : `₹${bookingDetails.couponApplied.discountValue}`}
                                   </span></div>
                                 )}
                               </div>
@@ -1188,14 +1188,14 @@ const BookingConfirmation = () => {
                       <div className="flex justify-between items-center">
                         <span className="text-gray-600">Service Price after discount</span>
                         <span className="font-semibold text-gray-800">
-                          â‚¹{priceAfterDiscount.toFixed(2)}
+                          ₹{priceAfterDiscount.toFixed(2)}
                         </span>
                       </div>
 
                       <div className="border-t border-gray-200 pt-3">
                         <div className="flex justify-between items-center">
                           <span className="text-lg font-bold text-gray-800">Total Amount</span>
-                          <span className="text-xl font-bold text-primary">â‚¹{totalAmount.toFixed(2)}</span>
+                          <span className="text-xl font-bold text-primary">₹{totalAmount.toFixed(2)}</span>
                         </div>
                       </div>
 
