@@ -38,7 +38,8 @@ const BookService = () => {
     notes: '',
     quantity: 1,
     couponCode: '',
-    appliedCoupon: null
+    appliedCoupon: null,
+    paymentMethod: 'online'
   });
 
   // Get next 3 days from today for date picker
@@ -435,7 +436,7 @@ const BookService = () => {
         notes: formData.notes.trim(),
         quantity: formData.quantity,
         couponCode: formData.appliedCoupon?.code || null,
-        paymentMethod: 'online',
+        paymentMethod: formData.paymentMethod,
         subtotal: baseAmount,
         totalAmount: totalAmount
       };
@@ -460,6 +461,10 @@ const BookService = () => {
 
       if (!response.data.success) {
         throw new Error(response.data.message || 'Failed to create booking');
+      }
+
+      if (response.data.isDuplicate) {
+        toast.info('Referencing your existing booking for this slot.');
       }
 
       const bookingId = response.data.bookingId || response.data.data?._id;
@@ -494,7 +499,7 @@ const BookService = () => {
         address: formData.useCustomAddress ? formData.customAddress : addresses[0],
         notes: formData.notes.trim(),
         quantity: formData.quantity,
-        paymentMethod: 'online'
+        paymentMethod: formData.paymentMethod
       };
 
       setTimeout(() => {
@@ -843,6 +848,52 @@ const BookService = () => {
                   </div>
                 </div>
 
+                {/* Payment Method */}
+                <div className="pt-4 border-t border-gray-100">
+                  <label className="block text-sm font-semibold text-gray-700 mb-4">
+                    Payment Method *
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div 
+                      className={`relative flex items-center p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${formData.paymentMethod === 'online' ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-gray-300'}`}
+                      onClick={() => setFormData(prev => ({ ...prev, paymentMethod: 'online' }))}
+                    >
+                      <input
+                        type="radio"
+                        name="paymentMethod"
+                        value="online"
+                        checked={formData.paymentMethod === 'online'}
+                        onChange={handleChange}
+                        className="h-4 w-4 text-primary focus:ring-primary border-gray-300"
+                      />
+                      <div className="ml-3">
+                        <span className="block text-sm font-bold text-gray-900">Pay Online</span>
+                        <span className="block text-xs text-gray-500">Secure payment via Razorpay</span>
+                      </div>
+                      <CreditCard className={`ml-auto w-5 h-5 ${formData.paymentMethod === 'online' ? 'text-primary' : 'text-gray-400'}`} />
+                    </div>
+
+                    <div 
+                      className={`relative flex items-center p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${formData.paymentMethod === 'cash' ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-gray-300'}`}
+                      onClick={() => setFormData(prev => ({ ...prev, paymentMethod: 'cash' }))}
+                    >
+                      <input
+                        type="radio"
+                        name="paymentMethod"
+                        value="cash"
+                        checked={formData.paymentMethod === 'cash'}
+                        onChange={handleChange}
+                        className="h-4 w-4 text-primary focus:ring-primary border-gray-300"
+                      />
+                      <div className="ml-3">
+                        <span className="block text-sm font-bold text-gray-900">Cash on Pay</span>
+                        <span className="block text-xs text-gray-500">Pay after service completion</span>
+                      </div>
+                      <Truck className={`ml-auto w-5 h-5 ${formData.paymentMethod === 'cash' ? 'text-primary' : 'text-gray-400'}`} />
+                    </div>
+                  </div>
+                </div>
+
                 {/* Additional Notes */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-3">
@@ -1014,7 +1065,7 @@ const BookService = () => {
                   ) : (
                     <>
                       <CheckCircle className="mr-2 w-5 h-5" />
-                      Pay ₹{totalAmount.toFixed(2)}
+                      {formData.paymentMethod === 'cash' ? `Book for ₹${totalAmount.toFixed(2)}` : `Pay ₹${totalAmount.toFixed(2)}`}
                     </>
                   )}
                 </button>

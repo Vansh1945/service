@@ -80,7 +80,7 @@ const formatDateTime = (dateStr) => {
   return new Date(dateStr).toLocaleString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 };
 
-const needsPayment = (booking) => booking.paymentStatus === 'pending' && !booking.confirmedBooking;
+const needsPayment = (booking) => booking.paymentStatus === 'pending' && booking.status !== 'cancelled';
 const canCancelBooking = (booking) => ['pending', 'accepted'].includes(booking.status);
 const canReschedule = (booking) => booking.status === 'pending';
 const isActiveBooking = (booking) => ['pending', 'accepted', 'in_progress', 'in-progress', 'payment_pending'].includes(booking.status);
@@ -157,16 +157,17 @@ const CustomerBookingsPage = () => {
   };
 
   const handlePayNow = (booking) => {
-    if (booking.status === 'pending' && booking.paymentStatus === 'pending') {
+    if (booking.paymentStatus === 'pending' && booking.status !== 'cancelled') {
       navigate(`/customer/booking-confirm/${booking._id}`, {
         state: {
           booking,
-          service: booking.services?.[0]?.serviceDetails,
+          service: booking.services?.[0]?.serviceDetails || booking.services?.[0]?.service,
           coupon: booking.couponApplied,
+          isReachingFromBookings: true
         },
       });
     } else {
-      showToast('Payment can only be made for pending bookings.', 'info');
+      showToast('Payment is not pending for this booking.', 'info');
     }
   };
 

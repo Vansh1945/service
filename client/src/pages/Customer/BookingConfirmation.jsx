@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
 import axios from 'axios';
@@ -575,39 +575,34 @@ const BookingConfirmation = () => {
 
   // Get service details with proper fallbacks
   const getServiceInfo = () => {
+    // 1. Priority: state-passed service details (from ServiceDetail page)
     if (serviceDetails) {
       return {
         title: serviceDetails.title,
         category: serviceDetails.category,
         duration: serviceDetails.duration,
-        image: serviceDetails.images && serviceDetails.images.length > 0 ? serviceDetails.images[0] : null,
+        image: serviceDetails.images?.[0] || serviceDetails.image,
         basePrice: serviceDetails.basePrice,
         averageRating: serviceDetails.averageRating || 0,
         ratingCount: serviceDetails.ratingCount || 0
       };
     }
 
-    if (bookingDetails?.services?.[0]?.serviceDetails) {
-      return {
-        title: bookingDetails.services[0].serviceDetails.title,
-        category: bookingDetails.services[0].serviceDetails.category,
-        duration: bookingDetails.services[0].serviceDetails.duration,
-        image: bookingDetails.services[0].serviceDetails.images && bookingDetails.services[0].serviceDetails.images.length > 0 ? bookingDetails.services[0].serviceDetails.images[0] : null,
-        basePrice: bookingDetails.services[0].serviceDetails.basePrice,
-        averageRating: bookingDetails.services[0].serviceDetails.averageRating || 0,
-        ratingCount: bookingDetails.services[0].serviceDetails.ratingCount || 0
-      };
-    }
+    // 2. Fallback: populated service object in bookingDetails
+    const firstServiceInBooking = bookingDetails?.services?.[0];
+    const populatedService = firstServiceInBooking?.service;
+    const snappedService = firstServiceInBooking?.serviceDetails;
 
-    if (bookingDetails?.service) {
+    if (populatedService || snappedService) {
+      const source = populatedService || snappedService;
       return {
-        title: bookingDetails.service.title || bookingDetails.service.name,
-        category: bookingDetails.service.category,
-        duration: bookingDetails.service.duration,
-        image: bookingDetails.service.images && bookingDetails.service.images.length > 0 ? bookingDetails.service.images[0] : null,
-        basePrice: bookingDetails.service.basePrice,
-        averageRating: bookingDetails.service.averageRating || 0,
-        ratingCount: bookingDetails.service.ratingCount || 0
+        title: source.title || source.name || 'Service',
+        category: source.category || 'General Service',
+        duration: source.duration || null,
+        image: source.images?.[0] || source.image || (snappedService?.image) || (populatedService?.images?.[0]),
+        basePrice: source.basePrice || firstServiceInBooking?.price || 0,
+        averageRating: source.averageRating || 0,
+        ratingCount: source.ratingCount || 0
       };
     }
 
@@ -621,6 +616,7 @@ const BookingConfirmation = () => {
       ratingCount: 0
     };
   };
+
 
   // Get booking status display info
   const getBookingStatusInfo = () => {
@@ -1203,33 +1199,25 @@ const BookingConfirmation = () => {
                         </div>
                       </div>
 
-                      {/* Savings Message */}
-                      {(() => {
-                        const totalDiscount = bookingDetails.totalDiscount || 0;
-                        if (totalDiscount > 0) {
-                          return (
-                            <div className="mt-2 p-3 bg-green-50 rounded-lg border border-green-200">
-                              <p className="text-sm text-green-700 font-medium text-center">
-                                ðŸŽ‰ You saved â‚¹{totalDiscount.toFixed(2)} on this booking!
-                              </p>
-                            </div>
-                          );
-                        }
-                        return null;
-                      })()}
+                      {discount > 0 && (
+                        <div className="mt-2 p-3 bg-green-50 rounded-lg border border-green-200">
+                          <p className="text-sm text-green-700 font-medium text-center">
+                            🎉 You saved ₹{discount.toFixed(2)} on this booking!
+                          </p>
+                        </div>
+                      )}
 
-                      {/* Payment Status */}
                       <div className="border-t border-gray-200 pt-3">
                         <div className="flex justify-between items-center">
                           <span className="text-gray-600 text-sm">Payment Status</span>
                           <span className={`font-semibold text-sm ${bookingDetails.paymentStatus === 'paid' ? 'text-primary' : 'text-accent'}`}>
                             {bookingDetails.paymentMethod === 'online' && bookingDetails.paymentStatus === 'paid'
                               ? 'Paid Online'
-                              : bookingDetails.paymentMethod === 'cash'
-                                ? 'Pending (Cash)'
-                                : bookingDetails.paymentStatus === 'pending'
-                                  ? 'Pending'
-                                  : bookingDetails.paymentStatus}
+                              : bookingDetails.paymentStatus === 'paid'
+                                ? 'Paid'
+                                : bookingDetails.paymentMethod === 'cash'
+                                  ? 'Cash on Pay'
+                                  : 'Pending'}
                           </span>
                         </div>
                       </div>

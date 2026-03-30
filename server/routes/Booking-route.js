@@ -21,6 +21,7 @@ router.patch('/:id/status', userAuthMiddleware, requireCustomer, bookingControll
 router.get('/user', userAuthMiddleware, requireCustomer, bookingController.getUserBookings);
 router.get('/customer', userAuthMiddleware, requireCustomer, bookingController.getCustomerBookings);
 router.post('/:id/payment', userAuthMiddleware, requireCustomer, bookingController.updateBookingPayment);
+router.post('/pay/:id', userAuthMiddleware, requireCustomer, bookingController.payBooking);
 router.get('/providers/:id', userAuthMiddleware, requireCustomer, bookingController.getProviderById);
 router.get('/services/:id', userAuthMiddleware, requireCustomer, bookingController.getServiceById);
 router.get('/:id', userAuthMiddleware, requireCustomer, bookingController.getBooking);

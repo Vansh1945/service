@@ -214,11 +214,8 @@ const verifyPayment = async (req, res) => {
       });
     }
 
-    // IMPORTANT: Keep booking status as "pending" after payment
-    // The booking will remain pending until provider accepts it
-    // This ensures proper workflow: Payment -> Pending -> Provider Accepts -> Accepted
     booking.paymentStatus = 'paid';
-    // booking.status remains "pending" - do not change to "accepted"
+    booking.paymentMethod = 'online';
     await booking.save();
 
     res.status(200).json({
@@ -329,6 +326,7 @@ const handleSuccessfulPayment = async (payment, session) => {
   // IMPORTANT: Booking status remains "pending" until provider accepts it
   // This ensures proper workflow: Payment -> Pending -> Provider Accepts -> Accepted
   booking.paymentStatus = 'paid';
+  booking.paymentMethod = 'online';
   booking.paidAmount = transaction.amount;
   booking.paymentDate = new Date();
   // booking.status remains "pending" - do not change to "accepted"

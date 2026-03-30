@@ -75,6 +75,27 @@ const createBooking = async (req, res) => {
       });
     }
 
+    // CHECK FOR DUPLICATE BOOKING (Idempotency)
+    const existingBooking = await Booking.findOne({
+      customer: req.user._id,
+      'services.service': serviceId,
+      date: bookingDate,
+      time: time || null,
+      status: { $nin: ['cancelled'] }
+    }).session(session);
+
+    if (existingBooking) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(200).json({
+        success: true,
+        message: 'Existing booking found. Returning current booking.',
+        data: existingBooking.toObject(),
+        bookingId: existingBooking._id,
+        isDuplicate: true
+      });
+    }
+
 
 
     // Calculate amounts
@@ -682,6 +703,82 @@ const updateBookingPayment = async (req, res) => {
       success: false,
       message: error.message || 'Failed to update payment details'
     });
+  }
+};
+
+// Convert COD to Online Payment
+const payBooking = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const { id } = req.params;
+    const { paymentDetails } = req.body;
+    const userId = req.user._id;
+
+    const booking = await Booking.findOne({ _id: id, customer: userId }).session(session);
+    if (!booking) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    if (booking.status === 'cancelled') {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({ success: false, message: 'Cannot pay for cancelled booking' });
+    }
+
+    if (booking.paymentStatus === 'paid') {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ success: false, message: 'Booking already paid' });
+    }
+
+    // Process online payment
+    const paymentResult = await processOnlinePayment({
+      amount: booking.totalAmount,
+      bookingId: booking._id,
+      paymentDetails,
+      userId
+    }, session);
+
+    if (!paymentResult.success) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ success: false, message: paymentResult.message || 'Payment failed' });
+    }
+
+    // Update booking
+    booking.paymentMethod = 'online';
+    booking.paymentStatus = 'paid';
+    await booking.save({ session });
+
+    // Record Transaction
+    await Transaction.create([{
+      customer: userId,
+      booking: booking._id,
+      amount: booking.totalAmount,
+      paymentMethod: 'online',
+      paymentStatus: 'paid',
+      transactionId: paymentResult.transactionId,
+      razorpayOrderId: paymentResult.razorpayOrderId,
+      razorpayPaymentId: paymentResult.razorpayPaymentId,
+      status: 'completed'
+    }], { session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    res.status(200).json({
+      success: true,
+      message: 'Payment successful',
+      data: booking
+    });
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    console.error('Error in payBooking:', error);
+    res.status(500).json({ success: false, message: error.message || 'Failed to process payment' });
   }
 };
 
@@ -2581,6 +2678,7 @@ module.exports = {
   updateBookingPayment,
   getProviderById,
   getServiceById,
+  payBooking,
   getBooking,
   cancelBooking,
   userUpdateBookingDateTime,
