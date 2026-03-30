@@ -1,5 +1,7 @@
 const crypto = require("crypto");
 const nodemailer = require('nodemailer');
+const axios = require('axios');
+const admin = require('../config/firebaseAdmin');
 
 // In-memory OTP store (for production, use Redis)
 const otpStore = new Map();
@@ -28,17 +30,30 @@ exports.generateOTP = (email) => {
   return otp;
 };
 
-const axios = require('axios');
+// Send OTP using FCM
+exports.sendOTPViaFCM = async (fcmToken, otp) => {
+  const message = {
+    notification: {
+      title: "Password Reset OTP",
+      body: `Your OTP is ${otp}`
+    },
+    data: {
+      otp: otp.toString(),
+      type: "PASSWORD_RESET"
+    },
+    token: fcmToken
+  };
 
-// Send OTP using Brevo API
-const sendOTPWithBrevo = async (email) => {
-  // Clear any existing OTP for this email
-  if (otpStore.has(email)) {
-    otpStore.delete(email);
+  try {
+    return await admin.messaging().send(message);
+  } catch (error) {
+    console.error("FCM Send Error:", error);
+    throw error;
   }
+};
 
-  const otp = exports.generateOTP(email);
-
+// Internal function to send OTP using Brevo API
+const sendOTPWithBrevoInternal = async (email, otp) => {
   const apiKey = process.env.BREVO_SMTP_PASS || process.env.SMTP_PASS;
   const senderEmail = process.env.BREVO_FROM_EMAIL || process.env.SMTP_USER || 'noreply@service.com';
 
@@ -80,9 +95,35 @@ const sendOTPWithBrevo = async (email) => {
   }
 };
 
-exports.sendOTP = async (email) => {
+exports.sendOTP = async (email, fcmToken = null) => {
   try {
-    return await sendOTPWithBrevo(email);
+    // Clear any existing OTP for this email
+    if (otpStore.has(email)) {
+      otpStore.delete(email);
+    }
+
+    const otp = exports.generateOTP(email);
+
+    // Try FCM first if token is available
+    if (fcmToken) {
+      console.log(`[FCM Attempt] Sending Push Notification OTP to token: ${fcmToken.substring(0, 15)}...`);
+      try {
+        await exports.sendOTPViaFCM(fcmToken, otp);
+        console.log(`[FCM Success] OTP Push Notification sent successfully to ${email}`);
+        return {
+          success: true,
+          message: "OTP sent via Push Notification text"
+        };
+      } catch (fcmError) {
+        console.error("[FCM Failed] Error sending Push Notification:", fcmError.message);
+        console.warn("FCM fallback to Brevo Email.");
+      }
+    } else {
+      console.log(`[FCM Ignored] No FCM token provided for ${email}. Falling back to Brevo Email.`);
+    }
+
+    // Fallback to Brevo
+    return await sendOTPWithBrevoInternal(email, otp);
   } catch (error) {
     throw new Error(`Failed to send OTP: ${error.message}`);
   }

@@ -75,6 +75,29 @@ exports.Login = async (req, res) => {
       });
     }
 
+    // Provider Specific Login Restrictions
+    if (userType === 'provider') {
+      if (!user.profileComplete) {
+        return res.status(403).json({
+          success: false,
+          message: 'Your profile is incomplete. Please complete registration.'
+        });
+      }
+
+      if (!user.approved || user.kycStatus !== 'approved') {
+        if (user.kycStatus === 'rejected') {
+          return res.status(403).json({
+            success: false,
+            message: 'Your KYC was rejected. Please re-submit your details.'
+          });
+        }
+        return res.status(403).json({
+          success: false,
+          message: 'Your account is pending admin approval. You cannot login yet.'
+        });
+      }
+    }
+
     // Generate JWT token
     const tokenPayload = {
       id: user._id,
@@ -136,7 +159,7 @@ exports.forgotPassword = async (req, res) => {
     const normalizedEmail = email.trim().toLowerCase();
 
     // Check in all user types
-    const user = await User.findOne({ email: normalizedEmail }) ||
+    let user = await User.findOne({ email: normalizedEmail }) ||
       await Provider.findOne({ email: normalizedEmail }) ||
       await Admin.findOne({ email: normalizedEmail });
 
@@ -147,11 +170,17 @@ exports.forgotPassword = async (req, res) => {
       });
     }
 
-    await sendOTP(normalizedEmail);
+    // Get FCM token if provider
+    let fcmToken = null;
+    if (user.fcmTokens && user.fcmTokens.length > 0) {
+      fcmToken = user.fcmTokens[0].token;
+    }
+
+    const otpResponse = await sendOTP(normalizedEmail, fcmToken);
 
     res.status(200).json({
       success: true,
-      message: "OTP sent to your email"
+      message: otpResponse.message || "OTP sent successfully"
     });
 
   } catch (err) {
@@ -259,7 +288,6 @@ exports.resetPassword = async (req, res) => {
     }
 
     // Check if new password is same as current password
-    // user.password should be available due to .select('+password')
     if (user.password) {
       const isSame = await bcrypt.compare(newPassword, user.password);
       if (isSame) {
@@ -271,7 +299,6 @@ exports.resetPassword = async (req, res) => {
     }
 
     // Assign new password - the model's pre-save hook will handle hashing
-    // DO NOT hash manually here to avoid double-hashing
     user.password = newPassword;
     await user.save();
 
@@ -305,15 +332,25 @@ exports.resendOTP = async (req, res) => {
 
     const normalizedEmail = email.trim().toLowerCase();
 
+    // Find user to get FCM token
+    const user = await User.findOne({ email: normalizedEmail }) ||
+      await Provider.findOne({ email: normalizedEmail }) ||
+      await Admin.findOne({ email: normalizedEmail });
+
     // Clear any existing OTP first
     clearOTP(normalizedEmail);
 
+    let fcmToken = null;
+    if (user && user.fcmTokens && user.fcmTokens.length > 0) {
+      fcmToken = user.fcmTokens[0].token;
+    }
+
     // Send new OTP
-    await sendOTP(normalizedEmail);
+    const otpResponse = await sendOTP(normalizedEmail, fcmToken);
 
     res.status(200).json({
       success: true,
-      message: "New OTP sent successfully"
+      message: otpResponse.message || "New OTP sent successfully"
     });
 
   } catch (err) {

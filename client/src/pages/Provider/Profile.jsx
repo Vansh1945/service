@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/auth';
 import { toast } from 'react-toastify';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 import 'react-toastify/dist/ReactToastify.css';
 import { Loader2, AlertCircle } from 'lucide-react';
 import * as ProviderService from '../../services/ProviderService';
@@ -958,12 +960,21 @@ const ProviderProfile = () => {
 
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Date of Birth</label>
-                        <input
-                          type="date"
+                        <DatePicker
+                          id="dateOfBirth"
                           name="dateOfBirth"
-                          value={profileData.dateOfBirth ? new Date(profileData.dateOfBirth).toISOString().split('T')[0] : ''}
-                          onChange={(e) => handleChange(e)}
+                          selected={profileData.dateOfBirth ? new Date(profileData.dateOfBirth) : null}
+                          onChange={(date) => {
+                            const localDate = date ? new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().split('T')[0] : '';
+                            setProfileData(prev => ({ ...prev, dateOfBirth: localDate }));
+                          }}
+                          dateFormat="yyyy-MM-dd"
                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-colors"
+                          placeholderText="Select Date of Birth"
+                          showYearDropdown
+                          scrollableYearDropdown
+                          yearDropdownItemNumber={100}
+                          maxDate={new Date()}
                         />
                       </div>
                     </div>

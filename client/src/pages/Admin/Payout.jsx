@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/auth';
 import { ToastContainer, toast } from 'react-toastify';
+import DatePicker from 'react-datepicker';
+import TimePicker from 'react-time-picker';
+import 'react-datepicker/dist/react-datepicker.css';
+import 'react-time-picker/dist/TimePicker.css';
 import 'react-toastify/dist/ReactToastify.css';
 import {
   DollarSign, Clock, CheckCircle, BarChart3,
@@ -197,10 +201,20 @@ const AdminPayout = () => {
                 <option key={s} value={s}>{s.replace('_', ' ')}</option>
               ))}
             </select>
-            <input type="date" className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
-              value={filters.startDate} onChange={e => handleFilterChange('startDate', e.target.value)} />
-            <input type="date" className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
-              value={filters.endDate} onChange={e => handleFilterChange('endDate', e.target.value)} />
+            <DatePicker
+              selected={filters.startDate ? new Date(filters.startDate) : null}
+              onChange={date => handleFilterChange('startDate', date ? new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().split('T')[0] : '')}
+              dateFormat="yyyy-MM-dd"
+              placeholderText="Start Date"
+              className="px-3 py-2 w-full bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
+            />
+            <DatePicker
+              selected={filters.endDate ? new Date(filters.endDate) : null}
+              onChange={date => handleFilterChange('endDate', date ? new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().split('T')[0] : '')}
+              dateFormat="yyyy-MM-dd"
+              placeholderText="End Date"
+              className="px-3 py-2 w-full bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
+            />
             <div className="relative">
               <input type="text"
                 className="w-full px-3 py-2 pl-8 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
@@ -359,17 +373,25 @@ const AdminPayout = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-secondary mb-1.5">Transfer Date <span className="text-red-400">*</span></label>
-                  <input type="date" required
+                  <DatePicker
+                    selected={approveForm.transferDate ? new Date(approveForm.transferDate) : null}
+                    onChange={date => setApproveForm(p => ({ ...p, transferDate: date ? new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().split('T')[0] : '' }))}
+                    dateFormat="yyyy-MM-dd"
+                    placeholderText="Select date"
                     className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
-                    value={approveForm.transferDate}
-                    onChange={e => setApproveForm(p => ({ ...p, transferDate: e.target.value }))} />
+                    required
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-secondary mb-1.5">Transfer Time <span className="text-red-400">*</span></label>
-                  <input type="time" required
-                    className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
+                  <TimePicker
                     value={approveForm.transferTime}
-                    onChange={e => setApproveForm(p => ({ ...p, transferTime: e.target.value }))} />
+                    onChange={time => setApproveForm(p => ({ ...p, transferTime: time }))}
+                    format="HH:mm"
+                    disableClock={true}
+                    required
+                    className="w-full h-[42px] px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
+                  />
                 </div>
               </div>
               <div>

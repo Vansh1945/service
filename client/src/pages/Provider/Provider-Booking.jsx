@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 import { useAuth } from '../../context/auth';
 import {
   Calendar,
@@ -222,23 +224,25 @@ const DownloadReports = ({
             <label className="text-sm font-medium text-secondary">Date Range:</label>
           </div>
           <div className="flex flex-col sm:flex-row gap-2">
-            <input
-              type="date"
-              value={dateFilter.startDate}
-              onChange={(e) => setDateFilter({
+            <DatePicker
+              selected={dateFilter.startDate ? new Date(dateFilter.startDate) : null}
+              onChange={(date) => setDateFilter({
                 ...dateFilter,
-                startDate: e.target.value
+                startDate: date ? new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().split('T')[0] : ''
               })}
+              dateFormat="yyyy-MM-dd"
+              placeholderText="Start Date"
               className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-colors"
             />
             <span className="text-sm text-gray-500 self-center">to</span>
-            <input
-              type="date"
-              value={dateFilter.endDate}
-              onChange={(e) => setDateFilter({
+            <DatePicker
+              selected={dateFilter.endDate ? new Date(dateFilter.endDate) : null}
+              onChange={(date) => setDateFilter({
                 ...dateFilter,
-                endDate: e.target.value
+                endDate: date ? new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().split('T')[0] : ''
               })}
+              dateFormat="yyyy-MM-dd"
+              placeholderText="End Date"
               className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-colors"
             />
           </div>

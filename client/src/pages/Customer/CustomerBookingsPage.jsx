@@ -1,5 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../../context/auth';
+import DatePicker from 'react-datepicker';
+import TimePicker from 'react-time-picker';
+import 'react-datepicker/dist/react-datepicker.css';
+import 'react-time-picker/dist/TimePicker.css';
 import { useNavigate } from 'react-router-dom';
 import {
   Calendar,
@@ -967,21 +971,23 @@ const CustomerBookingsPage = () => {
 
   // Reschedule Modal
   const RescheduleModal = ({ booking, onClose, onConfirm }) => {
-    const [date, setDate] = useState(booking ? new Date(booking.date).toISOString().split('T')[0] : '');
-    const [time, setTime] = useState(booking?.time || '');
+    const [date, setDate] = useState(booking ? new Date(booking.date) : new Date());
+    const [time, setTime] = useState(booking?.time || '10:00');
     const [error, setError] = useState('');
 
     const handleSubmit = () => {
       const now = new Date();
       const sixHoursLater = new Date(now.getTime() + 6 * 60 * 60 * 1000);
-      const bookingDateTime = new Date(`${date}T${time}`);
+      const dateStr = date instanceof Date ? date.toISOString().split('T')[0] : date;
+      const bookingDateTime = new Date(`${dateStr}T${time}`);
 
       if (bookingDateTime < sixHoursLater) {
         setError('Cannot reschedule within 6 hours of booking time. Please contact support.');
         return;
       }
       setError('');
-      onConfirm({ date, time });
+      const formattedDate = date instanceof Date ? date.toISOString().split('T')[0] : date;
+      onConfirm({ date: formattedDate, time });
     };
 
     return (
@@ -994,20 +1000,23 @@ const CustomerBookingsPage = () => {
           <div className="p-6 space-y-4">
             <div>
               <label className="block text-sm font-medium text-secondary mb-2">New Date</label>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
+              <DatePicker
+                selected={date}
+                onChange={(d) => setDate(d)}
+                minDate={new Date()}
+                dateFormat="dd/MM/yyyy"
                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
+                placeholderText="Select new date"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-secondary mb-2">New Time</label>
-              <input
-                type="time"
+              <TimePicker
+                onChange={setTime}
                 value={time}
-                onChange={(e) => setTime(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
+                format="HH:mm"
+                disableClock={true}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg"
               />
             </div>
             {error && <p className="text-sm text-red-600">{error}</p>}

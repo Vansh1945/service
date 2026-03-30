@@ -35,6 +35,8 @@ import AddressSelector from '../components/AddressSelector';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/auth';
 import { toast } from 'react-toastify';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 import 'react-toastify/dist/ReactToastify.css';
 
 const ProviderRegistration = () => {
@@ -688,13 +690,21 @@ const ProviderRegistration = () => {
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
                   <Calendar className="text-primary w-5 h-5" />
                 </div>
-                <input
-                  type="date"
+                <DatePicker
                   id="dateOfBirth"
                   name="dateOfBirth"
-                  value={formData.dateOfBirth}
-                  onChange={handleChange}
+                  selected={formData.dateOfBirth ? new Date(formData.dateOfBirth) : null}
+                  onChange={(date) => {
+                    const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+                    setFormData(prev => ({ ...prev, dateOfBirth: localDate }));
+                  }}
+                  dateFormat="yyyy-MM-dd"
                   className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
+                  placeholderText="Select Date of Birth"
+                  showYearDropdown
+                  scrollableYearDropdown
+                  yearDropdownItemNumber={100}
+                  maxDate={new Date()}
                   required
                 />
               </div>

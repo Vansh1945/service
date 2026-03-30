@@ -68,23 +68,33 @@ exports.initiateRegistration = async (req, res) => {
         if (existingProvider || emailExistsInUser || emailExistsInAdmin) {
             if (existingProvider) {
                 if (!existingProvider.profileComplete) {
-                    // Profile incomplete
+                    // CASE A: Profile incomplete
                     return res.status(200).json({
                         success: true,
                         message: 'Incomplete profile found. Please complete your profile.',
-                        profileComplete: true
+
+                        profileComplete: true // For backward compatibility with existing frontend
                     });
-                } else if (!existingProvider.approved) {
-                    // Pending approval
-                    return res.status(400).json({
-                        success: false,
-                        message: 'Provider registration with this email is pending approval'
+                } else if (existingProvider.profileComplete && existingProvider.kycStatus === 'rejected' && !existingProvider.approved) {
+                    // CASE B: KYC REJECTED
+                    return res.status(200).json({
+                        success: true,
+                        message: 'Your KYC was rejected. Please update your profile and resubmit.',
+
+                        isRejected: true,
+                        profileComplete: true // To trigger the same OTP skip behavior
                     });
-                } else {
-                    // Fully registered & approved
+                } else if (existingProvider.profileComplete && existingProvider.approved) {
+                    // CASE C: APPROVED PROVIDER
                     return res.status(400).json({
                         success: false,
                         message: 'Provider with this email already exists'
+                    });
+                } else {
+                    // CASE D: PENDING APPROVAL (profileComplete=true, approved=false)
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Provider registration with this email is pending approval'
                     });
                 }
             } else {
