@@ -1,8 +1,5 @@
 const crypto = require("crypto");
-const { sendPushNotification } = require("./notificationService");
-const User = require("../models/User-model");
-const Provider = require("../models/Provider-model");
-const Admin = require("../models/Admin-model");
+const nodemailer = require('nodemailer');
 
 // In-memory OTP store (for production, use Redis)
 const otpStore = new Map();
@@ -31,8 +28,10 @@ exports.generateOTP = (email) => {
   return otp;
 };
 
-// Send OTP using FCM (Firebase Cloud Messaging)
-const sendOTPWithFCM = async (email) => {
+const axios = require('axios');
+
+// Send OTP using Brevo API
+const sendOTPWithBrevo = async (email) => {
   // Clear any existing OTP for this email
   if (otpStore.has(email)) {
     otpStore.delete(email);
@@ -40,44 +39,50 @@ const sendOTPWithFCM = async (email) => {
 
   const otp = exports.generateOTP(email);
 
-  // Find user in collections to get FCM tokens
-  const user = await User.findOne({ email }) || 
-               await Provider.findOne({ email }) || 
-               await Admin.findOne({ email });
+  const apiKey = process.env.BREVO_SMTP_PASS || process.env.SMTP_PASS;
+  const senderEmail = process.env.BREVO_FROM_EMAIL || process.env.SMTP_USER || 'noreply@service.com';
 
-  if (!user) {
-    throw new Error('User not found with this email.');
-  }
-
-  if (!user.fcmTokens || user.fcmTokens.length === 0) {
-    throw new Error('No registered devices found for this account to receive verification code via push notification.');
-  }
-
-  const title = "Verification Code";
-  const body = `Your verification code is: ${otp}. It expires in 5 minutes.`;
-  const data = {
-    type: 'otp_verification',
-    otp: otp
+  const payload = {
+    sender: { name: "Service Team", email: senderEmail },
+    to: [{ email: email }],
+    subject: "Your Verification Code",
+    htmlContent: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
+        <h2 style="color: #333; text-align: center;">Verification Code</h2>
+        <p style="color: #555; font-size: 16px;">Hello,</p>
+        <p style="color: #555; font-size: 16px;">Your One-Time Password (OTP) for verification is:</p>
+        <div style="background-color: #f4f4f4; padding: 15px; text-align: center; border-radius: 4px; margin: 20px 0;">
+          <strong style="font-size: 24px; color: #2c3e50; letter-spacing: 2px;">${otp}</strong>
+        </div>
+        <p style="color: #555; font-size: 14px;">This code will expire in 5 minutes.</p>
+        <p style="color: #555; font-size: 14px;">If you didn't request this code, please ignore this email.</p>
+      </div>
+    `
   };
 
-  const response = await sendPushNotification(user.fcmTokens, { title, body, data });
-  
-  const successCount = response ? response.successCount : 0;
-  
-  if (successCount === 0) {
-    throw new Error('Failed to send verification code to your registered devices.');
-  }
+  try {
+    const response = await axios.post('https://api.brevo.com/v3/smtp/email', payload, {
+      headers: {
+        'api-key': apiKey,
+        'Content-Type': 'application/json',
+        'accept': 'application/json'
+      }
+    });
 
-  return {
-    success: true,
-    message: "OTP sent via push notification successfully",
-    successCount
-  };
+    return {
+      success: true,
+      message: "OTP sent via email successfully",
+      messageId: response.data.messageId
+    };
+  } catch (error) {
+    console.error("Brevo API Error:", error.response?.data || error.message);
+    throw new Error(`Failed to send email via Brevo API: ${error.response?.data?.message || error.message}`);
+  }
 };
 
 exports.sendOTP = async (email) => {
   try {
-    return await sendOTPWithFCM(email);
+    return await sendOTPWithBrevo(email);
   } catch (error) {
     throw new Error(`Failed to send OTP: ${error.message}`);
   }

@@ -27,7 +27,9 @@ import {
   Briefcase,
   RotateCcw,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  ChevronDown,
+  X
 } from 'lucide-react';
 import AddressSelector from '../components/AddressSelector';
 import { Link, useNavigate } from 'react-router-dom';
@@ -74,8 +76,7 @@ const ProviderRegistration = () => {
   const [providerServices, setProviderServices] = useState([]);
   const [providerServicesLoading, setProviderServicesLoading] = useState(true);
   const [providerServicesError, setProviderServicesError] = useState(null);
-
-  useEffect(() => {
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);  useEffect(() => {
     let timer;
     if (otpSentTime) {
       timer = setInterval(() => {
@@ -174,13 +175,18 @@ const ProviderRegistration = () => {
           throw new Error(data.message || 'Failed to send OTP');
         }
 
-        const sentTime = Date.now();
-        setOtpSentTime(sentTime);
-        setOtpExpiryTime(new Date(sentTime + 300000));
-        setCanResendOtp(false);
-        setResendCountdown(60);
-        setStep(2);
-        resolve('OTP sent successfully! Check your email.');
+        if (data.profileComplete) {
+          setStep(3);
+          resolve(data.message || 'Incomplete profile found. Please login to complete your profile.');
+        } else {
+          const sentTime = Date.now();
+          setOtpSentTime(sentTime);
+          setOtpExpiryTime(new Date(sentTime + 300000));
+          setCanResendOtp(false);
+          setResendCountdown(60);
+          setStep(2);
+          resolve('OTP sent successfully! Check your email.');
+        }
       } catch (error) {
         reject(error.message);
       } finally {
@@ -354,12 +360,17 @@ const ProviderRegistration = () => {
           throw new Error(data.message || 'Failed to resend OTP');
         }
 
-        const sentTime = Date.now();
-        setOtpSentTime(sentTime);
-        setOtpExpiryTime(new Date(sentTime + 300000));
-        setCanResendOtp(false);
-        setResendCountdown(60);
-        resolve('New OTP sent successfully!');
+        if (data.profileComplete) {
+          setStep(3);
+          resolve(data.message || 'Incomplete profile found. Please login to complete your profile.');
+        } else {
+          const sentTime = Date.now();
+          setOtpSentTime(sentTime);
+          setOtpExpiryTime(new Date(sentTime + 300000));
+          setCanResendOtp(false);
+          setResendCountdown(60);
+          resolve('New OTP sent successfully!');
+        }
       } catch (error) {
         reject(error.message);
       } finally {
@@ -791,7 +802,7 @@ const ProviderRegistration = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="group">
+              <div className="group relative z-50">
                 <label className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Service Categories (Select 1-3) *</label>
 
                 {providerServicesLoading ? (
@@ -808,42 +819,81 @@ const ProviderRegistration = () => {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-64 overflow-y-auto">
-                      {providerServices.map((service) => (
-                        <div
-                          key={service._id}
-                          onClick={() => handleServiceChange(service)}
-                          className={`relative p-4 rounded-2xl border-2 cursor-pointer transition-all duration-300 hover:shadow-md ${selectedServices.includes(service._id) ? 'border-primary bg-primary/5 shadow-lg' : 'border-gray-200 hover:border-primary/50'} ${selectedServices.length >= 3 && !selectedServices.includes(service._id) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        >
-                          <div className="flex items-start space-x-3">
-                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${selectedServices.includes(service._id) ? 'bg-primary text-white' : 'bg-gray-100 text-secondary/60'}`}>
-                              {service.icon ? (
-                                <img src={service.icon} alt={service.name} className="w-6 h-6 object-contain" />
-                              ) : (
-                                <Briefcase className="w-5 h-5" />
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h4 className={`font-semibold text-sm truncate ${selectedServices.includes(service._id) ? 'text-primary' : 'text-secondary'}`}>{service.name}</h4>
-                              {service.description && <p className="text-xs text-secondary/60 mt-1 line-clamp-2">{service.description}</p>}
-                            </div>
-                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${selectedServices.includes(service._id) ? 'border-primary bg-primary' : 'border-gray-300'}`}>
-                              {selectedServices.includes(service._id) && <CheckCircle className="w-4 h-4 text-white" />}
-                            </div>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
+                        <Briefcase className="text-primary w-5 h-5" />
+                      </div>
+                      <div 
+                        onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
+                        className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 bg-gradient-to-r from-primary/5 to-transparent cursor-pointer flex justify-between items-center hover:border-primary/50 transition-all duration-300 min-h-[60px]"
+                      >
+                        <div className="flex flex-wrap gap-2 flex-1">
+                          {selectedServices.length === 0 ? (
+                            <span className="text-secondary/50 font-medium tracking-wide">Select categories...</span>
+                          ) : (
+                            selectedServices.map(id => {
+                              const svc = providerServices.find(s => s._id === id) || { name: 'Unknown' };
+                              return (
+                                <span key={id} className="inline-flex items-center px-3 py-1.5 bg-primary text-white rounded-full text-sm font-semibold shadow-sm">
+                                  {svc.name}
+                                  <button 
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); handleServiceChange({_id: id}); }}
+                                    className="ml-2 focus:outline-none hover:text-white/80 transition-colors"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </span>
+                              );
+                            })
+                          )}
+                        </div>
+                        <ChevronDown className={`w-5 h-5 text-secondary/60 transition-transform duration-300 ml-2 flex-shrink-0 ${isCategoryDropdownOpen ? 'rotate-180' : ''}`} />
+                      </div>
+
+                      {isCategoryDropdownOpen && (
+                        <div className="absolute z-50 w-full mt-2 bg-white rounded-2xl border-2 border-gray-100 shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                          <div className="max-h-64 overflow-y-auto w-full custom-scrollbar">
+                            {providerServices.map((service) => (
+                              <div
+                                key={service._id}
+                                onClick={() => handleServiceChange(service)}
+                                className={`flex items-center space-x-4 p-4 cursor-pointer transition-colors duration-200 hover:bg-gray-50 border-b border-gray-50 last:border-0 ${selectedServices.includes(service._id) ? 'bg-primary/5' : ''} ${selectedServices.length >= 3 && !selectedServices.includes(service._id) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              >
+                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${selectedServices.includes(service._id) ? 'bg-primary text-white shadow-md shadow-primary/20' : 'bg-gray-100 text-secondary/60'}`}>
+                                  {service.icon ? (
+                                    <img src={service.icon} alt={service.name} className="w-7 h-7 object-contain" />
+                                  ) : (
+                                    <Briefcase className="w-6 h-6" />
+                                  )}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <h4 className={`font-semibold text-base truncate ${selectedServices.includes(service._id) ? 'text-primary' : 'text-secondary'}`}>
+                                    {service.name}
+                                  </h4>
+                                  {service.description && (
+                                    <p className="text-xs text-secondary/60 mt-1 truncate">{service.description}</p>
+                                  )}
+                                </div>
+                                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all duration-300 ${selectedServices.includes(service._id) ? 'border-primary bg-primary scale-110' : 'border-gray-300'}`}>
+                                  {selectedServices.includes(service._id) && <CheckCircle className="w-4 h-4 text-white" />}
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         </div>
-                      ))}
+                      )}
                     </div>
 
                     {selectedServices.length > 0 && (
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-secondary/70">{selectedServices.length} of 3 categories selected</span>
-                        <button type="button" onClick={() => setSelectedServices([])} className="text-accent hover:text-accent/80 font-medium">Clear all</button>
+                      <div className="flex items-center justify-between text-sm mt-2 px-1">
+                        <span className="text-secondary/70 font-medium">{selectedServices.length} of 3 categories selected</span>
+                        <button type="button" onClick={() => setSelectedServices([])} className="text-accent hover:text-accent/80 font-bold transition-colors">Clear all</button>
                       </div>
                     )}
 
                     {providerServices.length === 0 && (
-                      <div className="text-center py-8 text-secondary/60">No service categories available at the moment.</div>
+                      <div className="text-center py-8 text-secondary/60 font-medium">No service categories available at the moment.</div>
                     )}
                   </div>
                 )}
@@ -890,7 +940,7 @@ const ProviderRegistration = () => {
               </div>
             </div>
 
-            <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="group">
                 <label htmlFor="resume" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Professional Resume *</label>
                 <div className="relative">
@@ -941,12 +991,22 @@ const ProviderRegistration = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="group">
                   <label htmlFor="street" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Street Address *</label>
-                  <input type="text" id="street" name="street" value={formData.street} onChange={handleChange} className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="123 Main Street" required />
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
+                      <MapPin className="text-primary w-5 h-5" />
+                    </div>
+                    <input type="text" id="street" name="street" value={formData.street} onChange={handleChange} className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="123 Main Street" required />
+                  </div>
                 </div>
 
                 <div className="group">
                   <label htmlFor="postalCode" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Postal Code *</label>
-                  <input type="text" id="postalCode" name="postalCode" value={formData.postalCode} onChange={handleChange} className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="123456" required />
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
+                      <MapPin className="text-primary w-5 h-5" />
+                    </div>
+                    <input type="text" id="postalCode" name="postalCode" value={formData.postalCode} onChange={handleChange} className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="123456" required />
+                  </div>
                 </div>
               </div>
 
@@ -969,24 +1029,44 @@ const ProviderRegistration = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="group">
                   <label htmlFor="accountNo" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Account Number *</label>
-                  <input type="text" id="accountNo" name="accountNo" value={formData.accountNo} onChange={handleChange} className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="1234567890" required />
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
+                      <CreditCard className="text-primary w-5 h-5" />
+                    </div>
+                    <input type="text" id="accountNo" name="accountNo" value={formData.accountNo} onChange={handleChange} className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="1234567890" required />
+                  </div>
                 </div>
 
                 <div className="group">
                   <label htmlFor="ifsc" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">IFSC Code *</label>
-                  <input type="text" id="ifsc" name="ifsc" value={formData.ifsc} onChange={handleChange} className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="ABCD0123456" required />
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
+                      <Building className="text-primary w-5 h-5" />
+                    </div>
+                    <input type="text" id="ifsc" name="ifsc" value={formData.ifsc} onChange={handleChange} className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="ABCD0123456" required />
+                  </div>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
                 <div className="group">
                   <label htmlFor="bankName" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Bank Name</label>
-                  <input type="text" id="bankName" name="bankName" value={formData.bankName} onChange={handleChange} className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="e.g., State Bank of India" />
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
+                      <Building className="text-primary w-5 h-5" />
+                    </div>
+                    <input type="text" id="bankName" name="bankName" value={formData.bankName} onChange={handleChange} className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="e.g., State Bank of India" />
+                  </div>
                 </div>
 
                 <div className="group">
                   <label htmlFor="accountName" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Account Holder Name</label>
-                  <input type="text" id="accountName" name="accountName" value={formData.accountName} onChange={handleChange} className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="Name as per bank records" />
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
+                      <User className="text-primary w-5 h-5" />
+                    </div>
+                    <input type="text" id="accountName" name="accountName" value={formData.accountName} onChange={handleChange} className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="Name as per bank records" />
+                  </div>
                 </div>
               </div>
 
@@ -1032,10 +1112,10 @@ const ProviderRegistration = () => {
               {renderStepContent()}
 
               <div className="flex justify-between mt-8 space-x-4">
-                {step > 1 && (
+                {step === 2 && (
                   <button
                     type="button"
-                    onClick={() => setStep(step - 1)}
+                    onClick={() => setStep(1)}
                     className="flex items-center px-6 py-3 rounded-2xl border-2 border-primary text-primary hover:bg-primary hover:text-white transition-all duration-300 font-semibold"
                     disabled={isSubmitting}
                   >

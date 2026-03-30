@@ -67,11 +67,12 @@ exports.initiateRegistration = async (req, res) => {
 
         if (existingProvider || emailExistsInUser || emailExistsInAdmin) {
             if (existingProvider) {
-                if (existingProvider.approved && existingProvider.profileComplete) {
-                    // Fully registered & approved
-                    return res.status(400).json({
-                        success: false,
-                        message: 'Provider with this email already exists'
+                if (!existingProvider.profileComplete) {
+                    // Profile incomplete
+                    return res.status(200).json({
+                        success: true,
+                        message: 'Incomplete profile found. Please complete your profile.',
+                        profileComplete: true
                     });
                 } else if (!existingProvider.approved) {
                     // Pending approval
@@ -79,11 +80,11 @@ exports.initiateRegistration = async (req, res) => {
                         success: false,
                         message: 'Provider registration with this email is pending approval'
                     });
-                } else if (!existingProvider.profileComplete) {
-                    // Profile incomplete
+                } else {
+                    // Fully registered & approved
                     return res.status(400).json({
                         success: false,
-                        message: 'Provider profile is incomplete. Please login complete it to continue.'
+                        message: 'Provider with this email already exists'
                     });
                 }
             } else {
