@@ -11,11 +11,41 @@ const setIO = (io) => {
 };
 
 /**
+ * Generate smart routing links for automatic system notifications
+ */
+const computeNotificationUrl = (role, type, title, message) => {
+    const textContext = `${title} ${message}`.toLowerCase();
+    
+    if (role === 'admin') {
+        if (type === 'booking') return '/admin/bookings';
+        if (textContext.includes('payout') || textContext.includes('withdraw') || type === 'withdrawal') return '/admin/payout';
+        if (textContext.includes('provider') || textContext.includes('approved')) return '/admin/approve-providers';
+        if (textContext.includes('complaint')) return '/admin/complaints';
+        return '/admin/dashboard';
+    } 
+    
+    if (role === 'provider') {
+        if (textContext.includes('payout') || textContext.includes('withdraw')) return '/provider/dashboard'; // Route to provider payout if available
+        if (textContext.includes('review') || textContext.includes('feedback')) return '/provider/dashboard';
+        return '/provider/dashboard'; // Main dashboard hosts booking tables
+    } 
+    
+    if (role === 'customer') {
+        if (type === 'booking' || textContext.includes('booking')) return '/customer/bookings';
+        if (type === 'payment') return '/customer/bookings'; // Customer payments relate to bookings
+        return '/customer/dashboard';
+    }
+    
+    return '/'; // Fallback
+};
+
+/**
  * Create a notification in DB and emit it via Socket.io and FCM
  */
 const sendNotification = async (userId, role, title, message, type = 'system', referenceId = null, url = '/') => {
     try {
         let notification = null;
+        const generatedUrl = url !== '/' ? url : computeNotificationUrl(role, type, title, message);
 
         // If userId is provided, save to DB and emit to that specific user
         if (userId) {
@@ -25,7 +55,8 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
                 title,
                 message,
                 type,
-                referenceId
+                referenceId,
+                url: generatedUrl
             });
 
             // 1. Emit real-time event via Socket.io
@@ -39,6 +70,7 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
                     message,
                     type,
                     referenceId,
+                    url: generatedUrl,
                     isRead: false,
                     createdAt: notification.createdAt
                 });
@@ -51,12 +83,12 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
                 await notificationService.notifyUser(userId, role, {
                     title,
                     body: message,
-                    url,
+                    url: generatedUrl,
                     data: {
                         bookingId: referenceId ? referenceId.toString() : '',
                         userId: userId.toString(),
                         type: type,
-                        url
+                        url: generatedUrl
                     }
                 });
             } catch (fcmError) {
@@ -69,6 +101,7 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
                 message,
                 type,
                 referenceId,
+                url: generatedUrl,
                 isRead: false,
                 createdAt: new Date()
             });
@@ -79,11 +112,11 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
                     await notificationService.notifyAllAdmins({
                         title,
                         body: message,
-                        url,
+                        url: generatedUrl,
                         data: {
                             referenceId: referenceId ? referenceId.toString() : '',
                             type: type,
-                            url
+                            url: generatedUrl
                         }
                     });
                 } catch (fcmError) {
@@ -108,7 +141,8 @@ const notifyAdmins = async (title, message, type = 'system', referenceId = null,
         const admins = await Admin.find({ isActive: true });
 
         for (const admin of admins) {
-            await sendNotification(admin._id, 'admin', title, message, type, referenceId, url);
+            let generatedUrl = url !== '/' ? url : computeNotificationUrl('admin', type, title, message);
+            await sendNotification(admin._id, 'admin', title, message, type, referenceId, generatedUrl);
         }
     } catch (error) {
         console.error('Error notifying admins:', error);

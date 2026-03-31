@@ -67,6 +67,8 @@ const AdminNotification = () => {
     const [loadingHistory, setLoadingHistory] = useState(true);
     const [filter, setFilter] = useState('all');
 
+    const filteredHistory = history.filter(h => filter === 'all' || h.audience === filter);
+
     const fetchHistory = async () => {
         try {
             setLoadingHistory(true);
@@ -274,8 +276,8 @@ const AdminNotification = () => {
                                 <div className="text-xs text-gray-400 text-right mt-1">{form.title.length}/80 chars</div>
                                 
                                 {showPicker === 'title' && (
-                                    <div className="absolute z-50 mt-1 right-0 shadow-xl rounded-xl border border-gray-100">
-                                        <EmojiPicker onEmojiClick={handleEmojiClick} skinTonesDisabled width={300} height={400} />
+                                    <div className="absolute z-50 mt-1 right-0 w-[300px] max-w-[calc(100vw-3rem)] sm:max-w-none shadow-2xl rounded-xl border border-gray-100">
+                                        <EmojiPicker onEmojiClick={handleEmojiClick} skinTonesDisabled width="100%" height={380} />
                                     </div>
                                 )}
                             </div>
@@ -309,8 +311,8 @@ const AdminNotification = () => {
                                 <div className="text-xs text-gray-400 text-right mt-1">{form.body.length}/200 chars</div>
 
                                 {showPicker === 'body' && (
-                                    <div className="absolute z-50 mt-1 right-0 shadow-xl rounded-xl border border-gray-100">
-                                        <EmojiPicker onEmojiClick={handleEmojiClick} skinTonesDisabled width={300} height={400} />
+                                    <div className="absolute z-50 mt-1 right-0 w-[300px] max-w-[calc(100vw-3rem)] sm:max-w-none shadow-2xl rounded-xl border border-gray-100">
+                                        <EmojiPicker onEmojiClick={handleEmojiClick} skinTonesDisabled width="100%" height={380} />
                                     </div>
                                 )}
                             </div>
@@ -451,9 +453,9 @@ const AdminNotification = () => {
                             {/* Alert Body Simulator */}
                             <div className="p-4 bg-white/90 m-2 rounded-lg shadow-sm border border-gray-100">
                                 <div className="flex items-start gap-3">
-                                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 border border-primary/20">
-                                        <img src="/icon-192.png" alt="App" className="w-6 h-6 opacity-80" onError={(e) => {e.target.style.display='none'}} />
-                                        <FiBell className="text-primary absolute" size={18} style={{zIndex: -1}} />
+                                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 border border-primary/20 relative overflow-hidden">
+                                        <FiBell className="text-primary absolute inset-0 m-auto" size={18} style={{zIndex: 0}} />
+                                        <img src="/icon-192.png" alt="App" className="w-6 h-6 opacity-80 relative z-10" onError={(e) => {e.target.style.display='none'}} />
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <div className="text-sm font-bold text-gray-900 truncate">
@@ -507,7 +509,7 @@ const AdminNotification = () => {
                     </h2>
                     
                     {/* Filters */}
-                    <div className="flex p-1 bg-gray-100 rounded-lg">
+                    <div className="flex flex-wrap overflow-x-auto whitespace-nowrap scrollbar-hide p-1 bg-gray-100 rounded-lg">
                         {['all', 'customer', 'provider'].map(f => (
                             <button
                                 key={f}
@@ -529,14 +531,14 @@ const AdminNotification = () => {
                         <FiLoader className="animate-spin text-primary mb-2" size={24} />
                         <span className="text-sm">Loading logs...</span>
                     </div>
-                ) : history.length === 0 ? (
-                    <div className="py-12 flex flex-col items-center justify-center text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                        <FiBell className="mb-2 opacity-50" size={28} />
+                ) : filteredHistory.length === 0 ? (
+                    <div className="py-6 sm:py-10 flex flex-col items-center justify-center text-gray-400 bg-gray-50/50 rounded-xl border border-dashed border-gray-200">
+                        <FiBell className="mb-2 opacity-40" size={24} />
                         <span className="text-sm font-medium">No broadcast history found</span>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {history.filter(h => filter === 'all' || h.audience === filter).map(item => (
+                        {filteredHistory.map(item => (
                             <div key={item._id} className="border border-gray-200 rounded-xl p-4 hover:border-primary/30 hover:shadow-sm transition-all bg-white relative group">
                                 <div className="flex justify-between items-start gap-4">
                                     <div className="flex-1">
@@ -567,7 +569,7 @@ const AdminNotification = () => {
                                     </div>
                                 </div>
 
-                                <div className="mt-3 flex gap-2">
+                                <div className="mt-3 flex flex-wrap gap-2">
                                     <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-[10px] font-bold">
                                         Tgt: {item.totalSent || 0}
                                     </span>
