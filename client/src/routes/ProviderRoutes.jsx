@@ -28,13 +28,13 @@ const ProviderRoutes = () => {
     return (
         <Suspense fallback={<LoadingSpinner />}>
             <Routes>
-                <Route element={<ProtectedRoute allowedRoles={["provider"]} requireApproval />}>
+                <Route element={<ProtectedRoute allowedRoles={["provider"]} requireApproval requireTest />}>
                     <Route element={<ProviderLayout />}>
                         <Route index element={<ProviderDashboard />} />
                         <Route path="profile" element={<ProviderProfile />} />
                         <Route path="dashboard" element={<ProviderDashboard />} />
-                        <Route path="booking-requests" element={<ProviderBookingDashboard />} />
                         <Route path="test" element={<ProviderTestPage />} />
+                        <Route path="booking-requests" element={<ProviderBookingDashboard />} />
                         <Route path="earnings" element={<ProviderEarning />} />
                         <Route path="feedbacks" element={<ProviderFeedback />} />
                     </Route>

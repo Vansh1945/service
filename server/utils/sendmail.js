@@ -9,8 +9,8 @@ const axios = require('axios');
  * @param {string} options.html     - HTML body of the email
  */
 const sendMail = async ({ to, subject, html }) => {
-  const apiKey = process.env.BREVO_SMTP_PASS || process.env.EMAIL_PASS || process.env.SMTP_PASS;
-  const senderEmail = process.env.BREVO_FROM_EMAIL || process.env.EMAIL_SENDER || 'noreply@service.com';
+  const apiKey = process.env.SMTP_PASS;
+  const senderEmail = process.env.SMTP_USER;
 
   const payload = {
     sender: { name: "Support Team", email: senderEmail },

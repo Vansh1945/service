@@ -21,6 +21,7 @@ const ProviderLayout = () => {
     const location = useLocation();
     const navigate = useNavigate();
     const { user, logoutUser, API, token } = useAuth();
+    const testPassed = user?.testPassed || false;
 
     useEffect(() => {
         const fetchSystemSettings = async () => {
@@ -46,13 +47,16 @@ const ProviderLayout = () => {
         }
     }, [API, token]);
 
-    const menuItems = [
-        { name: 'Dashboard', path: '/provider/dashboard', icon: <FiHome className="w-5 h-5" /> },
-        { name: 'Booking Requests', path: '/provider/booking-requests', icon: <FiCheckCircle className="w-5 h-5" /> },
-        { name: 'Earnings', path: '/provider/earnings', icon: <FiDollarSign className="w-5 h-5" /> },
-        { name: 'Feedback Viewer', path: '/provider/feedbacks', icon: <FiMessageSquare className="w-5 h-5" /> },
-        { name: 'Test Result', path: '/provider/test', icon: <FiActivity className="w-5 h-5" /> }
+    const allMenuItems = [
+        { name: 'Dashboard', path: '/provider/dashboard', icon: <FiHome className="w-5 h-5" />, requireTest: false },
+        { name: 'Booking Requests', path: '/provider/booking-requests', icon: <FiCheckCircle className="w-5 h-5" />, requireTest: true },
+        { name: 'Earnings', path: '/provider/earnings', icon: <FiDollarSign className="w-5 h-5" />, requireTest: true },
+        { name: 'Feedback Viewer', path: '/provider/feedbacks', icon: <FiMessageSquare className="w-5 h-5" />, requireTest: true },
+        { name: 'Test', path: '/provider/test', icon: <FiActivity className="w-5 h-5" />, requireTest: false }
     ];
+
+    // If test not passed, only show Dashboard and Test in sidebar
+    const menuItems = allMenuItems.filter(item => !item.requireTest || testPassed);
 
     const isDashboardActive = location.pathname === '/provider' || location.pathname === '/provider/dashboard';
 

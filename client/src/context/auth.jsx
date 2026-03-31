@@ -97,7 +97,11 @@ export const AuthProvider = ({ children }) => {
                 if (finalRole === 'admin' || userObj.isAdmin) {
                     navigate('/admin/dashboard', { replace: true });
                 } else if (finalRole === 'provider') {
-                    navigate(userObj.approved ? '/provider/dashboard' : '/pending-approval');
+                    if (!userObj.testPassed) {
+                        navigate('/provider/test');
+                    } else {
+                        navigate('/provider/dashboard');
+                    }
                 } else {
                     navigate('/customer/services');
                 }
