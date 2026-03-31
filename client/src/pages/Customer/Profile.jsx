@@ -1,7 +1,8 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/auth';
 import { toast } from 'react-toastify';
 import { getProfile, updateProfile, updateprofilepic } from '../../services/CustomerService';
+import AddressSelector from '../../components/AddressSelector';
 
 const UserProfile = () => {
     const { user, token, API, logoutUser } = useAuth();
@@ -18,7 +19,6 @@ const UserProfile = () => {
         profilePicUrl: '',
         firstBookingUsed: false,
         totalBookings: 0,
-        totalSpent: 0,
         customDiscount: 0
     });
     const [isEditing, setIsEditing] = useState(false);
@@ -175,10 +175,6 @@ const UserProfile = () => {
                                         <span className="text-sm font-inter text-gray-600">Total Bookings:</span>
                                         <span className="text-sm font-poppins font-medium text-primary">{profile.totalBookings}</span>
                                     </div>
-                                    <div className="flex justify-between items-center mb-2">
-                                        <span className="text-sm font-inter text-gray-600">Total Spent:</span>
-                                        <span className="text-sm font-poppins font-medium text-primary">${(profile.totalSpent || 0).toFixed(2)}</span>
-                                    </div>
                                     <div className="flex justify-between items-center">
                                         <span className="text-sm font-inter text-gray-600">Custom Discount:</span>
                                         <span className="text-sm font-poppins font-medium text-yellow-500">{profile.customDiscount}%</span>
@@ -190,15 +186,6 @@ const UserProfile = () => {
 
                     {/* Right Column - Profile Details */}
                     <div className="lg:col-span-2 space-y-6">
-                        {/* Tabs */}
-                        <div className="flex border-b border-gray-200 gap-6 mb-6">
-                            <button
-                                className={`pb-4 text-sm font-poppins font-medium transition-colors border-b-2 ${activeTab === 'profile' ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
-                                onClick={() => setActiveTab('profile')}
-                            >
-                                Personal Information
-                            </button>
-                        </div>
 
                         {activeTab === 'profile' && (
                             <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-md overflow-hidden">
@@ -253,7 +240,7 @@ const UserProfile = () => {
 
                                                 <div className="md:col-span-2">
                                                     <h3 className="text-lg font-poppins font-medium text-secondary mb-3">Address Information</h3>
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                    <div className="grid grid-cols-1 gap-6">
                                                         <div>
                                                             <label className="block text-sm font-poppins font-medium text-secondary mb-1">Street</label>
                                                             <input
@@ -265,27 +252,18 @@ const UserProfile = () => {
                                                             />
                                                         </div>
 
-                                                        <div>
-                                                            <label className="block text-sm font-poppins font-medium text-secondary mb-1">City</label>
-                                                            <input
-                                                                type="text"
-                                                                name="city"
-                                                                value={profile.address.city}
-                                                                onChange={handleAddressChange}
-                                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary font-inter"
-                                                            />
-                                                        </div>
-
-                                                        <div>
-                                                            <label className="block text-sm font-poppins font-medium text-secondary mb-1">State</label>
-                                                            <input
-                                                                type="text"
-                                                                name="state"
-                                                                value={profile.address.state}
-                                                                onChange={handleAddressChange}
-                                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary font-inter"
-                                                            />
-                                                        </div>
+                                                        <AddressSelector
+                                                            selectedState={profile.address.state}
+                                                            selectedCity={profile.address.city}
+                                                            onStateChange={(state) => setProfile(prev => ({
+                                                                ...prev,
+                                                                address: { ...prev.address, state, city: '' }
+                                                            }))}
+                                                            onCityChange={(city) => setProfile(prev => ({
+                                                                ...prev,
+                                                                address: { ...prev.address, city }
+                                                            }))}
+                                                        />
 
                                                         <div>
                                                             <label className="block text-sm font-poppins font-medium text-secondary mb-1">Postal Code</label>

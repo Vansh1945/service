@@ -311,24 +311,15 @@ const getProfile = async (req, res) => {
     // Calculate total bookings dynamically
     const totalBookings = await Booking.countDocuments({ customer: req.user._id });
 
-    // Calculate total spent
-    const totalSpentResult = await Transaction.aggregate([
-      { $match: { user: req.user._id, paymentStatus: 'completed' } },
-      { $group: { _id: null, total: { $sum: '$amount' } } }
-    ]);
-    const totalSpent = totalSpentResult.length > 0 ? totalSpentResult[0].total : 0;
-
     // Update user with calculated values
     const updatedUser = {
       ...user,
-      totalBookings,
-      totalSpent
+      totalBookings
     };
 
     // Optionally update the stored values in DB for future use
     await User.findByIdAndUpdate(req.user._id, {
-      totalBookings,
-      totalSpent
+      totalBookings
     });
 
     res.status(200).json({

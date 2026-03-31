@@ -3,7 +3,8 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   FiMenu, FiX, FiHome, FiCheckCircle, FiUsers, FiCalendar, FiMessageCircle,
   FiDollarSign, FiTag, FiPlus, FiTool, FiAlertCircle, FiChevronDown,
-  FiLogOut, FiUser, FiBell, FiSettings, FiCreditCard, FiActivity, FiFileText, FiMessageSquare
+  FiLogOut, FiUser, FiBell, FiSettings, FiCreditCard, FiActivity, FiFileText,
+  FiMessageSquare, FiHelpCircle, FiLayers, FiLayout, FiPhoneCall
 } from 'react-icons/fi';
 import { useAuth } from '../context/auth';
 import NotificationBell from '../components/NotificationBell';
@@ -46,18 +47,18 @@ const AdminLayout = () => {
     { name: 'Dashboard', path: '/admin/dashboard', icon: <FiHome className="w-5 h-5" /> },
     { name: 'Approve Providers', path: '/admin/approve-providers', icon: <FiCheckCircle className="w-5 h-5" /> },
     { name: 'All Providers', path: '/admin/providers', icon: <FiUsers className="w-5 h-5" /> },
-    { name: 'All Customers', path: '/admin/customers', icon: <FiUsers className="w-5 h-5" /> },
+    { name: 'All Customers', path: '/admin/customers', icon: <FiUser className="w-5 h-5" /> },
     { name: 'Bookings', path: '/admin/bookings', icon: <FiCalendar className="w-5 h-5" /> },
     { name: 'Commission Settings', path: '/admin/commission', icon: <FiDollarSign className="w-5 h-5" /> },
     { name: 'Coupons', path: '/admin/coupons', icon: <FiTag className="w-5 h-5" /> },
-    { name: 'Test', path: '/admin/add-questions', icon: <FiPlus className="w-5 h-5" /> },
-    { name: 'Add Services', path: '/admin/add-services', icon: <FiTool className="w-5 h-5" /> },
+    { name: 'Test', path: '/admin/add-questions', icon: <FiHelpCircle className="w-5 h-5" /> },
+    { name: 'Add Services', path: '/admin/add-services', icon: <FiLayers className="w-5 h-5" /> },
     { name: 'Complaint', path: '/admin/complaints', icon: <FiAlertCircle className="w-5 h-5" /> },
-    { name: 'Feedback', path: '/admin/feedback', icon: <FiMessageCircle className="w-5 h-5" /> },
-    { name: 'User Contacts', path: '/admin/user-contacts', icon: <FiMessageCircle className="w-5 h-5" /> },
+    { name: 'Feedback', path: '/admin/feedback', icon: <FiMessageSquare className="w-5 h-5" /> },
+    { name: 'User Contacts', path: '/admin/user-contacts', icon: <FiPhoneCall className="w-5 h-5" /> },
     { name: 'Earning Reports', path: '/admin/earning-reports', icon: <FiActivity className="w-5 h-5" /> },
     { name: 'Payout', path: '/admin/payout', icon: <FiCreditCard className="w-5 h-5" /> },
-    { name: 'Category & Banner', path: '/admin/category-banner', icon: <FiFileText className="w-5 h-5" /> },
+    { name: 'Category & Banner', path: '/admin/category-banner', icon: <FiLayout className="w-5 h-5" /> },
   ];
 
   const isDashboardActive = location.pathname === '/admin' || location.pathname === '/admin/dashboard';

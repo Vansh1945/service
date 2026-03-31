@@ -117,6 +117,16 @@ const CustomerLayout = () => {
 
                             <NotificationBell />
 
+                            {/* Mobile Logout Button */}
+                            <button
+                                onClick={handleLogout}
+                                className="lg:hidden p-2 rounded-full text-red-500 hover:bg-red-50 bg-red-50/50 transition-all duration-200 focus:outline-none flex items-center justify-center"
+                                aria-label="Logout"
+                                title="Logout"
+                            >
+                                <FiLogOut className="h-5 w-5" />
+                            </button>
+
                             {/* Profile Dropdown - Desktop Only */}
                             <div className="hidden lg:block relative">
                                 <button

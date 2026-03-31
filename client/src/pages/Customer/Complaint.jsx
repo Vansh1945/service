@@ -491,9 +491,9 @@ const ComplaintsPage = () => {
 
         {/* New Complaint Modal */}
         {openNewComplaint && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-xl max-w-2xl w-full max-h-screen overflow-y-auto">
-              <div className="flex justify-between items-center border-b border-gray-200 px-6 py-4">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[999]">
+            <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+              <div className="flex justify-between items-center border-b border-gray-200 px-6 py-4 flex-shrink-0">
                 <h3 className="text-lg font-semibold text-secondary">Submit New Complaint</h3>
                 <button
                   onClick={() => {
@@ -507,7 +507,7 @@ const ComplaintsPage = () => {
                   </svg>
                 </button>
               </div>
-              <div className="p-6">
+              <div className="p-6 overflow-y-auto flex-1 min-h-0">
                 {formData.category === 'Service issue' && (
                   <div className="mb-6">
                     <label htmlFor="bookingId" className="block text-sm font-medium text-secondary mb-1">
@@ -664,7 +664,7 @@ const ComplaintsPage = () => {
                   )}
                 </div>
               </div>
-              <div className="bg-gray-50/80 px-6 py-4 flex justify-end space-x-3">
+              <div className="bg-gray-50/80 px-6 py-4 flex justify-end space-x-3 rounded-b-xl flex-shrink-0">
                 <button
                   onClick={() => {
                     setOpenNewComplaint(false);
@@ -688,9 +688,9 @@ const ComplaintsPage = () => {
 
         {/* Complaint Detail Modal */}
         {openComplaintDetail && selectedComplaint && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-xl max-w-3xl w-full max-h-screen overflow-y-auto">
-              <div className="flex justify-between items-center border-b border-gray-200 px-6 py-4">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[999]">
+            <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col">
+              <div className="flex justify-between items-center border-b border-gray-200 px-6 py-4 flex-shrink-0">
                 <h3 className="text-lg font-semibold text-secondary">Complaint Details</h3>
                 <button
                   onClick={() => setOpenComplaintDetail(false)}
@@ -701,7 +701,7 @@ const ComplaintsPage = () => {
                   </svg>
                 </button>
               </div>
-              <div className="p-6">
+              <div className="p-6 overflow-y-auto flex-1 min-h-0">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                   <div>
                     <h4 className="text-md font-medium text-secondary mb-3">Complaint Information</h4>
@@ -810,7 +810,7 @@ const ComplaintsPage = () => {
                   </div>
                 )}
               </div>
-              <div className="bg-gray-50/80 px-6 py-4 flex flex-col md:flex-row md:justify-between space-y-3 md:space-y-0">
+              <div className="bg-gray-50/80 px-6 py-4 flex flex-col md:flex-row md:justify-between space-y-3 md:space-y-0 rounded-b-xl flex-shrink-0">
                 {selectedComplaint.status === 'Solved' && (
                   <button
                     onClick={reopenComplaint}

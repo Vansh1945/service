@@ -301,7 +301,7 @@ const BookingConfirmation = () => {
       }
 
       // Success message with more details
-      showToast('âœ… Booking confirmed! You can pay cash after service completion.', 'success');
+      showToast(' Booking confirmed! You can pay cash after service completion.', 'success');
 
       // Navigate with enhanced state
       setTimeout(() => {

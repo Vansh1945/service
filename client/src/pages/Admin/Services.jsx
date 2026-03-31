@@ -117,17 +117,17 @@ const ServiceRow = React.memo(({ service, onViewClick, onEditClick, onToggleStat
         </span>
       </td>
       <td className="px-4 md:px-6 py-4 whitespace-nowrap">
-        <div className="flex items-center">
-          <span className="text-gray-400 mr-1">🕒</span>
-          <span className="text-sm text-gray-600">
+        <div className="flex items-center text-gray-600">
+          <Clock className="w-4 h-4 mr-1 text-gray-400" />
+          <span className="text-sm">
             {formatDuration(service.duration)}
           </span>
         </div>
       </td>
       <td className="px-4 md:px-6 py-4 whitespace-nowrap">
-        <div className="flex items-center">
-          <span className="text-yellow-400 mr-1">⭐</span>
-          <span className="text-sm text-gray-600">
+        <div className="flex items-center text-gray-600">
+          <Star className="w-4 h-4 mr-1 text-yellow-500 fill-current" />
+          <span className="text-sm">
             {service.averageRating || 0} ({service.ratingCount || 0})
           </span>
         </div>
@@ -137,42 +137,34 @@ const ServiceRow = React.memo(({ service, onViewClick, onEditClick, onToggleStat
           ? 'bg-green-100 text-green-800'
           : 'bg-red-100 text-red-800'
           }`}>
-          {service.isActive ? (
-            <>
-              Active
-            </>
-          ) : (
-            <>
-              Inactive
-            </>
-          )}
+          {service.isActive ? 'Active' : 'Inactive'}
         </span>
       </td>
       <td className="px-4 md:px-6 py-4 whitespace-nowrap">
         <div className="flex items-center space-x-2">
           <button
             onClick={() => onViewClick(service)}
-            className="text-primary hover:text-teal-800 p-1 rounded transition-colors duration-200"
+            className="p-1.5 rounded-md text-gray-500 hover:text-primary hover:bg-teal-50 transition-colors duration-200"
             title="View Details"
           >
-            👁️
+            <Eye className="w-4 h-4" />
           </button>
           <button
             onClick={() => onEditClick(service)}
-            className="text-primary hover:text-teal-800 p-1 rounded transition-colors duration-200"
+            className="p-1.5 rounded-md text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors duration-200"
             title="Edit Service"
           >
-            ✏️
+            <Edit className="w-4 h-4" />
           </button>
           <button
             onClick={() => onToggleStatus(service)}
-            className={`p-1 rounded transition-colors duration-200 ${service.isActive
-              ? 'text-red-600 hover:text-red-800'
-              : 'text-green-600 hover:text-green-800'
+            className={`p-1.5 rounded-md transition-colors duration-200 ${service.isActive
+              ? 'text-red-500 hover:text-red-700 hover:bg-red-50'
+              : 'text-green-500 hover:text-green-700 hover:bg-green-50'
               }`}
             title={service.isActive ? 'Deactivate Service' : 'Activate Service'}
           >
-            {service.isActive ? '❌' : '✅'}
+            {service.isActive ? <XCircle className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
           </button>
         </div>
       </td>
@@ -225,7 +217,6 @@ const AdminServices = () => {
   // Fetch all services
   const fetchServices = useCallback(async () => {
     try {
-      const toastId = toast.loading('Fetching services...');
       const response = await fetch(`${API}/service/admin/services`, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -243,12 +234,6 @@ const AdminServices = () => {
 
       const data = await response.json();
       setServices(data.data || []);
-      toast.update(toastId, {
-        render: 'Services loaded successfully!',
-        type: 'success',
-        isLoading: false,
-        autoClose: 2000
-      });
     } catch (error) {
       console.error('Fetch services error:', error);
       toast.error(error.message || 'Failed to fetch services');
@@ -447,7 +432,6 @@ const AdminServices = () => {
   const handleCreateService = async (e) => {
     e.preventDefault();
     try {
-      const toastId = toast.loading('Creating service...');
       const formData = new FormData();
       formData.append('title', createForm.title);
       formData.append('category', createForm.category);
@@ -477,12 +461,7 @@ const AdminServices = () => {
 
       const data = await response.json();
       setServices(prev => [data.data, ...prev]);
-      toast.update(toastId, {
-        render: 'Service created successfully!',
-        type: 'success',
-        isLoading: false,
-        autoClose: 2000
-      });
+      toast.success('Service created successfully!');
       resetCreateForm();
       setShowCreateModal(false);
     } catch (error) {
@@ -495,7 +474,6 @@ const AdminServices = () => {
   const handleUpdateService = async (e) => {
     e.preventDefault();
     try {
-      const toastId = toast.loading('Updating service...');
       const formData = new FormData();
       Object.keys(editForm).forEach(key => {
         if (key !== 'images' && key !== 'existingImages' && key !== 'specialNotes' && key !== 'materialsUsed' && editForm[key] !== undefined) {
@@ -537,12 +515,7 @@ const AdminServices = () => {
 
       const data = await response.json();
       setServices(prev => prev.map(s => s._id === data.data._id ? data.data : s));
-      toast.update(toastId, {
-        render: 'Service updated successfully!',
-        type: 'success',
-        isLoading: false,
-        autoClose: 2000
-      });
+      toast.success('Service updated successfully!');
       setShowEditModal(false);
     } catch (error) {
       console.error('Update service error:', error);
@@ -553,7 +526,6 @@ const AdminServices = () => {
   // Update service price
   const handleUpdatePrice = async (serviceId, newPrice) => {
     try {
-      const toastId = toast.loading('Updating price...');
       const response = await fetch(`${API}/service/admin/services/${serviceId}/price`, {
         method: 'PATCH',
         headers: {
@@ -570,12 +542,7 @@ const AdminServices = () => {
 
       const data = await response.json();
       setServices(prev => prev.map(s => s._id === data.data._id ? data.data : s));
-      toast.update(toastId, {
-        render: 'Price updated successfully!',
-        type: 'success',
-        isLoading: false,
-        autoClose: 2000
-      });
+      toast.success('Price updated successfully!');
     } catch (error) {
       console.error('Update price error:', error);
       toast.error(error.message || 'Failed to update price');
@@ -585,7 +552,6 @@ const AdminServices = () => {
   // Toggle service status
   const handleToggleStatus = useCallback(async (service) => {
     try {
-      const toastId = toast.loading(service.isActive ? 'Deactivating service...' : 'Activating service...');
       let response;
 
       if (service.isActive) {
@@ -615,12 +581,7 @@ const AdminServices = () => {
 
       // Refetch services to get updated status
       await fetchServices();
-      toast.update(toastId, {
-        render: `Service ${service.isActive ? 'deactivated' : 'activated'} successfully!`,
-        type: 'success',
-        isLoading: false,
-        autoClose: 2000
-      });
+      toast.success(`Service ${service.isActive ? 'deactivated' : 'activated'} successfully!`);
     } catch (error) {
       console.error('Toggle status error:', error);
       toast.error(error.message || 'Failed to update service status');
@@ -636,7 +597,6 @@ const AdminServices = () => {
     }
 
     try {
-      const toastId = toast.loading('Importing services...');
       const formData = new FormData();
       formData.append('servicesFile', bulkFile);
 
@@ -654,12 +614,7 @@ const AdminServices = () => {
       }
 
       const data = await response.json();
-      toast.update(toastId, {
-        render: `Successfully imported ${data.importedCount} services!`,
-        type: 'success',
-        isLoading: false,
-        autoClose: 3000
-      });
+      toast.success(`Successfully imported ${data.importedCount} services!`);
 
       if (data.errorCount > 0) {
         toast.warning(`${data.errorCount} services had errors`);
@@ -677,7 +632,6 @@ const AdminServices = () => {
   // Export services to Excel
   const handleExportServices = async () => {
     try {
-      const toastId = toast.loading('Exporting services...');
       const response = await fetch(`${API}/service/admin/services-export`, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -701,12 +655,7 @@ const AdminServices = () => {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
 
-      toast.update(toastId, {
-        render: 'Services exported successfully!',
-        type: 'success',
-        isLoading: false,
-        autoClose: 2000
-      });
+      toast.success('Services exported successfully!');
     } catch (error) {
       console.error('Export services error:', error);
       toast.error(error.message || 'Failed to export services');
@@ -1054,7 +1003,7 @@ const AdminServices = () => {
                 </div>
                 <CategorySelect
                   value={createForm.category}
-                  onChange={useCallback((value) => setCreateForm(prev => ({ ...prev, category: value })), [])}
+                  onChange={(value) => setCreateForm(prev => ({ ...prev, category: value }))}
                   label="Category"
                   required
                   categories={categories}
@@ -1282,7 +1231,7 @@ const AdminServices = () => {
                 </div>
                 <CategorySelect
                   value={editForm.category}
-                  onChange={useCallback((value) => setEditForm(prev => ({ ...prev, category: value })), [])}
+                  onChange={(value) => setEditForm(prev => ({ ...prev, category: value }))}
                   label="Category"
                   required
                   categories={categories}
