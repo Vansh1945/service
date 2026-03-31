@@ -2,24 +2,23 @@ import React, { createContext, useContext, useEffect, useState, useRef } from 'r
 import { getToken, onMessage } from 'firebase/messaging';
 import { messaging } from '../../firebase';
 import { useAuth } from './auth';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
 
 const NotificationContext = createContext(null);
 
 export const NotificationProvider = ({ children }) => {
     const { token, isAuthenticated, API } = useAuth();
+    const navigate = useNavigate();
     const [fcmToken, setFcmToken] = useState(null);
     const [notificationPermission, setNotificationPermission] = useState(Notification.permission);
-    const savedTokenRef = useRef(null); // Track last saved token to avoid duplicates
+    const savedTokenRef = useRef(null);
 
     // Save token to backend
     const saveTokenToBackend = async (newToken, authToken) => {
         if (!newToken || !authToken) return;
         
-        // Prevent duplicate API call using localStorage
-        if (localStorage.getItem("fcmToken") === newToken) {
-            console.log('[FCM] Token already saved in this session.');
-            return;
-        }
+        if (localStorage.getItem("fcmToken") === newToken) return;
 
         try {
             const res = await fetch(`${API}/notifications/save-token`, {
@@ -39,7 +38,6 @@ export const NotificationProvider = ({ children }) => {
         }
     };
 
-    // Generate FCM token and save it
     const initFCMToken = async (authToken) => {
         try {
             const permission = Notification.permission;
@@ -53,17 +51,15 @@ export const NotificationProvider = ({ children }) => {
 
             if (currentToken) {
                 setFcmToken(currentToken);
-                console.log('[FCM] Token:', currentToken);
                 await saveTokenToBackend(currentToken, authToken);
             } else {
-                console.warn('[FCM] No token available — permission not granted or SW not registered.');
+                console.warn('[FCM] No token available.');
             }
         } catch (err) {
             console.error('[FCM] Error generating token:', err);
         }
     };
 
-    // Request notification permission from user
     const requestPermission = async () => {
         try {
             const permission = await Notification.requestPermission();
@@ -76,37 +72,61 @@ export const NotificationProvider = ({ children }) => {
         }
     };
 
-    // Run on login or page reload when authenticated
+    useEffect(() => {
+        if (!('serviceWorker' in navigator)) return;
+
+        const handleSWMessage = (event) => {
+            if (event.data && event.data.type === 'NAVIGATE' && event.data.url) {
+                navigate(event.data.url);
+            }
+        };
+
+        navigator.serviceWorker.addEventListener('message', handleSWMessage);
+        return () => navigator.serviceWorker.removeEventListener('message', handleSWMessage);
+    }, [navigate]);
+
     useEffect(() => {
         if (!isAuthenticated || !token) return;
 
         if (Notification.permission === 'granted') {
-            // Already granted — just fetch & save token
             initFCMToken(token);
         } else if (Notification.permission === 'default') {
-            // Ask for permission
             requestPermission();
         }
-        // If 'denied', do nothing
 
-        // Handle foreground messages
         const unsubscribe = onMessage(messaging, (payload) => {
             console.log('[FCM] Foreground message received:', payload);
-            
-            // ✅ DO NOT manually show notification if notification key exists (Firebase handles it)
-            if (payload.notification) return;
 
-            // Only show custom notification for data messages (if needed)
-            if (payload.data && payload.data.title) {
-                new Notification(payload.data.title, {
-                    body: payload.data.body,
-                    icon: '/logo.png'
+            const title = payload.notification?.title || payload.data?.title || 'New Notification';
+            const body = payload.notification?.body || payload.data?.body || '';
+            const url = payload.data?.url || '/';
+
+            // Standard Toast notification (No custom UI)
+            toast.info(`${title}: ${body}`, {
+                onClick: () => {
+                    if (url) navigate(url);
+                },
+                autoClose: 6000,
+            });
+            
+            // Still trigger standard desktop notification if authorized
+            if (Notification.permission === 'granted') {
+                const notif = new Notification(title, {
+                    body: body,
+                    icon: '/icon-192.png',
+                    badge: '/icon-192.png',
+                    data: { url }
                 });
+
+                notif.onclick = () => {
+                    navigate(notif.data.url);
+                    notif.close();
+                };
             }
         });
 
         return () => unsubscribe();
-    }, [isAuthenticated, token]); // Re-run when token changes (login/logout)
+    }, [isAuthenticated, token]);
 
     const contextValue = {
         fcmToken,

@@ -20,6 +20,7 @@ const AdminPayout = lazy(() => import("../pages/Admin/Payout"));
 const CategoryBanner = lazy(() => import("../pages/Admin/CategoryBanner"));
 const SystemSetting = lazy(() => import("../pages/Admin/System-Setting"));
 const UserContacts = lazy(() => import("../pages/Admin/User-Contacts"));
+const AdminNotification = lazy(() => import("../pages/Admin/AdminNotification"));
 
 const AdminRoutes = () => {
     return (
@@ -44,6 +45,7 @@ const AdminRoutes = () => {
                     <Route path="category-banner" element={<CategoryBanner />} />
                     <Route path="settings" element={<SystemSetting />} />
                     <Route path="user-contacts" element={<UserContacts />} />
+                    <Route path="notifications" element={<AdminNotification />} />
                 </Route>
             </Route>
         </Routes>

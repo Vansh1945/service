@@ -2,6 +2,8 @@ const Notification = require('../models/Notification');
 const User = require('../models/User-model');
 const Provider = require('../models/Provider-model');
 const Admin = require('../models/Admin-model');
+const { sendBroadcastNotification } = require('../utils/notificationService');
+
 
 
 /**
@@ -180,12 +182,90 @@ const removeToken = async (req, res) => {
     }
 };
 
-module.exports = { 
-    getNotifications, 
-    markRead, 
-    markAllRead, 
-    getUnreadCount,
-    saveToken,
-    removeToken
+/**
+ * POST /api/notifications/send-broadcast
+ * Admin-only: Send FCM broadcast to selected audience
+ */
+const sendBroadcast = async (req, res) => {
+    try {
+        const { audience = 'all', title, body, url = '/', type = 'broadcast' } = req.body;
+
+        if (!title || !body) {
+            return res.status(400).json({ success: false, message: 'Title and body are required' });
+        }
+
+        const validAudiences = ['all', 'customer', 'provider'];
+        if (!validAudiences.includes(audience)) {
+            return res.status(400).json({ success: false, message: 'audience must be all, customer, or provider' });
+        }
+
+        const result = await sendBroadcastNotification(audience, {
+            title,
+            body,
+            url,
+            data: { type, url }
+        });
+
+        if (!result.success && result.sent === 0 && result.total === 0) {
+            return res.status(200).json({
+                success: false,
+                message: result.message || 'No registered devices found',
+                data: result
+            });
+        }
+
+        // Save History (Async so it doesn't block the response)
+        Notification.create({
+            title,
+            message: body,
+            type: 'broadcast',
+            audience,
+            url,
+            totalSent: result.total || 0,
+            successCount: result.sent || 0,
+            failureCount: result.failed || 0
+        }).catch(err => {
+            console.error('[NotificationController] Error saving broadcast history:', err);
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: `Broadcast sent to ${result.sent} device(s) out of ${result.total}`,
+            data: result
+        });
+    } catch (error) {
+        console.error('sendBroadcast error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to send broadcast notification' });
+    }
 };
 
+/**
+ * GET /api/notifications/history
+ * Admin-only: Get broadcast history
+ */
+const getBroadcastHistory = async (req, res) => {
+    try {
+        const history = await Notification.find({ type: 'broadcast' })
+            .sort({ createdAt: -1 })
+            .limit(50);
+
+        return res.status(200).json({
+            success: true,
+            history
+        });
+    } catch (error) {
+        console.error('getBroadcastHistory error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to fetch broadcast history' });
+    }
+};
+
+module.exports = {
+    getNotifications,
+    markRead,
+    markAllRead,
+    getUnreadCount,
+    saveToken,
+    removeToken,
+    sendBroadcast,
+    getBroadcastHistory
+};

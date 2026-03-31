@@ -13,7 +13,7 @@ const setIO = (io) => {
 /**
  * Create a notification in DB and emit it via Socket.io and FCM
  */
-const sendNotification = async (userId, role, title, message, type = 'system', referenceId = null) => {
+const sendNotification = async (userId, role, title, message, type = 'system', referenceId = null, url = '/') => {
     try {
         let notification = null;
 
@@ -51,10 +51,12 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
                 await notificationService.notifyUser(userId, role, {
                     title,
                     body: message,
+                    url,
                     data: {
                         bookingId: referenceId ? referenceId.toString() : '',
                         userId: userId.toString(),
-                        type: type
+                        type: type,
+                        url
                     }
                 });
             } catch (fcmError) {
@@ -72,15 +74,16 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
             });
 
             // Optional: Broadcast to all tokens of users with this role if needed
-            // For now, requirement 4 says Admin gets all major activities
             if (role === 'admin') {
                 try {
                     await notificationService.notifyAllAdmins({
                         title,
                         body: message,
+                        url,
                         data: {
                             referenceId: referenceId ? referenceId.toString() : '',
-                            type: type
+                            type: type,
+                            url
                         }
                     });
                 } catch (fcmError) {
@@ -99,14 +102,13 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
 /**
  * Broadcast notification DB entries to all admins
  */
-const notifyAdmins = async (title, message, type = 'system', referenceId = null) => {
+const notifyAdmins = async (title, message, type = 'system', referenceId = null, url = '/') => {
     try {
-        // This will now trigger FCM via sendNotification -> notifyUser(admin)
         const Admin = require('../models/Admin-model');
         const admins = await Admin.find({ isActive: true });
 
         for (const admin of admins) {
-            await sendNotification(admin._id, 'admin', title, message, type, referenceId);
+            await sendNotification(admin._id, 'admin', title, message, type, referenceId, url);
         }
     } catch (error) {
         console.error('Error notifying admins:', error);
@@ -114,3 +116,4 @@ const notifyAdmins = async (title, message, type = 'system', referenceId = null)
 };
 
 module.exports = { sendNotification, notifyAdmins, setIO };
+

@@ -19,6 +19,14 @@ const flexAuth = (req, res, next) => {
     }
 };
 
+// Admin-only guard (must come after flexAuth)
+const adminOnly = (req, res, next) => {
+    if (req.role !== 'admin' && !req.isAdmin) {
+        return res.status(403).json({ success: false, message: 'Admin access required' });
+    }
+    next();
+};
+
 // GET /api/notifications — get all with unread count
 router.get('/', flexAuth, notificationController.getNotifications);
 
@@ -37,4 +45,11 @@ router.post('/save-token', flexAuth, notificationController.saveToken);
 // POST /api/notifications/remove-token
 router.post('/remove-token', flexAuth, notificationController.removeToken);
 
+// POST /api/notifications/send-broadcast — Admin only
+router.post('/send-broadcast', flexAuth, adminOnly, notificationController.sendBroadcast);
+
+// GET /api/notifications/history — Admin only
+router.get('/history', flexAuth, adminOnly, notificationController.getBroadcastHistory);
+
 module.exports = router;
+

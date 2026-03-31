@@ -6,13 +6,13 @@ importScripts('https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js
 importScripts('https://www.gstatic.com/firebasejs/10.11.0/firebase-messaging-compat.js');
 
 const firebaseConfig = {
-    apiKey: "AIzaSyBa4POZSvx62cqq8Mdc8rIBhjIGreNJ-GA",
-    authDomain: "raj-electrical.firebaseapp.com",
-    projectId: "raj-electrical",
-    storageBucket: "raj-electrical.firebasestorage.app",
-    messagingSenderId: "710160850410",
-    appId: "1:710160850410:web:2e5a539d56b3e12025a693",
-    measurementId: "G-DMD24Q474W"
+    apiKey: "%%VITE_FIREBASE_API_KEY%%",
+    authDomain: "%%VITE_FIREBASE_AUTH_DOMAIN%%",
+    projectId: "%%VITE_FIREBASE_PROJECT_ID%%",
+    storageBucket: "%%VITE_FIREBASE_STORAGE_BUCKET%%",
+    messagingSenderId: "%%VITE_FIREBASE_MESSAGING_SENDER_ID%%",
+    appId: "%%VITE_FIREBASE_APP_ID%%",
+    measurementId: "%%VITE_FIREBASE_MEASUREMENT_ID%%"
 };
 
 firebase.initializeApp(firebaseConfig);
@@ -51,22 +51,26 @@ messaging.onBackgroundMessage((payload) => {
     self.registration.showNotification(title, notificationOptions);
 });
 
-// ✅ Handle notification click — opens the app
+// ✅ Handle notification click — deep-link to specific route
 self.addEventListener('notificationclick', (event) => {
     console.log('[SW] Notification clicked:', event);
     event.notification.close();
 
-    const urlToOpen = self.location.origin + '/';
+    // Extract deep-link URL from notification data
+    const data = event.notification.data || {};
+    const deepLink = data.url || '/';
+    const urlToOpen = self.location.origin + deepLink;
 
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-            // If app is already open, focus it
+            // If app is already open, navigate it to the deep-link route
             for (const client of clientList) {
                 if (client.url.startsWith(self.location.origin) && 'focus' in client) {
+                    client.postMessage({ type: 'NAVIGATE', url: deepLink });
                     return client.focus();
                 }
             }
-            // Otherwise open a new window
+            // Otherwise open a new window at the deep-link URL
             if (clients.openWindow) {
                 return clients.openWindow(urlToOpen);
             }
