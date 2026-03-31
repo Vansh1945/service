@@ -2,6 +2,8 @@ const admin = require('../config/firebaseAdmin');
 const User = require('../models/User-model');
 const Provider = require('../models/Provider-model');
 const Admin = require('../models/Admin-model');
+const Notification = require('../models/Notification'); // Ensure Notification model is imported
+const cron = require('node-cron');
 
 /**
  * Send a push notification to a list of registration tokens
@@ -202,9 +204,129 @@ const sendBroadcastNotification = async (audience, payload) => {
     }
 };
 
+/**
+ * Schedule a notification for a specific user, role, or broadcast audience
+ * @param {object} payload - { userId, role, audience, title, body, url, type, scheduledTime }
+ */
+const scheduleNotification = async (payload) => {
+    try {
+        const { userId, role, audience, title, body, url = '/', type = 'system', scheduledTime } = payload;
+        
+        if (!scheduledTime) {
+            throw new Error('scheduledTime is required to schedule a notification');
+        }
+
+        // Store in DB as 'pending'
+        const newNotif = await Notification.create({
+            userId: userId || null,
+            role: role || null,
+            audience: audience || null,
+            title,
+            message: body,
+            url,
+            type: audience ? 'broadcast' : type,
+            scheduledTime: new Date(scheduledTime),
+            status: 'pending',
+            totalSent: 0,
+            successCount: 0,
+            failureCount: 0,
+            retries: 0
+        });
+
+        console.log(`[NotificationService] Notification scheduled for ${newNotif.scheduledTime} (ID: ${newNotif._id})`);
+        return { success: true, message: 'Notification scheduled successfully', notification: newNotif };
+    } catch (error) {
+        console.error('[NotificationService] Error scheduling notification:', error);
+        return { success: false, message: 'Failed to schedule notification', error: error.message };
+    }
+};
+
+/**
+ * CRON JOB: Runs every minute to check and send pending scheduled notifications
+ */
+cron.schedule('* * * * *', async () => {
+    try {
+        const now = new Date();
+        // Find pending notifications where scheduledTime has passed, up to 3 retries max
+        const pendingNotifications = await Notification.find({
+            status: 'pending',
+            scheduledTime: { $lte: now },
+            retries: { $lt: 3 }
+        });
+
+        if (pendingNotifications.length > 0) {
+            console.log(`[NotificationService] Found ${pendingNotifications.length} scheduled notification(s) to process.`);
+        }
+
+        for (const notif of pendingNotifications) {
+            try {
+                let result;
+                // Dispatch logic based on whether it is a broadcast or user-specific notification
+                if (notif.audience && ['all', 'customer', 'provider'].includes(notif.audience)) {
+                    result = await sendBroadcastNotification(notif.audience, {
+                        title: notif.title,
+                        body: notif.message,
+                        url: notif.url,
+                        data: { type: notif.type, url: notif.url }
+                    });
+                } else if (notif.userId && notif.role) {
+                    // Collect tokens for a single user to trigger sendPushNotification manually,
+                    // but we can simply rely on the existing notifyUser if we don't need accurate result counting.
+                    // For accuracy, we manually execute finding tokens to log failures identically.
+                    let userModel;
+                    if (notif.role === 'provider') userModel = Provider;
+                    else if (notif.role === 'admin') userModel = Admin;
+                    else userModel = User;
+
+                    const user = await userModel.findById(notif.userId);
+                    if (user && user.fcmTokens && user.fcmTokens.length > 0) {
+                        const tokens = [...new Set(user.fcmTokens.map(t => t.token))];
+                        result = await sendPushNotification(tokens, {
+                            title: notif.title,
+                            body: notif.message,
+                            url: notif.url,
+                            data: { type: notif.type, url: notif.url }
+                        });
+                        if (result) {
+                            result = { success: true, sent: result.successCount, failed: result.failureCount, total: tokens.length };
+                        } else {
+                            result = { success: false, sent: 0, failed: 0, total: tokens.length };
+                        }
+                    } else {
+                        // User exists but has no Firebase tokens
+                        result = { success: false, sent: 0, failed: 0, total: 0, message: 'No registered devices' };
+                    }
+                }
+
+                // Update DB status to 'sent'
+                notif.status = 'sent';
+                notif.sentAt = new Date();
+                notif.totalSent = result?.total || 0;
+                notif.successCount = result?.sent || 0;
+                notif.failureCount = result?.failed || 0;
+                await notif.save();
+                console.log(`[NotificationService] Scheduled notification (ID: ${notif._id}) SENT successfully.`);
+                
+            } catch (err) {
+                console.error(`[NotificationService] Failed matching scheduled notification (ID: ${notif._id}):`, err);
+                
+                // Retry Logic
+                notif.retries += 1;
+                if (notif.retries >= 3) {
+                    notif.status = 'failed';
+                }
+                await notif.save();
+            }
+        }
+    } catch (error) {
+        console.error('[NotificationService] Cron job error:', error);
+    }
+});
+
 module.exports = {
     sendPushNotification,
     notifyUser,
     notifyAllAdmins,
-    sendBroadcastNotification
+    sendBroadcastNotification,
+    scheduleNotification
 };

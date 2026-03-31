@@ -56,11 +56,26 @@ const notificationSchema = new mongoose.Schema({
     failureCount: {
         type: Number,
         default: 0
+    },
+    // Tracking fields for Scheduled Notifications
+    scheduledTime: {
+        type: Date,
+        default: null
+    },
+    status: {
+        type: String,
+        enum: ['pending', 'sent', 'failed'],
+        default: 'sent' // Backward compatibility: existing immediate notifications are 'sent'
+    },
+    retries: {
+        type: Number,
+        default: 0
     }
 }, { timestamps: true });
 
 notificationSchema.index({ userId: 1, isRead: 1 });
 notificationSchema.index({ userId: 1, createdAt: -1 });
 notificationSchema.index({ type: 1, createdAt: -1 }); // Fast query for broadcast history
+notificationSchema.index({ status: 1, scheduledTime: 1 }); // Fast query for CRON scheduler
 
 module.exports = mongoose.model('Notification', notificationSchema);

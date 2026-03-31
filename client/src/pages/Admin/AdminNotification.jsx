@@ -55,7 +55,9 @@ const AdminNotification = () => {
         title:    '',
         body:     '',
         url:      '/',
+        scheduledTime: '',
     });
+    const [isScheduled, setIsScheduled] = useState(false);
     const [status,  setStatus]  = useState(null); // null | 'loading' | 'success' | 'error'
     const [result,  setResult]  = useState(null);
     const [message, setMessage] = useState('');
@@ -138,6 +140,7 @@ const AdminNotification = () => {
                     body:     form.body.trim(),
                     url:      form.url.trim() || '/',
                     type:     'broadcast',
+                    scheduledTime: isScheduled && form.scheduledTime ? form.scheduledTime : null,
                 }),
             });
 
@@ -145,7 +148,7 @@ const AdminNotification = () => {
 
             if (data.success) {
                 setStatus('success');
-                setMessage(data.message || 'Broadcast sent successfully!');
+                setMessage(data.message || 'Broadcast scheduled successfully!');
                 setResult(data.data);
                 fetchHistory(); // Refresh history
             } else {
@@ -161,7 +164,8 @@ const AdminNotification = () => {
     };
 
     const resetForm = () => {
-        setForm({ audience: 'all', title: '', body: '', url: '/' });
+        setForm({ audience: 'all', title: '', body: '', url: '/', scheduledTime: '' });
+        setIsScheduled(false);
         setStatus(null);
         setResult(null);
         setMessage('');
@@ -341,6 +345,38 @@ const AdminNotification = () => {
                                         </button>
                                     ))}
                                 </div>
+                            </div>
+
+                            {/* Scheduling Section */}
+                            <div className="pt-2">
+                                <label className="flex items-center gap-2 cursor-pointer mb-3">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={isScheduled} 
+                                        onChange={(e) => setIsScheduled(e.target.checked)}
+                                        className="rounded border-gray-300 text-primary focus:ring-primary h-4 w-4"
+                                    />
+                                    <span className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
+                                        <FiClock className="text-primary" /> Schedule for later
+                                    </span>
+                                </label>
+
+                                {isScheduled && (
+                                    <div className="pl-6 animate-fade-in">
+                                        <input
+                                            type="datetime-local"
+                                            name="scheduledTime"
+                                            value={form.scheduledTime}
+                                            onChange={handleChange}
+                                            min={new Date().toISOString().slice(0, 16)}
+                                            required={isScheduled}
+                                            className="w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors duration-200 text-sm"
+                                        />
+                                        <p className="text-xs text-gray-500 mt-1.5">
+                                            Notification will be automatically dispatched at the selected time.
+                                        </p>
+                                    </div>
+                                )}
                             </div>
                         </div>
 

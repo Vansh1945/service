@@ -2,7 +2,7 @@ const Notification = require('../models/Notification');
 const User = require('../models/User-model');
 const Provider = require('../models/Provider-model');
 const Admin = require('../models/Admin-model');
-const { sendBroadcastNotification } = require('../utils/notificationService');
+const { sendBroadcastNotification, scheduleNotification } = require('../utils/notificationService');
 
 
 
@@ -186,25 +186,41 @@ const removeToken = async (req, res) => {
  * POST /api/notifications/send-broadcast
  * Admin-only: Send FCM broadcast to selected audience
  */
-const sendBroadcast = async (req, res) => {
-    try {
-        const { audience = 'all', title, body, url = '/', type = 'broadcast' } = req.body;
-
-        if (!title || !body) {
-            return res.status(400).json({ success: false, message: 'Title and body are required' });
-        }
-
-        const validAudiences = ['all', 'customer', 'provider'];
-        if (!validAudiences.includes(audience)) {
-            return res.status(400).json({ success: false, message: 'audience must be all, customer, or provider' });
-        }
-
-        const result = await sendBroadcastNotification(audience, {
-            title,
-            body,
-            url,
-            data: { type, url }
-        });
+    const sendBroadcast = async (req, res) => {
+        try {
+            const { audience = 'all', title, body, url = '/', type = 'broadcast', scheduledTime } = req.body;
+    
+            if (!title || !body) {
+                return res.status(400).json({ success: false, message: 'Title and body are required' });
+            }
+    
+            const validAudiences = ['all', 'customer', 'provider'];
+            if (!validAudiences.includes(audience)) {
+                return res.status(400).json({ success: false, message: 'audience must be all, customer, or provider' });
+            }
+    
+            if (scheduledTime) {
+                const schedResult = await scheduleNotification({
+                    audience,
+                    title,
+                    body,
+                    url,
+                    type,
+                    scheduledTime
+                });
+                return res.status(schedResult.success ? 200 : 500).json({
+                    success: schedResult.success,
+                    message: schedResult.message,
+                    data: schedResult.notification
+                });
+            }
+    
+            const result = await sendBroadcastNotification(audience, {
+                title,
+                body,
+                url,
+                data: { type, url }
+            });
 
         if (!result.success && result.sent === 0 && result.total === 0) {
             return res.status(200).json({
