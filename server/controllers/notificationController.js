@@ -214,19 +214,21 @@ const sendBroadcast = async (req, res) => {
             });
         }
 
-        // Save History (Async so it doesn't block the response)
-        Notification.create({
-            title,
-            message: body,
-            type: 'broadcast',
-            audience,
-            url,
-            totalSent: result.total || 0,
-            successCount: result.sent || 0,
-            failureCount: result.failed || 0
-        }).catch(err => {
+        // Save History before returning response to ensure frontend fetchHistory gets the latest data
+        try {
+            await Notification.create({
+                title,
+                message: body,
+                type: 'broadcast',
+                audience,
+                url,
+                totalSent: result.total || 0,
+                successCount: result.sent || 0,
+                failureCount: result.failed || 0
+            });
+        } catch (err) {
             console.error('[NotificationController] Error saving broadcast history:', err);
-        });
+        }
 
         return res.status(200).json({
             success: true,

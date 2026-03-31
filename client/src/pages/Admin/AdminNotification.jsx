@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/auth';
 import {
     FiBell, FiSend, FiUsers, FiLink, FiCheckCircle, FiAlertCircle,
-    FiLoader, FiMessageSquare, FiTarget, FiClock, FiRefreshCw
+    FiLoader, FiMessageSquare, FiTarget, FiClock, FiRefreshCw, FiSmile
 } from 'react-icons/fi';
+import EmojiPicker from 'emoji-picker-react';
 
 // ─── Audience Options ────────────────────────────────────────────────────────
 const AUDIENCE_OPTIONS = [
@@ -58,6 +59,7 @@ const AdminNotification = () => {
     const [status,  setStatus]  = useState(null); // null | 'loading' | 'success' | 'error'
     const [result,  setResult]  = useState(null);
     const [message, setMessage] = useState('');
+    const [showPicker, setShowPicker] = useState(null); // 'title' | 'body' | null
 
     const [history, setHistory] = useState([]);
     const [loadingHistory, setLoadingHistory] = useState(true);
@@ -163,6 +165,16 @@ const AdminNotification = () => {
         setStatus(null);
         setResult(null);
         setMessage('');
+        setShowPicker(null);
+    };
+
+    const handleEmojiClick = (emojiObj) => {
+        if (showPicker === 'title') {
+            setForm(prev => ({ ...prev, title: prev.title + emojiObj.emoji }));
+        } else if (showPicker === 'body') {
+            setForm(prev => ({ ...prev, body: prev.body + emojiObj.emoji }));
+        }
+        setShowPicker(null); // Optional: close picker after select, or leave open for multiple emojis
     };
 
     return (
@@ -230,41 +242,73 @@ const AdminNotification = () => {
 
                         <div className="grid grid-cols-1 gap-5">
                             {/* Title */}
-                            <div>
+                            <div className="relative">
                                 <label htmlFor="notif-title" className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
                                     <FiMessageSquare className="text-gray-400" /> Notification Title *
                                 </label>
-                                <input
-                                    id="notif-title"
-                                    type="text"
-                                    name="title"
-                                    value={form.title}
-                                    onChange={handleChange}
-                                    placeholder="e.g. Special Offer Today!"
-                                    maxLength={80}
-                                    required
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors duration-200"
-                                />
+                                <div className="relative">
+                                    <input
+                                        id="notif-title"
+                                        type="text"
+                                        name="title"
+                                        value={form.title}
+                                        onChange={handleChange}
+                                        placeholder="e.g. Special Offer Today! 🎉"
+                                        maxLength={80}
+                                        required
+                                        className="w-full pl-4 pr-10 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors duration-200"
+                                    />
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setShowPicker(prev => prev === 'title' ? null : 'title')}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-gray-400 hover:text-primary transition-colors rounded-full hover:bg-gray-100"
+                                        title="Add Emoji"
+                                    >
+                                        <FiSmile size={18} />
+                                    </button>
+                                </div>
                                 <div className="text-xs text-gray-400 text-right mt-1">{form.title.length}/80 chars</div>
+                                
+                                {showPicker === 'title' && (
+                                    <div className="absolute z-50 mt-1 right-0 shadow-xl rounded-xl border border-gray-100">
+                                        <EmojiPicker onEmojiClick={handleEmojiClick} skinTonesDisabled width={300} height={400} />
+                                    </div>
+                                )}
                             </div>
 
                             {/* Message */}
-                            <div>
+                            <div className="relative">
                                 <label htmlFor="notif-body" className="block text-sm font-medium text-gray-700 mb-1">
                                     Message Body *
                                 </label>
-                                <textarea
-                                    id="notif-body"
-                                    name="body"
-                                    value={form.body}
-                                    onChange={handleChange}
-                                    placeholder="Write your notification message here..."
-                                    maxLength={200}
-                                    required
-                                    rows={3}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors duration-200 resize-y"
-                                />
+                                <div className="relative">
+                                    <textarea
+                                        id="notif-body"
+                                        name="body"
+                                        value={form.body}
+                                        onChange={handleChange}
+                                        placeholder="Write your notification message here... 🚀🔥⏱️"
+                                        maxLength={200}
+                                        required
+                                        rows={3}
+                                        className="w-full pl-4 pr-10 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors duration-200 resize-y"
+                                    />
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setShowPicker(prev => prev === 'body' ? null : 'body')}
+                                        className="absolute right-2 top-2 p-1.5 text-gray-400 hover:text-primary transition-colors rounded-full hover:bg-gray-100"
+                                        title="Add Emoji"
+                                    >
+                                        <FiSmile size={18} />
+                                    </button>
+                                </div>
                                 <div className="text-xs text-gray-400 text-right mt-1">{form.body.length}/200 chars</div>
+
+                                {showPicker === 'body' && (
+                                    <div className="absolute z-50 mt-1 right-0 shadow-xl rounded-xl border border-gray-100">
+                                        <EmojiPicker onEmojiClick={handleEmojiClick} skinTonesDisabled width={300} height={400} />
+                                    </div>
+                                )}
                             </div>
 
                             {/* Deep Link URL */}
