@@ -23,6 +23,10 @@ export const AuthProvider = ({ children }) => {
         }
     });
 
+    // Deep link state
+    const [isDeepLink, setIsDeepLink] = useState(false);
+    const [intendedRoute, setIntendedRoute] = useState(null);
+
     // Check if token is expired
     const isTokenExpired = (token) => {
         if (!token) return true;
@@ -90,7 +94,11 @@ export const AuthProvider = ({ children }) => {
             const urlParams = new URLSearchParams(window.location.search);
             const redirectTo = urlParams.get('redirectTo');
 
-            if (redirectTo) {
+            if (intendedRoute) {
+                const target = intendedRoute;
+                setIntendedRoute(null);
+                navigate(target, { replace: true });
+            } else if (redirectTo) {
                 navigate(redirectTo, { replace: true });
             } else {
                 // Redirect based on role
@@ -168,15 +176,20 @@ export const AuthProvider = ({ children }) => {
         token,
         role,
         user,
-        isAuthenticated: !!token, // Use existence of token for authentication
+        isAuthenticated: !!token, 
         isAdmin,
+        isDeepLink,
+        setIsDeepLink,
+        intendedRoute,
+        setIntendedRoute,
+        resetDeepLink: () => setIsDeepLink(false),
         loginUser,
         logoutUser,
         API,
         API_URL_IMAGE,
         showToast,
         isTokenExpired
-    }), [token, role, user, isAdmin, API]);
+    }), [token, role, user, isAdmin, isDeepLink, intendedRoute, API]);
 
     return (
         <AuthContext.Provider value={contextValue}>

@@ -31,6 +31,12 @@ const sendPushNotification = async (tokens, payload) => {
         if (payload.url) {
             dataPayload.url = String(payload.url);
         }
+        if (payload.route) {
+            dataPayload.route = String(payload.route);
+        }
+        if (payload.role) {
+            dataPayload.role = String(payload.role);
+        }
 
         const message = {
             notification: {
@@ -267,7 +273,7 @@ cron.schedule('* * * * *', async () => {
                         title: notif.title,
                         body: notif.message,
                         url: notif.url,
-                        data: { type: notif.type, url: notif.url }
+                        data: { type: notif.type, url: notif.url, route: notif.url, role: notif.audience === 'all' ? null : notif.audience }
                     });
                 } else if (notif.userId && notif.role) {
                     // Collect tokens for a single user to trigger sendPushNotification manually,
@@ -285,7 +291,7 @@ cron.schedule('* * * * *', async () => {
                             title: notif.title,
                             body: notif.message,
                             url: notif.url,
-                            data: { type: notif.type, url: notif.url }
+                            data: { type: notif.type, url: notif.url, route: notif.url, role: notif.role }
                         });
                         if (result) {
                             result = { success: true, sent: result.successCount, failed: result.failureCount, total: tokens.length };

@@ -19,7 +19,7 @@ const Navbar = () => {
   const [systemSettings, setSystemSettings] = useState({ companyName: '', logo: null });
   const location = useLocation();
   const menuRef = useRef(null);
-  const { API } = useAuth();
+  const { API, isDeepLink, isAuthenticated, resetDeepLink } = useAuth();
 
   // Handle scroll effect with smoother transition
   useEffect(() => {
@@ -83,6 +83,8 @@ const Navbar = () => {
     { text: "Contact", path: "/contact", icon: <FiMail className="mr-2 text-sm" /> }
   ];
 
+  if (isDeepLink && isAuthenticated) return null;
+
   return (
     <nav
       role="navigation"
@@ -123,6 +125,7 @@ const Navbar = () => {
                     key={link.text}
                     {...link}
                     isActive={location.pathname === link.path}
+                    onClick={resetDeepLink}
                   />
                 ))}
               </div>
@@ -136,12 +139,14 @@ const Navbar = () => {
               text="Login"
               variant="secondary"
               path="/login"
+              onClick={resetDeepLink}
             />
             <ActionButton
               icon={<FiUserPlus className="mr-2 text-sm" />}
               text="Register"
               variant="primary"
               path="/register"
+              onClick={resetDeepLink}
             />
           </div>
 
@@ -213,9 +218,10 @@ const Navbar = () => {
 };
 
 // Enhanced NavItem with professional hover animations
-const NavItem = ({ text, path, icon, isActive }) => (
+const NavItem = ({ text, path, icon, isActive, onClick }) => (
   <Link
     to={path}
+    onClick={onClick}
     className={`relative px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-300 flex items-center group ${isActive
         ? 'text-primary bg-primary/10 shadow-sm'
         : 'text-secondary hover:text-accent'

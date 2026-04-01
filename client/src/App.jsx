@@ -1,5 +1,5 @@
 import React, { useEffect, useState, Suspense, lazy } from "react";
-import { Routes, Route, useLocation } from "react-router-dom";
+import { Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import "./index.css";
 import { useAuth } from "./context/auth";
 
@@ -104,10 +104,63 @@ const App = () => {
     fetchSystemSettings();
   }, [API]);
 
+  const { isDeepLink, setIsDeepLink, isAuthenticated, role: userRole, isAdmin, setIntendedRoute, resetDeepLink, user } = useAuth();
+  const navigate_fn = useNavigate();
+
+  // 🔄 AUTO-REDIRECT: If logged-in, don't show Home/Login page
+  useEffect(() => {
+    // Only redirect if they land on public "/" route
+    if (isAuthenticated && location.pathname === "/") {
+        if (userRole === 'admin' || user?.isAdmin) {
+            navigate_fn('/admin/dashboard', { replace: true });
+        } else if (userRole === 'provider') {
+            navigate_fn('/provider/dashboard', { replace: true });
+        } else {
+            navigate_fn('/customer/services', { replace: true });
+        }
+    }
+  }, [isAuthenticated, userRole, user, location.pathname, navigate_fn]);
+
+  // 🔔 Handle Cold Start Deep Linking
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const route = params.get('route');
+    const role = params.get('role');
+
+    if (route) {
+      setIsDeepLink(true);
+      
+      const newUrl = window.location.pathname + window.location.hash;
+      window.history.replaceState({}, '', newUrl);
+
+      if (!isAuthenticated) {
+        setIntendedRoute(route);
+        navigate_fn('/login');
+        return;
+      }
+
+      if (role && role !== userRole && !(role === 'admin' && isAdmin)) {
+        if (userRole === 'admin' || isAdmin) navigate_fn('/admin/dashboard');
+        else if (userRole === 'provider') navigate_fn('/provider/dashboard');
+        else navigate_fn('/customer/services');
+        return;
+      }
+
+      navigate_fn(route, { state: { fromNotification: true } });
+    }
+  }, [isAuthenticated, userRole, isAdmin, navigate_fn, setIsDeepLink, setIntendedRoute]);
+
+  // 🔄 Reset deep link state on manual navigation
+  useEffect(() => {
+    if (!location.state?.fromNotification) {
+        resetDeepLink?.();
+    }
+  }, [location.pathname, location.state, resetDeepLink]);
+
   return (
     <Suspense fallback={<LoadingSpinner />}>
-      {/* Only show Navbar for public routes */}
-      {!isDashboardRoute && <Navbar />}
+      {/* Hide Navbar on deep link if authenticated as per requirements */}
+      {(!isDashboardRoute && !(isDeepLink && isAuthenticated)) && <Navbar />}
 
       <SocketProvider>
         <Routes>

@@ -58,21 +58,25 @@ self.addEventListener('notificationclick', (event) => {
 
     // Extract deep-link URL from notification data
     const data = event.notification.data || {};
-    const deepLink = data.url || '/';
-    const urlToOpen = self.location.origin + deepLink;
+    const route = data.route || data.url || '/';
+    const role = data.role || null;
+    const urlToOpen = self.location.origin + route;
 
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
             // If app is already open, navigate it to the deep-link route
             for (const client of clientList) {
                 if (client.url.startsWith(self.location.origin) && 'focus' in client) {
-                    client.postMessage({ type: 'NAVIGATE', url: deepLink });
+                    client.postMessage({ type: 'NAVIGATE', url: route, role: role });
                     return client.focus();
                 }
             }
-            // Otherwise open a new window at the deep-link URL
+            // On cold start, we pass route and role via search params so the app can pick them up
             if (clients.openWindow) {
-                return clients.openWindow(urlToOpen);
+                const searchParams = new URLSearchParams();
+                searchParams.append('route', route);
+                if (role) searchParams.append('role', role);
+                return clients.openWindow(`${self.location.origin}?${searchParams.toString()}`);
             }
         })
     );

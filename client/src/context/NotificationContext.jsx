@@ -8,7 +8,7 @@ import { toast } from 'react-toastify';
 const NotificationContext = createContext(null);
 
 export const NotificationProvider = ({ children }) => {
-    const { token, isAuthenticated, API } = useAuth();
+    const { token, isAuthenticated, role: userRole, isAdmin, setIsDeepLink, setIntendedRoute, API } = useAuth();
     const navigate = useNavigate();
     const [fcmToken, setFcmToken] = useState(null);
     const [notificationPermission, setNotificationPermission] = useState(Notification.permission);
@@ -77,7 +77,25 @@ export const NotificationProvider = ({ children }) => {
 
         const handleSWMessage = (event) => {
             if (event.data && event.data.type === 'NAVIGATE' && event.data.url) {
-                navigate(event.data.url);
+                const targetRoute = event.data.url;
+                const requiredRole = event.data.role;
+                
+                setIsDeepLink?.(true);
+
+                if (!isAuthenticated) {
+                    setIntendedRoute?.(targetRoute);
+                    navigate('/login');
+                    return;
+                }
+
+                if (requiredRole && requiredRole !== userRole && !(requiredRole === 'admin' && isAdmin)) {
+                    if (userRole === 'admin' || isAdmin) navigate('/admin/dashboard');
+                    else if (userRole === 'provider') navigate('/provider/dashboard');
+                    else navigate('/customer/services');
+                    return;
+                }
+
+                navigate(targetRoute, { state: { fromNotification: true } });
             }
         };
 
@@ -99,27 +117,43 @@ export const NotificationProvider = ({ children }) => {
 
             const title = payload.notification?.title || payload.data?.title || 'New Notification';
             const body = payload.notification?.body || payload.data?.body || '';
-            const url = payload.data?.url || '/';
+            const targetRoute = payload.data?.route || payload.data?.url || '/';
+            const requiredRole = payload.data?.role;
 
-            // Standard Toast notification (No custom UI)
+            const handleNavigation = () => {
+                setIsDeepLink?.(true);
+                
+                if (!isAuthenticated) {
+                    setIntendedRoute?.(targetRoute);
+                    navigate('/login');
+                    return;
+                }
+
+                if (requiredRole && requiredRole !== userRole && !(requiredRole === 'admin' && isAdmin)) {
+                    if (userRole === 'admin' || isAdmin) navigate('/admin/dashboard');
+                    else if (userRole === 'provider') navigate('/provider/dashboard');
+                    else navigate('/customer/services');
+                    return;
+                }
+
+                navigate(targetRoute, { state: { fromNotification: true } });
+            };
+
             toast.info(`${title}: ${body}`, {
-                onClick: () => {
-                    if (url) navigate(url);
-                },
+                onClick: handleNavigation,
                 autoClose: 6000,
             });
             
-            // Still trigger standard desktop notification if authorized
             if (Notification.permission === 'granted') {
                 const notif = new Notification(title, {
                     body: body,
                     icon: '/icon-192.png',
                     badge: '/icon-192.png',
-                    data: { url }
+                    data: { url: targetRoute, role: requiredRole }
                 });
 
                 notif.onclick = () => {
-                    navigate(notif.data.url);
+                    handleNavigation();
                     notif.close();
                 };
             }
