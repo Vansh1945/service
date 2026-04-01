@@ -259,29 +259,42 @@ const Dashboard = () => {
 
       {/* Provider Performance Section */}
       <div className="bg-background rounded-xl shadow-md p-4 md:p-6">
-        <h2 className="text-base md:text-lg font-semibold text-secondary flex items-center mb-4">
-          <FiStar className="mr-2 text-yellow-500" />
-          Provider Performance
-        </h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base md:text-lg font-semibold text-secondary flex items-center">
+            <FiStar className="mr-2 text-yellow-500" />
+            Provider Performance
+          </h2>
+          {ratings?.performanceBadge && (
+            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold text-white shadow-sm
+              ${ratings.performanceBadge === 'Platinum' ? 'bg-gradient-to-r from-gray-700 to-black border border-gray-600' :
+                ratings.performanceBadge === 'Gold' ? 'bg-gradient-to-r from-yellow-400 to-yellow-600 border border-yellow-300' :
+                ratings.performanceBadge === 'Silver' ? 'bg-gradient-to-r from-gray-300 to-gray-500 border border-gray-200 text-gray-800' :
+                'bg-gradient-to-r from-amber-600 to-amber-800 border border-amber-500' /* Bronze */}
+            `}>
+              <FiStar className={`mr-1 ${ratings.performanceBadge === 'Silver' ? 'text-gray-700' : 'text-yellow-200'}`} />
+              {ratings.performanceBadge} tier
+            </span>
+          )}
+        </div>
         <div className="flex flex-col md:flex-row justify-around items-center border border-gray-100 rounded-lg p-4 md:p-6 bg-gray-50/50 space-y-4 md:space-y-0 text-center">
           <div>
             <p className="text-gray-500 text-sm font-medium mb-1">⭐ Rating</p>
             <p className="text-xl md:text-2xl font-bold text-gray-800">
-              {profile?.performanceScore?.rating ? profile.performanceScore.rating.toFixed(1) : '0.0'} / 5
+              {ratings?.averageRating ? ratings.averageRating.toFixed(1) : '0.0'} / 5
             </p>
           </div>
           <div className="hidden md:block w-full md:w-px h-px md:h-12 bg-gray-200"></div>
           <div>
             <p className="text-gray-500 text-sm font-medium mb-1">⏱ On-Time</p>
             <p className="text-xl md:text-2xl font-bold text-gray-800">
-              {profile?.performanceScore?.onTimePercentage ? profile.performanceScore.onTimePercentage.toFixed(1) : '0.0'}%
+              {ratings?.onTimeRate ? ratings.onTimeRate.toFixed(1) : '0.0'}%
             </p>
           </div>
           <div className="hidden md:block w-full md:w-px h-px md:h-12 bg-gray-200"></div>
           <div>
             <p className="text-gray-500 text-sm font-medium mb-1">✔ Completion</p>
             <p className="text-xl md:text-2xl font-bold text-gray-800">
-              {profile?.performanceScore?.completionPercentage ? profile.performanceScore.completionPercentage.toFixed(1) : '0.0'}%
+              {ratings?.completionRate ? ratings.completionRate.toFixed(1) : '0.0'}%
             </p>
           </div>
         </div>

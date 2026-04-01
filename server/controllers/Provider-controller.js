@@ -1617,24 +1617,51 @@ exports.getPerformanceRatings = async (req, res) => {
         const averageRating = ratingData.averageRating ? parseFloat(ratingData.averageRating.toFixed(1)) : 0;
 
         // Process completion stats
-        let totalBookings = 0;
+        let totalRelevant = 0;
         let completedBookings = 0;
-        completionStats.forEach(stat => {
-            totalBookings += stat.count;
-            if (stat._id === 'completed') {
-                completedBookings = stat.count;
+        let onTimeCompleted = 0;
+
+        // Fetch completed bookings with timestamps for on-time calculation
+        const completedJobs = await Booking.find({
+            provider: providerId,
+            status: 'completed'
+        }).select('completedAt date time').lean();
+
+        completedBookings = completedJobs.length;
+
+        // Calculate on-time
+        completedJobs.forEach(job => {
+            if (job.completedAt && job.date && job.time) {
+                const scheduledDate = new Date(job.date);
+                const [hours, minutes] = job.time.split(':').map(Number);
+                scheduledDate.setHours(hours, minutes, 0, 0);
+                
+                // 6-hour buffer as per Booking-controller
+                const maxCompletionTime = new Date(scheduledDate.getTime() + 6 * 60 * 60 * 1000);
+                if (job.completedAt <= maxCompletionTime) {
+                    onTimeCompleted++;
+                }
             }
         });
 
-        const completionRate = totalBookings > 0 ? parseFloat(((completedBookings / totalBookings) * 100).toFixed(1)) : 0;
+        // Use completionStats for total relevant bookings (accepted, in-progress, completed, cancelled)
+        completionStats.forEach(stat => {
+            if (['accepted', 'in-progress', 'completed', 'cancelled', 'scheduled'].includes(stat._id)) {
+                totalRelevant += stat.count;
+            }
+        });
+
+        const completionRate = totalRelevant > 0 ? parseFloat(((completedBookings / totalRelevant) * 100).toFixed(1)) : 0;
+        const onTimeRate = completedBookings > 0 ? parseFloat(((onTimeCompleted / completedBookings) * 100).toFixed(1)) : 0;
 
         // Determine performance badge
+        // Determine performance badge
         let performanceBadge = 'Bronze';
-        if (averageRating >= 4.5 && completionRate >= 95) {
+        if (averageRating >= 4.5 && completionRate >= 95 && onTimeRate >= 95) {
             performanceBadge = 'Platinum';
-        } else if (averageRating >= 4.0 && completionRate >= 90) {
+        } else if (averageRating >= 4.0 && completionRate >= 90 && onTimeRate >= 90) {
             performanceBadge = 'Gold';
-        } else if (averageRating >= 3.5 && completionRate >= 85) {
+        } else if (averageRating >= 3.5 && completionRate >= 85 && onTimeRate >= 85) {
             performanceBadge = 'Silver';
         }
 
@@ -1644,6 +1671,7 @@ exports.getPerformanceRatings = async (req, res) => {
                 averageRating,
                 totalReviews: ratingData.totalReviews || 0,
                 completionRate,
+                onTimeRate,
                 performanceBadge
             }
         });
