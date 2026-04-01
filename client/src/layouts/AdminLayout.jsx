@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
-  FiMenu, FiX, FiHome, FiCheckCircle, FiUsers, FiCalendar, FiMessageCircle,
+  FiMenu, FiX, FiHome, FiCheckCircle, FiUsers, FiCalendar,
   FiDollarSign, FiTag, FiPlus, FiTool, FiAlertCircle, FiChevronDown,
   FiLogOut, FiUser, FiBell, FiSettings, FiCreditCard, FiActivity, FiFileText,
   FiMessageSquare, FiHelpCircle, FiLayers, FiLayout, FiPhoneCall
@@ -211,15 +211,6 @@ const AdminLayout = () => {
 
             {/* Right side - Actions and profile */}
             <div className="flex items-center space-x-3">
-              {/* Messages */}
-              <Link
-                to="/admin/messages"
-                className="relative p-2 rounded-lg text-secondary hover:bg-primary/10 hover:text-primary transition-colors"
-              >
-                <span className="sr-only">Messages</span>
-                <FiMessageCircle className="w-5 h-5" />
-                <span className="absolute -top-1 -right-1 w-3 h-3 bg-accent rounded-full"></span>
-              </Link>
 
               {/* Notifications */}
               <NotificationBell />

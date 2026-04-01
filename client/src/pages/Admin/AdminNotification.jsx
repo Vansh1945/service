@@ -62,6 +62,7 @@ const AdminNotification = () => {
     const [result,  setResult]  = useState(null);
     const [message, setMessage] = useState('');
     const [showPicker, setShowPicker] = useState(null); // 'title' | 'body' | null
+    const [logoLoaded, setLogoLoaded] = useState(false);
 
     const [history, setHistory] = useState([]);
     const [loadingHistory, setLoadingHistory] = useState(true);
@@ -453,9 +454,15 @@ const AdminNotification = () => {
                             {/* Alert Body Simulator */}
                             <div className="p-4 bg-white/90 m-2 rounded-lg shadow-sm border border-gray-100">
                                 <div className="flex items-start gap-3">
-                                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 border border-primary/20 relative overflow-hidden">
-                                        <FiBell className="text-primary absolute inset-0 m-auto" size={18} style={{zIndex: 0}} />
-                                        <img src="/icon-192.png" alt="App" className="w-6 h-6 opacity-80 relative z-10" onError={(e) => {e.target.style.display='none'}} />
+                                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 border border-primary/20 overflow-hidden">
+                                        {!logoLoaded && <FiBell className="text-primary" size={18} />}
+                                        <img
+                                            src="/icon-192.png"
+                                            alt="App"
+                                            className={`w-8 h-8 object-contain transition-opacity duration-200 ${logoLoaded ? 'opacity-100' : 'opacity-0 absolute'}`}
+                                            onLoad={() => setLogoLoaded(true)}
+                                            onError={() => setLogoLoaded(false)}
+                                        />
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <div className="text-sm font-bold text-gray-900 truncate">
