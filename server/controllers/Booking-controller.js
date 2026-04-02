@@ -553,7 +553,7 @@ const getUserBookings = async (req, res) => {
       })
       .populate({
         path: 'provider',
-        select: 'name email phone completedBookings performanceScore feedbacks',
+        select: 'name email phone completedBookings performanceScore feedbacks providerId',
         populate: {
           path: 'feedbacks',
           select: 'providerFeedback.rating'
@@ -787,15 +787,13 @@ const getProviderById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid provider ID'
-      });
+    let query = { providerId: id };
+    if (mongoose.Types.ObjectId.isValid(id) && id.length === 24) {
+      query = { $or: [{ _id: id }, { providerId: id }] };
     }
 
-    const provider = await Provider.findById(id)
-      .select('name email phone  rating services experience serviceArea address')
+    const provider = await Provider.findOne(query)
+      .select('name email phone rating services experience serviceArea address providerId')
       .lean();
 
     if (!provider) {

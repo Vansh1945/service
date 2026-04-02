@@ -509,7 +509,14 @@ const AdminProvidersPage = () => {
               )}
             </div>
             <div>
-              <div className="font-semibold text-secondary group-hover:text-primary transition-colors">{provider.name}</div>
+              <div className="font-semibold text-secondary group-hover:text-primary transition-colors flex items-center gap-2">
+                {provider.name}
+                {provider.providerId && (
+                  <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-bold uppercase tracking-wider border border-primary/20">
+                    {provider.providerId}
+                  </span>
+                )}
+              </div>
               <div className="text-xs text-gray-500 flex items-center mt-1">
                 <Mail className="w-3 h-3 mr-1" />
                 {provider.email}

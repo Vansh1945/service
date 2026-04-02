@@ -359,6 +359,9 @@ const AdminProviders = () => {
                               </div>
                               <div className="ml-4">
                                 <div className="text-sm font-medium text-secondary">{provider.name}</div>
+                                {provider.providerId && (
+                                  <div className="text-[10px] font-bold text-primary tracking-wider uppercase">{provider.providerId}</div>
+                                )}
                                 <div className="text-sm text-gray-500">
                                   Joined {formatDate(provider.registrationDate || provider.createdAt)}
                                 </div>

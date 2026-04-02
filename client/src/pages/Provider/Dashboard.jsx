@@ -202,9 +202,16 @@ const Dashboard = () => {
             <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-secondary">
               Welcome back, {profile?.name || 'Provider'}!
             </h1>
-            <p className="text-gray-600 mt-1 text-sm md:text-base">
-              Here's what's happening with your services today.
-            </p>
+            <div className="flex flex-wrap items-center gap-2 mt-1">
+              {profile?.providerId && (
+                <span className="text-[10px] md:text-sm font-bold px-2 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded uppercase tracking-wider">
+                  ID: {profile.providerId}
+                </span>
+              )}
+              <p className="text-gray-600 text-sm md:text-base">
+                Here's what's happening with your services today.
+              </p>
+            </div>
           </div>
         </div>
       </div>

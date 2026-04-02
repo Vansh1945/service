@@ -570,6 +570,12 @@ const CustomerBookingsPage = () => {
                       <span className="text-gray-600">Name:</span>
                       <span className="font-medium">{booking.provider.name}</span>
                     </div>
+                    {booking.provider.providerId && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Provider ID:</span>
+                        <span className="text-xs font-bold text-primary uppercase tracking-wider">{booking.provider.providerId}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between">
                       <span className="text-gray-600">Phone:</span>
                       <span className="font-medium">{booking.provider.phone}</span>
@@ -933,6 +939,12 @@ const CustomerBookingsPage = () => {
                       <span className="text-gray-600">Name:</span>
                       <span className="font-medium">{booking.provider.name}</span>
                     </div>
+                    {booking.provider.providerId && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Provider ID:</span>
+                        <span className="text-xs font-bold text-primary uppercase tracking-wider">{booking.provider.providerId}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between">
                       <span className="text-gray-600">Phone:</span>
                       <span className="font-medium">{booking.provider.phone}</span>

@@ -287,7 +287,12 @@ const AdminDashboard = () => {
             <tbody>
               {topProviders.map((provider, index) => (
                 <tr key={index} className="border-t">
-                  <td className="p-3 text-sm text-gray-900">{provider.providerName}</td>
+                  <td className="p-3 text-sm text-gray-900">
+                    <div className="font-medium">{provider.providerName}</div>
+                    {provider.providerId && (
+                      <div className="text-[10px] font-bold text-primary uppercase">{provider.providerId}</div>
+                    )}
+                  </td>
                   <td className="p-3 text-sm text-gray-900">{provider.providerEmail}</td>
                   <td className="p-3 text-sm font-medium text-gray-900">{formatCurrency(provider.totalEarnings)}</td>
                   <td className="p-3 text-sm text-gray-600">{provider.totalBookings}</td>

@@ -119,7 +119,8 @@ exports.Login = async (req, res) => {
       role: userType === 'admin' ? 'admin' : user.role || userType,
       ...(userType === 'provider' && {
         approved: user.approved,
-        serviceArea: user.serviceArea
+        serviceArea: user.serviceArea,
+        providerId: user.providerId
       }),
       ...(userType === 'customer' && {
         phone: user.phone,

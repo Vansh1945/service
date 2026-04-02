@@ -16,6 +16,7 @@ const fs = require('fs');
 const cloudinary = require('../services/cloudinary');
 const mongoose = require('mongoose');
 const { sendNotification } = require('../utils/notificationHelper');
+const generateProviderId = require('../utils/generateProviderId');
 
 /**
  * Register a new admin
@@ -198,7 +199,7 @@ const getAllCustomers = async (req, res) => {
  */
 const approveProvider = async (req, res) => {
     try {
-        const providerId = req.params.id;
+        const queryId = req.params.id;
         const { status, remarks } = req.body;
 
         if (!['approved', 'rejected'].includes(status)) {
@@ -208,7 +209,12 @@ const approveProvider = async (req, res) => {
             });
         }
 
-        const provider = await Provider.findById(providerId);
+        let matchQuery = { providerId: queryId };
+        if (mongoose.isValidObjectId(queryId) && queryId.length === 24) {
+            matchQuery = { $or: [{ _id: queryId }, { providerId: queryId }] };
+        }
+
+        const provider = await Provider.findOne(matchQuery);
         if (!provider) {
             return res.status(404).json({
                 success: false,
@@ -224,6 +230,9 @@ const approveProvider = async (req, res) => {
             if (provider.bankDetails) {
                 provider.bankDetails.verified = true;
             }
+            if (!provider.providerId) {
+                provider.providerId = generateProviderId();
+            }
 
             await provider.save();
 
@@ -234,7 +243,7 @@ const approveProvider = async (req, res) => {
                     'provider',
                     'Account Approved 🎓',
                     `Congratulations! Your provider account has been approved. ${remarks ? '\nRemarks: ' + remarks : ''}`,
-                    'account_status',
+                    'approved',
                     provider._id
                 );
             } catch (fcmError) {
@@ -263,7 +272,7 @@ const approveProvider = async (req, res) => {
                     'provider',
                     'Account Rejected ❌',
                     `Your provider account has been rejected. Reason: ${provider.rejectionReason}`,
-                    'account_status',
+                    'rejected',
                     provider._id
                 );
             } catch (fcmError) {
@@ -303,7 +312,8 @@ const getPendingProviders = async (req, res) => {
             ...(search && {
                 $or: [
                     { name: { $regex: search, $options: 'i' } },
-                    { email: { $regex: search, $options: 'i' } }
+                    { email: { $regex: search, $options: 'i' } },
+                    { providerId: { $regex: search, $options: 'i' } }
                 ]
             })
         };
@@ -404,7 +414,8 @@ const getAllProviders = async (req, res) => {
             ...(search && {
                 $or: [
                     { name: { $regex: search, $options: 'i' } },
-                    { email: { $regex: search, $options: 'i' } }
+                    { email: { $regex: search, $options: 'i' } },
+                    { providerId: { $regex: search, $options: 'i' } }
                 ]
             })
         };
@@ -493,10 +504,15 @@ const getAllProviders = async (req, res) => {
  */
 const getProviderDetails = async (req, res) => {
     try {
-        const providerId = req.params.id;
+        const queryId = req.params.id;
+
+        let matchQuery = { providerId: queryId };
+        if (mongoose.isValidObjectId(queryId) && queryId.length === 24) {
+            matchQuery = { $or: [{ _id: new mongoose.Types.ObjectId(queryId) }, { providerId: queryId }] };
+        }
 
         const providerPipeline = [
-            { $match: { _id: new mongoose.Types.ObjectId(providerId) } },
+            { $match: matchQuery },
             {
                 $lookup: {
                     from: 'categories',
@@ -1338,8 +1354,8 @@ const getDashboardTopProviders = async (req, res) => {
             },
             {
                 $project: {
-                    _id: 0,
-                    providerId: '$_id',
+                    _id: 1,
+                    providerId: '$providerInfo.providerId',
                     providerName: '$providerInfo.name',
                     providerEmail: '$providerInfo.email',
                     totalEarnings: 1,

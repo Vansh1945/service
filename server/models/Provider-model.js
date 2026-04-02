@@ -19,6 +19,12 @@ const walletSchema = new mongoose.Schema({
 }, { _id: false });
 
 const providerSchema = new mongoose.Schema({
+    // Identifiers
+    providerId: {
+        type: String,
+        unique: true,
+        sparse: true
+    },
     // Basic Information
     name: {
         type: String,
@@ -54,11 +60,7 @@ const providerSchema = new mongoose.Schema({
         type: String,
         default: 'provider'
     },
-    performanceScore: {
-        type: String,
-        enum: ['basic', 'standard', 'premium'],
-        default: 'standard'
-    },
+
     services: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: "Category",
