@@ -64,7 +64,8 @@ const ProviderProfile = () => {
     updatedAt: null,
     createdAt: null,
     averageRating: 0,
-    ratingCount: 0
+    ratingCount: 0,
+    providerId: ''
   });
 
   // UI State
@@ -518,6 +519,12 @@ const ProviderProfile = () => {
               </div>
               <div className="p-6">
                 <div className="grid grid-cols-1 gap-4">
+                  <div className="flex justify-between items-center p-3 bg-teal-50 border border-teal-100 rounded-md">
+                    <span className="text-sm font-bold text-teal-800 uppercase tracking-wider">Your Provider ID</span>
+                    <span className="text-sm font-bold text-teal-600 bg-white px-3 py-1 rounded border border-teal-200">
+                      {profileData.providerId || 'N/A'}
+                    </span>
+                  </div>
                   <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md">
                     <span className="text-sm text-gray-600">Registration Date</span>
                     <span className="text-sm font-medium text-gray-900">

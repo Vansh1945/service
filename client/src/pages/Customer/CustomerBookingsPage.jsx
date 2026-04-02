@@ -335,9 +335,9 @@ const CustomerBookingsPage = () => {
           label: 'Provider Assigned',
           icon: User,
           completed: ['accepted', 'in-progress', 'completed'].includes(booking.status),
-          active: booking.providerDetails && booking.status === 'pending',
-          description: booking.providerDetails
-            ? `${booking.providerDetails.name} has been assigned.`
+          active: (booking.providerDetails || booking.provider) && booking.status === 'pending',
+          description: booking.providerDetails || booking.provider
+            ? `${(booking.providerDetails || booking.provider).name} (ID: ${(booking.providerDetails || booking.provider).providerId || 'N/A'}) has been assigned.`
             : 'Waiting for a provider to be assigned.',
           time: getStatusTimestamp('accepted') || getStatusTimestamp('assigned'),
         },
@@ -559,65 +559,89 @@ const CustomerBookingsPage = () => {
               )}
 
               {/* Provider Details */}
-              {booking.provider && ['accepted', 'in_progress', 'in-progress'].includes(booking.status) && (
-                <div className="bg-gray-50 rounded-xl p-4">
-                  <h4 className="font-semibold text-secondary mb-3 flex items-center">
-                    <User className="w-4 h-4 text-primary mr-2" />
-                    Provider Information
+              {(booking.provider || booking.providerDetails) && ['accepted', 'in-progress', 'in-progress', 'completed'].includes(booking.status) && (
+                <div className="bg-gray-50 rounded-xl p-5 border border-gray-200">
+                  <h4 className="font-bold text-secondary mb-4 flex items-center text-base">
+                    <User className="w-5 h-5 text-primary mr-2" />
+                    Assigned Provider
                   </h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Name:</span>
-                      <span className="font-medium">{booking.provider.name}</span>
+                  
+                  <div className="flex items-center space-x-4 mb-6">
+                    <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center border-2 border-primary/20">
+                      <User className="w-8 h-8 text-primary" />
                     </div>
-                    {booking.provider.providerId && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Provider ID:</span>
-                        <span className="text-xs font-bold text-primary uppercase tracking-wider">{booking.provider.providerId}</span>
+                    <div>
+                      <h5 className="font-bold text-lg text-gray-900">{(booking.provider || booking.providerDetails).name}</h5>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-sm font-bold text-primary uppercase">ID: {(booking.provider || booking.providerDetails).providerId || 'N/A'}</span>
+                        {(booking.provider || booking.providerDetails).performanceScore?.rating > 0 && (
+                          <div className="flex items-center bg-white px-2 py-0.5 rounded border border-yellow-200">
+                            <Star className="w-3 h-3 text-yellow-500 fill-yellow-500 mr-1" />
+                            <span className="text-xs font-bold">{(booking.provider || booking.providerDetails).performanceScore.rating.toFixed(1)}</span>
+                          </div>
+                        )}
                       </div>
-                    )}
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Phone:</span>
-                      <span className="font-medium">{booking.provider.phone}</span>
                     </div>
-                    {booking.provider.performanceScore && (
-                      <>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Rating:</span>
+                  </div>
+
+                  {booking.status !== 'completed' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm mb-6">
+                      <div className="bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
+                        <p className="text-gray-500 mb-1">Phone Number</p>
+                        <p className="font-semibold text-gray-900 flex items-center">
+                          <Phone className="w-3 h-3 mr-2 text-primary" />
+                          {(booking.provider || booking.providerDetails).phone || 'N/A'}
+                        </p>
+                      </div>
+                      {(booking.provider || booking.providerDetails).performanceScore && (
+                        <div className="bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
+                          <p className="text-gray-500 mb-1">Provider Rating</p>
                           <div className="flex items-center">
                             <Star className="w-4 h-4 text-yellow-500 fill-yellow-500 mr-1" />
-                            <span className="font-medium">
-                              {booking.provider.performanceScore.rating > 0 ? `${booking.provider.performanceScore.rating.toFixed(1)}/5` : 'New'}
+                            <span className="font-bold text-gray-900">
+                              {(booking.provider || booking.providerDetails).performanceScore.rating > 0 
+                                ? `${(booking.provider || booking.providerDetails).performanceScore.rating.toFixed(1)}/5` 
+                                : 'New Provider'}
                             </span>
                           </div>
                         </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">On-Time:</span>
-                          <span className="font-medium">
-                            {booking.provider.performanceScore.onTimePercentage?.toFixed(1) || '0.0'}%
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Completion:</span>
-                          <span className="font-medium">
-                            {booking.provider.performanceScore.completionPercentage?.toFixed(1) || '0.0'}%
-                          </span>
-                        </div>
-                      </>
-                    )}
-                    {booking.provider.totalCompletedBookings && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Completed Bookings:</span>
-                        <span className="font-medium">{booking.provider.totalCompletedBookings}</span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Call Button in Modal */}
+                  {(booking.provider || booking.providerDetails).phone && booking.status !== 'completed' && (
+                    <a 
+                      href={`tel:${(booking.provider || booking.providerDetails).phone}`}
+                      className="w-full flex items-center justify-center space-x-2 bg-primary text-white py-3 rounded-xl font-bold hover:bg-primary/90 transition-all shadow-md active:scale-95"
+                    >
+                      <Phone className="w-5 h-5" />
+                      <span>Call Provider Now</span>
+                    </a>
+                  )}
+
+                  {booking.status !== 'completed' && (
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        {(booking.provider || booking.providerDetails).performanceScore && (
+                          <>
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">On-Time Rate:</span>
+                              <span className="font-bold text-gray-700">
+                                {((booking.provider || booking.providerDetails).performanceScore.onTimePercentage || 0).toFixed(0)}%
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">Completion:</span>
+                              <span className="font-bold text-gray-700">
+                                {((booking.provider || booking.providerDetails).performanceScore.completionPercentage || 0).toFixed(0)}%
+                              </span>
+                            </div>
+                          </>
+                        )}
                       </div>
-                    )}
-                    {booking.provider.email && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Email:</span>
-                        <span className="font-medium">{booking.provider.email}</span>
-                      </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -724,6 +748,29 @@ const CustomerBookingsPage = () => {
                   </span>
                 )}
               </div>
+              {/* Provider Info (if assigned) - Show only if not completed */}
+              {(booking.provider || booking.providerDetails) && booking.status !== 'completed' && (
+                <div className="mt-3 p-3 bg-blue-50 rounded-xl border border-blue-100 flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center border border-blue-200">
+                      <User className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 font-medium">Assigned Provider</p>
+                      <p className="text-sm font-bold text-gray-900">{(booking.provider || booking.providerDetails).name}</p>
+                      <p className="text-[10px] font-bold text-primary uppercase">ID: {(booking.provider || booking.providerDetails).providerId || 'N/A'}</p>
+                    </div>
+                  </div>
+                  {/* Performance if available */}
+                  {(booking.provider || booking.providerDetails).performanceScore?.rating > 0 && (
+                    <div className="flex items-center bg-white px-2 py-1 rounded-lg border border-blue-100">
+                      <Star className="w-3 h-3 text-yellow-500 fill-yellow-500 mr-1" />
+                      <span className="text-xs font-bold">{(booking.provider || booking.providerDetails).performanceScore.rating.toFixed(1)}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {booking.paymentStatus === 'pending' && (
                 <p className="text-xs text-amber-700 mt-2 p-2 bg-amber-50 rounded-md">
                   Please confirm your booking so that a provider can be assigned and your request can be resolved.

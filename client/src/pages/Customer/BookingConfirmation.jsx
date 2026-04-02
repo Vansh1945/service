@@ -945,7 +945,66 @@ const BookingConfirmation = () => {
                     </div>
                   </div>
                 )}
-              </div>
+                {/* Assigned Provider Card (Enhanced) */}
+              {bookingDetails.provider && (
+                <div className="bg-white rounded-2xl shadow-lg border border-blue-200 p-6 hover:shadow-xl transition-all duration-300">
+                  <h2 className="text-lg font-poppins font-bold text-gray-900 mb-4 flex items-center">
+                    <FaTruck className="w-5 h-5 text-primary mr-2" />
+                    Assigned Provider Details
+                  </h2>
+                  
+                  <div className="flex items-center space-x-4 mb-6 p-4 bg-blue-50 rounded-xl border border-blue-100">
+                    <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center border-2 border-primary/20 shadow-inner">
+                      <FaTools className="w-8 h-8 text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-gray-900">{bookingDetails.provider.name}</h3>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-xs font-bold text-primary bg-white px-2 py-0.5 rounded border border-primary/30 uppercase tracking-wider">
+                          ID: {bookingDetails.provider.providerId || 'N/A'}
+                        </span>
+                        {bookingDetails.provider.performanceScore?.rating > 0 && (
+                          <div className="flex items-center text-yellow-500 bg-white px-2 py-0.5 rounded border border-yellow-200">
+                            <FaStar className="w-3 h-3 fill-current mr-1" />
+                            <span className="text-xs font-bold">{bookingDetails.provider.performanceScore.rating.toFixed(1)}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {bookingDetails.status !== 'completed' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                      <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 text-sm">
+                        <p className="text-gray-500 mb-1">Provider Phone</p>
+                        <p className="font-bold text-gray-800 flex items-center gap-2">
+                          <FaPhone className="w-3 h-3 text-primary" />
+                          {bookingDetails.provider.phone || 'N/A'}
+                        </p>
+                      </div>
+                      {bookingDetails.provider.performanceScore && (
+                        <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 text-sm">
+                          <p className="text-gray-500 mb-1">On-Time Performance</p>
+                          <p className="font-bold text-gray-800">
+                            {((bookingDetails.provider.performanceScore.onTimePercentage || 0)).toFixed(0)}% Reliable
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {bookingDetails.provider.phone && !['completed', 'cancelled'].includes(bookingDetails.status) && (
+                    <a 
+                      href={`tel:${bookingDetails.provider.phone}`}
+                      className="w-full flex items-center justify-center gap-3 bg-primary hover:bg-primary/90 text-white font-bold py-4 rounded-xl transition-all shadow-lg active:scale-95"
+                    >
+                      <FaPhone className="w-5 h-5 animate-bounce" />
+                      <span>Call Your Provider Now</span>
+                    </a>
+                  )}
+                </div>
+              )}
+            </div>
 
               {/* Booking Status */}
               <div className="mt-4 p-3 bg-gradient-to-r from-primary/5 to-primary/10 rounded-lg border border-primary/20">
