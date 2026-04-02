@@ -116,14 +116,24 @@ const Dashboard = () => {
         setError(`Failed to load data for: ${errors.join(', ')}`);
       }
 
+      const summaryData = summary?.data || null;
+      const analyticsData = analytics?.data || null;
+      const todayJobs = analyticsData?.todayJobs || [];
+      const upcomingJobs = analyticsData?.upcomingJobs || [];
+      const combinedBookings = [...todayJobs, ...upcomingJobs];
+
       setDashboardData({
-        summary: summary?.data || null,
+        summary: summaryData,
         earnings: earnings?.data || null,
         bookings: bookings?.data || null,
-        analytics: analytics?.data || null,
+        analytics: analyticsData,
         wallet: wallet?.data || null,
         ratings: ratings?.data || null,
-        profile: profile?.provider || null
+        profile: profile?.provider || null,
+        totalEarnings: summaryData?.totalEarnings || 0,
+        pendingRequests: new Array(summaryData?.pendingBookings || 0),
+        activeJobs: combinedBookings,
+        recentBookings: combinedBookings
       });
 
     } catch (error) {
@@ -178,7 +188,10 @@ const Dashboard = () => {
     return <Loader />;
   }
 
-  const { summary, earnings, bookings, analytics, wallet, ratings, profile } = dashboardData;
+  const { summary, earnings, bookings, analytics, wallet, ratings, profile, totalEarnings, pendingRequests, activeJobs, recentBookings } = dashboardData;
+
+  // Debug fixed logging
+  console.log('Provider Dashboard Data:', dashboardData);
 
   return (
     <div className="space-y-6 p-4 md:p-6">
@@ -207,7 +220,7 @@ const Dashboard = () => {
             <div className="ml-3 sm:ml-4">
               <p className="text-xs sm:text-sm font-medium text-gray-600">Total Earnings</p>
               <p className="text-lg sm:text-xl md:text-2xl font-bold text-secondary">
-                {formatCurrency(earnings?.totalEarnings || 0)}
+                {formatCurrency(dashboardData?.totalEarnings || 0)}
               </p>
             </div>
           </div>
@@ -382,7 +395,7 @@ const Dashboard = () => {
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-base md:text-lg font-semibold text-secondary">Pending Requests</h3>
-                <p className="text-2xl md:text-3xl font-bold text-accent mt-1 md:mt-2">{summary?.pendingBookings || 0}</p>
+                <p className="text-2xl md:text-3xl font-bold text-accent mt-1 md:mt-2">{dashboardData?.pendingRequests?.length || 0}</p>
                 <p className="text-xs md:text-sm text-gray-600 mt-1">Awaiting your response</p>
               </div>
               <div className="p-2 md:p-3 bg-accent/10 rounded-lg">
@@ -400,7 +413,7 @@ const Dashboard = () => {
               <div>
                 <h3 className="text-base md:text-lg font-semibold text-secondary">Active Jobs</h3>
                 <p className="text-2xl md:text-3xl font-bold text-primary mt-1 md:mt-2">
-                  {(analytics?.todayJobs?.length || 0) + (analytics?.upcomingJobs?.length || 0)}
+                  {dashboardData?.activeJobs?.length || 0}
                 </p>
                 <p className="text-xs md:text-sm text-gray-600 mt-1">Currently in progress</p>
               </div>
@@ -465,8 +478,7 @@ const Dashboard = () => {
           </div>
 
           <div className="p-4 md:p-6">
-            {(!analytics?.todayJobs || analytics.todayJobs.length === 0) &&
-              (!analytics?.upcomingJobs || analytics.upcomingJobs.length === 0) ? (
+            {!dashboardData?.recentBookings || dashboardData.recentBookings.length === 0 ? (
               <div className="text-center py-6 md:py-8">
                 <FiCalendar className="mx-auto h-8 w-8 md:h-12 md:w-12 text-gray-400" />
                 <h3 className="mt-2 text-sm font-medium text-gray-900">No recent bookings</h3>
@@ -476,14 +488,13 @@ const Dashboard = () => {
               </div>
             ) : (
               <div className="space-y-3 md:space-y-4">
-                {/* Today's Jobs */}
-                {analytics?.todayJobs?.map((booking) => (
+                {dashboardData.recentBookings.map((booking) => (
                   <div key={booking._id} className="bg-gray-50 rounded-lg p-3 md:p-4">
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
                         <div className="flex items-center space-x-3">
-                          <div className="p-2 bg-primary/10 rounded-lg">
-                            <FiUser className="h-4 w-4 text-primary" />
+                          <div className={`p-2 rounded-lg ${booking.status === 'pending' ? 'bg-orange-100 text-orange-600' : 'bg-primary/10 text-primary'}`}>
+                            <FiCalendar className="h-4 w-4" />
                           </div>
                           <div>
                             <h4 className="text-sm font-medium text-secondary">
@@ -504,56 +515,28 @@ const Dashboard = () => {
                         </div>
                       </div>
                       <div className="flex space-x-2 ml-4">
-                        <button
-                          onClick={() => handleBookingAction(booking._id, 'accept')}
-                          disabled={actionLoading[booking._id] === 'accept'}
-                          className="px-3 py-1 bg-green-500 text-white text-xs rounded-md hover:bg-green-600 disabled:opacity-50"
-                        >
-                          {actionLoading[booking._id] === 'accept' ? '...' : 'Accept'}
-                        </button>
-                        <button
-                          onClick={() => handleBookingAction(booking._id, 'reject')}
-                          disabled={actionLoading[booking._id] === 'reject'}
-                          className="px-3 py-1 bg-red-500 text-white text-xs rounded-md hover:bg-red-600 disabled:opacity-50"
-                        >
-                          {actionLoading[booking._id] === 'reject' ? '...' : 'Reject'}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-
-                {/* Upcoming Jobs */}
-                {analytics?.upcomingJobs?.map((booking) => (
-                  <div key={booking._id} className="bg-blue-50 rounded-lg p-3 md:p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-3">
-                          <div className="p-2 bg-blue-100 rounded-lg">
-                            <FiCalendar className="h-4 w-4 text-blue-600" />
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-medium text-secondary">
-                              {booking.customer?.name || 'Customer'}
-                            </h4>
-                            <p className="text-xs text-gray-600">
-                              {new Date(booking.date).toLocaleDateString()} at {booking.time}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="mt-2 flex items-center justify-between">
-                          <span className="text-xs text-gray-500">
-                            {formatAddress(booking.location)}
+                        {booking.status === 'pending' ? (
+                          <>
+                            <button
+                              onClick={() => handleBookingAction(booking._id, 'accept')}
+                              disabled={actionLoading[booking._id] === 'accept'}
+                              className="px-3 py-1 bg-green-500 text-white text-xs rounded-md hover:bg-green-600 disabled:opacity-50"
+                            >
+                              {actionLoading[booking._id] === 'accept' ? '...' : 'Accept'}
+                            </button>
+                            <button
+                              onClick={() => handleBookingAction(booking._id, 'reject')}
+                              disabled={actionLoading[booking._id] === 'reject'}
+                              className="px-3 py-1 bg-red-500 text-white text-xs rounded-md hover:bg-red-600 disabled:opacity-50"
+                            >
+                              {actionLoading[booking._id] === 'reject' ? '...' : 'Reject'}
+                            </button>
+                          </>
+                        ) : (
+                          <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full capitalize">
+                            {booking.status}
                           </span>
-                          <span className="text-sm font-semibold text-blue-600">
-                            {formatCurrency(booking.totalAmount)}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="ml-4">
-                        <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                          Scheduled
-                        </span>
+                        )}
                       </div>
                     </div>
                   </div>

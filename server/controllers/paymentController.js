@@ -160,22 +160,15 @@ const getEarningsSummary = async (req, res) => {
     const availableBalance = provider?.wallet?.availableBalance || 0;
     const totalWithdrawn = provider?.wallet?.totalWithdrawn || 0;
 
-    // Build match conditions
-    const matchConditions = {
+    // Base match conditions for lifetime
+    const baseMatchConditions = {
       provider: providerId,
       isVisibleToProvider: true
     };
 
-    if (startDate && endDate) {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
-      matchConditions.createdAt = { $gte: start, $lte: end };
-    }
-
-    // Get earnings
-    const earnings = await ProviderEarning.aggregate([
-      { $match: matchConditions },
+    // Get lifetime earnings
+    const lifetimeEarnings = await ProviderEarning.aggregate([
+      { $match: baseMatchConditions },
       {
         $group: {
           _id: null,
@@ -184,7 +177,31 @@ const getEarningsSummary = async (req, res) => {
       }
     ]);
 
-    const totalEarnings = earnings.length > 0 ? earnings[0].totalEarnings : 0;
+    const totalEarnings = lifetimeEarnings.length > 0 ? lifetimeEarnings[0].totalEarnings : 0;
+
+    let periodEarnings = totalEarnings;
+
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      
+      const periodConditions = { 
+        ...baseMatchConditions, 
+        createdAt: { $gte: start, $lte: end } 
+      };
+
+      const periodEarningsResult = await ProviderEarning.aggregate([
+        { $match: periodConditions },
+        {
+          $group: {
+            _id: null,
+            totalEarnings: { $sum: '$netAmount' }
+          }
+        }
+      ]);
+      periodEarnings = periodEarningsResult.length > 0 ? periodEarningsResult[0].totalEarnings : 0;
+    }
 
     // Get total pending withdrawals
     const pendingWithdrawals = await PaymentRecord.aggregate([

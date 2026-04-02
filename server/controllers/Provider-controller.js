@@ -1158,6 +1158,7 @@ exports.getDashboardSummary = async (req, res) => {
         const [
             bookingStats,
             todayEarnings,
+            totalEarningsRaw,
             ratingStats
         ] = await Promise.all([
             // Booking statistics
@@ -1179,6 +1180,17 @@ exports.getDashboardSummary = async (req, res) => {
                         createdAt: { $gte: today, $lt: tomorrow }
                     }
                 },
+                {
+                    $group: {
+                        _id: null,
+                        totalEarnings: { $sum: '$netAmount' }
+                    }
+                }
+            ]),
+
+            // Total lifetime earnings
+            ProviderEarning.aggregate([
+                { $match: { provider: new mongoose.Types.ObjectId(providerId) } },
                 {
                     $group: {
                         _id: null,
@@ -1225,6 +1237,7 @@ exports.getDashboardSummary = async (req, res) => {
 
         // Process today's earnings
         const todaysEarnings = todayEarnings.length > 0 ? todayEarnings[0].totalEarnings : 0;
+        const totalEarnings = totalEarningsRaw.length > 0 ? totalEarningsRaw[0].totalEarnings : 0;
 
         // Process rating stats
         const averageRating = ratingStats.length > 0 ? parseFloat(ratingStats[0].averageRating.toFixed(1)) : 0;
@@ -1237,6 +1250,7 @@ exports.getDashboardSummary = async (req, res) => {
                 completedJobs: stats.completedJobs,
                 cancelledJobs: stats.cancelledJobs,
                 todaysEarnings,
+                totalEarnings,
                 averageRating
             }
         });
