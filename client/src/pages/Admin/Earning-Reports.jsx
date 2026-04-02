@@ -148,10 +148,15 @@ const AdminEarningReports = () => {
           return;
       }
 
-      // Add date range if provided
+      // Add filters if provided
       if (dateRange.startDate && dateRange.endDate) {
         params.fromDate = dateRange.startDate;
         params.toDate = dateRange.endDate;
+      }
+      
+      // Add global providerId filter if present (unless it's already used as a path param)
+      if (providerId && reportId !== 'provider-ledger') {
+        params.providerId = providerId;
       }
 
       const response = await axios.get(url, {

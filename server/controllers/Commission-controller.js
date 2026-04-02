@@ -57,15 +57,30 @@ exports.createCommissionRule = async (req, res) => {
     if (applyTo === 'performanceScore' && !performanceScore) {
       return res.status(400).json({
         success: false,
-        message: 'Performance tier is required when applyTo is performanceScore'
+        message: 'Performance score is required when applyTo is performanceScore'
       });
     }
 
-    if (applyTo === 'specificProvider' && !specificProvider) {
-      return res.status(400).json({
-        success: false,
-        message: 'Specific provider is required when applyTo is specificProvider'
-      });
+    let targetProviderId = specificProvider;
+    if (applyTo === 'specificProvider') {
+      if (!specificProvider) {
+        return res.status(400).json({
+          success: false,
+          message: 'Specific provider ID is required'
+        });
+      }
+
+      // If specificProvider is a providerId (PROV-XXXX), find the actual ObjectId
+      if (typeof specificProvider === 'string' && specificProvider.startsWith('PROV-')) {
+        const provider = await Provider.findOne({ providerId: specificProvider });
+        if (!provider) {
+          return res.status(404).json({
+            success: false,
+            message: `Provider with ID ${specificProvider} not found`
+          });
+        }
+        targetProviderId = provider._id;
+      }
     }
 
     const newRule = new CommissionRule({
@@ -75,7 +90,7 @@ exports.createCommissionRule = async (req, res) => {
       value,
       applyTo,
       performanceScore: applyTo === 'performanceScore' ? performanceScore : undefined,
-      specificProvider: applyTo === 'specificProvider' ? specificProvider : undefined,
+      specificProvider: applyTo === 'specificProvider' ? targetProviderId : undefined,
       effectiveFrom,
       effectiveUntil,
       createdBy: req.admin._id
@@ -131,7 +146,19 @@ exports.toggleCommissionRuleStatus = async (req, res) => {
 exports.updateCommissionRule = async (req, res) => {
   try {
     const { id } = req.params;
-    const updates = req.body;
+    const updates = { ...req.body };
+
+    // If specificProvider is a providerId (PROV-XXXX), find the actual ObjectId
+    if (updates.applyTo === 'specificProvider' && typeof updates.specificProvider === 'string' && updates.specificProvider.startsWith('PROV-')) {
+      const provider = await Provider.findOne({ providerId: updates.specificProvider });
+      if (!provider) {
+        return res.status(404).json({
+          success: false,
+          message: `Provider with ID ${updates.specificProvider} not found`
+        });
+      }
+      updates.specificProvider = provider._id;
+    }
 
     const updatedRule = await CommissionRule.updateCommissionRule(id, updates, req.admin._id);
 

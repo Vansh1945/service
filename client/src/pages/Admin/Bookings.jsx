@@ -115,6 +115,9 @@ const BookingRow = React.memo(({ booking, onDetails, onReschedule, onAssign, onD
             <div>
                 <div className="text-sm font-medium text-secondary">
                     {booking.provider?.name || 'Unassigned'}
+                    {booking.provider?.providerId && (
+                        <span className="ml-1 text-[10px] text-gray-400 font-mono">[{booking.provider.providerId}]</span>
+                    )}
                 </div>
                 <div className="text-sm text-gray-500">
                     {booking.provider?.email || 'N/A'}
@@ -981,6 +984,9 @@ const AdminBookingsView = () => {
                                                     <div>
                                                         <p className="font-semibold text-secondary">
                                                             {selectedBooking.provider.businessName || selectedBooking.provider.name || 'N/A'}
+                                                            {selectedBooking.provider.providerId && (
+                                                                <span className="ml-2 text-xs text-gray-500 font-mono">[{selectedBooking.provider.providerId}]</span>
+                                                            )}
                                                         </p>
                                                         <p className="text-sm text-gray-600 flex items-center">
                                                             <Mail className="w-3 h-3 mr-1" />
@@ -1285,7 +1291,7 @@ const AdminBookingsView = () => {
                                         <option value="">Select a provider</option>
                                         {getFilteredProviders(selectedBooking).map(provider => (
                                             <option key={provider._id} value={provider._id}>
-                                                {provider.businessName || provider.name} - {provider.serviceLocation?.city || provider.city || 'N/A'}
+                                                {provider.providerId ? `[${provider.providerId}] ` : ''} {provider.businessName || provider.name} - {provider.serviceLocation?.city || provider.city || 'N/A'}
                                             </option>
                                         ))}
                                     </select>

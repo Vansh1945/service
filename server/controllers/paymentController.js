@@ -185,10 +185,10 @@ const getEarningsSummary = async (req, res) => {
       const start = new Date(startDate);
       const end = new Date(endDate);
       end.setHours(23, 59, 59, 999);
-      
-      const periodConditions = { 
-        ...baseMatchConditions, 
-        createdAt: { $gte: start, $lte: end } 
+
+      const periodConditions = {
+        ...baseMatchConditions,
+        createdAt: { $gte: start, $lte: end }
       };
 
       const periodEarningsResult = await ProviderEarning.aggregate([
@@ -266,7 +266,7 @@ const requestBulkWithdrawal = async (req, res) => {
       }
 
       const baseAvailableBalance = provider?.wallet?.availableBalance || 0;
-      
+
       // Withdrawal Validation
       if (baseAvailableBalance <= 0) {
         throw new Error("Insufficient balance for withdrawal");
@@ -754,6 +754,7 @@ const getAllWithdrawalRequests = async (req, res) => {
         $match: {
           $or: [
             { 'provider.name': { $regex: providerSearch, $options: 'i' } },
+            { 'provider.providerId': { $regex: providerSearch, $options: 'i' } },
             { 'provider._id': mongoose.isValidObjectId(providerSearch) ? new mongoose.Types.ObjectId(providerSearch) : null }
           ].filter(Boolean)
         }
@@ -898,14 +899,14 @@ const approveWithdrawalRequest = async (req, res) => {
     if (!providerDoc.wallet) {
       providerDoc.wallet = { availableBalance: 0, totalWithdrawn: 0, lastUpdated: new Date() };
     }
-    
+
     // Safety check before deduction
     if (providerDoc.wallet.availableBalance < paymentRecord.amount) {
       await session.abortTransaction();
       session.endSession();
       return res.status(400).json({ success: false, message: "Provider does not have enough balance to approve this withdrawal." });
     }
-    
+
     // Ledger-like tracking inline
     providerDoc.wallet.availableBalance -= paymentRecord.amount;
     providerDoc.wallet.totalWithdrawn += paymentRecord.amount;
@@ -1057,7 +1058,7 @@ const generateWithdrawalReport = async (req, res) => {
 
     // Fetch PaymentRecords with provider details populated
     const records = await PaymentRecord.find(filter)
-      .populate('provider', 'name bankDetails')
+      .populate('provider', 'name bankDetails providerId')
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(parseInt(limit))
@@ -1090,7 +1091,7 @@ const generateWithdrawalReport = async (req, res) => {
 
       worksheet.addRow({
         providerName: record.provider ? record.provider.name : '-',
-        providerId: record.provider ? record.provider._id.toString() : '-',
+        providerId: record.provider ? record.provider.providerId : '-',
         amount: record.amount,
         netAmount: record.netAmount,
         paymentMethod: record.paymentMethod,
@@ -1132,7 +1133,7 @@ const generateWithdrawalReport = async (req, res) => {
 // Admin - Provider Wise Earnings Report
 const generateProviderEarningsReport = async (req, res) => {
   try {
-    const { fromDate, toDate } = req.query;
+    const { fromDate, toDate, providerId } = req.query;
 
     // Validate dates
     if (!fromDate || !toDate) {
@@ -1154,8 +1155,16 @@ const generateProviderEarningsReport = async (req, res) => {
       });
     }
 
-    // Fetch all providers
-    const providers = await Provider.find({ isDeleted: false }).lean();
+    // Fetch providers
+    const providerFilter = { isDeleted: false };
+    if (providerId) {
+      if (mongoose.isValidObjectId(providerId)) {
+        providerFilter._id = providerId;
+      } else {
+        providerFilter.providerId = providerId;
+      }
+    }
+    const providers = await Provider.find(providerFilter).lean();
 
     if (!providers.length) {
       return res.status(200).json({
@@ -1176,39 +1185,69 @@ const generateProviderEarningsReport = async (req, res) => {
       { header: "Total Commission", key: "totalCommission", width: 20 },
       { header: "Net Earnings", key: "netEarnings", width: 20 },
       { header: "Total Withdrawn", key: "totalWithdrawn", width: 20 },
-      { header: "Pending Balance", key: "pendingBalance", width: 20 },
+      { header: "Balance", key: "pendingBalance", width: 20 },
     ];
 
     for (const provider of providers) {
-      // Get all payment records for this provider within date range
-      const records = await PaymentRecord.find({
-        provider: provider._id,
-        status: 'completed',
-        createdAt: { $gte: start, $lte: end },
-      }).lean();
+      // 1. Get Earnings Stats from ProviderEarning
+      const earningStats = await ProviderEarning.aggregate([
+        {
+          $match: {
+            provider: provider._id,
+            createdAt: { $gte: start, $lte: end }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalBookings: { $sum: 1 },
+            totalGross: { $sum: '$grossAmount' },
+            totalCommission: { $sum: '$commissionAmount' },
+            totalNet: { $sum: '$netAmount' }
+          }
+        }
+      ]);
 
-      const totalBookings = records.length;
-      const totalEarnings = records.reduce((sum, r) => sum + (r.amount || 0), 0);
+      const stats = earningStats[0] || { totalBookings: 0, totalGross: 0, totalCommission: 0, totalNet: 0 };
 
-      // Assuming admin cut is difference between gross and net
-      const totalCommission = records.reduce((sum, r) => sum + ((r.amount || 0) - (r.netAmount || 0)), 0);
-      const netEarnings = records.reduce((sum, r) => sum + (r.netAmount || 0), 0);
+      // 2. Get Withdrawal Stats (Completed AND Pending)
+      const withdrawalStats = await PaymentRecord.aggregate([
+        {
+          $match: {
+            provider: provider._id,
+            status: { $in: ['requested', 'processing', 'under_review', 'approved', 'transferred', 'completed'] },
+            type: 'withdrawal',
+            createdAt: { $gte: start, $lte: end }
+          }
+        },
+        {
+          $group: {
+            _id: '$status',
+            totalAmount: { $sum: '$amount' }
+          }
+        }
+      ]);
 
-      // Total withdrawn: sum of netAmount from completed withdrawals
-      const totalWithdrawn = records.reduce((sum, r) => sum + (r.netAmount || 0), 0);
+      const completedWithdrawal = withdrawalStats
+        .filter(s => ['completed', 'transferred', 'approved'].includes(s._id))
+        .reduce((sum, s) => sum + s.totalAmount, 0);
 
-      // Pending balance = total earnings - total withdrawn
-      const pendingBalance = totalEarnings - totalWithdrawn;
+      const pendingWithdrawal = withdrawalStats
+        .filter(s => ['requested', 'processing', 'under_review'].includes(s._id))
+        .reduce((sum, s) => sum + s.totalAmount, 0);
+
+      // Pending Balance (Withdrawable) = Total Net in period - (All Withdrawals in period)
+      const pendingBalance = Math.max(0, stats.totalNet - (completedWithdrawal + pendingWithdrawal));
 
       worksheet.addRow({
-        providerId: provider._id.toString(),
+        providerId: provider.providerId || 'N/A',
         providerName: provider.name,
-        totalBookings,
-        totalEarnings,
-        totalCommission,
-        netEarnings,
-        totalWithdrawn,
-        pendingBalance
+        totalBookings: stats.totalBookings,
+        totalEarnings: stats.totalGross,
+        totalCommission: stats.totalCommission,
+        netEarnings: stats.totalNet,
+        totalWithdrawn: completedWithdrawal,
+        pendingBalance: pendingBalance
       });
     }
 
@@ -1258,7 +1297,7 @@ const getCommissionReport = async (req, res) => {
       status: 'completed',
       serviceCompletedAt: { $gte: start, $lte: end }
     })
-      .populate('provider', 'name email')
+      .populate('provider', 'name email providerId')
       .populate('services.service', 'title basePrice')
       .lean();
 
@@ -1290,7 +1329,7 @@ const getCommissionReport = async (req, res) => {
         worksheet.addRow({
           bookingId: booking._id.toString(),
           providerName: booking.provider?.name || 'N/A',
-          providerId: booking.provider?._id.toString() || 'N/A',
+          providerId: booking.provider?.providerId || 'N/A',
           serviceName: item.service?.title || 'N/A',
           serviceQty: item.quantity,
           serviceAmount: item.price,
@@ -1364,7 +1403,7 @@ const failedRejectedWithdrawalsReport = async (req, res) => {
       records.forEach(record => {
         worksheet.addRow({
           providerName: record.provider ? record.provider.name : 'N/A',
-          providerId: record.provider ? record.provider._id.toString() : 'N/A',
+          providerId: record.provider ? record.provider.providerId : 'N/A',
           amount: record.amount,
           reason: record.rejectionReason || record.adminRemark || 'N/A',
           status: record.status,
@@ -1394,14 +1433,16 @@ const providerLedgerReport = async (req, res) => {
     const { providerId } = req.params;
     const { fromDate, toDate } = req.query;
 
-    // Validate providerId
-    if (!mongoose.isValidObjectId(providerId)) {
-      return res.status(400).json({ success: false, error: 'Invalid provider ID' });
+    // Validate and fetch provider
+    let provider;
+    if (mongoose.isValidObjectId(providerId)) {
+      provider = await Provider.findById(providerId);
+    } else {
+      provider = await Provider.findOne({ providerId: providerId });
     }
 
-    // Validate dates
-    if (!fromDate || !toDate) {
-      return res.status(400).json({ success: false, error: 'fromDate and toDate are required' });
+    if (!provider) {
+      return res.status(404).json({ success: false, error: 'Provider not found' });
     }
 
     const start = new Date(fromDate);
@@ -1417,7 +1458,7 @@ const providerLedgerReport = async (req, res) => {
     const earnings = await ProviderEarning.aggregate([
       {
         $match: {
-          provider: new mongoose.Types.ObjectId(providerId),
+          provider: provider._id,
           createdAt: { $gte: start, $lte: end }
         }
       },
@@ -1449,6 +1490,8 @@ const providerLedgerReport = async (req, res) => {
     const worksheet = workbook.addWorksheet('Provider Ledger Report');
 
     worksheet.columns = [
+      { header: 'Provider ID', key: 'providerId', width: 20 },
+      { header: 'Provider Name', key: 'providerName', width: 25 },
       { header: 'Date', key: 'date', width: 20 },
       { header: 'Booking ID', key: 'bookingId', width: 25 },
       { header: 'Gross Amount', key: 'grossAmount', width: 15 },
@@ -1463,6 +1506,8 @@ const providerLedgerReport = async (req, res) => {
 
     earnings.forEach(earning => {
       worksheet.addRow({
+        providerId: provider.providerId || 'N/A',
+        providerName: provider.name,
         date: earning.createdAt.toISOString().slice(0, 10),
         bookingId: earning.booking._id.toString(),
         grossAmount: earning.grossAmount,
@@ -1491,7 +1536,7 @@ const providerLedgerReport = async (req, res) => {
 // Admin - Earnings Summary Report
 const earningsSummaryReport = async (req, res) => {
   try {
-    const { fromDate, toDate, groupBy = 'month' } = req.query;
+    const { fromDate, toDate, groupBy = 'month', providerId } = req.query;
 
     let start, end, dateFilter = {};
 
@@ -1505,6 +1550,22 @@ const earningsSummaryReport = async (req, res) => {
       }
 
       dateFilter = { createdAt: { $gte: start, $lte: end } };
+    }
+
+    if (providerId) {
+      let resolvedProviderId;
+      if (mongoose.isValidObjectId(providerId)) {
+        resolvedProviderId = new mongoose.Types.ObjectId(providerId);
+      } else {
+        const prov = await Provider.findOne({ providerId: providerId }).select('_id');
+        if (prov) resolvedProviderId = prov._id;
+      }
+
+      if (resolvedProviderId) {
+        dateFilter.provider = resolvedProviderId;
+      } else {
+        return res.status(404).json({ success: false, error: 'Provider not found for filter' });
+      }
     }
 
     let groupId = { year: { $year: '$createdAt' }, month: { $month: '$createdAt' } };
@@ -1621,7 +1682,7 @@ const payoutHistoryReport = async (req, res) => {
     const payouts = await PaymentRecord.find({
       status: 'completed',
       createdAt: { $gte: start, $lte: end }
-    }).populate('provider', 'name').populate('admin', 'name').sort({ createdAt: -1 }).lean();
+    }).populate('provider', 'name providerId').populate('admin', 'name').sort({ createdAt: -1 }).lean();
 
     // Create Excel
     const workbook = new ExcelJS.Workbook();
@@ -1646,7 +1707,7 @@ const payoutHistoryReport = async (req, res) => {
 
       worksheet.addRow({
         providerName: payout.provider.name,
-        providerId: payout.provider._id.toString(),
+        providerId: payout.provider.providerId,
         amount: payout.amount,
         paymentMethod: payout.paymentMethod,
         bankDetails: bankInfo,
@@ -1672,7 +1733,7 @@ const payoutHistoryReport = async (req, res) => {
 // Admin - Outstanding Balance Report
 const outstandingBalanceReport = async (req, res) => {
   try {
-    const providers = await Provider.find({ isDeleted: false }).select('name email phone').lean();
+    const providers = await Provider.find({ isDeleted: false }).select('name email phone providerId').lean();
 
     const reportData = [];
 
@@ -1747,7 +1808,7 @@ const outstandingBalanceReport = async (req, res) => {
 
       if (outstandingBalance > 0) {
         reportData.push({
-          providerId: provider._id.toString(),
+          providerId: provider.providerId,
           providerName: provider.name,
           availableBalance: outstandingBalance,
           lastWithdrawalDate: lastWithdrawalDate ? lastWithdrawalDate.toISOString().slice(0, 10) : 'Never',

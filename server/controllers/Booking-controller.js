@@ -1641,12 +1641,18 @@ const completeBooking = async (req, res) => {
 
     if (!provider) throw new Error('Provider not found');
 
-    const performanceScore = provider.performanceScore || 'standard';
+    // Map provider performanceScore stats to a tier for commission rule selection
+    const stats = provider.performanceScore || { rating: 0, onTimePercentage: 0, completionPercentage: 0 };
+    const avgScore = (stats.rating * 20 + (stats.onTimePercentage || 0) + (stats.completionPercentage || 0)) / 3;
+    
+    let performanceTier = 'standard';
+    if (avgScore >= 80) performanceTier = 'premium';
+    else if (avgScore < 40) performanceTier = 'basic';
 
     // Get commission rule for provider
     const commissionRule = await CommissionRule.getCommissionForProvider(
       providerId,
-      performanceScore
+      performanceTier
     );
 
     if (!commissionRule) {
@@ -2218,7 +2224,7 @@ const getBookingDetails = async (req, res) => {
       .populate('customer', 'name email phone')
       .populate({
         path: 'provider',
-        select: 'name email phone  experience serviceArea rating services profilePicUrl bankDetails',
+        select: 'providerId name email phone experience serviceArea rating services profilePicUrl bankDetails',
         populate: {
           path: 'services',
           select: 'name'
@@ -2596,6 +2602,7 @@ const downloadBookingReport = async (req, res) => {
       { header: 'Customer Address', key: 'customerAddress', width: 30 },
 
       { header: 'Provider Name', key: 'providerName', width: 20 },
+      { header: 'Provider ID', key: 'providerId', width: 15 },
       { header: 'Provider Area', key: 'providerArea', width: 15 },
 
       { header: 'Service Details', key: 'serviceDetails', width: 40 },
@@ -2631,6 +2638,7 @@ const downloadBookingReport = async (req, res) => {
         customerPhone: b.customer?.phone || '',
         customerAddress: `${b.address.street}, ${b.address.city}, ${b.address.state}, ${b.address.postalCode}`,
         providerName: b.provider?.name || '',
+        providerId: b.provider?.providerId || '',
         providerArea: b.provider?.area || '',
         serviceDetails,
         paymentMethod: b.paymentMethod,

@@ -269,6 +269,9 @@ const AdminPayout = () => {
                   <tr key={w._id} className="hover:bg-gray-50 transition-colors duration-150">
                     <td className="px-5 py-4">
                       <p className="text-sm font-medium text-secondary">{w.provider?.name || 'N/A'}</p>
+                      {w.provider?.providerId && (
+                        <p className="text-xs text-gray-500">[{w.provider.providerId}]</p>
+                      )}
                       <p className="text-xs text-gray-400">{w.provider?.email || 'N/A'}</p>
                       <span className="inline-flex items-center gap-1 mt-1 text-xs text-primary font-medium bg-primary bg-opacity-10 px-2 py-0.5 rounded">
                         ₹{(w.provider?.wallet?.availableBalance || 0).toLocaleString('en-IN')} wallet
@@ -495,6 +498,7 @@ const AdminPayout = () => {
                   </h3>
                   {[
                     ['Name', selectedDetails.provider?.name],
+                    ['Provider ID', selectedDetails.provider?.providerId],
                     ['Email', selectedDetails.provider?.email],
                     ['Phone', selectedDetails.provider?.phone],
                     ['Wallet Balance', `₹${(selectedDetails.provider?.wallet?.availableBalance || 0).toLocaleString('en-IN')}`],

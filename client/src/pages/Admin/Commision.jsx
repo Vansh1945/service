@@ -181,7 +181,7 @@ const AdminCommissionPage = () => {
     }
 
     if (ruleForm.applyTo === 'specificProvider' && !ruleForm.specificProvider) {
-      showToast('Provider is required when applyTo is specificProvider', 'error');
+      showToast('Provider ID (PROV-XXXXXX) is required when applyTo is specificProvider', 'error');
       return;
     }
 
@@ -251,7 +251,7 @@ const AdminCommissionPage = () => {
     }
 
     if (ruleForm.applyTo === 'specificProvider' && !ruleForm.specificProvider) {
-      showToast('Provider is required when applyTo is specificProvider', 'error');
+      showToast('Provider ID (PROV-XXXXXX) is required when applyTo is specificProvider', 'error');
       return;
     }
 
@@ -366,7 +366,7 @@ const AdminCommissionPage = () => {
       value: rule.value || 10,
       applyTo: rule.applyTo || 'all',
       performanceScore: rule.performanceScore || '',
-      specificProvider: rule.specificProvider?._id || '',
+      specificProvider: rule.specificProvider?.providerId || rule.specificProvider?._id || '',
       effectiveFrom: rule.effectiveFrom ? new Date(rule.effectiveFrom) : new Date(),
       effectiveUntil: rule.effectiveUntil ? new Date(rule.effectiveUntil) : ''
     });
@@ -507,7 +507,7 @@ const AdminCommissionPage = () => {
                   {applyToOptions.map(option => (
                     <option key={option} value={option}>
                       {option === 'all' ? 'All Providers' :
-                        option === 'performanceScore' ? 'Performance Tier' :
+                        option === 'performanceScore' ? 'Performance Score' :
                           'Specific Provider'}
                     </option>
                   ))}
@@ -592,17 +592,17 @@ const AdminCommissionPage = () => {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-800">
                             {rule.applyTo === 'all' && 'All Providers'}
-                            {rule.applyTo === 'performanceScore' && 'Performance Tier'}
+                            {rule.applyTo === 'performanceScore' && 'Performance Score'}
                             {rule.applyTo === 'specificProvider' && 'Specific Provider'}
                           </span>
-                          {rule.performanceScore && (
-                            <div className="text-xs text-gray-500 mt-1">
-                              {rule.performanceScore.charAt(0).toUpperCase() + rule.performanceScore.slice(1)} Tier
+                          {rule.performanceScore && rule.applyTo === 'performanceScore' && (
+                            <div className="text-xs text-gray-500 mt-1 capitalize">
+                              {rule.performanceScore} Score
                             </div>
                           )}
-                          {rule.specificProvider && (
+                          {rule.specificProvider && rule.applyTo === 'specificProvider' && (
                             <div className="text-xs text-gray-500 mt-1">
-                              {rule.specificProvider.name}
+                              {rule.specificProvider.name} [{rule.specificProvider.providerId || 'N/A'}]
                             </div>
                           )}
                         </td>
@@ -825,14 +825,14 @@ const AdminCommissionPage = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
                   >
                     <option value="all">All Providers</option>
-                    <option value="performanceScore">Performance Tier</option>
+                    <option value="performanceScore">Performance Score</option>
                     <option value="specificProvider">Specific Provider</option>
                   </select>
                 </div>
 
                 {ruleForm.applyTo === 'performanceScore' && (
                   <div>
-                    <label className="block text-sm font-medium text-secondary mb-1">Performance Tier *</label>
+                    <label className="block text-sm font-medium text-secondary mb-1">Performance Score *</label>
                     <select
                       value={ruleForm.performanceScore}
                       onChange={(e) => setRuleForm({ ...ruleForm, performanceScore: e.target.value })}
@@ -850,19 +850,15 @@ const AdminCommissionPage = () => {
 
                 {ruleForm.applyTo === 'specificProvider' && (
                   <div>
-                    <label className="block text-sm font-medium text-secondary mb-1">Provider *</label>
-                    <select
+                    <label className="block text-sm font-medium text-secondary mb-1">Provider ID *</label>
+                    <input
+                      type="text"
                       value={ruleForm.specificProvider}
-                      onChange={(e) => setRuleForm({ ...ruleForm, specificProvider: e.target.value })}
+                      onChange={(e) => setRuleForm({ ...ruleForm, specificProvider: e.target.value.toUpperCase() })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-                    >
-                      <option value="">Select provider</option>
-                      {providers.map(provider => (
-                        <option key={provider._id} value={provider._id}>
-                          {provider.name} - {provider.email}
-                        </option>
-                      ))}
-                    </select>
+                      placeholder="e.g. PROV-XXXXXXXX"
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1">Enter the unique Provider ID (PROV-XXXX) to target a specific provider.</p>
                   </div>
                 )}
 
