@@ -16,7 +16,7 @@ const fs = require('fs');
 const cloudinary = require('../services/cloudinary');
 const mongoose = require('mongoose');
 const { sendNotification } = require('../utils/notificationHelper');
-const generateProviderId = require('../utils/generateProviderId');
+const generateProviderId = require('../utils/generateUniqueId');
 
 /**
  * Register a new admin
