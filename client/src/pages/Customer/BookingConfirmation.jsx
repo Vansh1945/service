@@ -1178,7 +1178,12 @@ const BookingConfirmation = () => {
           <div className="lg:col-span-1 space-y-6">
             {/* Price Summary Card */}
             <div className="bg-white rounded-2xl shadow-lg border border-gray-300 p-8 hover:shadow-xl transition-shadow duration-300 sticky top-6 z-20">
-              <h3 className="text-lg font-poppins font-bold text-gray-900 mb-6">Price Summary</h3>
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-lg font-poppins font-bold text-gray-900">Price Summary</h3>
+                <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-1 rounded border border-primary/20">
+                  ID: {bookingDetails.bookingId || bookingDetails._id || 'N/A'}
+                </span>
+              </div>
 
               <div className="space-y-3">
                 {(() => {
