@@ -72,7 +72,7 @@ const ComplaintsPage = () => {
           Authorization: `Bearer ${token}`
         }
       });
-      setBookings(response.data.bookings || []);
+      setBookings(response.data.data || []);
     } catch (err) {
       console.error('Failed to fetch bookings:', err);
       toast.error('Failed to load bookings');
@@ -521,11 +521,21 @@ const ComplaintsPage = () => {
                       className={`w-full px-3 py-2 border ${formErrors.bookingId ? 'border-red-300' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary`}
                     >
                       <option value="">Select a booking</option>
-                      {bookings.map((booking) => (
-                        <option key={booking._id} value={booking._id}>
-                          {booking.bookingId} - {booking.serviceName} - {formatDate(booking.date)}
-                        </option>
-                      ))}
+                      {bookings
+                        .filter((booking) => {
+                          const bookingDate = new Date(booking.date);
+                          const tenDaysAgo = new Date();
+                          tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
+                          return bookingDate >= tenDaysAgo;
+                        })
+                        .map((booking) => {
+                          const serviceName = booking.services?.[0]?.service?.title || 'Service';
+                          return (
+                            <option key={booking._id} value={booking._id}>
+                              {booking.bookingId || `#${booking._id.slice(-8).toUpperCase()}`} - {serviceName} - {formatDate(booking.date)}
+                            </option>
+                          );
+                        })}
                     </select>
                     {formErrors.bookingId && (
                       <p className="mt-1 text-sm text-red-600">{formErrors.bookingId}</p>

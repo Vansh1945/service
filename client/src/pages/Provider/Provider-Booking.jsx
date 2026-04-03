@@ -834,6 +834,7 @@ const ProviderBooking = () => {
         (booking.customer?.name?.toLowerCase().includes(query)) ||
         (booking.services?.some(service =>
           service.service?.title?.toLowerCase().includes(query))) ||
+        (booking.bookingId?.toLowerCase().includes(query)) ||
         (booking._id?.toLowerCase().includes(query)));
     }
 

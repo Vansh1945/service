@@ -253,7 +253,7 @@ const getFeedback = async (req, res) => {
         path: 'serviceFeedback.service',
         select: 'title category'
       })
-      .populate('booking', 'date time') // Added time as per modal
+      .populate('booking', 'date time bookingId') // Added bookingId and time
       .lean();
 
     if (!feedback) {
@@ -513,7 +513,7 @@ const getAllFeedbacks = async (req, res) => {
         path: 'serviceFeedback.service',
         select: 'title category'
       })
-      .populate('booking', 'date')
+      .populate('booking', 'date bookingId')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit))

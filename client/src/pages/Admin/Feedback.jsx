@@ -322,6 +322,12 @@ const AdminFeedback = () => {
                       <p className="font-medium text-secondary">{val || 'N/A'}</p>
                     </div>
                   ))}
+                  <div>
+                    <p className="text-xs text-gray-400">Booking ID</p>
+                    <p className="font-medium text-primary">
+                      {selectedFeedback.booking?.bookingId || selectedFeedback.booking?._id || 'N/A'}
+                    </p>
+                  </div>
                 </div>
               </div>
 

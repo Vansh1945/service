@@ -98,7 +98,7 @@ const BookingRow = React.memo(({ booking, onDetails, onReschedule, onAssign, onD
     <tr className="hover:bg-gray-50">
         <td className="px-4 py-4 whitespace-nowrap">
             <div className="text-sm font-medium text-secondary">
-                #{booking._id?.substring(booking._id.length - 8) || 'N/A'}
+                {booking.bookingId || `#${booking._id?.substring(booking._id.length - 8) || 'N/A'}`}
             </div>
         </td>
         <td className="px-4 py-4 whitespace-nowrap">
@@ -921,7 +921,7 @@ const AdminBookingsView = () => {
                                         <div className="space-y-2">
                                             <div>
                                                 <span className="text-sm text-gray-600">Booking ID:</span>
-                                                <p className="font-medium">{selectedBooking.booking._id}</p>
+                                                <p className="font-medium text-primary">{selectedBooking.booking.bookingId || selectedBooking.booking._id}</p>
                                             </div>
                                             <div>
                                                 <span className="text-sm text-gray-600">Date:</span>
