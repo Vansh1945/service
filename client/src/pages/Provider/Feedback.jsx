@@ -48,7 +48,7 @@ const ProviderFeedback = () => {
                     id: feedback._id,
                     customerName: feedback.customer?.name || 'Anonymous',
                     customerAvatar: feedback.customer?.profilePicUrl,
-                    bookingId: feedback.booking?._id || 'N/A',
+                    bookingId: feedback.booking?.bookingId || 'N/A',
                     service: feedback.booking?.services?.[0]?.service?.title || 'Service',
                     date: feedback.createdAt,
                     rating: feedback.providerFeedback?.rating || 0,

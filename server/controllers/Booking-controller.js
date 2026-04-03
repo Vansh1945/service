@@ -93,6 +93,7 @@ const createBooking = async (req, res) => {
         message: 'Existing booking found. Returning current booking.',
         data: existingBooking.toObject(),
         bookingId: existingBooking.bookingId || existingBooking._id,
+        _id: existingBooking._id,
         isDuplicate: true
       });
     }

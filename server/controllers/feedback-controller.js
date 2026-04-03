@@ -443,7 +443,7 @@ const getProviderFeedbacks = async (req, res) => {
       })
       .populate({
         path: 'booking',
-        select: '_id date time status totalAmount address services',
+        select: '_id bookingId date time status totalAmount address services',
         populate: {
           path: 'services.service',
           select: 'title'

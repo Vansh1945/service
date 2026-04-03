@@ -786,9 +786,14 @@ const BookingConfirmation = () => {
               Back
             </button>
 
-            <h1 className="text-xl lg:text-2xl font-poppins font-bold text-gray-800 ml-4">
-              Complete Your Booking
-            </h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-xl lg:text-3xl font-poppins font-bold text-gray-800 ml-4">
+                Complete Your Booking
+              </h1>
+              <span className="text-sm font-bold text-primary bg-primary/10 px-3 py-1 rounded-full border border-primary/20 shadow-sm animate-pulse">
+                {bookingDetails.bookingId || bookingDetails._id || 'N/A'}
+              </span>
+            </div>
           </div>
         </div>
 
