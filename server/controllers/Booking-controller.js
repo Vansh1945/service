@@ -117,8 +117,9 @@ const createBooking = async (req, res) => {
         });
       }
 
-      // Validate coupon
-      if (coupon.usedBy.includes(req.user._id)) {
+      // Validate coupon correctly (since usedBy is an array of objects)
+      const alreadyUsed = coupon.usedBy.some(usage => usage.user && usage.user.toString() === req.user._id.toString());
+      if (alreadyUsed) {
         await session.abortTransaction();
         session.endSession();
         return res.status(400).json({
@@ -127,7 +128,8 @@ const createBooking = async (req, res) => {
         });
       }
 
-      if (coupon.expiryDate && new Date(coupon.expiryDate) < new Date()) {
+      const now = new Date();
+      if (coupon.expiryDate && new Date(coupon.expiryDate) < now) {
         await session.abortTransaction();
         session.endSession();
         return res.status(400).json({
@@ -136,12 +138,12 @@ const createBooking = async (req, res) => {
         });
       }
 
-      if (coupon.minOrderValue && subtotal < coupon.minOrderValue) {
+      if (coupon.minBookingValue && subtotal < coupon.minBookingValue) {
         await session.abortTransaction();
         session.endSession();
         return res.status(400).json({
           success: false,
-          message: `Minimum order value of ${coupon.minOrderValue} required for this coupon`
+          message: `Minimum order value of ${coupon.minBookingValue} required for this coupon`
         });
       }
 
@@ -149,9 +151,6 @@ const createBooking = async (req, res) => {
       let discount = 0;
       if (coupon.discountType === 'percent') {
         discount = (subtotal * coupon.discountValue) / 100;
-        if (coupon.maxDiscount && discount > coupon.maxDiscount) {
-          discount = coupon.maxDiscount;
-        }
       } else {
         discount = coupon.discountValue;
       }
@@ -160,12 +159,8 @@ const createBooking = async (req, res) => {
       couponDetails = {
         code: coupon.code,
         discountType: coupon.discountType,
-        discountValue: coupon.discountValue,
-        maxDiscount: coupon.maxDiscount || null
+        discountValue: coupon.discountValue
       };
-
-      // Mark coupon as used (but don't save yet - will save after booking is created)
-      coupon.usedBy.push(req.user._id);
     }
 
     const totalAmount = subtotal - totalDiscount;
@@ -207,7 +202,15 @@ const createBooking = async (req, res) => {
     if (couponCode && couponDetails) {
       await Coupon.findOneAndUpdate(
         { code: couponCode },
-        { $addToSet: { usedBy: req.user._id } },
+        { 
+          $push: { 
+            usedBy: { 
+              user: req.user._id, 
+              bookingValue: subtotal,
+              usedAt: new Date()
+            } 
+          } 
+        },
         { session }
       );
     }

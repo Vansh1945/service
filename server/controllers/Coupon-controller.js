@@ -87,7 +87,13 @@ const getAllCoupons = async (req, res) => {
     }
 
     const [coupons, total] = await Promise.all([
-      Coupon.find(filters).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      Coupon.find(filters)
+        .populate('usedBy.user', 'name email')
+        .populate('assignedTo', 'name email')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
       Coupon.countDocuments(filters)
     ]);
 
@@ -160,7 +166,8 @@ const updateCoupon = async (req, res) => {
       id,
       updateData,
       { new: true, runValidators: true }
-    ).populate('assignedTo', 'name email totalBookings');
+    ).populate('assignedTo', 'name email totalBookings')
+    .populate('usedBy.user', 'name email');
 
     res.status(200).json({
       success: true,
