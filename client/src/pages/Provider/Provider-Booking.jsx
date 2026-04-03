@@ -1032,10 +1032,10 @@ const ProviderBooking = () => {
                             <span className="ml-1.5 capitalize">{booking.status === 'in-progress' ? 'In Progress' : booking.status || 'unknown'}</span>
                           </span>
                           <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2.5 py-1 rounded-md">
-                            ID: {booking._id.slice(-8)}
+                            ID: {booking.bookingId || booking._id.slice(-8)}
                           </span>
                           <button
-                            onClick={() => navigator.clipboard.writeText(booking._id)}
+                            onClick={() => navigator.clipboard.writeText(booking.bookingId || booking._id)}
                             className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
                             title="Copy Booking ID"
                           >
@@ -1173,7 +1173,7 @@ const ProviderBooking = () => {
                   </div>
                   <div>
                     <h2 className="text-xl font-bold text-secondary">Booking Details</h2>
-                    <p className="text-sm text-gray-500">ID: {selectedBooking._id}</p>
+                    <p className="text-sm text-gray-500">ID: {selectedBooking.bookingId || selectedBooking._id}</p>
                   </div>
                 </div>
                 <button

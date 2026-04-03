@@ -382,9 +382,10 @@ const Feedback = () => {
                     <div key={feedback._id} className="border border-gray-200 rounded-lg p-6 bg-white shadow-sm">
                       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between mb-4">
                         <div className="flex-1">
-                          <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                          <h3 className="text-xl font-semibold text-gray-900 mb-1">
                             {serviceTitle}
                           </h3>
+
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
                             <div>
                               <span className="font-medium">Provider:</span> {providerName}
@@ -573,12 +574,18 @@ const Feedback = () => {
                           : 'Service';
                         const hasFeedback = !!getFeedbackForBooking(booking._id);
                         return (
-                          <li key={booking._id} className={`border border-gray-300 rounded p-4 ${hasFeedback ? 'bg-gray-100 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-100'}`}
+                          <li key={booking._id}
+                            className={`border border-gray-300 rounded-lg p-4 ${hasFeedback ? 'bg-gray-100 cursor-not-allowed opacity-70' : 'cursor-pointer hover:bg-primary/5 hover:border-primary/40 transition-colors'}`}
                             onClick={() => !hasFeedback && selectBookingForFeedback(booking)}>
-                            <div className="font-semibold">{serviceTitle}</div>
-                            <div className="text-sm text-gray-600">
+                            <div className="font-semibold text-secondary">{serviceTitle}</div>
+                            <div className="mt-1">
+                              <span className="inline-block text-xs font-mono font-medium bg-primary/10 text-primary px-2 py-0.5 rounded">
+                                Booking ID: {booking.bookingId || `#${booking._id?.slice(-8).toUpperCase()}`}
+                              </span>
+                            </div>
+                            <div className="text-sm text-gray-600 mt-1">
                               Date: {formatDate(booking.date)} | Provider: {booking.provider?.name || 'N/A'}
-                              {hasFeedback && <span className="block text-red-500 font-medium">Feedback already submitted</span>}
+                              {hasFeedback && <span className="block text-red-500 font-medium mt-1">Feedback already submitted</span>}
                             </div>
                           </li>
                         );

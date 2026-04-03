@@ -96,6 +96,7 @@ const CustomerBookingsPage = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [timeFilter, setTimeFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [expandedBooking, setExpandedBooking] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
@@ -107,9 +108,18 @@ const CustomerBookingsPage = () => {
   const [pagination, setPagination] = useState({});
 
 
+  // Debounce search: wait 500ms after user stops typing before firing API
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setCurrentPage(1); // reset to page 1 on new search
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
   useEffect(() => {
     fetchBookings();
-  }, [statusFilter, timeFilter, searchTerm, currentPage]);
+  }, [statusFilter, timeFilter, debouncedSearch, currentPage]);
 
   const fetchBookings = useCallback(async () => {
     try {
@@ -118,7 +128,7 @@ const CustomerBookingsPage = () => {
       const params = new URLSearchParams({
         status: statusFilter,
         timeFilter: timeFilter,
-        searchTerm: searchTerm,
+        searchTerm: debouncedSearch,
         page: currentPage,
         limit: 20,
       });
@@ -144,7 +154,7 @@ const CustomerBookingsPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [API, token, showToast, statusFilter, timeFilter, searchTerm, currentPage]);
+  }, [API, token, showToast, statusFilter, timeFilter, debouncedSearch, currentPage]);
 
   const fetchBookingDetails = (bookingId) => {
     const booking = bookings.find(b => b._id === bookingId);
@@ -420,7 +430,7 @@ const CustomerBookingsPage = () => {
             <div className="flex justify-between items-start">
               <div>
                 <h2 className="text-xl font-bold text-secondary">{booking.services?.[0]?.service?.title || 'Service Booking'}</h2>
-                <p className="text-sm text-gray-500">ID: #{booking._id.slice(-8).toUpperCase()}</p>
+                <p className="text-sm text-gray-500">Booking ID: {booking.bookingId || `#${booking._id?.slice(-8).toUpperCase()}`}</p>
               </div>
               <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl">
                 <X className="w-6 h-6" />
@@ -719,7 +729,7 @@ const CustomerBookingsPage = () => {
 
               {/* Booking ID */}
               <p className="text-sm text-gray-500 mb-2">
-                Booking ID: #{booking?._id?.slice(-8).toUpperCase()}
+                Booking ID: {booking?.bookingId || `#${booking?._id?.slice(-8).toUpperCase()}`}
               </p>
 
               {/* Date & Time */}

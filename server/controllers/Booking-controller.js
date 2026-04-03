@@ -544,6 +544,13 @@ const getUserBookings = async (req, res) => {
       }
     }
 
+    // Search: match by bookingId (always) or service title (via populate below)
+    if (searchTerm) {
+      query.$or = [
+        { bookingId: { $regex: searchTerm, $options: 'i' } }
+      ];
+    }
+
     // Get total count for pagination
     const totalBookings = await Booking.countDocuments(query);
 
@@ -568,8 +575,13 @@ const getUserBookings = async (req, res) => {
       .limit(itemsPerPage)
       .lean();
 
-    // Since the match on populated field might return bookings with empty services, we filter them out.
-    const filteredBookings = bookings.filter(b => b.services && b.services.length > 0 && b.services[0].service);
+    // Keep bookings where service title matched OR bookingId matched the search term
+    const filteredBookings = bookings.filter(b => {
+      const serviceMatch = b.services && b.services.length > 0 && b.services[0].service;
+      const bookingIdMatch = searchTerm && b.bookingId &&
+        new RegExp(searchTerm, 'i').test(b.bookingId);
+      return serviceMatch || bookingIdMatch;
+    });
 
 
     // Fetch transaction details for each booking
@@ -2000,7 +2012,7 @@ const providerBookingReport = async (req, res) => {
         .join("; ");
 
       worksheet.addRow({
-        bookingId: booking._id.toString(),
+        bookingId: booking.bookingId || booking._id.toString(),
         customerName: booking.customer?.name || "N/A",
         services: serviceDetails,
         dateTime: `${booking.date.toISOString().split("T")[0]} ${booking.time}`,
@@ -2135,6 +2147,7 @@ const getAllBookings = async (req, res) => {
           { 'provider.email': searchRegex },
           { 'serviceDetails.title': searchRegex },
           { status: searchRegex },
+          { bookingId: searchRegex },
           { 'address.street': searchRegex },
           { 'address.city': searchRegex },
           { 'address.postalCode': searchRegex },
@@ -2295,6 +2308,7 @@ const getBookingDetails = async (req, res) => {
     const response = {
       booking: {
         _id: booking._id,
+        bookingId: booking.bookingId,
         date: booking.date,
         time: booking.time,
         status: booking.status,
@@ -2631,7 +2645,7 @@ const downloadBookingReport = async (req, res) => {
       }).join('; ');
 
       worksheet.addRow({
-        _id: b._id.toString(),
+        _id: b.bookingId || b._id.toString(),
         date: b.date.toISOString().split('T')[0],
         time: b.time,
         status: b.status,
