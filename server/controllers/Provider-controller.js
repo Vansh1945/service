@@ -1649,7 +1649,7 @@ exports.getPerformanceRatings = async (req, res) => {
                 const scheduledDate = new Date(job.date);
                 const [hours, minutes] = job.time.split(':').map(Number);
                 scheduledDate.setHours(hours, minutes, 0, 0);
-                
+
                 // 6-hour buffer as per Booking-controller
                 const maxCompletionTime = new Date(scheduledDate.getTime() + 6 * 60 * 60 * 1000);
                 if (job.completedAt <= maxCompletionTime) {
@@ -1668,7 +1668,6 @@ exports.getPerformanceRatings = async (req, res) => {
         const completionRate = totalRelevant > 0 ? parseFloat(((completedBookings / totalRelevant) * 100).toFixed(1)) : 0;
         const onTimeRate = completedBookings > 0 ? parseFloat(((onTimeCompleted / completedBookings) * 100).toFixed(1)) : 0;
 
-        // Determine performance badge
         // Determine performance badge
         let performanceBadge = 'Bronze';
         if (averageRating >= 4.5 && completionRate >= 95 && onTimeRate >= 95) {

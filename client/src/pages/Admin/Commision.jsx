@@ -68,7 +68,7 @@ const AdminCommissionPage = () => {
   });
 
   // Available options matching backend enum
-  const performanceScores = ['basic', 'standard', 'premium'];
+  const performanceScores = ['Bronze', 'Silver', 'Gold', 'Platinum'];
   const applyToOptions = ['all', 'performanceScore', 'specificProvider'];
 
   // Fetch commission rules
@@ -756,8 +756,8 @@ const AdminCommissionPage = () => {
 
         {/* Commission Rule Modal */}
         {showRuleModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
-            <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md">
+          <div className="fixed inset-0 bg-black bg-opacity-50 overflow-y-auto h-full w-full z-50 flex justify-center py-8 px-4 sm:px-6">
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-xl h-fit">
               <div className="px-6 py-4 border-b border-gray-200">
                 <h3 className="text-xl font-semibold text-secondary">
                   {editingRule ? 'Edit Commission Rule' : 'Add Commission Rule'}
@@ -855,12 +855,96 @@ const AdminCommissionPage = () => {
                       type="text"
                       value={ruleForm.specificProvider}
                       onChange={(e) => setRuleForm({ ...ruleForm, specificProvider: e.target.value.toUpperCase() })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary text-sm"
                       placeholder="e.g. PROV-XXXXXXXX"
                     />
-                    <p className="text-[10px] text-gray-400 mt-1">Enter the unique Provider ID (PROV-XXXX) to target a specific provider.</p>
+                    
+                    {/* Provider Performance Display */}
+                    {ruleForm.specificProvider && providers.find(p => p.providerId === ruleForm.specificProvider) && (
+                      <div className="mt-3 p-3 bg-teal-50 border border-teal-100 rounded-xl">
+                        {(() => {
+                          const provider = providers.find(p => p.providerId === ruleForm.specificProvider);
+                          const badgeColor = {
+                            'Platinum': 'text-purple-600',
+                            'Gold': 'text-amber-500',
+                            'Silver': 'text-gray-400',
+                            'Bronze': 'text-orange-700'
+                          }[provider.performanceBadge] || 'text-secondary';
+
+                          const nextBadge = {
+                            'Bronze': { name: 'Silver', rating: 3.5, comp: 85 },
+                            'Silver': { name: 'Gold', rating: 4.0, comp: 90 },
+                            'Gold': { name: 'Platinum', rating: 4.5, comp: 95 },
+                            'Platinum': null
+                          }[provider.performanceBadge];
+
+                          let gapInfo = null;
+                          if (nextBadge) {
+                            const ratingGap = Math.max(0, nextBadge.rating - (provider.averageRating || 0));
+                            const compGap = Math.max(0, nextBadge.comp - (provider.completionRate || 0));
+                            const onTimeGap = Math.max(0, nextBadge.comp - (provider.onTimeRate || 0));
+                            
+                            if (ratingGap > 0 || compGap > 0 || onTimeGap > 0) {
+                              const gapParts = [];
+                              if (ratingGap > 0) gapParts.push(`${ratingGap.toFixed(1)}★`);
+                              if (compGap > 0) gapParts.push(`+${compGap}% comp`);
+                              if (onTimeGap > 0) gapParts.push(`+${onTimeGap}% on-time`);
+                              if (gapParts.length > 0) gapInfo = `Need ${gapParts.join(' & ')} for ${nextBadge.name}`;
+                            }
+                          }
+
+                          return (
+                            <div className="space-y-2">
+                              <div className="flex justify-between items-center">
+                                <span className="text-[10px] font-bold text-teal-800 uppercase tracking-wider">Performance</span>
+                                <div className="flex items-center gap-1.5">
+                                  <div className={`w-1.5 h-1.5 rounded-full ${provider.performanceBadge === 'Platinum' ? 'bg-purple-500' : provider.performanceBadge === 'Gold' ? 'bg-amber-500' : 'bg-gray-400'}`}></div>
+                                  <span className={`text-xs font-bold ${badgeColor}`}>{provider.performanceBadge}</span>
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-3 gap-2">
+                                {[
+                                  { label: 'Rating', value: (provider.averageRating || 0).toFixed(1) },
+                                  { label: 'Comp %', value: `${provider.completionRate || 0}%` },
+                                  { label: 'On-Time', value: `${provider.onTimeRate || 0}%` },
+                                ].map((stat) => (
+                                  <div key={stat.label} className="bg-white p-1.5 rounded-lg border border-teal-100 text-center shadow-xs">
+                                    <p className="text-[9px] text-gray-500 leading-none mb-1">{stat.label}</p>
+                                    <p className="text-[11px] font-bold text-secondary leading-none">{stat.value}</p>
+                                  </div>
+                                ))}
+                              </div>
+                              {gapInfo && (
+                                <p className="text-[9px] text-teal-600 italic font-medium pt-1 border-t border-teal-100/50">{gapInfo}</p>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
                   </div>
                 )}
+
+                {/* Badge Criteria Display */}
+                <div className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden mt-1">
+                  <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-200 flex items-center gap-2">
+                    <Info className="w-3 h-3 text-slate-500" />
+                    <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Badge Criteria</span>
+                  </div>
+                  <div className="p-2 grid grid-cols-2 gap-2">
+                    {[
+                      { name: 'Platinum', criteria: '4.5★ | 95%', color: 'bg-indigo-100 text-indigo-700' },
+                      { name: 'Gold', criteria: '4.0★ | 90%', color: 'bg-amber-100 text-amber-700' },
+                      { name: 'Silver', criteria: '3.5★ | 85%', color: 'bg-slate-200 text-slate-700' },
+                      { name: 'Bronze', criteria: 'Basics / Below', color: 'bg-orange-100 text-orange-700' }
+                    ].map((badge) => (
+                      <div key={badge.name} className="flex items-center justify-between p-1.5 bg-white rounded border border-slate-100 shadow-xs">
+                        <span className={`px-1 rounded text-[8px] font-black ${badge.color}`}>{badge.name.toUpperCase()}</span>
+                        <span className="text-[9px] text-slate-500 font-medium">{badge.criteria}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -910,65 +994,68 @@ const AdminCommissionPage = () => {
 
         {/* Commission Rule Details Modal */}
         {showRuleDetailsModal && viewingRule && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
-            <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h3 className="text-xl font-semibold text-secondary">Commission Rule Details</h3>
+          <div className="fixed inset-0 bg-black bg-opacity-50 overflow-y-auto h-full w-full z-50 flex justify-center py-8 px-4 sm:px-6">
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-xl h-fit">
+              <div className="px-6 py-4 border-b border-gray-200 bg-slate-50 rounded-t-2xl">
+                <h3 className="text-xl font-bold text-secondary">Commission Rule Details</h3>
               </div>
-              <div className="p-6 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1">Rule Name</label>
-                  <p className="text-sm text-secondary">{viewingRule.name}</p>
-                </div>
-
-                {viewingRule.description && (
-                  <div>
-                    <label className="block text-sm font-medium text-secondary mb-1">Description</label>
-                    <p className="text-sm text-secondary">{viewingRule.description}</p>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-secondary mb-1">Commission Type</label>
-                    <p className="text-sm text-secondary capitalize">{viewingRule.type}</p>
+              <div className="p-6 space-y-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="md:col-span-2">
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Rule Name</label>
+                    <p className="text-base font-semibold text-secondary">{viewingRule.name}</p>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-secondary mb-1">Value</label>
-                    <p className="text-sm text-secondary">
+                  {viewingRule.description && (
+                    <div className="md:col-span-2">
+                      <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Description</label>
+                      <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg border border-gray-100">{viewingRule.description}</p>
+                    </div>
+                  )}
+
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Commission Type</label>
+                    <p className="text-sm font-bold text-secondary capitalize">{viewingRule.type}</p>
+                  </div>
+
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Commission Value</label>
+                    <p className="text-lg font-black text-primary">
                       {viewingRule.type === 'percentage' ? `${viewingRule.value}%` : `₹${viewingRule.value.toFixed(2)}`}
                     </p>
                   </div>
-                </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1">Apply To</label>
-                  <p className="text-sm text-secondary capitalize">
-                    {viewingRule.applyTo === 'all' && 'All Providers'}
-                    {viewingRule.applyTo === 'performanceScore' && 'Performance Tier'}
-                    {viewingRule.applyTo === 'specificProvider' && 'Specific Provider'}
-                  </p>
-                </div>
-
-                {viewingRule.performanceScore && (
-                  <div>
-                    <label className="block text-sm font-medium text-secondary mb-1">Performance Tier</label>
-                    <p className="text-sm text-secondary capitalize">{viewingRule.performanceScore}</p>
+                  <div className="md:col-span-2 pb-2 border-b border-gray-100">
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Application Scope</label>
+                    <div className="flex flex-wrap gap-2">
+                      <span className="px-3 py-1 bg-teal-100 text-teal-700 rounded-full text-xs font-bold">
+                        {viewingRule.applyTo === 'all' && 'All Providers'}
+                        {viewingRule.applyTo === 'performanceScore' && 'Performance Tier'}
+                        {viewingRule.applyTo === 'specificProvider' && 'Specific Provider'}
+                      </span>
+                      
+                      {viewingRule.performanceScore && (
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                          viewingRule.performanceScore === 'Platinum' ? 'bg-purple-100 text-purple-700' :
+                          viewingRule.performanceScore === 'Gold' ? 'bg-amber-100 text-amber-700' :
+                          viewingRule.performanceScore === 'Silver' ? 'bg-slate-200 text-slate-700' :
+                          'bg-orange-100 text-orange-700'
+                        }`}>
+                          {viewingRule.performanceScore} Badge
+                        </span>
+                      )}
+                      
+                      {viewingRule.specificProvider && (
+                        <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-bold">
+                          {viewingRule.specificProvider.name}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                )}
 
-                {viewingRule.specificProvider && (
                   <div>
-                    <label className="block text-sm font-medium text-secondary mb-1">Specific Provider</label>
-                    <p className="text-sm text-secondary">{viewingRule.specificProvider.name}</p>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-secondary mb-1">Status</label>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${viewingRule.isActive
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Status</label>
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${viewingRule.isActive
                       ? 'bg-green-100 text-green-800'
                       : 'bg-red-100 text-red-800'
                       }`}>
@@ -977,50 +1064,37 @@ const AdminCommissionPage = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-secondary mb-1">Created By</label>
-                    <p className="text-sm text-secondary">{viewingRule.createdBy?.name || 'N/A'}</p>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Created By</label>
+                    <p className="text-sm font-medium text-secondary">{viewingRule.createdBy?.name || 'N/A'}</p>
                   </div>
-                </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-secondary mb-1">Effective From</label>
-                    <p className="text-sm text-secondary">
+                  <div className="bg-gray-50 p-2 rounded-lg">
+                    <label className="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">Effective From</label>
+                    <p className="text-xs font-semibold text-secondary">
                       {viewingRule.effectiveFrom ? format(new Date(viewingRule.effectiveFrom), 'dd MMM yyyy') : 'N/A'}
                     </p>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-secondary mb-1">Effective Until</label>
-                    <p className="text-sm text-secondary">
+                  <div className="bg-gray-50 p-2 rounded-lg">
+                    <label className="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">Effective Until</label>
+                    <p className="text-xs font-semibold text-secondary">
                       {viewingRule.effectiveUntil ? format(new Date(viewingRule.effectiveUntil), 'dd MMM yyyy') : 'No expiration'}
                     </p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-secondary mb-1">Created At</label>
-                    <p className="text-sm text-secondary">
-                      {viewingRule.createdAt ? format(new Date(viewingRule.createdAt), 'dd MMM yyyy') : 'N/A'}
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-secondary mb-1">Last Updated</label>
-                    <p className="text-sm text-secondary">
-                      {viewingRule.updatedAt ? format(new Date(viewingRule.updatedAt), 'dd MMM yyyy') : 'N/A'}
-                    </p>
-                  </div>
+                <div className="pt-4 border-t border-gray-100 flex justify-between items-center text-[10px] text-gray-400 italic">
+                  <span>Created: {viewingRule.createdAt ? format(new Date(viewingRule.createdAt), 'dd MMM yyyy HH:mm') : 'N/A'}</span>
+                  <span>Updated: {viewingRule.updatedAt ? format(new Date(viewingRule.updatedAt), 'dd MMM yyyy HH:mm') : 'N/A'}</span>
                 </div>
               </div>
-              <div className="flex justify-end gap-3 p-6 border-t border-gray-200">
+              <div className="flex justify-end gap-3 p-6 border-t border-gray-200 bg-slate-50 rounded-b-2xl">
                 <button
                   onClick={() => {
                     setShowRuleDetailsModal(false);
                     setViewingRule(null);
                   }}
-                  className="px-4 py-2 text-sm font-medium text-secondary bg-gray-100 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors"
+                  className="px-6 py-2 text-sm font-bold text-secondary bg-white border border-gray-200 rounded-xl hover:bg-gray-100 transition-colors shadow-sm"
                 >
                   Close
                 </button>

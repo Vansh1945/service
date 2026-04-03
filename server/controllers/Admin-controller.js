@@ -364,7 +364,7 @@ const getPendingProviders = async (req, res) => {
         const providers = await Provider.aggregate(providersPipeline);
         const total = await Provider.countDocuments(filter);
 
-        // Calculate age for each provider since aggregation doesn't include virtuals
+        // Calculate age and performance badge for each provider
         providers.forEach(provider => {
             if (provider.dateOfBirth) {
                 const today = new Date();
@@ -376,6 +376,24 @@ const getPendingProviders = async (req, res) => {
                 }
                 provider.age = age;
             }
+
+            // Performance Badge Calculation
+            const rating = provider.averageRating || 0;
+            const completion = provider.performanceScore?.completionPercentage || 0;
+            const onTime = provider.performanceScore?.onTimePercentage || 0;
+
+            let performanceBadge = 'Bronze';
+            if (rating >= 4.5 && completion >= 95 && onTime >= 95) {
+                performanceBadge = 'Platinum';
+            } else if (rating >= 4.0 && completion >= 90 && onTime >= 90) {
+                performanceBadge = 'Gold';
+            } else if (rating >= 3.5 && completion >= 85 && onTime >= 85) {
+                performanceBadge = 'Silver';
+            }
+            
+            provider.performanceBadge = performanceBadge;
+            provider.completionRate = completion;
+            provider.onTimeRate = onTime;
         });
 
         res.status(200).json({
@@ -466,7 +484,7 @@ const getAllProviders = async (req, res) => {
         const providers = await Provider.aggregate(providersPipeline);
         const total = await Provider.countDocuments(filter);
 
-        // Calculate age for each provider since aggregation doesn't include virtuals
+        // Calculate age and performance badge for each provider
         providers.forEach(provider => {
             if (provider.dateOfBirth) {
                 const today = new Date();
@@ -478,6 +496,24 @@ const getAllProviders = async (req, res) => {
                 }
                 provider.age = age;
             }
+
+            // Performance Badge Calculation
+            const rating = provider.averageRating || 0;
+            const completion = provider.performanceScore?.completionPercentage || 0;
+            const onTime = provider.performanceScore?.onTimePercentage || 0;
+
+            let performanceBadge = 'Bronze';
+            if (rating >= 4.5 && completion >= 95 && onTime >= 95) {
+                performanceBadge = 'Platinum';
+            } else if (rating >= 4.0 && completion >= 90 && onTime >= 90) {
+                performanceBadge = 'Gold';
+            } else if (rating >= 3.5 && completion >= 85 && onTime >= 85) {
+                performanceBadge = 'Silver';
+            }
+            
+            provider.performanceBadge = performanceBadge;
+            provider.completionRate = completion;
+            provider.onTimeRate = onTime;
         });
 
         res.status(200).json({
@@ -562,7 +598,7 @@ const getProviderDetails = async (req, res) => {
 
         const provider = providers[0];
 
-        // Calculate age dynamically since aggregation doesn't include virtuals
+        // Calculate age and performance badge dynamically
         if (provider.dateOfBirth) {
             const today = new Date();
             const birthDate = new Date(provider.dateOfBirth);
@@ -573,6 +609,24 @@ const getProviderDetails = async (req, res) => {
             }
             provider.age = age;
         }
+
+        // Performance Badge Calculation
+        const rating = provider.averageRating || 0;
+        const completion = provider.performanceScore?.completionPercentage || 0;
+        const onTime = provider.performanceScore?.onTimePercentage || 0;
+
+        let performanceBadge = 'Bronze';
+        if (rating >= 4.5 && completion >= 95 && onTime >= 95) {
+            performanceBadge = 'Platinum';
+        } else if (rating >= 4.0 && completion >= 90 && onTime >= 90) {
+            performanceBadge = 'Gold';
+        } else if (rating >= 3.5 && completion >= 85 && onTime >= 85) {
+            performanceBadge = 'Silver';
+        }
+        
+        provider.performanceBadge = performanceBadge;
+        provider.completionRate = completion;
+        provider.onTimeRate = onTime;
 
         res.status(200).json({
             success: true,
