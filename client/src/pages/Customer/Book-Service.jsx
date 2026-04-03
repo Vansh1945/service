@@ -467,7 +467,7 @@ const BookService = () => {
         toast.info('Referencing your existing booking for this slot.');
       }
 
-      const bookingId = response.data.bookingId || response.data.data?._id;
+      const bookingId = response.data._id || response.data.data?._id || response.data.bookingId;
 
       if (!bookingId) {
         throw new Error('Booking ID not received from server');
