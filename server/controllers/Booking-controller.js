@@ -9,6 +9,7 @@ const Transaction = require('../models/Transaction-model');
 const ProviderEarning = require('../models/ProviderEarning-model');
 const ExcelJS = require('exceljs');
 const { sendNotification, notifyAdmins } = require('../utils/notificationHelper');
+const { generateBookingId } = require('../utils/generateUniqueId');
 
 
 
@@ -91,7 +92,7 @@ const createBooking = async (req, res) => {
         success: true,
         message: 'Existing booking found. Returning current booking.',
         data: existingBooking.toObject(),
-        bookingId: existingBooking._id,
+        bookingId: existingBooking.bookingId || existingBooking._id,
         isDuplicate: true
       });
     }
@@ -170,6 +171,7 @@ const createBooking = async (req, res) => {
 
     // Create booking
     const booking = new Booking({
+      bookingId: generateBookingId(),
       customer: req.user._id,
       services: [{
         service: serviceId,
@@ -216,7 +218,8 @@ const createBooking = async (req, res) => {
       success: true,
       message: 'Booking created successfully. Please confirm payment to complete booking.',
       data: booking.toObject(),
-      bookingId: booking._id
+      bookingId: booking.bookingId,
+      _id: booking._id
     });
 
     // Real-time notification (non-blocking)

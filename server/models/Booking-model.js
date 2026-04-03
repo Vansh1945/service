@@ -56,6 +56,12 @@ const serviceItemSchema = new Schema({
 
 // Booking Schema
 const bookingSchema = new Schema({
+  bookingId: {
+    type: String,
+    unique: true,
+    sparse: true,
+    trim: true
+  },
   customer: {
     type: Schema.Types.ObjectId,
     ref: 'User',
