@@ -16,6 +16,11 @@ const statusHistorySchema = new mongoose.Schema({
 
 const complaintSchema = new mongoose.Schema(
   {
+    complaintId: {
+      type: String,
+      unique: true,
+      index: true
+    },
     // 1. Customer Details
     customer: {
       type: mongoose.Schema.Types.ObjectId,

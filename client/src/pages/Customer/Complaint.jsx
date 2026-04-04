@@ -452,14 +452,14 @@ const ComplaintsPage = () => {
                         <div className="flex-1">
                           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 mb-2">
                             <h3 className="text-lg font-poppins font-semibold text-secondary">
-                              Complaint #{complaint._id.substring(0, 8)}
+                              {complaint.complaintId || complaint._id.substring(0, 8)}
                             </h3>
                             <span className={`px-3 py-1 rounded-full text-xs font-poppins font-medium self-start ${getStatusColor(complaint.status)}`}>
                               {complaint.status.charAt(0).toUpperCase() + complaint.status.slice(1)}
                             </span>
                           </div>
                           <p className="text-sm text-gray-500 font-inter mb-3">
-                            Booking: {complaint.booking?.bookingId || complaint.booking || 'N/A'}
+                            Booking: {complaint.booking?.bookingId || complaint.booking?._id}
                           </p>
                           <p className="text-gray-700 font-inter leading-relaxed">
                             {complaint.description && complaint.description.length > 120
@@ -526,7 +526,7 @@ const ComplaintsPage = () => {
                           const bookingDate = new Date(booking.date);
                           const tenDaysAgo = new Date();
                           tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
-                          return bookingDate >= tenDaysAgo;
+                          return bookingDate >= tenDaysAgo && booking.status === 'completed';
                         })
                         .map((booking) => {
                           const serviceName = booking.services?.[0]?.service?.title || 'Service';
@@ -716,7 +716,7 @@ const ComplaintsPage = () => {
                   <div>
                     <h4 className="text-md font-medium text-secondary mb-3">Complaint Information</h4>
                     <div className="space-y-2">
-                      <p className="text-sm"><span className="font-medium">ID:</span> {selectedComplaint._id}</p>
+                      <p className="text-sm"><span className="font-medium">ID:</span> {selectedComplaint.complaintId || selectedComplaint._id}</p>
                       <p className="text-sm flex items-center">
                         <span className="font-medium">Status:</span>
                         <span className={`ml-2 px-2 py-1 rounded-full text-xs ${getStatusColor(selectedComplaint.status)}`}>
@@ -728,7 +728,7 @@ const ComplaintsPage = () => {
                         <p className="text-sm"><span className="font-medium">Resolved:</span> {formatDate(selectedComplaint.resolvedAt)}</p>
                       )}
                       {selectedComplaint.category === 'Service issue' && (
-                        <p className="text-sm"><span className="font-medium">Booking ID:</span> {selectedComplaint.booking?.bookingId || selectedComplaint.booking || 'N/A'}</p>
+                        <p className="text-sm"><span className="font-medium">Booking ID:</span> {selectedComplaint.booking?.bookingId || selectedComplaint.booking?._id || (typeof selectedComplaint.booking === 'string' ? selectedComplaint.booking : 'N/A')}</p>
                       )}
                     </div>
                   </div>

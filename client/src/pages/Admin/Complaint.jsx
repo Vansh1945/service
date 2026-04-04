@@ -57,7 +57,7 @@ const ComplaintDetailsModal = ({ complaint, onClose, onUpdateStatus, onResolve }
         <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white z-10">
           <div>
             <h3 className="text-lg font-semibold text-secondary">Complaint Details</h3>
-            <p className="text-xs text-gray-400 mt-0.5">ID: #{complaint._id?.slice(-8)}</p>
+            <p className="text-xs text-gray-400 mt-0.5">ID: #{complaint.complaintId || complaint._id?.slice(-8)}</p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
             <X className="w-5 h-5 text-gray-400" />
@@ -135,8 +135,8 @@ const ComplaintDetailsModal = ({ complaint, onClose, onUpdateStatus, onResolve }
                       </div>
                     ))}
                     <div>
-                      <p className="text-xs text-gray-400 mb-1">Booking Ref</p>
-                      <p className="text-sm font-medium text-secondary">#{complaint.booking?.bookingId || complaint.booking?._id?.slice(-8) || 'N/A'}</p>
+                      <p className="text-xs text-gray-400 mb-1">Booking ID</p>
+                      <p className="text-sm font-medium text-secondary">#{complaint.booking?.bookingId || complaint.booking?._id?.slice(-8) || (typeof complaint.booking === 'string' ? complaint.booking : 'N/A')}</p>
                     </div>
                   </div>
                 </div>
@@ -481,7 +481,7 @@ const ComplaintsPage = () => {
                   </tr>
                 ) : complaints.map(c => (
                   <tr key={c._id} className="hover:bg-gray-50 transition-colors duration-150">
-                    <td className="px-5 py-4 text-sm font-medium text-secondary">#{(c._id || '').slice(-8)}</td>
+                    <td className="px-5 py-4 text-sm font-medium text-secondary">#{c.complaintId || (c._id || '').slice(-8)}</td>
                     <td className="px-5 py-4">
                       <p className="text-sm font-medium text-secondary">{c.title || 'No Title'}</p>
                       <p className="text-xs text-gray-400 truncate max-w-xs">{c.description || 'No description'}</p>

@@ -3,6 +3,7 @@ const Booking = require('../models/Booking-model');
 const User = require('../models/User-model');
 const mongoose = require('mongoose');
 const { notifyAdmins } = require('../utils/notificationHelper');
+const { generateComplaintId } = require('../utils/generateUniqueId');
 
 // @desc    Submit a new complaint
 // @route   POST /api/complaints
@@ -45,6 +46,7 @@ const submitComplaint = async (req, res) => {
 
     // 3. Create Complaint
     const complaint = await Complaint.create({
+      complaintId: generateComplaintId(),
       customer: customerId,
       booking: booking ? bookingId : undefined,
       provider: provider,
@@ -102,6 +104,7 @@ const getAllComplaints = async (req, res) => {
 
     if (search) {
       query.$or = [
+        { complaintId: { $regex: search, $options: 'i' } },
         { title: { $regex: search, $options: 'i' } },
         { description: { $regex: search, $options: 'i' } },
       ];
@@ -117,7 +120,7 @@ const getAllComplaints = async (req, res) => {
     const complaints = await Complaint.find(query)
       .populate('customer', 'name email')
       .populate('provider', 'name email')
-      .populate('booking', 'date services')
+      .populate('booking', 'date services bookingId')
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(parseInt(limit))
@@ -163,7 +166,7 @@ const getMyComplaints = async (req, res) => {
     const complaints = await Complaint.find(query)
       .populate('customer', 'name email')
       .populate('provider', 'name email')
-      .populate('booking', 'date services')
+      .populate('booking', 'date services bookingId')
       .sort({ createdAt: -1 })
       .lean();
 

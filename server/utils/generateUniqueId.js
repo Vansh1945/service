@@ -10,5 +10,13 @@ const generateBookingId = () => {
   return `BK-${year}-${shortId}`;
 };
 
+
+const generateComplaintId = () => {
+  const year = new Date().getFullYear();
+  const shortId = uuidv4().replace(/-/g, "").substring(0, 8).toUpperCase();
+  return `CMP-${year}-${shortId}`;
+};
+
 module.exports = generateProviderId;
 module.exports.generateBookingId = generateBookingId;
+module.exports.generateComplaintId = generateComplaintId;

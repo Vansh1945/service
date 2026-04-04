@@ -71,7 +71,7 @@ export const AuthProvider = ({ children }) => {
 
             const decodedToken = jwtDecode(newToken);
             const finalRole = (userData?.isAdmin || decodedToken.isAdmin) ? 'admin' : newRole;
-            
+
             const userObj = {
                 ...userData,
                 _id: decodedToken.id,
@@ -87,8 +87,6 @@ export const AuthProvider = ({ children }) => {
             setToken(newToken);
             setRole(finalRole);
             setUser(userObj);
-
-            showToast('Login successful!');
 
             // Check for redirectTo query parameter
             const urlParams = new URLSearchParams(window.location.search);
@@ -139,18 +137,18 @@ export const AuthProvider = ({ children }) => {
             if (!token || !role) return;
 
             try {
-                const endpoint = role === 'admin' ? '/admin/profile' 
-                               : role === 'provider' ? '/provider/profile' 
-                               : '/customer/profile';
-                               
+                const endpoint = role === 'admin' ? '/admin/profile'
+                    : role === 'provider' ? '/provider/profile'
+                        : '/customer/profile';
+
                 const response = await fetch(`${API}${endpoint}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
 
                 if (response.ok) {
                     const data = await response.json();
-                    const userData = data.admin || data.provider || data.user || data.data; 
-                    
+                    const userData = data.admin || data.provider || data.user || data.data;
+
                     if (userData) {
                         const userObj = {
                             ...userData,
@@ -176,7 +174,7 @@ export const AuthProvider = ({ children }) => {
         token,
         role,
         user,
-        isAuthenticated: !!token, 
+        isAuthenticated: !!token,
         isAdmin,
         isDeepLink,
         setIsDeepLink,
