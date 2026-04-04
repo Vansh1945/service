@@ -808,7 +808,10 @@ const getAllAdmins = async (req, res) => {
             total,
             page,
             pages: Math.ceil(total / limit),
-            admins: admins.map(admin => admin.toJSON())
+            admins: admins.map(admin => {
+                const { password, __v, ...rest } = admin;
+                return rest;
+            })
         });
 
     } catch (error) {

@@ -47,7 +47,10 @@ const uploadResume = multer({
 
 const uploadServiceImage = multer({
   storage: createCloudinaryStorage('serviceImage', 'image', ['jpg', 'jpeg', 'png']),
-  limits: { fileSize: 3 * 1024 * 1024 }, // 3MB
+  limits: { 
+    fileSize: 10 * 1024 * 1024, // 10MB
+    fieldSize: 10 * 1024 * 1024 // 10MB to allow large JSON fields like specialNotes
+  },
 });
 
 const uploadComplaintImage = multer({
@@ -91,11 +94,15 @@ const uploadBannerImage = multer({
 // Error handler middleware
 const handleUploadErrors = (err, req, res, next) => {
   if (err instanceof multer.MulterError) {
+    let message = 'File upload error';
+    if (err.code === 'LIMIT_FILE_SIZE') message = 'File too large (Max 10MB)';
+    if (err.code === 'LIMIT_FIELD_SIZE') message = 'Field data too large';
+    if (err.code === 'LIMIT_UNEXPECTED_FILE') message = 'Too many files or unexpected field name';
+
     return res.status(400).json({
       success: false,
-      message: err.code === 'LIMIT_FILE_SIZE'
-        ? 'File too large'
-        : 'Multer file upload error',
+      message: `${message}: ${err.message}`, // Including Multer's native message
+      code: err.code
     });
   } else if (err) {
     return res.status(500).json({
