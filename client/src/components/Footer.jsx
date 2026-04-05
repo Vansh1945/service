@@ -95,8 +95,8 @@ const Footer = () => {
   }
 
   return (
-    <footer className="bg-secondary text-white pt-12 pb-6 sm:pt-16 sm:pb-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <footer className="bg-secondary/95 text-white pt-12 pb-6 sm:pt-16 sm:pb-8">
+      <div className="max-w-8xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-12">
           {/* Brand Column */}
           <div className="space-y-4 sm:space-y-6 lg:col-span-1">
@@ -140,40 +140,43 @@ const Footer = () => {
             </div>
           </div>
 
-          {/* Quick Links */}
-          <div className="space-y-4 sm:space-y-6">
-            <h3 className="text-lg sm:text-xl font-bold text-accent mb-4 sm:mb-6">Quick Links</h3>
-            <ul className="space-y-2 sm:space-y-3">
-              {footerData.quickLinks.map((item, index) => (
-                <li key={index}>
-                  <a
-                    href={item.href}
-                    className="text-gray-300 hover:text-accent transition-colors duration-300 flex items-center group text-sm sm:text-base"
-                  >
-                    <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-accent rounded-full mr-2 sm:mr-3 opacity-70 group-hover:opacity-100 transition-opacity duration-300"></span>
-                    {item.name}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
+          {/* Combined Links Wrapper for Mobile Column View */}
+          <div className="grid grid-cols-2 gap-8 sm:contents">
+            {/* Quick Links */}
+            <div className="space-y-4 sm:space-y-6">
+              <h3 className="text-lg sm:text-xl font-bold text-accent mb-4 sm:mb-6">Quick Links</h3>
+              <ul className="space-y-2 sm:space-y-3">
+                {footerData.quickLinks.map((item, index) => (
+                  <li key={index}>
+                    <a
+                      href={item.href}
+                      className="text-gray-300 hover:text-accent transition-colors duration-300 flex items-center group text-sm sm:text-base"
+                    >
+                      <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-accent rounded-full mr-2 sm:mr-3 opacity-70 group-hover:opacity-100 transition-opacity duration-300"></span>
+                      {item.name}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
 
-          {/* Services */}
-          <div className="space-y-4 sm:space-y-6">
-            <h3 className="text-lg sm:text-xl font-bold text-accent mb-4 sm:mb-6">Our Services</h3>
-            <ul className="space-y-2 sm:space-y-3">
-              {footerData.services.map((item, index) => (
-                <li key={index}>
-                  <a
-                    href={item.href}
-                    className="text-gray-300 hover:text-accent transition-colors duration-300 flex items-center group text-sm sm:text-base"
-                  >
-                    <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-accent rounded-full mr-2 sm:mr-3 opacity-70 group-hover:opacity-100 transition-opacity duration-300"></span>
-                    {item.name}
-                  </a>
-                </li>
-              ))}
-            </ul>
+            {/* Services */}
+            <div className="space-y-4 sm:space-y-6">
+              <h3 className="text-lg sm:text-xl font-bold text-accent mb-4 sm:mb-6">Our Services</h3>
+              <ul className="space-y-2 sm:space-y-3">
+                {footerData.services.map((item, index) => (
+                  <li key={index}>
+                    <a
+                      href={item.href}
+                      className="text-gray-300 hover:text-accent transition-colors duration-300 flex items-center group text-sm sm:text-base"
+                    >
+                      <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-accent rounded-full mr-2 sm:mr-3 opacity-70 group-hover:opacity-100 transition-opacity duration-300"></span>
+                      {item.name}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
 
           {/* Contact Info */}
@@ -201,23 +204,31 @@ const Footer = () => {
         </div>
 
         {/* Divider */}
-        <hr className="border-background/30 my-8 sm:my-12" />
+        <hr className="border-background/30 my-4 sm:my-6" />
 
-        {/* Copyright */}
-        <div className="flex flex-col sm:flex-row justify-between items-center text-gray-400 text-xs sm:text-sm space-y-4 sm:space-y-0">
-          <p className="text-center sm:text-left">
-            © {currentYear} <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter font-semibold">{footerData.company.name}</span>. All rights reserved.
-          </p>
-          <div className="flex flex-wrap justify-center sm:justify-end space-x-4 sm:space-x-6">
+        {/* Copyright & Bottom Info */}
+        <div className="flex flex-col lg:flex-row justify-between items-center text-gray-400 text-xs sm:text-sm space-y-6 lg:space-y-0">
+          {/* Copyright Information */}
+          <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-center sm:text-left">
+            <p>
+              © {currentYear} <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter font-semibold">{footerData.company.name}</span>. All rights reserved.
+            </p>
+          </div>
+
+          {/* Legal Links */}
+          <div className="flex flex-wrap justify-center lg:justify-end gap-x-4 gap-y-1">
             {footerData.legalLinks.map((link, index) => (
               <a
                 key={index}
                 href={link.href}
-                className="hover:text-accent transition-colors duration-300"
+                className="hover:text-accent transition-colors duration-300 whitespace-nowrap"
               >
                 {link.name}
               </a>
             ))}
+            <p className="flex items-center gap-1">
+              Developed by <a href="https://vanshkholi0.vercel.app/" target="_blank" rel="noopener noreferrer" className="hover:text-accent transition-colors"><span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter font-semibold">Vansh</span></a>
+            </p>
           </div>
         </div>
       </div>

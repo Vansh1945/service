@@ -39,14 +39,6 @@ export default {
       transitionProperty: {
         'height': 'height',
         'spacing': 'margin, padding',
-      },
-      boxShadow: {
-        'premium': '0 10px 25px -5px rgba(0, 0, 0, 0.04), 0 8px 10px -6px rgba(0, 0, 0, 0.04)',
-        'accent-glow': '0 0 20px rgba(249, 115, 22, 0.15)',
-        'primary-glow': '0 0 20px rgba(13, 148, 136, 0.15)',
-      },
-      transitionTimingFunction: {
-        'smooth': 'cubic-bezier(0.4, 0, 0.2, 1)',
       }
     },
   },

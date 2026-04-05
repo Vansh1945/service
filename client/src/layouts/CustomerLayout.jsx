@@ -69,11 +69,11 @@ const CustomerLayout = () => {
     };
 
     return (
-        <div className="min-h-screen bg-background pb-16 lg:pb-0">
+        <div className="min-h-screen bg-background lg:pb-0">
             {/* Header */}
             <header className="sticky top-0 z-50 bg-background shadow-sm border-b border-gray-100">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="flex items-center justify-between h-16 lg:h-20">
+                    <div className="flex items-center justify-between h-16 md:h-18 lg:h-20">
                         {/* Logo Section */}
                         <div className="flex items-center space-x-3">
                             <Link to="/customer/services" className="flex items-center space-x-2 transition-transform duration-200 hover:scale-105">
@@ -81,7 +81,7 @@ const CustomerLayout = () => {
                                     <img
                                         src={systemSettings.logo}
                                         alt={systemSettings.companyName}
-                                        className="h-8 lg:h-10 w-auto object-contain mr-2"
+                                        className="h-8 md:h-10 lg:h-12 w-auto object-contain mr-2"
                                     />
                                 ) : (
                                     <div className="flex items-center justify-center h-8 w-8 lg:h-10 lg:w-10 rounded-full bg-primary shadow-lg">
@@ -117,21 +117,11 @@ const CustomerLayout = () => {
 
                             <NotificationBell />
 
-                            {/* Mobile Logout Button */}
-                            <button
-                                onClick={handleLogout}
-                                className="lg:hidden p-2 rounded-full text-red-500 hover:bg-red-50 bg-red-50/50 transition-all duration-200 focus:outline-none flex items-center justify-center"
-                                aria-label="Logout"
-                                title="Logout"
-                            >
-                                <FiLogOut className="h-5 w-5" />
-                            </button>
-
-                            {/* Profile Dropdown - Desktop Only */}
-                            <div className="hidden lg:block relative">
+                            {/* Profile Dropdown - Unified for all screens */}
+                            <div className="relative">
                                 <button
                                     onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-                                    className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-50 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary/20 border border-transparent hover:border-gray-200"
+                                    className="flex items-center space-x-2 p-1.5 rounded-lg hover:bg-gray-50 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary/20 border border-transparent hover:border-gray-200"
                                 >
                                     {user?.profilePicUrl ? (
                                         <img
@@ -140,18 +130,18 @@ const CustomerLayout = () => {
                                             className="w-8 h-8 rounded-full object-cover border-2 border-primary shadow-sm"
                                         />
                                     ) : (
-                                        <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-background font-semibold text-sm shadow-md">
+                                        <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-background font-semibold text-xs shadow-md">
                                             {getUserInitials()}
                                         </div>
                                     )}
-                                    <span className="text-sm font-medium text-secondary max-w-20 truncate">
+                                    <span className="hidden sm:block text-sm font-medium text-secondary max-w-20 truncate">
                                         {user?.name || 'Customer'}
                                     </span>
                                     <FiChevronDown className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${profileDropdownOpen ? 'rotate-180' : ''}`} />
                                 </button>
 
                                 {profileDropdownOpen && (
-                                    <div className="absolute right-0 mt-2 w-64 bg-background rounded-xl shadow-xl border border-gray-200 py-2 z-20 animate-in slide-in-from-top-2 duration-200">
+                                    <div className="absolute right-0 mt-2 w-56 sm:w-64 bg-background rounded-xl shadow-xl border border-gray-200 py-2 z-[60] animate-in slide-in-from-top-2 duration-200">
                                         <div className="px-4 py-3 border-b border-gray-100">
                                             <p className="text-sm font-semibold text-secondary">{user?.name || 'Customer'}</p>
                                             <p className="text-xs text-gray-500 truncate">{user?.email}</p>
@@ -192,31 +182,6 @@ const CustomerLayout = () => {
                     <Outlet />
                 </div>
             </main>
-
-            {/* Mobile Bottom Navigation */}
-            <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-background border-t border-gray-100 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] z-50">
-                <div className="flex items-center justify-around h-16">
-                    {navigationItems.map((item) => (
-                        <Link
-                            key={item.name}
-                            to={item.path}
-                            className={`flex flex-col items-center justify-center flex-1 h-full space-y-1 transition-all duration-200 ${isActiveRoute(item.path)
-                                ? 'text-primary'
-                                : 'text-gray-400 hover:text-gray-600'
-                                }`}
-                        >
-                            <div className={`p-1 rounded-lg transition-all duration-200 ${isActiveRoute(item.path) ? 'bg-primary/10' : ''}`}>
-                                {React.cloneElement(item.icon, {
-                                    className: `w-5 h-5 ${isActiveRoute(item.path) ? 'stroke-[2.5px]' : 'stroke-2'}`
-                                })}
-                            </div>
-                            <span className="text-[10px] font-semibold uppercase tracking-wider">
-                                {item.name}
-                            </span>
-                        </Link>
-                    ))}
-                </div>
-            </nav>
 
             {/* Click outside to close dropdowns */}
             {profileDropdownOpen && (

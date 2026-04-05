@@ -20,7 +20,7 @@ const Navbar = () => {
   const location = useLocation();
   const menuRef = useRef(null);
   const buttonRef = useRef(null);
-  const { API, isDeepLink, isAuthenticated, resetDeepLink } = useAuth();
+  const { API, isDeepLink, isAuthenticated, resetDeepLink, role } = useAuth();
 
   // Handle scroll effect with smoother transition
   useEffect(() => {
@@ -140,20 +140,32 @@ const Navbar = () => {
 
           {/* Right side - Auth Buttons (Desktop) */}
           <div className="hidden lg:flex items-center space-x-3">
-            <ActionButton
-              icon={<FiLogIn className="mr-2 text-sm" />}
-              text="Login"
-              variant="secondary"
-              path="/login"
-              onClick={resetDeepLink}
-            />
-            <ActionButton
-              icon={<FiUserPlus className="mr-2 text-sm" />}
-              text="Register"
-              variant="primary"
-              path="/register"
-              onClick={resetDeepLink}
-            />
+            {isAuthenticated ? (
+              <ActionButton
+                icon={<FiHome className="mr-2 text-sm" />}
+                text="Dashboard"
+                variant="primary"
+                path={role === 'admin' ? '/admin/dashboard' : role === 'provider' ? '/provider/dashboard' : '/customer/services'}
+                onClick={resetDeepLink}
+              />
+            ) : (
+              <>
+                <ActionButton
+                  icon={<FiLogIn className="mr-2 text-sm" />}
+                  text="Login"
+                  variant="secondary"
+                  path="/login"
+                  onClick={resetDeepLink}
+                />
+                <ActionButton
+                  icon={<FiUserPlus className="mr-2 text-sm" />}
+                  text="Register"
+                  variant="primary"
+                  path="/register"
+                  onClick={resetDeepLink}
+                />
+              </>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
@@ -201,22 +213,35 @@ const Navbar = () => {
 
           {/* Mobile Action Buttons */}
           <div className="pt-6 border-t border-gray-200/20 space-y-3">
-            <ActionButton
-              icon={<FiLogIn className="mr-3 text-base" />}
-              text="Login"
-              variant="secondary"
-              fullWidth
-              path="/login"
-              onClick={() => setIsOpen(false)}
-            />
-            <ActionButton
-              icon={<FiUserPlus className="mr-3 text-base" />}
-              text="Register"
-              variant="primary"
-              fullWidth
-              path="/register"
-              onClick={() => setIsOpen(false)}
-            />
+            {isAuthenticated ? (
+              <ActionButton
+                icon={<FiHome className="mr-3 text-base" />}
+                text="Go to Dashboard"
+                variant="primary"
+                fullWidth
+                path={role === 'admin' ? '/admin/dashboard' : role === 'provider' ? '/provider/dashboard' : '/customer/services'}
+                onClick={() => setIsOpen(false)}
+              />
+            ) : (
+              <>
+                <ActionButton
+                  icon={<FiLogIn className="mr-3 text-base" />}
+                  text="Login"
+                  variant="secondary"
+                  fullWidth
+                  path="/login"
+                  onClick={() => setIsOpen(false)}
+                />
+                <ActionButton
+                  icon={<FiUserPlus className="mr-3 text-base" />}
+                  text="Register"
+                  variant="primary"
+                  fullWidth
+                  path="/register"
+                  onClick={() => setIsOpen(false)}
+                />
+              </>
+            )}
           </div>
         </div>
       </div>

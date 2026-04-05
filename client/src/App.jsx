@@ -193,8 +193,8 @@ const App = () => {
         </Routes>
       </SocketProvider>
 
-      {/* Only show Footer for public routes */}
-      {!isDashboardRoute && <Footer />}
+      {/* Show Footer for public routes and customer dashboard */}
+      {(!isDashboardRoute || location.pathname.startsWith('/customer')) && <Footer />}
     </Suspense>
   );
 };

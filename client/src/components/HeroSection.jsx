@@ -92,7 +92,7 @@ const HeroSection = ({ noMargin = false }) => {
 
           return (
             <SwiperSlide key={index} className="h-full">
-              <div className="relative w-full h-[180px] md:h-[220px] rounded-xl overflow-hidden shadow-md bg-black cursor-pointer group">
+              <div className="relative w-full h-[180px] md:h-[220px] rounded-xl overflow-hidden shadow-md cursor-pointer group">
 
                 {/* Main image */}
                 <div className="relative w-full h-full">
