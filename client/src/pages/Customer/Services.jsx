@@ -232,18 +232,14 @@ const ServiceListingPage = () => {
 
   if (error && allServices.length === 0) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center p-8 bg-white rounded-2xl shadow-lg max-w-md mx-4">
-          <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <p className="text-gray-600 mb-6">{error}</p>
-          <button
-            onClick={() => fetchAllServices()}
-            className="px-6 py-3 bg-primary text-white rounded-xl font-semibold hover:bg-primary/90 transition-all flex items-center gap-2 mx-auto"
-          >
-            <RefreshCw className="w-4 h-4" /> Try Again
-          </button>
-        </div>
-      </div>
+      <ErrorState 
+        title="Failed to Load"
+        message={error}
+        onRetry={() => fetchAllServices()}
+        retryText="Try Again"
+        onBack={() => navigate('/')}
+        backText="Go Home"
+      />
     );
   }
 
