@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FaFacebook, FaTwitter, FaInstagram, FaLinkedin, FaYoutube, FaMapMarkerAlt, FaPhone, FaEnvelope } from 'react-icons/fa';
 import { useAuth } from '../context/auth';
+import LoadingSpinner from './Loader';
 
 const Footer = () => {
   const { API } = useAuth();
@@ -65,10 +66,10 @@ const Footer = () => {
       { name: 'Careers', href: '/careers' }
     ],
     services: [
-      { name: 'Electrical Wiring', href: '/services' },
-      { name: 'Lighting Solutions', href: '/services' },
-      { name: 'Safety Inspections', href: '/services' },
-      { name: 'Emergency Repairs', href: '/services' }
+      { name: 'Electrical Wiring', href: '/customer/services' },
+      { name: 'Lighting Solutions', href: '/customer/services' },
+      { name: 'Safety Inspections', href: '/customer/services' },
+      { name: 'Emergency Repairs', href: '/customer/services' }
     ],
     contact: {
       address: systemData?.address || "Urban Phase 1, Jalandhar, Punjab, India 144005",
@@ -87,12 +88,8 @@ const Footer = () => {
   if (loading) {
     return (
       <footer className="bg-secondary text-white pt-12 pb-6 sm:pt-16 sm:pb-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
-            <p className="text-gray-300 mt-4">Loading footer...</p>
-          </div>
-        </div>
+        <LoadingSpinner />
+        <p className="text-gray-300 mt-4">Loading footer...</p>
       </footer>
     );
   }

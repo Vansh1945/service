@@ -35,7 +35,7 @@ const App = () => {
   });
 
   // Check if current route is a protected/dashboard route (Optimized: memoized)
-  const isDashboardRoute = React.useMemo(() => 
+  const isDashboardRoute = React.useMemo(() =>
     /^\/(admin|customer|provider)/.test(location.pathname),
     [location.pathname]
   );
@@ -111,13 +111,13 @@ const App = () => {
   useEffect(() => {
     // Only redirect if they land on public "/" route
     if (isAuthenticated && location.pathname === "/") {
-        if (userRole === 'admin' || user?.isAdmin) {
-            navigate_fn('/admin/dashboard', { replace: true });
-        } else if (userRole === 'provider') {
-            navigate_fn('/provider/dashboard', { replace: true });
-        } else {
-            navigate_fn('/customer/services', { replace: true });
-        }
+      if (userRole === 'admin' || user?.isAdmin) {
+        navigate_fn('/admin/dashboard', { replace: true });
+      } else if (userRole === 'provider') {
+        navigate_fn('/provider/dashboard', { replace: true });
+      } else {
+        navigate_fn('/customer/services', { replace: true });
+      }
     }
   }, [isAuthenticated, userRole, user, location.pathname, navigate_fn]);
 
@@ -129,7 +129,7 @@ const App = () => {
 
     if (route) {
       setIsDeepLink(true);
-      
+
       const newUrl = window.location.pathname + window.location.hash;
       window.history.replaceState({}, '', newUrl);
 
@@ -153,7 +153,7 @@ const App = () => {
   // 🔄 Reset deep link state on manual navigation
   useEffect(() => {
     if (!location.state?.fromNotification) {
-        resetDeepLink?.();
+      resetDeepLink?.();
     }
   }, [location.pathname, location.state, resetDeepLink]);
 
