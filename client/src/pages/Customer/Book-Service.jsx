@@ -854,7 +854,7 @@ const BookService = () => {
                     Payment Method *
                   </label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div 
+                    <div
                       className={`relative flex items-center p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${formData.paymentMethod === 'online' ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-gray-300'}`}
                       onClick={() => setFormData(prev => ({ ...prev, paymentMethod: 'online' }))}
                     >
@@ -873,7 +873,7 @@ const BookService = () => {
                       <CreditCard className={`ml-auto w-5 h-5 ${formData.paymentMethod === 'online' ? 'text-primary' : 'text-gray-400'}`} />
                     </div>
 
-                    <div 
+                    <div
                       className={`relative flex items-center p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${formData.paymentMethod === 'cash' ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-gray-300'}`}
                       onClick={() => setFormData(prev => ({ ...prev, paymentMethod: 'cash' }))}
                     >
