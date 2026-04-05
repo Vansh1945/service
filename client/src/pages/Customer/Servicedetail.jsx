@@ -252,23 +252,23 @@ const ServiceDetailPage = () => {
   return (
     <div className="min-h-screen bg-white font-inter">
       {/* Breadcrumb Section */}
-      <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
+      <div className="max-w-[95%] mx-auto px-4 py-4 sm:px-6 lg:px-8">
         <nav className="flex text-sm text-gray-500 font-medium" aria-label="Breadcrumb">
           <ol className="flex items-center space-x-2">
             <li>
-              <Link to="/customer/services" className="hover:text-green-600 transition-colors flex items-center">
+              <Link to="/customer/services" className="hover:text-primary transition-colors flex items-center">
                 <MdHome className="w-4 h-4 mr-1" />
                 Home
               </Link>
             </li>
             <MdChevronRight className="w-4 h-4 text-gray-400" />
             <li>
-              <button onClick={() => navigate(`/customer/services?category=${getCategoryId}`)} className="hover:text-green-600 transition-colors">
+              <button onClick={() => navigate(`/customer/services?category=${getCategoryId}`)} className="hover:text-primary transition-colors">
                 {categoryName}
               </button>
             </li>
             <MdChevronRight className="w-4 h-4 text-gray-400" />
-            <li className="text-gray-900 font-semibold truncate max-w-[200px]">
+            <li className="text-secondary font-semibold truncate max-w-[200px]">
               {service.title}
             </li>
           </ol>
@@ -276,7 +276,7 @@ const ServiceDetailPage = () => {
       </div>
 
       {/* Main Content Grid */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
+      <div className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 pb-12">
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
           <div className="md:grid md:grid-cols-2 gap-8 p-6 lg:p-8">
 
@@ -297,10 +297,10 @@ const ServiceDetailPage = () => {
 
                 {allImages.length > 1 && (
                   <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 flex justify-between opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={(e) => { e.stopPropagation(); prevImage(); }} className="p-2 rounded-full bg-white/90 shadow-md text-gray-600 hover:text-green-600 hover:bg-white transition-all">
+                    <button onClick={(e) => { e.stopPropagation(); prevImage(); }} className="p-2 rounded-full bg-white/90 shadow-md text-gray-600 hover:text-primary hover:bg-white transition-all">
                       <MdArrowBack size={20} />
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); nextImage(); }} className="p-2 rounded-full bg-white/90 shadow-md text-gray-600 hover:text-green-600 hover:bg-white transition-all">
+                    <button onClick={(e) => { e.stopPropagation(); nextImage(); }} className="p-2 rounded-full bg-white/90 shadow-md text-gray-600 hover:text-primary hover:bg-white transition-all">
                       <MdArrowForward size={20} />
                     </button>
                   </div>
@@ -315,7 +315,7 @@ const ServiceDetailPage = () => {
                       key={index}
                       onClick={() => handleThumbnailClick(index)}
                       className={`w-20 h-20 rounded-xl overflow-hidden border-2 transition-all p-1 flex-shrink-0 ${index === currentImageIndex
-                        ? 'border-green-600 ring-2 ring-green-100 scale-105 shadow-md'
+                        ? 'border-primary ring-2 ring-primary/10 scale-105 shadow-md'
                         : 'border-gray-100 hover:border-gray-300'
                         }`}
                     >
@@ -330,13 +330,13 @@ const ServiceDetailPage = () => {
             <div className="flex flex-col h-full mt-8 md:mt-0">
               <div className="flex-1 space-y-6">
                 <div>
-                  <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 tracking-tight leading-tight mb-2">
+                  <h1 className="text-3xl lg:text-4xl font-bold text-secondary tracking-tight leading-tight mb-2">
                     {service.title}
                   </h1>
 
                   {/* Rating Section */}
                   <div className="flex items-center gap-4">
-                    <div className="flex items-center bg-green-50 px-2 py-1 rounded text-green-700 font-bold text-sm">
+                    <div className="flex items-center bg-primary/10 px-2 py-1 rounded text-primary font-bold text-sm">
                       <MdStar className="mr-0.5" />
                       {service.averageRating?.toFixed(1) || '0.0'}
                     </div>
@@ -347,19 +347,47 @@ const ServiceDetailPage = () => {
                 </div>
 
                 {/* Price Section */}
-                <div className="bg-green-50/50 p-6 rounded-2xl border border-green-100">
+                <div className="bg-primary/5 p-6 rounded-2xl border border-primary/10">
                   <div className="flex items-baseline gap-3">
-                    <span className="text-4xl font-bold text-green-700">₹{service.basePrice?.toLocaleString()}</span>
-                    <span className="text-gray-400 text-lg line-through">₹{(service.basePrice * 1.2).toFixed(0)}</span>
-                    <span className="bg-orange-100 text-orange-600 px-2 py-1 rounded text-xs font-black uppercase">20% OFF</span>
+                    <span className="text-4xl font-bold text-primary">₹{service.basePrice?.toLocaleString()}</span>
+
                   </div>
                   <p className="text-gray-400 text-xs mt-2 font-medium">Inclusive of all taxes • Direct Professional Service</p>
                 </div>
+                {/* CTA Section */}
+                <div className="mt-10 space-y-4">
+                  <div className="flex gap-4">
+                    <button
+                      onClick={handleBookNow}
+                      className="flex-1 bg-accent hover:opacity-90 text-white font-bold py-4 rounded-xl shadow-lg shadow-accent/20 transition-all active:scale-95 flex items-center justify-center gap-2"
+                    >
+                      <MdCalendarToday size={20} />
+                      BOOK SERVICE NOW
+                    </button>
+                    <button
+                      onClick={handleShare}
+                      className="p-4 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center justify-center transition-all"
+                    >
+                      <MdShare size={24} />
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-center gap-6 py-4 border-t border-gray-100">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 uppercase tracking-tighter">
+                      <MdSecurity className="text-primary w-4 h-4" />
+                      Secure Booking
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 uppercase tracking-tighter">
+                      <MdAccessTime className="text-primary w-4 h-4" />
+                      On-time arrival
+                    </div>
+
+                  </div>
+                </div>
 
                 <div className="space-y-4">
-                  <h3 className="text-gray-900 font-bold uppercase text-xs tracking-wider border-b border-gray-100 pb-2">Description</h3>
+                  <h3 className="text-secondary font-bold uppercase text-xs tracking-wider border-b border-gray-100 pb-2">Note</h3>
                   <p className="text-gray-600 text-[15px] leading-relaxed">
-                    {service.description}
+                    Material cost is not included in the price. and material charges extra purchase in local market by customer
                   </p>
                 </div>
 
@@ -370,7 +398,7 @@ const ServiceDetailPage = () => {
                     <ul className="space-y-2">
                       {specialNotes.map((note, index) => (
                         <li key={index} className="flex items-start gap-2 text-sm text-gray-700">
-                          <MdCheck className="text-green-500 mt-0.5 shrink-0" />
+                          <MdCheck className="text-primary mt-0.5 shrink-0" />
                           <span>{note}</span>
                         </li>
                       ))}
@@ -381,7 +409,7 @@ const ServiceDetailPage = () => {
                     <ul className="space-y-2">
                       {materialsUsed.map((item, index) => (
                         <li key={index} className="flex items-start gap-2 text-sm text-gray-700">
-                          <div className="w-1.5 h-1.5 rounded-full bg-green-500 mt-2 shrink-0" />
+                          <div className="w-1.5 h-1.5 rounded-full bg-primary mt-2 shrink-0" />
                           <span>{item}</span>
                         </li>
                       ))}
@@ -390,34 +418,6 @@ const ServiceDetailPage = () => {
                 </div>
               </div>
 
-              {/* CTA Section */}
-              <div className="mt-10 space-y-4">
-                <div className="flex gap-4">
-                  <button
-                    onClick={handleBookNow}
-                    className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-green-200 transition-all active:scale-95 flex items-center justify-center gap-2"
-                  >
-                    <MdCalendarToday size={20} />
-                    BOOK SERVICE NOW
-                  </button>
-                  <button
-                    onClick={handleShare}
-                    className="p-4 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center justify-center transition-all"
-                  >
-                    <MdShare size={24} />
-                  </button>
-                </div>
-                <div className="flex items-center justify-center gap-6 py-4 border-t border-gray-100">
-                  <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 uppercase tracking-tighter">
-                    <MdSecurity className="text-green-500 w-4 h-4" />
-                    Secure Booking
-                  </div>
-                  <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 uppercase tracking-tighter">
-                    <MdAccessTime className="text-green-500 w-4 h-4" />
-                    On-time arrival
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         </div>
@@ -432,7 +432,7 @@ const ServiceDetailPage = () => {
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 className={`pb-4 px-1 border-b-2 font-bold text-sm uppercase tracking-widest transition-all ${activeTab === tab
-                  ? 'border-green-600 text-green-600'
+                  ? 'border-primary text-primary'
                   : 'border-transparent text-gray-400 hover:text-gray-600'
                   }`}
               >
@@ -447,11 +447,11 @@ const ServiceDetailPage = () => {
             <div className="bg-white rounded-2xl border border-gray-100 p-8 shadow-sm space-y-8">
               <div className="grid md:grid-cols-2 gap-12">
                 <div className="space-y-6">
-                  <h3 className="text-xl font-bold text-gray-900 border-l-4 border-green-600 pl-4">Service Details</h3>
+                  <h3 className="text-xl font-bold text-secondary border-l-4 border-primary pl-4">Service Details</h3>
                   <p className="text-gray-600 leading-relaxed">{service.description}</p>
                 </div>
                 <div className="space-y-6">
-                  <h3 className="text-xl font-bold text-gray-900 border-l-4 border-green-600 pl-4">Service Guarantees</h3>
+                  <h3 className="text-xl font-bold text-secondary border-l-4 border-primary pl-4">Service Guarantees</h3>
                   <div className="grid grid-cols-2 gap-4">
                     {[
                       { icon: <ShieldCheckIcon className="w-5 h-5" />, text: "30-Day Warranty" },
@@ -460,7 +460,7 @@ const ServiceDetailPage = () => {
                       { icon: <CheckBadgeIcon className="w-5 h-5" />, text: "Genuine Spares" }
                     ].map((item, i) => (
                       <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                        <div className="text-green-600">{item.icon}</div>
+                        <div className="text-primary">{item.icon}</div>
                         <span className="text-sm font-semibold text-gray-700">{item.text}</span>
                       </div>
                     ))}
@@ -475,15 +475,15 @@ const ServiceDetailPage = () => {
               <div className="max-w-2xl divide-y divide-gray-100">
                 <div className="grid grid-cols-2 py-4">
                   <span className="text-gray-500 font-medium">Estimated Duration</span>
-                  <span className="text-gray-900 font-bold">{formatDuration(service.duration)}</span>
+                  <span className="text-secondary font-bold">{formatDuration(service.duration)}</span>
                 </div>
                 <div className="grid grid-cols-2 py-4">
                   <span className="text-gray-500 font-medium">Category</span>
-                  <span className="text-gray-900 font-bold">{categoryName}</span>
+                  <span className="text-secondary font-bold">{categoryName}</span>
                 </div>
                 <div className="grid grid-cols-2 py-4">
                   <span className="text-gray-500 font-medium">Availability</span>
-                  <span className={`font-bold ${service.isActive ? 'text-green-600' : 'text-red-500'}`}>
+                  <span className={`font-bold ${service.isActive ? 'text-primary' : 'text-red-500'}`}>
                     {service.isActive ? 'Ready for Booking' : 'Not Available Currently'}
                   </span>
                 </div>
@@ -495,7 +495,7 @@ const ServiceDetailPage = () => {
             <div className="space-y-8">
               <div className="bg-white rounded-2xl border border-gray-100 p-8 shadow-sm flex flex-col md:flex-row gap-8 items-center">
                 <div className="text-center md:text-left">
-                  <div className="text-5xl font-black text-gray-900 mb-2">{service.averageRating?.toFixed(1) || '0.0'}</div>
+                  <div className="text-5xl font-black text-secondary mb-2">{service.averageRating?.toFixed(1) || '0.0'}</div>
                   <div className="flex justify-center md:justify-start items-center gap-1 mb-1">
                     {[1, 2, 3, 4, 5].map((star) => (
                       <MdStar key={star} className={`w-5 h-5 ${star <= (service.averageRating || 0) ? 'text-yellow-400' : 'text-gray-200'}`} />
@@ -518,37 +518,36 @@ const ServiceDetailPage = () => {
                     );
                   })}
                 </div>
-              </div>
-
-              <div className="grid md:grid-cols-2 gap-6">
-                {service.feedback?.length > 0 ? (
-                  service.feedback.map((review, index) => (
-                    <div key={index} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-                      <div className="flex items-center gap-4 mb-4">
-                        <div className="w-10 h-10 bg-green-100 text-green-700 rounded-full flex items-center justify-center font-bold">
-                          {review.customer?.name?.[0] || 'U'}
-                        </div>
-                        <div className="flex-1">
-                          <div className="text-sm font-bold text-gray-900">{review.customer?.name || 'Customer'}</div>
-                          <div className="text-[10px] uppercase font-black text-gray-400 tracking-widest">
-                            {new Date(review.createdAt).toLocaleDateString()}
+                <div className="grid md:grid-cols-2 gap-6">
+                  {service.feedback?.length > 0 ? (
+                    service.feedback.map((review, index) => (
+                      <div key={index} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                        <div className="flex items-center gap-4 mb-4">
+                          <div className="w-10 h-10 bg-primary/10 text-primary rounded-full flex items-center justify-center font-bold">
+                            {review.customer?.name?.[0] || 'U'}
+                          </div>
+                          <div className="flex-1">
+                            <div className="text-sm font-bold text-secondary">{review.customer?.name || 'Customer'}</div>
+                            <div className="text-[10px] uppercase font-black text-gray-400 tracking-widest">
+                              {new Date(review.createdAt).toLocaleDateString()}
+                            </div>
+                          </div>
+                          <div className="flex gap-0.5">
+                            {[1, 2, 3, 4, 5].map(s => (
+                              <MdStar key={s} className={`w-3.5 h-3.5 ${s <= review.rating ? 'text-yellow-400' : 'text-gray-200'}`} />
+                            ))}
                           </div>
                         </div>
-                        <div className="flex gap-0.5">
-                          {[1, 2, 3, 4, 5].map(s => (
-                            <MdStar key={s} className={`w-3.5 h-3.5 ${s <= review.rating ? 'text-yellow-400' : 'text-gray-200'}`} />
-                          ))}
-                        </div>
+                        <p className="text-gray-600 text-sm leading-relaxed italic">"{review.comment}"</p>
                       </div>
-                      <p className="text-gray-600 text-sm leading-relaxed italic">"{review.comment}"</p>
+                    ))
+                  ) : (
+                    <div className="col-span-full py-12 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                      <ChatBubbleLeftEllipsisIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                      <p className="text-gray-500 font-bold uppercase text-xs tracking-widest">No reviews yet for this service</p>
                     </div>
-                  ))
-                ) : (
-                  <div className="col-span-full py-12 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-                    <ChatBubbleLeftEllipsisIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                    <p className="text-gray-500 font-bold uppercase text-xs tracking-widest">No reviews yet for this service</p>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -557,16 +556,7 @@ const ServiceDetailPage = () => {
 
       {/* Related Services Section */}
       <div className="bg-gray-50/50 py-20 border-t border-gray-100 mt-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-end justify-between mb-12">
-            <div className="space-y-4">
-              <span className="block w-12 h-1.5 bg-green-600 rounded-full"></span>
-              <h2 className="text-3xl font-bold text-gray-900 tracking-tighter">Recommended For You</h2>
-            </div>
-            <Link to={`/customer/services?category=${getCategoryId}`} className="text-xs font-bold uppercase tracking-widest text-green-600 hover:underline">
-              Explore More
-            </Link>
-          </div>
+        <div className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8">
           <RelatedServicesComponent
             services={relatedServices}
             categoryName={categoryName}
