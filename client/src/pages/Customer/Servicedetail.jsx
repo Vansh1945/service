@@ -4,12 +4,12 @@ import { useAuth } from '../../context/auth';
 import {
   MdStar, MdAccessTime, MdSecurity, MdCheck, MdCurrencyRupee,
   MdChevronRight, MdError, MdShare, MdArrowBack, MdArrowForward,
-  MdPhoto, MdHome, MdCalendarToday
+  MdPhoto, MdHome, MdCalendarToday, MdHelpOutline
 } from 'react-icons/md';
 import {
   StarIcon as StarIconSolid, ShieldCheckIcon, CheckBadgeIcon,
   WrenchIcon, UserIcon, ClockIcon, ChevronRightIcon, CheckIcon,
-  ChatBubbleLeftEllipsisIcon
+  ChatBubbleLeftEllipsisIcon, ChevronDownIcon
 } from '@heroicons/react/24/outline';
 import LoadingSpinner from '../../components/Loader';
 import RelatedServicesComponent from '../../components/RelatedServices';
@@ -25,7 +25,7 @@ const ServiceDetailPage = () => {
   const [relatedServices, setRelatedServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('Overview');
   const [openAccordion, setOpenAccordion] = useState(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [imageLoading, setImageLoading] = useState(true);
@@ -227,6 +227,13 @@ const ServiceDetailPage = () => {
   const specialNotes = service?.specialNotes || [];
   const materialsUsed = service?.materialsUsed || [];
 
+  // Placeholder FAQs
+  const faqs = [
+    { q: "What if the service takes longer than estimated?", a: "The price remains the same as quoted. Any additional costs for materials will be discussed beforehand." },
+    { q: "Are the service professionals background checked?", a: "Yes, all our professionals undergo strict identity and background verification." },
+    { q: "Do you provide a warranty for the service?", a: "We provide a 30-day service warranty on all professional bookings." }
+  ];
+
   // ==================== LOADING STATE ====================
   if (loading) {
     return (
@@ -278,10 +285,10 @@ const ServiceDetailPage = () => {
       {/* Main Content Grid */}
       <div className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 pb-12">
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
-          <div className="md:grid md:grid-cols-2 gap-8 p-6 lg:p-8">
+          <div className="md:grid md:grid-cols-2 gap-10 p-6 lg:p-10">
 
             {/* Left Column: Image Section */}
-            <div className="space-y-6">
+            <div className="flex flex-col">
               <div className="relative aspect-square rounded-2xl overflow-hidden bg-gray-50 border border-gray-100 group">
                 {imageLoading && (
                   <div className="absolute inset-0 flex items-center justify-center bg-white/60 z-10">
@@ -291,12 +298,19 @@ const ServiceDetailPage = () => {
                 <img
                   src={allImages[currentImageIndex]}
                   alt={service.title}
-                  className={`w-full h-full object-contain transition-all duration-500 group-hover:scale-105 ${imageLoading ? 'opacity-0' : 'opacity-100'}`}
+                  className={`w-full h-full object-contain transition-all duration-500 group-hover:scale-95 ${imageLoading ? 'opacity-0' : 'opacity-100'}`}
                   onLoad={handleImageLoad}
                 />
 
+                {/* Counter Overlay */}
                 {allImages.length > 1 && (
-                  <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 flex justify-between opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="absolute bottom-4 right-4 bg-black/60 text-white text-[10px] font-black px-2 py-1 rounded-md backdrop-blur-sm z-20 tracking-widest">
+                    {currentImageIndex + 1} / {allImages.length}
+                  </div>
+                )}
+
+                {allImages.length > 1 && (
+                  <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 flex justify-between opacity-0 group-hover:opacity-100 transition-opacity z-20">
                     <button onClick={(e) => { e.stopPropagation(); prevImage(); }} className="p-2 rounded-full bg-white/90 shadow-md text-gray-600 hover:text-primary hover:bg-white transition-all">
                       <MdArrowBack size={20} />
                     </button>
@@ -306,57 +320,39 @@ const ServiceDetailPage = () => {
                   </div>
                 )}
               </div>
-
-              {/* Thumbnails */}
-              {allImages.length > 1 && (
-                <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar justify-center">
-                  {allImages.map((image, index) => (
-                    <button
-                      key={index}
-                      onClick={() => handleThumbnailClick(index)}
-                      className={`w-20 h-20 rounded-xl overflow-hidden border-2 transition-all p-1 flex-shrink-0 ${index === currentImageIndex
-                        ? 'border-primary ring-2 ring-primary/10 scale-105 shadow-md'
-                        : 'border-gray-100 hover:border-gray-300'
-                        }`}
-                    >
-                      <img src={image} className="w-full h-full object-cover rounded-lg" alt="" />
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
 
             {/* Right Column: Service Details */}
             <div className="flex flex-col h-full mt-8 md:mt-0">
-              <div className="flex-1 space-y-6">
-                <div>
-                  <h1 className="text-3xl lg:text-4xl font-bold text-secondary tracking-tight leading-tight mb-2">
+              <div className="flex-1 space-y-8">
+                <div className="space-y-2">
+                  <h1 className="text-2xl lg:text-3xl font-bold text-secondary tracking-tight leading-tight">
                     {service.title}
                   </h1>
 
                   {/* Rating Section */}
                   <div className="flex items-center gap-4">
-                    <div className="flex items-center bg-primary/10 px-2 py-1 rounded text-primary font-bold text-sm">
-                      <MdStar className="mr-0.5" />
+                    <div className="flex items-center bg-primary/10 px-2.5 py-1 rounded-lg text-primary font-bold text-sm">
+                      <MdStar className="mr-1" />
                       {service.averageRating?.toFixed(1) || '0.0'}
                     </div>
-                    <div className="text-gray-400 text-sm font-medium border-l border-gray-200 pl-4 uppercase tracking-wider">
+                    <div className="text-gray-400 text-sm font-medium border-l border-gray-200 pl-4">
                       {service.ratingCount || 0} Reviews
                     </div>
                   </div>
                 </div>
 
                 {/* Price Section */}
-                <div className="bg-primary/5 p-6 rounded-2xl border border-primary/10">
+                <div className="bg-primary/5 p-4 rounded-2xl border border-primary/10">
                   <div className="flex items-baseline gap-3">
                     <span className="text-4xl font-bold text-primary">₹{service.basePrice?.toLocaleString()}</span>
-
                   </div>
-                  <p className="text-gray-400 text-xs mt-2 font-medium">Inclusive of all taxes • Direct Professional Service</p>
+                  <p className="text-gray-400 text-xs mt-2 font-medium">• Inclusive of all taxes • Direct Professional Service</p>
                 </div>
+
                 {/* CTA Section */}
-                <div className="mt-10 space-y-4">
-                  <div className="flex gap-4">
+                <div className="space-y-4">
+                  <div className="flex flex-col sm:flex-row gap-4">
                     <button
                       onClick={handleBookNow}
                       className="flex-1 bg-accent hover:opacity-90 text-white font-bold py-4 rounded-xl shadow-lg shadow-accent/20 transition-all active:scale-95 flex items-center justify-center gap-2"
@@ -366,89 +362,81 @@ const ServiceDetailPage = () => {
                     </button>
                     <button
                       onClick={handleShare}
-                      className="p-4 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center justify-center transition-all"
+                      className="px-6 py-4 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center justify-center transition-all"
                     >
                       <MdShare size={24} />
                     </button>
                   </div>
-                  <div className="flex items-center justify-center gap-6 py-4 border-t border-gray-100">
-                    <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 uppercase tracking-tighter">
-                      <MdSecurity className="text-primary w-4 h-4" />
-                      Secure Booking
-                    </div>
-                    <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 uppercase tracking-tighter">
-                      <MdAccessTime className="text-primary w-4 h-4" />
-                      On-time arrival
-                    </div>
-
-                  </div>
                 </div>
 
-                <div className="space-y-4">
-                  <h3 className="text-secondary font-bold uppercase text-xs tracking-wider border-b border-gray-100 pb-2">Note</h3>
-                  <p className="text-gray-600 text-[15px] leading-relaxed">
-                    Material cost is not included in the price. and material charges extra purchase in local market by customer
+                {/* Note Section */}
+                <div className="space-y-2 p-4 bg-yellow-50 rounded-xl border border-yellow-100">
+                  <h3 className="text-yellow-800 font-bold text-[10px] tracking-widest flex items-center gap-2">
+                    <MdError className="w-4 h-4" />
+                    Note
+                  </h3>
+                  <p className="text-yellow-700 text-xs font-bold leading-relaxed">
+                    Material cost is NOT included; actual material charges will be extra.
                   </p>
                 </div>
 
                 {/* Features / Special Notes */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-3">
-                    <h4 className="text-gray-400 font-bold uppercase text-[10px] tracking-widest">What's Included</h4>
-                    <ul className="space-y-2">
-                      {specialNotes.map((note, index) => (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+                  <div className="space-y-4">
+                    <h4 className="text-gray-400 font-bold text-[10px] tracking-widest border-b border-gray-100 pb-2">What's Included</h4>
+                    <ul className="space-y-3">
+                      {specialNotes.length > 0 ? specialNotes.map((note, index) => (
                         <li key={index} className="flex items-start gap-2 text-sm text-gray-700">
                           <MdCheck className="text-primary mt-0.5 shrink-0" />
                           <span>{note}</span>
                         </li>
-                      ))}
+                      )) : <li className="text-gray-400 text-xs italic">Standard professional service</li>}
                     </ul>
                   </div>
-                  <div className="space-y-3">
-                    <h4 className="text-gray-400 font-bold uppercase text-[10px] tracking-widest">Materials/Tools</h4>
-                    <ul className="space-y-2">
-                      {materialsUsed.map((item, index) => (
+                  <div className="space-y-4">
+                    <h4 className="text-gray-400 font-bold text-[10px] tracking-widest border-b border-gray-100 pb-2">Tools & Materials</h4>
+                    <ul className="space-y-3">
+                      {materialsUsed.length > 0 ? materialsUsed.map((item, index) => (
                         <li key={index} className="flex items-start gap-2 text-sm text-gray-700">
                           <div className="w-1.5 h-1.5 rounded-full bg-primary mt-2 shrink-0" />
                           <span>{item}</span>
                         </li>
-                      ))}
+                      )) : <li className="text-gray-400 text-xs italic">All pro-tools included</li>}
                     </ul>
                   </div>
                 </div>
               </div>
-
             </div>
           </div>
         </div>
       </div>
 
       {/* Tabs / Bottom Section (FAQ & Reviews) */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="border-b border-gray-200 mb-8 overflow-x-auto no-scrollbar">
+      <div className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-4">
+        <div className="border-b border-gray-200 mb-10 overflow-x-auto">
           <nav className="flex space-x-12 min-w-max">
-            {['overview', 'specifications', 'reviews'].map((tab) => (
+            {['Overview', 'Specifications', 'Reviews'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`pb-4 px-1 border-b-2 font-bold text-sm uppercase tracking-widest transition-all ${activeTab === tab
+                className={`pb-5 px-1 border-b-2 font-bold text-sm tracking-widest transition-all ${activeTab === tab
                   ? 'border-primary text-primary'
                   : 'border-transparent text-gray-400 hover:text-gray-600'
                   }`}
               >
-                {tab === 'reviews' ? `Customer Reviews (${service.ratingCount || 0})` : tab}
+                {tab === 'Reviews' ? `Customer Reviews (${service.ratingCount || 0})` : tab}
               </button>
             ))}
           </nav>
         </div>
 
-        <div className="animate-fade-in">
-          {activeTab === 'overview' && (
+        <div className="animate-fade-in min-h-[300px]">
+          {activeTab === 'Overview' && (
             <div className="bg-white rounded-2xl border border-gray-100 p-8 shadow-sm space-y-8">
               <div className="grid md:grid-cols-2 gap-12">
                 <div className="space-y-6">
                   <h3 className="text-xl font-bold text-secondary border-l-4 border-primary pl-4">Service Details</h3>
-                  <p className="text-gray-600 leading-relaxed">{service.description}</p>
+                  <p className="text-gray-600 leading-relaxed whitespace-pre-line">{service.description}</p>
                 </div>
                 <div className="space-y-6">
                   <h3 className="text-xl font-bold text-secondary border-l-4 border-primary pl-4">Service Guarantees</h3>
@@ -470,83 +458,129 @@ const ServiceDetailPage = () => {
             </div>
           )}
 
-          {activeTab === 'specifications' && (
-            <div className="bg-white rounded-2xl border border-gray-100 p-8 shadow-sm">
-              <div className="max-w-2xl divide-y divide-gray-100">
-                <div className="grid grid-cols-2 py-4">
-                  <span className="text-gray-500 font-medium">Estimated Duration</span>
-                  <span className="text-secondary font-bold">{formatDuration(service.duration)}</span>
+          {activeTab === 'Specifications' && (
+            <div className="bg-white rounded-2xl border border-gray-100 p-8 shadow-sm lg:grid lg:grid-cols-2 gap-16">
+              {/* Left Column: Tech Specs */}
+              <div>
+                <h3 className="text-xl font-bold text-secondary mb-6 flex items-center gap-2">
+                  <WrenchIcon className="w-6 h-6 text-primary" />
+                  Technical Details
+                </h3>
+                <div className="divide-y divide-gray-100">
+                  <div className="grid grid-cols-2 py-4">
+                    <span className="text-gray-500 font-medium">Estimated Duration</span>
+                    <span className="text-secondary font-bold">{formatDuration(service.duration)}</span>
+                  </div>
+                  <div className="grid grid-cols-2 py-4">
+                    <span className="text-gray-500 font-medium">Category</span>
+                    <span className="text-secondary font-bold">{categoryName}</span>
+                  </div>
+                  <div className="grid grid-cols-2 py-4">
+                    <span className="text-gray-500 font-medium">Availability</span>
+                    <span className={`font-bold ${service.isActive ? 'text-primary' : 'text-red-500'}`}>
+                      {service.isActive ? 'Ready for Booking' : 'Not Available Currently'}
+                    </span>
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 py-4">
-                  <span className="text-gray-500 font-medium">Category</span>
-                  <span className="text-secondary font-bold">{categoryName}</span>
-                </div>
-                <div className="grid grid-cols-2 py-4">
-                  <span className="text-gray-500 font-medium">Availability</span>
-                  <span className={`font-bold ${service.isActive ? 'text-primary' : 'text-red-500'}`}>
-                    {service.isActive ? 'Ready for Booking' : 'Not Available Currently'}
-                  </span>
+              </div>
+
+              {/* Right Column: FAQ */}
+              <div className="mt-12 lg:mt-0">
+                <h3 className="text-xl font-bold text-secondary mb-6 flex items-center gap-2">
+                  <MdHelpOutline className="w-6 h-6 text-primary" />
+                  Frequently Asked Questions
+                </h3>
+                <div className="space-y-4">
+                  {faqs.map((faq, index) => (
+                    <div
+                      key={index}
+                      className="border border-gray-100 rounded-xl p-4 hover:border-primary/30 transition-all cursor-pointer group"
+                      onClick={() => toggleAccordion(index)}
+                    >
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-sm font-bold text-secondary group-hover:text-primary transition-colors">
+                          {faq.q}
+                        </span>
+                        <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${openAccordion === index ? 'rotate-180' : ''}`} />
+                      </div>
+                      {openAccordion === index && (
+                        <p className="mt-3 text-xs text-gray-500 leading-relaxed animate-fade-in">
+                          {faq.a}
+                        </p>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
           )}
 
-          {activeTab === 'reviews' && (
-            <div className="space-y-8">
-              <div className="bg-white rounded-2xl border border-gray-100 p-8 shadow-sm flex flex-col md:flex-row gap-8 items-center">
-                <div className="text-center md:text-left">
-                  <div className="text-5xl font-black text-secondary mb-2">{service.averageRating?.toFixed(1) || '0.0'}</div>
-                  <div className="flex justify-center md:justify-start items-center gap-1 mb-1">
+          {activeTab === 'Reviews' && (
+            <div className="space-y-10">
+              <div className="bg-white rounded-2xl border border-gray-100 p-8 shadow-sm flex flex-col md:flex-row gap-10">
+                {/* Left Side: Global Score */}
+                <div className="text-center md:text-left min-w-[150px]">
+                  <div className="text-6xl font-black text-secondary mb-2">{service.averageRating?.toFixed(1) || '0.0'}</div>
+                  <div className="flex justify-center md:justify-start items-center gap-1 mb-2">
                     {[1, 2, 3, 4, 5].map((star) => (
-                      <MdStar key={star} className={`w-5 h-5 ${star <= (service.averageRating || 0) ? 'text-yellow-400' : 'text-gray-200'}`} />
+                      <MdStar key={star} className={`w-6 h-6 ${star <= (service.averageRating || 0) ? 'text-yellow-400' : 'text-gray-200'}`} />
                     ))}
                   </div>
-                  <div className="text-gray-400 text-sm font-semibold uppercase">{service.ratingCount || 0} Customer Ratings</div>
+                  <div className="text-gray-400 text-xs font-bold uppercase tracking-widest">{service.ratingCount || 0} Registered Reviews</div>
                 </div>
-                <div className="flex-1 w-full max-w-md space-y-2">
-                  {[5, 4, 3, 2, 1].map((rating) => {
-                    const count = ratingDistribution[rating];
-                    const percentage = service.ratingCount > 0 ? (count / service.ratingCount) * 100 : 0;
-                    return (
-                      <div key={rating} className="flex items-center gap-4 group">
-                        <span className="text-xs font-bold text-gray-600 w-4">{rating}</span>
-                        <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                          <div className="h-full bg-yellow-400 rounded-full transition-all duration-1000" style={{ width: `${percentage}%` }} />
-                        </div>
-                        <span className="text-xs font-bold text-gray-400 w-8 text-right">{percentage.toFixed(0)}%</span>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="grid md:grid-cols-2 gap-6">
-                  {service.feedback?.length > 0 ? (
-                    service.feedback.map((review, index) => (
-                      <div key={index} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-                        <div className="flex items-center gap-4 mb-4">
-                          <div className="w-10 h-10 bg-primary/10 text-primary rounded-full flex items-center justify-center font-bold">
-                            {review.customer?.name?.[0] || 'U'}
+
+                {/* Right Side: Progress Bars AND Comments Grid side-by-side on desktop */}
+                <div className="flex-1 w-full flex flex-col xl:flex-row gap-10">
+                  {/* Progress Bars */}
+                  <div className="w-full xl:w-1/3 space-y-3">
+                    {[5, 4, 3, 2, 1].map((rating) => {
+                      const count = ratingDistribution[rating];
+                      const percentage = service.ratingCount > 0 ? (count / service.ratingCount) * 100 : 0;
+                      return (
+                        <div key={rating} className="flex items-center gap-4 group">
+                          <span className="text-xs font-bold text-gray-600 w-6">{rating}★</span>
+                          <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div className="h-full bg-yellow-400 rounded-full transition-all duration-1000 shadow-sm" style={{ width: `${percentage}%` }} />
                           </div>
-                          <div className="flex-1">
-                            <div className="text-sm font-bold text-secondary">{review.customer?.name || 'Customer'}</div>
-                            <div className="text-[10px] uppercase font-black text-gray-400 tracking-widest">
-                              {new Date(review.createdAt).toLocaleDateString()}
+                          <span className="text-xs font-bold text-gray-400 w-10 text-right">{percentage.toFixed(0)}%</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Comments Grid */}
+                  <div className="flex-1">
+                    <div className="grid grid-cols-1 gap-6">
+                      {service.feedback?.length > 0 ? (
+                        service.feedback.map((review, index) => (
+                          <div key={index} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow group">
+                            <div className="flex items-center gap-4 mb-4">
+                              <div className="w-10 h-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center font-bold">
+                                {review.customer?.name?.[0]?.toUpperCase() || 'U'}
+                              </div>
+                              <div className="flex-1">
+                                <div className="text-sm font-bold text-secondary group-hover:text-primary transition-colors">{review.customer?.name || 'Verified Customer'}</div>
+                                <div className="text-[10px] uppercase font-black text-gray-400 tracking-widest">
+                                  {new Date(review.createdAt).toLocaleDateString()}
+                                </div>
+                              </div>
+                              <div className="flex gap-0.5">
+                                {[1, 2, 3, 4, 5].map(s => (
+                                  <MdStar key={s} className={`w-3 h-3 ${s <= review.rating ? 'text-yellow-400' : 'text-gray-200'}`} />
+                                ))}
+                              </div>
                             </div>
+                            <p className="text-gray-600 text-sm leading-relaxed italic border-l-2 border-gray-100 pl-4">{review.comment}</p>
                           </div>
-                          <div className="flex gap-0.5">
-                            {[1, 2, 3, 4, 5].map(s => (
-                              <MdStar key={s} className={`w-3.5 h-3.5 ${s <= review.rating ? 'text-yellow-400' : 'text-gray-200'}`} />
-                            ))}
-                          </div>
+                        ))
+                      ) : (
+                        <div className="py-12 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                          <ChatBubbleLeftEllipsisIcon className="w-12 h-12 text-gray-200 mx-auto mb-4" />
+                          <p className="text-gray-400 font-bold uppercase text-xs">No reviews yet</p>
                         </div>
-                        <p className="text-gray-600 text-sm leading-relaxed italic">"{review.comment}"</p>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="col-span-full py-12 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-                      <ChatBubbleLeftEllipsisIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                      <p className="text-gray-500 font-bold uppercase text-xs tracking-widest">No reviews yet for this service</p>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -555,7 +589,7 @@ const ServiceDetailPage = () => {
       </div>
 
       {/* Related Services Section */}
-      <div className="bg-gray-50/50 py-20 border-t border-gray-100 mt-12">
+      <div className="bg-gray-50/50 border-t border-gray-100 mt-2">
         <div className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8">
           <RelatedServicesComponent
             services={relatedServices}
