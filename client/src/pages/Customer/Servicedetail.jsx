@@ -2,38 +2,23 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
 import {
-  MdStar,
-  MdAccessTime,
-  MdSecurity,
-  MdCheck,
-  MdCurrencyRupee,
-  MdChevronRight,
-  MdError,
-  MdShare,
-  MdArrowBack,
-  MdArrowForward,
-  MdPhoto,
-  MdHome,
-  MdCalendarToday
+  MdStar, MdAccessTime, MdSecurity, MdCheck, MdCurrencyRupee,
+  MdChevronRight, MdError, MdShare, MdArrowBack, MdArrowForward,
+  MdPhoto, MdHome, MdCalendarToday
 } from 'react-icons/md';
 import {
-  StarIcon as StarIconSolid,
-  ShieldCheckIcon,
-  CheckBadgeIcon,
-  WrenchIcon,
-  UserIcon,
-  ClockIcon,
-  ChevronRightIcon,
-  CheckIcon,
+  StarIcon as StarIconSolid, ShieldCheckIcon, CheckBadgeIcon,
+  WrenchIcon, UserIcon, ClockIcon, ChevronRightIcon, CheckIcon,
   ChatBubbleLeftEllipsisIcon
 } from '@heroicons/react/24/outline';
+import LoadingSpinner from '../../components/Loader';
 
 const ServiceDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { API, showToast, isAuthenticated } = useAuth();
 
-  // State management
+  // ==================== STATE MANAGEMENT ====================
   const [service, setService] = useState(null);
   const [relatedServices, setRelatedServices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -45,24 +30,90 @@ const ServiceDetailPage = () => {
   const [allImages, setAllImages] = useState([]);
   const [categories, setCategories] = useState([]);
 
-  // Fetch categories
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const response = await fetch(`${API}/system-setting/categories`);
-        if (!response.ok) throw new Error('Failed to fetch categories');
-        const data = await response.json();
-        if (data.success) {
-          setCategories(data.data || []);
-        }
-      } catch (error) {
-        console.error('Error fetching categories:', error);
-      }
-    };
-    fetchCategories();
-  }, [API]);
+  // ==================== HELPER FUNCTIONS ====================
+  const formatDuration = (hours) => {
+    const hrs = Math.floor(hours);
+    const mins = Math.round((hours - hrs) * 60);
+    if (hrs === 0) return `${mins} min`;
+    if (mins === 0) return `${hrs} hr`;
+    return `${hrs} hr ${mins} min`;
+  };
 
-  // Fetch service data
+  const toggleAccordion = (index) => {
+    setOpenAccordion(openAccordion === index ? null : index);
+  };
+
+  const nextImage = () => {
+    setCurrentImageIndex(prev => prev === allImages.length - 1 ? 0 : prev + 1);
+  };
+
+  const prevImage = () => {
+    setCurrentImageIndex(prev => prev === 0 ? allImages.length - 1 : prev - 1);
+  };
+
+  const handleImageLoad = () => {
+    setImageLoading(false);
+  };
+
+  const handleThumbnailClick = (index) => {
+    setCurrentImageIndex(index);
+    setImageLoading(true);
+  };
+
+  // ==================== MEMOIZED VALUES ====================
+  const categoryName = useMemo(() => {
+    if (!service?.category) return 'Uncategorized';
+    if (typeof service.category === 'object' && service.category.name) {
+      return service.category.name;
+    }
+    if (typeof service.category === 'string' && categories.length > 0) {
+      const category = categories.find(cat => cat._id === service.category);
+      return category ? category.name : 'Uncategorized';
+    }
+    if (typeof service.category === 'object' && service.category._id && categories.length > 0) {
+      const category = categories.find(cat => cat._id === service.category._id);
+      return category ? category.name : 'Uncategorized';
+    }
+    return 'Uncategorized';
+  }, [service, categories]);
+
+  const getCategoryId = useMemo(() => {
+    if (!service?.category) return '';
+    if (typeof service.category === 'object' && service.category._id) {
+      return service.category._id;
+    }
+    if (typeof service.category === 'string') {
+      return service.category;
+    }
+    return '';
+  }, [service]);
+
+  const ratingDistribution = useMemo(() => {
+    const distribution = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+    if (service?.feedback && service.feedback.length > 0) {
+      for (const review of service.feedback) {
+        if (distribution[review.rating] !== undefined) {
+          distribution[review.rating]++;
+        }
+      }
+    }
+    return distribution;
+  }, [service?.feedback]);
+
+  // ==================== API CALLS ====================
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch(`${API}/system-setting/categories`);
+      if (!response.ok) throw new Error('Failed to fetch categories');
+      const data = await response.json();
+      if (data.success) {
+        setCategories(data.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
+
   const fetchServiceData = async () => {
     try {
       setLoading(true);
@@ -74,7 +125,6 @@ const ServiceDetailPage = () => {
       if (!serviceResponse.ok) {
         throw new Error(serviceData.message || 'Failed to fetch service');
       }
-
       if (!serviceData.success || !serviceData.data) {
         throw new Error('Service not found');
       }
@@ -92,15 +142,11 @@ const ServiceDetailPage = () => {
       if (serviceDetails.category) {
         try {
           const categoryId = typeof serviceDetails.category === 'object' ? serviceDetails.category._id : serviceDetails.category;
-          const relatedResponse = await fetch(
-            `${API}/service/services/category/${categoryId}?limit=4`
-          );
+          const relatedResponse = await fetch(`${API}/service/services/category/${categoryId}?limit=4`);
           const relatedData = await relatedResponse.json();
 
           if (relatedResponse.ok && relatedData.success) {
-            const filteredRelated = relatedData.data.filter(
-              s => s._id !== serviceDetails._id
-            );
+            const filteredRelated = relatedData.data.filter(s => s._id !== serviceDetails._id);
             setRelatedServices(filteredRelated);
           }
         } catch (relatedError) {
@@ -115,73 +161,23 @@ const ServiceDetailPage = () => {
     }
   };
 
-  useEffect(() => {
-    if (id) fetchServiceData();
-  }, [id]);
-
-  // Get category name
-  const categoryName = useMemo(() => {
-    if (!service?.category) return 'Uncategorized';
-
-    // If category is an object with name property
-    if (typeof service.category === 'object' && service.category.name) {
-      return service.category.name;
-    }
-
-    // If category is a string ID, find in categories array
-    if (typeof service.category === 'string' && categories.length > 0) {
-      const category = categories.find(cat => cat._id === service.category);
-      return category ? category.name : 'Uncategorized';
-    }
-
-    // If category is an object with _id, find by _id
-    if (typeof service.category === 'object' && service.category._id && categories.length > 0) {
-      const category = categories.find(cat => cat._id === service.category._id);
-      return category ? category.name : 'Uncategorized';
-    }
-
-    return 'Uncategorized';
-  }, [service, categories]);
-
-  // Get category ID for navigation
-  const getCategoryId = useMemo(() => {
-    if (!service?.category) return '';
-
-    if (typeof service.category === 'object' && service.category._id) {
-      return service.category._id;
-    }
-
-    if (typeof service.category === 'string') {
-      return service.category;
-    }
-
-    return '';
-  }, [service]);
-
-  // Get related service category name
   const getRelatedCategoryName = (relatedCategory) => {
     if (!relatedCategory) return 'Uncategorized';
-
-    // If relatedCategory is an object with name
     if (typeof relatedCategory === 'object' && relatedCategory.name) {
       return relatedCategory.name;
     }
-
-    // If relatedCategory is a string ID
     if (typeof relatedCategory === 'string' && categories.length > 0) {
       const category = categories.find(cat => cat._id === relatedCategory);
       return category ? category.name : 'Uncategorized';
     }
-
-    // If relatedCategory is an object with _id
     if (typeof relatedCategory === 'object' && relatedCategory._id && categories.length > 0) {
       const category = categories.find(cat => cat._id === relatedCategory._id);
       return category ? category.name : 'Uncategorized';
     }
-
     return 'Uncategorized';
   };
 
+  // ==================== EVENT HANDLERS ====================
   const handleBookNow = () => {
     if (!isAuthenticated) {
       showToast('Please login to book services', 'error');
@@ -216,95 +212,19 @@ const ServiceDetailPage = () => {
     }
   };
 
-  const toggleAccordion = (index) => {
-    setOpenAccordion(openAccordion === index ? null : index);
-  };
+  // ==================== EFFECTS ====================
+  useEffect(() => {
+    fetchCategories();
+  }, [API]);
 
-  const nextImage = () => {
-    setCurrentImageIndex(prev =>
-      prev === allImages.length - 1 ? 0 : prev + 1
-    );
-  };
+  useEffect(() => {
+    if (id) fetchServiceData();
+  }, [id]);
 
-  const prevImage = () => {
-    setCurrentImageIndex(prev =>
-      prev === 0 ? allImages.length - 1 : prev - 1
-    );
-  };
+  // ==================== RENDER COMPONENTS ====================
+  const specialNotes = service?.specialNotes || [];
+  const materialsUsed = service?.materialsUsed || [];
 
-  const formatDuration = (hours) => {
-    const hrs = Math.floor(hours);
-    const mins = Math.round((hours - hrs) * 60);
-
-    if (hrs === 0) return `${mins} min`;
-    if (mins === 0) return `${hrs} hr`;
-    return `${hrs} hr ${mins} min`;
-  };
-
-  const handleImageLoad = () => {
-    setImageLoading(false);
-  };
-
-  const handleThumbnailClick = (index) => {
-    setCurrentImageIndex(index);
-    setImageLoading(true);
-  };
-
-  const ratingDistribution = useMemo(() => {
-    const distribution = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
-    if (service?.feedback && service.feedback.length > 0) {
-      for (const review of service.feedback) {
-        if (distribution[review.rating] !== undefined) {
-          distribution[review.rating]++;
-        }
-      }
-    }
-    return distribution;
-  }, [service?.feedback]);
-
-  // Loading State
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-flex items-center space-x-2 mb-4">
-            <div className="w-3 h-3 bg-teal-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-            <div className="w-3 h-3 bg-teal-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-            <div className="w-3 h-3 bg-teal-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-          </div>
-          <p className="text-gray-600 font-medium">Loading service details...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Error State
-  if (error || !service) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="text-center max-w-md bg-white rounded-2xl p-8 shadow-xl border border-gray-200">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <MdError className="w-8 h-8 text-red-600" />
-          </div>
-          <h3 className="text-xl font-bold text-gray-800 mb-2">Service Not Found</h3>
-          <p className="text-gray-600 mb-6">
-            {error || 'The service you\'re looking for doesn\'t exist.'}
-          </p>
-          <button
-            onClick={() => navigate('/customer/services')}
-            className="px-6 py-3 bg-orange-500 text-white font-medium rounded-lg hover:bg-orange-600 transition-all duration-300 shadow-lg hover:shadow-xl"
-          >
-            Browse Services
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const specialNotes = service.specialNotes || [];
-  const materialsUsed = service.materialsUsed || [];
-
-  // Desktop Booking Card Component
   const DesktopBookingCard = (
     <div className="sticky top-8 space-y-8">
       <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-xl">
@@ -312,7 +232,7 @@ const ServiceDetailPage = () => {
           <div className="flex items-baseline justify-center mb-2">
             <MdCurrencyRupee className="w-8 h-8 text-gray-600" />
             <span className="text-4xl font-bold text-gray-800 ml-1">
-              {service.basePrice?.toLocaleString() || '0'}
+              {service?.basePrice?.toLocaleString() || '0'}
             </span>
           </div>
           <p className="text-gray-600">All inclusive pricing • No hidden charges</p>
@@ -326,10 +246,9 @@ const ServiceDetailPage = () => {
             <MdAccessTime className="w-5 h-5 text-teal-600 mr-3" />
             <div>
               <div className="font-medium text-gray-800">Service Duration</div>
-              <div className="text-sm text-gray-600">{formatDuration(service.duration)} Approx</div>
+              <div className="text-sm text-gray-600">{formatDuration(service?.duration)} Approx</div>
             </div>
           </div>
-
           <div className="flex items-center p-3 bg-white rounded-lg border border-gray-200 shadow-sm">
             <MdSecurity className="w-5 h-5 text-teal-600 mr-3" />
             <div>
@@ -347,7 +266,6 @@ const ServiceDetailPage = () => {
             <MdCalendarToday className="w-5 h-5 mr-3" />
             Book Service
           </button>
-
           <button
             onClick={handleShare}
             className="flex items-center justify-center py-2 px-3 border border-gray-300 rounded-xl hover:bg-gray-50 transition-all duration-300 transform hover:scale-105 shadow-sm"
@@ -365,6 +283,36 @@ const ServiceDetailPage = () => {
     </div>
   );
 
+  // ==================== LOADING STATE ====================
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center gap-4">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  // ==================== ERROR STATE ====================
+  if (error || !service) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="text-center max-w-md bg-white rounded-2xl p-8 shadow-xl border border-gray-200">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <MdError className="w-8 h-8 text-red-600" />
+          </div>
+          <h3 className="text-xl font-bold text-gray-800 mb-2">Service Not Found</h3>
+          <button
+            onClick={() => navigate('/customer/services')}
+            className="px-6 py-3 bg-orange-500 text-white font-medium rounded-lg hover:bg-orange-600 transition-all duration-300 shadow-lg hover:shadow-xl"
+          >
+            Browse Services
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ==================== MAIN RENDER ====================
   return (
     <div className="min-h-screen bg-gray-50 font-inter">
       {/* Breadcrumb */}
@@ -373,10 +321,7 @@ const ServiceDetailPage = () => {
           <nav className="flex" aria-label="Breadcrumb">
             <ol className="inline-flex items-center space-x-1 md:space-x-3">
               <li>
-                <button
-                  onClick={() => navigate('/customer/services')}
-                  className="inline-flex items-center text-sm font-medium text-gray-500 hover:text-teal-600"
-                >
+                <button onClick={() => navigate('/customer/services')} className="inline-flex items-center text-sm font-medium text-gray-500 hover:text-teal-600">
                   <MdHome className="w-4 h-4 mr-2" />
                   Services
                 </button>
@@ -384,10 +329,7 @@ const ServiceDetailPage = () => {
               <li>
                 <div className="flex items-center">
                   <MdChevronRight className="w-4 h-4 text-gray-400 mx-1" />
-                  <button
-                    onClick={() => navigate(`/customer/services?category=${getCategoryId}`)}
-                    className="text-sm font-medium text-gray-500 hover:text-teal-600"
-                  >
+                  <button onClick={() => navigate(`/customer/services?category=${getCategoryId}`)} className="text-sm font-medium text-gray-500 hover:text-teal-600">
                     {categoryName}
                   </button>
                 </div>
@@ -419,7 +361,6 @@ const ServiceDetailPage = () => {
                       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600"></div>
                     </div>
                   )}
-
                   {allImages.length > 0 ? (
                     <img
                       src={allImages[currentImageIndex]}
@@ -440,29 +381,20 @@ const ServiceDetailPage = () => {
                       </div>
                     </div>
                   )}
-
                   {allImages.length > 1 && (
                     <>
-                      <button
-                        onClick={prevImage}
-                        className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-white/90 rounded-full p-3 shadow-lg hover:bg-white hover:scale-110 transition-all duration-300 opacity-0 group-hover:opacity-100"
-                      >
+                      <button onClick={prevImage} className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-white/90 rounded-full p-3 shadow-lg hover:bg-white hover:scale-110 transition-all duration-300 opacity-0 group-hover:opacity-100">
                         <MdArrowBack className="w-5 h-5 text-gray-600" />
                       </button>
-                      <button
-                        onClick={nextImage}
-                        className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-white/90 rounded-full p-3 shadow-lg hover:bg-white hover:scale-110 transition-all duration-300 opacity-0 group-hover:opacity-100"
-                      >
+                      <button onClick={nextImage} className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-white/90 rounded-full p-3 shadow-lg hover:bg-white hover:scale-110 transition-all duration-300 opacity-0 group-hover:opacity-100">
                         <MdArrowForward className="w-5 h-5 text-gray-600" />
                       </button>
-
                       <div className="absolute top-4 left-4 bg-black/70 text-white px-3 py-1 rounded-full text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                         {currentImageIndex + 1} / {allImages.length}
                       </div>
                     </>
                   )}
                 </div>
-
                 {allImages.length > 1 && (
                   <div className="mt-4">
                     <h4 className="text-sm font-medium text-gray-600 mb-3 flex items-center">
@@ -508,7 +440,6 @@ const ServiceDetailPage = () => {
                       {service.title}
                     </h1>
                   </div>
-
                   <div className="hidden lg:block text-right">
                     <div className="flex items-center bg-yellow-50 px-3 py-2 rounded-lg border border-yellow-200">
                       <StarIconSolid className="w-5 h-5 text-yellow-400 mr-1" />
@@ -521,11 +452,9 @@ const ServiceDetailPage = () => {
                     </div>
                   </div>
                 </div>
-
                 <p className="text-gray-600 text-lg leading-relaxed">
                   {service.description}
                 </p>
-
                 <div className="lg:hidden flex items-center mt-4">
                   <StarIconSolid className="w-5 h-5 text-yellow-400 mr-1" />
                   <span className="font-semibold text-gray-800">
@@ -552,7 +481,6 @@ const ServiceDetailPage = () => {
                       * Material cost from local market is not included
                     </p>
                   </div>
-
                   <div className="space-y-4 mb-6">
                     <div className="flex items-center p-3 bg-white rounded-lg border border-gray-200 shadow-sm">
                       <MdAccessTime className="w-5 h-5 text-teal-600 mr-3" />
@@ -561,7 +489,6 @@ const ServiceDetailPage = () => {
                         <div className="text-sm text-gray-600">{formatDuration(service.duration)} Approx</div>
                       </div>
                     </div>
-
                     <div className="flex items-center p-3 bg-white rounded-lg border border-gray-200 shadow-sm">
                       <MdSecurity className="w-5 h-5 text-teal-600 mr-3" />
                       <div>
@@ -570,7 +497,6 @@ const ServiceDetailPage = () => {
                       </div>
                     </div>
                   </div>
-
                   <div className="grid grid-cols-3 gap-3">
                     <button
                       onClick={handleBookNow}
@@ -579,7 +505,6 @@ const ServiceDetailPage = () => {
                       <MdCalendarToday className="w-4 h-4 mr-2" />
                       Book Service
                     </button>
-
                     <button
                       onClick={handleShare}
                       className="flex items-center justify-center py-2 px-2 border border-gray-300 rounded-xl hover:bg-gray-50 transition-all duration-300 shadow-sm"
@@ -587,7 +512,6 @@ const ServiceDetailPage = () => {
                       <MdShare className="w-4 h-4 text-gray-600" />
                     </button>
                   </div>
-
                   <div className="mt-6 pt-6 border-t border-gray-200 text-center">
                     <p className="text-sm text-gray-600 mb-4">
                       Need help? <Link to="/contact" className="text-teal-600 hover:text-teal-800 font-medium">Contact us</Link>
@@ -620,6 +544,7 @@ const ServiceDetailPage = () => {
 
               {/* Tab Content */}
               <div className="prose prose-lg max-w-none">
+                {/* Overview Tab */}
                 {activeTab === 'overview' && (
                   <div className="space-y-6">
                     <div className="grid md:grid-cols-2 gap-6">
@@ -639,7 +564,6 @@ const ServiceDetailPage = () => {
                           )) : <p>No special notes available.</p>}
                         </ul>
                       </div>
-
                       <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-6 border border-orange-200">
                         <h4 className="font-semibold text-gray-800 mb-4 flex items-center text-lg">
                           <WrenchIcon className="w-6 h-6 text-orange-500 mr-3" />
@@ -657,11 +581,8 @@ const ServiceDetailPage = () => {
                         </ul>
                       </div>
                     </div>
-
                     <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-6 border border-gray-200">
-                      <h4 className="font-semibold text-gray-800 mb-4 text-lg">
-                        Why Choose Raj Electrical Service
-                      </h4>
+                      <h4 className="font-semibold text-gray-800 mb-4 text-lg">Why Choose Raj Electrical Service</h4>
                       <div className="grid sm:grid-cols-2 gap-4">
                         <div className="flex items-center p-3 bg-white/50 rounded-lg">
                           <ShieldCheckIcon className="w-5 h-5 text-teal-600 mr-3" />
@@ -684,13 +605,12 @@ const ServiceDetailPage = () => {
                   </div>
                 )}
 
+                {/* Specifications Tab */}
                 {activeTab === 'specifications' && (
                   <div className="grid gap-8 lg:grid-cols-5">
                     <div className="lg:col-span-2">
                       <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-6 border border-gray-200">
-                        <h4 className="font-semibold text-gray-800 mb-4 text-lg">
-                          Service Specifications
-                        </h4>
+                        <h4 className="font-semibold text-gray-800 mb-4 text-lg">Service Specifications</h4>
                         <div className="space-y-4">
                           <div className="flex justify-between items-center py-3 border-b border-gray-200">
                             <span className="font-medium text-gray-600 flex items-center">
@@ -701,14 +621,10 @@ const ServiceDetailPage = () => {
                               {formatDuration(service.duration)}
                             </span>
                           </div>
-
                           <div className="flex justify-between items-center py-3 border-b border-gray-200">
-                            <span className="font-medium text-gray-600 flex items-center">
-                              Category
-                            </span>
+                            <span className="font-medium text-gray-600 flex items-center">Category</span>
                             <span className="text-gray-800 font-semibold">{categoryName}</span>
                           </div>
-
                           <div className="flex justify-between items-center py-3 border-b border-gray-200">
                             <span className="font-medium text-gray-600">Service Status</span>
                             <span className={`font-semibold px-3 py-1 rounded-full border ${service.isActive
@@ -718,7 +634,6 @@ const ServiceDetailPage = () => {
                               {service.isActive ? 'Active' : 'Inactive'}
                             </span>
                           </div>
-
                           <div className="flex justify-between items-center py-3">
                             <span className="font-medium text-gray-600">Total Images</span>
                             <span className="text-gray-800 font-semibold bg-teal-100 px-3 py-1 rounded-full border border-teal-200">
@@ -728,7 +643,6 @@ const ServiceDetailPage = () => {
                         </div>
                       </div>
                     </div>
-
                     <div className="lg:col-span-3">
                       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
                         <h4 className="font-semibold text-gray-800 p-6 text-lg border-b border-gray-200 bg-gray-50">
@@ -736,32 +650,14 @@ const ServiceDetailPage = () => {
                         </h4>
                         <div className="divide-y divide-gray-200">
                           {[
-                            {
-                              question: "What's included in the service cost?",
-                              answer: "The service cost includes professional labor, basic materials, standard tools, and transportation. Material cost from local market is not included in the service charge."
-                            },
-                            {
-                              question: "Do you provide service warranty?",
-                              answer: "Yes, we provide a 30-day service warranty on all our electrical repairs and installations. This covers any issues arising from the service provided."
-                            },
-                            {
-                              question: "Are your electricians certified?",
-                              answer: "Yes, all our electricians are certified professionals with extensive experience in electrical services and safety protocols."
-                            }
+                            { question: "What's included in the service cost?", answer: "The service cost includes professional labor, basic materials, standard tools, and transportation. Material cost from local market is not included in the service charge." },
+                            { question: "Do you provide service warranty?", answer: "Yes, we provide a 30-day service warranty on all our electrical repairs and installations. This covers any issues arising from the service provided." },
+                            { question: "Are your electricians certified?", answer: "Yes, all our electricians are certified professionals with extensive experience in electrical services and safety protocols." }
                           ].map((faq, index) => (
                             <div key={index} className="group">
-                              <button
-                                className="flex justify-between items-center w-full p-6 text-left hover:bg-gray-50"
-                                onClick={() => toggleAccordion(index)}
-                              >
+                              <button className="flex justify-between items-center w-full p-6 text-left hover:bg-gray-50" onClick={() => toggleAccordion(index)}>
                                 <span className="font-medium text-gray-800 pr-4">{faq.question}</span>
-                                <svg
-                                  className={`w-5 h-5 text-gray-500 transition-transform ${openAccordion === index ? 'transform rotate-180' : ''
-                                    }`}
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
+                                <svg className={`w-5 h-5 text-gray-500 transition-transform ${openAccordion === index ? 'transform rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                 </svg>
                               </button>
@@ -778,6 +674,7 @@ const ServiceDetailPage = () => {
                   </div>
                 )}
 
+                {/* Reviews Tab */}
                 {activeTab === 'reviews' && (
                   <div className="space-y-6">
                     <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl p-6 border border-yellow-200">
@@ -788,20 +685,11 @@ const ServiceDetailPage = () => {
                           </div>
                           <div className="flex items-center justify-center lg:justify-start mb-2">
                             {[1, 2, 3, 4, 5].map((star) => (
-                              <StarIconSolid
-                                key={star}
-                                className={`w-6 h-6 ${star <= (service.averageRating || 0)
-                                  ? 'text-yellow-400'
-                                  : 'text-gray-300'
-                                  }`}
-                              />
+                              <StarIconSolid key={star} className={`w-6 h-6 ${star <= (service.averageRating || 0) ? 'text-yellow-400' : 'text-gray-300'}`} />
                             ))}
                           </div>
-                          <div className="text-sm text-gray-600">
-                            Based on {service.ratingCount || 0} reviews
-                          </div>
+                          <div className="text-sm text-gray-600">Based on {service.ratingCount || 0} reviews</div>
                         </div>
-
                         <div className="flex-1 max-w-md">
                           {[5, 4, 3, 2, 1].map((rating) => {
                             const count = ratingDistribution[rating];
@@ -811,10 +699,7 @@ const ServiceDetailPage = () => {
                                 <span className="w-8 text-gray-600">{rating}</span>
                                 <StarIconSolid className="w-4 h-4 text-yellow-400 mr-2" />
                                 <div className="flex-1 bg-gray-200 rounded-full h-2">
-                                  <div
-                                    className="bg-yellow-400 h-2 rounded-full transition-all duration-1000"
-                                    style={{ width: `${percentage}%` }}
-                                  />
+                                  <div className="bg-yellow-400 h-2 rounded-full transition-all duration-1000" style={{ width: `${percentage}%` }} />
                                 </div>
                                 <span className="w-12 text-gray-600 text-right">{percentage.toFixed(0)}%</span>
                               </div>
@@ -823,7 +708,6 @@ const ServiceDetailPage = () => {
                         </div>
                       </div>
                     </div>
-
                     <div className="space-y-4">
                       {service.feedback?.length > 0 ? (
                         service.feedback.slice(0, 10).map((review, index) => (
@@ -834,31 +718,17 @@ const ServiceDetailPage = () => {
                               </div>
                               <div className="flex-1">
                                 <div className="flex items-center justify-between mb-2">
-                                  <div className="font-semibold text-gray-800">
-                                    {review.customer?.name || 'Anonymous User'}
-                                  </div>
+                                  <div className="font-semibold text-gray-800">{review.customer?.name || 'Anonymous User'}</div>
                                   <div className="text-sm text-gray-500">
-                                    {new Date(review.createdAt).toLocaleDateString('en-US', {
-                                      year: 'numeric',
-                                      month: 'long',
-                                      day: 'numeric'
-                                    })}
+                                    {new Date(review.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
                                   </div>
                                 </div>
                                 <div className="flex items-center mb-3">
                                   {[1, 2, 3, 4, 5].map((star) => (
-                                    <StarIconSolid
-                                      key={star}
-                                      className={`w-4 h-4 ${star <= review.rating
-                                        ? 'text-yellow-400'
-                                        : 'text-gray-300'
-                                        }`}
-                                    />
+                                    <StarIconSolid key={star} className={`w-4 h-4 ${star <= review.rating ? 'text-yellow-400' : 'text-gray-300'}`} />
                                   ))}
                                 </div>
-                                {review.comment && (
-                                  <p className="text-gray-600 leading-relaxed">{review.comment}</p>
-                                )}
+                                {review.comment && <p className="text-gray-600 leading-relaxed">{review.comment}</p>}
                               </div>
                             </div>
                           </div>
@@ -888,20 +758,15 @@ const ServiceDetailPage = () => {
           <div className="mt-16">
             <div className="flex items-center justify-between mb-8">
               <h2 className="text-3xl font-bold text-gray-800">Related {categoryName} Services</h2>
-              <button
-                onClick={() => navigate(`/customer/services?category=${getCategoryId}`)}
-                className="text-teal-600 hover:text-teal-700 font-medium flex items-center"
-              >
+              <button onClick={() => navigate(`/customer/services?category=${getCategoryId}`)} className="text-teal-600 hover:text-teal-700 font-medium flex items-center">
                 View all {categoryName}
                 <ChevronRightIcon className="w-4 h-4 ml-1" />
               </button>
             </div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {relatedServices.map((relatedService) => {
                 const relatedImages = relatedService.images || [];
                 const relatedCategoryName = getRelatedCategoryName(relatedService.category);
-
                 return (
                   <div
                     key={relatedService._id}
@@ -924,37 +789,25 @@ const ServiceDetailPage = () => {
                         </span>
                       </div>
                     </div>
-
                     <div className="p-5">
                       <h3 className="font-semibold text-gray-800 mb-2 line-clamp-2 group-hover:text-teal-600 transition-colors duration-300">
                         {relatedService.title}
                       </h3>
-                      <p className="text-gray-600 text-sm mb-4 line-clamp-2">
-                        {relatedService.description}
-                      </p>
-
+                      <p className="text-gray-600 text-sm mb-4 line-clamp-2">{relatedService.description}</p>
                       <div className="flex items-center justify-between">
                         <div className="flex items-baseline">
                           <MdCurrencyRupee className="w-4 h-4 text-gray-600" />
-                          <span className="text-xl font-bold text-gray-800 ml-1">
-                            {relatedService.basePrice?.toLocaleString() || '0'}
-                          </span>
+                          <span className="text-xl font-bold text-gray-800 ml-1">{relatedService.basePrice?.toLocaleString() || '0'}</span>
                         </div>
-
                         <div className="flex items-center text-sm text-gray-600 bg-gray-100 px-2 py-1 rounded-full border border-gray-200">
                           <MdAccessTime className="w-3 h-3 mr-1" />
                           {formatDuration(relatedService.duration)}
                         </div>
                       </div>
-
                       <div className="flex items-center mt-3">
                         <MdStar className="w-4 h-4 text-yellow-400 mr-1" />
-                        <span className="text-sm font-medium text-gray-800">
-                          {relatedService.averageRating?.toFixed(1) || '0.0'}
-                        </span>
-                        <span className="text-gray-600 text-sm ml-1">
-                          ({relatedService.ratingCount || 0})
-                        </span>
+                        <span className="text-sm font-medium text-gray-800">{relatedService.averageRating?.toFixed(1) || '0.0'}</span>
+                        <span className="text-gray-600 text-sm ml-1">({relatedService.ratingCount || 0})</span>
                       </div>
                     </div>
                   </div>
