@@ -19,6 +19,7 @@ const Navbar = () => {
   const [systemSettings, setSystemSettings] = useState({ companyName: '', logo: null });
   const location = useLocation();
   const menuRef = useRef(null);
+  const buttonRef = useRef(null);
   const { API, isDeepLink, isAuthenticated, resetDeepLink } = useAuth();
 
   // Handle scroll effect with smoother transition
@@ -40,7 +41,12 @@ const Navbar = () => {
   // Close mobile menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
+      if (
+        menuRef.current && 
+        !menuRef.current.contains(event.target) &&
+        buttonRef.current &&
+        !buttonRef.current.contains(event.target)
+      ) {
         setIsOpen(false);
       }
     };
@@ -153,6 +159,7 @@ const Navbar = () => {
           {/* Mobile Menu Button */}
           <div className="lg:hidden flex items-center">
             <button
+              ref={buttonRef}
               onClick={() => setIsOpen(!isOpen)}
               className="inline-flex items-center justify-center p-2 rounded-xl text-secondary hover:text-primary hover:bg-primary/5 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all duration-300"
               aria-label={isOpen ? "Close menu" : "Open menu"}
@@ -175,7 +182,7 @@ const Navbar = () => {
       <div
         ref={menuRef}
         className={`lg:hidden overflow-hidden transition-all duration-500 ease-in-out ${isOpen
-            ? 'max-h-screen opacity-100 visible'
+            ? 'max-h-[500px] opacity-100 visible'
             : 'max-h-0 opacity-0 invisible'
           } bg-white/98 backdrop-blur-xl border-t border-gray-200 shadow-xl`}
       >

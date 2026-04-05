@@ -261,24 +261,6 @@ const CustomerRegistration = () => {
         </div>
       </div>
 
-      {/* Special Offer */}
-      {/* <div className="relative overflow-hidden bg-gradient-to-r from-primary via-primary/90 to-accent rounded-2xl p-8 text-center text-white">
-        <div className="absolute inset-0 bg-black/10"></div>
-        <div className="relative z-4">
-          <div className="flex items-center justify-center mb-4">
-            <Sparkles className="w-6 h-6 mr-2 animate-pulse" />
-            <span className="text-lg font-bold">Limited Time Offer!</span>
-            <Sparkles className="w-6 h-6 ml-2 animate-pulse" />
-          </div>
-          <h3 className="text-2xl font-bold mb-2">Get 25% OFF Your First Service</h3>
-          <p className="text-white/90 mb-4">Plus free electrical safety inspection worth $150</p>
-          <div className="inline-flex items-center px-4 py-2 bg-white/20 rounded-full backdrop-blur-sm">
-            <TrendingUp className="w-4 h-4 mr-2" />
-            <span className="text-sm font-semibold">Join 500+ customers this month</span>
-          </div>
-        </div>
-      </div> */}
-
     </div>
   );
 
@@ -310,7 +292,6 @@ const CustomerRegistration = () => {
                     onChange={handleChange}
                     className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                     placeholder="Enter your full name"
-                    required
                   />
 
                 </div>
@@ -325,14 +306,13 @@ const CustomerRegistration = () => {
                     <Mail className="text-primary w-5 h-5 group-focus-within:scale-110 transition-transform duration-200" />
                   </div>
                   <input
-                    type="email"
+                    type="text"
                     id="email"
                     name="email"
                     value={formData.email}
                     onChange={handleChange}
                     className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                     placeholder="your@email.com"
-                    required
                   />
 
                 </div>
@@ -347,14 +327,13 @@ const CustomerRegistration = () => {
                     <Phone className="text-primary w-5 h-5 group-focus-within:scale-110 transition-transform duration-200" />
                   </div>
                   <input
-                    type="tel"
+                    type="text"
                     id="phone"
                     name="phone"
                     value={formData.phone}
                     onChange={handleChange}
                     className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                     placeholder="+91 98765-32100"
-                    required
                   />
 
                 </div>
@@ -389,7 +368,6 @@ const CustomerRegistration = () => {
                     onChange={handleChange}
                     className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                     placeholder="123 Main Street, Apartment 4B"
-                    required
                   />
 
                 </div>
@@ -420,7 +398,6 @@ const CustomerRegistration = () => {
                     onChange={handleChange}
                     className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                     placeholder="12345"
-                    required
                   />
                 </div>
               </div>
@@ -454,7 +431,6 @@ const CustomerRegistration = () => {
                     onChange={handleChange}
                     className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                     placeholder="At least 8 characters"
-                    required
                   />
                 </div>
                 <p className="text-xs text-secondary/60 mt-2">
@@ -475,97 +451,6 @@ const CustomerRegistration = () => {
             </div>
           </div>
         );
-
-      case 4:
-        return (
-          <div className="space-y-6 ">
-            <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold text-secondary mb-3">Review & Verify</h2>
-              <p className="text-secondary/70 text-lg">Please review your information and verify your email</p>
-              <div className="w-16 h-1 bg-gradient-to-r from-primary to-accent mx-auto mt-4 rounded-full"></div>
-            </div>
-
-            {/* Review Information */}
-            <div className="bg-gradient-to-r from-primary/5 to-accent/5 rounded-2xl p-6 border border-primary/20 space-y-4">
-              <h3 className="font-bold text-secondary mb-4 text-lg flex items-center">
-                <CheckCircle className="w-5 h-5 text-primary mr-2" />
-                Your Information:
-              </h3>
-
-              <div className="grid grid-cols-1 gap-4 text-sm">
-                <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                  <span className="text-secondary/70 font-medium">Name:</span>
-                  <span className="font-semibold text-secondary">{formData.name}</span>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                  <span className="text-secondary/70 font-medium">Email:</span>
-                  <span className="font-semibold text-secondary">{formData.email}</span>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                  <span className="text-secondary/70 font-medium">Phone:</span>
-                  <span className="font-semibold text-secondary">{formData.phone}</span>
-                </div>
-                <div className="flex justify-between items-center py-2">
-                  <span className="text-secondary/70 font-medium">Address:</span>
-                  <span className="font-semibold text-secondary text-right">
-                    {formData.address.street}, {formData.address.city}, {formData.address.state}, {formData.address.postalCode}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* OTP Section */}
-            {otpSent ? (
-              <div className="space-y-4">
-                <div className="text-center">
-                  <div className="bg-green-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-                    <CheckCircle className="w-8 h-8 text-green-600" />
-                  </div>
-                  <p className="text-secondary/80 mb-2">
-                    Verification code sent to:
-                  </p>
-                  <p className="font-semibold text-secondary">{formData.email}</p>
-                </div>
-
-                <div className="group">
-                  <label htmlFor="otp" className="block text-secondary font-semibold mb-3 text-center text-sm tracking-wide">
-                    Enter 6-Digit Code
-                  </label>
-                  <input
-                    type="text"
-                    id="otp"
-                    name="otp"
-                    value={formData.otp}
-                    onChange={handleChange}
-                    className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 text-center tracking-widest text-secondary bg-gradient-to-r from-primary/5 to-transparent placeholder-secondary/50 text-xl font-semibold hover:border-primary/50 hover:shadow-md focus:shadow-lg"
-                    placeholder="123456"
-                    maxLength="6"
-                    required
-                  />
-                </div>
-
-                <div className="text-center space-y-2">
-                  <button
-                    type="button"
-                    onClick={handleSendOtp}
-                    disabled={isLoading}
-                    className="text-accent hover:text-accent/80 text-sm transition-colors duration-300 font-medium disabled:opacity-50"
-                  >
-                    Didn't receive code? Resend OTP
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center">
-                <Clock className="w-16 h-16 text-primary mx-auto mb-4" />
-                <p className="text-secondary/80">
-                  Click "Send Verification Code" to receive your OTP
-                </p>
-              </div>
-            )}
-          </div>
-        );
-
       default:
         return null;
     }

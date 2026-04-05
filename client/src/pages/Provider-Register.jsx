@@ -78,7 +78,7 @@ const ProviderRegistration = () => {
   const [providerServices, setProviderServices] = useState([]);
   const [providerServicesLoading, setProviderServicesLoading] = useState(true);
   const [providerServicesError, setProviderServicesError] = useState(null);
-  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);  useEffect(() => {
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false); useEffect(() => {
     let timer;
     if (otpSentTime) {
       timer = setInterval(() => {
@@ -286,12 +286,6 @@ const ProviderRegistration = () => {
   const handleCompleteProfile = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-
-    if (selectedServices.length < 1) {
-      toast.error('Please select at least one service category.');
-      setIsSubmitting(false);
-      return;
-    }
 
     const formDataWithServices = {
       ...formData,
@@ -578,7 +572,6 @@ const ProviderRegistration = () => {
                   onChange={handleChange}
                   className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                   placeholder="your@email.com"
-                  required
                 />
               </div>
             </div>
@@ -630,7 +623,6 @@ const ProviderRegistration = () => {
                   className="flex-1 px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 text-center tracking-widest text-secondary bg-gradient-to-r from-primary/5 to-transparent placeholder-secondary/50 text-xl font-semibold hover:border-primary/50 hover:shadow-md focus:shadow-lg"
                   placeholder="123456"
                   maxLength="6"
-                  required
                 />
                 <button
                   type="button"
@@ -658,7 +650,6 @@ const ProviderRegistration = () => {
                     onChange={handleChange}
                     className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                     placeholder="John Doe"
-                    required
                   />
                 </div>
               </div>
@@ -670,15 +661,13 @@ const ProviderRegistration = () => {
                     <Phone className="text-primary w-5 h-5" />
                   </div>
                   <input
-                    type="tel"
+                    type="text"
                     id="phone"
                     name="phone"
                     value={formData.phone}
                     onChange={handleChange}
                     className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                     placeholder="9876543210"
-                    maxLength="10"
-                    required
                   />
                 </div>
               </div>
@@ -705,7 +694,6 @@ const ProviderRegistration = () => {
                   scrollableYearDropdown
                   yearDropdownItemNumber={100}
                   maxDate={new Date()}
-                  required
                 />
               </div>
             </div>
@@ -725,8 +713,6 @@ const ProviderRegistration = () => {
                     onChange={handleChange}
                     className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                     placeholder="At least 8 characters"
-                    minLength="8"
-                    required
                   />
                 </div>
               </div>
@@ -745,7 +731,6 @@ const ProviderRegistration = () => {
                     onChange={handleChange}
                     className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                     placeholder="Confirm your password"
-                    required
                   />
                 </div>
               </div>
@@ -769,14 +754,13 @@ const ProviderRegistration = () => {
                   <Mail className="text-primary w-5 h-5" />
                 </div>
                 <input
-                  type="email"
+                  type="text"
                   id="email"
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
                   className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                   placeholder="your@email.com"
-                  required
                 />
               </div>
             </div>
@@ -795,7 +779,6 @@ const ProviderRegistration = () => {
                   onChange={handleChange}
                   className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                   placeholder="Enter your password"
-                  required
                 />
               </div>
             </div>
@@ -846,8 +829,8 @@ const ProviderRegistration = () => {
                       >
                         <option value="" disabled>Select a category...</option>
                         {providerServices.map((service) => (
-                          <option 
-                            key={service._id} 
+                          <option
+                            key={service._id}
                             value={service._id}
                             disabled={selectedServices.includes(service._id)}
                           >
@@ -865,9 +848,9 @@ const ProviderRegistration = () => {
                           return (
                             <span key={id} className="inline-flex items-center px-4 py-1.5 bg-primary/10 text-primary border border-primary/20 rounded-full text-sm font-semibold shadow-sm">
                               {svc.name}
-                              <button 
+                              <button
                                 type="button"
-                                onClick={() => handleServiceChange({_id: id})}
+                                onClick={() => handleServiceChange({ _id: id })}
                                 className="ml-2 focus:outline-none hover:text-primary/70 transition-colors"
                               >
                                 <X className="w-4 h-4" />
@@ -904,11 +887,8 @@ const ProviderRegistration = () => {
                     name="experience"
                     value={formData.experience}
                     onChange={handleChange}
-                    min="0"
-                    max="40"
                     className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                     placeholder="Years of experience"
-                    required
                   />
                 </div>
               </div>
@@ -928,7 +908,6 @@ const ProviderRegistration = () => {
                   onChange={handleChange}
                   className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                   placeholder="Cities or pincodes you serve (e.g., Mumbai, 400001)"
-                  required
                 />
               </div>
             </div>
@@ -944,7 +923,6 @@ const ProviderRegistration = () => {
                     onChange={handleFileChange('resume')}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                     accept=".pdf,.doc,.docx"
-                    required
                   />
                   <div className="flex items-center justify-between px-4 py-4 bg-gradient-to-r from-primary/5 to-transparent border-2 border-gray-200 rounded-2xl hover:border-primary/50 transition-all duration-300 hover:shadow-md">
                     <span className="text-secondary/70 truncate">{formData.resume ? formData.resume.name : 'Choose PDF/DOC file...'}</span>
@@ -964,7 +942,6 @@ const ProviderRegistration = () => {
                     onChange={handleFileChange('profilePic')}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                     accept="image/*"
-                    required
                   />
                   <div className="flex items-center justify-between px-4 py-4 bg-gradient-to-r from-primary/5 to-transparent border-2 border-gray-200 rounded-2xl hover:border-primary/50 transition-all duration-300 hover:shadow-md">
                     <span className="text-secondary/70 truncate">{formData.profilePic ? formData.profilePic.name : 'Choose image file...'}</span>
@@ -988,7 +965,7 @@ const ProviderRegistration = () => {
                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
                       <MapPin className="text-primary w-5 h-5" />
                     </div>
-                    <input type="text" id="street" name="street" value={formData.street} onChange={handleChange} className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="123 Main Street" required />
+                    <input type="text" id="street" name="street" value={formData.street} onChange={handleChange} className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="123 Main Street" />
                   </div>
                 </div>
 
@@ -998,7 +975,7 @@ const ProviderRegistration = () => {
                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
                       <MapPin className="text-primary w-5 h-5" />
                     </div>
-                    <input type="text" id="postalCode" name="postalCode" value={formData.postalCode} onChange={handleChange} className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="123456" required />
+                    <input type="text" id="postalCode" name="postalCode" value={formData.postalCode} onChange={handleChange} className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="123456" />
                   </div>
                 </div>
               </div>
@@ -1029,7 +1006,7 @@ const ProviderRegistration = () => {
                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
                       <CreditCard className="text-primary w-5 h-5" />
                     </div>
-                    <input type="text" id="accountNo" name="accountNo" value={formData.accountNo} onChange={handleChange} className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="1234567890" required />
+                    <input type="text" id="accountNo" name="accountNo" value={formData.accountNo} onChange={handleChange} className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="1234567890" />
                   </div>
                 </div>
 
@@ -1039,7 +1016,7 @@ const ProviderRegistration = () => {
                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
                       <Building className="text-primary w-5 h-5" />
                     </div>
-                    <input type="text" id="ifsc" name="ifsc" value={formData.ifsc} onChange={handleChange} className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="ABCD0123456" required />
+                    <input type="text" id="ifsc" name="ifsc" value={formData.ifsc} onChange={handleChange} className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="ABCD0123456" />
                   </div>
                 </div>
               </div>
@@ -1069,7 +1046,7 @@ const ProviderRegistration = () => {
               <div className="mt-4 group">
                 <label htmlFor="passbookImage" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Bank Passbook Image *</label>
                 <div className="relative">
-                  <input type="file" id="passbookImage" name="passbookImage" onChange={handleFileChange('passbookImage')} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept="image/*" required />
+                  <input type="file" id="passbookImage" name="passbookImage" onChange={handleFileChange('passbookImage')} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept="image/*" />
                   <div className="flex items-center justify-between px-4 py-4 bg-gradient-to-r from-primary/5 to-transparent border-2 border-gray-200 rounded-2xl hover:border-primary/50 transition-all duration-300 hover:shadow-md">
                     <span className="text-secondary/70 truncate">{formData.passbookImage ? formData.passbookImage.name : 'Choose passbook image...'}</span>
                     <Camera className="text-primary w-5 h-5" />
