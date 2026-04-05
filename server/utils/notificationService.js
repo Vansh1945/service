@@ -73,7 +73,7 @@ const sendPushNotification = async (tokens, payload) => {
 
         if (response.failureCount > 0) {
             const failedTokens = [];
-            
+
             response.responses.forEach((resp, idx) => {
                 if (!resp.success) {
                     console.error(`[NotificationService] Token[${idx}] failed:`, resp.error?.code, resp.error?.message);
@@ -217,7 +217,7 @@ const sendBroadcastNotification = async (audience, payload) => {
 const scheduleNotification = async (payload) => {
     try {
         const { userId, role, audience, title, body, url = '/', type = 'system', scheduledTime } = payload;
-        
+
         if (!scheduledTime) {
             throw new Error('scheduledTime is required to schedule a notification');
         }
@@ -312,10 +312,10 @@ cron.schedule('* * * * *', async () => {
                 notif.failureCount = result?.failed || 0;
                 await notif.save();
                 console.log(`[NotificationService] Scheduled notification (ID: ${notif._id}) SENT successfully.`);
-                
+
             } catch (err) {
                 console.error(`[NotificationService] Failed matching scheduled notification (ID: ${notif._id}):`, err);
-                
+
                 // Retry Logic
                 notif.retries += 1;
                 if (notif.retries >= 3) {

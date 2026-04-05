@@ -307,7 +307,7 @@ const updateBanner = async (req, res) => {
   try {
     const { id } = req.params;
     const { image, title, subtitle, startDate, endDate, noExpiry } = req.body;
-    
+
     let finalStartDate = startDate ? new Date(startDate) : new Date();
     let finalEndDate = (noExpiry === 'true' || noExpiry === true) ? null : (endDate ? new Date(endDate) : null);
 
