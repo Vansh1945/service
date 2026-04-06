@@ -87,7 +87,7 @@ const Footer = () => {
 
   if (loading) {
     return (
-      <footer className="bg-secondary text-white pt-12 pb-6 sm:pt-16 sm:pb-8">
+      <footer className="bg-secondary text-white pt-8 pb-4 sm:pt-10 sm:pb-6">
         <LoadingSpinner />
         <p className="text-gray-300 mt-4">Loading footer...</p>
       </footer>
@@ -95,7 +95,7 @@ const Footer = () => {
   }
 
   return (
-    <footer className="bg-secondary/95 text-white pt-12 pb-6 sm:pt-16 sm:pb-8">
+    <footer className="bg-secondary/95 text-white pt-8 pb-4 sm:pt-10 sm:pb-6">
       <div className="max-w-8xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-12">
           {/* Brand Column */}
@@ -144,7 +144,7 @@ const Footer = () => {
           <div className="grid grid-cols-2 gap-8 sm:contents">
             {/* Quick Links */}
             <div className="space-y-4 sm:space-y-6">
-              <h3 className="text-lg sm:text-xl font-bold text-accent mb-4 sm:mb-6">Quick Links</h3>
+              <h3 className="text-lg sm:text-xl font-bold text-accent mb-3 sm:mb-4">Quick Links</h3>
               <ul className="space-y-2 sm:space-y-3">
                 {footerData.quickLinks.map((item, index) => (
                   <li key={index}>
@@ -162,7 +162,7 @@ const Footer = () => {
 
             {/* Services */}
             <div className="space-y-4 sm:space-y-6">
-              <h3 className="text-lg sm:text-xl font-bold text-accent mb-4 sm:mb-6">Our Services</h3>
+              <h3 className="text-lg sm:text-xl font-bold text-accent mb-3 sm:mb-4">Our Services</h3>
               <ul className="space-y-2 sm:space-y-3">
                 {footerData.services.map((item, index) => (
                   <li key={index}>
@@ -181,7 +181,7 @@ const Footer = () => {
 
           {/* Contact Info */}
           <div className="space-y-4 sm:space-y-6">
-            <h3 className="text-lg sm:text-xl font-bold text-accent mb-4 sm:mb-6">Contact Us</h3>
+            <h3 className="text-lg sm:text-xl font-bold text-accent mb-3 sm:mb-4">Contact Us</h3>
             <ul className="space-y-3 sm:space-y-4 text-gray-300">
               <li className="flex items-start group">
                 <FaMapMarkerAlt className="text-accent mt-1 mr-2 sm:mr-3 flex-shrink-0 group-hover:scale-110 transition-transform duration-300" />
@@ -204,7 +204,7 @@ const Footer = () => {
         </div>
 
         {/* Divider */}
-        <hr className="border-background/30 my-4 sm:my-6" />
+        <hr className="border-background/30 my-3 sm:my-4" />
 
         {/* Copyright & Bottom Info */}
         <div className="flex flex-col lg:flex-row justify-between items-center text-gray-400 text-xs sm:text-sm space-y-6 lg:space-y-0">
