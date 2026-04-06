@@ -1,21 +1,22 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/auth';
 import { toast } from 'react-toastify';
+import { useNavigate } from 'react-router-dom';
 import { getProfile, updateProfile, updateprofilepic } from '../../services/CustomerService';
 import AddressSelector from '../../components/AddressSelector';
+import {
+    User, MapPin, Mail, Phone, Camera, LogOut, Shield,
+    ChevronRight, ArrowLeft, CreditCard, Package, Edit2, CheckCircle, Gift
+} from 'lucide-react';
 
 const UserProfile = () => {
-    const { user, token, API, logoutUser } = useAuth();
+    const { user, logoutUser } = useAuth();
+    const navigate = useNavigate();
     const [profile, setProfile] = useState({
         name: '',
         email: '',
         phone: '',
-        address: {
-            street: '',
-            city: '',
-            state: '',
-            postalCode: ''
-        },
+        address: { street: '', city: '', state: '', postalCode: '' },
         profilePicUrl: '',
         firstBookingUsed: false,
         totalBookings: 0,
@@ -23,12 +24,10 @@ const UserProfile = () => {
     });
     const [isEditing, setIsEditing] = useState(false);
     const [selectedFile, setSelectedFile] = useState(null);
-    const [activeTab, setActiveTab] = useState('profile');
+    const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        if (user) {
-            fetchProfile();
-        }
+        if (user) fetchProfile();
     }, [user]);
 
     const fetchProfile = async () => {
@@ -37,15 +36,9 @@ const UserProfile = () => {
             const data = response.data;
             setProfile({
                 ...data.user,
-                address: data.user.address || {
-                    street: '',
-                    city: '',
-                    state: '',
-                    postalCode: ''
-                }
+                address: data.user.address || { street: '', city: '', state: '', postalCode: '' }
             });
         } catch (error) {
-            console.error('Profile fetch error:', error);
             toast.error(error.message);
         }
     };
@@ -65,6 +58,7 @@ const UserProfile = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setLoading(true);
         try {
             const response = await updateProfile(profile);
             const data = response.data;
@@ -74,18 +68,17 @@ const UserProfile = () => {
                 ...data.user,
                 address: data.user.address || prev.address
             }));
+            toast.success('Profile updated successfully!');
         } catch (error) {
-            console.error('Profile update error:', error);
             toast.error(error.message);
+        } finally {
+            setLoading(false);
         }
     };
 
-    const handleFileChange = (e) => {
-        setSelectedFile(e.target.files[0]);
-    };
+    const handleFileChange = (e) => setSelectedFile(e.target.files[0]);
 
-    const handleImageUpload = async (e) => {
-        e.preventDefault();
+    const handleImageUpload = async () => {
         if (!selectedFile) {
             toast.warning('Please select a file first');
             return;
@@ -96,262 +89,257 @@ const UserProfile = () => {
 
         try {
             const response = await updateprofilepic(formData);
-            const data = response.data;
-            setProfile(prev => ({
-                ...prev,
-                profilePicUrl: data.profilePicUrl
-            }));
+            setProfile(prev => ({ ...prev, profilePicUrl: response.data.profilePicUrl }));
             setSelectedFile(null);
+            toast.success('Profile picture updated!');
         } catch (error) {
-            console.error('Image upload error:', error);
             toast.error(error.message);
         }
     };
 
     return (
-        <div className="min-h-screen py-8 px-4 sm:px-6 lg:px-8 bg-transparent font-inter">
-            <div className="max-w-6xl mx-auto">
-                {/* Header */}
-                <div className="mb-8 text-center">
-                    <h1 className="text-3xl font-poppins font-bold text-secondary">My Profile</h1>
-                    <p className="mt-2 text-gray-600 font-inter">Manage your account information and preferences</p>
+        <div className="min-h-screen bg-gray-50">
+            {/* Header */}
+            <div className="sticky top-0 z-20 bg-white border-b border-gray-100 shadow-sm">
+                <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <button onClick={() => navigate(-1)} className="p-1.5 rounded-full hover:bg-gray-100">
+                            <ArrowLeft className="w-5 h-5 text-gray-600" />
+                        </button>
+                        <div>
+                            <h1 className="text-base font-bold text-secondary">My Profile</h1>
+                            <p className="text-xs text-gray-400">Manage your account</p>
+                        </div>
+                    </div>
                 </div>
+            </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Left Column - Profile Card */}
-                    <div className="lg:col-span-1">
-                        <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-md overflow-hidden">
-                            <div className="bg-primary px-6 py-4 text-center">
-                                <h2 className="text-xl font-poppins font-semibold text-white">Profile Overview</h2>
-                            </div>
-                            <div className="p-6">
-                                <div className="flex flex-col items-center">
-                                    <div className="relative mb-4">
-                                        <img
-                                            src={profile.profilePicUrl || 'https://placehold.co/150'}
-                                            alt="Profile"
-                                            className="w-32 h-32 rounded-full border-4 border-primary/30 object-cover"
-                                        />
-                                        {isEditing && (
-                                            <div className="absolute bottom-0 right-0 bg-accent rounded-full p-2 cursor-pointer">
-                                                <label htmlFor="profile-pic-upload" className="cursor-pointer">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
-                                                        <path fillRule="evenodd" d="M4 5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-1.586a1 1 0 01-.707-.293l-1.121-1.121A2 2 0 0011.172 3H8.828a2 2 0 00-1.414.586L6.293 4.707A1 1 0 015.586 5H4zm6 9a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
-                                                    </svg>
-                                                    <input
-                                                        id="profile-pic-upload"
-                                                        type="file"
-                                                        onChange={handleFileChange}
-                                                        accept="image/*"
-                                                        className="hidden"
-                                                    />
-                                                </label>
-                                            </div>
-                                        )}
-                                    </div>
-                                    <h3 className="text-xl font-poppins font-bold text-secondary">{profile.name}</h3>
-                                    <p className="text-primary font-inter">{profile.email}</p>
-                                    <p className="text-gray-600 mt-1 font-inter">{profile.phone}</p>
+            <div className="max-w-7xl mx-auto px-4 py-5">
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
 
-                                    {isEditing && selectedFile && (
-                                        <button
-                                            onClick={handleImageUpload}
-                                            className="mt-4 px-4 py-2 rounded-md text-sm font-medium text-white bg-accent hover:bg-accent/90"
-                                        >
-                                            Save Photo
-                                        </button>
-                                    )}
-                                </div>
-
-                                <div className="mt-6 border-t border-gray-200 pt-4">
-                                    <h4 className="text-sm font-poppins font-medium text-gray-500 mb-2">ACCOUNT STATUS</h4>
-                                    <div className="flex justify-between items-center mb-2">
-                                        <span className="text-sm font-inter text-gray-600">First Booking Used:</span>
-                                        <span className={`text-sm font-poppins font-medium ${profile.firstBookingUsed ? 'text-green-600' : 'text-yellow-500'}`}>
-                                            {profile.firstBookingUsed ? 'Yes' : 'No'}
+                    {/* Sidebar - Desktop */}
+                    <div className="hidden lg:block space-y-3 font-poppins">
+                        <div className="bg-white rounded-xl border border-gray-100 p-2 shadow-sm">
+                            {[
+                                { id: 'profile', label: 'My Profile', icon: <User className="w-4 h-4" /> },
+                                { id: 'payments', label: 'Payments', icon: <CreditCard className="w-4 h-4" />, secondary: true },
+                                { id: 'offers', label: 'Offers', icon: <Gift className="w-4 h-4" />, secondary: true },
+                                { id: 'support', label: 'Support', icon: <Shield className="w-4 h-4" />, secondary: true, action: () => navigate('/customer/complaints') },
+                            ].map((item) => (
+                                <button
+                                    key={item.id}
+                                    onClick={() => item.action ? item.action() : setIsEditing(false)}
+                                    className={`w-full flex items-center justify-between p-3 rounded-lg transition-all group mt-1 first:mt-0 ${item.id === 'profile' && !isEditing
+                                        ? 'bg-primary/5 text-primary'
+                                        : 'text-gray-500 hover:bg-gray-50'
+                                        }`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className={`transition-colors ${item.id === 'profile' && !isEditing ? 'text-primary' : 'text-gray-400 group-hover:text-secondary'}`}>
+                                            {item.icon}
+                                        </div>
+                                        <span className={`text-sm font-semibold tracking-tight ${item.id === 'profile' && !isEditing ? 'text-primary' : 'text-gray-600 group-hover:text-secondary'}`}>
+                                            {item.label}
                                         </span>
                                     </div>
-                                    <div className="flex justify-between items-center mb-2">
-                                        <span className="text-sm font-inter text-gray-600">Total Bookings:</span>
-                                        <span className="text-sm font-poppins font-medium text-primary">{profile.totalBookings}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-sm font-inter text-gray-600">Custom Discount:</span>
-                                        <span className="text-sm font-poppins font-medium text-yellow-500">{profile.customDiscount}%</span>
-                                    </div>
+                                    <ChevronRight className={`w-4 h-4 transition-transform ${item.id === 'profile' && !isEditing ? 'opacity-100 translate-x-1' : 'opacity-0'}`} />
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Stats Card */}
+                        <div className="bg-gradient-to-br from-secondary to-gray-800 rounded-xl p-4 text-white">
+                            <p className="text-[10px] font-semibold uppercase text-white/50 mb-3 text-center">Account Stats</p>
+                            <div className="space-y-3">
+                                <div className="flex justify-between items-center">
+                                    <div className="flex items-center gap-2"><Package className="w-4 h-4 text-primary" /><span className="text-xs">Bookings</span></div>
+                                    <span className="text-sm font-bold">{profile.totalBookings}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <div className="flex items-center gap-2"><Gift className="w-4 h-4 text-accent" /><span className="text-xs">Discount</span></div>
+                                    <span className="text-sm font-bold">{profile.customDiscount}%</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <div className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-400" /><span className="text-xs">First Booking</span></div>
+                                    <span className="text-xs font-semibold">{profile.firstBookingUsed ? 'Used' : 'Available'}</span>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Right Column - Profile Details */}
-                    <div className="lg:col-span-2 space-y-6">
+                    {/* Main Content */}
+                    <div className="lg:col-span-3 space-y-5">
+                        {/* Profile Header Card */}
+                        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                            <div className="h-20 bg-gradient-to-r from-primary/10 to-primary/5"></div>
+                            <div className="px-5 pb-5 relative">
+                                <div className="flex flex-col sm:flex-row items-center sm:items-end gap-4 -mt-10">
+                                    {/* Avatar */}
+                                    <div className="relative">
+                                        <img
+                                            src={profile.profilePicUrl || `https://ui-avatars.com/api/?name=${profile.name}&background=0D9488&color=fff`}
+                                            alt="Profile"
+                                            className="w-20 h-20 rounded-full border-4 border-white shadow-md object-cover bg-white"
+                                        />
+                                        {isEditing && (
+                                            <>
+                                                <label className="absolute bottom-0 right-0 bg-primary rounded-full p-1.5 cursor-pointer shadow-md hover:bg-primary/90">
+                                                    <Camera className="w-3.5 h-3.5 text-white" />
+                                                    <input type="file" onChange={handleFileChange} accept="image/*" className="hidden" />
+                                                </label>
+                                                {selectedFile && (
+                                                    <button onClick={handleImageUpload} className="absolute -top-2 -right-2 bg-accent text-white p-1 rounded-full shadow-md">
+                                                        <CheckCircle className="w-3.5 h-3.5" />
+                                                    </button>
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
 
-                        {activeTab === 'profile' && (
-                            <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-md overflow-hidden">
-                                <div className="bg-primary px-6 py-4 flex justify-between items-center">
-                                    <h2 className="text-xl font-poppins font-semibold text-white">Personal Information</h2>
+                                    {/* User Info */}
+                                    <div className="flex-1 text-center sm:text-left">
+                                        <h2 className="text-xl font-bold text-secondary">{profile.name}</h2>
+                                        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 text-xs text-gray-400">
+                                            <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" />{profile.email}</span>
+                                            <span className="hidden sm:block">•</span>
+                                            <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" />{profile.phone || 'Add phone'}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Edit Button */}
                                     <button
                                         onClick={() => setIsEditing(!isEditing)}
-                                        className={`px-4 py-2 rounded-md text-sm font-poppins font-medium ${isEditing ? 'bg-white text-primary' : 'bg-accent text-white hover:bg-accent/90'}`}
+                                        className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${isEditing
+                                            ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                            : 'bg-primary text-white hover:bg-primary/90'
+                                            }`}
                                     >
-                                        {isEditing ? 'Cancel' : 'Edit Profile'}
+                                        {isEditing ? 'Cancel' : <span className="flex items-center gap-1"><Edit2 className="w-3.5 h-3.5" /> Edit</span>}
                                     </button>
                                 </div>
 
-                                <div className="p-6">
-                                    {isEditing ? (
-                                        <form onSubmit={handleSubmit}>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                <div>
-                                                    <label className="block text-sm font-poppins font-medium text-secondary mb-1">Full Name</label>
-                                                    <input
-                                                        type="text"
-                                                        name="name"
-                                                        value={profile.name}
-                                                        onChange={handleInputChange}
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary font-inter"
-                                                        required
-                                                    />
-                                                </div>
-
-                                                <div>
-                                                    <label className="block text-sm font-poppins font-medium text-secondary mb-1">Email</label>
-                                                    <input
-                                                        type="email"
-                                                        name="email"
-                                                        value={profile.email}
-                                                        readOnly
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md bg-gray-100 cursor-not-allowed font-inter"
-                                                    />
-                                                </div>
-
-                                                <div>
-                                                    <label className="block text-sm font-poppins font-medium text-secondary mb-1">Phone</label>
-                                                    <input
-                                                        type="tel"
-                                                        name="phone"
-                                                        value={profile.phone}
-                                                        onChange={handleInputChange}
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary font-inter"
-                                                        required
-                                                    />
-                                                </div>
-
-                                                <div className="md:col-span-2">
-                                                    <h3 className="text-lg font-poppins font-medium text-secondary mb-3">Address Information</h3>
-                                                    <div className="grid grid-cols-1 gap-6">
-                                                        <div>
-                                                            <label className="block text-sm font-poppins font-medium text-secondary mb-1">Street</label>
-                                                            <input
-                                                                type="text"
-                                                                name="street"
-                                                                value={profile.address.street}
-                                                                onChange={handleAddressChange}
-                                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary font-inter"
-                                                            />
-                                                        </div>
-
-                                                        <AddressSelector
-                                                            selectedState={profile.address.state}
-                                                            selectedCity={profile.address.city}
-                                                            onStateChange={(state) => setProfile(prev => ({
-                                                                ...prev,
-                                                                address: { ...prev.address, state, city: '' }
-                                                            }))}
-                                                            onCityChange={(city) => setProfile(prev => ({
-                                                                ...prev,
-                                                                address: { ...prev.address, city }
-                                                            }))}
-                                                        />
-
-                                                        <div>
-                                                            <label className="block text-sm font-poppins font-medium text-secondary mb-1">Postal Code</label>
-                                                            <input
-                                                                type="text"
-                                                                name="postalCode"
-                                                                value={profile.address.postalCode}
-                                                                onChange={handleAddressChange}
-                                                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary font-inter"
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div className="mt-8 flex justify-end space-x-3">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setIsEditing(false)}
-                                                    className="px-6 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-poppins font-medium text-secondary bg-white hover:bg-gray-50"
-                                                >
-                                                    Cancel
-                                                </button>
-                                                <button
-                                                    type="submit"
-                                                    className="px-6 py-2 border border-transparent rounded-md shadow-sm text-sm font-poppins font-medium text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
-                                                >
-                                                    Save Changes
-                                                </button>
-                                            </div>
-                                        </form>
-                                    ) : (
-                                        <div className="space-y-6">
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                <div>
-                                                    <h3 className="text-sm font-poppins font-medium text-gray-500">Full Name</h3>
-                                                    <p className="mt-1 text-sm font-inter text-secondary">{profile.name}</p>
-                                                </div>
-
-                                                <div>
-                                                    <h3 className="text-sm font-poppins font-medium text-gray-500">Email</h3>
-                                                    <p className="mt-1 text-sm font-inter text-secondary">{profile.email}</p>
-                                                </div>
-
-                                                <div>
-                                                    <h3 className="text-sm font-poppins font-medium text-gray-500">Phone</h3>
-                                                    <p className="mt-1 text-sm font-inter text-secondary">{profile.phone || 'Not provided'}</p>
-                                                </div>
-                                            </div>
-
-                                            <div className="pt-6 border-t border-gray-200">
-                                                <h3 className="text-lg font-poppins font-medium text-secondary mb-4">Address Information</h3>
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                    <div>
-                                                        <h3 className="text-sm font-poppins font-medium text-gray-500">Street</h3>
-                                                        <p className="mt-1 text-sm font-inter text-secondary">{profile.address.street || 'Not provided'}</p>
-                                                    </div>
-
-                                                    <div>
-                                                        <h3 className="text-sm font-poppins font-medium text-gray-500">City</h3>
-                                                        <p className="mt-1 text-sm font-inter text-secondary">{profile.address.city || 'Not provided'}</p>
-                                                    </div>
-
-                                                    <div>
-                                                        <h3 className="text-sm font-poppins font-medium text-gray-500">State</h3>
-                                                        <p className="mt-1 text-sm font-inter text-secondary">{profile.address.state || 'Not provided'}</p>
-                                                    </div>
-
-                                                    <div>
-                                                        <h3 className="text-sm font-poppins font-medium text-gray-500">Postal Code</h3>
-                                                        <p className="mt-1 text-sm font-inter text-secondary">{profile.address.postalCode || 'Not provided'}</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div className="pt-6 border-t border-gray-200 flex justify-end">
-                                                <button
-                                                    onClick={logoutUser}
-                                                    className="px-6 py-2 border border-transparent rounded-md shadow-sm text-sm font-poppins font-medium text-white bg-accent hover:bg-accent/90"
-                                                >
-                                                    Logout
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
+                                {/* Mobile Quick Links - Only visible on small screens */}
+                                <div className="grid grid-cols-3 gap-2 mt-6 lg:hidden border-t border-gray-50 pt-4">
+                                    {[
+                                        { label: 'Payments', icon: <CreditCard className="w-4 h-4 text-primary" /> },
+                                        { label: 'Offers', icon: <Gift className="w-4 h-4 text-accent" /> },
+                                        { label: 'Support', icon: <Shield className="w-4 h-4 text-blue-500" />, action: () => navigate('/customer/complaints') },
+                                    ].map((link, idx) => (
+                                        <button
+                                            key={idx}
+                                            onClick={link.action}
+                                            className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-gray-50 active:bg-gray-100 transition-colors"
+                                        >
+                                            {link.icon}
+                                            <span className="text-[10px] font-bold text-gray-600 uppercase tracking-tighter">{link.label}</span>
+                                        </button>
+                                    ))}
                                 </div>
                             </div>
-                        )}
+                        </div>
+
+                        {/* Profile Details Form/View */}
+                        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+                            {isEditing ? (
+                                <form onSubmit={handleSubmit} className="space-y-4">
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-500 mb-1">Full Name *</label>
+                                        <input
+                                            type="text"
+                                            name="name"
+                                            value={profile.name}
+                                            onChange={handleInputChange}
+                                            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20"
+                                            required
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-500 mb-1">Phone Number</label>
+                                        <input
+                                            type="tel"
+                                            name="phone"
+                                            value={profile.phone}
+                                            onChange={handleInputChange}
+                                            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20"
+                                        />
+                                    </div>
+                                    <div className="pt-2 border-t border-gray-100">
+                                        <h3 className="text-sm font-semibold text-secondary mb-3">Address</h3>
+                                        <div className="space-y-3">
+                                            <input
+                                                type="text"
+                                                name="street"
+                                                value={profile.address.street}
+                                                onChange={handleAddressChange}
+                                                placeholder="Street Address"
+                                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
+                                            />
+                                            <AddressSelector
+                                                selectedState={profile.address.state}
+                                                selectedCity={profile.address.city}
+                                                onStateChange={(state) => setProfile(prev => ({
+                                                    ...prev,
+                                                    address: { ...prev.address, state, city: '' }
+                                                }))}
+                                                onCityChange={(city) => setProfile(prev => ({
+                                                    ...prev,
+                                                    address: { ...prev.address, city }
+                                                }))}
+                                            />
+                                            <input
+                                                type="text"
+                                                name="postalCode"
+                                                value={profile.address.postalCode}
+                                                onChange={handleAddressChange}
+                                                placeholder="Postal Code"
+                                                maxLength="6"
+                                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
+                                            />
+                                        </div>
+                                    </div>
+                                    <button type="submit" disabled={loading} className="w-full py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50">
+                                        {loading ? 'Saving...' : 'Save Changes'}
+                                    </button>
+                                </form>
+                            ) : (
+                                <div className="space-y-4">
+                                    {/* Personal Info Grid */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div><p className="text-xs text-gray-400 mb-1">Full Name</p><p className="text-sm font-medium text-secondary">{profile.name}</p></div>
+                                        <div><p className="text-xs text-gray-400 mb-1">Email</p><p className="text-sm font-medium text-secondary">{profile.email}</p></div>
+                                        <div><p className="text-xs text-gray-400 mb-1">Phone</p><p className="text-sm font-medium text-secondary">{profile.phone || 'Not provided'}</p></div>
+                                    </div>
+
+                                    {/* Address */}
+                                    <div className="pt-4 border-t border-gray-100">
+                                        <div className="flex items-start gap-3">
+                                            <div className="p-2 bg-gray-50 rounded-lg"><MapPin className="w-5 h-5 text-primary" /></div>
+                                            <div className="flex-1">
+                                                <h3 className="text-sm font-bold text-secondary mb-1">Saved Address</h3>
+                                                {profile.address.street || profile.address.city ? (
+                                                    <div className="text-sm text-gray-500">
+                                                        <p className="font-semibold text-secondary">{profile.address.street}</p>
+                                                        <p>{profile.address.city}, {profile.address.state}</p>
+                                                        <p>{profile.address.postalCode}</p>
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-sm text-gray-400 italic">No address added yet</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-2 border-t border-gray-100 flex justify-end">
+                                        <button
+                                            onClick={logoutUser}
+                                            className="px-6 py-2 border border-transparent rounded-lg text-xs font-bold text-red-500 hover:bg-red-50 transition-colors uppercase tracking-widest"
+                                        >
+                                            Logout account
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
