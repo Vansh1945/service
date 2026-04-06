@@ -1271,94 +1271,94 @@ const ProviderBooking = () => {
                       </div>
                     )}
 
-                  {/* Payment Information */}
-                  <div className="bg-gray-50 rounded-xl p-5 border border-gray-200">
-                    <div className="flex items-center mb-4">
-                      <div className="p-2 bg-primary/10 rounded-lg mr-3">
-                        <CreditCard className="w-5 h-5 text-primary" />
-                      </div>
-                      <h3 className="text-lg font-semibold text-secondary">Payment Details</h3>
-                    </div>
-
-                    <div className="space-y-3 mb-4">
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-600">Payment Method</span>
-                        <span className="font-medium text-secondary capitalize">
-                          {selectedBooking.paymentMethod === 'cash' ? (
-                            <span className="flex items-center text-green-600">
-                              <Banknote className="w-4 h-4 mr-1" />
-                              Cash on Delivery
-                            </span>
-                          ) : (
-                            <span className="flex items-center text-blue-600">
-                              <CreditCard className="w-4 h-4 mr-1" />
-                              Online Payment
-                            </span>
-                          )}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-600">Payment Status</span>
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${selectedBooking.paymentStatus === 'paid'
-                          ? 'bg-green-100 text-green-800'
-                          : (selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentType === 'pay_after_service')
-                            ? 'bg-yellow-100 text-yellow-800'
-                            : 'bg-red-100 text-red-800'
-                          }`}>
-                          {selectedBooking.paymentStatus === 'paid' ? 'Paid' : (selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentType === 'pay_after_service' ? 'Pending Collection' : 'Unpaid')}
-                        </span>
-                      </div>
-                    </div>
-
-                    {(selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentType === 'pay_after_service') && selectedBooking.status === 'completed' && selectedBooking.paymentStatus !== 'paid' && (
-                      <div className="mt-4 p-4 border-2 border-dashed border-yellow-200 bg-yellow-50 rounded-xl text-center">
-                        <div className="bg-white p-3 inline-block rounded-lg shadow-sm mb-3">
-                          <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=COLLECT_CASH" alt="Collect Cash QR" className="w-24 h-24 opacity-60" />
+                    {/* Payment Information */}
+                    <div className="bg-gray-50 rounded-xl p-5 border border-gray-200">
+                      <div className="flex items-center mb-4">
+                        <div className="p-2 bg-primary/10 rounded-lg mr-3">
+                          <CreditCard className="w-5 h-5 text-primary" />
                         </div>
-                        <h4 className="text-sm font-bold text-secondary mb-1">Verify Cash Collection</h4>
-                        <p className="text-xs text-gray-500 mb-3 px-2">Provider must verify receiving ₹{calculateNetAmount(selectedBooking)} from customer.</p>
-                        <button 
-                          className="w-full py-2.5 bg-yellow-400 hover:bg-yellow-500 text-yellow-900 rounded-lg text-sm font-bold shadow-sm transition-all"
-                          onClick={() => showToast('Payment collection verified!', 'success')}
-                        >
-                          Confirm & Close
-                        </button>
+                        <h3 className="text-lg font-semibold text-secondary">Payment Details</h3>
                       </div>
-                    )}
-                  </div>
 
-                  <div className="border-t border-gray-200 pt-4">
-                    <div className="space-y-2">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Service Amount</span>
-                        <span className="font-medium">{formatCurrency(calculateServiceSubtotal(selectedBooking))}</span>
+                      <div className="space-y-3 mb-4">
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-600">Payment Method</span>
+                          <span className="font-medium text-secondary capitalize">
+                            {selectedBooking.paymentMethod === 'cash' ? (
+                              <span className="flex items-center text-green-600">
+                                <Banknote className="w-4 h-4 mr-1" />
+                                Cash on Delivery
+                              </span>
+                            ) : (
+                              <span className="flex items-center text-blue-600">
+                                <CreditCard className="w-4 h-4 mr-1" />
+                                Online Payment
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-600">Payment Status</span>
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${selectedBooking.paymentStatus === 'paid'
+                            ? 'bg-green-100 text-green-800'
+                            : (selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentType === 'pay_after_service')
+                              ? 'bg-yellow-100 text-yellow-800'
+                              : 'bg-red-100 text-red-800'
+                            }`}>
+                            {selectedBooking.paymentStatus === 'paid' ? 'Paid' : (selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentType === 'pay_after_service' ? 'Pending Collection' : 'Unpaid')}
+                          </span>
+                        </div>
                       </div>
-                      {calculateTotalDiscount(selectedBooking) > 0 && (
-                        <div className="flex justify-between text-green-600">
-                          <span>Discount</span>
-                          <span>-{formatCurrency(calculateTotalDiscount(selectedBooking))}</span>
+
+                      {(selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentType === 'pay_after_service') && selectedBooking.status === 'completed' && selectedBooking.paymentStatus !== 'paid' && (
+                        <div className="mt-4 p-4 border-2 border-dashed border-yellow-200 bg-yellow-50 rounded-xl text-center">
+                          <div className="bg-white p-3 inline-block rounded-lg shadow-sm mb-3">
+                            <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=COLLECT_CASH" alt="Collect Cash QR" className="w-24 h-24 opacity-60" />
+                          </div>
+                          <h4 className="text-sm font-bold text-secondary mb-1">Verify Cash Collection</h4>
+                          <p className="text-xs text-gray-500 mb-3 px-2">Provider must verify receiving ₹{calculateNetAmount(selectedBooking)} from customer.</p>
+                          <button
+                            className="w-full py-2.5 bg-yellow-400 hover:bg-yellow-500 text-yellow-900 rounded-lg text-sm font-bold shadow-sm transition-all"
+                            onClick={() => showToast('Payment collection verified!', 'success')}
+                          >
+                            Confirm & Close
+                          </button>
                         </div>
                       )}
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Subtotal</span>
-                        <span className="font-medium">{formatCurrency(calculateSubtotal(selectedBooking))}</span>
-                      </div>
-                      {selectedBooking.booking?.visitingCharge > 0 && (
-                        <div className="flex justify-between text-orange-600">
-                          <span>Visiting Charge</span>
-                          <span>+{formatCurrency(selectedBooking.booking.visitingCharge)}</span>
+                    </div>
+
+                    <div className="border-t border-gray-200 pt-4">
+                      <div className="space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Service Amount</span>
+                          <span className="font-medium">{formatCurrency(calculateServiceSubtotal(selectedBooking))}</span>
                         </div>
-                      )}
-                      <div className="flex justify-between text-gray-600">
-                        <span>Platform Commission</span>
-                        <span>-{formatCurrency(selectedBooking.commission?.amount || 0)}</span>
-                      </div>
-                      <div className="flex justify-between border-t border-gray-200 pt-2">
-                        <span className="text-lg font-bold text-secondary">Net Amount</span>
-                        <span className="text-lg font-bold text-primary">{formatCurrency(calculateNetAmount(selectedBooking))}</span>
+                        {calculateTotalDiscount(selectedBooking) > 0 && (
+                          <div className="flex justify-between text-green-600">
+                            <span>Discount</span>
+                            <span>-{formatCurrency(calculateTotalDiscount(selectedBooking))}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Subtotal</span>
+                          <span className="font-medium">{formatCurrency(calculateSubtotal(selectedBooking))}</span>
+                        </div>
+                        {selectedBooking.booking?.visitingCharge > 0 && (
+                          <div className="flex justify-between text-orange-600">
+                            <span>Visiting Charge</span>
+                            <span>+{formatCurrency(selectedBooking.booking.visitingCharge)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between text-gray-600">
+                          <span>Platform Commission</span>
+                          <span>-{formatCurrency(selectedBooking.commission?.amount || 0)}</span>
+                        </div>
+                        <div className="flex justify-between border-t border-gray-200 pt-2">
+                          <span className="text-lg font-bold text-secondary">Net Amount</span>
+                          <span className="text-lg font-bold text-primary">{formatCurrency(calculateNetAmount(selectedBooking))}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
                   </div>
                 </div>
 
