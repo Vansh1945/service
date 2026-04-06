@@ -466,15 +466,14 @@ const ProviderBooking = () => {
         fetchBookings('accepted'),
         fetchBookings('in-progress'),
         fetchBookings('completed'),
-        fetchBookings('cancelled'),
-        fetchBookings('confirmed')
+        fetchBookings('cancelled')
       ]);
 
       const flattenedBookings = allBookings.flat();
 
       // Update bookings state
       setBookings({
-        pending: [...(allBookings[0] || []), ...(allBookings[5] || [])],
+        pending: allBookings[0] || [],
         accepted: allBookings[1] || [],
         'in-progress': allBookings[2] || [],
         completed: allBookings[3] || [],
