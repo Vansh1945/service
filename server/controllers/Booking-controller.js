@@ -356,8 +356,8 @@ const confirmBooking = async (req, res) => {
     // Update booking status
     booking.paymentMethod = paymentMethod;
     booking.paymentStatus = paymentResult.paymentStatus || 'paid';
+    booking.status = 'pending';
     booking.confirmedBooking = true;
-    booking.status = 'scheduled';
 
     // Update transaction
     const transaction = await Transaction.findOneAndUpdate(
