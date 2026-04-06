@@ -189,10 +189,10 @@ const createBooking = async (req, res) => {
       totalDiscount,
       subtotal,
       totalAmount,
-      paymentMethod, // Add the missing paymentMethod field
-      status: 'pending',
+      paymentMethod,
+      status: paymentMethod === 'cash' ? 'scheduled' : 'pending',
       paymentStatus: 'pending',
-      confirmedBooking: false
+      confirmedBooking: paymentMethod === 'cash'
     });
 
     // Save booking
@@ -202,14 +202,14 @@ const createBooking = async (req, res) => {
     if (couponCode && couponDetails) {
       await Coupon.findOneAndUpdate(
         { code: couponCode },
-        { 
-          $push: { 
-            usedBy: { 
-              user: req.user._id, 
+        {
+          $push: {
+            usedBy: {
+              user: req.user._id,
               bookingValue: subtotal,
               usedAt: new Date()
-            } 
-          } 
+            }
+          }
         },
         { session }
       );
@@ -562,7 +562,10 @@ const getUserBookings = async (req, res) => {
       .populate({
         path: 'services.service',
         select: 'title description basePrice category images duration',
-        // Search term filter on service title
+        populate: {
+          path: 'category',
+          select: 'name'
+        },
         match: searchTerm ? { title: { $regex: searchTerm, $options: 'i' } } : {}
       })
       .populate({
@@ -742,9 +745,9 @@ const payBooking = async (req, res) => {
     }
 
     if (booking.status === 'cancelled') {
-        await session.abortTransaction();
-        session.endSession();
-        return res.status(400).json({ success: false, message: 'Cannot pay for cancelled booking' });
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ success: false, message: 'Cannot pay for cancelled booking' });
     }
 
     if (booking.paymentStatus === 'paid') {
@@ -1663,7 +1666,7 @@ const completeBooking = async (req, res) => {
     // Map provider performanceScore stats to a tier for commission rule selection
     const stats = provider.performanceScore || { rating: 0, onTimePercentage: 0, completionPercentage: 0 };
     const avgScore = (stats.rating * 20 + (stats.onTimePercentage || 0) + (stats.completionPercentage || 0)) / 3;
-    
+
     let performanceTier = 'standard';
     if (avgScore >= 80) performanceTier = 'premium';
     else if (avgScore < 40) performanceTier = 'basic';
