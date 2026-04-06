@@ -4,24 +4,24 @@ export const createService = () => {
     return axiosInstance.post("/service/admin/services");
 };
 
-export const updateService = () => {
-    return axiosInstance.put("/service/admin/service/:id");
+export const updateService = (id, data) => {
+    return axiosInstance.put(`/service/admin/service/${id}`, data);
 };
 
-export const updateBasePrice = () => {
-    return axiosInstance.patch("/service/admin/services/:id/price");
+export const updateBasePrice = (id, data) => {
+    return axiosInstance.patch(`/service/admin/services/${id}/price`, data);
 };
 
-export const deleteService = () => {
-    return axiosInstance.delete("/service/admin/services/:id");
+export const deleteService = (id) => {
+    return axiosInstance.delete(`/service/admin/services/${id}`);
 };
 
 export const getAllServices = () => {
     return axiosInstance.get("/service/admin/services")
 }
 
-export const getServiceById = () => {
-    return axiosInstance.get("/service/admin/services/:id")
+export const getServiceById = (id) => {
+    return axiosInstance.get(`/service/admin/services/${id}`)
 }
 
 export const bulkImportServices = () => {
@@ -38,8 +38,8 @@ export const getServicesForProvider = () => {
     return axiosInstance.get("/service/provider/services")
 }
 
-export const getServiceDetailsForProvider = () => {
-    return axiosInstance.get("/service/provider/services/:id")
+export const getServiceDetailsForProvider = (id) => {
+    return axiosInstance.get(`/service/provider/services/${id}`)
 }
 
 //PUBLIC ROUTES
@@ -48,10 +48,14 @@ export const getActiveServices = () => {
     return axiosInstance.get("/service/services")
 }
 
-export const getPublicServiceById = () => {
-    return axiosInstance.get("/service/services/:id")
+export const getPublicServices = (page = 1, limit = 10) => {
+    return axiosInstance.get(`/service/services?page=${page}&limit=${limit}`);
+};
+
+export const getPublicServiceById = (id) => {
+    return axiosInstance.get(`/service/services/${id}`)
 }
 
-export const getServicesByCategory = () => {
-    return axiosInstance.get("/service/services/category/:category")
+export const getServicesByCategory = (category) => {
+    return axiosInstance.get(`/service/services/category/${category}`)
 }

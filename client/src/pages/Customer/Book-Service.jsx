@@ -7,6 +7,10 @@ import axios from 'axios';
 import { toast } from 'react-toastify';
 import { ArrowLeft, CheckCircle, Plus, Minus, Tag, Clock, Calendar, Shield, Lock, Star, IndianRupee, Truck, RotateCcw, Check, CalendarDays, CreditCard } from 'lucide-react';
 import AddressSelector from '../../components/AddressSelector';
+import Loader from '../../components/Loader';
+import { getPublicServiceById } from '../../services/ServiceService';
+import { getAvailableCoupons } from '../../services/CouponService';
+import { createBooking } from '../../services/BookingService';
 
 const BookService = () => {
   const { serviceId } = useParams();
@@ -95,7 +99,7 @@ const BookService = () => {
   // Fetch service details
   const fetchService = async () => {
     try {
-      const response = await axios.get(`${API}/service/services/${serviceId}`);
+      const response = await getPublicServiceById(serviceId);
       if (!response.data.success) {
         throw new Error(response.data.message || 'Failed to load service');
       }
@@ -127,9 +131,7 @@ const BookService = () => {
     setIsFetchingCoupons(true);
     try {
       const bookingValue = service.basePrice * (formData.quantity || 1);
-      const response = await axios.get(`${API}/coupon/coupons/available?bookingValue=${bookingValue}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await getAvailableCoupons({ bookingValue });
 
       if (response.data.success) {
         setCoupons(response.data.data || []);
@@ -150,13 +152,11 @@ const BookService = () => {
     }
 
     try {
-      const response = await axios.post(
-        `${API}/coupon/coupons/apply`,
+      const response = await applyCoupon(
         {
           code: formData.couponCode.trim().toUpperCase(),
           bookingValue: service.basePrice * formData.quantity
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
+        }
       );
 
       if (!response.data.success) {
@@ -350,10 +350,7 @@ const BookService = () => {
         totalAmount: totalAmount
       };
 
-      const response = await axios.post(`${API}/booking`, bookingData, {
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        timeout: 15000
-      });
+      const response = await createBooking(bookingData);
 
       if (!response.data.success) {
         throw new Error(response.data.message || 'Failed to create booking');
@@ -398,14 +395,7 @@ const BookService = () => {
   const discountAmount = calculateDiscount();
 
   if (isLoading || !service) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-secondary">Loading service details...</p>
-        </div>
-      </div>
-    );
+    return <Loader />;
   }
 
   return (

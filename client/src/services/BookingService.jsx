@@ -17,8 +17,9 @@ export const getUserBookings = () => {
     return axiosInstance.get("/booking/user");
 };
 
-export const getCustomerBookings = () => {
-    return axiosInstance.get("/booking/customer");
+export const getCustomerBookings = (params) => {
+    const queryString = params ? params.toString() : '';
+    return axiosInstance.get(`/booking/customer?${queryString}`);
 };
 
 export const updateBookingPayment = (id, data) => {
@@ -37,12 +38,12 @@ export const getBooking = (id) => {
     return axiosInstance.get(`/booking/${id}`);
 };
 
-export const cancelBooking = (id) => {
-    return axiosInstance.patch(`/booking/${id}/cancel`);
+export const cancelBooking = (id, data) => {
+    return axiosInstance.patch(`/booking/bookings/${id}/cancel`, data);
 };
 
 export const userUpdateBookingDateTime = (id, data) => {
-    return axiosInstance.patch(`/booking/${id}/reschedule`, data);
+    return axiosInstance.patch(`/booking/bookings/${id}/reschedule`, data);
 };
 
 

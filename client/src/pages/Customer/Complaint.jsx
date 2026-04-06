@@ -9,6 +9,8 @@ import {
   Clock, AlertCircle, CheckCircle, X, Upload, Loader2,
   ChevronRight, FileText, ShieldCheck, Headphones, ArrowLeft, Tag
 } from 'lucide-react';
+import { getCustomerBookings } from '../../services/BookingService';
+import { getComplaint, getCustomerComplaints } from '../../services/ComplaintService';
 
 const COMPLAINT_CATEGORIES = ["Service issue", "Payment issue", "Delivery issue", "Suggestion", "Other"];
 
@@ -34,9 +36,13 @@ const ComplaintsPage = () => {
 
   const fetchBookings = async () => {
     try {
-      const response = await axios.get(`${API}/booking/customer`, { headers: { Authorization: `Bearer ${token}` } });
-      setBookings(response.data.data || []);
+      const response = await getCustomerBookings();
+      const responseData = response.data;
+      if (responseData.success && Array.isArray(responseData.data)) {
+        setBookings(responseData.data);
+      }
     } catch (err) {
+      console.error('Fetch bookings error:', err);
       toast.error('Failed to load bookings');
     }
   };
@@ -44,14 +50,18 @@ const ComplaintsPage = () => {
   const fetchComplaints = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API}/complaint/my-complaints`, { headers: { Authorization: `Bearer ${token}` } });
-      const complaintsWithFullUrls = response.data.data.map(complaint => ({
-        ...complaint,
-        images: complaint.images ? complaint.images.map(img => typeof img === 'string' ? `${API_URL_IMAGE}/${img.replace(/\\/g, '/')}` : img.secure_url) : []
-      }));
-      setComplaints(complaintsWithFullUrls);
+      const response = await getCustomerComplaints();
+      const responseData = response.data;
+      if (responseData.success && Array.isArray(responseData.data)) {
+        const complaintsWithFullUrls = responseData.data.map(complaint => ({
+          ...complaint,
+          images: complaint.images ? complaint.images.map(img => typeof img === 'string' ? `${API_URL_IMAGE}/${img.replace(/\\/g, '/')}` : (img.secure_url || img)) : []
+        }));
+        setComplaints(complaintsWithFullUrls);
+      }
       setLoading(false);
     } catch (err) {
+      console.error('Fetch complaints error:', err);
       setError(err.response?.data?.message || 'Failed to fetch complaints');
       setLoading(false);
       if (err.response?.status === 401) {
@@ -124,9 +134,7 @@ const ComplaintsPage = () => {
       fd.append('description', formData.description);
       fd.append('category', formData.category);
       formData.images.forEach(img => fd.append('images', img));
-      await axios.post(`${API}/complaint`, fd, {
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' }
-      });
+      await submitComplaint(fd);
       toast.success('Complaint submitted successfully!');
       setOpenNewComplaint(false);
       resetForm();
@@ -139,7 +147,7 @@ const ComplaintsPage = () => {
 
   const viewComplaintDetails = async (complaintId) => {
     try {
-      const response = await axios.get(`${API}/complaint/${complaintId}`, { headers: { Authorization: `Bearer ${token}` } });
+      const response = await getComplaint(complaintId);
       const c = {
         ...response.data.data,
         images: response.data.data.images ? response.data.data.images.map(img => typeof img === 'string' ? `${API_URL_IMAGE}/${img.replace(/\\/g, '/')}` : img.secure_url) : []
@@ -154,10 +162,7 @@ const ComplaintsPage = () => {
   const reopenComplaint = async () => {
     if (!reopenReason.trim()) { toast.error('Please provide a reason'); return; }
     try {
-      await axios.put(`${API}/complaint/${selectedComplaint._id}/reopen`,
-        { reason: reopenReason },
-        { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
-      );
+      await reopenComplaint(selectedComplaint._id, { reason: reopenReason });
       toast.success('Complaint reopened!');
       setOpenComplaintDetail(false);
       setReopenReason('');
@@ -348,13 +353,13 @@ const ComplaintsPage = () => {
             </div>
           </div>
           <div className="flex gap-2">
-            <button 
+            <button
               onClick={() => toast.info('Feature coming soon!')}
               className="border border-white/20 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-white/10 transition-colors"
             >
               Chat
             </button>
-            <button 
+            <button
               onClick={() => toast.info('Feature coming soon!')}
               className="bg-white text-secondary px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-gray-100 transition-colors"
             >

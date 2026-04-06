@@ -11,6 +11,7 @@ import {
   ShoppingCart, Timer, Wrench, Activity, Edit3, ChevronLeft,
   ChevronRight, X, ChevronDown, ChevronUp
 } from 'lucide-react';
+import { cancelBooking, userUpdateBookingDateTime, getCustomerBookings } from '../../services/BookingService';
 
 // ─── Pure helpers ─────────────────────────────────────────────────────────────
 
@@ -538,13 +539,12 @@ const CustomerBookingsPage = () => {
     try {
       setLoading(true);
       const params = new URLSearchParams({ status: statusFilter, timeFilter, searchTerm: debouncedSearch, page: currentPage, limit: 20 });
-      const res = await fetch(`${API}/booking/customer?${params}`, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
-      if (!res.ok) throw new Error(res.statusText);
-      const data = await res.json();
-      setBookings(data.data);
-      setPagination(data.pagination);
+      const res = await getCustomerBookings(params);
+      const responseData = res.data;
+      setBookings(responseData.data || []);
+      setPagination(responseData.pagination || {});
     } catch (err) {
-      showToast(`Error fetching bookings: ${err.message}`, 'error');
+      showToast(`Error fetching bookings: ${err.message} `, 'error');
       setBookings([]);
     } finally {
       setLoading(false);
@@ -569,12 +569,9 @@ const CustomerBookingsPage = () => {
   const handleCancelConfirm = async () => {
     if (!bookingToCancel) return;
     try {
-      const res = await fetch(`${API}/booking/bookings/${bookingToCancel._id}/cancel`, {
-        method: 'PATCH',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason: cancelReason.trim() }),
+      await cancelBooking(bookingToCancel._id, {
+        reason: cancelReason.trim(),
       });
-      if (!res.ok) throw new Error((await res.json()).message || 'Failed to cancel');
       showToast('Booking cancelled successfully', 'success');
       setShowCancelModal(false);
       setBookingToCancel(null);
@@ -588,12 +585,7 @@ const CustomerBookingsPage = () => {
   const handleRescheduleSubmit = async ({ date, time }) => {
     if (!bookingToReschedule) return;
     try {
-      const res = await fetch(`${API}/booking/bookings/${bookingToReschedule._id}/reschedule`, {
-        method: 'PATCH',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date, time }),
-      });
-      if (!res.ok) throw new Error((await res.json()).message || 'Failed to reschedule');
+      await userUpdateBookingDateTime(bookingToReschedule._id, { date, time });
       showToast('Booking rescheduled successfully', 'success');
       setShowRescheduleModal(false);
       setBookingToReschedule(null);

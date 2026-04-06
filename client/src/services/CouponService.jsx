@@ -30,6 +30,6 @@ export const markCouponUsed = (data) => {
     return axiosInstance.post("/coupon/coupons/mark-used", data);
 };
 
-export const getAvailableCoupons = () => {
-    return axiosInstance.get("/coupon/coupons/available");
+export const getAvailableCoupons = (data) => {
+    return axiosInstance.get("/coupon/coupons/available", data);
 };

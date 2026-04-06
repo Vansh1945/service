@@ -9,13 +9,13 @@ export const getCustomerFeedbacks = (data) => {
     return axiosInstance.get("/feedback/my-feedbacks", data);
 };
 
-export const getFeedback = (data) => {
-    return axiosInstance.get("/feedback/:feedbackId", data);
+export const getFeedback = (feedbackId) => {
+    return axiosInstance.get(`/feedback/${feedbackId}`);
 };
 
 
-export const editFeedback = (data) => {
-    return axiosInstance.put("/feedback/edit/:feedbackId", data);
+export const editFeedback = (feedbackId, data) => {
+    return axiosInstance.put(`/feedback/edit/${feedbackId}`, data);
 };
 
 

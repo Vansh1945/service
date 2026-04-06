@@ -8,6 +8,9 @@ import {
   Clock, Tag, AlertTriangle, Shield, Lock, Wrench, Star, IndianRupee,
   Truck, Phone, Mail, ChevronRight, MessageCircle, AlertCircle
 } from 'lucide-react';
+import { getPublicServiceById } from '../../services/ServiceService';
+import { getBooking } from '../../services/BookingService';
+import Loader from '../../components/Loader';
 
 const BookingConfirmation = () => {
   const { bookingId } = useParams();
@@ -44,9 +47,7 @@ const BookingConfirmation = () => {
 
   const fetchServiceDetails = async (serviceId) => {
     try {
-      const response = await axios.get(`${API}/service/services/${serviceId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await getPublicServiceById(serviceId);
       if (response.data?.success) return response.data.data;
       return null;
     } catch (error) {
@@ -57,9 +58,7 @@ const BookingConfirmation = () => {
 
   const fetchBookingDetails = async () => {
     try {
-      const response = await axios.get(`${API}/booking/${bookingId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await getBooking(bookingId);
 
       if (!response.data?.success) {
         throw new Error(response.data?.message || 'Failed to fetch booking details');
@@ -254,6 +253,9 @@ const BookingConfirmation = () => {
         currency: order.currency || 'INR',
         name: 'SAFEVOLT SOLUTIONS',
         description: `Payment for ${getServiceInfo().title}`,
+        image: (getServiceInfo().image && getServiceInfo().image.startsWith('https') && !getServiceInfo().image.includes('localhost')) 
+               ? getServiceInfo().image 
+               : 'https://placehold.co/200x200?text=S',
         order_id: order.id,
         handler: async function (response) {
           try {
@@ -293,16 +295,11 @@ const BookingConfirmation = () => {
     try {
       setShowCashModal(false);
       showToast('Confirming booking...', 'info');
-      await axios.post(
-        `${API}/booking/${bookingDetails._id}/payment`,
-        { 
-          paymentMethod: 'cash', 
-          paymentStatus: 'pending', 
-          bookingStatus: 'confirmed',
-          paymentType: 'pay_after_service'
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await updateBookingPayment(bookingDetails._id, {
+        paymentMethod: 'cash',
+        paymentStatus: 'pending',
+        bookingStatus: 'confirmed',
+      });
       showToast('Booking Confirmed! Pay after service completion.', 'success');
       setTimeout(() => navigate('/customer/bookings'), 2000);
     } catch (error) {
@@ -311,14 +308,7 @@ const BookingConfirmation = () => {
   };
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-secondary">Loading booking details...</p>
-        </div>
-      </div>
-    );
+    return <Loader />;
   }
 
   if (error || !bookingDetails) {

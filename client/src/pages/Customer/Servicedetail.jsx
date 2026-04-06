@@ -14,6 +14,8 @@ import {
 import LoadingSpinner from '../../components/Loader';
 import RelatedServicesComponent from '../../components/RelatedServices';
 import ErrorState from '../../components/Error';
+import { getPublicServiceById, getServicesByCategory } from '../../services/ServiceService';
+import { getCategories } from '../../services/SystemService';
 
 const ServiceDetailPage = () => {
   const { id } = useParams();
@@ -105,11 +107,10 @@ const ServiceDetailPage = () => {
   // ==================== API CALLS ====================
   const fetchCategories = async () => {
     try {
-      const response = await fetch(`${API}/system-setting/categories`);
-      if (!response.ok) throw new Error('Failed to fetch categories');
-      const data = await response.json();
-      if (data.success) {
-        setCategories(data.data || []);
+      const response = await getCategories();
+      const responseData = response.data;
+      if (responseData.success) {
+        setCategories(responseData.data || []);
       }
     } catch (error) {
       console.error('Error fetching categories:', error);
@@ -121,14 +122,11 @@ const ServiceDetailPage = () => {
       setLoading(true);
       setError(null);
 
-      const serviceResponse = await fetch(`${API}/service/services/${id}`);
-      const serviceData = await serviceResponse.json();
+      const serviceResponse = await getPublicServiceById(id);
+      const serviceData = serviceResponse.data;
 
-      if (!serviceResponse.ok) {
-        throw new Error(serviceData.message || 'Failed to fetch service');
-      }
       if (!serviceData.success || !serviceData.data) {
-        throw new Error('Service not found');
+        throw new Error(serviceData.message || 'Service not found');
       }
 
       const serviceDetails = serviceData.data;
@@ -144,10 +142,10 @@ const ServiceDetailPage = () => {
       if (serviceDetails.category) {
         try {
           const categoryId = typeof serviceDetails.category === 'object' ? serviceDetails.category._id : serviceDetails.category;
-          const relatedResponse = await fetch(`${API}/service/services/category/${categoryId}?limit=4`);
-          const relatedData = await relatedResponse.json();
+          const relatedResponse = await getServicesByCategory(categoryId);
+          const relatedData = relatedResponse.data;
 
-          if (relatedResponse.ok && relatedData.success) {
+          if (relatedData.success) {
             const filteredRelated = relatedData.data.filter(s => s._id !== serviceDetails._id);
             setRelatedServices(filteredRelated);
           }

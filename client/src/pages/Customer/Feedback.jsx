@@ -7,6 +7,13 @@ import {
   User, Eye, Edit2, CheckCircle, Clock, ChevronRight, X
 } from 'lucide-react';
 import LoadingSpinner from '../../components/Loader';
+import { getCustomerBookings } from '../../services/BookingService';
+import { 
+  submitFeedback as submitFeedbackService, 
+  getCustomerFeedbacks as getCustomerFeedbacksService, 
+  getFeedback as getFeedbackService, 
+  editFeedback as editFeedbackService 
+} from '../../services/FeedbackService';
 
 const Feedback = () => {
   const { token, API } = useAuth();
@@ -51,18 +58,16 @@ const Feedback = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const bookingsResponse = await fetch(`${API}/booking/customer?status=completed`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const bookingsData = await bookingsResponse.json();
+      const params = new URLSearchParams({ status: 'completed' });
+      const bookingsResponse = await getCustomerBookings(params);
+      const bookingsData = bookingsResponse.data;
       setCompletedBookings(bookingsData.data || []);
 
-      const feedbacksResponse = await fetch(`${API}/feedback/my-feedbacks`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const feedbacksData = await feedbacksResponse.json();
+      const feedbacksResponse = await getCustomerFeedbacksService();
+      const feedbacksData = feedbacksResponse.data;
       setFeedbacks(feedbacksData.data || []);
     } catch (error) {
+      console.error('Fetch data error:', error);
       toast.error('Failed to load data');
     } finally {
       setLoading(false);
@@ -77,19 +82,15 @@ const Feedback = () => {
 
     try {
       setSubmitting(true);
-      const response = await fetch(`${API}/feedback`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          bookingId,
-          providerRating: feedbackForm.providerRating,
-          providerComment: feedbackForm.providerComment,
-          serviceRating: feedbackForm.serviceRating,
-          serviceComment: feedbackForm.serviceComment
-        })
+      const response = await submitFeedbackService({
+        bookingId,
+        providerRating: feedbackForm.providerRating,
+        providerComment: feedbackForm.providerComment,
+        serviceRating: feedbackForm.serviceRating,
+        serviceComment: feedbackForm.serviceComment
       });
 
-      if (!response.ok) throw new Error('Failed to submit feedback');
+      if (!response.data.success) throw new Error(response.data.message || 'Failed to submit feedback');
       toast.success('Feedback submitted successfully!');
       setFeedbackForm({ bookingId: '', providerRating: 0, providerComment: '', serviceRating: 0, serviceComment: '' });
       await fetchData();
@@ -109,13 +110,13 @@ const Feedback = () => {
 
   const getFeedback = async (feedbackId) => {
     try {
-      const response = await fetch(`${API}/feedback/${feedbackId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await response.json();
-      setDetailedFeedback(data.data);
-      setSelectedFeedback(data.data);
-      setIsViewing(true);
+      const response = await getFeedbackService(feedbackId);
+      const responseData = response.data;
+      if (responseData.success) {
+        setDetailedFeedback(responseData.data);
+        setSelectedFeedback(responseData.data);
+        setIsViewing(true);
+      }
     } catch (error) {
       toast.error('Failed to load feedback details');
     }
@@ -129,18 +130,14 @@ const Feedback = () => {
 
     try {
       setSubmitting(true);
-      const response = await fetch(`${API}/feedback/edit/${feedbackId}`, {
-        method: 'PUT',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          providerRating: editingForm.providerRating,
-          providerComment: editingForm.providerComment,
-          serviceRating: editingForm.serviceRating,
-          serviceComment: editingForm.serviceComment
-        })
+      const response = await editFeedbackService(feedbackId, {
+        providerRating: editingForm.providerRating,
+        providerComment: editingForm.providerComment,
+        serviceRating: editingForm.serviceRating,
+        serviceComment: editingForm.serviceComment
       });
 
-      if (!response.ok) throw new Error('Failed to update feedback');
+      if (!response.data.success) throw new Error(response.data.message || 'Failed to update feedback');
       toast.success('Feedback updated successfully!');
       setIsEditing(false);
       setSelectedFeedback(null);

@@ -4,8 +4,8 @@ export const submitComplaint = (data) => {
     return axiosInstance.post("/complaint/", data);
 };
 
-export const getMyComplaints = (data) => {
-    return axiosInstance.get("/complaint/my-complaints", data);
+export const getCustomerComplaints = () => {
+    return axiosInstance.get("/complaint/my-complaints");
 };
 
 export const getComplaint = (id) => {

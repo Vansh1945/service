@@ -10,6 +10,9 @@ import { useAuth } from '../../context/auth';
 import Rating from '@mui/material/Rating';
 import LoadingSpinner from '../../components/Loader';
 import HeroSection from '../../components/HeroSection';
+import ErrorState from '../../components/Error';
+import { getPublicServices } from '../../services/ServiceService';
+import { getCategories } from '../../services/SystemService';
 
 const ServiceListingPage = () => {
   const { API, user } = useAuth();
@@ -37,10 +40,10 @@ const ServiceListingPage = () => {
   // Fetch categories
   const fetchCategories = async () => {
     try {
-      const response = await fetch(`${API}/system-setting/categories`);
-      const data = await response.json();
-      if (data.success && Array.isArray(data.data)) {
-        setCategoriesData(data.data);
+      const response = await getCategories();
+      const responseData = response.data;
+      if (responseData.success && Array.isArray(responseData.data)) {
+        setCategoriesData(responseData.data);
       }
     } catch (error) {
       console.error('Fetch categories error:', error);
@@ -53,14 +56,11 @@ const ServiceListingPage = () => {
       setInitialLoading(true);
       setError(null);
 
-      const response = await fetch(`${API}/service/services?page=1&limit=100`);
+      const response = await getPublicServices(1, 100);
+      const responseData = response.data;
 
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-
-      const data = await response.json();
-
-      if (data.success && Array.isArray(data.data)) {
-        const transformedServices = data.data.map(service => ({
+      if (responseData.success && Array.isArray(responseData.data)) {
+        const transformedServices = responseData.data.map(service => ({
           ...service,
           displayImage: service.images?.[0] || service.image
         }));
@@ -73,7 +73,7 @@ const ServiceListingPage = () => {
         setPriceRange([0, maxServicePrice]);
         setRetryCount(0);
       } else {
-        throw new Error(data.message || 'Invalid response');
+        throw new Error(responseData.message || 'Invalid response');
       }
     } catch (error) {
       console.error('Fetch services error:', error);
@@ -232,7 +232,7 @@ const ServiceListingPage = () => {
 
   if (error && allServices.length === 0) {
     return (
-      <ErrorState 
+      <ErrorState
         title="Failed to Load"
         message={error}
         onRetry={() => fetchAllServices()}
