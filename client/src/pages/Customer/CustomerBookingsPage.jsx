@@ -29,7 +29,13 @@ const getStatusCfg = (status) => STATUS_CONFIG[status] || { color: 'bg-gray-100 
 const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Not specified';
 const formatDateTime = (d) => d ? new Date(d).toLocaleString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
-const needsPayment = (b) => b.paymentStatus === 'pending' && b.status !== 'cancelled' && b.paymentMethod !== 'cash';
+const needsPayment = (b) => {
+  if (b.paymentStatus === 'paid' || b.status === 'cancelled') return false;
+  // If it's already an online pending payment, it needs payment
+  if (b.paymentMethod !== 'cash' && b.paymentType !== 'cash') return b.paymentStatus === 'pending';
+  // If it's a cash booking, allow online payment ONLY if still pending (not accepted)
+  return b.status === 'pending';
+};
 const canCancel = (b) => ['pending', 'accepted'].includes(b.status);
 const canReschedule = (b) => b.status === 'pending';
 
@@ -399,8 +405,8 @@ const BookingCard = ({ booking, onView, onPayNow, onReschedule, onCancel, onCall
               </div>
               <div className="text-right flex-shrink-0">
                 <p className="text-lg font-bold text-secondary">₹{booking.totalAmount || 0}</p>
-                <p className={`text-xs font-medium ${booking.paymentStatus === 'paid' ? 'text-emerald-600' : 'text-accent'}`}>
-                  {booking.paymentStatus === 'paid' ? `✓ ${booking.paymentMethod}` : (booking.paymentMethod === 'cash' ? 'Pay After Service' : 'Unpaid')}
+                <p className={`text-xs font-bold px-2 py-0.5 rounded-full ${booking.paymentStatus === 'paid' ? 'bg-green-100 text-green-600' : (booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service' ? 'bg-yellow-100 text-yellow-600' : 'bg-red-50 text-accent')}`}>
+                  {booking.paymentStatus === 'paid' ? `✓ Paid` : (booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service' ? 'Pay After Service' : 'Unpaid')}
                 </p>
               </div>
             </div>

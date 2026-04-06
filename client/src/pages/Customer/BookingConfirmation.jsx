@@ -295,11 +295,16 @@ const BookingConfirmation = () => {
       showToast('Confirming booking...', 'info');
       await axios.post(
         `${API}/booking/${bookingDetails._id}/payment`,
-        { paymentMethod: 'cash', paymentStatus: 'pending', bookingStatus: 'pending' },
+        { 
+          paymentMethod: 'cash', 
+          paymentStatus: 'pending', 
+          bookingStatus: 'confirmed',
+          paymentType: 'pay_after_service'
+        },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      showToast('Booking confirmed! Pay cash after service.', 'success');
-      setTimeout(() => navigate('/customer/bookings'), 3000);
+      showToast('Booking Confirmed! Pay after service completion.', 'success');
+      setTimeout(() => navigate('/customer/bookings'), 2000);
     } catch (error) {
       showToast('Failed to confirm booking', 'error');
     }

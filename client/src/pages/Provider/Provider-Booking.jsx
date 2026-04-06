@@ -466,14 +466,15 @@ const ProviderBooking = () => {
         fetchBookings('accepted'),
         fetchBookings('in-progress'),
         fetchBookings('completed'),
-        fetchBookings('cancelled')
+        fetchBookings('cancelled'),
+        fetchBookings('confirmed')
       ]);
 
       const flattenedBookings = allBookings.flat();
 
       // Update bookings state
       setBookings({
-        pending: allBookings[0] || [],
+        pending: [...(allBookings[0] || []), ...(allBookings[5] || [])],
         accepted: allBookings[1] || [],
         'in-progress': allBookings[2] || [],
         completed: allBookings[3] || [],
@@ -747,7 +748,8 @@ const ProviderBooking = () => {
 
   const getStatusColor = useCallback((status) => {
     switch (status?.toLowerCase()) {
-      case 'pending': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'pending': return 'bg-yellow-50 text-yellow-700 border-yellow-200';
+      case 'confirmed': return 'bg-blue-50 text-blue-700 border-blue-200';
       case 'accepted': return 'bg-blue-100 text-blue-800 border-blue-200';
       case 'in-progress': return 'bg-purple-100 text-purple-800 border-purple-200';
       case 'completed': return 'bg-green-100 text-green-800 border-green-200';
@@ -1068,19 +1070,21 @@ const ProviderBooking = () => {
                         </div>
 
                         <div className="flex items-center gap-2 mb-2">
-                          {booking.paymentMethod === 'cash' ? (
-                            <div className="flex items-center text-green-600 text-xs bg-green-50 px-2.5 py-1 rounded-md">
-                              <Banknote className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-                              <span className="font-medium">Cash on Delivery</span>
+                          {(booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service') ? (
+                            <div className="flex items-center text-yellow-600 text-[10px] sm:text-xs bg-yellow-100 px-2 sm:px-2.5 py-1 rounded-md border border-yellow-200">
+                              <Banknote className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-1" />
+                              <span className="font-bold uppercase tracking-wider">Pay After Service</span>
                             </div>
                           ) : (
-                            <div className="flex items-center text-blue-600 text-xs bg-blue-50 px-2.5 py-1 rounded-md">
-                              <CreditCard className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-                              <span className="font-medium">Online Payment</span>
+                            <div className="flex items-center text-blue-600 text-[10px] sm:text-xs bg-blue-100 px-2 sm:px-2.5 py-1 rounded-md border border-blue-200">
+                              <CreditCard className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-1" />
+                              <span className="font-bold uppercase tracking-wider">Paid Online</span>
                             </div>
                           )}
-                          {booking.paymentStatus === 'paid' && (
-                            <CheckSquare className="w-3 h-3 sm:w-4 sm:h-4 text-green-500" />
+                          {(booking.paymentStatus === 'paid') && (
+                            <div className="bg-green-100 text-green-600 p-1 rounded-full border border-green-200 shadow-sm">
+                              <CheckSquare className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                            </div>
                           )}
                         </div>
                       </div>
@@ -1266,7 +1270,6 @@ const ProviderBooking = () => {
                         </div>
                       </div>
                     )}
-                  </div>
 
                   {/* Payment Information */}
                   <div className="bg-gray-50 rounded-xl p-5 border border-gray-200">
@@ -1298,47 +1301,64 @@ const ProviderBooking = () => {
                         <span className="text-gray-600">Payment Status</span>
                         <span className={`px-2 py-1 rounded text-xs font-medium ${selectedBooking.paymentStatus === 'paid'
                           ? 'bg-green-100 text-green-800'
-                          : 'bg-yellow-100 text-yellow-800'
+                          : (selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentType === 'pay_after_service')
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : 'bg-red-100 text-red-800'
                           }`}>
-                          {selectedBooking.paymentStatus?.toUpperCase() || 'PENDING'}
+                          {selectedBooking.paymentStatus === 'paid' ? 'Paid' : (selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentType === 'pay_after_service' ? 'Pending Collection' : 'Unpaid')}
                         </span>
                       </div>
                     </div>
 
-                    <div className="border-t border-gray-200 pt-4">
-                      <div className="space-y-2">
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Service Amount</span>
-                          <span className="font-medium">{formatCurrency(calculateServiceSubtotal(selectedBooking))}</span>
+                    {(selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentType === 'pay_after_service') && selectedBooking.status === 'completed' && selectedBooking.paymentStatus !== 'paid' && (
+                      <div className="mt-4 p-4 border-2 border-dashed border-yellow-200 bg-yellow-50 rounded-xl text-center">
+                        <div className="bg-white p-3 inline-block rounded-lg shadow-sm mb-3">
+                          <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=COLLECT_CASH" alt="Collect Cash QR" className="w-24 h-24 opacity-60" />
                         </div>
-                        {calculateTotalDiscount(selectedBooking) > 0 && (
-                          <div className="flex justify-between text-green-600">
-                            <span>Discount</span>
-                            <span>-{formatCurrency(calculateTotalDiscount(selectedBooking))}</span>
-                          </div>
-                        )}
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Subtotal</span>
-                          <span className="font-medium">{formatCurrency(calculateSubtotal(selectedBooking))}</span>
+                        <h4 className="text-sm font-bold text-secondary mb-1">Verify Cash Collection</h4>
+                        <p className="text-xs text-gray-500 mb-3 px-2">Provider must verify receiving ₹{calculateNetAmount(selectedBooking)} from customer.</p>
+                        <button 
+                          className="w-full py-2.5 bg-yellow-400 hover:bg-yellow-500 text-yellow-900 rounded-lg text-sm font-bold shadow-sm transition-all"
+                          onClick={() => showToast('Payment collection verified!', 'success')}
+                        >
+                          Confirm & Close
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="border-t border-gray-200 pt-4">
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Service Amount</span>
+                        <span className="font-medium">{formatCurrency(calculateServiceSubtotal(selectedBooking))}</span>
+                      </div>
+                      {calculateTotalDiscount(selectedBooking) > 0 && (
+                        <div className="flex justify-between text-green-600">
+                          <span>Discount</span>
+                          <span>-{formatCurrency(calculateTotalDiscount(selectedBooking))}</span>
                         </div>
-                        {selectedBooking.booking?.visitingCharge > 0 && (
-                          <div className="flex justify-between text-orange-600">
-                            <span>Visiting Charge</span>
-                            <span>+{formatCurrency(selectedBooking.booking.visitingCharge)}</span>
-                          </div>
-                        )}
-                        {selectedBooking.commission?.amount > 0 && (
-                          <div className="flex justify-between text-gray-600">
-                            <span>Platform Commission</span>
-                            <span>-{formatCurrency(selectedBooking.commission?.amount || 0)}</span>
-                          </div>
-                        )}
-                        <div className="flex justify-between border-t border-gray-200 pt-2">
-                          <span className="text-lg font-bold text-secondary">Net Amount</span>
-                          <span className="text-lg font-bold text-primary">{formatCurrency(calculateNetAmount(selectedBooking))}</span>
+                      )}
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Subtotal</span>
+                        <span className="font-medium">{formatCurrency(calculateSubtotal(selectedBooking))}</span>
+                      </div>
+                      {selectedBooking.booking?.visitingCharge > 0 && (
+                        <div className="flex justify-between text-orange-600">
+                          <span>Visiting Charge</span>
+                          <span>+{formatCurrency(selectedBooking.booking.visitingCharge)}</span>
                         </div>
+                      )}
+                      <div className="flex justify-between text-gray-600">
+                        <span>Platform Commission</span>
+                        <span>-{formatCurrency(selectedBooking.commission?.amount || 0)}</span>
+                      </div>
+                      <div className="flex justify-between border-t border-gray-200 pt-2">
+                        <span className="text-lg font-bold text-secondary">Net Amount</span>
+                        <span className="text-lg font-bold text-primary">{formatCurrency(calculateNetAmount(selectedBooking))}</span>
                       </div>
                     </div>
+                  </div>
                   </div>
                 </div>
 
@@ -1501,7 +1521,6 @@ const ProviderBooking = () => {
                       Complete Service
                     </button>
                   )}
-
 
                   <button
                     onClick={() => setShowModal(false)}
