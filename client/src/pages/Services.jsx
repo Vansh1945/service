@@ -111,12 +111,12 @@ const Services = ({ limit }) => {
               </span>
             </div>
             <div className="flex items-center gap-1">
-              <Rating 
-                value={service.averageRating || 4.5} 
-                precision={0.5} 
-                readOnly 
-                size="small" 
-                sx={{ '& .MuiRating-iconFilled': { color: '#F97316' }, fontSize: '14px' }} 
+              <Rating
+                value={service.averageRating || 4.5}
+                precision={0.5}
+                readOnly
+                size="small"
+                sx={{ '& .MuiRating-iconFilled': { color: '#F97316' }, fontSize: '14px' }}
               />
               <span className="text-[10px] text-gray-400">({service.ratingCount || 0})</span>
             </div>
@@ -127,7 +127,7 @@ const Services = ({ limit }) => {
             <div className="flex flex-col">
               <div className="flex items-center text-secondary">
                 <IndianRupee className="w-3.5 h-3.5 font-bold" />
-                <span className="text-base md:text-lg font-black text-secondary tracking-tight">
+                <span className="text-bold md:text-lg font-black text-secondary">
                   {service.basePrice?.toLocaleString()}
                 </span>
               </div>
@@ -138,11 +138,10 @@ const Services = ({ limit }) => {
                 handleBookNow(service._id, isAvailable);
               }}
               disabled={!isAvailable}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all transform active:scale-95 ${
-                isAvailable
-                  ? 'bg-primary text-white hover:bg-primary/90 hover:shadow-md'
-                  : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-              }`}
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all transform active:scale-95 ${isAvailable
+                ? 'bg-primary text-white hover:bg-primary/90 hover:shadow-md'
+                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                }`}
             >
               {isAvailable ? 'Book' : 'Off'}
             </button>
@@ -160,10 +159,10 @@ const Services = ({ limit }) => {
     <section className={`bg-transparent min-h-screen ${limit ? 'py-8' : 'py-20'} px-4 md:px-8`}>
       <div className="max-w-[1500px] mx-auto">
         {!limit && (
-           <div className="mb-10 text-center md:text-left">
-              <h2 className="text-3xl md:text-4xl font-extrabold text-secondary tracking-tight mb-2">Our Electrical Services</h2>
-              <p className="text-gray-500 font-medium">Get professional help for all your electric needs.</p>
-           </div>
+          <div className="mb-10 text-center">
+            <h2 className="text-xl md:text-2xl font-extrabold text-secondary tracking-tight mb-1">Our Electrical Services</h2>
+            <p className="text-gray-400 text-sm font-medium">Get professional help for all your electric needs.</p>
+          </div>
         )}
 
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
@@ -178,7 +177,7 @@ const Services = ({ limit }) => {
             <h3 className="text-xl font-bold text-secondary mb-2">No Services Found</h3>
             <p className="text-gray-500 mb-6">We're working hard to bring more services to you.</p>
             <button onClick={() => window.location.reload()} className="px-6 py-2 bg-gray-50 text-secondary font-bold rounded-xl border border-gray-200 hover:bg-gray-100 transition-all inline-flex items-center gap-2">
-               <RefreshCw className="w-4 h-4" /> Refresh
+              <RefreshCw className="w-4 h-4" /> Refresh
             </button>
           </div>
         )}
@@ -187,4 +186,4 @@ const Services = ({ limit }) => {
   );
 };
 
-export default Services;
+export default Services;
