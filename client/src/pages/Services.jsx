@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Search, Filter, Clock, IndianRupee, ChevronRight,
-  CheckCircle, Loader2, AlertCircle, RefreshCw, MapPin,
-  Sliders, ChevronDown, ChevronUp, Star, X
+  Clock, IndianRupee, Star, ShieldCheck, MapPin, Search, RefreshCw
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
@@ -31,7 +29,6 @@ const Services = ({ limit }) => {
         }
 
         if (data.success && data.data) {
-          // Transform the data to ensure image field is properly handled
           const transformedData = data.data.map(service => ({
             ...service,
             displayImage: service.images && service.images.length > 0 ? service.images[0] : service.image || null
@@ -51,7 +48,6 @@ const Services = ({ limit }) => {
     fetchServices();
   }, [API]);
 
-  // Handle booking navigation
   const handleBookNow = (serviceId, isActive) => {
     if (!isActive) {
       toast.error('This service is currently unavailable');
@@ -67,109 +63,88 @@ const Services = ({ limit }) => {
     navigate(`/customer/services/${serviceId}`);
   };
 
-  // Service Card Component
   const ServiceCard = ({ service }) => {
-    const imageUrl = service.displayImage ||
-      (service.images && service.images.length > 0 ? service.images[0] :
-        service.image);
-
-    const isServiceAvailable = service.isActive !== false;
+    const imageUrl = service.displayImage || (service.images && service.images[0]) || service.image || 'https://via.placeholder.com/400x300?text=Service';
+    const isAvailable = service.isActive !== false;
 
     return (
-      <div className="flex flex-col h-full bg-white/80 backdrop-blur-sm rounded-xl shadow-md border border-gray-200 overflow-hidden">
-        {/* Service Image */}
-        <div className="relative h-48 overflow-hidden flex-shrink-0 bg-gray-50">
+      <div className="group bg-white rounded-xl border border-gray-100 hover:border-primary/20 hover:shadow-lg transition-all duration-300 overflow-hidden flex flex-col h-full ring-1 ring-gray-100">
+        {/* Image Area */}
+        <div className="relative h-36 md:h-44 overflow-hidden bg-gray-50">
           <img
             src={imageUrl}
-            alt={service.title || 'Service'}
-            className="w-full h-full object-cover"
+            alt={service.title}
+            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+            onError={(e) => e.target.src = 'https://via.placeholder.com/400x300?text=Service'}
           />
-
-          {/* Status Badge */}
-          <div className="absolute top-3 left-3">
-            {isServiceAvailable ? (
-              <span className="bg-primary text-white px-2 py-1 rounded-full text-xs font-semibold shadow-sm">
-                Available
-              </span>
-            ) : (
-              <span className="bg-red-500 text-white px-2 py-1 rounded-full text-xs font-semibold shadow-sm">
-                Unavailable
-              </span>
-            )}
+          <div className="absolute top-2 left-2 flex flex-col gap-1.5">
+            <span className="text-[10px] font-bold bg-white/95 backdrop-blur-sm text-primary px-2 py-0.5 rounded-lg shadow-sm">
+              {service.category?.name || 'Service'}
+            </span>
           </div>
-
-          {/* Premium Badge */}
-          {service.basePrice > 1000 && (
-            <div className="absolute top-3 right-3 bg-accent text-secondary px-2 py-1 rounded-full text-xs font-bold shadow-sm">
-              Premium
+          {service.basePrice > 1500 && (
+            <div className="absolute top-2 right-2">
+              <span className="text-[10px] uppercase font-bold bg-accent text-secondary px-2 py-0.5 rounded-lg shadow-sm">
+                Premium
+              </span>
             </div>
           )}
-
-          {/* Category Badge */}
-          <div className="absolute bottom-3 left-3 bg-white/95 backdrop-blur-sm text-secondary px-2 py-1 rounded-full text-xs font-semibold shadow-sm">
-            {service.category?.name || 'Service'}
-          </div>
         </div>
 
-        {/* Service Details */}
-        <div className="flex flex-col flex-grow p-4">
-          <h3 className="font-bold text-secondary mb-2 line-clamp-2 text-lg leading-tight" style={{ fontSize: '18px' }}>
-            {service.title}
-          </h3>
+        {/* Info Area */}
+        <div className="p-3 md:p-4 flex flex-col flex-grow">
+          <div className="flex-grow">
+            <h3 className="font-bold text-secondary text-sm md:text-base mb-1 line-clamp-1 group-hover:text-primary transition-colors duration-300 leading-tight">
+              {service.title}
+            </h3>
+            <p className="text-gray-500 text-xs line-clamp-2 mb-3 leading-relaxed font-normal">
+              {service.description}
+            </p>
+          </div>
 
-          <p className="text-gray-600 text-sm mb-3 line-clamp-2 leading-relaxed flex-grow">
-            {service.description}
-          </p>
-
-          {/* Rating and Duration */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-1 bg-primary/10 px-2 py-1 rounded-lg">
-              <Clock className="w-3 h-3 text-primary" />
-              <span className="text-sm text-primary font-medium">
-                {service.durationFormatted || `${service.duration || 1} hrs`}
+          {/* Metrics */}
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-1 text-gray-500">
+              <Clock className="w-3 h-3" />
+              <span className="text-[11px] font-medium">
+                {service.duration || 1} hr
               </span>
             </div>
             <div className="flex items-center gap-1">
-              <Rating
-                name="read-only"
-                value={service.averageRating || 0}
-                precision={0.5}
-                readOnly
-                size="small"
-                sx={{
-                  '& .MuiRating-iconFilled': {
-                    color: '#F97316',
-                  },
-                  fontSize: '14px'
-                }}
+              <Rating 
+                value={service.averageRating || 4.5} 
+                precision={0.5} 
+                readOnly 
+                size="small" 
+                sx={{ '& .MuiRating-iconFilled': { color: '#F97316' }, fontSize: '14px' }} 
               />
-              <span className="text-sm font-medium text-gray-600">
-                ({service.ratingCount || 0})
-              </span>
+              <span className="text-[10px] text-gray-400">({service.ratingCount || 0})</span>
             </div>
           </div>
 
-          {/* Price and Book Button */}
-          <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-            <div>
-              <span className="text-lg font-bold text-secondary">
-                ₹{service.basePrice?.toLocaleString() || '0'}
-              </span>
-              <p className="text-xs text-gray-500">Starting price</p>
+          {/* Pricing Row */}
+          <div className="flex items-center justify-between pt-3 border-t border-gray-100 mt-auto">
+            <div className="flex flex-col">
+              <div className="flex items-center text-secondary">
+                <IndianRupee className="w-3.5 h-3.5 font-bold" />
+                <span className="text-base md:text-lg font-black text-secondary tracking-tight">
+                  {service.basePrice?.toLocaleString()}
+                </span>
+              </div>
             </div>
             <button
-              onClick={() => handleBookNow(service._id, isServiceAvailable)}
-              disabled={!isServiceAvailable}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-1.5 ${isServiceAvailable
-                ? 'bg-primary text-white hover:bg-primary/90'
-                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                }`}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleBookNow(service._id, isAvailable);
+              }}
+              disabled={!isAvailable}
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all transform active:scale-95 ${
+                isAvailable
+                  ? 'bg-primary text-white hover:bg-primary/90 hover:shadow-md'
+                  : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+              }`}
             >
-              {isServiceAvailable ? (
-                <>
-                  Book Now
-                </>
-              ) : 'Unavailable'}
+              {isAvailable ? 'Book' : 'Off'}
             </button>
           </div>
         </div>
@@ -177,75 +152,39 @@ const Services = ({ limit }) => {
     );
   };
 
-  // Loading Skeleton Component
-  const ServiceCardSkeleton = () => (
-    <div className="flex flex-col h-full bg-white/80 backdrop-blur-sm rounded-xl shadow-md border border-gray-200 overflow-hidden animate-pulse">
-      <div className="aspect-square bg-gray-200"></div>
-    </div>
-  );
+  if (loading) return <LoadingSpinner />;
 
-  if (loading) {
-    return <LoadingSpinner />
-  }
-
-  if (error) {
-    return (
-      <section className="py-20 px-6 sm:px-10 lg:px-16 bg-transparent min-h-screen flex flex-col justify-center">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-20">
-            <h4 className="text-xl font-extrabold text-primary mb-2 font-poppins">
-              Our Electrical Services
-            </h4>
-          </div>
-        </div>
-      </section>
-    );
-  }
-
-  // Determine displayed services and header
   const displayedServices = limit ? services.slice(0, limit) : services;
-  const isLimited = limit && services.length > limit;
 
-  // If limit is provided, render only the grid for embedding
-  if (limit) {
-    if (loading) {
-      return (
-        <div className="flex items-center justify-center py-8">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-        </div>
-      );
-    }
-
-    if (error) {
-      return (
-        <div className="text-center py-8">
-          <p className="text-red-600">Error loading services: {error}</p>
-        </div>
-      );
-    }
-
-    return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-        {displayedServices.map((service) => (
-          <ServiceCard key={service._id} service={service} />
-        ))}
-      </div>
-    );
-  }
-
-  // Full page render
   return (
-    <section className="py-20 px-6 sm:px-10 lg:px-16 bg-transparent min-h-screen">
-      <div className="max-w-7xl mx-auto">
-        {/* Services Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-          {services.map((service) => (
+    <section className={`bg-transparent min-h-screen ${limit ? 'py-8' : 'py-20'} px-4 md:px-8`}>
+      <div className="max-w-[1500px] mx-auto">
+        {!limit && (
+           <div className="mb-10 text-center md:text-left">
+              <h2 className="text-3xl md:text-4xl font-extrabold text-secondary tracking-tight mb-2">Our Electrical Services</h2>
+              <p className="text-gray-500 font-medium">Get professional help for all your electric needs.</p>
+           </div>
+        )}
+
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
+          {displayedServices.map((service) => (
             <ServiceCard key={service._id} service={service} />
           ))}
         </div>
+
+        {services.length === 0 && !loading && (
+          <div className="text-center py-20 bg-white rounded-2xl border border-gray-100">
+            <Search className="w-12 h-12 text-gray-200 mx-auto mb-4" />
+            <h3 className="text-xl font-bold text-secondary mb-2">No Services Found</h3>
+            <p className="text-gray-500 mb-6">We're working hard to bring more services to you.</p>
+            <button onClick={() => window.location.reload()} className="px-6 py-2 bg-gray-50 text-secondary font-bold rounded-xl border border-gray-200 hover:bg-gray-100 transition-all inline-flex items-center gap-2">
+               <RefreshCw className="w-4 h-4" /> Refresh
+            </button>
+          </div>
+        )}
       </div>
     </section>
   );
 };
 
-export default Services;
+export default Services;

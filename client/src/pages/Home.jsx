@@ -11,9 +11,9 @@ const Home = () => {
 
 
       {/* Limited Services Section */}
-          <Services/>
+      <Services />
 
-     
+
     </div>
   );
 };
