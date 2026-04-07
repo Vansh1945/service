@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import {
   Phone,
   Mail,
@@ -9,9 +10,13 @@ import {
   User,
   Shield,
   CheckCircle,
-  AlertCircle,
-  MapPin
+  MapPin,
+  Star,
+  Award,
+  ThumbsUp,
+  ArrowRight
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/auth';
 
 const Contact = () => {
@@ -21,11 +26,11 @@ const Contact = () => {
   const [error, setError] = useState(null);
 
   const contactInfo = {
-    primaryPhone: systemData?.phone || '',
-    emergencyPhone: systemData?.phone || '',
-    ctaPhone: systemData?.phone || '',
-    email: systemData?.email || '',
-    address: systemData?.address || '',
+    primaryPhone: systemData?.phone || '+91 9625333919',
+    emergencyPhone: systemData?.phone || '+91 9625333919',
+    ctaPhone: systemData?.phone || '+91 9625333919',
+    email: systemData?.email || 'info@safevolt.com',
+    address: systemData?.address || 'Himachal Pradesh & Punjab, India',
     businessHours: {
       weekdays: '8:00 AM - 6:00 PM',
       sunday: '9:00 AM - 5:00 PM'
@@ -40,6 +45,13 @@ const Contact = () => {
     message: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const stats = [
+    { icon: Award, value: "15+", label: "Years Experience" },
+    { icon: CheckCircle, value: "5000+", label: "Happy Customers" },
+    { icon: Zap, value: "100%", label: "Safety Guaranteed" },
+    { icon: MapPin, value: "50+", label: "Cities Covered" },
+  ];
 
   useEffect(() => {
     const fetchSystemData = async () => {
@@ -105,285 +117,352 @@ const Contact = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <section className="py-16 sm:py-20 lg:py-24">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12 sm:mb-16">
-            <div className="inline-flex items-center bg-primary/10 px-6 py-3 rounded-full border border-primary/20 mb-6">
-              <MessageSquare className="w-5 h-5 text-primary mr-2" />
-              <span className="text-primary font-medium">Contact Us</span>
-            </div>
+    <div className="min-h-screen bg-white">
+      {/* Hero Section - Matching other pages */}
+      <section className="relative bg-gradient-to-br from-gray-50 to-white pt-20 pb-16 md:pt-28 md:pb-24">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="inline-flex items-center gap-2 bg-primary/10 px-4 py-2 rounded-full mb-6"
+            >
+              <MessageSquare className="w-4 h-4 text-primary" />
+              <span className="text-primary text-sm font-semibold">Contact Us</span>
+            </motion.div>
 
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold font-poppins text-primary mb-6">
+            <motion.h1
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 mb-6 leading-tight"
+            >
               Get in Touch with Our
-              <span className="block text-accent">Electrical Experts</span>
-            </h1>
-            <p className="text-base sm:text-lg text-secondary/80 max-w-3xl mx-auto leading-relaxed">
-              Ready to solve your electrical needs? Our certified professionals across Himachal Pradesh and Punjab
-              are here to provide reliable, safe, and efficient electrical solutions for your home or business.
-            </p>
+              <span className="block text-primary mt-2">Electrical Experts</span>
+            </motion.h1>
+
+            <motion.p
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="text-lg text-gray-600 max-w-2xl mx-auto mb-8"
+            >
+              Ready to solve your electrical needs? Our certified professionals across Himachal Pradesh and Punjab are here to provide reliable, safe, and efficient electrical solutions
+            </motion.p>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="flex flex-col sm:flex-row gap-4 justify-center"
+            >
+              <a
+                href={`tel:${contactInfo.primaryPhone}`}
+                className="inline-flex items-center justify-center gap-2 bg-primary text-white px-6 py-3 rounded-lg font-semibold hover:bg-primary/90 transition-colors"
+              >
+                <Phone className="w-4 h-4" />
+                Call Now
+              </a>
+              <Link
+                to="/services"
+                className="inline-flex items-center justify-center gap-2 border border-gray-300 text-gray-700 px-6 py-3 rounded-lg font-semibold hover:bg-gray-50 transition-colors"
+              >
+                View Services
+              </Link>
+            </motion.div>
           </div>
         </div>
       </section>
 
-      <section className="py-8 sm:py-12 lg:py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 items-start">
-            <div className="relative">
-              <div className="bg-white rounded-2xl shadow-2xl p-8 lg:p-10 border border-gray-100 relative overflow-hidden">
-                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary via-accent to-primary"></div>
-
-                <div className="relative z-10">
-                  <div className="flex items-center mb-4">
-                    <div className="bg-primary/10 p-3 rounded-xl mr-4">
-                      <Send className="w-6 h-6 text-primary" />
-                    </div>
-                    <div>
-                      <h2 className="text-xl lg:text-2xl font-bold text-primary">Send us a Message</h2>
-                      <p className="text-secondary/70">We'll get back to you within 2 hours</p>
-                    </div>
+      {/* Stats Section - Matching other pages */}
+      <section className="py-12 border-y border-gray-100">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+            {stats.map((stat, index) => {
+              const Icon = stat.icon;
+              return (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  viewport={{ once: true }}
+                  className="text-center"
+                >
+                  <div className="inline-flex items-center justify-center w-12 h-12 bg-primary/10 rounded-lg mb-3">
+                    <Icon className="w-6 h-6 text-primary" />
                   </div>
+                  <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
+                  <div className="text-sm text-gray-500">{stat.label}</div>
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
 
-                  <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                      <label htmlFor="name" className="block text-sm font-semibold text-secondary mb-3 items-center">
-                        <User className="w-4 h-4 mr-2 text-primary" />
-                        Full Name *
-                      </label>
-                      <input
-                        type="text"
-                        id="name"
-                        name="name"
-                        value={formData.name}
-                        onChange={handleChange}
-                        required
-                        className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary text-secondary placeholder-gray-400"
-                        placeholder="Enter your full name"
-                      />
-                    </div>
-
-                    <div>
-                      <label htmlFor="email" className="block text-sm font-semibold text-secondary mb-3 items-center">
-                        <Mail className="w-4 h-4 mr-2 text-primary" />
-                        Email Address *
-                      </label>
-                      <input
-                        type="email"
-                        id="email"
-                        name="email"
-                        value={formData.email}
-                        onChange={handleChange}
-                        required
-                        className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary text-secondary placeholder-gray-400"
-                        placeholder="Enter your email address"
-                      />
-                    </div>
-
-                    <div>
-                      <label htmlFor="phone" className="block text-sm font-semibold text-secondary mb-3 items-center">
-                        <Phone className="w-4 h-4 mr-2 text-primary" />
-                        Phone Number *
-                      </label>
-                      <input
-                        type="tel"
-                        id="phone"
-                        name="phone"
-                        value={formData.phone}
-                        onChange={handleChange}
-                        className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary text-secondary placeholder-gray-400"
-                        placeholder="Enter your phone number"
-                      />
-                    </div>
-
-                    <div>
-                      <label htmlFor="subject" className="block text-sm font-semibold text-secondary mb-3 items-center">
-                        <MessageSquare className="w-4 h-4 mr-2 text-primary" />
-                        Subject *
-                      </label>
-                      <input
-                        type="text"
-                        id="subject"
-                        name="subject"
-                        value={formData.subject}
-                        onChange={handleChange}
-                        required
-                        className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary text-secondary placeholder-gray-400"
-                        placeholder="Enter subject of your message"
-                      />
-                    </div>
-
-                    <div>
-                      <label htmlFor="message" className="block text-sm font-semibold text-secondary mb-3 items-center">
-                        <MessageSquare className="w-4 h-4 mr-2 text-primary" />
-                        Message *
-                      </label>
-                      <textarea
-                        id="message"
-                        name="message"
-                        value={formData.message}
-                        onChange={handleChange}
-                        required
-                        rows="5"
-                        className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary text-secondary placeholder-gray-400 resize-vertical"
-                        placeholder="Tell us about your electrical service needs..."
-                      ></textarea>
-                    </div>
-
-                    <button
-                      type="submit"
-                      disabled={isSubmitting}
-                      className="w-full bg-gradient-to-r from-accent to-accent/90 text-white font-bold py-4 px-8 rounded-xl shadow-lg flex items-center justify-center group disabled:opacity-50 hover:shadow-xl transition-all duration-300"
-                    >
-                      {isSubmitting ? (
-                        <>
-                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
-                          Sending...
-                        </>
-                      ) : (
-                        <>
-                          <Send className="w-5 h-5 mr-3" />
-                          Send Message
-                          <Zap className="w-5 h-5 ml-3" />
-                        </>
-                      )}
-                    </button>
-                  </form>
-
-                  <div className="mt-4 flex items-center justify-center space-x-6 text-sm text-secondary/70">
-                    <div className="flex items-center">
-                      <CheckCircle className="w-4 h-4 text-primary mr-2" />
-                      <span>Quick Response</span>
-                    </div>
-                    <div className="flex items-center">
-                      <Shield className="w-4 h-4 text-primary mr-2" />
-                      <span>Secure & Private</span>
-                    </div>
-                  </div>
-                </div>
+      {/* Contact Form and Info Section */}
+      <section className="py-16 md:py-20">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid md:grid-cols-2 gap-12">
+            {/* Contact Form */}
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 md:p-8"
+            >
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">Send us a Message</h2>
+                <p className="text-gray-500">We'll get back to you within 2 hours</p>
               </div>
-            </div>
 
-            <div className="space-y-4">
-              <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100 relative overflow-hidden">
-                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary to-accent"></div>
-
-                <div className="flex items-center mb-4">
-                  <div className="bg-primary/10 p-3 rounded-xl mr-4">
-                    <Phone className="w-4 h-4 text-primary" />
-                  </div>
-                  <h2 className="text-xl lg:text-2xl font-bold text-primary">Contact Information</h2>
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <div>
+                  <label htmlFor="name" className="block text-sm font-semibold text-gray-700 mb-2">
+                    Full Name *
+                  </label>
+                  <input
+                    type="text"
+                    id="name"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleChange}
+                    required
+                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary text-gray-900 placeholder-gray-400"
+                    placeholder="Enter your full name"
+                  />
                 </div>
 
-                <div className="space-y-4">
-                  <div className="flex items-start space-x-4 p-4 rounded-xl bg-primary/5 cursor-pointer hover:bg-primary/10 transition-colors duration-300">
-                    <div className="flex-shrink-0 w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
-                      <Phone className="w-4 h-4 text-white" />
+                <div>
+                  <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">
+                    Email Address *
+                  </label>
+                  <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    required
+                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary text-gray-900 placeholder-gray-400"
+                    placeholder="Enter your email address"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="phone" className="block text-sm font-semibold text-gray-700 mb-2">
+                    Phone Number
+                  </label>
+                  <input
+                    type="tel"
+                    id="phone"
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary text-gray-900 placeholder-gray-400"
+                    placeholder="Enter your phone number"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="subject" className="block text-sm font-semibold text-gray-700 mb-2">
+                    Subject *
+                  </label>
+                  <input
+                    type="text"
+                    id="subject"
+                    name="subject"
+                    value={formData.subject}
+                    onChange={handleChange}
+                    required
+                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary text-gray-900 placeholder-gray-400"
+                    placeholder="Enter subject of your message"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="message" className="block text-sm font-semibold text-gray-700 mb-2">
+                    Message *
+                  </label>
+                  <textarea
+                    id="message"
+                    name="message"
+                    value={formData.message}
+                    onChange={handleChange}
+                    required
+                    rows="5"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary text-gray-900 placeholder-gray-400 resize-vertical"
+                    placeholder="Tell us about your electrical service needs..."
+                  ></textarea>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full bg-primary text-white font-semibold py-3 px-6 rounded-lg flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors disabled:opacity-50"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      Send Message
+                    </>
+                  )}
+                </button>
+
+                <div className="flex items-center justify-center gap-6 text-sm text-gray-500">
+                  <div className="flex items-center gap-1">
+                    <CheckCircle className="w-4 h-4 text-green-500" />
+                    <span>Quick Response</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Shield className="w-4 h-4 text-primary" />
+                    <span>Secure & Private</span>
+                  </div>
+                </div>
+              </form>
+            </motion.div>
+
+            {/* Contact Information */}
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              className="space-y-6"
+            >
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 md:p-8">
+                <h2 className="text-2xl font-bold text-gray-900 mb-6">Contact Information</h2>
+
+                <div className="space-y-5">
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <Phone className="w-5 h-5 text-primary" />
                     </div>
                     <div>
-                      <h3 className="text-lg font-semibold text-secondary mb-1">Phone Numbers</h3>
+                      <h3 className="font-semibold text-gray-900 mb-1">Phone Numbers</h3>
                       <p className="text-primary font-medium">{contactInfo.primaryPhone}</p>
-                      <p className="text-accent text-sm font-medium mt-1">24/7 Emergency Available</p>
+                      <p className="text-sm text-gray-500 mt-1">24/7 Emergency Available</p>
                     </div>
                   </div>
 
-                  <div className="flex items-start space-x-4 p-4 rounded-xl bg-accent/5 cursor-pointer hover:bg-accent/10 transition-colors duration-300">
-                    <div className="flex-shrink-0 w-10 h-10 bg-accent rounded-xl flex items-center justify-center">
-                      <Mail className="w-4 h-4 text-white" />
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <Mail className="w-5 h-5 text-primary" />
                     </div>
                     <div>
-                      <h3 className="text-lg font-semibold text-secondary mb-1">Email Addresses</h3>
-                      <p className="text-secondary">{contactInfo.email}</p>
-                      <p className="text-accent text-sm font-medium mt-1">Response within 2 hours</p>
+                      <h3 className="font-semibold text-gray-900 mb-1">Email Address</h3>
+                      <p className="text-gray-600">{contactInfo.email}</p>
+                      <p className="text-sm text-gray-500 mt-1">Response within 2 hours</p>
                     </div>
                   </div>
 
-                  <div className="flex items-start space-x-4 p-4 rounded-xl bg-primary/5 cursor-pointer hover:bg-primary/10 transition-colors duration-300">
-                    <div className="flex-shrink-0 w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
-                      <MapPin className="w-4 h-4 text-white" />
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <MapPin className="w-5 h-5 text-primary" />
                     </div>
                     <div>
-                      <h3 className="text-lg font-semibold text-secondary mb-1">Our Address</h3>
-                      <p className="text-secondary">{contactInfo.address}</p>
-                      <p className="text-accent text-sm font-medium mt-1">Visit us anytime</p>
+                      <h3 className="font-semibold text-gray-900 mb-1">Service Area</h3>
+                      <p className="text-gray-600">{contactInfo.address}</p>
+                      <p className="text-sm text-gray-500 mt-1">Himachal Pradesh & Punjab</p>
                     </div>
                   </div>
 
-                  <div className="p-4 rounded-xl bg-primary/5 cursor-pointer hover:bg-primary/10 transition-colors duration-300">
-                    <div className="flex items-center mb-2">
-                      <Clock className="w-5 h-5 text-primary mr-2" />
-                      <h3 className="text-lg font-semibold text-secondary">Business Hours</h3>
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <Clock className="w-5 h-5 text-primary" />
                     </div>
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-center py-2 border-b border-gray-200">
-                        <span className="text-secondary font-medium">Monday - Saturday</span>
-                        <span className="text-primary font-medium">{contactInfo.businessHours.weekdays}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-secondary font-medium">Sunday</span>
-                        <span className="text-accent font-medium">{contactInfo.businessHours.sunday}</span>
+                    <div>
+                      <h3 className="font-semibold text-gray-900 mb-1">Business Hours</h3>
+                      <div className="space-y-1">
+                        <div className="flex justify-between gap-8">
+                          <span className="text-gray-600">Monday - Saturday</span>
+                          <span className="font-medium text-gray-900">{contactInfo.businessHours.weekdays}</span>
+                        </div>
+                        <div className="flex justify-between gap-8">
+                          <span className="text-gray-600">Sunday</span>
+                          <span className="font-medium text-primary">{contactInfo.businessHours.sunday}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-gradient-to-r from-accent to-accent/90 rounded-2xl shadow-xl p-6 text-white relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
-                <div className="relative z-10">
-                  <div className="flex items-center mb-4">
-                    <AlertCircle className="w-6 h-6 mr-3" />
-                    <h3 className="text-lg lg:text-2xl font-bold">Emergency Services</h3>
+              {/* Emergency Card */}
+              <div className="bg-gradient-to-r from-primary to-teal-600 rounded-xl p-6 md:p-8 text-white">
+                <div className="flex items-center gap-3 mb-4">
+                  <Zap className="w-6 h-6" />
+                  <h3 className="text-xl font-bold">Emergency Services</h3>
+                </div>
+                <p className="text-white/90 mb-4 leading-relaxed">
+                  Electrical emergencies don't wait for business hours. Our certified electricians are available 24/7 for urgent electrical issues.
+                </p>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-white/80 text-sm">Emergency Hotline</p>
+                    <p className="text-xl font-bold">{contactInfo.emergencyPhone}</p>
                   </div>
-                  <p className="text-white/90 mb-4 text-base sm:text-lg leading-relaxed">
-                    Electrical emergencies don't wait for business hours. Our certified electricians are available
-                    24/7 for urgent electrical issues across Himachal Pradesh and Punjab.
-                  </p>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-white/80 text-sm">Emergency Hotline</p>
-                      <p className="text-lg font-bold">{contactInfo.emergencyPhone}</p>
-                    </div>
-                    <div className="bg-white/20 p-2 rounded-xl">
-                      <Zap className="w-6 h-6" />
-                    </div>
+                  <div className="bg-white/20 p-3 rounded-lg">
+                    <Phone className="w-5 h-5" />
                   </div>
                 </div>
+              </div>
+            </motion.div>
+          </div>
+        </div>
+      </section>
+
+      {/* Testimonial Section - Matching other pages */}
+      <section className="py-16 bg-gray-50">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-white rounded-2xl p-8 md:p-12">
+            <div className="max-w-3xl mx-auto text-center">
+              <div className="flex justify-center mb-4">
+                {[...Array(5)].map((_, i) => (
+                  <Star key={i} className="w-5 h-5 fill-yellow-400 text-yellow-400" />
+                ))}
+              </div>
+              <p className="text-xl md:text-2xl text-gray-700 italic mb-6">
+                "Excellent service! The team was professional, punctual, and did high-quality work. Highly recommended for any electrical needs."
+              </p>
+              <div>
+                <p className="font-semibold text-gray-900">Rajesh Kumar</p>
+                <p className="text-sm text-gray-500">Shimla, Himachal Pradesh</p>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="py-12 sm:py-16 lg:py-20 bg-gradient-to-r from-primary to-primary/90">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
-          <div>
-            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-4">
+      {/* CTA Section - Matching other pages */}
+      <section className="py-16">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-gradient-to-r from-primary to-teal-600 rounded-2xl p-8 md:p-12 text-center">
+            <h2 className="text-2xl md:text-3xl font-bold text-white mb-4">
               Ready to Get Started?
             </h2>
-            <p className="text-base sm:text-lg text-white/90 max-w-3xl mx-auto mb-6 leading-relaxed">
-              Don't let electrical issues disrupt your daily life. Contact our expert team today for reliable,
-              professional electrical services across Himachal Pradesh and Punjab.
+            <p className="text-white/90 mb-6 max-w-2xl mx-auto">
+              Don't let electrical issues disrupt your daily life. Contact our expert team today for reliable, professional electrical services.
             </p>
-
-            <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
-              <button
-                className="bg-accent text-white font-bold py-4 px-8 rounded-xl shadow-2xl inline-flex items-center group hover:scale-105 transition-transform duration-300"
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <a
+                href={`tel:${contactInfo.ctaPhone}`}
+                className="inline-flex items-center justify-center gap-2 bg-white text-primary px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
               >
-                <Phone className="w-5 h-5 mr-3" />
+                <Phone className="w-4 h-4" />
                 Call Now: {contactInfo.ctaPhone}
-              </button>
-
-              <button
-                className="bg-white/10 backdrop-blur-md text-white font-bold py-4 px-8 border-2 border-white/30 rounded-xl inline-flex items-center hover:bg-white/20 transition-colors duration-300"
+              </a>
+              <Link
+                to="/services"
+                className="inline-flex items-center justify-center gap-2 bg-white/20 text-white px-6 py-3 rounded-lg font-semibold hover:bg-white/30 transition-colors border border-white/30"
               >
-                <Mail className="w-5 h-5 mr-3" />
-                Get Free Quote
-              </button>
-            </div>
-
-            <div className="mt-4 inline-flex items-center bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/20">
-              <Shield className="w-5 h-5 text-white mr-3" />
-              <span className="text-white font-medium">Licensed & Insured Professionals</span>
+                View Our Services <ArrowRight className="w-4 h-4" />
+              </Link>
             </div>
           </div>
         </div>
