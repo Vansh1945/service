@@ -153,7 +153,7 @@ const Contact = () => {
             >
               <a
                 href={`tel:${contactInfo.primaryPhone}`}
-                className="inline-flex items-center justify-center gap-2 bg-primary text-white px-6 py-3 rounded-lg font-semibold hover:bg-primary/90 transition-colors"
+                className="inline-flex items-center justify-center gap-2 bg-accent text-white px-6 py-3 rounded-lg font-semibold hover:bg-accent/90 transition-colors shadow-lg shadow-accent/20"
               >
                 <Phone className="w-4 h-4" />
                 Call Now
@@ -270,7 +270,7 @@ const Contact = () => {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full bg-primary text-white font-semibold py-3 px-6 rounded-lg flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors disabled:opacity-50"
+                  className="w-full bg-accent text-white font-semibold py-3 px-6 rounded-lg flex items-center justify-center gap-2 hover:bg-accent/90 transition-colors disabled:opacity-50 shadow-lg shadow-accent/20"
                 >
                   {isSubmitting ? (
                     <>

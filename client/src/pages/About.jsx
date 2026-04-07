@@ -86,7 +86,7 @@ const AboutPage = () => {
             >
               <Link
                 to="/contact"
-                className="inline-flex items-center justify-center gap-2 bg-primary text-white px-6 py-3 rounded-lg font-semibold hover:bg-primary/90 transition-colors"
+                className="inline-flex items-center justify-center gap-2 bg-accent text-white px-6 py-3 rounded-lg font-semibold hover:bg-accent/90 transition-colors shadow-lg shadow-accent/20"
               >
                 Get Free Quote <ArrowRight className="w-4 h-4" />
               </Link>
@@ -288,7 +288,7 @@ const AboutPage = () => {
             </p>
             <Link
               to="/contact"
-              className="inline-flex items-center gap-2 bg-white text-primary px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
+              className="inline-flex items-center gap-2 bg-accent text-white px-6 py-3 rounded-lg font-semibold hover:bg-accent/90 transition-colors shadow-lg shadow-accent/20"
             >
               <Phone className="w-4 h-4" />
               Contact Us Today

@@ -126,7 +126,7 @@ const ServicesPage = () => {
                         >
                             <Link
                                 to="/contact"
-                                className="inline-flex items-center justify-center gap-2 bg-primary text-white px-6 py-3 rounded-lg font-semibold hover:bg-primary/90 transition-colors"
+                                className="inline-flex items-center justify-center gap-2 bg-accent text-white px-6 py-3 rounded-lg font-semibold hover:bg-accent/90 transition-colors shadow-lg shadow-accent/20"
                             >
                                 Get Free Quote <ArrowRight className="w-4 h-4" />
                             </Link>
@@ -178,7 +178,7 @@ const ServicesPage = () => {
                                 <div className="p-6">
                                     <div className="flex justify-between items-start mb-3">
                                         <h3 className="text-xl font-bold text-gray-900">{service.title}</h3>
-                                        <span className="text-primary font-bold">{service.price}</span>
+                                        <span className="text-accent font-bold">{service.price}</span>
                                     </div>
                                     <p className="text-gray-500 text-sm mb-4 leading-relaxed">{service.description}</p>
 
@@ -193,7 +193,7 @@ const ServicesPage = () => {
 
                                     <button
                                         onClick={() => handleBookNow(service)}
-                                        className="w-full bg-primary text-white px-4 py-2.5 rounded-lg font-semibold hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
+                                        className="w-full bg-accent text-white px-4 py-2.5 rounded-lg font-semibold hover:bg-accent/90 transition-colors flex items-center justify-center gap-2 shadow-md shadow-accent/10"
                                     >
                                         Book Now <ArrowRight className="w-4 h-4" />
                                     </button>

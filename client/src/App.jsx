@@ -16,8 +16,8 @@ const CareersPage = lazy(() => import("./pages/Careers"));
 const ContactPage = lazy(() => import("./pages/Contact"));
 const LoginPage = lazy(() => import("./pages/Login"));
 const ForgotPassword = lazy(() => import("./pages/ForgetPassword"));
-const CustomerRegistration = lazy(() => import("./pages/Customer-Register"));
-const ProviderRegistration = lazy(() => import("./pages/Provider-Register"));
+const CustomerRegistration = lazy(() => import("./pages/Customer/Customer-Register"));
+const ProviderRegistration = lazy(() => import("./pages/Provider/Provider-Register"));
 const Unauthorized = lazy(() => import("./pages/Unauthorized"));
 import LoadingSpinner from "./components/Loader";
 

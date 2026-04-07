@@ -113,7 +113,7 @@ const CareersPage = () => {
             >
               <Link
                 to="/register-provider"
-                className="inline-flex items-center justify-center gap-2 bg-primary text-white px-6 py-3 rounded-lg font-semibold hover:bg-primary/90 transition-colors"
+                className="inline-flex items-center justify-center gap-2 bg-accent text-white px-6 py-3 rounded-lg font-semibold hover:bg-accent/90 transition-colors shadow-lg shadow-accent/20"
               >
                 Apply Now <ArrowRight className="w-4 h-4" />
               </Link>
@@ -268,7 +268,7 @@ const CareersPage = () => {
               <div className="mt-12">
                 <Link
                   to="/register-provider"
-                  className="inline-flex items-center justify-center gap-2 bg-primary text-white px-8 py-4 rounded-xl text-lg font-bold hover:bg-primary/90 transition-all transform hover:scale-105"
+                  className="inline-flex items-center justify-center gap-2 bg-accent text-white px-8 py-4 rounded-xl text-lg font-bold hover:bg-accent/90 transition-all transform hover:scale-105 shadow-lg shadow-accent/20"
                 >
                   Join Now <ArrowRight className="w-5 h-5" />
                 </Link>
@@ -307,7 +307,7 @@ const CareersPage = () => {
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link
                 to="/register-provider"
-                className="inline-flex items-center justify-center gap-2 bg-white text-primary px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
+                className="inline-flex items-center justify-center gap-2 bg-accent text-white px-6 py-3 rounded-lg font-semibold hover:bg-accent/90 transition-colors shadow-md shadow-accent/20"
               >
                 Apply Now <ArrowRight className="w-4 h-4" />
               </Link>
