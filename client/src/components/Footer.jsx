@@ -1,235 +1,158 @@
 import React, { useState, useEffect } from 'react';
-import { FaFacebook, FaTwitter, FaInstagram, FaLinkedin, FaYoutube, FaMapMarkerAlt, FaPhone, FaEnvelope } from 'react-icons/fa';
-import { useAuth } from '../context/auth';
-import LoadingSpinner from './Loader';
+import { Link } from 'react-router-dom';
+import {
+  Facebook,
+  Twitter,
+  Instagram,
+  Linkedin,
+  MapPin,
+  Phone,
+  Mail,
+  ChevronRight,
+  Smartphone,
+  ShieldCheck,
+  Zap,
+  Heart,
+  Send,
+  Apple
+} from 'lucide-react';
+import { getSystemSetting } from '../services/SystemService';
 
 const Footer = () => {
-  const { API } = useAuth();
   const [systemData, setSystemData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchSystemData = async () => {
       try {
-        const response = await fetch(`${API}/system-setting/system-data`);
-        const data = await response.json();
-        if (data.success) {
-          setSystemData(data.data);
-        } else {
-          setError('Failed to load system data');
+        const response = await getSystemSetting();
+        if (response.data.success) {
+          setSystemData(response.data.data);
         }
       } catch (err) {
-        setError('Failed to load system data');
         console.error('Footer fetch error:', err);
       } finally {
         setLoading(false);
       }
     };
-
     fetchSystemData();
-  }, [API]);
-
-  // Helper function to get dynamic social links
-  const getSocialLinks = () => {
-    const links = [];
-    if (systemData?.socialLinks?.facebook) {
-      links.push({ Icon: FaFacebook, href: systemData.socialLinks.facebook, label: "Facebook" });
-    }
-    if (systemData?.socialLinks?.twitter) {
-      links.push({ Icon: FaTwitter, href: systemData.socialLinks.twitter, label: "Twitter" });
-    }
-    if (systemData?.socialLinks?.instagram) {
-      links.push({ Icon: FaInstagram, href: systemData.socialLinks.instagram, label: "Instagram" });
-    }
-    if (systemData?.socialLinks?.linkedin) {
-      links.push({ Icon: FaLinkedin, href: systemData.socialLinks.linkedin, label: "LinkedIn" });
-    }
-    if (systemData?.socialLinks?.youtube) {
-      links.push({ Icon: FaYoutube, href: systemData.socialLinks.youtube, label: "YouTube" });
-    }
-    return links;
-  };
-
-  // Dynamic data
-  const footerData = {
-    company: {
-      name: systemData?.companyName || "SafeVolt Solutions",
-      description: systemData?.tagline || "Providing reliable electrical solutions with certified expertise and cutting-edge technology for homes and businesses.",
-      logo: systemData?.logo,
-      socialLinks: getSocialLinks()
-    },
-    quickLinks: [
-      { name: 'Home', href: '/' },
-      { name: 'Services', href: '/services' },
-      { name: 'About Us', href: '/about' },
-      { name: 'Careers', href: '/careers' }
-    ],
-    services: [
-      { name: 'Electrical Wiring', href: '/customer/services' },
-      { name: 'Lighting Solutions', href: '/customer/services' },
-      { name: 'Safety Inspections', href: '/customer/services' },
-      { name: 'Emergency Repairs', href: '/customer/services' }
-    ],
-    contact: {
-      address: systemData?.address || "Urban Phase 1, Jalandhar, Punjab, India 144005",
-      phone: systemData?.phone || "+91 9625333919",
-      email: systemData?.email || "rajelectricalservice25@gmail.com"
-    },
-    legalLinks: [
-      { name: 'Privacy Policy', href: '/privacy' },
-      { name: 'Terms of Service', href: '/terms' },
-      { name: 'Sitemap', href: '/sitemap' }
-    ]
-  };
+  }, []);
 
   const currentYear = new Date().getFullYear();
 
-  if (loading) {
-    return (
-      <footer className="bg-secondary text-white pt-8 pb-4 sm:pt-10 sm:pb-6">
-        <LoadingSpinner />
-        <p className="text-gray-300 mt-4">Loading footer...</p>
-      </footer>
-    );
-  }
+  if (loading) return null;
 
   return (
-    <footer className="bg-secondary/95 text-white pt-8 pb-4 sm:pt-10 sm:pb-6">
-      <div className="max-w-8xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-12">
-          {/* Brand Column */}
-          <div className="space-y-4 sm:space-y-6 lg:col-span-1">
-            <div className="flex items-center">
-              {footerData.company.logo ? (
-                <>
-                  <img
-                    src={footerData.company.logo}
-                    alt="Company Logo"
-                    className="h-10 w-10 sm:h-12 sm:w-12 object-contain mr-3"
-                  />
-                  <span className="font-bold text-xl sm:text-2xl bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter">
-                    {footerData.company.name}
-                  </span>
-                </>
+    <footer className="bg-gray-900 text-gray-300 pt-8 pb-6 border-t border-gray-800">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Main Footer Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-10">
+
+          {/* Company Info */}
+          <div className="space-y-6">
+            <Link to="/" className="flex items-center gap-2 group">
+              {systemData?.logo ? (
+                <img src={systemData.logo} alt="Logo" className="w-10 h-10 object-contain" />
               ) : (
-                <div className="flex items-center">
-                  <div className="flex items-center justify-center h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-gradient-to-r from-primary to-accent shadow-lg mr-3">
-                    <span className="text-white font-bold text-lg sm:text-xl">S</span>
-                  </div>
-                  <span className="font-bold text-xl sm:text-2xl bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter">
-                    {footerData.company.name}
-                  </span>
+                <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                  <Zap className="w-6 h-6 text-white text-primary" />
                 </div>
               )}
-            </div>
-            <p className="text-gray-300 leading-relaxed text-sm sm:text-base">
-              {footerData.company.description}
+              <span className="text-2xl font-bold text-white tracking-tight">
+                {systemData?.companyName || "SafeVolt"}
+              </span>
+            </Link>
+            <p className="text-sm leading-relaxed text-gray-400">
+              {systemData?.tagline || "Professional electrical services at your doorstep. Reliable, certified, and affordable."}
             </p>
-            <div className="flex space-x-3 sm:space-x-4">
-              {footerData.company.socialLinks.map(({ Icon, href, label }, index) => (
-                <a
-                  key={index}
-                  href={href}
-                  aria-label={label}
-                  className="w-9 h-9 sm:w-10 sm:h-10 bg-primary hover:bg-accent rounded-full flex items-center justify-center transition-all duration-300 transform hover:scale-110 hover:shadow-lg"
-                >
-                  <Icon className="text-white text-base sm:text-lg" />
+            <div className="flex gap-4">
+              {[Facebook, Instagram, Linkedin, Twitter].map((Icon, i) => (
+                <a key={i} href="#" className="p-2 bg-gray-800 rounded-full hover:bg-primary hover:text-white transition-all duration-300">
+                  <Icon className="w-5 h-5" />
                 </a>
               ))}
             </div>
           </div>
 
-          {/* Combined Links Wrapper for Mobile Column View */}
-          <div className="grid grid-cols-2 gap-8 sm:contents">
-            {/* Quick Links */}
-            <div className="space-y-4 sm:space-y-6">
-              <h3 className="text-lg sm:text-xl font-bold text-accent mb-3 sm:mb-4">Quick Links</h3>
-              <ul className="space-y-2 sm:space-y-3">
-                {footerData.quickLinks.map((item, index) => (
-                  <li key={index}>
-                    <a
-                      href={item.href}
-                      className="text-gray-300 hover:text-accent transition-colors duration-300 flex items-center group text-sm sm:text-base"
-                    >
-                      <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-accent rounded-full mr-2 sm:mr-3 opacity-70 group-hover:opacity-100 transition-opacity duration-300"></span>
-                      {item.name}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Services */}
-            <div className="space-y-4 sm:space-y-6">
-              <h3 className="text-lg sm:text-xl font-bold text-accent mb-3 sm:mb-4">Our Services</h3>
-              <ul className="space-y-2 sm:space-y-3">
-                {footerData.services.map((item, index) => (
-                  <li key={index}>
-                    <a
-                      href={item.href}
-                      className="text-gray-300 hover:text-accent transition-colors duration-300 flex items-center group text-sm sm:text-base"
-                    >
-                      <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-accent rounded-full mr-2 sm:mr-3 opacity-70 group-hover:opacity-100 transition-opacity duration-300"></span>
-                      {item.name}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
+          {/* Quick Links */}
+          <div className="lg:pl-8">
+            <h3 className="text-white font-bold uppercase tracking-wider text-sm mb-6">Quick Links</h3>
+            <ul className="space-y-4">
+              {[
+                { name: 'Home', path: '/' },
+                { name: 'Services', path: '/services' },
+                { name: 'About Us', path: '/about' },
+                { name: 'Contact', path: '/contact' },
+                { name: 'Become a Provider', path: '/register-provider' }
+              ].map((link) => (
+                <li key={link.name}>
+                  <Link to={link.path} className="text-sm hover:text-accent transition-colors flex items-center group">
+                    <ChevronRight className="w-4 h-4 opacity-0 -ml-4 group-hover:opacity-100 group-hover:ml-0 transition-all duration-300 text-accent mr-1" />
+                    {link.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </div>
 
-          {/* Contact Info */}
-          <div className="space-y-4 sm:space-y-6">
-            <h3 className="text-lg sm:text-xl font-bold text-accent mb-3 sm:mb-4">Contact Us</h3>
-            <ul className="space-y-3 sm:space-y-4 text-gray-300">
-              <li className="flex items-start group">
-                <FaMapMarkerAlt className="text-accent mt-1 mr-2 sm:mr-3 flex-shrink-0 group-hover:scale-110 transition-transform duration-300" />
-                <span className="text-sm sm:text-base leading-relaxed">{footerData.contact.address}</span>
+
+
+          <div>
+            <h3 className="text-white font-bold uppercase tracking-wider text-sm mb-6">Contact Info</h3>
+            <ul className="space-y-4">
+              <li className="flex items-start gap-3 text-sm">
+                <MapPin className="w-5 h-5 text-accent shrink-0" />
+                <span className="text-gray-400 leading-relaxed">{systemData?.address || "Jalandhar, Punjab"}</span>
               </li>
-              <li className="flex items-center group">
-                <FaPhone className="text-accent mr-2 sm:mr-3 group-hover:scale-110 transition-transform duration-300" />
-                <a href={`tel:${footerData.contact.phone}`} className="text-sm sm:text-base hover:text-accent transition-colors duration-300">
-                  {footerData.contact.phone}
-                </a>
+              <li className="flex items-center gap-3 text-sm">
+                <Phone className="w-5 h-5 text-accent shrink-0" />
+                <a href={`tel:${systemData?.phone}`} className="hover:text-accent transition-colors">{systemData?.phone || "+91 9625333919"}</a>
               </li>
-              <li className="flex items-center group">
-                <FaEnvelope className="text-accent mr-2 sm:mr-3 group-hover:scale-110 transition-transform duration-300" />
-                <a href={`mailto:${footerData.contact.email}`} className="text-sm sm:text-base hover:text-accent transition-colors duration-300 break-all">
-                  {footerData.contact.email}
-                </a>
+              <li className="flex items-center gap-3 text-sm">
+                <Mail className="w-5 h-5 text-accent shrink-0" />
+                <a href={`mailto:${systemData?.email}`} className="hover:text-accent transition-colors break-all">{systemData?.email || "info@safevolt.com"}</a>
               </li>
             </ul>
           </div>
+          {/* Support & Legal */}
+          <div>
+            <h3 className="text-white font-bold uppercase tracking-wider text-sm mb-4">Newsletter</h3>
+            <form className="relative group">
+              <input
+                type="email"
+                placeholder="Your email"
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-primary transition-colors text-white"
+              />
+              <button className="absolute right-2 top-2 p-1 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors">
+                <Send className="w-4 h-4" />
+              </button>
+            </form>
+
+            <div className="mt-8 pt-6 border-t border-gray-800">
+              <h3 className="text-white font-bold uppercase tracking-wider text-[10px] mb-3">Experience our App</h3>
+              <a href="#" className="flex items-center justify-center gap-3 bg-white text-gray-900 py-2.5 px-4 rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg hover:shadow-accent/10 group">
+                <Smartphone className="w-5 h-5 text-gray-400 group-hover:text-accent transition-colors" />
+                <div className="leading-none text-left">
+                  <p className="text-[9px] uppercase font-bold text-gray-500">Install our</p>
+                  <p className="text-sm font-extrabold tracking-tight">PWA WEB APP</p>
+                </div>
+              </a>
+            </div>
+          </div>
+
         </div>
 
-        {/* Divider */}
-        <hr className="border-background/30 my-3 sm:my-4" />
-
-        {/* Copyright & Bottom Info */}
-        <div className="flex flex-col lg:flex-row justify-between items-center text-gray-400 text-xs sm:text-sm space-y-6 lg:space-y-0">
-          {/* Copyright Information */}
-          <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-center sm:text-left">
-            <p>
-              © {currentYear} <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter font-semibold">{footerData.company.name}</span>. All rights reserved.
-            </p>
+        {/* Bottom Bar */}
+        <div className="pt-6 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-gray-500">
+          <p>© {currentYear} {systemData?.companyName || "SafeVolt"}. All rights reserved.</p>
+          <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 font-medium">
+            <Link to="/terms" className="hover:text-accent transition-colors uppercase tracking-wider">Terms & Conditions</Link>
+            <Link to="/privacy" className="hover:text-accent transition-colors uppercase tracking-wider">Privacy Policy</Link>
+            <Link to="/refund" className="hover:text-accent transition-colors uppercase tracking-wider">Refund Policy</Link>
           </div>
-
-          {/* Legal Links */}
-          <div className="flex flex-wrap justify-center lg:justify-end gap-x-4 gap-y-1">
-            {footerData.legalLinks.map((link, index) => (
-              <a
-                key={index}
-                href={link.href}
-                className="hover:text-accent transition-colors duration-300 whitespace-nowrap"
-              >
-                {link.name}
-              </a>
-            ))}
-            <p className="flex items-center gap-1">
-              Developed by <a href="https://vanshkholi0.vercel.app/" target="_blank" rel="noopener noreferrer" className="hover:text-accent transition-colors"><span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter font-semibold">Vansh</span></a>
-            </p>
-          </div>
+          <p>
+            Developed by <a href="https://vanshkholi0.vercel.app/" target="_blank" rel="noopener noreferrer" className="text-accent font-bold hover:underline">Vansh</a>
+          </p>
         </div>
       </div>
     </footer>

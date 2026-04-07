@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/auth';
+import { getSystemSetting } from '../services/SystemService';
 
 const Contact = () => {
   const { API, showToast } = useAuth();
@@ -51,8 +52,8 @@ const Contact = () => {
   useEffect(() => {
     const fetchSystemData = async () => {
       try {
-        const response = await fetch(`${API}/system-setting/system-data`);
-        const data = await response.json();
+        const response = await getSystemSetting();
+        const data = response.data;
         if (data.success) {
           setSystemData(data.data);
         } else {
