@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/auth';
-import { register } from '../services/AuthService';
+import { useAuth } from '../../context/auth';
+import { register } from '../../services/AuthService';
 import {
   User,
   Mail,
@@ -20,7 +20,7 @@ import {
   Award,
   Flag
 } from 'lucide-react';
-import AddressSelector from '../components/AddressSelector';
+import AddressSelector from '../../components/AddressSelector';
 
 const CustomerRegistration = () => {
   const [formData, setFormData] = useState({

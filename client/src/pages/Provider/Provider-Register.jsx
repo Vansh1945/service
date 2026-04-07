@@ -31,9 +31,9 @@ import {
   ChevronDown,
   X
 } from 'lucide-react';
-import AddressSelector from '../components/AddressSelector';
+import AddressSelector from '../../components/AddressSelector';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/auth';
+import { useAuth } from '../../context/auth';
 import { toast } from 'react-toastify';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';

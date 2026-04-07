@@ -46,12 +46,7 @@ const Contact = () => {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const stats = [
-    { icon: Award, value: "15+", label: "Years Experience" },
-    { icon: CheckCircle, value: "5000+", label: "Happy Customers" },
-    { icon: Zap, value: "100%", label: "Safety Guaranteed" },
-    { icon: MapPin, value: "50+", label: "Cities Covered" },
-  ];
+
 
   useEffect(() => {
     const fetchSystemData = async () => {
@@ -119,8 +114,8 @@ const Contact = () => {
   return (
     <div className="min-h-screen bg-white">
       {/* Hero Section - Matching other pages */}
-      <section className="relative bg-gradient-to-br from-gray-50 to-white pt-20 pb-16 md:pt-28 md:pb-24">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section className="relative bg-gradient-to-br from-gray-50 to-white pt-20 pb-8 md:pt-28 md:pb-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -135,10 +130,10 @@ const Contact = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
-              className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 mb-6 leading-tight"
+              className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 mb-6 leading-tight"
             >
               Get in Touch with Our
-              <span className="block text-primary mt-2">Electrical Experts</span>
+              <span className="block text-primary mt-1">Electrical Experts</span>
             </motion.h1>
 
             <motion.p
@@ -147,7 +142,7 @@ const Contact = () => {
               transition={{ delay: 0.2 }}
               className="text-lg text-gray-600 max-w-2xl mx-auto mb-8"
             >
-              Ready to solve your electrical needs? Our certified professionals across Himachal Pradesh and Punjab are here to provide reliable, safe, and efficient electrical solutions
+              Need help with electricity? Our expert team in Himachal Pradesh and Punjab is ready to provide fast, safe, and reliable service for your home.
             </motion.p>
 
             <motion.div
@@ -174,36 +169,11 @@ const Contact = () => {
         </div>
       </section>
 
-      {/* Stats Section - Matching other pages */}
-      <section className="py-12 border-y border-gray-100">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            {stats.map((stat, index) => {
-              const Icon = stat.icon;
-              return (
-                <motion.div
-                  key={index}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  viewport={{ once: true }}
-                  className="text-center"
-                >
-                  <div className="inline-flex items-center justify-center w-12 h-12 bg-primary/10 rounded-lg mb-3">
-                    <Icon className="w-6 h-6 text-primary" />
-                  </div>
-                  <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
-                  <div className="text-sm text-gray-500">{stat.label}</div>
-                </motion.div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
+
 
       {/* Contact Form and Info Section */}
-      <section className="py-16 md:py-20">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section className="pt-8 md:pt-12 pb-8 md:pb-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid md:grid-cols-2 gap-12">
             {/* Contact Form */}
             <motion.div
@@ -212,7 +182,7 @@ const Contact = () => {
               viewport={{ once: true }}
               className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 md:p-8"
             >
-              <div className="mb-6">
+              <div className="text-center mb-6">
                 <h2 className="text-2xl font-bold text-gray-900 mb-2">Send us a Message</h2>
                 <p className="text-gray-500">We'll get back to you within 2 hours</p>
               </div>
@@ -336,7 +306,7 @@ const Contact = () => {
               className="space-y-6"
             >
               <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 md:p-8">
-                <h2 className="text-2xl font-bold text-gray-900 mb-6">Contact Information</h2>
+                <h2 className="text-center text-2xl font-bold text-gray-900 mb-6">Contact Information</h2>
 
                 <div className="space-y-5">
                   <div className="flex items-start gap-4">
@@ -366,7 +336,7 @@ const Contact = () => {
                       <MapPin className="w-5 h-5 text-primary" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-gray-900 mb-1">Service Area</h3>
+                      <h3 className="font-semibold text-gray-900 mb-1">Address</h3>
                       <p className="text-gray-600">{contactInfo.address}</p>
                       <p className="text-sm text-gray-500 mt-1">Himachal Pradesh & Punjab</p>
                     </div>
@@ -377,7 +347,7 @@ const Contact = () => {
                       <Clock className="w-5 h-5 text-primary" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-gray-900 mb-1">Business Hours</h3>
+                      <h3 className="font-semibold text-gray-900 mb-1">Support timing</h3>
                       <div className="space-y-1">
                         <div className="flex justify-between gap-8">
                           <span className="text-gray-600">Monday - Saturday</span>
@@ -400,7 +370,7 @@ const Contact = () => {
                   <h3 className="text-xl font-bold">Emergency Services</h3>
                 </div>
                 <p className="text-white/90 mb-4 leading-relaxed">
-                  Electrical emergencies don't wait for business hours. Our certified electricians are available 24/7 for urgent electrical issues.
+                  Electrical emergencies can happen at any time. Our 24/7 emergency service is currently available in Jalandhar.
                 </p>
                 <div className="flex items-center justify-between">
                   <div>
@@ -417,37 +387,15 @@ const Contact = () => {
         </div>
       </section>
 
-      {/* Testimonial Section - Matching other pages */}
-      <section className="py-16 bg-gray-50">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="bg-white rounded-2xl p-8 md:p-12">
-            <div className="max-w-3xl mx-auto text-center">
-              <div className="flex justify-center mb-4">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="w-5 h-5 fill-yellow-400 text-yellow-400" />
-                ))}
-              </div>
-              <p className="text-xl md:text-2xl text-gray-700 italic mb-6">
-                "Excellent service! The team was professional, punctual, and did high-quality work. Highly recommended for any electrical needs."
-              </p>
-              <div>
-                <p className="font-semibold text-gray-900">Rajesh Kumar</p>
-                <p className="text-sm text-gray-500">Shimla, Himachal Pradesh</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* CTA Section - Matching other pages */}
-      <section className="py-16">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section className="pt-8 md:pt-10 pb-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="bg-gradient-to-r from-primary to-teal-600 rounded-2xl p-8 md:p-12 text-center">
             <h2 className="text-2xl md:text-3xl font-bold text-white mb-4">
-              Ready to Get Started?
+              Need Expert Help Now?
             </h2>
             <p className="text-white/90 mb-6 max-w-2xl mx-auto">
-              Don't let electrical issues disrupt your daily life. Contact our expert team today for reliable, professional electrical services.
+              Don't worry about electrical problems. Call our experts today for fast and safe service that you can trust.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <a
