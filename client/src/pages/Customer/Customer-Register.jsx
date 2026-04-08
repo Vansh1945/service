@@ -1,28 +1,53 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
 import { register } from '../../services/AuthService';
 import {
-  User,
-  Mail,
-  Phone,
-  Lock,
-  MapPin,
-  Home,
-  Building,
-  ArrowRight,
-  ArrowLeft,
-  CheckCircle,
-  Shield,
-  Zap,
-  HeadphonesIcon,
-  Sparkles,
-  Award,
-  Flag
+  User, Mail, Phone, Lock, MapPin, Home,
+  ArrowLeft, ArrowRight, CheckCircle, Shield, Zap,
+  Sparkles, Award, HeadphonesIcon, Info
 } from 'lucide-react';
 import AddressSelector from '../../components/AddressSelector';
 
+// ─── Static sub-components (defined OUTSIDE to avoid remount) ──────────────
+
+const inputCls =
+  'w-full px-4 py-3 border border-gray-300 rounded-lg text-secondary bg-background placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors text-sm';
+
+const Field = ({ label, children }) => (
+  <div className="flex flex-col gap-1 w-full">
+    <label className="text-xs font-semibold text-secondary uppercase tracking-wide">{label}</label>
+    {children}
+  </div>
+);
+
+const Section = ({ title, icon: Icon, accent = false, tooltip, children }) => (
+  <div className={`rounded-xl border p-5 space-y-4 ${accent ? 'border-accent/20 bg-accent/5' : 'border-gray-200 bg-background'}`}>
+    <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
+      {Icon && <Icon className={`w-4 h-4 ${accent ? 'text-accent' : 'text-primary'}`} />}
+      <span className="text-sm font-bold text-secondary">{title}</span>
+      {tooltip && (
+        <div className="relative group ml-auto cursor-pointer">
+          <Info className="w-3.5 h-3.5 text-gray-400 hover:text-accent transition-colors" />
+          <div className="absolute right-0 top-5 z-50 hidden group-hover:block w-64 bg-secondary text-background text-xs rounded-lg px-3 py-2.5 shadow-lg leading-relaxed">
+            <div className="absolute -top-1.5 right-1 w-3 h-3 bg-secondary rotate-45 rounded-sm" />
+            {tooltip}
+          </div>
+        </div>
+      )}
+    </div>
+    {children}
+  </div>
+);
+
+// ─── Step progress configuration ───────────────────────────────────────────
+const STEP_LABELS = ['Personal', 'Location', 'Security'];
+const STEP_ICONS = [User, MapPin, Lock];
+
 const CustomerRegistration = () => {
+  const navigate = useNavigate();
+  const { showToast } = useAuth();
+
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -39,9 +64,6 @@ const CustomerRegistration = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
-
-  const { API, showToast } = useAuth();
-  const navigate = useNavigate();
 
   const totalSteps = 3;
 
@@ -64,7 +86,6 @@ const CustomerRegistration = () => {
       }));
     }
 
-    // Clear error when field is changed
     if (errors[name]) {
       setErrors(prev => {
         const newErrors = { ...prev };
@@ -74,26 +95,15 @@ const CustomerRegistration = () => {
     }
   };
 
-  // Helper function to handle backend validation errors
   const handleValidationErrors = (backendErrors) => {
-    console.log("Backend errors received:", backendErrors);
     if (backendErrors && typeof backendErrors === 'object') {
       setErrors(backendErrors);
-
-      // Show toast for the first error
       const errorValues = Object.values(backendErrors);
       const firstError = errorValues[0];
-
-      console.log("First error to toast:", firstError);
-      if (typeof firstError === 'string') {
-        showToast(firstError, 'error');
-      } else if (firstError && firstError.message) {
-        showToast(firstError.message, 'error');
-      } else {
-        showToast('Validation failed. Please check form inputs.', 'error');
-      }
+      const msg = typeof firstError === 'string' ? firstError : (firstError?.message || 'Check your inputs');
+      showToast(msg, 'error');
     } else {
-      showToast('Validation failed. Registration rejected.', 'error');
+      showToast('Validation failed. Please check form.', 'error');
     }
   };
 
@@ -103,35 +113,27 @@ const CustomerRegistration = () => {
 
     try {
       const response = await register(formData);
-      const data = response.data;
-
-      showToast(data.message || 'Registration successful! You can now login.');
+      showToast(response.data.message || 'Registration successful! Welcome to SafeVolt.');
       navigate('/login');
-
     } catch (err) {
-      console.error('Registration error:', err);
-
       const errorData = err.response?.data;
-      console.log('Error Data Structure:', errorData);
-
       const errorMsg = errorData?.message || err.message || 'Registration failed';
 
       if (errorData?.errors) {
         handleValidationErrors(errorData.errors);
       } else {
-        showToast(typeof errorMsg === 'string' ? errorMsg : 'Registration failed with status code 400', 'error');
+        showToast(errorMsg, 'error');
       }
     } finally {
       setIsLoading(false);
     }
   };
 
-  const nextStep = async () => {
-    if (currentStep === 3) {
-      // Final submission
-      await handleSubmit();
+  const nextStep = () => {
+    if (currentStep === totalSteps) {
+      handleSubmit();
     } else {
-      setCurrentStep(prev => Math.min(prev + 1, totalSteps));
+      setCurrentStep(prev => prev + 1);
     }
   };
 
@@ -139,128 +141,115 @@ const CustomerRegistration = () => {
     setCurrentStep(prev => Math.max(prev - 1, 1));
   };
 
+  // ── Progress indicator ────────────────────────────────────────────────────
   const ProgressIndicator = () => (
-    <div className="mb-10">
-      <div className="flex items-center justify-between mb-6">
-        {[1, 2, 3].map((step) => (
-          <div key={step} className="flex items-center">
-            <div
-              className={`relative w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-500 transform ${step <= currentStep
-                ? 'bg-primary text-white shadow-lg shadow-primary/30 scale-110'
-                : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
-                }`}
-            >
-              {step < currentStep ? (
-                <CheckCircle className="w-6 h-6 animate-pulse" />
-              ) : (
-                <span className="font-bold">{step}</span>
-              )}
-              {step <= currentStep && (
-                <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping"></div>
+    <div className="mb-8">
+      <div className="flex items-center">
+        {[1, 2, 3].map((s, idx) => {
+          const StepIcon = STEP_ICONS[idx];
+          const done = s < currentStep;
+          const active = s === currentStep;
+          return (
+            <div key={s} className="flex-1 last:flex-none flex items-center">
+              <div className="flex flex-col items-center gap-1.5 min-w-0">
+                <div
+                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
+                    done
+                      ? 'bg-primary text-background'
+                      : active
+                      ? 'bg-accent text-background ring-4 ring-accent/20 border-2 border-accent'
+                      : 'bg-gray-100 text-gray-400'
+                  }`}
+                >
+                  {done ? (
+                    <CheckCircle className="w-4 h-4" />
+                  ) : (
+                    <StepIcon className="w-4 h-4" />
+                  )}
+                </div>
+                <span
+                  className={`text-[10px] font-semibold whitespace-nowrap ${
+                    active ? 'text-accent font-bold' : done ? 'text-secondary' : 'text-gray-400'
+                  }`}
+                >
+                  {STEP_LABELS[idx]}
+                </span>
+              </div>
+              {s < 3 && (
+                <div className="flex-1 h-0.5 mx-2 rounded-full bg-gray-100 overflow-hidden mb-4">
+                  <div
+                    className={`h-full bg-accent transition-all duration-500 ${done ? 'w-full' : 'w-0'}`}
+                  />
+                </div>
               )}
             </div>
-            {step < 3 && (
-              <div className="flex-1 mx-3 h-2 bg-gray-100 rounded-full overflow-hidden">
-                <div
-                  className={`h-full transition-all duration-700 ease-out ${step < currentStep
-                    ? 'w-full bg-primary'
-                    : 'w-0 bg-gray-300'
-                    }`}
-                />
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-      <div className="text-center">
-        <p className="text-sm text-secondary/60 font-medium tracking-wide">
-          Step {currentStep} of {totalSteps}
-        </p>
-        <div className="mt-2 text-xs text-primary font-semibold">
-          {currentStep === 1 && "Personal Information"}
-          {currentStep === 2 && "Address Details"}
-          {currentStep === 3 && "Account Security"}
-        </div>
+          );
+        })}
       </div>
     </div>
   );
 
+  // ── Benefits sidebar ──────────────────────────────────────────────────────
   const BenefitsSection = () => (
-    <div className="space-y-8">
-      {/* Hero Section */}
-      <div className="text-center space-y-6">
-        <div className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-primary/10 to-accent/10 rounded-full mb-4">
-          <Sparkles className="w-4 h-4 text-primary mr-2" />
-          <span className="text-sm font-semibold text-secondary">Trusted by 10,000+ Customers</span>
+    <div className="space-y-6">
+      <div className="text-center flex flex-col items-center">
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 rounded-full mb-4 mt-6">
+          <Sparkles className="w-3.5 h-3.5 text-primary" />
+          <span className="text-xs font-bold text-primary">Trusted by 10,000+ Customers</span>
         </div>
-
-        <h1 className="text-5xl lg:text-6xl font-bold text-secondary leading-tight">
-          Join <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">SafeVolt</span>
-          <br />
-          <span className="text-3xl lg:text-4xl font-semibold text-secondary/80">Solutions Today!</span>
+        <h1 className="text-4xl font-bold text-secondary leading-tight">
+          Join <span className="text-primary">SafeVolt</span> today
         </h1>
-
-        <p className="text-xl text-secondary/70 max-w-md mx-auto leading-relaxed">
-          Experience premium electrical services with verified professionals.
-          <span className="font-semibold text-primary"> Join thousands of satisfied customers!</span>
+        <p className="mt-3 text-sm text-gray-500 leading-relaxed max-w-sm mx-auto">
+          Experience premium electrical services with verified professionals at your doorstep.
         </p>
       </div>
 
-      {/* Benefits Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        <div className="group bg-gradient-to-br from-primary/5 to-primary/10 rounded-2xl p-6 border border-primary/20 hover:border-primary/40 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10">
-          <div className="flex items-center mb-4">
-            <div className="w-12 h-12 bg-primary/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-              <Zap className="w-6 h-6 text-primary" />
+      <div className="grid grid-cols-2 gap-3">
+        {[
+          { icon: Zap, title: 'Super Fast', desc: 'Same-day service', color: 'primary' },
+          { icon: Shield, title: 'Verified Pros', desc: 'Secure & Safe', color: 'accent' },
+          { icon: Award, title: 'Top Quality', desc: '100% Satisfaction', color: 'primary' },
+          { icon: HeadphonesIcon, title: '24/7 Support', desc: 'Always available', color: 'accent' },
+        ].map(({ icon: Icon, title, desc, color }) => (
+          <div
+            key={title}
+            className={`rounded-xl border p-4 transition-all hover:shadow-sm ${
+              color === 'primary'
+                ? 'border-primary/20 bg-primary/5 hover:border-primary/40'
+                : 'border-accent/20 bg-accent/5 hover:border-accent/40'
+            }`}
+          >
+            <div
+              className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${
+                color === 'primary' ? 'bg-primary/15' : 'bg-accent/15'
+              }`}
+            >
+              <Icon className={`w-4 h-4 ${color === 'primary' ? 'text-primary' : 'text-accent'}`} />
             </div>
-            <div className="ml-4">
-              <h3 className="font-bold text-secondary">Lightning Fast</h3>
-              <p className="text-sm text-secondary/60">Same-day service</p>
-            </div>
+            <p className="text-sm font-bold text-secondary">{title}</p>
+            <p className="text-xs text-gray-500 mt-0.5">{desc}</p>
           </div>
-          <p className="text-sm text-secondary/70">Get your electrical issues resolved within hours, not days. Our rapid response team is always ready.</p>
-        </div>
-
-        <div className="group bg-gradient-to-br from-accent/5 to-accent/10 rounded-2xl p-6 border border-accent/20 hover:border-accent/40 transition-all duration-300 hover:shadow-lg hover:shadow-accent/10">
-          <div className="flex items-center mb-4">
-            <div className="w-12 h-12 bg-accent/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-              <Shield className="w-6 h-6 text-accent" />
-            </div>
-            <div className="ml-4">
-              <h3 className="font-bold text-secondary">Certified Experts</h3>
-              <p className="text-sm text-secondary/60">Licensed professionals</p>
-            </div>
-          </div>
-          <p className="text-sm text-secondary/70">All our electricians are fully licensed, insured, and background-checked for your peace of mind.</p>
-        </div>
-
-        <div className="group bg-gradient-to-br from-primary/5 to-primary/10 rounded-2xl p-6 border border-primary/20 hover:border-primary/40 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10">
-          <div className="flex items-center mb-4">
-            <div className="w-12 h-12 bg-primary/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-              <Award className="w-6 h-6 text-primary" />
-            </div>
-            <div className="ml-4">
-              <h3 className="font-bold text-secondary">Quality Guaranteed</h3>
-              <p className="text-sm text-secondary/60">100% satisfaction</p>
-            </div>
-          </div>
-          <p className="text-sm text-secondary/70">We stand behind our work with a comprehensive warranty and satisfaction guarantee.</p>
-        </div>
-
-        <div className="group bg-gradient-to-br from-accent/5 to-accent/10 rounded-2xl p-6 border border-accent/20 hover:border-accent/40 transition-all duration-300 hover:shadow-lg hover:shadow-accent/10">
-          <div className="flex items-center mb-4">
-            <div className="w-12 h-12 bg-accent/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-              <HeadphonesIcon className="w-6 h-6 text-accent" />
-            </div>
-            <div className="ml-4">
-              <h3 className="font-bold text-secondary">24/7 Support</h3>
-              <p className="text-sm text-secondary/60">Always available</p>
-            </div>
-          </div>
-          <p className="text-sm text-secondary/70">Round-the-clock customer support for emergencies and questions. We're here when you need us.</p>
-        </div>
+        ))}
       </div>
 
+      <div className="bg-background border border-gray-200 rounded-xl p-5">
+        <h3 className="text-sm font-bold text-secondary mb-3 flex items-center gap-2">
+          <Shield className="w-4 h-4 text-primary" /> Why Customers Trust Us
+        </h3>
+        <div className="space-y-2.5">
+          {[
+            'Professional & background-checked electricians',
+            'Upfront, transparent pricing with no hidden costs',
+            'Full insurance coverage for your peace of mind',
+          ].map((text) => (
+            <div key={text} className="flex items-start gap-2">
+              <CheckCircle className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+              <span className="text-xs text-secondary/70">{text}</span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 
@@ -268,187 +257,123 @@ const CustomerRegistration = () => {
     switch (currentStep) {
       case 1:
         return (
-          <div className="space-y-6 ">
-            <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold text-secondary mb-3">Personal Details</h2>
-              <p className="text-secondary/70 text-lg">Let's start with your basic information</p>
-              <div className="w-16 h-1 bg-gradient-to-r from-primary to-accent mx-auto mt-4 rounded-full"></div>
+          <div className="space-y-5">
+            <div>
+              <h2 className="text-2xl font-bold text-secondary">Personal Information</h2>
+              <p className="text-sm text-gray-500 mt-1">Let's start with your basic details</p>
             </div>
-
-            <div className="space-y-6">
-              <div className="group">
-                <label htmlFor="name" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                  Full Name *
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                    <User className="text-primary w-5 h-5 group-focus-within:scale-110 transition-transform duration-200" />
-                  </div>
+            <Section title="Basic Details" icon={User}>
+              <div className="space-y-4">
+                <Field label="Full Name *" error={errors.name}>
                   <input
                     type="text"
                     id="name"
                     name="name"
                     value={formData.name}
                     onChange={handleChange}
-                    className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
-                    placeholder="Enter your full name"
+                    placeholder="John Doe"
+                    className={inputCls}
                   />
-
+                </Field>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Field label="Email Address *" error={errors.email}>
+                    <input
+                      type="email"
+                      id="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleChange}
+                      placeholder="john@example.com"
+                      className={inputCls}
+                    />
+                  </Field>
+                  <Field label="Phone Number *" error={errors.phone}>
+                    <input
+                      type="text"
+                      id="phone"
+                      name="phone"
+                      value={formData.phone}
+                      onChange={handleChange}
+                      placeholder="9876543210"
+                      className={inputCls}
+                    />
+                  </Field>
                 </div>
               </div>
-
-              <div className="group">
-                <label htmlFor="email" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                  Email Address *
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                    <Mail className="text-primary w-5 h-5 group-focus-within:scale-110 transition-transform duration-200" />
-                  </div>
-                  <input
-                    type="text"
-                    id="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
-                    placeholder="your@email.com"
-                  />
-
-                </div>
-              </div>
-
-              <div className="group">
-                <label htmlFor="phone" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                  Phone Number *
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                    <Phone className="text-primary w-5 h-5 group-focus-within:scale-110 transition-transform duration-200" />
-                  </div>
-                  <input
-                    type="text"
-                    id="phone"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleChange}
-                    className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
-                    placeholder="+91 98765-32100"
-                  />
-
-                </div>
-              </div>
-            </div>
+            </Section>
           </div>
         );
 
       case 2:
         return (
-          <div className="space-y-6 ">
-            <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold text-secondary mb-3">Address Information</h2>
-              <p className="text-secondary/70 text-lg">Where can we reach you for services?</p>
-              <div className="w-16 h-1 bg-gradient-to-r from-primary to-accent mx-auto mt-4 rounded-full"></div>
+          <div className="space-y-5">
+            <div>
+              <h2 className="text-2xl font-bold text-secondary">Address Information</h2>
+              <p className="text-sm text-gray-500 mt-1">Where can we reach you for services?</p>
             </div>
-
-            <div className="space-y-6">
-              <div className="group">
-                <label htmlFor="street" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                  Street Address *
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                    <Home className="text-primary w-5 h-5 group-focus-within:scale-110 transition-transform duration-200" />
-                  </div>
+            <Section title="Location Details" icon={MapPin}>
+              <div className="space-y-4">
+                <Field label="Street Address *" error={errors['address.street']}>
                   <input
                     type="text"
                     id="street"
                     name="address.street"
                     value={formData.address.street}
                     onChange={handleChange}
-                    className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
-                    placeholder="123 Main Street, Apartment 4B"
+                    placeholder="123 Main Street, Apt 4"
+                    className={inputCls}
                   />
-
-                </div>
-              </div>
-
-              <div className="group">
+                </Field>
                 <AddressSelector
                   selectedState={formData.address.state}
                   selectedCity={formData.address.city}
                   onStateChange={(value) => handleChange({ target: { name: 'address.state', value } })}
                   onCityChange={(value) => handleChange({ target: { name: 'address.city', value } })}
                 />
-              </div>
-
-              <div className="group">
-                <label htmlFor="postalCode" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                  Postal Code *
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                    <MapPin className="text-primary w-5 h-5 group-focus-within:scale-110 transition-transform duration-200" />
-                  </div>
+                <Field label="Postal Code *" error={errors['address.postalCode']}>
                   <input
                     type="text"
                     id="postalCode"
                     name="address.postalCode"
                     value={formData.address.postalCode}
                     onChange={handleChange}
-                    className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
-                    placeholder="12345"
+                    placeholder="400001"
+                    className={inputCls}
                   />
-                </div>
+                </Field>
               </div>
-            </div>
+            </Section>
           </div>
         );
 
       case 3:
         return (
-          <div className="space-y-6 "> {/* Added mt-8 for top margin */}
-            <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold text-secondary mb-3">Account Setup</h2>
-              <p className="text-secondary/70 text-lg">Create a secure password for your account</p>
-              <div className="w-16 h-1 bg-gradient-to-r from-primary to-accent mx-auto mt-4 rounded-full"></div>
+          <div className="space-y-5">
+            <div>
+              <h2 className="text-2xl font-bold text-secondary">Account Security</h2>
+              <p className="text-sm text-gray-500 mt-1">Protect your account with a password</p>
             </div>
-
-            <div className="space-y-6">
-              <div className="group">
-                <label htmlFor="password" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                  Create Password *
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                    <Lock className="text-primary w-5 h-5 group-focus-within:scale-110 transition-transform duration-200" />
-                  </div>
+            <Section title="Security" icon={Lock} accent tooltip="Use at least 8 characters with a mix of letters and numbers for a strong password.">
+              <div className="space-y-4">
+                <Field label="Create Password *" error={errors.password}>
                   <input
                     type="password"
                     id="password"
                     name="password"
                     value={formData.password}
                     onChange={handleChange}
-                    className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
-                    placeholder="At least 8 characters"
+                    placeholder="••••••••"
+                    className={inputCls}
                   />
+                </Field>
+                <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex items-start gap-3">
+                  <Shield className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-secondary/70 leading-relaxed">
+                    Your privacy is our priority. We use industry-standard encryption to protect your data and never share it with unauthorized third parties.
+                  </p>
                 </div>
-                <p className="text-xs text-secondary/60 mt-2">
-                  Password should be at least 8 characters long and include letters and numbers
-                </p>
               </div>
-
-              <div className="bg-gradient-to-r from-primary/10 to-accent/10 rounded-2xl p-6 border border-primary/20">
-                <div className="flex items-center mb-3">
-                  <Shield className="w-6 h-6 text-primary mr-3" />
-                  <h3 className="font-bold text-secondary text-lg">Security & Privacy</h3>
-                </div>
-                <p className="text-sm text-secondary/70 leading-relaxed">
-                  Your information is encrypted and secure. We never share your personal data with third parties.
-                  All communications are protected with industry-standard security protocols.
-                </p>
-              </div>
-            </div>
+            </Section>
           </div>
         );
       default:
@@ -457,78 +382,75 @@ const CustomerRegistration = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 pt-28 bg-background relative overflow-hidden">
-
-
-      {/* Main Container - Desktop: Grid Layout, Mobile: Single Column */}
-      <div className="w-full max-w-7xl relative z-10 lg:grid lg:grid-cols-2 lg:gap-12 lg:items-start">
-
-        {/* Benefits Section - Hidden on mobile, Left side on desktop */}
-        <div className="hidden lg:block lg:sticky lg:top-8">
-          <BenefitsSection />
+    <div className="min-h-screen bg-gray-50 pt-20 pb-14 px-4">
+      <div className="max-w-7xl mx-auto">
+        
+        {/* Mobile Header (Hidden on LG) */}
+        <div className="lg:hidden text-center mb-6">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-primary/10 rounded-full mb-3">
+            <Sparkles className="w-3.5 h-3.5 text-primary" />
+            <span className="text-xs font-bold text-primary">Join 10,000+ Happy Customers</span>
+          </div>
+          <h1 className="text-2xl font-bold text-secondary leading-tight">
+            Join <span className="text-primary">SafeVolt</span> today
+          </h1>
         </div>
 
-        {/* Form Container - Full width on mobile, Right side on desktop */}
-        <div className="w-full max-w-lg mx-auto lg:mx-0">
-          <div className="backdrop-blur-lg bg-transparent rounded-3xl shadow-2xl p-8 border border-primary/20 shadow-primary/10 hover:shadow-primary/20 transition-shadow duration-500 relative overflow-hidden">
-            {/* Subtle inner glow */}
-            <div className="absolute inset-0 bg-primary/5 rounded-3xl pointer-events-none"></div>
-            <div className="relative z-10">
+        <div className="lg:flex lg:flex-row lg:gap-14 lg:items-start">
+          {/* Left: Benefits */}
+          <div className="hidden lg:block lg:flex-1">
+            <BenefitsSection />
+          </div>
+
+          {/* Right: Form Card */}
+          <div className="w-full lg:flex-1 mt-6 lg:mt-8">
+            <div className="bg-background rounded-2xl shadow-sm border border-gray-200 p-6 md:p-8">
               <ProgressIndicator />
+              
+              <div className="mt-8">
+                {renderStepContent()}
 
-              {renderStepContent()}
+                <div className="flex gap-3 mt-10">
+                  {currentStep > 1 && (
+                    <button
+                      type="button"
+                      onClick={prevStep}
+                      disabled={isLoading}
+                      className="flex items-center gap-2 px-5 py-3 rounded-lg border border-gray-300 text-secondary text-sm font-semibold hover:bg-gray-50 transition-all disabled:opacity-50"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                      Back
+                    </button>
+                  )}
 
-              {/* Navigation Buttons */}
-              <div className="flex justify-between mt-8 space-x-4">
-                {currentStep > 1 && (
                   <button
                     type="button"
-                    onClick={prevStep}
-                    className="flex items-center px-6 py-3 rounded-2xl border-2 border-primary text-primary hover:bg-primary hover:text-white transition-all duration-300 font-semibold"
+                    onClick={nextStep}
+                    disabled={isLoading}
+                    className="flex-1 flex items-center justify-center gap-2 py-3 rounded-lg bg-primary text-background text-sm font-bold hover:bg-primary/90 active:scale-[0.99] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    <ArrowLeft className="w-5 h-5 mr-2" />
-                    Back
+                    {isLoading ? (
+                      <>
+                        <div className="h-4 w-4 rounded-full border-2 border-background border-t-transparent animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        {currentStep === totalSteps ? 'Complete Registration' : 'Continue'}
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
                   </button>
-                )}
+                </div>
 
-                <button
-                  type="button"
-                  onClick={nextStep}
-                  disabled={isLoading}
-                  className={`flex items-center justify-center px-8 py-3 rounded-2xl font-semibold transition-all duration-300 transform hover:scale-[1.02] disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none ${currentStep === 1 ? 'w-full' : 'flex-1'
-                    } bg-accent hover:bg-accent/90 text-background shadow-lg hover:shadow-xl`}
-                >
-                  {isLoading ? (
-                    <div className="flex items-center">
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-background mr-2"></div>
-                      <span>Processing...</span>
-                    </div>
-                  ) : (
-                    <>
-                      <span className="mr-2">
-                        {currentStep === 4 && otpSent
-                          ? 'Complete Registration'
-                          : currentStep === 4
-                            ? 'Send Verification Code'
-                            : currentStep === 3
-                              ? 'Review Information'
-                              : 'Continue'
-                        }
-                      </span>
-                      <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                    </>
-                  )}
-                </button>
-              </div>
-
-              {/* Login Link */}
-              <div className="text-center mt-6">
-                <a
-                  href="/login"
-                  className="text-accent hover:text-accent/80 font-semibold transition-colors duration-300"
-                >
-                  Already have an account? Sign in
-                </a>
+                <div className="text-center mt-6">
+                  <p className="text-sm text-gray-500">
+                    Already have an account?{' '}
+                    <Link to="/login" className="text-accent font-semibold hover:underline">
+                      Sign in here
+                    </Link>
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -538,4 +460,4 @@ const CustomerRegistration = () => {
   );
 };
 
-export default CustomerRegistration;
+export default CustomerRegistration;

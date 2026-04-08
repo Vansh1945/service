@@ -1,35 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import {
-  User,
-  Mail,
-  Phone,
-  Lock,
-  MapPin,
-  Home,
-  Building,
-  ArrowRight,
-  ArrowLeft,
-  CheckCircle,
-  Shield,
-  Clock,
-  Star,
-  Zap,
-  HeadphonesIcon,
-  Sparkles,
-  Award,
-  Users,
-  TrendingUp,
-  DollarSign,
-  Calendar,
-  FileText,
-  Camera,
-  CreditCard,
-  Briefcase,
-  RotateCcw,
-  Loader2,
-  AlertCircle,
-  ChevronDown,
-  X
+  User, Mail, Phone, Lock, MapPin, Home, Building,
+  ArrowLeft, CheckCircle, Shield, Zap,
+  Sparkles, Award, Users,
+  DollarSign, Calendar, FileText, Camera, CreditCard,
+  Briefcase, RotateCcw, AlertCircle, ChevronDown, X, Info
 } from 'lucide-react';
 import AddressSelector from '../../components/AddressSelector';
 import { Link, useNavigate } from 'react-router-dom';
@@ -38,6 +13,64 @@ import { toast } from 'react-toastify';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import 'react-toastify/dist/ReactToastify.css';
+
+// ─── Static sub-components (defined OUTSIDE the main component to avoid remount) ─
+
+const inputCls =
+  'w-full px-4 py-3 border border-gray-300 rounded-lg text-secondary bg-background placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors text-sm';
+
+const Field = ({ label, children }) => (
+  <div className="flex flex-col gap-1">
+    <label className="text-xs font-semibold text-secondary uppercase tracking-wide">{label}</label>
+    {children}
+  </div>
+);
+
+const Section = ({ title, icon: Icon, accent = false, tooltip, children }) => (
+  <div className={`rounded-xl border p-5 space-y-4 ${accent ? 'border-accent/20 bg-accent/5' : 'border-gray-200 bg-background'}`}>
+    <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
+      {Icon && <Icon className={`w-4 h-4 ${accent ? 'text-accent' : 'text-primary'}`} />}
+      <span className="text-sm font-bold text-secondary">{title}</span>
+      {tooltip && (
+        <div className="relative group ml-auto cursor-pointer">
+          <Info className="w-3.5 h-3.5 text-gray-400 hover:text-accent transition-colors" />
+          <div className="absolute right-0 top-5 z-50 hidden group-hover:block w-64 bg-secondary text-background text-xs rounded-lg px-3 py-2.5 shadow-lg leading-relaxed">
+            <div className="absolute -top-1.5 right-1 w-3 h-3 bg-secondary rotate-45 rounded-sm" />
+            {tooltip}
+          </div>
+        </div>
+      )}
+    </div>
+    {children}
+  </div>
+);
+
+const FileField = ({ label, fieldName, accept, placeholder, icon: Icon, value, onChange }) => (
+  <Field label={label}>
+    <div className="relative">
+      <input
+        type="file"
+        id={fieldName}
+        name={fieldName}
+        onChange={onChange}
+        accept={accept}
+        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+      />
+      <div className="flex items-center justify-between px-4 py-3 border border-gray-300 rounded-lg bg-background hover:border-primary hover:bg-primary/5 transition-colors">
+        <span className={`text-sm truncate ${value ? 'text-secondary font-medium' : 'text-gray-400'}`}>
+          {value ? value.name : placeholder}
+        </span>
+        <Icon className="w-4 h-4 text-primary flex-shrink-0 ml-2" />
+      </div>
+    </div>
+  </Field>
+);
+
+// ─── Step progress labels ─
+const STEP_LABELS = ['Email', 'Details', 'Login', 'Profile'];
+const STEP_ICONS = [Mail, User, Lock, Briefcase];
+
+// ─── Main Component ──────────────────────────────────────────────────────────
 
 const ProviderRegistration = () => {
   const navigate = useNavigate();
@@ -65,7 +98,7 @@ const ProviderRegistration = () => {
     accountNo: '',
     ifsc: '',
     passbookImage: null,
-    profilePic: null
+    profilePic: null,
   });
 
   const [step, setStep] = useState(1);
@@ -78,20 +111,20 @@ const ProviderRegistration = () => {
   const [providerServices, setProviderServices] = useState([]);
   const [providerServicesLoading, setProviderServicesLoading] = useState(true);
   const [providerServicesError, setProviderServicesError] = useState(null);
-  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false); useEffect(() => {
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+
+  // ── OTP countdown timer ──
+  useEffect(() => {
     let timer;
     if (otpSentTime) {
       timer = setInterval(() => {
-        const now = Date.now();
-        const secondsSinceSent = Math.round((now - otpSentTime) / 1000);
-
+        const secondsSinceSent = Math.round((Date.now() - otpSentTime) / 1000);
         if (secondsSinceSent < 60) {
           setResendCountdown(60 - secondsSinceSent);
           setCanResendOtp(false);
         } else {
           setCanResendOtp(true);
         }
-
         if (secondsSinceSent >= 300) {
           setOtpExpiryTime(null);
           clearInterval(timer);
@@ -103,26 +136,24 @@ const ProviderRegistration = () => {
     return () => clearInterval(timer);
   }, [otpSentTime, otpExpiryTime]);
 
+  // ── Fetch service categories ──
   useEffect(() => {
     const fetchServiceCategories = async () => {
       try {
         setProviderServicesLoading(true);
         const response = await fetch(`${API}/system-setting/categories`);
         const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.message || 'Failed to fetch service categories');
-        }
-
-        const transformedData = (data.data || []).map(category => ({
-          _id: category._id,
-          name: category.name,
-          title: category.name,
-          category: category.name,
-          icon: category.icon,
-          description: category.description
-        }));
-        setProviderServices(transformedData);
+        if (!response.ok) throw new Error(data.message || 'Failed to fetch service categories');
+        setProviderServices(
+          (data.data || []).map((c) => ({
+            _id: c._id,
+            name: c.name,
+            title: c.name,
+            category: c.name,
+            icon: c.icon,
+            description: c.description,
+          }))
+        );
         setProviderServicesError(null);
       } catch (error) {
         console.error('Error fetching service categories:', error);
@@ -131,55 +162,43 @@ const ProviderRegistration = () => {
         setProviderServicesLoading(false);
       }
     };
-
     fetchServiceCategories();
   }, [API]);
 
-  const handleServiceChange = (service) => {
-    const serviceId = service.id || service._id;
-    setSelectedServices(prev => {
-      if (prev.includes(serviceId)) {
-        return prev.filter(id => id !== serviceId);
-      } else {
-        if (prev.length < 3) {
-          return [...prev, serviceId];
-        } else {
-          return prev;
-        }
-      }
-    });
-  };
-
+  // ── Handlers ──
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleFileChange = (field) => (e) => {
-    setFormData(prev => ({ ...prev, [field]: e.target.files[0] }));
+    setFormData((prev) => ({ ...prev, [field]: e.target.files[0] }));
+  };
+
+  const handleServiceChange = (service) => {
+    const serviceId = service.id || service._id;
+    setSelectedServices((prev) => {
+      if (prev.includes(serviceId)) return prev.filter((id) => id !== serviceId);
+      if (prev.length < 3) return [...prev, serviceId];
+      return prev;
+    });
   };
 
   const handleInitiateRegistration = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-
     const promise = new Promise(async (resolve, reject) => {
       try {
-        const response = await fetch(`${API}/provider/register/initiate`, {
+        const res = await fetch(`${API}/provider/register/initiate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: formData.email })
+          body: JSON.stringify({ email: formData.email }),
         });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.message || 'Failed to send OTP');
-        }
-
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Failed to send OTP');
         if (data.profileComplete) {
           setStep(3);
-          resolve(data.message || 'Incomplete profile found. Please login to complete your profile.');
+          resolve(data.message || 'Incomplete profile found. Please login to complete.');
         } else {
           const sentTime = Date.now();
           setOtpSentTime(sentTime);
@@ -189,27 +208,25 @@ const ProviderRegistration = () => {
           setStep(2);
           resolve('OTP sent successfully! Check your email.');
         }
-      } catch (error) {
-        reject(error.message);
+      } catch (err) {
+        reject(err.message);
       } finally {
         setIsSubmitting(false);
       }
     });
-
     toast.promise(promise, {
       pending: 'Sending OTP...',
       success: { render({ data }) { return data; }, autoClose: 3000 },
-      error: { render({ data }) { return data; }, autoClose: 3000 }
+      error: { render({ data }) { return data; }, autoClose: 3000 },
     });
   };
 
   const handleCompleteRegistration = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-
     const promise = new Promise(async (resolve, reject) => {
       try {
-        const response = await fetch(`${API}/provider/register/complete`, {
+        const res = await fetch(`${API}/provider/register/complete`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -218,147 +235,110 @@ const ProviderRegistration = () => {
             password: formData.password,
             name: formData.name,
             phone: formData.phone,
-            dateOfBirth: formData.dateOfBirth
-          })
+            dateOfBirth: formData.dateOfBirth,
+          }),
         });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.message || 'Registration failed');
-        }
-
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Registration failed');
         localStorage.setItem('providerToken', data.token);
         setStep(3);
         resolve('Registration successful! Please login to complete your profile.');
-      } catch (error) {
-        reject(error.message);
+      } catch (err) {
+        reject(err.message);
       } finally {
         setIsSubmitting(false);
       }
     });
-
     toast.promise(promise, {
       pending: 'Registering...',
       success: { render({ data }) { return data; }, autoClose: 3000 },
-      error: { render({ data }) { return data; }, autoClose: 3000 }
+      error: { render({ data }) { return data; }, autoClose: 3000 },
     });
   };
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-
     const promise = new Promise(async (resolve, reject) => {
       try {
-        const response = await fetch(`${API}/provider/login-for-completion`, {
+        const res = await fetch(`${API}/provider/login-for-completion`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: formData.email,
-            password: formData.password
-          })
+          body: JSON.stringify({ email: formData.email, password: formData.password }),
         });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.message || 'Login failed');
-        }
-
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Login failed');
         localStorage.setItem('providerToken', data.token);
         setStep(4);
         resolve('Login successful! Please complete your profile.');
-      } catch (error) {
-        reject(error.message);
+      } catch (err) {
+        reject(err.message);
       } finally {
         setIsSubmitting(false);
       }
     });
-
     toast.promise(promise, {
       pending: 'Logging in...',
       success: { render({ data }) { return data; }, autoClose: 3000 },
-      error: { render({ data }) { return data; }, autoClose: 3000 }
+      error: { render({ data }) { return data; }, autoClose: 3000 },
     });
   };
 
   const handleCompleteProfile = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-
-    const formDataWithServices = {
-      ...formData,
-      services: selectedServices
-    };
-
+    const formDataWithServices = { ...formData, services: selectedServices };
     const promise = new Promise(async (resolve, reject) => {
       try {
-        const formDataToSend = new FormData();
-
+        const fd = new FormData();
         Object.entries(formDataWithServices).forEach(([key, value]) => {
           if (value !== null && value !== undefined && value !== '') {
-            if (key === 'resume' || key === 'passbookImage' || key === 'profilePic') {
-              if (value) formDataToSend.append(key, value);
+            if (['resume', 'passbookImage', 'profilePic'].includes(key)) {
+              if (value) fd.append(key, value);
             } else if (key === 'services') {
-              value.forEach(service => formDataToSend.append('services', service));
+              value.forEach((s) => fd.append('services', s));
             } else {
-              formDataToSend.append(key, value);
+              fd.append(key, value);
             }
           }
         });
-
-        const response = await fetch(`${API}/provider/profile/complete`, {
+        const res = await fetch(`${API}/provider/profile/complete`, {
           method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('providerToken')}`
-          },
-          body: formDataToSend
+          headers: { Authorization: `Bearer ${localStorage.getItem('providerToken')}` },
+          body: fd,
         });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.message || 'Profile completion failed');
-        }
-
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Profile completion failed');
         resolve('Profile completed successfully! Your account is pending approval.');
         navigate('/');
-      } catch (error) {
-        reject(error.message);
+      } catch (err) {
+        reject(err.message);
       } finally {
         setIsSubmitting(false);
       }
     });
-
     toast.promise(promise, {
       pending: 'Completing profile...',
       success: { render({ data }) { return data; }, autoClose: 3000 },
-      error: { render({ data }) { return data; }, autoClose: 3000 }
+      error: { render({ data }) { return data; }, autoClose: 3000 },
     });
   };
 
   const handleResendOTP = async () => {
     if (!canResendOtp) return;
-
     setIsSubmitting(true);
     const promise = new Promise(async (resolve, reject) => {
       try {
-        const response = await fetch(`${API}/provider/register/initiate`, {
+        const res = await fetch(`${API}/provider/register/initiate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: formData.email })
+          body: JSON.stringify({ email: formData.email }),
         });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.message || 'Failed to resend OTP');
-        }
-
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Failed to resend OTP');
         if (data.profileComplete) {
           setStep(3);
-          resolve(data.message || 'Incomplete profile found. Please login to complete your profile.');
+          resolve(data.message || 'Incomplete profile found. Please login to complete.');
         } else {
           const sentTime = Date.now();
           setOtpSentTime(sentTime);
@@ -367,252 +347,102 @@ const ProviderRegistration = () => {
           setResendCountdown(60);
           resolve('New OTP sent successfully!');
         }
-      } catch (error) {
-        reject(error.message);
+      } catch (err) {
+        reject(err.message);
       } finally {
         setIsSubmitting(false);
       }
     });
-
     toast.promise(promise, {
       pending: 'Resending OTP...',
       success: { render({ data }) { return data; }, autoClose: 3000 },
-      error: { render({ data }) { return data; }, autoClose: 3000 }
+      error: { render({ data }) { return data; }, autoClose: 3000 },
     });
   };
 
-  const formatExpiryTime = (date) => {
-    if (!date) return '';
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
+  const formatExpiry = (date) =>
+    date ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
 
-  const ProgressIndicator = () => (
-    <div className="mb-10">
-      <div className="flex items-center justify-between mb-6">
-        {[1, 2, 3, 4].map((stepNumber) => (
-          <div key={stepNumber} className="flex items-center">
-            <div className={`relative w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-500 transform ${stepNumber <= step ? 'bg-primary text-white shadow-lg shadow-primary/30 scale-110' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}>
-              {stepNumber < step ? (
-                <CheckCircle className="w-6 h-6" />
-              ) : (
-                <span className="font-bold">{stepNumber}</span>
-              )}
-            </div>
-            {stepNumber < 4 && (
-              <div className="flex-1 mx-3 h-2 bg-gray-100 rounded-full overflow-hidden">
-                <div className={`h-full transition-all duration-700 ease-out ${stepNumber < step ? 'w-full bg-primary' : 'w-0 bg-gray-300'}`} />
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-      <div className="text-center">
-        <p className="text-sm text-secondary/60 font-medium tracking-wide">Step {step} of 4</p>
-        <div className="mt-2 text-xs text-primary font-semibold">
-          {step === 1 && "Email Verification"}
-          {step === 2 && "Personal Details"}
-          {step === 3 && "Account Login"}
-          {step === 4 && "Professional Profile"}
-        </div>
-      </div>
-    </div>
-  );
-
-  const BenefitsSection = () => (
-    <div className="space-y-8">
-      <div className="text-center space-y-6">
-        <div className="inline-flex items-center px-4 py-2 bg-gray-100 rounded-full mb-4">
-          <Sparkles className="w-4 h-4 text-primary mr-2" />
-          <span className="text-sm font-semibold text-secondary">Join 2,000+ Trusted Providers</span>
-        </div>
-
-        <h1 className="text-5xl lg:text-6xl font-bold text-secondary leading-tight">
-          Become a <span className="text-primary">SafeVolt</span>
-          <br />
-          <span className="text-3xl lg:text-4xl font-semibold text-secondary/80">Trusted Provider!</span>
-        </h1>
-
-        <p className="text-xl text-secondary/70 max-w-md mx-auto leading-relaxed">
-          Join our network of verified electrical professionals and
-          <span className="font-semibold text-primary"> start earning more today!</span>
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        <div className="group bg-white rounded-2xl p-6 border border-primary/20 hover:border-primary/40 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10">
-          <div className="flex items-center mb-4">
-            <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-              <DollarSign className="w-6 h-6 text-primary" />
-            </div>
-            <div className="ml-4">
-              <h3 className="font-bold text-secondary">Earn More Income</h3>
-              <p className="text-sm text-secondary/60">Flexible earnings</p>
-            </div>
-          </div>
-          <p className="text-sm text-secondary/70">Set your own rates and work schedule. Earn 20-40% more than traditional employment with verified leads.</p>
-        </div>
-
-        <div className="group bg-white rounded-2xl p-6 border border-accent/20 hover:border-accent/40 transition-all duration-300 hover:shadow-lg hover:shadow-accent/10">
-          <div className="flex items-center mb-4">
-            <div className="w-12 h-12 bg-accent/10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-              <Shield className="w-6 h-6 text-accent" />
-            </div>
-            <div className="ml-4">
-              <h3 className="font-bold text-secondary">Get Verified</h3>
-              <p className="text-sm text-secondary/60">Build trust & credibility</p>
-            </div>
-          </div>
-          <p className="text-sm text-secondary/70">Complete verification process increases customer trust and booking rates by up to 300%.</p>
-        </div>
-
-        <div className="group bg-white rounded-2xl p-6 border border-primary/20 hover:border-primary/40 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10">
-          <div className="flex items-center mb-4">
-            <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-              <Zap className="w-6 h-6 text-primary" />
-            </div>
-            <div className="ml-4">
-              <h3 className="font-bold text-secondary">Instant Payments</h3>
-              <p className="text-sm text-secondary/60">Secure & fast</p>
-            </div>
-          </div>
-          <p className="text-sm text-secondary/70">Get paid instantly after job completion through our secure payment system. No waiting periods.</p>
-        </div>
-
-        <div className="group bg-white rounded-2xl p-6 border border-accent/20 hover:border-accent/40 transition-all duration-300 hover:shadow-lg hover:shadow-accent/10">
-          <div className="flex items-center mb-4">
-            <div className="w-12 h-12 bg-accent/10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-              <Calendar className="w-6 h-6 text-accent" />
-            </div>
-            <div className="ml-4">
-              <h3 className="font-bold text-secondary">Flexible Hours</h3>
-              <p className="text-sm text-secondary/60">Work on your terms</p>
-            </div>
-          </div>
-          <p className="text-sm text-secondary/70">Choose your working hours and service areas. Perfect for full-time professionals or side income.</p>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-2xl p-8 border border-primary/20">
-        <h3 className="text-2xl font-bold text-secondary mb-6 text-center flex items-center justify-center">
-          <Award className="w-6 h-6 text-primary mr-2" />
-          How It Works
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="text-center">
-            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-2xl font-bold text-primary">1</span>
-            </div>
-            <h4 className="font-bold text-secondary mb-2">Register</h4>
-            <p className="text-sm text-secondary/70">Complete your profile with credentials and experience</p>
-          </div>
-          <div className="text-center">
-            <div className="w-16 h-16 bg-accent/10 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-2xl font-bold text-accent">2</span>
-            </div>
-            <h4 className="font-bold text-secondary mb-2">Get Verified</h4>
-            <p className="text-sm text-secondary/70">Our team reviews and verifies your qualifications</p>
-          </div>
-          <div className="text-center">
-            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-2xl font-bold text-primary">3</span>
-            </div>
-            <h4 className="font-bold text-secondary mb-2">Start Earning</h4>
-            <p className="text-sm text-secondary/70">Receive bookings and start providing services</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-2xl p-6 border border-accent/20">
-        <h3 className="text-xl font-bold text-secondary mb-4 flex items-center">
-          <Users className="w-5 h-5 text-accent mr-2" />
-          Why Providers Trust SafeVolt
-        </h3>
-        <div className="space-y-3">
-          <div className="flex items-center">
-            <CheckCircle className="w-5 h-5 text-primary mr-3 flex-shrink-0" />
-            <span className="text-sm text-secondary/80">Secure payments with instant transfer to your account</span>
-          </div>
-          <div className="flex items-center">
-            <CheckCircle className="w-5 h-5 text-primary mr-3 flex-shrink-0" />
-            <span className="text-sm text-secondary/80">24/7 customer support and provider assistance</span>
-          </div>
-          <div className="flex items-center">
-            <CheckCircle className="w-5 h-5 text-primary mr-3 flex-shrink-0" />
-            <span className="text-sm text-secondary/80">Pre-screened customers with verified requirements</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  // ── Step content ──────────────────────────────────────────────────────────
 
   const renderStepContent = () => {
     switch (step) {
+
+      // ── Step 1 : Email ──
       case 1:
         return (
           <div className="space-y-6">
-            <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold text-secondary mb-3">Start Your Provider Journey</h2>
-              <p className="text-secondary/70 text-lg">Enter your email to begin registration</p>
-              <div className="w-16 h-1 bg-gradient-to-r from-primary to-accent mx-auto mt-4 rounded-full"></div>
+            <div>
+              <h2 className="text-2xl font-bold text-secondary">Start Your Journey</h2>
+              <p className="text-sm text-gray-500 mt-1">Enter your email address to begin registration</p>
             </div>
 
-            <div className="group">
-              <label htmlFor="email" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                Email Address *
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                  <Mail className="text-primary w-5 h-5" />
-                </div>
-                <input
-                  type="email"
-                  id="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
-                  placeholder="your@email.com"
-                />
+            <Field label="Email Address *">
+              <input
+                type="email"
+                id="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                placeholder="you@example.com"
+                className={inputCls}
+              />
+            </Field>
+
+            <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex gap-3 items-start">
+              <CheckCircle className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-secondary/80">
+                <p className="font-semibold text-secondary mb-0.5">Quick & Secure Registration</p>
+                <p>We'll send a verification code to your email to get started.</p>
               </div>
             </div>
           </div>
         );
 
+      // ── Step 2 : OTP + Personal Details ──
       case 2:
         return (
-          <div className="space-y-6">
-            <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold text-secondary mb-3">Verify & Complete Details</h2>
-              <p className="text-secondary/70 text-lg">Enter the OTP and your basic information</p>
-              <div className="w-16 h-1 bg-gradient-to-r from-primary to-accent mx-auto mt-4 rounded-full"></div>
+          <div className="space-y-5">
+            <div>
+              <h2 className="text-2xl font-bold text-secondary">Verify & Fill Details</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Code sent to <span className="font-semibold text-primary">{formData.email}</span>
+              </p>
             </div>
 
-            <div className="bg-gradient-to-r from-primary/10 to-accent/10 rounded-2xl p-6 border border-primary/20">
-              <div className="text-center">
-                <div className="bg-green-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-                  <CheckCircle className="w-8 h-8 text-green-600" />
-                </div>
-                <p className="text-secondary/80 mb-2">Verification code sent to:</p>
-                <p className="font-semibold text-secondary">{formData.email}</p>
-                <p className="text-sm text-secondary/60 mt-2">
+            {/* OTP Banner */}
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 flex items-start gap-3">
+              <Mail className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-secondary/80 flex-1">
+                <p>Verification code sent to your email.</p>
+                <p className="mt-1">
                   {otpExpiryTime ? (
                     <>
-                      Code expires at {formatExpiryTime(otpExpiryTime)} •
+                      Expires at{' '}
+                      <span className="font-medium text-secondary">{formatExpiry(otpExpiryTime)}</span>
+                      {' • '}
                       {canResendOtp ? (
-                        <button onClick={handleResendOTP} className="ml-1 text-accent hover:text-accent/80 font-medium" disabled={isSubmitting}>Resend now</button>
+                        <button
+                          type="button"
+                          onClick={handleResendOTP}
+                          disabled={isSubmitting}
+                          className="text-accent font-semibold hover:underline"
+                        >
+                          Resend now
+                        </button>
                       ) : (
-                        <span className="ml-1">Resend in {resendCountdown}s</span>
+                        <span className="text-gray-400">Resend in {resendCountdown}s</span>
                       )}
                     </>
-                  ) : 'Code expired'}
+                  ) : (
+                    <span className="text-red-500 font-medium">Code expired — resend to continue</span>
+                  )}
                 </p>
               </div>
             </div>
 
-            <div className="group">
-              <label htmlFor="otp" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">
-                Enter 6-Digit Code *
-              </label>
+            {/* OTP Input */}
+            <Field label="Enter 6-Digit Code *">
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -620,202 +450,168 @@ const ProviderRegistration = () => {
                   name="otp"
                   value={formData.otp}
                   onChange={handleChange}
-                  className="flex-1 px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 text-center tracking-widest text-secondary bg-gradient-to-r from-primary/5 to-transparent placeholder-secondary/50 text-xl font-semibold hover:border-primary/50 hover:shadow-md focus:shadow-lg"
-                  placeholder="123456"
                   maxLength="6"
+                  placeholder="123456"
+                  className={`${inputCls} text-center tracking-[0.5em] text-xl font-bold flex-1`}
                 />
                 <button
                   type="button"
                   onClick={handleResendOTP}
                   disabled={!canResendOtp || isSubmitting}
-                  className={`px-4 py-4 rounded-2xl transition flex items-center ${canResendOtp ? 'bg-primary hover:bg-primary/90 text-white' : 'bg-gray-200 text-gray-500 cursor-not-allowed'} disabled:opacity-70`}
+                  className={`px-4 rounded-lg border transition-all flex items-center justify-center ${canResendOtp
+                    ? 'bg-primary border-primary text-background hover:bg-primary/90'
+                    : 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
+                    }`}
                 >
-                  <RotateCcw className="w-5 h-5" />
+                  <RotateCcw className="w-4 h-4" />
                 </button>
               </div>
-            </div>
+            </Field>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="group">
-                <label htmlFor="name" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Full Name *</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                    <User className="text-primary w-5 h-5" />
-                  </div>
+            {/* Personal Info Section */}
+            <Section title="Personal Information" icon={User}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Field label="Full Name *">
                   <input
                     type="text"
                     id="name"
                     name="name"
                     value={formData.name}
                     onChange={handleChange}
-                    className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                     placeholder="John Doe"
+                    className={inputCls}
                   />
-                </div>
-              </div>
-
-              <div className="group">
-                <label htmlFor="phone" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Phone Number *</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                    <Phone className="text-primary w-5 h-5" />
-                  </div>
+                </Field>
+                <Field label="Phone Number *">
                   <input
                     type="text"
                     id="phone"
                     name="phone"
                     value={formData.phone}
                     onChange={handleChange}
-                    className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                     placeholder="9876543210"
+                    className={inputCls}
                   />
-                </div>
+                </Field>
               </div>
-            </div>
-
-            <div className="group">
-              <label htmlFor="dateOfBirth" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Date of Birth *</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                  <Calendar className="text-primary w-5 h-5" />
-                </div>
+              <Field label="Date of Birth *">
                 <DatePicker
                   id="dateOfBirth"
                   name="dateOfBirth"
                   selected={formData.dateOfBirth ? new Date(formData.dateOfBirth) : null}
                   onChange={(date) => {
-                    const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().split('T')[0];
-                    setFormData(prev => ({ ...prev, dateOfBirth: localDate }));
+                    const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+                      .toISOString()
+                      .split('T')[0];
+                    setFormData((prev) => ({ ...prev, dateOfBirth: localDate }));
                   }}
                   dateFormat="yyyy-MM-dd"
-                  className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
                   placeholderText="Select Date of Birth"
                   showYearDropdown
                   scrollableYearDropdown
                   yearDropdownItemNumber={100}
                   maxDate={new Date()}
+                  wrapperClassName="w-full"
+                  className={inputCls}
                 />
-              </div>
-            </div>
+              </Field>
+            </Section>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="group">
-                <label htmlFor="password" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Create Password *</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                    <Lock className="text-primary w-5 h-5" />
-                  </div>
+            {/* Password Section */}
+            <Section title="Account Security" icon={Lock}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Field label="Create Password *">
                   <input
                     type="password"
                     id="password"
                     name="password"
                     value={formData.password}
                     onChange={handleChange}
-                    className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
-                    placeholder="At least 8 characters"
+                    placeholder="Min. 8 characters"
+                    className={inputCls}
                   />
-                </div>
-              </div>
-
-              <div className="group">
-                <label htmlFor="confirmPassword" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Confirm Password *</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                    <Lock className="text-primary w-5 h-5" />
-                  </div>
+                </Field>
+                <Field label="Confirm Password *">
                   <input
                     type="password"
                     id="confirmPassword"
                     name="confirmPassword"
                     value={formData.confirmPassword}
                     onChange={handleChange}
-                    className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
-                    placeholder="Confirm your password"
+                    placeholder="Repeat password"
+                    className={inputCls}
                   />
-                </div>
+                </Field>
               </div>
-            </div>
+            </Section>
           </div>
         );
 
+      // ── Step 3 : Login ──
       case 3:
         return (
           <div className="space-y-6">
-            <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold text-secondary mb-3">Login to Continue</h2>
-              <p className="text-secondary/70 text-lg">Access your account to complete your profile</p>
-              <div className="w-16 h-1 bg-gradient-to-r from-primary to-accent mx-auto mt-4 rounded-full"></div>
+            <div>
+              <h2 className="text-2xl font-bold text-secondary">Login to Continue</h2>
+              <p className="text-sm text-gray-500 mt-1">Access your account to complete your profile</p>
             </div>
 
-            <div className="group">
-              <label htmlFor="email" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Email Address *</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                  <Mail className="text-primary w-5 h-5" />
-                </div>
-                <input
-                  type="text"
-                  id="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
-                  placeholder="your@email.com"
-                />
-              </div>
+            <div className="bg-accent/5 border border-accent/20 rounded-xl p-4 flex gap-3 items-start">
+              <Shield className="w-5 h-5 text-accent flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-secondary/80">Your registration was saved. Log in to finish setting up your provider profile.</p>
             </div>
 
-            <div className="group">
-              <label htmlFor="password" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Password *</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                  <Lock className="text-primary w-5 h-5" />
-                </div>
-                <input
-                  type="password"
-                  id="password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
-                  placeholder="Enter your password"
-                />
-              </div>
-            </div>
+            <Field label="Email Address *">
+              <input
+                type="email"
+                id="email-login"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                placeholder="you@example.com"
+                className={inputCls}
+              />
+            </Field>
+
+            <Field label="Password *">
+              <input
+                type="password"
+                id="password-login"
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                placeholder="Enter your password"
+                className={inputCls}
+              />
+            </Field>
           </div>
         );
 
+      // ── Step 4 : Professional Profile ──
       case 4:
         return (
-          <div className="space-y-6">
-            <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold text-secondary mb-3">Complete Your Profile</h2>
-              <p className="text-secondary/70 text-lg">Add your professional details to start earning</p>
-              <div className="w-16 h-1 bg-gradient-to-r from-primary to-accent mx-auto mt-4 rounded-full"></div>
+          <div className="space-y-5">
+            <div>
+              <h2 className="text-2xl font-bold text-secondary">Complete Your Profile</h2>
+              <p className="text-sm text-gray-500 mt-1">Add professional details to start receiving bookings</p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="group relative z-50">
-                <label className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Service Categories (Select 1-3) *</label>
-
+            {/* Professional Info */}
+            <Section title="Professional Information" icon={Briefcase}>
+              <Field label="Service Categories (Select 1–3) *">
                 {providerServicesLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                    <span className="ml-3 text-secondary/70">Loading service categories...</span>
+                  <div className="flex items-center gap-2 py-3 text-sm text-gray-400">
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent" />
+                    Loading categories...
                   </div>
                 ) : providerServicesError ? (
-                  <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
-                    <div className="flex items-center">
-                      <AlertCircle className="w-5 h-5 text-red-500 mr-2" />
-                      <span className="text-red-700 text-sm">Failed to load service categories. Please try again.</span>
-                    </div>
+                  <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-600">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                    Failed to load categories. Please refresh.
                   </div>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                        <Briefcase className="text-primary w-5 h-5" />
-                      </div>
                       <select
                         onChange={(e) => {
                           const val = e.target.value;
@@ -824,237 +620,233 @@ const ProviderRegistration = () => {
                           }
                           e.target.value = '';
                         }}
-                        className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary font-medium appearance-none cursor-pointer"
                         defaultValue=""
+                        className={`${inputCls} appearance-none pr-10 cursor-pointer`}
                       >
-                        <option value="" disabled>Select a category...</option>
-                        {providerServices.map((service) => (
-                          <option
-                            key={service._id}
-                            value={service._id}
-                            disabled={selectedServices.includes(service._id)}
-                          >
-                            {service.name}
+                        <option value="" disabled>
+                          {selectedServices.length >= 3 ? 'Max 3 selected' : 'Select a category...'}
+                        </option>
+                        {providerServices.map((svc) => (
+                          <option key={svc._id} value={svc._id} disabled={selectedServices.includes(svc._id)}>
+                            {svc.name}
                           </option>
                         ))}
                       </select>
-                      <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-secondary/60 pointer-events-none" />
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                     </div>
 
                     {selectedServices.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mt-3">
-                        {selectedServices.map(id => {
-                          const svc = providerServices.find(s => s._id === id) || { name: 'Unknown' };
-                          return (
-                            <span key={id} className="inline-flex items-center px-4 py-1.5 bg-primary/10 text-primary border border-primary/20 rounded-full text-sm font-semibold shadow-sm">
-                              {svc.name}
-                              <button
-                                type="button"
-                                onClick={() => handleServiceChange({ _id: id })}
-                                className="ml-2 focus:outline-none hover:text-primary/70 transition-colors"
+                      <>
+                        <div className="flex flex-wrap gap-2">
+                          {selectedServices.map((id) => {
+                            const svc = providerServices.find((s) => s._id === id) || { name: 'Unknown' };
+                            return (
+                              <span
+                                key={id}
+                                className="inline-flex items-center gap-1.5 px-3 py-1 bg-primary/10 text-primary border border-primary/30 rounded-full text-xs font-semibold"
                               >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </span>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {selectedServices.length > 0 && (
-                      <div className="flex items-center justify-between text-sm mt-3 px-1">
-                        <span className="text-secondary/70 font-medium">{selectedServices.length} of 3 categories selected</span>
-                        <button type="button" onClick={() => setSelectedServices([])} className="text-accent hover:text-accent/80 font-bold transition-colors">Clear all</button>
-                      </div>
+                                {svc.name}
+                                <button
+                                  type="button"
+                                  onClick={() => handleServiceChange({ _id: id })}
+                                  className="hover:text-primary/60 transition-colors"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </span>
+                            );
+                          })}
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-gray-500 font-medium">
+                            {selectedServices.length}/3 selected
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedServices([])}
+                            className="text-accent font-semibold hover:underline"
+                          >
+                            Clear all
+                          </button>
+                        </div>
+                      </>
                     )}
 
                     {providerServices.length === 0 && (
-                      <div className="text-center py-8 text-secondary/60 font-medium">No service categories available at the moment.</div>
+                      <p className="text-sm text-gray-400 py-2">No categories available.</p>
                     )}
                   </div>
                 )}
-              </div>
+              </Field>
 
-              <div className="group">
-                <label htmlFor="experience" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Years of Experience *</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                    <Award className="text-primary w-5 h-5" />
-                  </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Field label="Years of Experience *">
                   <input
                     type="number"
                     id="experience"
                     name="experience"
                     value={formData.experience}
                     onChange={handleChange}
-                    className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
-                    placeholder="Years of experience"
+                    placeholder="e.g., 5"
+                    min="0"
+                    className={inputCls}
                   />
+                </Field>
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-1.5">
+                    <label className="text-xs font-semibold text-secondary uppercase tracking-wide">Service Area *</label>
+                    <div className="relative group cursor-pointer">
+                      <Info className="w-3.5 h-3.5 text-gray-400 hover:text-accent transition-colors" />
+                      <div className="absolute left-0 top-5 z-50 hidden group-hover:block w-60 bg-secondary text-background text-xs rounded-lg px-3 py-2.5 shadow-lg leading-relaxed">
+                        <div className="absolute -top-1.5 left-1 w-3 h-3 bg-secondary rotate-45 rounded-sm" />
+                        Enter the <strong>single city or area</strong> where you will provide services. Example: <em>Mumbai</em> or <em>Andheri West</em>. You can update this later from your profile.
+                      </div>
+                    </div>
+                  </div>
+                  <input
+                    type="text"
+                    id="serviceArea"
+                    name="serviceArea"
+                    value={formData.serviceArea}
+                    onChange={handleChange}
+                    placeholder="Enter your city (e.g., Mumbai)"
+                    className={inputCls}
+                  />
+                  {formData.serviceArea && (
+                    <p className="text-[10px] text-primary font-medium mt-0.5">📍 {formData.serviceArea}</p>
+                  )}
                 </div>
               </div>
-            </div>
+            </Section>
 
-            <div className="group">
-              <label htmlFor="serviceArea" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Service Area *</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                  <MapPin className="text-primary w-5 h-5" />
-                </div>
-                <input
-                  type="text"
-                  id="serviceArea"
-                  name="serviceArea"
-                  value={formData.serviceArea}
-                  onChange={handleChange}
-                  className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium"
-                  placeholder="Cities or pincodes you serve (e.g., Mumbai, 400001)"
+            {/* Address Details */}
+            <Section title="Address Details" icon={MapPin}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Field label="Street Address *">
+                  <input
+                    type="text"
+                    id="street"
+                    name="street"
+                    value={formData.street}
+                    onChange={handleChange}
+                    placeholder="123 Main Street"
+                    className={inputCls}
+                  />
+                </Field>
+                <Field label="Postal Code *">
+                  <input
+                    type="text"
+                    id="postalCode"
+                    name="postalCode"
+                    value={formData.postalCode}
+                    onChange={handleChange}
+                    placeholder="400001"
+                    className={inputCls}
+                  />
+                </Field>
+              </div>
+              <AddressSelector
+                selectedState={formData.state}
+                selectedCity={formData.city}
+                onStateChange={(value) => handleChange({ target: { name: 'state', value } })}
+                onCityChange={(value) => {
+                  handleChange({ target: { name: 'city', value } });
+                  handleChange({ target: { name: 'serviceArea', value } });
+                }}
+              />
+            </Section>
+
+            {/* Bank Details */}
+            <Section
+              title="Bank Details"
+              icon={CreditCard}
+              accent
+              tooltip="Your bank details are used for secure payment transfers after each completed job. All information is encrypted and never shared. Provide the account where you want to receive your earnings."
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Field label="Account Number *">
+                  <input
+                    type="text"
+                    id="accountNo"
+                    name="accountNo"
+                    value={formData.accountNo}
+                    onChange={handleChange}
+                    placeholder="1234567890"
+                    className={inputCls}
+                  />
+                </Field>
+                <Field label="IFSC Code *">
+                  <input
+                    type="text"
+                    id="ifsc"
+                    name="ifsc"
+                    value={formData.ifsc}
+                    onChange={handleChange}
+                    placeholder="ABCD0123456"
+                    className={inputCls}
+                  />
+                </Field>
+                <Field label="Bank Name">
+                  <input
+                    type="text"
+                    id="bankName"
+                    name="bankName"
+                    value={formData.bankName}
+                    onChange={handleChange}
+                    placeholder="e.g., State Bank of India"
+                    className={inputCls}
+                  />
+                </Field>
+                <Field label="Account Holder Name">
+                  <input
+                    type="text"
+                    id="accountName"
+                    name="accountName"
+                    value={formData.accountName}
+                    onChange={handleChange}
+                    placeholder="Name as per bank records"
+                    className={inputCls}
+                  />
+                </Field>
+              </div>
+              <FileField
+                label="Bank Passbook Image *"
+                fieldName="passbookImage"
+                accept="image/*"
+                placeholder="Upload passbook image..."
+                icon={Camera}
+                value={formData.passbookImage}
+                onChange={handleFileChange('passbookImage')}
+              />
+            </Section>
+
+            {/* Documents */}
+            <Section
+              title="Documents Upload"
+              icon={FileText}
+              tooltip="Upload clear images only. 'Any Experience' can be a certificate, work photo, or any proof of your skills. 'Profile Picture' should be a clear face photo. These help build trust with customers."
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FileField
+                  label="Any Experience (Image) *"
+                  fieldName="resume"
+                  accept="image/*"
+                  placeholder="Upload experience photo/certificate..."
+                  icon={Camera}
+                  value={formData.resume}
+                  onChange={handleFileChange('resume')}
+                />
+                <FileField
+                  label="Profile Picture *"
+                  fieldName="profilePic"
+                  accept="image/*"
+                  placeholder="Upload profile photo..."
+                  icon={Camera}
+                  value={formData.profilePic}
+                  onChange={handleFileChange('profilePic')}
                 />
               </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="group">
-                <label htmlFor="resume" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Professional Resume *</label>
-                <div className="relative">
-                  <input
-                    type="file"
-                    id="resume"
-                    name="resume"
-                    onChange={handleFileChange('resume')}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    accept=".pdf,.doc,.docx"
-                  />
-                  <div className="flex items-center justify-between px-4 py-4 bg-gradient-to-r from-primary/5 to-transparent border-2 border-gray-200 rounded-2xl hover:border-primary/50 transition-all duration-300 hover:shadow-md">
-                    <span className="text-secondary/70 truncate">{formData.resume ? formData.resume.name : 'Choose PDF/DOC file...'}</span>
-                    <FileText className="text-primary w-5 h-5" />
-                  </div>
-                </div>
-                <p className="mt-2 text-sm text-secondary/60">Upload your professional resume (PDF or DOC format)</p>
-              </div>
-
-              <div className="group">
-                <label htmlFor="profilePic" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Profile Picture *</label>
-                <div className="relative">
-                  <input
-                    type="file"
-                    id="profilePic"
-                    name="profilePic"
-                    onChange={handleFileChange('profilePic')}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    accept="image/*"
-                  />
-                  <div className="flex items-center justify-between px-4 py-4 bg-gradient-to-r from-primary/5 to-transparent border-2 border-gray-200 rounded-2xl hover:border-primary/50 transition-all duration-300 hover:shadow-md">
-                    <span className="text-secondary/70 truncate">{formData.profilePic ? formData.profilePic.name : 'Choose image file...'}</span>
-                    <Camera className="text-primary w-5 h-5" />
-                  </div>
-                </div>
-                <p className="mt-2 text-sm text-secondary/60">Upload a clear, professional photo</p>
-              </div>
-            </div>
-
-            <div className="border-t border-gray-200 pt-6 mt-6">
-              <h3 className="text-lg font-bold text-secondary mb-4 flex items-center">
-                <Home className="mr-2 text-primary w-5 h-5" />
-                Address Information
-              </h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="group">
-                  <label htmlFor="street" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Street Address *</label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                      <MapPin className="text-primary w-5 h-5" />
-                    </div>
-                    <input type="text" id="street" name="street" value={formData.street} onChange={handleChange} className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="123 Main Street" />
-                  </div>
-                </div>
-
-                <div className="group">
-                  <label htmlFor="postalCode" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Postal Code *</label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                      <MapPin className="text-primary w-5 h-5" />
-                    </div>
-                    <input type="text" id="postalCode" name="postalCode" value={formData.postalCode} onChange={handleChange} className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="123456" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-6">
-                <AddressSelector
-                  selectedState={formData.state}
-                  selectedCity={formData.city}
-                  onStateChange={(value) => handleChange({ target: { name: 'state', value } })}
-                  onCityChange={(value) => {
-                    handleChange({ target: { name: 'city', value } });
-                    handleChange({ target: { name: 'serviceArea', value } });
-                  }}
-                />
-              </div>
-            </div>
-
-            <div className="border-t border-gray-200 pt-6 mt-6">
-              <h3 className="text-lg font-bold text-secondary mb-4 flex items-center">
-                <CreditCard className="mr-2 text-primary w-5 h-5" />
-                Bank Details for Payments
-              </h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="group">
-                  <label htmlFor="accountNo" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Account Number *</label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                      <CreditCard className="text-primary w-5 h-5" />
-                    </div>
-                    <input type="text" id="accountNo" name="accountNo" value={formData.accountNo} onChange={handleChange} className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="1234567890" />
-                  </div>
-                </div>
-
-                <div className="group">
-                  <label htmlFor="ifsc" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">IFSC Code *</label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                      <Building className="text-primary w-5 h-5" />
-                    </div>
-                    <input type="text" id="ifsc" name="ifsc" value={formData.ifsc} onChange={handleChange} className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="ABCD0123456" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-                <div className="group">
-                  <label htmlFor="bankName" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Bank Name</label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                      <Building className="text-primary w-5 h-5" />
-                    </div>
-                    <input type="text" id="bankName" name="bankName" value={formData.bankName} onChange={handleChange} className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="e.g., State Bank of India" />
-                  </div>
-                </div>
-
-                <div className="group">
-                  <label htmlFor="accountName" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Account Holder Name</label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-                      <User className="text-primary w-5 h-5" />
-                    </div>
-                    <input type="text" id="accountName" name="accountName" value={formData.accountName} onChange={handleChange} className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300 bg-gradient-to-r from-primary/5 to-transparent text-secondary placeholder-secondary/50 hover:border-primary/50 hover:shadow-md focus:shadow-lg font-medium" placeholder="Name as per bank records" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 group">
-                <label htmlFor="passbookImage" className="block text-secondary font-semibold mb-3 text-sm tracking-wide">Bank Passbook Image *</label>
-                <div className="relative">
-                  <input type="file" id="passbookImage" name="passbookImage" onChange={handleFileChange('passbookImage')} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept="image/*" />
-                  <div className="flex items-center justify-between px-4 py-4 bg-gradient-to-r from-primary/5 to-transparent border-2 border-gray-200 rounded-2xl hover:border-primary/50 transition-all duration-300 hover:shadow-md">
-                    <span className="text-secondary/70 truncate">{formData.passbookImage ? formData.passbookImage.name : 'Choose passbook image...'}</span>
-                    <Camera className="text-primary w-5 h-5" />
-                  </div>
-                </div>
-                <p className="mt-2 text-sm text-secondary/60">Upload clear image of your bank passbook</p>
-              </div>
-            </div>
+            </Section>
           </div>
         );
 
@@ -1063,63 +855,276 @@ const ProviderRegistration = () => {
     }
   };
 
-  return (
-    <div className="min-h-screen flex items-center justify-center p-4 pt-28 bg-background relative overflow-hidden">
-      <div className="absolute inset-0 opacity-10">
-        <div className="absolute top-20 left-20 w-32 h-32 bg-accent/30 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-20 right-20 w-48 h-48 bg-primary/30 rounded-full blur-3xl"></div>
-        <div className="absolute top-1/2 left-1/4 w-24 h-24 bg-accent/30 rounded-full blur-2xl"></div>
+  // ── Benefits sidebar ──────────────────────────────────────────────────────
+  const BenefitsSection = () => (
+    <div className="space-y-6">
+      <div className="text-center flex flex-col items-center">
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 rounded-full mb-4 mt-6">
+          <Sparkles className="w-3.5 h-3.5 text-primary" />
+          <span className="text-xs font-bold text-primary">Join 2,000+ Trusted Providers</span>
+        </div>
+        <h1 className="text-4xl font-bold text-secondary leading-tight">
+          Become a{' '}
+          <span className="text-primary">SafeVolt</span>{' '}
+          Provider
+        </h1>
+        <p className="mt-3 text-sm text-gray-500 leading-relaxed">
+          Join our network of verified electrical professionals and start earning more today.
+        </p>
       </div>
 
-      <div className="w-full max-w-7xl relative z-10 lg:grid lg:grid-cols-2 lg:gap-12 lg:items-start">
+      <div className="grid grid-cols-2 gap-3">
+        {[
+          { icon: DollarSign, title: 'Earn More', desc: 'Set your own rates', color: 'primary' },
+          { icon: Shield, title: 'Get Verified', desc: 'Build trust fast', color: 'accent' },
+          { icon: Zap, title: 'Fast Payments', desc: 'Instant transfers', color: 'primary' },
+          { icon: Calendar, title: 'Flexible Hours', desc: 'Work your way', color: 'accent' },
+        ].map(({ icon: Icon, title, desc, color }) => (
+          <div
+            key={title}
+            className={`rounded-xl border p-4 transition-all hover:shadow-sm ${color === 'primary'
+              ? 'border-primary/20 bg-primary/5 hover:border-primary/40'
+              : 'border-accent/20 bg-accent/5 hover:border-accent/40'
+              }`}
+          >
+            <div
+              className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${color === 'primary' ? 'bg-primary/15' : 'bg-accent/15'
+                }`}
+            >
+              <Icon className={`w-4 h-4 ${color === 'primary' ? 'text-primary' : 'text-accent'}`} />
+            </div>
+            <p className="text-sm font-bold text-secondary">{title}</p>
+            <p className="text-xs text-gray-500 mt-0.5">{desc}</p>
+          </div>
+        ))}
+      </div>
 
-        <div className="hidden lg:block lg:sticky lg:top-8">
-          <BenefitsSection />
+      <div className="bg-background border border-gray-200 rounded-xl p-5">
+        <h3 className="text-sm font-bold text-secondary mb-4 flex items-center gap-2">
+          <Award className="w-4 h-4 text-primary" /> How It Works
+        </h3>
+        <div className="space-y-3">
+          {[
+            { label: 'Register your profile', color: 'primary' },
+            { label: 'Get verified by our team', color: 'accent' },
+            { label: 'Start receiving bookings', color: 'primary' },
+          ].map(({ label, color }, i) => (
+            <div key={i} className="flex items-center gap-3">
+              <div
+                className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${color === 'primary' ? 'bg-primary/10' : 'bg-accent/10'
+                  }`}
+              >
+                <span className={`text-xs font-bold ${color === 'primary' ? 'text-primary' : 'text-accent'}`}>
+                  {i + 1}
+                </span>
+              </div>
+              <span className="text-sm text-secondary/80">{label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-background border border-gray-200 rounded-xl p-5">
+        <h3 className="text-sm font-bold text-secondary mb-3 flex items-center gap-2">
+          <Users className="w-4 h-4 text-accent" /> Why Providers Trust SafeVolt
+        </h3>
+        <div className="space-y-2.5">
+          {[
+            'Secure payments with instant bank transfer',
+            '24/7 customer and provider support',
+            'Pre-screened customers with verified needs',
+          ].map((text) => (
+            <div key={text} className="flex items-start gap-2">
+              <CheckCircle className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+              <span className="text-xs text-secondary/70">{text}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  // ── Progress indicator ────────────────────────────────────────────────────
+  const ProgressIndicator = () => (
+    <div className="mb-8">
+      <div className="flex items-center">
+        {[1, 2, 3, 4].map((s, idx) => {
+          const StepIcon = STEP_ICONS[idx];
+          const done = s < step;
+          const active = s === step;
+          return (
+            <div key={s} className="flex-1 last:flex-none flex items-center">
+              <div className="flex flex-col items-center gap-1.5 min-w-0">
+                <div
+                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${done
+                    ? 'bg-primary text-background'
+                    : active
+                      ? 'bg-accent text-background ring-4 ring-accent/20 border-2 border-accent'
+                      : 'bg-gray-100 text-gray-400'
+                    }`}
+                >
+                  {done ? (
+                    <CheckCircle className="w-4 h-4" />
+                  ) : (
+                    <StepIcon className="w-4 h-4" />
+                  )}
+                </div>
+                <span
+                  className={`text-[10px] font-semibold whitespace-nowrap ${active ? 'text-accent font-bold' : done ? 'text-secondary' : 'text-gray-400'
+                    }`}
+                >
+                  {STEP_LABELS[idx]}
+                </span>
+              </div>
+              {s < 4 && (
+                <div className="flex-1 h-0.5 mx-2 rounded-full bg-gray-100 overflow-hidden mb-4">
+                  <div
+                    className={`h-full bg-accent transition-all duration-500 ${done ? 'w-full' : 'w-0'}`}
+                  />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  // ── Submit button labels ──
+  const submitLabel = {
+    1: 'Send Verification Code',
+    2: 'Complete Registration',
+    3: 'Login & Continue',
+    4: 'Submit & Start Earning',
+  };
+
+  // ── Root render ───────────────────────────────────────────────────────────
+  return (
+    <div className="min-h-screen bg-gray-50 pt-20 pb-14 px-4">
+      <div className="max-w-7xl mx-auto">
+
+        {/* ── Mobile trust hero ──────────────────────────── */}
+        <div className="lg:hidden mb-5">
+          {/* Brand headline */}
+          <div className="text-center mb-4">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-primary/10 rounded-full mb-3">
+              <Sparkles className="w-3.5 h-3.5 text-primary" />
+              <span className="text-xs font-bold text-primary">Join 2,000+ Trusted Providers</span>
+            </div>
+            <h1 className="text-2xl font-bold text-secondary leading-tight">
+              Become a <span className="text-primary">SafeVolt</span> Provider
+            </h1>
+            <p className="text-xs text-gray-500 mt-1">
+              Verified electrical professionals earning more every day
+            </p>
+          </div>
+
+          {/* 4 stat pills */}
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            {[
+              { icon: DollarSign, label: 'Earn More', sub: 'Flexible rates', color: 'primary' },
+              { icon: Shield, label: 'Get Verified', sub: 'Trusted badge', color: 'accent' },
+              { icon: Zap, label: 'Fast Payments', sub: 'Instant transfer', color: 'primary' },
+              { icon: Calendar, label: 'Flexible Hours', sub: 'Work your way', color: 'accent' },
+            ].map(({ icon: Icon, label, sub, color }) => (
+              <div
+                key={label}
+                className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 ${color === 'primary'
+                  ? 'border-primary/20 bg-primary/5'
+                  : 'border-accent/20 bg-accent/5'
+                  }`}
+              >
+                <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${color === 'primary' ? 'bg-primary/15' : 'bg-accent/15'
+                  }`}>
+                  <Icon className={`w-3.5 h-3.5 ${color === 'primary' ? 'text-primary' : 'text-accent'}`} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-secondary leading-tight">{label}</p>
+                  <p className="text-[10px] text-gray-400 leading-tight">{sub}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Trust checks strip */}
+          <div className="flex flex-col gap-1.5 bg-background border border-gray-200 rounded-xl px-4 py-3">
+            {[
+              'Secure payments with instant bank transfer',
+              '24/7 provider support, always available',
+              'Pre-screened, verified customers only',
+            ].map((text) => (
+              <div key={text} className="flex items-center gap-2">
+                <CheckCircle className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+                <span className="text-xs text-secondary/70">{text}</span>
+              </div>
+            ))}
+          </div>
         </div>
 
-        <div className="w-full max-w-lg mx-auto lg:mx-0">
-          <div className="bg-background/95 backdrop-blur-sm rounded-3xl shadow-2xl p-8 border border-primary/20 shadow-primary/10">
-            <ProgressIndicator />
+        {/* ── Desktop: side-by-side layout ───────────────────────────────── */}
+        <div className="lg:flex lg:flex-row lg:gap-10 lg:items-start">
 
-            <form onSubmit={step === 1 ? handleInitiateRegistration : step === 2 ? handleCompleteRegistration : step === 3 ? handleLogin : handleCompleteProfile}>
-              {renderStepContent()}
+          {/* Left: Full benefits — desktop only */}
+          <div className="hidden lg:block lg:flex-1">
+            <BenefitsSection />
+          </div>
 
-              <div className="flex justify-between mt-8 space-x-4">
-                {step === 2 && (
-                  <button
-                    type="button"
-                    onClick={() => setStep(1)}
-                    className="flex items-center px-6 py-3 rounded-2xl border-2 border-primary text-primary hover:bg-primary hover:text-white transition-all duration-300 font-semibold"
-                    disabled={isSubmitting}
-                  >
-                    <ArrowLeft className="w-5 h-5 mr-2" />
-                    Back
-                  </button>
-                )}
+          {/* Right: Form card */}
+          <div className="w-full lg:flex-1 mt-6 lg:mt-8">
+            <div className="bg-background rounded-2xl shadow-sm border border-gray-200 p-6 md:p-8">
+              <ProgressIndicator />
 
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className={`flex items-center justify-center px-8 py-3 rounded-2xl font-semibold transition-all duration-300 transform hover:scale-[1.02] disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none ${step === 1 ? 'w-full' : 'flex-1'} bg-accent text-background shadow-lg hover:shadow-xl`}
-                >
-                  {isSubmitting ? (
-                    <div className="flex items-center">
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-background mr-2"></div>
-                      <span>Processing...</span>
-                    </div>
-                  ) : (
-                    <span>{step === 1 ? 'Send Verification Code' : step === 2 ? 'Complete Registration' : step === 3 ? 'Login & Continue' : 'Register & Start Earning'}</span>
+              <form
+                onSubmit={
+                  step === 1 ? handleInitiateRegistration
+                    : step === 2 ? handleCompleteRegistration
+                      : step === 3 ? handleLogin
+                        : handleCompleteProfile
+                }
+              >
+                {renderStepContent()}
+
+                {/* Action buttons */}
+                <div className="flex gap-3 mt-8">
+                  {step === 2 && (
+                    <button
+                      type="button"
+                      onClick={() => setStep(1)}
+                      disabled={isSubmitting}
+                      className="flex items-center gap-2 px-5 py-3 rounded-lg border border-gray-300 text-secondary text-sm font-semibold hover:bg-gray-50 transition-all disabled:opacity-50"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                      Back
+                    </button>
                   )}
-                </button>
-              </div>
-            </form>
 
-            <div className="text-center mt-6">
-              <Link to="/login" className="text-accent hover:text-accent/80 font-semibold transition-colors duration-300">
-                Already registered? Sign in to your provider account
-              </Link>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="flex-1 flex items-center justify-center gap-2 py-3 rounded-lg bg-primary text-background text-sm font-bold hover:bg-primary/90 active:scale-[0.99] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <div className="h-4 w-4 rounded-full border-2 border-background border-t-transparent animate-spin" />
+                        Submitting...
+                      </>
+                    ) : (
+                      submitLabel[step]
+                    )}
+                  </button>
+                </div>
+              </form>
+
+              {/* Footer link */}
+              <p className="text-center text-sm text-gray-500 mt-6">
+                Already registered?{' '}
+                <Link to="/login" className="text-accent font-semibold hover:underline">
+                  Sign in to your account
+                </Link>
+              </p>
             </div>
           </div>
+
         </div>
       </div>
     </div>
