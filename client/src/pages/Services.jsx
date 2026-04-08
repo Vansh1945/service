@@ -127,7 +127,7 @@ const Services = ({ limit }) => {
             <div className="flex flex-col">
               <div className="flex items-center text-secondary">
                 <IndianRupee className="w-3.5 h-3.5 font-bold" />
-                <span className="text-bold md:text-lg font-black text-secondary">
+                <span className="font-bold text-secondary text-sm md:text-lg">
                   {service.basePrice?.toLocaleString()}
                 </span>
               </div>
