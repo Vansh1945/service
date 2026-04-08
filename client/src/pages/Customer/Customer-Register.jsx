@@ -200,7 +200,7 @@ const CustomerRegistration = () => {
         <h1 className="text-4xl font-bold text-secondary leading-tight">
           Join <span className="text-primary">SafeVolt</span> today
         </h1>
-        <p className="mt-3 text-sm text-gray-500 leading-relaxed max-w-sm mx-auto">
+        <p className="mt-3 text-sm text-secondary/60 leading-relaxed max-w-sm mx-auto">
           Experience premium electrical services with verified professionals at your doorstep.
         </p>
       </div>
@@ -216,8 +216,8 @@ const CustomerRegistration = () => {
             key={title}
             className={`rounded-xl border p-4 transition-all hover:shadow-sm ${
               color === 'primary'
-                ? 'border-primary/20 bg-primary/5 hover:border-primary/40'
-                : 'border-accent/20 bg-accent/5 hover:border-accent/40'
+                ? 'border-primary/20 bg-primary/5 hover:border-primary/30'
+                : 'border-accent/20 bg-accent/5 hover:border-accent/30'
             }`}
           >
             <div
@@ -228,12 +228,12 @@ const CustomerRegistration = () => {
               <Icon className={`w-4 h-4 ${color === 'primary' ? 'text-primary' : 'text-accent'}`} />
             </div>
             <p className="text-sm font-bold text-secondary">{title}</p>
-            <p className="text-xs text-gray-500 mt-0.5">{desc}</p>
+            <p className="text-xs text-secondary/50 mt-0.5">{desc}</p>
           </div>
         ))}
       </div>
 
-      <div className="bg-background border border-gray-200 rounded-xl p-5">
+      <div className="bg-background border border-secondary/10 rounded-xl p-5 shadow-sm">
         <h3 className="text-sm font-bold text-secondary mb-3 flex items-center gap-2">
           <Shield className="w-4 h-4 text-primary" /> Why Customers Trust Us
         </h3>
@@ -245,7 +245,7 @@ const CustomerRegistration = () => {
           ].map((text) => (
             <div key={text} className="flex items-start gap-2">
               <CheckCircle className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-              <span className="text-xs text-secondary/70">{text}</span>
+              <span className="text-xs text-secondary/80">{text}</span>
             </div>
           ))}
         </div>
@@ -374,6 +374,18 @@ const CustomerRegistration = () => {
                 </div>
               </div>
             </Section>
+
+            <div className="flex items-start gap-3 mt-4 px-1">
+              <input
+                type="checkbox"
+                id="terms"
+                required
+                className="w-4 h-4 mt-0.5 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer transition-all"
+              />
+              <label htmlFor="terms" className="text-xs text-gray-400 leading-relaxed cursor-pointer select-none">
+                I agree to the <Link to="/terms" className="text-primary font-bold hover:underline">Terms of Service</Link> and <Link to="/privacy" className="text-primary font-bold hover:underline">Privacy Policy</Link>
+              </label>
+            </div>
           </div>
         );
       default:
