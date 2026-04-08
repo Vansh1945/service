@@ -771,13 +771,12 @@ const ProviderBooking = () => {
                       </div>
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-gray-500">Payment Status</span>
-                        <span className={`px-2 py-0.5 rounded-lg text-xs font-semibold ${
-                          selectedBooking.paymentStatus === 'paid'
+                        <span className={`px-2 py-0.5 rounded-lg text-xs font-semibold ${selectedBooking.paymentStatus === 'paid'
                             ? 'bg-primary/10 text-primary'
                             : (selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentType === 'pay_after_service')
-                            ? 'bg-yellow-100 text-yellow-700'
-                            : 'bg-accent/10 text-accent'
-                        }`}>
+                              ? 'bg-yellow-100 text-yellow-700'
+                              : 'bg-accent/10 text-accent'
+                          }`}>
                           {selectedBooking.paymentStatus === 'paid' ? 'Paid' : (selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentType === 'pay_after_service') ? 'Pending Collection' : 'Unpaid'}
                         </span>
                       </div>

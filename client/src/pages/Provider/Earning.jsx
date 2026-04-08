@@ -1,95 +1,122 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/auth';
 import {
-  TrendingUp,
-  DollarSign,
-  Clock,
-  Download,
-  CreditCard,
-  FileText,
-  AlertCircle,
-  CheckCircle,
-  XCircle,
-  Calendar,
-  Filter,
-  ArrowDownLeft,
-  ChevronDown,
-  ChevronUp,
-  BarChart3,
-  Activity,
-  Wallet,
-  Receipt,
-  TrendingDown,
-  Menu,
-  X
+  TrendingUp, DollarSign, Clock, Download, CreditCard, FileText,
+  AlertCircle, CheckCircle, XCircle, Calendar, ArrowDownLeft,
+  ChevronDown, ChevronUp, BarChart3, Activity, Wallet, Receipt,
+  Filter, Loader2, X, Info, TrendingDown, Eye, Banknote, Building
 } from 'lucide-react';
 
+// ── Utility Helpers ──────────────────────────────────────────────────────────
+
+const formatCurrency = (amount) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(amount || 0);
+
+const formatDate = (dateString) => dateString ? new Date(dateString).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A';
+
+const formatTime = (dateString) => dateString ? new Date(dateString).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : 'N/A';
+
+const getStatusConfig = (status) => {
+  const configs = {
+    completed: { color: 'bg-emerald-50 text-emerald-700', icon: CheckCircle, label: 'Success' },
+    paid: { color: 'bg-emerald-50 text-emerald-700', icon: CheckCircle, label: 'Paid' },
+    available: { color: 'bg-teal-50 text-teal-700', icon: Wallet, label: 'Available' },
+    processing: { color: 'bg-amber-50 text-amber-700', icon: Clock, label: 'Processing' },
+    under_review: { color: 'bg-purple-50 text-purple-700', icon: Clock, label: 'Review' },
+    approved: { color: 'bg-teal-50 text-teal-700', icon: CheckCircle, label: 'Approved' },
+    requested: { color: 'bg-yellow-50 text-yellow-700', icon: Clock, label: 'Requested' },
+    failed: { color: 'bg-red-50 text-red-700', icon: XCircle, label: 'Failed' },
+    rejected: { color: 'bg-red-50 text-red-700', icon: XCircle, label: 'Rejected' }
+  };
+  return configs[status?.toLowerCase()] || { color: 'bg-gray-100 text-gray-600', icon: AlertCircle, label: status || 'Unknown' };
+};
+
+// ── Shared UI Components ─────────────────────────────────────────────────────
+
+const StatCard = ({ title, value, icon: Icon, subtext }) => (
+  <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
+    <div className="flex items-center justify-between">
+      <div>
+        <p className="text-xs font-medium text-secondary/50 uppercase tracking-wide">{title}</p>
+        <p className="text-2xl font-bold text-secondary mt-1">{value}</p>
+        {subtext && <p className="text-xs text-secondary/40 mt-1">{subtext}</p>}
+      </div>
+      <div className="p-3 bg-primary/10 rounded-xl text-primary">
+        <Icon className="w-5 h-5" />
+      </div>
+    </div>
+  </div>
+);
+
+const Badge = ({ status }) => {
+  const cfg = getStatusConfig(status);
+  const Icon = cfg.icon;
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${cfg.color}`}>
+      <Icon className="w-3.5 h-3.5" />
+      {cfg.label}
+    </span>
+  );
+};
+
+// ── Main Dashboard Component ─────────────────────────────────────────────────
+
 const ProviderEarningsDashboard = () => {
-  const { token, API, showToast, user } = useAuth();
+  const { token, API, showToast } = useAuth();
+
+  const tabs = [
+    { id: 'dashboard', label: 'Overview', icon: BarChart3 },
+    { id: 'earnings', label: 'Earnings', icon: CreditCard },
+    { id: 'withdrawals', label: 'Withdrawals', icon: FileText },
+    { id: 'reports', label: 'Reports', icon: Download },
+  ];
+
   const [loading, setLoading] = useState(false);
-  const [summary, setSummary] = useState({
-    totalEarnings: 0,
-    totalWithdrawn: 0,
-    availableBalance: 0,
-    totalPendingWithdrawals: 0
-  });
+  const [summary, setSummary] = useState({ totalEarnings: 0, totalWithdrawn: 0, availableBalance: 0, totalPendingWithdrawals: 0 });
   const [earningsReport, setEarningsReport] = useState([]);
   const [withdrawalReport, setWithdrawalReport] = useState([]);
-  const [showWithdrawal, setShowWithdrawal] = useState(false);
-  const [expandedCards, setExpandedCards] = useState({
-    weekly: false,
-    monthly: false
-  });
-  const [withdrawalForm, setWithdrawalForm] = useState({
-    amount: ''
-  });
+  const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
+  const [selectedWithdrawal, setSelectedWithdrawal] = useState(null);
+  const [expandedCards, setExpandedCards] = useState({ weekly: false, monthly: false });
+  const [withdrawalForm, setWithdrawalForm] = useState({ amount: '' });
   const [downloading, setDownloading] = useState({ earnings: false, withdrawals: false });
   const [providerBankDetails, setProviderBankDetails] = useState(null);
-  const [dateFilter, setDateFilter] = useState({
-    startDate: '',
-    endDate: ''
-  });
+  const [dateFilter, setDateFilter] = useState({ startDate: '', endDate: '' });
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [weeklyData, setWeeklyData] = useState([]);
-  const [monthlyData, setMonthlyData] = useState([]);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [processingWithdrawal, setProcessingWithdrawal] = useState(false);
-  const [pagination, setPagination] = useState({
-    currentPage: 1,
-    pageSize: 20,
-    totalEarnings: 0
-  });
+  const [pagination, setPagination] = useState({ currentPage: 1, pageSize: 20, totalEarnings: 0 });
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmMessage, setConfirmMessage] = useState('');
   const [confirmAction, setConfirmAction] = useState(null);
+  const [timeFilter, setTimeFilter] = useState('month');
+  const [weeklyData, setWeeklyData] = useState([]);
+  const [monthlyData, setMonthlyData] = useState([]);
+  const [processingWithdrawal, setProcessingWithdrawal] = useState(false);
 
-  // Fetch earnings summary
-  const fetchSummary = async () => {
+  // ── API Handlers ─────────────────────────────────────────────────────────────
+
+  const fetchSummary = useCallback(async () => {
     try {
-      setLoading(true);
-
-      // Calculate current month start and end dates
-      const currentDate = new Date();
-      const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-      const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-      endOfMonth.setHours(23, 59, 59, 999);
-
-      const startDate = startOfMonth.toISOString().split('T')[0];
-      const endDate = endOfMonth.toISOString().split('T')[0];
-
-      const response = await fetch(`${API}/payment/summary?startDate=${startDate}&endDate=${endDate}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData?.error || errorData?.message || 'Failed to fetch earnings summary');
+      const now = new Date();
+      let start, end;
+      if (timeFilter === 'week') {
+        const d = new Date(now);
+        const day = d.getDay();
+        const diff = d.getDate() - day;
+        start = new Date(d.setDate(diff));
+        start.setHours(0, 0, 0, 0);
+        end = new Date();
+      } else if (timeFilter === 'month') {
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+        end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      } else if (timeFilter === 'year') {
+        start = new Date(now.getFullYear(), 0, 1);
+        end = new Date(now.getFullYear(), 11, 31);
       }
+      end.setHours(23, 59, 59, 999);
 
-      const data = await response.json();
+      const res = await fetch(`${API}/payment/summary?startDate=${start.toISOString().split('T')[0]}&endDate=${end.toISOString().split('T')[0]}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
       if (data.success) {
         setSummary({
           totalEarnings: data.totalEarnings || 0,
@@ -97,1145 +124,531 @@ const ProviderEarningsDashboard = () => {
           availableBalance: data.availableBalance || 0,
           totalPendingWithdrawals: data.pendingWithdrawals || 0
         });
-      } else {
-        throw new Error(data.error || data.message || 'Failed to fetch earnings summary');
       }
-    } catch (error) {
-      console.error('Error fetching summary:', error);
-      showToast(error.message, 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
+    } catch (err) { console.error('Error fetching summary:', err); }
+  }, [API, token, timeFilter]);
 
-  // Fetch weekly/monthly earnings data
-  const fetchWeeklyMonthlyData = async () => {
-    try {
-      // Generate weekly data for current month
-      const currentDate = new Date();
-      const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-      const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-
-      const weeklyResponse = await fetch(
-        `${API}/payment/earnings-report?startDate=${startOfMonth.toISOString().split('T')[0]}&endDate=${endOfMonth.toISOString().split('T')[0]}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      if (weeklyResponse.ok) {
-        const weeklyData = await weeklyResponse.json();
-        if (weeklyData.success && weeklyData.earnings) {
-          processWeeklyData(weeklyData.earnings);
-        }
-      }
-
-      // Generate monthly data for current year
-      const startOfYear = new Date(currentDate.getFullYear(), 0, 1);
-      const endOfYear = new Date(currentDate.getFullYear(), 11, 31);
-
-      const monthlyResponse = await fetch(
-        `${API}/payment/earnings-report?startDate=${startOfYear.toISOString().split('T')[0]}&endDate=${endOfYear.toISOString().split('T')[0]}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      if (monthlyResponse.ok) {
-        const monthlyData = await monthlyResponse.json();
-        if (monthlyData.success && monthlyData.earnings) {
-          processMonthlyData(monthlyData.earnings);
-        }
-      }
-
-    } catch (error) {
-      console.error('Error fetching weekly/monthly data:', error);
-    }
-  };
-
-  // Process weekly data
-  const processWeeklyData = (earnings) => {
-    const weeks = [];
+  const processWeeklyData = useCallback((earnings) => {
     const currentDate = new Date();
     const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-
-    // Generate 4 weeks for current month
+    const weeks = [];
     for (let i = 0; i < 4; i++) {
       const weekStart = new Date(startOfMonth);
       weekStart.setDate(startOfMonth.getDate() + (i * 7));
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekStart.getDate() + 6);
-
-      const weekEarnings = earnings.filter(earning => {
-        const earningDate = new Date(earning.createdAt);
-        return earningDate >= weekStart && earningDate <= weekEnd;
+      const weekEarnings = earnings.filter(e => {
+        const d = new Date(e.createdAt);
+        return d >= weekStart && d <= weekEnd;
       });
-
       weeks.push({
         week: `Week ${i + 1}`,
-        startDate: weekStart,
-        endDate: weekEnd,
-        earnings: weekEarnings.reduce((sum, e) => sum + (e.netAmount || 0), 0),
+        earnings: weekEarnings.reduce((s, e) => s + (e.netAmount || 0), 0),
         count: weekEarnings.length
       });
     }
-
     setWeeklyData(weeks);
-  };
+  }, []);
 
-  // Process monthly data
-  const processMonthlyData = (earnings) => {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
-
-    const monthlyEarnings = months.map((month, index) => {
-      const monthEarnings = earnings.filter(earning => {
-        const earningDate = new Date(earning.createdAt);
-        return earningDate.getMonth() === index;
-      });
-
+  const processMonthlyData = useCallback((earnings) => {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthlyEarnings = months.map((month, i) => {
+      const monthEarnings = earnings.filter(e => new Date(e.createdAt).getMonth() === i);
       return {
         month,
-        earnings: monthEarnings.reduce((sum, e) => sum + (e.netAmount || 0), 0),
-        count: monthEarnings.length,
-        commission: monthEarnings.reduce((sum, e) => sum + (e.commissionAmount || 0), 0)
+        earnings: monthEarnings.reduce((s, e) => s + (e.netAmount || 0), 0),
+        count: monthEarnings.length
       };
     });
-
     setMonthlyData(monthlyEarnings);
-  };
+  }, []);
 
-  // Fetch earnings report
-  const fetchEarningsReport = async (page = pagination.currentPage, limit = pagination.pageSize) => {
+  const fetchWeeklyMonthlyData = useCallback(async () => {
     try {
-      let url = `${API}/payment/earnings-report`;
-      const params = new URLSearchParams();
+      const currentDate = new Date();
+      const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+      const startOfYear = new Date(currentDate.getFullYear(), 0, 1);
+      const endOfYear = new Date(currentDate.getFullYear(), 11, 31);
+      const [weeklyRes, monthlyRes] = await Promise.all([
+        fetch(`${API}/payment/earnings-report?startDate=${startOfMonth.toISOString().split('T')[0]}&endDate=${endOfMonth.toISOString().split('T')[0]}`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API}/payment/earnings-report?startDate=${startOfYear.toISOString().split('T')[0]}&endDate=${endOfYear.toISOString().split('T')[0]}`, { headers: { 'Authorization': `Bearer ${token}` } })
+      ]);
+      const weeklyData = await weeklyRes.json();
+      const monthlyData = await monthlyRes.json();
+      if (weeklyData.success) processWeeklyData(weeklyData.earnings);
+      if (monthlyData.success) processMonthlyData(monthlyData.earnings);
+    } catch (err) { console.error('Error fetching trends:', err); }
+  }, [API, token, processWeeklyData, processMonthlyData]);
 
-      params.append('page', page.toString());
-      params.append('limit', limit.toString());
-
+  const fetchEarningsReport = useCallback(async (page = 1, limit = 20) => {
+    try {
+      const params = new URLSearchParams({ page: page.toString(), limit: limit.toString() });
       if (dateFilter.startDate) params.append('startDate', dateFilter.startDate);
       if (dateFilter.endDate) params.append('endDate', dateFilter.endDate);
-
-      url += `?${params.toString()}`;
-
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData?.error || errorData?.message || 'Failed to fetch earnings report');
-      }
-
-      const data = await response.json();
+      const res = await fetch(`${API}/payment/earnings-report?${params}`, { headers: { 'Authorization': `Bearer ${token}` } });
+      const data = await res.json();
       if (data.success) {
         setEarningsReport(data.earnings || []);
-        setPagination(prev => ({
-          ...prev,
-          currentPage: page,
-          pageSize: limit,
-          totalEarnings: data.totalCount || 0
-        }));
-      } else {
-        throw new Error(data.error || data.message || 'Failed to fetch earnings report');
+        setPagination({ currentPage: page, pageSize: limit, totalEarnings: data.totalCount || 0 });
       }
-    } catch (error) {
-      console.error('Error fetching earnings report:', error);
-      showToast(error.message, 'error');
-    }
-  };
+    } catch (err) { showToast('Failed to fetch earnings', 'error'); }
+  }, [API, token, dateFilter, showToast]);
 
-  // Fetch withdrawal report
-  const fetchWithdrawalReport = async () => {
+  const fetchWithdrawalReport = useCallback(async () => {
     try {
-      let url = `${API}/payment/withdrawal-report`;
       const params = new URLSearchParams();
-
       if (dateFilter.startDate) params.append('startDate', dateFilter.startDate);
       if (dateFilter.endDate) params.append('endDate', dateFilter.endDate);
+      const res = await fetch(`${API}/payment/withdrawal-report?${params}`, { headers: { 'Authorization': `Bearer ${token}` } });
+      const data = await res.json();
+      if (data.success) setWithdrawalReport(data.records || []);
+    } catch (err) { showToast('Failed to fetch withdrawals', 'error'); }
+  }, [API, token, dateFilter, showToast]);
 
-      if (params.toString()) {
-        url += `?${params.toString()}`;
-      }
-
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData?.error || errorData?.message || 'Failed to fetch withdrawal report');
-      }
-
-      const data = await response.json();
-      if (data.success) {
-        setWithdrawalReport(data.records || []);
-      } else {
-        throw new Error(data.error || data.message || 'Failed to fetch withdrawal report');
-      }
-    } catch (error) {
-      console.error('Error fetching withdrawal report:', error);
-      showToast(error.message, 'error');
-    }
-  };
-
-  // Fetch provider profile for bank details
-  const fetchProviderProfile = async () => {
+  const fetchProviderProfile = useCallback(async () => {
     try {
-      const response = await fetch(`${API}/provider/profile`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData?.error || errorData?.message || 'Failed to fetch provider profile');
-      }
-
-      const data = await response.json();
-      if (data.provider && data.provider.bankDetails) {
+      const res = await fetch(`${API}/provider/profile`, { headers: { 'Authorization': `Bearer ${token}` } });
+      const data = await res.json();
+      if (data.provider?.bankDetails) {
         setProviderBankDetails(data.provider.bankDetails);
         return data.provider.bankDetails;
-      } else {
-        throw new Error('No bank details found in profile');
       }
-    } catch (error) {
-      console.error('Error fetching provider profile:', error);
-      showToast(error.message, 'error');
-      return null;
-    }
+    } catch (err) { console.error('Profile fetch error:', err); }
+    return null;
+  }, [API, token]);
+
+  const handleWithdrawalRequest = async () => {
+    if (!withdrawalForm.amount || withdrawalForm.amount < 500) { showToast('Minimum ₹500 required', 'error'); return; }
+    if (withdrawalForm.amount > summary.availableBalance) { showToast(`Insufficient balance. Available: ${formatCurrency(summary.availableBalance)}`, 'error'); return; }
+    setConfirmMessage(`Withdraw ${formatCurrency(withdrawalForm.amount)}? This cannot be undone.`);
+    setConfirmAction(() => async () => {
+      try {
+        setProcessingWithdrawal(true);
+        const res = await fetch(`${API}/payment/withdraw`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount: parseFloat(withdrawalForm.amount) })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast('Withdrawal requested!', 'success');
+          setShowWithdrawalModal(false);
+          setWithdrawalForm({ amount: '' });
+          refreshAll();
+        } else { showToast(data.error || 'Withdrawal failed', 'error'); }
+      } catch (err) { showToast('Processing error', 'error'); } finally { setProcessingWithdrawal(false); }
+    });
+    setShowConfirmModal(true);
   };
 
-  // Handle withdrawal request
-  const handleWithdrawal = async () => {
-    try {
-      if (!withdrawalForm.amount || withdrawalForm.amount < 500) {
-        showToast('Minimum withdrawal amount is ₹500', 'error');
-        return;
-      }
-
-      // Refresh balance to ensure we have the latest data
-      await fetchSummary();
-
-      if (withdrawalForm.amount > summary.availableBalance) {
-        showToast(`Insufficient balance. Available: ₹${summary.availableBalance}`, 'error');
-        return;
-      }
-
-      showConfirmation(
-        `Are you sure you want to withdraw ₹${withdrawalForm.amount}? This action cannot be undone.`,
-        async () => {
-          try {
-            setProcessingWithdrawal(true);
-
-            const response = await fetch(`${API}/payment/withdraw`, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                amount: parseFloat(withdrawalForm.amount)
-              })
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-              // If backend provides actual balance, use it
-              const actualBalance = data.availableBalance !== undefined ? data.availableBalance : summary.availableBalance;
-
-              if (data.error?.includes('exceeds available balance')) {
-                showToast(`Insufficient balance. Available: ₹${actualBalance}`, 'error');
-              } else {
-                throw new Error(data?.error || data?.message || 'Failed to process withdrawal');
-              }
-              return;
-            }
-
-            if (data.success) {
-              showToast('Withdrawal request submitted successfully!', 'success');
-              setShowWithdrawal(false);
-              setWithdrawalForm({ amount: '' });
-              await refreshData(); // Refresh all data
-            } else {
-              throw new Error(data.error || data.message || 'Failed to process withdrawal');
-            }
-          } catch (error) {
-            console.error('Error processing withdrawal:', error);
-            showToast(error.message, 'error');
-          } finally {
-            setProcessingWithdrawal(false);
-          }
-        }
-      );
-    } catch (error) {
-      console.error('Error preparing withdrawal:', error);
-      showToast(error.message, 'error');
-    }
-  };
-
-  // Download Report function
   const downloadReport = async (type) => {
+    if (!dateFilter.startDate || !dateFilter.endDate) { showToast('Select date range', 'error'); return; }
     try {
       setDownloading(prev => ({ ...prev, [type]: true }));
-
-      if (!dateFilter.startDate || !dateFilter.endDate) {
-        showToast('Please select a start and end date to download the report', 'error');
-        return;
-      }
-
-      // First, check if there is data to download
-      const checkParams = new URLSearchParams();
-      checkParams.append('startDate', dateFilter.startDate);
-      checkParams.append('endDate', dateFilter.endDate);
-
       const endpoint = type === 'earnings' ? 'earnings-report' : 'withdrawal-report';
-      const checkResponse = await fetch(`${API}/payment/${endpoint}?${checkParams.toString()}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!checkResponse.ok) {
-        const errorData = await checkResponse.json();
-        throw new Error(errorData?.error || errorData?.message || `Failed to check for ${type} report data`);
-      }
-
-      const checkData = await checkResponse.json();
-      const records = type === 'earnings' ? checkData.earnings : checkData.records;
-
-      if (!records || records.length === 0) {
-        showToast(`No ${type} data found for the selected period.`, 'info');
-        return;
-      }
-
-      // If data exists, proceed with download
-      const downloadParams = new URLSearchParams();
-      downloadParams.append('startDate', dateFilter.startDate);
-      downloadParams.append('endDate', dateFilter.endDate);
-      downloadParams.append('download', 'true');
-
-      const downloadResponse = await fetch(`${API}/payment/${endpoint}?${downloadParams.toString()}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!downloadResponse.ok) {
-        const errorData = await downloadResponse.json();
-        throw new Error(errorData?.error || errorData?.message || `Failed to download ${type} report`);
-      }
-
-      // Handle file download
-      const blob = await downloadResponse.blob();
+      const res = await fetch(`${API}/payment/${endpoint}?startDate=${dateFilter.startDate}&endDate=${dateFilter.endDate}&download=true`, { headers: { 'Authorization': `Bearer ${token}` } });
+      const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${type}_report_${dateFilter.startDate}_to_${dateFilter.endDate}.xlsx`;
+      a.download = `${type}_report_${Date.now()}.xlsx`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-
-      showToast(`${type.charAt(0).toUpperCase() + type.slice(1)} report downloaded successfully!`, 'success');
-    } catch (error) {
-      console.error(`Error downloading ${type} report:`, error);
-      showToast(error.message, 'error');
-    } finally {
-      setDownloading(prev => ({ ...prev, [type]: false }));
-    }
+      showToast('Report downloaded!', 'success');
+    } catch (err) { showToast('Download failed', 'error'); } finally { setDownloading(prev => ({ ...prev, [type]: false })); }
   };
 
-  // Show confirmation modal
-  const showConfirmation = (message, action) => {
-    setConfirmMessage(message);
-    setConfirmAction(() => action);
-    setShowConfirmModal(true);
-  };
-
-  // Handle confirmation
-  const handleConfirm = async () => {
-    if (confirmAction) {
-      await confirmAction();
-    }
-    setShowConfirmModal(false);
-    setConfirmMessage('');
-    setConfirmAction(null);
-  };
-
-  // Refresh all data
-  const refreshData = async () => {
+  const refreshAll = useCallback(async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      await Promise.all([
-        fetchSummary(),
-        fetchWeeklyMonthlyData()
-      ]);
-      if (activeTab === 'earnings') {
-        await fetchEarningsReport();
-      } else if (activeTab === 'withdrawals') {
-        await fetchWithdrawalReport();
-      }
-    } catch (error) {
-      console.error('Error refreshing data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+      await Promise.all([fetchSummary(), fetchWeeklyMonthlyData(), fetchEarningsReport(), fetchWithdrawalReport()]);
+    } catch (err) { console.error('Refresh all error:', err); } finally { setLoading(false); }
+  }, [fetchSummary, fetchWeeklyMonthlyData, fetchEarningsReport, fetchWithdrawalReport]);
 
+  const getTrend = (current, previous) => ({
+    trend: previous === 0 ? 'neutral' : current > previous ? 'up' : current < previous ? 'down' : 'neutral',
+    percentage: previous === 0 ? 0 : Math.abs(((current - previous) / previous) * 100).toFixed(1)
+  });
+
+  useEffect(() => { refreshAll(); }, [timeFilter, dateFilter, refreshAll]);
   useEffect(() => {
-    refreshData();
+    const interval = setInterval(fetchSummary, 60000);
+    return () => clearInterval(interval);
+  }, [fetchSummary]);
 
-    // Set up auto-refresh every 30 seconds to check for balance updates
-    const autoRefreshInterval = setInterval(() => {
-      fetchSummary();
-    }, 5000); // 5 seconds
-
-    return () => clearInterval(autoRefreshInterval);
-  }, []);
-
-  useEffect(() => {
-    if (activeTab === 'earnings') {
-      fetchEarningsReport();
-    } else if (activeTab === 'withdrawals') {
-      fetchWithdrawalReport();
-    }
-  }, [dateFilter, activeTab]);
-
-  const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
-      case 'completed': return 'text-primary bg-green-100';
-      case 'available': return 'text-primary bg-primary/10';
-      case 'processing': return 'text-blue-600 bg-blue-100';
-      case 'under_review': return 'text-purple-600 bg-purple-100';
-      case 'approved': return 'text-teal-600 bg-teal-100';
-      case 'requested': return 'text-yellow-600 bg-yellow-100';
-      case 'paid': return 'text-primary bg-green-100';
-      case 'failed':
-      case 'rejected': return 'text-red-600 bg-red-100';
-      default: return 'text-secondary bg-gray-100';
-    }
-  };
-
-  const getStatusIcon = (status) => {
-    switch (status?.toLowerCase()) {
-      case 'completed':
-      case 'paid': return <CheckCircle className="w-4 h-4" />;
-      case 'available': return <Wallet className="w-4 h-4" />;
-      case 'processing':
-      case 'under_review':
-      case 'approved':
-      case 'requested': return <Clock className="w-4 h-4" />;
-      case 'failed':
-      case 'rejected': return <XCircle className="w-4 h-4" />;
-      default: return <AlertCircle className="w-4 h-4" />;
-    }
-  };
-
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      minimumFractionDigits: 2
-    }).format(amount || 0);
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('en-IN', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
-
-  const toggleCardExpansion = (cardType) => {
-    setExpandedCards(prev => ({
-      ...prev,
-      [cardType]: !prev[cardType]
-    }));
-  };
-
-  const getTrend = (current, previous) => {
-    if (previous === 0) return { trend: 'neutral', percentage: 0 };
-    const change = ((current - previous) / previous) * 100;
-    return {
-      trend: change > 0 ? 'up' : change < 0 ? 'down' : 'neutral',
-      percentage: Math.abs(change).toFixed(1)
-    };
-  };
-
-  // Mobile tab navigation
-  const MobileTabSelector = () => (
-    <div className="md:hidden mb-4">
-      <select
-        value={activeTab}
-        onChange={(e) => setActiveTab(e.target.value)}
-        className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-primary"
-      >
-        <option value="dashboard">Dashboard</option>
-        <option value="earnings">Earnings Report</option>
-        <option value="withdrawals">Withdrawal History</option>
-        <option value="reports">Download Reports</option>
-      </select>
-    </div>
-  );
+  if (loading && !summary.totalEarnings && !earningsReport.length) {
+    return (
+      <div className="min-h-screen flex items-center justify-center font-inter">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
+          <p className="mt-3 text-sm text-secondary/50 font-medium">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-transparent font-inter">
-      <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 lg:py-8">
+    <div className="min-h-screen font-inter">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+
         {/* Header */}
-        <div className="mb-6 sm:mb-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <div>
-                <h1 className="text-2xl sm:text-3xl font-bold text-secondary">Earnings Dashboard</h1>
-                <p className="text-gray-600 mt-1 sm:mt-2 text-sm sm:text-base">Track your earnings and manage withdrawals</p>
-              </div>
-            </div>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold text-secondary flex items-center gap-2">
+              <TrendingUp className="w-6 h-6 text-primary" />
+              Earnings Dashboard
+            </h1>
+            <p className="text-sm text-secondary/50 mt-1">Track your earnings and manage withdrawals</p>
           </div>
+          <select
+            value={timeFilter}
+            onChange={(e) => setTimeFilter(e.target.value)}
+            className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm text-secondary/70 focus:outline-none focus:ring-2 focus:ring-primary/20"
+          >
+            <option value="week">This Week</option>
+            <option value="month">This Month</option>
+            <option value="year">This Year</option>
+          </select>
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
-          {/* Total Earnings Card */}
-          <div className="bg-background rounded-xl shadow-sm p-4 sm:p-6 border border-gray-200 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Earnings</p>
-                <p className="text-lg sm:text-xl font-bold text-primary">
-                  {formatCurrency(summary.totalEarnings)}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">Lifetime earnings</p>
-              </div>
-              <div className="bg-primary/10 p-2 sm:p-3 rounded-full">
-                <TrendingUp className="w-5 sm:w-6 h-5 sm:h-6 text-primary" />
-              </div>
-            </div>
-          </div>
-
-          {/* Available Balance Card */}
-          <div className="bg-background rounded-xl shadow-sm p-4 sm:p-6 border border-gray-200 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Available Balance</p>
-                <p className="text-lg sm:text-xl font-bold text-primary">
-                  {formatCurrency(summary.availableBalance)}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">Ready to withdraw</p>
-              </div>
-              <div className="bg-primary/10 p-2 sm:p-3 rounded-full">
-                <Wallet className="w-5 sm:w-6 h-5 sm:h-6 text-primary" />
-              </div>
-            </div>
-          </div>
-
-          {/* Total Withdrawn Card */}
-          <div className="bg-background rounded-xl shadow-sm p-4 sm:p-6 border border-gray-200 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Withdrawn</p>
-                <p className="text-lg sm:text-xl font-bold text-accent">
-                  {formatCurrency(summary.totalWithdrawn)}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">Successfully withdrawn</p>
-              </div>
-              <div className="bg-accent/10 p-2 sm:p-3 rounded-full">
-                <FileText className="w-5 sm:w-6 h-5 sm:h-6 text-accent" />
-              </div>
-            </div>
-          </div>
-
-          {/* Total Pending Withdrawals Card */}
-          <div className="bg-background rounded-xl shadow-sm p-4 sm:p-6 border border-gray-200 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Pending Withdrawals</p>
-                <p className="text-lg sm:text-xl font-bold text-orange-600">
-                  {formatCurrency(summary.totalPendingWithdrawals)}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">Awaiting processing</p>
-              </div>
-              <div className="bg-orange-100 p-2 sm:p-3 rounded-full">
-                <Clock className="w-5 sm:w-6 h-5 sm:h-6 text-orange-600" />
-              </div>
-            </div>
-          </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard title="Total Earnings" value={formatCurrency(summary.totalEarnings)} icon={TrendingUp} subtext={`This ${timeFilter}`} />
+          <StatCard title="Available Balance" value={formatCurrency(summary.availableBalance)} icon={Wallet} subtext="Ready to withdraw" />
+          <StatCard title="Total Withdrawn" value={formatCurrency(summary.totalWithdrawn)} icon={FileText} subtext={`This ${timeFilter}`} />
+          <StatCard title="Processing" value={formatCurrency(summary.totalPendingWithdrawals)} icon={Clock} subtext="Awaiting clearance" />
         </div>
 
-        {/* Weekly & Monthly Stats */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8">
-          {/* Weekly Stats */}
-          <div className="bg-background rounded-xl shadow-sm border border-gray-200">
-            <div className="p-4 sm:p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="bg-primary/10 p-2 rounded-full">
-                    <BarChart3 className="w-4 sm:w-5 h-4 sm:h-5 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="text-base sm:text-lg font-semibold text-secondary">Weekly Overview</h3>
-                    <p className="text-xs sm:text-sm text-gray-500">Current month breakdown</p>
-                  </div>
+        {/* Charts Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {/* Weekly Card */}
+          <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-medium text-secondary flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-primary" />
+                Weekly Earnings
+              </h3>
+              <button
+                onClick={() => setExpandedCards(p => ({ ...p, weekly: !p.weekly }))}
+                className="p-1.5 hover:bg-gray-100 rounded-lg text-secondary/40"
+              >
+                {expandedCards.weekly ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {weeklyData.slice(0, 4).map((w) => (
+                <div key={w.week} className="bg-gray-50 p-3 rounded-lg">
+                  <p className="text-xs font-medium text-secondary/50 uppercase">{w.week}</p>
+                  <p className="text-lg font-bold text-secondary">{formatCurrency(w.earnings)}</p>
+                  <p className="text-[10px] text-secondary/40">{w.count} bookings</p>
                 </div>
-                <button
-                  onClick={() => toggleCardExpansion('weekly')}
-                  className="p-1 sm:p-2 hover:bg-gray-100 rounded-full transition-colors"
-                >
-                  {expandedCards.weekly ?
-                    <ChevronUp className="w-4 sm:w-5 h-4 sm:h-5 text-gray-500" /> :
-                    <ChevronDown className="w-4 sm:w-5 h-4 sm:h-5 text-gray-500" />
-                  }
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                {weeklyData.slice(0, 4).map((week, index) => (
-                  <div key={week.week} className="bg-gray-50 p-2 sm:p-3 rounded-lg">
-                    <p className="text-xs font-medium text-gray-600">{week.week}</p>
-                    <p className="text-sm font-bold text-secondary">
-                      {formatCurrency(week.earnings)}
-                    </p>
-                    <p className="text-xs text-gray-500">{week.count} bookings</p>
-                  </div>
-                ))}
-              </div>
-
-              {expandedCards.weekly && (
-                <div className="mt-4 pt-4 border-t">
-                  <div className="space-y-2">
-                    {weeklyData.map((week) => (
-                      <div key={week.week} className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">{week.week}</span>
-                        <span className="text-sm font-medium text-secondary">
-                          {formatCurrency(week.earnings)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              ))}
             </div>
           </div>
 
-          {/* Monthly Stats */}
-          <div className="bg-background rounded-xl shadow-sm border border-gray-200">
-            <div className="p-4 sm:p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="bg-accent/10 p-2 rounded-full">
-                    <Activity className="w-4 sm:w-5 h-4 sm:h-5 text-accent" />
-                  </div>
-                  <div>
-                    <h3 className="text-base sm:text-lg font-semibold text-secondary">Monthly Overview</h3>
-                    <p className="text-xs sm:text-sm text-gray-500">Current year performance</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => toggleCardExpansion('monthly')}
-                  className="p-1 sm:p-2 hover:bg-gray-100 rounded-full transition-colors"
-                >
-                  {expandedCards.monthly ?
-                    <ChevronUp className="w-4 sm:w-5 h-4 sm:h-5 text-gray-500" /> :
-                    <ChevronDown className="w-4 sm:w-5 h-4 sm:h-5 text-gray-500" />
-                  }
-                </button>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2 sm:gap-3">
-                {monthlyData.slice(0, 6).map((month, index) => {
-                  const prevMonth = index > 0 ? monthlyData[index - 1] : null;
-                  const trend = prevMonth ? getTrend(month.earnings, prevMonth.earnings) : { trend: 'neutral', percentage: 0 };
-
-                  return (
-                    <div key={month.month} className="bg-gray-50 p-2 rounded-lg">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-medium text-gray-600">{month.month}</span>
-                        {trend.trend !== 'neutral' && (
-                          <div className={`flex items-center gap-1 ${trend.trend === 'up' ? 'text-primary' : 'text-red-600'}`}>
-                            {trend.trend === 'up' ?
-                              <TrendingUp className="w-3 h-3" /> :
-                              <TrendingDown className="w-3 h-3" />
-                            }
-                          </div>
-                        )}
-                      </div>
-                      <p className="text-xs font-bold text-secondary">
-                        {formatCurrency(month.earnings)}
-                      </p>
-                      <p className="text-xs text-gray-500">{month.count} bookings</p>
+          {/* Monthly Card */}
+          <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-medium text-secondary flex items-center gap-2">
+                <Activity className="w-4 h-4 text-primary" />
+                Monthly Earnings
+              </h3>
+              <button
+                onClick={() => setExpandedCards(p => ({ ...p, monthly: !p.monthly }))}
+                className="p-1.5 hover:bg-gray-100 rounded-lg text-secondary/40"
+              >
+                {expandedCards.monthly ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {monthlyData.slice(0, 6).map((m, i) => {
+                const trend = i > 0 ? getTrend(m.earnings, monthlyData[i - 1].earnings) : { trend: 'neutral' };
+                return (
+                  <div key={m.month} className="bg-gray-50 p-2 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-medium text-secondary/50 uppercase">{m.month}</span>
+                      {trend.trend === 'up' && <TrendingUp className="w-3 h-3 text-green-500" />}
+                      {trend.trend === 'down' && <TrendingDown className="w-3 h-3 text-red-500" />}
                     </div>
-                  );
-                })}
-              </div>
-
-              {expandedCards.monthly && (
-                <div className="mt-4 pt-4 border-t">
-                  <div className="grid grid-cols-2 gap-3">
-                    {monthlyData.map((month) => (
-                      <div key={month.month} className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">{month.month}</span>
-                        <span className="text-sm font-medium text-secondary">
-                          {formatCurrency(month.earnings)}
-                        </span>
-                      </div>
-                    ))}
+                    <p className="text-sm font-bold text-secondary">{formatCurrency(m.earnings)}</p>
                   </div>
-                </div>
-              )}
+                );
+              })}
             </div>
           </div>
         </div>
 
-        {/* Withdrawal Button */}
-        <div className="mb-6 sm:mb-8">
-          <button
-            onClick={() => {
-              if (!providerBankDetails) {
-                fetchProviderProfile();
-              }
-              setShowWithdrawal(true);
-            }}
-            disabled={summary.availableBalance < 500}
-            className="w-full sm:w-auto bg-gradient-to-r from-accent to-accent/90 hover:from-accent/90 hover:to-accent text-white px-4 sm:px-6 py-3 rounded-lg font-medium flex items-center justify-center gap-2 transition-all disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed"
-          >
-            <DollarSign className="w-4 sm:w-5 h-4 sm:h-5" />
-            Request Withdrawal
-          </button>
+        {/* Withdrawal Quick Action */}
+        <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-primary/10 rounded-xl text-primary">
+                <Wallet className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-sm text-secondary/50">Available for withdrawal</p>
+                <p className="text-2xl font-bold text-secondary">{formatCurrency(summary.availableBalance)}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => { fetchProviderProfile(); setShowWithdrawalModal(true); }}
+              disabled={summary.availableBalance < 500}
+              className="w-full sm:w-auto px-6 py-3 bg-accent text-white rounded-lg font-medium hover:bg-accent/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              <DollarSign className="w-4 h-4" />
+              Request Payout
+            </button>
+          </div>
           {summary.availableBalance < 500 && (
-            <p className="text-sm text-red-600 mt-2">
-              Minimum ₹500 required for withdrawal. Current available: {formatCurrency(summary.availableBalance)}
-            </p>
+            <p className="text-xs text-red-500 mt-3">Minimum ₹500 required for withdrawal</p>
           )}
         </div>
 
-        {/* Withdrawal Modal */}
-        {showWithdrawal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-background rounded-lg shadow-xl p-4 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
-              <h3 className="text-lg sm:text-xl font-bold mb-4 text-secondary">Request Withdrawal</h3>
-
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-secondary mb-1">Amount (₹)</label>
-                <input
-                  type="number"
-                  value={withdrawalForm.amount}
-                  onChange={(e) => setWithdrawalForm({
-                    ...withdrawalForm,
-                    amount: e.target.value
-                  })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-                  placeholder="500 minimum"
-                  min="500"
-                  max={summary.availableBalance}
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Available: {formatCurrency(summary.availableBalance)} | Minimum: ₹500
-                </p>
-              </div>
-
-              {providerBankDetails && (
-                <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-                  <p className="text-sm font-medium text-secondary mb-2">Bank Details:</p>
-                  <p className="text-xs text-gray-600">Account: {providerBankDetails.accountNo}</p>
-                  <p className="text-xs text-gray-600">IFSC: {providerBankDetails.ifsc}</p>
-                  <p className="text-xs text-gray-600">Bank: {providerBankDetails.bankName}</p>
-                </div>
-              )}
-
-              <div className="flex flex-col sm:flex-row justify-end gap-3 mt-6">
-                <button
-                  onClick={() => setShowWithdrawal(false)}
-                  className="px-4 py-2 text-secondary border border-gray-300 rounded-md hover:bg-gray-50 order-2 sm:order-1"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleWithdrawal}
-                  disabled={processingWithdrawal || loading}
-                  className="px-4 py-2 bg-accent text-white rounded-md hover:bg-accent/90 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-1 order-1 sm:order-2 mb-3 sm:mb-0"
-                >
-                  {processingWithdrawal ? 'Processing...' : 'Request Withdrawal'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Confirmation Modal */}
-        {showConfirmModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-background rounded-lg shadow-xl p-4 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
-              <h3 className="text-lg sm:text-xl font-bold mb-4 text-secondary">Confirm Action</h3>
-
-              <p className="text-secondary mb-6">{confirmMessage}</p>
-
-              <div className="flex flex-col sm:flex-row justify-end gap-3">
-                <button
-                  onClick={() => setShowConfirmModal(false)}
-                  className="px-4 py-2 text-secondary border border-gray-300 rounded-md hover:bg-gray-50 order-2 sm:order-1"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleConfirm}
-                  disabled={processingWithdrawal}
-                  className="px-4 py-2 bg-accent text-white rounded-md hover:bg-accent/90 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-1 order-1 sm:order-2 mb-3 sm:mb-0"
-                >
-                  {processingWithdrawal ? 'Processing...' : 'Confirm'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Mobile Tab Selector */}
-        <MobileTabSelector />
-
-        {/* Tabs */}
-        <div className="bg-background rounded-xl shadow-sm border border-gray-200">
-          <div className="hidden md:block border-b border-gray-200">
-            <nav className="flex flex-wrap space-x-8 px-6">
-              {[
-                { id: 'dashboard', label: 'Dashboard', icon: TrendingUp },
-                { id: 'earnings', label: 'Earnings Report', icon: CreditCard },
-                { id: 'withdrawals', label: 'Withdrawal History', icon: FileText },
-                { id: 'reports', label: 'Download Reports', icon: Download }
-              ].map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 ${activeTab === tab.id
-                    ? 'border-primary text-primary'
-                    : 'border-transparent text-gray-500 hover:text-secondary'
-                    }`}
-                >
-                  <tab.icon className="w-4 h-4" />
-                  {tab.label}
-                </button>
-              ))}
-            </nav>
+        {/* Tabbed Content */}
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          {/* Tab Bar */}
+          <div className="flex border-b border-gray-100 px-2 overflow-x-auto">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-5 py-3.5 text-sm font-medium transition-colors relative whitespace-nowrap ${activeTab === tab.id ? 'text-primary' : 'text-secondary/40 hover:text-secondary/70'
+                  }`}
+              >
+                <tab.icon className="w-4 h-4" />
+                {tab.label}
+                {activeTab === tab.id && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full" />
+                )}
+              </button>
+            ))}
           </div>
 
-          <div className="p-4 sm:p-6">
-            {/* Dashboard Tab */}
+          {/* Tab Panels */}
+          <div className="overflow-x-auto">
+            {/* Overview Tab */}
             {activeTab === 'dashboard' && (
-              <div>
-                <h3 className="text-lg font-semibold mb-4 text-secondary">Recent Activity</h3>
-                {withdrawalReport.length > 0 ? (
-                  <div className="space-y-3 sm:space-y-4">
-                    {withdrawalReport.slice(0, 5).map((record, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 sm:p-4 bg-gray-50 rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <div className="bg-accent/10 p-2 rounded-full">
-                            <ArrowDownLeft className="w-4 h-4 text-accent" />
-                          </div>
-                          <div className="max-w-[60%]">
-                            <p className="font-medium text-secondary text-sm sm:text-base">Withdrawal</p>
-                            <p className="text-xs sm:text-sm text-gray-500">{formatDate(record.createdAt)}</p>
-                            <p className="text-xs text-gray-400 truncate">Ref: {record.transactionReference}</p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-medium text-accent text-sm sm:text-base">
-                            -{formatCurrency(record.amount)}
-                          </p>
-                          <div className={`text-xs px-2 py-1 rounded-full inline-flex items-center gap-1 ${getStatusColor(record.status)}`}>
-                            {getStatusIcon(record.status)}
-                            <span className="hidden sm:inline">{record.status}</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-6 sm:py-8">
-                    <AlertCircle className="w-10 sm:w-12 h-10 sm:h-12 text-gray-400 mx-auto mb-3" />
-                    <p className="text-gray-500">No recent activity found</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Earnings Report Tab */}
-            {activeTab === 'earnings' && (
-              <div>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                  <h3 className="text-lg font-semibold text-secondary">Earnings Report</h3>
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
-                    <div className="flex items-center gap-2 w-full sm:w-auto">
-                      <Calendar className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                      <input
-                        type="date"
-                        value={dateFilter.startDate}
-                        onChange={(e) => setDateFilter({
-                          ...dateFilter,
-                          startDate: e.target.value
-                        })}
-                        className="border border-gray-300 rounded-md px-2 py-1 text-sm focus:ring-2 focus:ring-primary focus:border-primary w-full sm:w-auto"
-                      />
-                      <span className="text-sm text-gray-500 hidden sm:inline">to</span>
-                    </div>
-                    <div className="flex items-center gap-2 w-full sm:w-auto">
-                      <span className="text-sm text-gray-500 sm:hidden">to</span>
-                      <input
-                        type="date"
-                        value={dateFilter.endDate}
-                        onChange={(e) => setDateFilter({
-                          ...dateFilter,
-                          endDate: e.target.value
-                        })}
-                        className="border border-gray-300 rounded-md px-2 py-1 text-sm focus:ring-2 focus:ring-primary focus:border-primary w-full sm:w-auto"
-                      />
-                    </div>
-                    <button
-                      onClick={() => setDateFilter({ startDate: '', endDate: '' })}
-                      className="text-sm text-primary hover:text-primary/80 w-full sm:w-auto text-left sm:text-center mt-1 sm:mt-0"
-                    >
-                      Clear Filters
-                    </button>
-                  </div>
-                </div>
-
-                {earningsReport.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Booking ID</th>
-                          <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                          <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                          <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Commission</th>
-                          <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Net</th>
-                          <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment Method</th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-background divide-y divide-gray-200">
-                        {earningsReport.map((earning) => (
-                          <tr key={earning.booking}>
-                            <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm font-medium text-secondary">#{earning.booking}</td>
-                            <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(earning.createdAt)}</td>
-                            <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatCurrency(earning.grossAmount)}</td>
-                            <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500 hidden sm:table-cell">-{formatCurrency(earning.commissionAmount)} ({earning.commissionRate}%)</td>
-                            <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm font-medium text-primary">+{formatCurrency(earning.netAmount)}</td>
-                            <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {earning.paymentMethod
-                                ? earning.paymentMethod.charAt(0).toUpperCase() + earning.paymentMethod.slice(1)
-                                : 'N/A'}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="text-center py-6 sm:py-8">
-                    <AlertCircle className="w-10 sm:w-12 h-10 sm:h-12 text-gray-400 mx-auto mb-3" />
-                    <p className="text-gray-500">No earnings found for the selected period</p>
-                  </div>
-                )}
-
-                {pagination.totalEarnings > 0 && (
-                  <div className="flex items-center justify-between mt-4">
-                    <div className="text-sm text-gray-500">
-                      Showing {((pagination.currentPage - 1) * pagination.pageSize) + 1} to {Math.min(pagination.currentPage * pagination.pageSize, pagination.totalEarnings)} of {pagination.totalEarnings} entries
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => fetchEarningsReport(pagination.currentPage - 1)}
-                        disabled={pagination.currentPage === 1}
-                        className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Previous
-                      </button>
-                      <span className="text-sm text-gray-600">
-                        Page {pagination.currentPage} of {Math.ceil(pagination.totalEarnings / pagination.pageSize)}
-                      </span>
-                      <button
-                        onClick={() => fetchEarningsReport(pagination.currentPage + 1)}
-                        disabled={pagination.currentPage >= Math.ceil(pagination.totalEarnings / pagination.pageSize)}
-                        className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Next
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Withdrawal History Tab */}
-            {activeTab === 'withdrawals' && (
-              <div>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                  <h3 className="text-lg font-semibold text-secondary">Withdrawal History</h3>
-                  <div className="flex items-center gap-2">
-                    <Filter className="w-4 h-4 text-gray-500" />
-                    <select
-                      className="border border-gray-300 rounded-md px-2 py-1 text-sm focus:ring-2 focus:ring-primary focus:border-primary w-full sm:w-auto"
-                      defaultValue="all"
-                    >
-                      <option value="all">All Status</option>
-                      <option value="requested">Requested</option>
-                      <option value="under_review">Under Review</option>
-                      <option value="approved">Approved</option>
-                      <option value="processing">Processing</option>
-                      <option value="completed">Completed</option>
-                      <option value='rejected'>Rejected</option>
-                    </select>
-                  </div>
-                </div>
-
-                {withdrawalReport.length > 0 ? (
-                  <div className="space-y-3 sm:space-y-4">
-                    {withdrawalReport.map((record, index) => (
-                      <div key={index} className="p-3 sm:p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3 max-w-[60%]">
-                            <div className="bg-accent/10 p-2 rounded-full flex-shrink-0">
-                              <ArrowDownLeft className="w-4 h-4 text-accent" />
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-gray-100">
+                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Activity Details</th>
+                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Timestamp</th>
+                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Value</th>
+                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {withdrawalReport.length > 0 ? (
+                    withdrawalReport.slice(0, 10).map((r, i) => (
+                      <tr key={i} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-gray-50 rounded-lg text-secondary/40">
+                              <ArrowDownLeft className="w-4 h-4" />
                             </div>
                             <div>
-                              <p className="font-medium text-secondary text-sm sm:text-base">Withdrawal Request</p>
-                              <p className="text-xs sm:text-sm text-gray-500 truncate">Ref: {record.transactionReference}</p>
-                              <p className="text-xs text-gray-400">{record.paymentMethod === 'bank_transfer' ? 'Bank Transfer' : record.paymentMethod}</p>
+                              <p className="text-sm font-medium text-secondary">Bank Payout</p>
+                              <p className="text-xs text-secondary/40 font-mono">Ref: {r.transactionReference || 'N/A'}</p>
                             </div>
                           </div>
-                          <div className="text-right">
-                            <p className="font-medium text-accent text-sm sm:text-base">
-                              {formatCurrency(record.amount)}
-                            </p>
-                            <p className="text-xs sm:text-sm text-gray-500">{formatDate(record.createdAt)}</p>
-                            <div className={`text-xs px-2 py-1 rounded-full inline-flex items-center gap-1 ${getStatusColor(record.status)}`}>
-                              {getStatusIcon(record.status)}
-                              <span className="hidden sm:inline">{record.status}</span>
-                            </div>
-                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-secondary/50">
+                          {formatDate(r.createdAt)}
+                          <span className="text-secondary/30 ml-1">{formatTime(r.createdAt)}</span>
+                        </td>
+                        <td className="px-6 py-4 text-sm font-semibold text-red-500">
+                          -{formatCurrency(r.amount)}
+                        </td>
+                        <td className="px-6 py-4">
+                          <Badge status={r.status} />
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="4" className="py-16 text-center">
+                        <div className="flex flex-col items-center text-secondary/30">
+                          <AlertCircle className="w-10 h-10 mb-2" />
+                          <p className="text-sm">No recent transactions</p>
                         </div>
-                        {record.status === 'rejected' && (record.rejectionReason || record.adminRemark) && (
-                          <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-                            {record.rejectionReason && (
-                              <p className="text-sm text-red-700 mb-1">
-                                <strong>Rejection Reason:</strong> {record.rejectionReason}
-                              </p>
-                            )}
-                            {record.adminRemark && (
-                              <p className="text-sm text-red-700">
-                                <strong>Admin Remark:</strong> {record.adminRemark}
-                              </p>
-                            )}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            )}
+
+            {/* Earnings Tab */}
+            {activeTab === 'earnings' && (
+              <table className="w-full text-left min-w-[800px]">
+                <thead>
+                  <tr className="border-b border-gray-100">
+                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Booking ID</th>
+                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-center">Date</th>
+                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Amount</th>
+                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Commission</th>
+                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Net</th>
+                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Payment Method</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {earningsReport.length > 0 ? (
+                    earningsReport.map((e, i) => (
+                      <tr key={i} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4 text-xs font-mono font-medium text-secondary/60">
+                          #{e.booking?.slice(-8)}
+                        </td>
+                        <td className="px-6 py-4 text-center text-sm text-secondary/50">
+                          {formatDate(e.createdAt)}
+                        </td>
+                        <td className="px-6 py-4 text-right text-sm text-secondary/40 line-through">
+                          {formatCurrency(e.grossAmount)}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <p className="text-sm text-red-500 font-medium">-{formatCurrency(e.commissionAmount)}</p>
+                          <p className="text-[10px] text-secondary/30">Fee {e.commissionRate}%</p>
+                        </td>
+                        <td className="px-6 py-4 text-right text-sm font-bold text-green-600">
+                          +{formatCurrency(e.netAmount)}
+                        </td>
+                        <td className="px-6 py-4 text-right text-xs text-secondary/40 uppercase">
+                          {e.paymentMethod?.replace('_', ' ') || 'Online'}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="6" className="py-16 text-center text-secondary/30">
+                        No earnings records found
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            )}
+
+            {/* Withdrawals Tab */}
+            {activeTab === 'withdrawals' && (
+              <table className="w-full text-left min-w-[800px]">
+                <thead>
+                  <tr className="border-b border-gray-100">
+                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Operation</th>
+                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Reference ID</th>
+                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Amount</th>
+                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-center">Date</th>
+                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {withdrawalReport.length > 0 ? (
+                    withdrawalReport.map((r, i) => (
+                      <tr key={i} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-gray-50 rounded-lg text-secondary/40">
+                              <ArrowDownLeft className="w-4 h-4" />
+                            </div>
+                            <p className="text-sm font-medium text-secondary">Payout<br /><span className="text-xs text-secondary/40">Bank Transfer</span></p>
                           </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-6 sm:py-8">
-                    <AlertCircle className="w-10 sm:w-12 h-10 sm:h-12 text-gray-400 mx-auto mb-3" />
-                    <p className="text-gray-500">No withdrawal history found</p>
-                  </div>
-                )}
-              </div>
+                        </td>
+                        <td className="px-6 py-4 text-xs font-mono font-medium text-secondary/40">
+                          {r.transactionReference || 'REF_PENDING'}
+                        </td>
+                        <td className="px-6 py-4 text-right text-sm font-semibold text-red-500">
+                          {formatCurrency(r.amount)}
+                        </td>
+                        <td className="px-6 py-4 text-center text-sm text-secondary/50">
+                          {formatDate(r.createdAt)}
+                        </td>
+                        <td className="px-6 py-4">
+                          <Badge status={r.status} />
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <button
+                            onClick={() => setSelectedWithdrawal(r)}
+                            className="p-2 text-secondary/40 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="6" className="py-16 text-center text-secondary/30">
+                        No payout history logged
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             )}
 
             {/* Reports Tab */}
             {activeTab === 'reports' && (
-              <div>
-                <h3 className="text-lg font-semibold mb-4 text-secondary">Download Reports</h3>
-
-                <div className="mb-6">
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                      <label className="text-sm font-medium text-secondary">Date Range:</label>
-                    </div>
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
-                      <input
-                        type="date"
-                        value={dateFilter.startDate}
-                        onChange={(e) => setDateFilter({
-                          ...dateFilter,
-                          startDate: e.target.value
-                        })}
-                        className="border border-gray-300 rounded-md px-2 py-1 text-sm focus:ring-2 focus:ring-primary focus:border-primary w-full sm:w-auto"
-                      />
-                      <span className="text-sm text-gray-500 hidden sm:inline">to</span>
-                      <input
-                        type="date"
-                        value={dateFilter.endDate}
-                        onChange={(e) => setDateFilter({
-                          ...dateFilter,
-                          endDate: e.target.value
-                        })}
-                        className="border border-gray-300 rounded-md px-2 py-1 text-sm focus:ring-2 focus:ring-primary focus:border-primary w-full sm:w-auto"
-                      />
-                    </div>
-                    <button
-                      onClick={() => setDateFilter({ startDate: '', endDate: '' })}
-                      className="text-sm text-primary hover:text-primary/80 w-full sm:w-auto text-left sm:text-center mt-1 sm:mt-0"
-                    >
-                      Clear
-                    </button>
+              <div className="p-6">
+                <div className="flex flex-wrap items-center gap-4 mb-8 bg-gray-50 p-4 rounded-xl">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-primary" />
+                    <p className="text-xs font-medium text-secondary/40 uppercase">Select Period:</p>
                   </div>
+                  <input
+                    type="date"
+                    value={dateFilter.startDate}
+                    onChange={e => setDateFilter(p => ({ ...p, startDate: e.target.value }))}
+                    className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                  <span className="text-gray-300">→</span>
+                  <input
+                    type="date"
+                    value={dateFilter.endDate}
+                    onChange={e => setDateFilter(p => ({ ...p, endDate: e.target.value }))}
+                    className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                  <button
+                    onClick={() => setDateFilter({ startDate: '', endDate: '' })}
+                    className="text-xs font-medium text-primary hover:text-primary/80 ml-auto"
+                  >
+                    Clear Filters
+                  </button>
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 sm:gap-6 sm:grid-cols-2">
-                  <div className="bg-background border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm">
-                    <div className="flex items-center gap-4 mb-4">
-                      <div className="bg-primary/10 p-3 rounded-full">
-                        <FileText className="w-5 sm:w-6 h-5 sm:h-6 text-primary" />
-                      </div>
-                      <div>
-                        <h4 className="font-medium text-secondary">Earnings Report</h4>
-                        <p className="text-sm text-gray-500">Detailed earnings breakdown</p>
-                      </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-3xl mx-auto">
+                  {/* Earnings Report Card */}
+                  <div className="bg-gray-50 rounded-xl p-6 border border-gray-100">
+                    <div className="p-3 bg-white rounded-lg text-primary mb-4 w-fit">
+                      <FileText className="w-6 h-6" />
                     </div>
+                    <h4 className="text-sm font-semibold text-secondary mb-1">Revenue Audit</h4>
+                    <p className="text-xs text-secondary/40 mb-5">Full spreadsheet of services, revenue, and commission fees.</p>
                     <button
                       onClick={() => downloadReport('earnings')}
-                      disabled={!dateFilter.startDate || !dateFilter.endDate || downloading.earnings}
-                      className="w-full bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-md text-sm flex items-center justify-center gap-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                      disabled={!dateFilter.startDate || downloading.earnings}
+                      className="w-full py-3 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                       <Download className="w-4 h-4" />
-                      {downloading.earnings ? 'Downloading...' : 'Download Excel'}
+                      {downloading.earnings ? 'Generating...' : 'Export Excel'}
                     </button>
                   </div>
 
-                  <div className="bg-background border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm">
-                    <div className="flex items-center gap-4 mb-4">
-                      <div className="bg-accent/10 p-3 rounded-full">
-                        <Receipt className="w-5 sm:w-6 h-5 sm:h-6 text-accent" />
-                      </div>
-                      <div>
-                        <h4 className="font-medium text-secondary">Withdrawal Report</h4>
-                        <p className="text-sm text-gray-500">Withdrawal history and status</p>
-                      </div>
+                  {/* Withdrawals Report Card */}
+                  <div className="bg-gray-50 rounded-xl p-6 border border-gray-100">
+                    <div className="p-3 bg-white rounded-lg text-primary mb-4 w-fit">
+                      <Receipt className="w-6 h-6" />
                     </div>
+                    <h4 className="text-sm font-semibold text-secondary mb-1">Payout Journal</h4>
+                    <p className="text-xs text-secondary/40 mb-5">Detailed history of bank transfers and clearance statuses.</p>
                     <button
                       onClick={() => downloadReport('withdrawals')}
-                      disabled={!dateFilter.startDate || !dateFilter.endDate || downloading.withdrawals}
-                      className="w-full bg-accent hover:bg-accent/90 text-white px-4 py-2 rounded-md text-sm flex items-center justify-center gap-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                      disabled={!dateFilter.startDate || downloading.withdrawals}
+                      className="w-full py-3 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                       <Download className="w-4 h-4" />
-                      {downloading.withdrawals ? 'Downloading...' : 'Download Excel'}
+                      {downloading.withdrawals ? 'Generating...' : 'Export Journal'}
                     </button>
                   </div>
                 </div>
@@ -1244,6 +657,197 @@ const ProviderEarningsDashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* Withdrawal Modal */}
+      {showWithdrawalModal && (
+        <div className="fixed inset-0 bg-secondary/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto animate-scale-up">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-secondary">Withdraw Funds</h3>
+              <button onClick={() => setShowWithdrawalModal(false)} className="p-1 hover:bg-gray-100 rounded-lg text-secondary/40">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5">
+              <div>
+                <p className="text-sm text-secondary/50 mb-1">Available Balance</p>
+                <p className="text-3xl font-bold text-primary">{formatCurrency(summary.availableBalance)}</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-secondary/70 mb-2">Amount (₹)</label>
+                <input
+                  type="number"
+                  value={withdrawalForm.amount}
+                  onChange={e => setWithdrawalForm({ amount: e.target.value })}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-lg font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  placeholder="Enter amount"
+                />
+                <p className="mt-2 text-xs text-secondary/40">* Minimum ₹500 required</p>
+              </div>
+
+              {providerBankDetails && (
+                <div className="p-4 bg-gray-50 rounded-lg space-y-3">
+                  <p className="text-xs font-medium text-secondary/40 uppercase">Destination Account</p>
+                  <div className="grid grid-cols-1 gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-white rounded-lg text-primary shadow-sm border border-gray-100">
+                        <Building className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold text-secondary/30 uppercase tracking-widest leading-none mb-1">Account Holder</p>
+                        <p className="text-sm font-bold text-secondary truncate">{providerBankDetails.accountName || providerBankDetails.accountHolderName || 'N/A'}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4 pl-11">
+                      <div>
+                        <p className="text-[9px] font-bold text-secondary/30 uppercase tracking-widest leading-none mb-1">Bank Name</p>
+                        <p className="text-xs font-semibold text-secondary truncate">{providerBankDetails.bankName}</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-bold text-secondary/30 uppercase tracking-widest leading-none mb-1">IFSC Code</p>
+                        <p className="text-xs font-semibold text-secondary uppercase tracking-wider">{providerBankDetails.ifscCode || providerBankDetails.ifsc || 'N/A'}</p>
+                      </div>
+                      <div className="col-span-2">
+                        <p className="text-[9px] font-bold text-secondary/30 uppercase tracking-widest leading-none mb-1">Account Number</p>
+                        <p className="text-xs font-bold text-secondary tracking-widest">{providerBankDetails.accountNo?.replace(/.(?=.{4})/g, '•')}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={handleWithdrawalRequest}
+                disabled={processingWithdrawal || !withdrawalForm.amount || withdrawalForm.amount < 500}
+                className="w-full py-3 bg-accent text-white rounded-lg font-medium hover:bg-accent/90 transition-colors disabled:opacity-50"
+              >
+                {processingWithdrawal ? 'Processing...' : 'Request Payout'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Withdrawal Details Modal */}
+      {selectedWithdrawal && (
+        <div className="fixed inset-0 bg-secondary/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto animate-scale-up">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-secondary">Payout Details</h3>
+                <p className="text-xs text-secondary/40 font-mono">Ref: {selectedWithdrawal.transactionReference || 'N/A'}</p>
+              </div>
+              <button onClick={() => setSelectedWithdrawal(null)} className="p-1 hover:bg-gray-100 rounded-lg text-secondary/40">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5">
+              <div className="flex items-center justify-between bg-primary/5 p-4 rounded-lg border border-primary/10">
+                <div>
+                  <p className="text-xs font-medium text-primary/60 uppercase">Net Disbursed</p>
+                  <p className="text-2xl font-bold text-primary">{formatCurrency(selectedWithdrawal.netAmount || selectedWithdrawal.amount)}</p>
+                </div>
+                <Badge status={selectedWithdrawal.status} />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-secondary/40 uppercase mb-1">Status</p>
+                  <p className="text-sm font-medium text-secondary capitalize">{selectedWithdrawal.status?.replace('_', ' ')}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-secondary/40 uppercase mb-1">Requested Amount</p>
+                  <p className="text-sm font-medium text-secondary">{formatCurrency(selectedWithdrawal.amount)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-secondary/40 uppercase mb-1">Request Date</p>
+                  <p className="text-sm font-medium text-secondary">{formatDate(selectedWithdrawal.createdAt)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-secondary/40 uppercase mb-1">Transfer Info</p>
+                  <p className="text-sm font-medium text-secondary">
+                    {selectedWithdrawal.transferDate ? `${formatDate(selectedWithdrawal.transferDate)}` : 'Pending'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <p className="text-xs font-medium text-secondary/40 uppercase mb-2">Bank Destination</p>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-white rounded-lg text-primary">
+                    <Building className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-secondary">{providerBankDetails?.bankName || 'Your Bank'}</p>
+                    <p className="text-xs text-secondary/40">A/C: {providerBankDetails?.accountNo || 'N/A'}</p>
+                  </div>
+                </div>
+              </div>
+
+              {(selectedWithdrawal.adminRemark || selectedWithdrawal.paymentDetails) && (
+                <div className="p-4 bg-amber-50 rounded-lg">
+                  <p className="text-xs font-medium text-amber-600 uppercase mb-2">Notes from Admin</p>
+                  {selectedWithdrawal.adminRemark && <p className="text-sm text-amber-700">{selectedWithdrawal.adminRemark}</p>}
+                  {selectedWithdrawal.paymentDetails && (
+                    <div className="text-xs text-amber-600 mt-2">
+                      {typeof selectedWithdrawal.paymentDetails === 'object' ? (
+                        Object.entries(selectedWithdrawal.paymentDetails).map(([k, v]) => (
+                          <div key={k} className="flex justify-between py-0.5">
+                            <span className="capitalize">{k.replace(/([A-Z])/g, ' $1')}:</span>
+                            <span>{v?.toString()}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <p>{selectedWithdrawal.paymentDetails}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-100">
+              <button
+                onClick={() => setSelectedWithdrawal(null)}
+                className="w-full py-3 bg-gray-100 text-secondary/60 rounded-lg font-medium hover:bg-gray-200 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 bg-secondary/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 text-center animate-scale-up">
+            <div className="w-14 h-14 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Info className="w-7 h-7 text-amber-500" />
+            </div>
+            <h3 className="text-xl font-semibold text-secondary mb-2">Confirm Withdrawal</h3>
+            <p className="text-sm text-secondary/60 mb-6">{confirmMessage}</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                className="flex-1 py-3 border border-gray-200 rounded-lg text-sm font-medium text-secondary/50 hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { if (confirmAction) confirmAction(); setShowConfirmModal(false); }}
+                className="flex-1 py-3 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
