@@ -4,10 +4,9 @@ import {
   Clock, CheckCircle, XCircle, Play, RotateCcw, Award, AlertCircle,
   BookOpen, Target, TrendingUp, Calendar, User, ChevronLeft,
   ChevronRight, Bookmark, BookmarkCheck, RefreshCw, Download,
-  Timer, Zap, Star, Trophy, BarChart3, Activity
+  Timer, Zap, Star, Trophy, BarChart3, Activity, X, ChevronDown, Loader2
 } from 'lucide-react';
 
-// Custom hooks for better code organization
 const useTestTimer = (initialTime, isActive, onTimeUp) => {
   const [timeLeft, setTimeLeft] = useState(initialTime);
   const [isWarning, setIsWarning] = useState(false);
@@ -17,7 +16,7 @@ const useTestTimer = (initialTime, isActive, onTimeUp) => {
       const timer = setTimeout(() => {
         setTimeLeft(prev => {
           const newTime = prev - 1;
-          setIsWarning(newTime <= 120); // Warning when 2 minutes left
+          setIsWarning(newTime <= 120);
           return newTime;
         });
       }, 1000);
@@ -62,10 +61,8 @@ const useTestData = (token, API, showToast) => {
   };
 };
 
-// Enhanced progress bar component
 const ProgressBar = React.memo(({ current, total, className = "" }) => {
   const percentage = (current / total) * 100;
-
   return (
     <div className={`w-full bg-gray-200/50 rounded-full h-3 overflow-hidden ${className}`}>
       <div
@@ -78,11 +75,9 @@ const ProgressBar = React.memo(({ current, total, className = "" }) => {
   );
 });
 
-// Enhanced timer component
 const TimerDisplay = React.memo(({ timeLeft, formatTime, isWarning, className = "" }) => (
   <div className={`text-center ${className}`}>
-    <div className={`text-3xl font-bold transition-colors duration-300 ${isWarning ? 'text-red-500 animate-pulse' : 'text-primary'
-      }`}>
+    <div className={`text-3xl font-bold transition-colors duration-300 ${isWarning ? 'text-red-500 animate-pulse' : 'text-primary'}`}>
       {formatTime(timeLeft)}
     </div>
     <div className="text-sm text-secondary/80 flex items-center justify-center mt-1">
@@ -97,7 +92,6 @@ const TimerDisplay = React.memo(({ timeLeft, formatTime, isWarning, className = 
   </div>
 ));
 
-// Question navigation component
 const QuestionNavigation = React.memo(({
   questions,
   currentIndex,
@@ -116,16 +110,15 @@ const QuestionNavigation = React.memo(({
         const isAnswered = answers[question.questionId] !== undefined;
         const isBookmarked = bookmarkedQuestions.has(question.questionId);
         const isCurrent = index === currentIndex;
-
         return (
           <button
             key={question.questionId}
             onClick={() => onQuestionSelect(index)}
             className={`relative w-10 h-10 rounded-lg text-sm font-medium transition-all duration-200 transform hover:scale-110 ${isCurrent
-                ? 'bg-primary text-white shadow-lg scale-105 ring-2 ring-primary/30'
-                : isAnswered
-                  ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                  : 'bg-gray-100/70 text-secondary/70 hover:bg-gray-200/80'
+              ? 'bg-primary text-white shadow-lg scale-105 ring-2 ring-primary/30'
+              : isAnswered
+                ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                : 'bg-gray-100/70 text-secondary/70 hover:bg-gray-200/80'
               }`}
           >
             {index + 1}
@@ -155,17 +148,14 @@ const QuestionNavigation = React.memo(({
   </div>
 ));
 
-// Performance analytics component
 const PerformanceAnalytics = React.memo(({ testResults, testHistory }) => {
   const analytics = useMemo(() => {
     if (!testHistory.length) return null;
-
     const avgScore = testHistory.reduce((sum, test) => sum + test.score, 0) / testHistory.length;
     const passRate = (testHistory.filter(test => test.passed).length / testHistory.length) * 100;
     const improvement = testHistory.length > 1
       ? testResults.score - testHistory[testHistory.length - 2].score
       : 0;
-
     return { avgScore, passRate, improvement };
   }, [testHistory, testResults]);
 
@@ -182,7 +172,6 @@ const PerformanceAnalytics = React.memo(({ testResults, testHistory }) => {
           <BarChart3 className="w-8 h-8 text-primary/70" />
         </div>
       </div>
-
       <div className="bg-gradient-to-r from-green-100/30 to-green-100/10 backdrop-blur-sm p-4 rounded-xl border border-white/20 shadow-sm hover:shadow-md transition-all duration-300">
         <div className="flex items-center justify-between">
           <div>
@@ -192,7 +181,6 @@ const PerformanceAnalytics = React.memo(({ testResults, testHistory }) => {
           <Target className="w-8 h-8 text-green-600/70" />
         </div>
       </div>
-
       <div className="bg-gradient-to-r from-purple-100/30 to-purple-100/10 backdrop-blur-sm p-4 rounded-xl border border-white/20 shadow-sm hover:shadow-md transition-all duration-300">
         <div className="flex items-center justify-between">
           <div>
@@ -208,26 +196,71 @@ const PerformanceAnalytics = React.memo(({ testResults, testHistory }) => {
   );
 });
 
-// Category Select Component
-const CategorySelect = React.memo(({ value, onChange, label, required, includeAll = false, categories }) => {
+const MultiCategorySelect = React.memo(({ selectedCategories, onToggleCategory, categories, maxSelection = 3 }) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  const selectedNames = categories
+    .filter(c => selectedCategories.includes(c._id))
+    .map(c => c.name)
+    .join(', ');
+
   return (
-    <div>
+    <div className="relative">
       <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-        {label} {required && '*'}
+        Categories * <span className="text-xs text-secondary/60 ml-1">(Select 1-{maxSelection})</span>
       </label>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        required={required}
-        className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+
+      <div
+        className="w-full px-4 py-3 border border-gray-300 rounded-lg cursor-pointer bg-white flex items-center justify-between"
+        onClick={() => setIsOpen(!isOpen)}
       >
-        {includeAll && <option value="">All Categories</option>}
-        {categories.map(category => (
-          <option key={category._id} value={category._id}>
-            {category.name}
-          </option>
-        ))}
-      </select>
+        <span className={`text-sm ${selectedCategories.length > 0 ? 'text-secondary' : 'text-gray-400'}`}>
+          {selectedCategories.length > 0 ? selectedNames : 'Select categories...'}
+        </span>
+        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </div>
+
+      {isOpen && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+          {categories.map(category => (
+            <label
+              key={category._id}
+              className="flex items-center px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+            >
+              <input
+                type="checkbox"
+                checked={selectedCategories.includes(category._id)}
+                onChange={() => onToggleCategory(category._id)}
+                disabled={!selectedCategories.includes(category._id) && selectedCategories.length >= maxSelection}
+                className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary mr-3"
+              />
+              <span className={`text-sm ${!selectedCategories.includes(category._id) && selectedCategories.length >= maxSelection ? 'text-gray-400' : 'text-secondary'}`}>
+                {category.name}
+              </span>
+            </label>
+          ))}
+        </div>
+      )}
+
+      {selectedCategories.length > 0 && (
+        <div className="flex flex-wrap gap-2 mt-2">
+          {selectedCategories.map(id => {
+            const category = categories.find(c => c._id === id);
+            return category ? (
+              <span key={id} className="inline-flex items-center gap-1 px-3 py-1 bg-primary/10 text-primary text-xs rounded-full">
+                {category.name}
+                <button onClick={() => onToggleCategory(id)} className="hover:text-primary/70">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            ) : null;
+          })}
+        </div>
+      )}
+
+      <p className="text-xs text-secondary/50 mt-1">
+        {selectedCategories.length}/{maxSelection} categories selected
+      </p>
     </div>
   );
 });
@@ -235,9 +268,8 @@ const CategorySelect = React.memo(({ value, onChange, label, required, includeAl
 const ProviderTestPage = () => {
   const { token, API, showToast } = useAuth();
 
-  // State management
   const [activeTab, setActiveTab] = useState('start');
-  const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedCategories, setSelectedCategories] = useState([]);
   const [currentTest, setCurrentTest] = useState(null);
   const [testResults, setTestResults] = useState(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -247,20 +279,18 @@ const ProviderTestPage = () => {
   const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState('saved');
   const [categories, setCategories] = useState([]);
+  const [currentCategoryIndex, setCurrentCategoryIndex] = useState(0);
+  const [testQuestions, setTestQuestions] = useState([]);
+  const [allTestData, setAllTestData] = useState({});
 
-  // Custom hooks
   const { timeLeft, formatTime, isWarning, setTimeLeft } = useTestTimer(
     600,
     !!currentTest,
     () => handleSubmitTest()
   );
 
-  const {
-    testHistory,
-    fetchTestHistory
-  } = useTestData(token, API, showToast);
+  const { testHistory, fetchTestHistory } = useTestData(token, API, showToast);
 
-  // Auto-save answers
   useEffect(() => {
     if (currentTest && Object.keys(answers).length > 0) {
       setAutoSaveStatus('saving');
@@ -272,7 +302,6 @@ const ProviderTestPage = () => {
     }
   }, [answers, currentTest]);
 
-  // Load saved answers
   useEffect(() => {
     if (currentTest) {
       const savedAnswers = localStorage.getItem(`test_answers_${currentTest.testId}`);
@@ -282,7 +311,6 @@ const ProviderTestPage = () => {
     }
   }, [currentTest]);
 
-  // Performance color helper
   const getPerformanceColor = useCallback((performance) => {
     const colors = {
       'Excellent': 'text-green-600',
@@ -293,18 +321,20 @@ const ProviderTestPage = () => {
     return colors[performance] || 'text-secondary';
   }, []);
 
-  // Start test handler
-  const handleStartTest = useCallback(async () => {
-    if (!selectedCategory) {
-      showToast('Please select a category', 'error');
-      return;
-    }
+  const handleToggleCategory = useCallback((categoryId) => {
+    setSelectedCategories(prev => {
+      if (prev.includes(categoryId)) {
+        return prev.filter(id => id !== categoryId);
+      } else {
+        if (prev.length < 3) {
+          return [...prev, categoryId];
+        }
+        return prev;
+      }
+    });
+  }, []);
 
-    if (testAttemptsLeft <= 0) {
-      showToast('You have used all 3 lifetime test attempts', 'error');
-      return;
-    }
-
+  const loadTestForCategory = useCallback(async (categoryId) => {
     try {
       const response = await fetch(`${API}/test/start`, {
         method: 'POST',
@@ -312,9 +342,7 @@ const ProviderTestPage = () => {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          category: selectedCategory
-        })
+        body: JSON.stringify({ category: categoryId })
       });
 
       const data = await response.json();
@@ -326,25 +354,68 @@ const ProviderTestPage = () => {
           }
         });
         const testData = await testResponse.json();
-
         if (testData.success) {
-          setCurrentTest(testData.data);
-          setCurrentQuestionIndex(0);
-          setAnswers({});
-          setBookmarkedQuestions(new Set());
-          setTimeLeft(600);
-          setActiveTab('test');
-          showToast('Test started successfully! 10 minute timer has begun.', 'success');
+          return testData.data;
         }
-      } else {
-        showToast(data.message, 'error');
       }
+      return null;
+    } catch (error) {
+      console.error('Error loading test:', error);
+      return null;
+    }
+  }, [API, token]);
+
+  const handleStartTest = useCallback(async () => {
+    if (selectedCategories.length === 0) {
+      showToast('Please select at least one category', 'error');
+      return;
+    }
+
+    if (testAttemptsLeft <= 0) {
+      showToast('You have used all 3 lifetime test attempts', 'error');
+      return;
+    }
+
+    try {
+      const allTests = {};
+      const allQuestions = [];
+
+      for (const categoryId of selectedCategories) {
+        const testData = await loadTestForCategory(categoryId);
+        if (testData) {
+          allTests[categoryId] = testData;
+          allQuestions.push(...testData.questions.map(q => ({
+            ...q,
+            categoryId,
+            testId: testData.testId
+          })));
+        }
+      }
+
+      if (allQuestions.length === 0) {
+        showToast('Failed to load test questions', 'error');
+        return;
+      }
+
+      setAllTestData(allTests);
+      setTestQuestions(allQuestions);
+      setCurrentCategoryIndex(0);
+      setCurrentTest({
+        testId: `combined-${Date.now()}`,
+        category: selectedCategories[0],
+        questions: allQuestions
+      });
+      setCurrentQuestionIndex(0);
+      setAnswers({});
+      setBookmarkedQuestions(new Set());
+      setTimeLeft(600);
+      setActiveTab('test');
+      showToast('Test started successfully! 10 minute timer has begun.', 'success');
     } catch (error) {
       showToast('Error starting test', 'error');
     }
-  }, [selectedCategory, testAttemptsLeft, API, token, showToast, setTimeLeft]);
+  }, [selectedCategories, testAttemptsLeft, API, token, showToast, setTimeLeft, loadTestForCategory]);
 
-  // Answer selection handler
   const handleAnswerSelect = useCallback((questionId, optionIndex) => {
     setAnswers(prev => ({
       ...prev,
@@ -352,7 +423,6 @@ const ProviderTestPage = () => {
     }));
   }, []);
 
-  // Bookmark toggle handler
   const handleToggleBookmark = useCallback((questionId) => {
     setBookmarkedQuestions(prev => {
       const newSet = new Set(prev);
@@ -365,46 +435,71 @@ const ProviderTestPage = () => {
     });
   }, []);
 
-  // Submit test handler
   const handleSubmitTest = useCallback(async () => {
     if (!currentTest) return;
 
     try {
-      const formattedAnswers = Object.entries(answers).map(([questionId, selectedOption]) => ({
-        questionId,
-        selectedOption
-      }));
-
-      const response = await fetch(`${API}/test/submit`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          testId: currentTest.testId,
-          answers: formattedAnswers
-        })
+      const answersByCategory = {};
+      currentTest.questions.forEach(question => {
+        if (!answersByCategory[question.categoryId]) {
+          answersByCategory[question.categoryId] = [];
+        }
+        if (answers[question.questionId] !== undefined) {
+          answersByCategory[question.categoryId].push({
+            questionId: question.questionId,
+            selectedOption: answers[question.questionId]
+          });
+        }
       });
 
-      const data = await response.json();
-      if (data.success) {
-        setTestResults(data.results);
-        setCurrentTest(null);
-        setActiveTab('results');
-        setShowConfirmSubmit(false);
-        localStorage.removeItem(`test_answers_${currentTest.testId}`);
-        showToast('Test submitted successfully!', 'success');
-        fetchTestHistory();
-      } else {
-        showToast(data.message, 'error');
+      const results = [];
+      for (const [categoryId, categoryAnswers] of Object.entries(answersByCategory)) {
+        const testData = allTestData[categoryId];
+        if (testData && categoryAnswers.length > 0) {
+          const response = await fetch(`${API}/test/submit`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              testId: testData.testId,
+              answers: categoryAnswers
+            })
+          });
+          const data = await response.json();
+          if (data.success) {
+            results.push({
+              categoryId,
+              categoryName: categories.find(c => c._id === categoryId)?.name || categoryId,
+              ...data.results
+            });
+          }
+        }
       }
+
+      const combinedResults = {
+        totalQuestions: currentTest.questions.length,
+        correctAnswers: results.reduce((sum, r) => sum + (r.correctAnswers || 0), 0),
+        score: results.length > 0 ? results.reduce((sum, r) => sum + (r.score || 0), 0) / results.length : 0,
+        passed: results.every(r => r.passed),
+        timeTaken: 600 - timeLeft,
+        categoryResults: results,
+        performance: results.length > 0 ? 'Satisfactory' : 'Poor'
+      };
+
+      setTestResults(combinedResults);
+      setCurrentTest(null);
+      setActiveTab('results');
+      setShowConfirmSubmit(false);
+      localStorage.removeItem(`test_answers_${currentTest.testId}`);
+      showToast('Test submitted successfully!', 'success');
+      fetchTestHistory();
     } catch (error) {
       showToast('Error submitting test', 'error');
     }
-  }, [currentTest, answers, API, token, showToast, fetchTestHistory]);
+  }, [currentTest, answers, allTestData, categories, API, token, timeLeft, showToast, fetchTestHistory]);
 
-  // Load data on mount and check for active test
   useEffect(() => {
     const checkActiveTest = async () => {
       try {
@@ -417,14 +512,12 @@ const ProviderTestPage = () => {
         const data = await response.json();
 
         if (data.success && data.data) {
-          // Active test found, resume it
           const activeTest = data.data;
           setCurrentTest(activeTest);
           setCurrentQuestionIndex(0);
           setTimeLeft(activeTest.timeRemaining);
           setActiveTab('test');
 
-          // Load saved answers
           const savedAnswers = localStorage.getItem(`test_answers_${activeTest.testId}`);
           if (savedAnswers) {
             setAnswers(JSON.parse(savedAnswers));
@@ -444,20 +537,13 @@ const ProviderTestPage = () => {
     checkActiveTest();
   }, [API, token, showToast, fetchTestHistory]);
 
-  // Fetch categories
   useEffect(() => {
     const fetchCategories = async () => {
       try {
         const response = await fetch(`${API}/system-setting/categories`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
+          headers: { 'Authorization': `Bearer ${token}` }
         });
-
-        if (!response.ok) {
-          throw new Error('Failed to fetch categories');
-        }
-
+        if (!response.ok) throw new Error('Failed to fetch categories');
         const data = await response.json();
         setCategories(data.data || []);
       } catch (error) {
@@ -465,23 +551,14 @@ const ProviderTestPage = () => {
         showToast(error.message || 'Failed to fetch categories', 'error');
       }
     };
-
     fetchCategories();
   }, [API, token, showToast]);
 
-  useEffect(() => {
-    if (categories.length > 0 && !selectedCategory) {
-      setSelectedCategory(categories[0]._id);
-    }
-  }, [categories, selectedCategory]);
-
-  // Calculate attempts left
   useEffect(() => {
     const attemptsUsed = testHistory.length;
     setTestAttemptsLeft(Math.max(0, 3 - attemptsUsed));
   }, [testHistory]);
 
-  // Tab configuration
   const tabs = [
     { id: 'start', label: 'Start Test', icon: Play, disabled: false },
     { id: 'test', label: 'Test', icon: Clock, disabled: !currentTest },
@@ -490,9 +567,8 @@ const ProviderTestPage = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50/90 to-blue-50/90 p-4 sm:p-6">
+    <div className="min-h-screen p-4 sm:p-6">
       <div className="max-w-7xl mx-auto">
-        {/* Enhanced Header */}
         <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-6 mb-6 border border-white/20">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -510,8 +586,7 @@ const ProviderTestPage = () => {
               <div className="flex items-center space-x-2 text-sm text-secondary/70">
                 <Activity className="w-4 h-4" />
                 <span>Auto-save: </span>
-                <span className={`font-medium ${autoSaveStatus === 'saved' ? 'text-green-600' : 'text-yellow-600'
-                  }`}>
+                <span className={`font-medium ${autoSaveStatus === 'saved' ? 'text-green-600' : 'text-yellow-600'}`}>
                   {autoSaveStatus === 'saved' ? '✓ Saved' : '⏳ Saving...'}
                 </span>
               </div>
@@ -519,7 +594,6 @@ const ProviderTestPage = () => {
           </div>
         </div>
 
-        {/* Enhanced Navigation Tabs */}
         <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg mb-6 border border-white/20 overflow-hidden">
           <nav className="flex">
             {tabs.map((tab) => {
@@ -530,10 +604,10 @@ const ProviderTestPage = () => {
                   onClick={() => !tab.disabled && setActiveTab(tab.id)}
                   disabled={tab.disabled}
                   className={`flex-1 py-4 px-6 font-medium text-sm transition-all duration-200 relative ${activeTab === tab.id
-                      ? 'bg-primary text-white shadow-lg'
-                      : tab.disabled
-                        ? 'text-secondary/40 cursor-not-allowed bg-gray-50/50'
-                        : 'text-secondary/80 hover:text-primary hover:bg-primary/10'
+                    ? 'bg-primary text-white shadow-lg'
+                    : tab.disabled
+                      ? 'text-secondary/40 cursor-not-allowed bg-gray-50/50'
+                      : 'text-secondary/80 hover:text-primary hover:bg-primary/10'
                     }`}
                 >
                   <div className="flex items-center justify-center space-x-2">
@@ -549,7 +623,6 @@ const ProviderTestPage = () => {
           </nav>
         </div>
 
-        {/* Start Test Tab */}
         {activeTab === 'start' && (
           <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-6 border border-white/20">
             <div className="flex items-center mb-6">
@@ -559,15 +632,13 @@ const ProviderTestPage = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
               <div className="space-y-2">
-                <CategorySelect
-                  value={selectedCategory}
-                  onChange={(value) => setSelectedCategory(value)}
-                  label="Category"
-                  required
+                <MultiCategorySelect
+                  selectedCategories={selectedCategories}
+                  onToggleCategory={handleToggleCategory}
                   categories={categories}
+                  maxSelection={3}
                 />
               </div>
-
             </div>
 
             <div className="bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 rounded-xl p-6 mb-8 backdrop-blur-sm">
@@ -578,7 +649,7 @@ const ProviderTestPage = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="flex items-center space-x-2">
                   <BookOpen className="w-4 h-4 text-primary" />
-                  <span className="text-sm text-primary">5-10 Questions</span>
+                  <span className="text-sm text-primary">5-10 Questions per category</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Clock className="w-4 h-4 text-primary" />
@@ -598,10 +669,10 @@ const ProviderTestPage = () => {
             <div className="flex flex-col sm:flex-row gap-4">
               <button
                 onClick={handleStartTest}
-                disabled={testAttemptsLeft <= 0}
-                className={`flex-1 sm:flex-none px-8 py-4 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center space-x-2 transform hover:scale-105 ${testAttemptsLeft <= 0
-                    ? 'bg-red-500 text-white cursor-not-allowed opacity-75'
-                    : 'bg-primary text-white hover:bg-primary/90 hover:shadow-lg'
+                disabled={testAttemptsLeft <= 0 || selectedCategories.length === 0}
+                className={`flex-1 sm:flex-none px-8 py-4 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center space-x-2 transform hover:scale-105 ${testAttemptsLeft <= 0 || selectedCategories.length === 0
+                  ? 'bg-red-500 text-white cursor-not-allowed opacity-75'
+                  : 'bg-primary text-white hover:bg-primary/90 hover:shadow-lg'
                   }`}
               >
                 {testAttemptsLeft <= 0 ? (
@@ -609,19 +680,22 @@ const ProviderTestPage = () => {
                     <XCircle className="w-5 h-5" />
                     <span>No Attempts Remaining</span>
                   </>
+                ) : selectedCategories.length === 0 ? (
+                  <>
+                    <AlertCircle className="w-5 h-5" />
+                    <span>Select Categories</span>
+                  </>
                 ) : (
                   <>
                     <Play className="w-5 h-5" />
-                    <span>Start Test</span>
+                    <span>Start Test ({selectedCategories.length} {selectedCategories.length === 1 ? 'category' : 'categories'})</span>
                   </>
                 )}
               </button>
 
               {testAttemptsLeft > 0 && (
                 <button
-                  onClick={() => {
-                    fetchTestHistory();
-                  }}
+                  onClick={() => fetchTestHistory()}
                   className="px-6 py-4 border border-gray-300/70 rounded-lg font-medium text-secondary hover:bg-white/50 transition-all duration-200 flex items-center justify-center space-x-2 backdrop-blur-sm"
                 >
                   <RefreshCw className="w-4 h-4" />
@@ -643,10 +717,8 @@ const ProviderTestPage = () => {
           </div>
         )}
 
-        {/* Enhanced Test Tab */}
         {activeTab === 'test' && currentTest && (
           <div className="space-y-6">
-            {/* Test Header */}
             <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-6 border border-white/20">
               <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                 <div>
@@ -655,7 +727,7 @@ const ProviderTestPage = () => {
                   </h2>
                   <p className="text-secondary/80 flex items-center">
                     <BookOpen className="w-4 h-4 mr-2" />
-                    {categories.find(cat => cat._id === currentTest.category)?.name || currentTest.category}
+                    {categories.find(cat => cat._id === currentTest.questions[currentQuestionIndex]?.categoryId)?.name || 'Category'}
                   </p>
                 </div>
                 <TimerDisplay
@@ -677,7 +749,6 @@ const ProviderTestPage = () => {
               </div>
             </div>
 
-            {/* Question Navigator */}
             <QuestionNavigation
               questions={currentTest.questions}
               currentIndex={currentQuestionIndex}
@@ -687,7 +758,6 @@ const ProviderTestPage = () => {
               onToggleBookmark={handleToggleBookmark}
             />
 
-            {/* Question Content */}
             <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-6 border border-white/20">
               <div className="flex items-start justify-between mb-6">
                 <h3 className="text-xl font-medium text-secondary flex-1 pr-4">
@@ -696,8 +766,8 @@ const ProviderTestPage = () => {
                 <button
                   onClick={() => handleToggleBookmark(currentTest.questions[currentQuestionIndex].questionId)}
                   className={`p-2 rounded-lg transition-colors duration-200 ${bookmarkedQuestions.has(currentTest.questions[currentQuestionIndex].questionId)
-                      ? 'text-accent bg-accent/10 hover:bg-accent/20'
-                      : 'text-secondary/50 hover:text-accent hover:bg-accent/10'
+                    ? 'text-accent bg-accent/10 hover:bg-accent/20'
+                    : 'text-secondary/50 hover:text-accent hover:bg-accent/10'
                     }`}
                 >
                   {bookmarkedQuestions.has(currentTest.questions[currentQuestionIndex].questionId) ? (
@@ -713,8 +783,8 @@ const ProviderTestPage = () => {
                   <label
                     key={index}
                     className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${answers[currentTest.questions[currentQuestionIndex].questionId] === index
-                        ? 'border-primary bg-primary/10 shadow-sm'
-                        : 'border-gray-200/70 hover:border-primary/50 hover:bg-primary/5'
+                      ? 'border-primary bg-primary/10 shadow-sm'
+                      : 'border-gray-200/70 hover:border-primary/50 hover:bg-primary/5'
                       }`}
                   >
                     <input
@@ -734,7 +804,6 @@ const ProviderTestPage = () => {
               </div>
             </div>
 
-            {/* Navigation Controls */}
             <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-6 border border-white/20">
               <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
                 <button
@@ -772,7 +841,6 @@ const ProviderTestPage = () => {
               </div>
             </div>
 
-            {/* Submit Confirmation Modal */}
             {showConfirmSubmit && (
               <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
                 <div className="bg-white/95 backdrop-blur-md rounded-xl p-6 max-w-md w-full border border-white/20 shadow-2xl">
@@ -800,16 +868,12 @@ const ProviderTestPage = () => {
           </div>
         )}
 
-        {/* Enhanced Results Tab */}
         {activeTab === 'results' && testResults && (
           <div className="space-y-6">
-            {/* Performance Analytics */}
             <PerformanceAnalytics testResults={testResults} testHistory={testHistory} />
 
-            {/* Main Results Card */}
             <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-8 border border-white/20 text-center">
-              <div className={`inline-flex items-center justify-center w-20 h-20 rounded-full mb-6 ${testResults.passed ? 'bg-green-100/80' : 'bg-red-100/80'
-                }`}>
+              <div className={`inline-flex items-center justify-center w-20 h-20 rounded-full mb-6 ${testResults.passed ? 'bg-green-100/80' : 'bg-red-100/80'}`}>
                 {testResults.passed ? (
                   <CheckCircle className="w-10 h-10 text-green-600" />
                 ) : (
@@ -818,7 +882,7 @@ const ProviderTestPage = () => {
               </div>
 
               <div className={`text-5xl font-bold mb-4 ${testResults.passed ? 'text-green-600' : 'text-red-600'}`}>
-                {testResults.score}%
+                {testResults.score.toFixed(1)}%
               </div>
 
               <div className="text-xl font-semibold mb-2">
@@ -843,7 +907,22 @@ const ProviderTestPage = () => {
                 Attempts remaining: <span className="font-semibold">{testAttemptsLeft}</span>
               </div>
 
-              {/* Detailed Stats */}
+              {testResults.categoryResults && testResults.categoryResults.length > 0 && (
+                <div className="mb-8">
+                  <h4 className="font-semibold text-secondary mb-3">Results by Category</h4>
+                  <div className="space-y-2">
+                    {testResults.categoryResults.map((result, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <span className="text-sm text-secondary">{result.categoryName}</span>
+                        <span className={`text-sm font-medium ${result.passed ? 'text-green-600' : 'text-red-600'}`}>
+                          {result.score}% {result.passed ? '✓' : '✗'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <div className="bg-primary/10 p-6 rounded-xl border border-primary/20 backdrop-blur-sm hover:shadow-md transition-all duration-300">
                   <div className="text-3xl font-bold text-primary mb-2">{testResults.correctAnswers}</div>
@@ -861,14 +940,13 @@ const ProviderTestPage = () => {
                 </div>
               </div>
 
-              {/* Action Buttons */}
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <button
                   onClick={() => setActiveTab('start')}
                   disabled={testAttemptsLeft <= 0}
                   className={`px-8 py-3 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 ${testAttemptsLeft <= 0
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                      : 'bg-primary text-white hover:bg-primary/90 hover:shadow-lg'
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-primary text-white hover:bg-primary/90 hover:shadow-lg'
                     }`}
                 >
                   {testAttemptsLeft <= 0 ? 'No Attempts Remaining' : 'Take Another Test'}
@@ -885,7 +963,6 @@ const ProviderTestPage = () => {
           </div>
         )}
 
-        {/* Enhanced History Tab */}
         {activeTab === 'history' && (
           <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-6 border border-white/20">
             <div className="flex items-center justify-between mb-6">
@@ -895,10 +972,7 @@ const ProviderTestPage = () => {
               </h2>
               {testHistory.length > 0 && (
                 <button
-                  onClick={() => {
-                    // Export functionality could be added here
-                    showToast('Export feature coming soon!', 'info');
-                  }}
+                  onClick={() => showToast('Export feature coming soon!', 'info')}
                   className="px-4 py-2 text-primary border border-primary rounded-lg hover:bg-primary/10 transition-all duration-200 flex items-center space-x-2 backdrop-blur-sm"
                 >
                   <Download className="w-4 h-4" />
@@ -932,8 +1006,8 @@ const ProviderTestPage = () => {
                             {test.category}
                           </h3>
                           <span className={`px-3 py-1 rounded-full text-xs font-medium ${test.passed
-                              ? 'bg-green-100/80 text-green-800'
-                              : 'bg-red-100/80 text-red-800'
+                            ? 'bg-green-100/80 text-green-800'
+                            : 'bg-red-100/80 text-red-800'
                             }`}>
                             {test.passed ? 'Passed' : 'Failed'}
                           </span>
@@ -955,8 +1029,7 @@ const ProviderTestPage = () => {
                       </div>
 
                       <div className="text-right">
-                        <div className={`text-2xl font-bold mb-1 ${test.passed ? 'text-green-600' : 'text-red-600'
-                          }`}>
+                        <div className={`text-2xl font-bold mb-1 ${test.passed ? 'text-green-600' : 'text-red-600'}`}>
                           {test.score}%
                         </div>
                         <div className={`text-sm font-medium ${getPerformanceColor(test.performance)}`}>

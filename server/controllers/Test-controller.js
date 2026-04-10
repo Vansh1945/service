@@ -80,20 +80,22 @@ const getTestCategories = async (req, res) => {
 const startTest = async (req, res) => {
     try {
         const provider = req.provider;
-        const { category } = req.body;
+        const { category, categories, services } = req.body;
+        
+        const categoryList = categories || services || (category ? [category] : []);
 
-        // Validate input
-        if (!category) {
+        if (categoryList.length === 0) {
             return res.status(400).json({
                 success: false,
                 message: 'Category is required'
             });
         }
 
-        // Check if provider has already passed this category
+        const primaryCategory = categoryList[0];
+
         const alreadyPassed = await ProviderTest.findOne({
             provider: provider._id,
-            testCategory: category,
+            testCategory: primaryCategory,
             passed: true
         });
 
@@ -104,30 +106,26 @@ const startTest = async (req, res) => {
             });
         }
 
-        // Check attempt count for this category
         const attemptCount = await ProviderTest.countDocuments({
             provider: provider._id,
-            testCategory: category
+            testCategory: primaryCategory
         });
 
         if (attemptCount >= TEST_CONFIG.MAX_ATTEMPTS) {
             return res.status(400).json({
                 success: false,
-                message: `You have reached the maximum of ${TEST_CONFIG.MAX_ATTEMPTS} attempts for this category`
+                message: `You have reached the maximum of ${TEST_CONFIG.MAX_ATTEMPTS} attempts`
             });
         }
 
-        // Check for existing active test
         const activeTest = await ProviderTest.findOne({
             provider: provider._id,
             status: 'in-progress'
         });
 
         if (activeTest) {
-            // Check if test has expired
             const timeElapsed = new Date() - activeTest.startedAt;
             if (timeElapsed > TEST_CONFIG.TIME_LIMIT) {
-                // Mark expired test as failed
                 activeTest.status = 'completed';
                 activeTest.passed = false;
                 activeTest.completedAt = new Date();
@@ -143,28 +141,24 @@ const startTest = async (req, res) => {
             }
         }
 
-        // Build question query
         const query = {
             isActive: true,
-            category: category
+            category: { $in: categoryList }
         };
 
-        // Get all available questions for the category
         const allQuestions = await Question.find(query);
 
         if (allQuestions.length < TEST_CONFIG.MIN_QUESTIONS_PER_TEST) {
             return res.status(400).json({
                 success: false,
-                message: `At least ${TEST_CONFIG.MIN_QUESTIONS_PER_TEST} questions are required for this category. Currently only ${allQuestions.length} questions are available.`
+                message: `At least ${TEST_CONFIG.MIN_QUESTIONS_PER_TEST} questions are required.`
             });
         }
 
-        // Randomly select questions (up to 10, or all available if fewer)
         const numQuestions = Math.min(10, allQuestions.length);
         const shuffled = allQuestions.sort(() => 0.5 - Math.random());
         const questions = shuffled.slice(0, numQuestions);
 
-        // Create new test with proper question structure
         const test = new ProviderTest({
             provider: provider._id,
             questions: questions.map(q => ({
@@ -177,7 +171,7 @@ const startTest = async (req, res) => {
                 status: 'unanswered'
             })),
             status: 'in-progress',
-            testCategory: category,
+            testCategory: primaryCategory,
             startedAt: new Date(),
             expiresAt: new Date(Date.now() + TEST_CONFIG.TIME_LIMIT),
             attemptNumber: attemptCount + 1
