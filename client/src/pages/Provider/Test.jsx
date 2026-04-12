@@ -489,12 +489,14 @@ const ProviderTestPage = () => {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const response = await fetch(`${API}/system-setting/categories`, {
+        const response = await fetch(`${API}/test/categories`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (!response.ok) throw new Error('Failed to fetch categories');
         const data = await response.json();
-        setCategories(data.data || []);
+        if (data.success) {
+          setCategories(data.data.categories || []);
+        }
       } catch (error) {
         console.error('Fetch categories error:', error);
         showToast(error.message || 'Failed to fetch categories', 'error');

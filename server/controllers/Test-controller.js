@@ -28,10 +28,21 @@ function getPerformanceRating(score) {
  */
 const getTestCategories = async (req, res) => {
     try {
-        const provider = req.provider;
+        const provider = req.provider; // This should be the full provider object from auth middleware
         
         // Get all categories that have questions
-        const categories = await Question.distinct('category');
+        const categoriesWithQuestions = await Question.distinct('category');
+
+        // Filter categories: only show those that the provider has in their services AND have questions
+        // Note: provider.services is an array of ObjectIds
+        const providerServiceIds = provider.services.map(id => id.toString());
+        
+        const filteredCategoryIds = categoriesWithQuestions.filter(catId => 
+            providerServiceIds.includes(catId.toString())
+        );
+
+        // Fetch full category objects for the frontend
+        const categories = await Category.find({ _id: { $in: filteredCategoryIds } }).select('name').lean();
 
         // Get passed tests
         const passedTests = await ProviderTest.find({
@@ -49,7 +60,10 @@ const getTestCategories = async (req, res) => {
 
         // Get attempt counts for each category
         const attemptCounts = await ProviderTest.aggregate([
-            { $match: { provider: provider._id } },
+            { $match: { 
+                provider: provider._id,
+                testCategories: { $in: provider.services } // Only consider tests for valid services
+            } },
             { $unwind: "$testCategories" },
             { $group: { 
                 _id: "$testCategories", 
@@ -95,6 +109,17 @@ const startTest = async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: 'Category is required'
+            });
+        }
+
+        // Validate that requested categories are in provider's services
+        const providerServiceIds = provider.services.map(id => id.toString());
+        const invalidCategories = categoryList.filter(id => !providerServiceIds.includes(id.toString()));
+
+        if (invalidCategories.length > 0) {
+            return res.status(403).json({
+                success: false,
+                message: 'You can only take tests for services registered in your profile'
             });
         }
 
