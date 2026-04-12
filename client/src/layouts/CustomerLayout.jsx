@@ -75,25 +75,25 @@ const CustomerLayout = () => {
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex items-center justify-between h-16 md:h-18 lg:h-20">
                         {/* Logo Section */}
-                        <div className="flex items-center space-x-3">
-                            <Link to="/customer/services" className="flex items-center space-x-2 transition-transform duration-200 hover:scale-105">
+                        <div className="flex flex-1 items-center space-x-2 min-w-0 pr-2">
+                            <Link to="/customer/services" className="flex items-center space-x-2 transition-transform duration-200 hover:scale-105 min-w-0 w-full">
                                 {systemSettings.logo ? (
                                     <img
                                         src={systemSettings.logo}
                                         alt={systemSettings.companyName}
-                                        className="h-8 md:h-10 lg:h-12 w-auto object-contain mr-2"
+                                        className="flex-shrink-0 h-8 md:h-10 lg:h-12 w-auto object-contain mr-1 md:mr-2"
                                     />
                                 ) : (
-                                    <div className="flex items-center justify-center h-8 w-8 lg:h-10 lg:w-10 rounded-full bg-primary shadow-lg">
+                                    <div className="flex-shrink-0 flex items-center justify-center h-8 w-8 lg:h-10 lg:w-10 rounded-full bg-primary shadow-lg">
                                         <FaBolt className="h-4 w-4 lg:h-5 lg:w-5 text-accent" />
                                     </div>
                                 )}
-                                <div className="flex flex-col">
-                                    <span className="font-bold text-lg lg:text-2xl bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                                <div className="flex flex-col min-w-0">
+                                    <span className="font-bold text-sm sm:text-base md:text-lg lg:text-2xl bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent truncate">
                                         {systemSettings.companyName || 'SAFEVOLT SOLUTIONS'}
                                     </span>
                                     {systemSettings.tagline && (
-                                        <span className="text-xs lg:text-sm text-gray-600 font-medium leading-tight">
+                                        <span className="hidden sm:block text-[10px] sm:text-xs lg:text-sm text-gray-600 font-medium leading-tight truncate">
                                             {systemSettings.tagline}
                                         </span>
                                     )}
@@ -102,7 +102,7 @@ const CustomerLayout = () => {
                         </div>
 
                         {/* Right Section */}
-                        <div className="flex items-center space-x-2 lg:space-x-4">
+                        <div className="flex items-center space-x-2 lg:space-x-4 flex-shrink-0">
                             {/* Service Location - Desktop Only */}
                             <div className="hidden lg:flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-all duration-200 border border-transparent hover:border-gray-200">
                                 <FiMapPin className="h-5 w-5 text-accent" />

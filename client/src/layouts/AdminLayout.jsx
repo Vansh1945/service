@@ -92,22 +92,22 @@ const AdminLayout = () => {
         <div className={`relative flex flex-col w-80 max-w-xs h-full bg-white shadow-2xl transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
           }`}>
           {/* Mobile header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-            <div className="flex items-center">
+          <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200">
+            <div className="flex items-center flex-1 min-w-0 pr-2">
               {systemSettings.logo && (
                 <img
                   src={systemSettings.logo}
                   alt={systemSettings.companyName}
-                  className="h-8 w-auto object-contain mr-3"
+                  className="h-8 w-auto object-contain mr-2 flex-shrink-0"
                 />
               )}
-              <span className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter">
+              <span className="text-lg font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter truncate">
                 {systemSettings.companyName || 'SAFEVOLT SOLUTIONS'}
               </span>
             </div>
             <button
               onClick={() => setSidebarOpen(false)}
-              className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-secondary transition-colors"
+              className="p-1.5 flex-shrink-0 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-secondary transition-colors"
             >
               <FiX className="w-5 h-5" />
             </button>

@@ -103,28 +103,28 @@ const Navbar = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16 md:h-18 lg:h-20 items-center">
           {/* Left side - Logo & Desktop Nav */}
-          <div className="flex items-center">
+          <div className="flex items-center flex-1 min-w-0">
             <Link
               to="/"
-              className="transition-all duration-300 focus:outline-none rounded-lg p-1"
+              className="transition-all duration-300 focus:outline-none rounded-lg p-1 min-w-0"
               aria-label="Go to homepage"
             >
-              <div className="flex items-center">
+              <div className="flex items-center min-w-0">
                 {systemSettings.logo && (
                   <img
                     src={systemSettings.logo}
                     alt={systemSettings.companyName || 'SAFEVOLT SOLUTIONS'}
-                    className="h-8 md:h-10 lg:h-12 w-auto object-contain mr-3"
+                    className="flex-shrink-0 h-8 md:h-10 lg:h-12 w-auto object-contain mr-2 md:mr-3"
                   />
                 )}
-                <span className="font-extrabold text-xl md:text-2xl lg:text-3xl bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter tracking-tight">
+                <span className="font-extrabold text-lg md:text-2xl lg:text-3xl bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter tracking-tight truncate">
                   {systemSettings.companyName || 'SAFEVOLT SOLUTIONS'}
                 </span>
               </div>
             </Link>
 
             {/* Desktop Navigation  */}
-            <div className="hidden lg:block ml-8 xl:ml-12">
+            <div className="hidden lg:block ml-8 xl:ml-12 flex-shrink-0">
               <div className="flex space-x-1">
                 {navLinks.map((link) => (
                   <NavItem
