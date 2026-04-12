@@ -13,6 +13,10 @@ const testSchema = new Schema({
       ref: 'Question',
       required: true
     },
+    categoryId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Category'
+    },
     questionText: {
       type: String,
       required: true
@@ -44,11 +48,10 @@ const testSchema = new Schema({
     enum: ['in-progress', 'completed'],
     default: 'in-progress'
   },
-  testCategory: {
+  testCategories: [{
     type: Schema.Types.ObjectId,
-    ref: 'Category',
-    required: true
-  },
+    ref: 'Category'
+  }],
   startedAt: {
     type: Date,
     default: Date.now

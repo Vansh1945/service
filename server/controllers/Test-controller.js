@@ -30,20 +30,29 @@ const getTestCategories = async (req, res) => {
     try {
         const provider = req.provider;
         
-        // Get all categories
+        // Get all categories that have questions
         const categories = await Question.distinct('category');
 
-        // Get passed tests to determine which categories are locked
+        // Get passed tests
         const passedTests = await ProviderTest.find({
             provider: provider._id,
             passed: true
-        }).select('testCategory');
+        }).select('testCategories');
+
+        // Extract all passed category IDs
+        const lockedCategories = [];
+        passedTests.forEach(test => {
+            if (test.testCategories) {
+                test.testCategories.forEach(catId => lockedCategories.push(catId.toString()));
+            }
+        });
 
         // Get attempt counts for each category
         const attemptCounts = await ProviderTest.aggregate([
             { $match: { provider: provider._id } },
+            { $unwind: "$testCategories" },
             { $group: { 
-                _id: "$testCategory", 
+                _id: "$testCategories", 
                 attempts: { $sum: 1 },
                 passed: { $max: { $cond: ["$passed", 1, 0] } }
             }},
@@ -55,13 +64,11 @@ const getTestCategories = async (req, res) => {
             }}
         ]);
 
-        const lockedCategories = passedTests.map(test => test.testCategory);
-
         res.json({
             success: true,
             data: {
                 categories,
-                lockedCategories: [...new Set(lockedCategories)], // Remove duplicates
+                lockedCategories: [...new Set(lockedCategories)],
                 attemptCounts
             }
         });
@@ -95,26 +102,26 @@ const startTest = async (req, res) => {
 
         const alreadyPassed = await ProviderTest.findOne({
             provider: provider._id,
-            testCategory: primaryCategory,
+            testCategories: { $in: categoryList },
             passed: true
         });
 
         if (alreadyPassed) {
             return res.status(400).json({
                 success: false,
-                message: 'You have already passed this category test'
+                message: 'You have already passed a test for one of these categories'
             });
         }
 
         const attemptCount = await ProviderTest.countDocuments({
             provider: provider._id,
-            testCategory: primaryCategory
+            testCategories: { $in: categoryList }
         });
 
         if (attemptCount >= TEST_CONFIG.MAX_ATTEMPTS) {
             return res.status(400).json({
                 success: false,
-                message: `You have reached the maximum of ${TEST_CONFIG.MAX_ATTEMPTS} attempts`
+                message: `You have reached the maximum of ${TEST_CONFIG.MAX_ATTEMPTS} attempts for these categories`
             });
         }
 
@@ -129,14 +136,15 @@ const startTest = async (req, res) => {
                 activeTest.status = 'completed';
                 activeTest.passed = false;
                 activeTest.completedAt = new Date();
-                activeTest.timeTaken = TEST_CONFIG.TIME_LIMIT;
+                activeTest.timeTaken = TEST_CONFIG.TIME_LIMIT / 1000;
                 await activeTest.save();
             } else {
-                return res.status(400).json({
-                    success: false,
-                    message: 'You already have an active test',
+                return res.status(200).json({
+                    success: true,
+                    message: 'Resuming active test',
                     testId: activeTest._id,
-                    timeRemaining: TEST_CONFIG.TIME_LIMIT - timeElapsed
+                    timeRemaining: Math.max(0, Math.floor((TEST_CONFIG.TIME_LIMIT - timeElapsed) / 1000)),
+                    isResumed: true
                 });
             }
         }
@@ -166,12 +174,13 @@ const startTest = async (req, res) => {
                 questionText: q.questionText,
                 options: q.options,
                 correctAnswer: q.correctAnswer,
+                categoryId: q.category, // Include category ID
                 selectedOption: null,
                 isCorrect: false,
                 status: 'unanswered'
             })),
             status: 'in-progress',
-            testCategory: primaryCategory,
+            testCategories: categoryList,
             startedAt: new Date(),
             expiresAt: new Date(Date.now() + TEST_CONFIG.TIME_LIMIT),
             attemptNumber: attemptCount + 1
@@ -184,7 +193,7 @@ const startTest = async (req, res) => {
             message: 'Test started successfully',
             testId: test._id,
             totalQuestions: test.questions.length,
-            testCategory: test.testCategory,
+            testCategories: test.testCategories,
             startedAt: test.startedAt,
             expiresAt: test.expiresAt,
             timeLimit: TEST_CONFIG.TIME_LIMIT,
@@ -296,7 +305,7 @@ const submitTest = async (req, res) => {
             await Provider.findByIdAndUpdate(
                 provider._id,
                 {
-                    $addToSet: { passedTestCategories: test.testCategory },
+                    $addToSet: { passedTestCategories: { $each: test.testCategories } },
                     testScore: score,
                     testCompletionDate: new Date()
                 },
@@ -314,7 +323,8 @@ const submitTest = async (req, res) => {
                 correctAnswers: correctCount,
                 totalQuestions: test.questions.length,
                 timeTaken: test.timeTaken,
-                testCategory: test.testCategory,
+                testCategories: test.testCategories,
+                categoryNames: (await Category.find({ _id: { $in: test.testCategories } }).select('name')).map(c => c.name).join(', '),
                 completedAt: test.completedAt,
                 performance: getPerformanceRating(score),
                 attemptNumber: test.attemptNumber,
@@ -339,15 +349,16 @@ const getTestResults = async (req, res) => {
 
         const results = await ProviderTest.find({ provider: provider._id })
             .sort({ completedAt: -1 })
-            .select('testCategory score passed completedAt timeTaken questionsAnswered status attemptNumber')
-            .populate('testCategory', 'name')
+            .select('testCategories score passed completedAt timeTaken questionsAnswered status attemptNumber')
+            .populate('testCategories', 'name')
             .lean();
 
         // Calculate attempts remaining for each category
         const attemptsData = await ProviderTest.aggregate([
             { $match: { provider: provider._id } },
+            { $unwind: "$testCategories" },
             { $group: { 
-                _id: "$testCategory", 
+                _id: "$testCategories", 
                 attempts: { $sum: 1 },
                 passed: { $max: { $cond: ["$passed", 1, 0] } }
             }},
@@ -360,21 +371,28 @@ const getTestResults = async (req, res) => {
         ]);
 
         const formattedResults = results.map(test => {
-            const categoryData = attemptsData.find(d => d.category.toString() === test.testCategory._id.toString()) || {};
+            const categories = test.testCategories || [];
+            const categoryNames = categories.map(c => c.name).join(', ') || 'Unknown';
+            
+            // Calculate attempts based on first category (approximation)
+            const firstCatId = categories[0]?._id?.toString();
+            const categoryData = firstCatId 
+                ? (attemptsData.find(d => d.category?.toString() === firstCatId) || {})
+                : {};
+                
             return {
                 testId: test._id,
-
-                category: test.testCategory.name,
+                category: categoryNames,
                 subcategory: test.testSubcategory,
-                score: test.score,
-                passed: test.passed,
+                score: test.score || 0,
+                passed: test.passed || false,
                 status: test.status,
                 date: test.completedAt,
                 timeTaken: test.timeTaken,
-                questionsAnswered: test.questionsAnswered,
-                performance: getPerformanceRating(test.score),
-                attemptNumber: test.attemptNumber,
-                attemptsRemaining: test.passed ? 0 : categoryData.attemptsLeft || 0
+                questionsAnswered: test.questionsAnswered || 0,
+                performance: getPerformanceRating(test.score || 0),
+                attemptNumber: test.attemptNumber || 1,
+                attemptsRemaining: test.passed ? 0 : (categoryData.attemptsLeft || 0)
             };
         });
 
@@ -401,7 +419,10 @@ const getActiveTest = async (req, res) => {
         const activeTest = await ProviderTest.findOne({
             provider: provider._id,
             status: 'in-progress'
-        }).lean();
+        })
+        .populate('testCategories', 'name')
+        .populate('questions.categoryId', 'name')
+        .lean();
 
         if (!activeTest) {
             return res.json({
@@ -429,12 +450,13 @@ const getActiveTest = async (req, res) => {
             });
         }
 
-        // Get attempts data for this category
+        // Get attempts data using all categories in this test
         const attemptsData = await ProviderTest.aggregate([
             { $match: {
                 provider: provider._id,
-                testCategory: activeTest.testCategory
+                testCategories: { $in: activeTest.testCategories || [] }
             }},
+            { $unwind: "$testCategories" },
             { $group: {
                 _id: null,
                 attempts: { $sum: 1 },
@@ -452,7 +474,7 @@ const getActiveTest = async (req, res) => {
         const response = {
             testId: activeTest._id,
             status: activeTest.status,
-            category: activeTest.testCategory,
+            categories: activeTest.testCategories,
             startedAt: activeTest.startedAt,
             expiresAt: activeTest.expiresAt,
             timeRemaining,
@@ -460,7 +482,9 @@ const getActiveTest = async (req, res) => {
                 questionId: q.questionId,
                 questionText: q.questionText,
                 options: q.options,
-                selectedOption: q.selectedOption
+                selectedOption: q.selectedOption,
+                categoryId: q.categoryId?._id || q.categoryId,
+                categoryName: q.categoryId?.name
             })),
             attemptNumber: activeTest.attemptNumber,
             attemptsRemaining: attemptsData[0]?.attemptsLeft || 0
@@ -497,7 +521,10 @@ const getTestDetails = async (req, res) => {
         const test = await ProviderTest.findOne({
             _id: testId,
             provider: provider._id
-        }).lean();
+        })
+        .populate('testCategories', 'name')
+        .populate('questions.categoryId', 'name')
+        .lean();
 
         if (!test) {
             return res.status(404).json({
@@ -506,12 +533,13 @@ const getTestDetails = async (req, res) => {
             });
         }
 
-        // Get attempts data for this category
+        // Get attempts data
         const attemptsData = await ProviderTest.aggregate([
             { $match: {
                 provider: provider._id,
-                testCategory: test.testCategory
+                testCategories: { $in: test.testCategories || [] }
             }},
+            { $unwind: "$testCategories" },
             { $group: {
                 _id: null,
                 attempts: { $sum: 1 },
@@ -529,7 +557,7 @@ const getTestDetails = async (req, res) => {
             status: test.status,
             score: test.score,
             passed: test.passed,
-            category: test.testCategory,
+            categories: test.testCategories,
             startedAt: test.startedAt,
             completedAt: test.completedAt,
             expiresAt: test.expiresAt,
@@ -539,6 +567,8 @@ const getTestDetails = async (req, res) => {
                 questionText: q.questionText,
                 options: q.options,
                 selectedOption: q.selectedOption,
+                categoryId: q.categoryId?._id || q.categoryId,
+                categoryName: q.categoryId?.name,
                 correctAnswer: test.status === 'completed' ? q.correctAnswer : undefined,
                 isCorrect: test.status === 'completed' ? q.isCorrect : undefined
             })),

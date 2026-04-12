@@ -334,36 +334,7 @@ const ProviderTestPage = () => {
     });
   }, []);
 
-  const loadTestForCategory = useCallback(async (categoryId) => {
-    try {
-      const response = await fetch(`${API}/test/start`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ category: categoryId })
-      });
 
-      const data = await response.json();
-      if (data.success) {
-        const testResponse = await fetch(`${API}/test/details/${data.testId}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        const testData = await testResponse.json();
-        if (testData.success) {
-          return testData.data;
-        }
-      }
-      return null;
-    } catch (error) {
-      console.error('Error loading test:', error);
-      return null;
-    }
-  }, [API, token]);
 
   const handleStartTest = useCallback(async () => {
     if (selectedCategories.length === 0) {
@@ -377,44 +348,49 @@ const ProviderTestPage = () => {
     }
 
     try {
-      const allTests = {};
-      const allQuestions = [];
-
-      for (const categoryId of selectedCategories) {
-        const testData = await loadTestForCategory(categoryId);
-        if (testData) {
-          allTests[categoryId] = testData;
-          allQuestions.push(...testData.questions.map(q => ({
-            ...q,
-            categoryId,
-            testId: testData.testId
-          })));
-        }
-      }
-
-      if (allQuestions.length === 0) {
-        showToast('Failed to load test questions', 'error');
-        return;
-      }
-
-      setAllTestData(allTests);
-      setTestQuestions(allQuestions);
-      setCurrentCategoryIndex(0);
-      setCurrentTest({
-        testId: `combined-${Date.now()}`,
-        category: selectedCategories[0],
-        questions: allQuestions
+      // Start test with all selected categories in one request
+      const response = await fetch(`${API}/test/start`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ categories: selectedCategories })
       });
-      setCurrentQuestionIndex(0);
-      setAnswers({});
-      setBookmarkedQuestions(new Set());
-      setTimeLeft(600);
-      setActiveTab('test');
-      showToast('Test started successfully! 10 minute timer has begun.', 'success');
+
+      const data = await response.json();
+      if (data.success) {
+        // Fetch the full test details including questions
+        const testId = data.testId;
+        const detailsResponse = await fetch(`${API}/test/details/${testId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        const detailsData = await detailsResponse.json();
+        if (detailsData.success) {
+          const testData = detailsData.data;
+          
+          setCurrentTest(testData);
+          setCurrentQuestionIndex(0);
+          setAnswers({});
+          setBookmarkedQuestions(new Set());
+          setTimeLeft(600);
+          setActiveTab('test');
+          showToast('Test started successfully! 10 minute timer has begun.', 'success');
+        } else {
+          showToast(detailsData.message || 'Failed to load test questions', 'error');
+        }
+      } else {
+        showToast(data.message || 'Failed to start test', 'error');
+      }
     } catch (error) {
+      console.error('Error starting test:', error);
       showToast('Error starting test', 'error');
     }
-  }, [selectedCategories, testAttemptsLeft, API, token, showToast, setTimeLeft, loadTestForCategory]);
+  }, [selectedCategories, testAttemptsLeft, API, token, showToast, setTimeLeft]);
 
   const handleAnswerSelect = useCallback((questionId, optionIndex) => {
     setAnswers(prev => ({
@@ -439,66 +415,39 @@ const ProviderTestPage = () => {
     if (!currentTest) return;
 
     try {
-      const answersByCategory = {};
-      currentTest.questions.forEach(question => {
-        if (!answersByCategory[question.categoryId]) {
-          answersByCategory[question.categoryId] = [];
-        }
-        if (answers[question.questionId] !== undefined) {
-          answersByCategory[question.categoryId].push({
-            questionId: question.questionId,
-            selectedOption: answers[question.questionId]
-          });
-        }
+      const formattedAnswers = Object.entries(answers).map(([questionId, selectedOption]) => ({
+        questionId,
+        selectedOption
+      }));
+
+      const response = await fetch(`${API}/test/submit`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          testId: currentTest.testId,
+          answers: formattedAnswers
+        })
       });
 
-      const results = [];
-      for (const [categoryId, categoryAnswers] of Object.entries(answersByCategory)) {
-        const testData = allTestData[categoryId];
-        if (testData && categoryAnswers.length > 0) {
-          const response = await fetch(`${API}/test/submit`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              testId: testData.testId,
-              answers: categoryAnswers
-            })
-          });
-          const data = await response.json();
-          if (data.success) {
-            results.push({
-              categoryId,
-              categoryName: categories.find(c => c._id === categoryId)?.name || categoryId,
-              ...data.results
-            });
-          }
-        }
+      const data = await response.json();
+      if (data.success) {
+        setTestResults(data.results);
+        setCurrentTest(null);
+        setActiveTab('results');
+        setShowConfirmSubmit(false);
+        localStorage.removeItem(`test_answers_${currentTest.testId}`);
+        showToast('Test submitted successfully!', 'success');
+        fetchTestHistory();
+      } else {
+        showToast(data.message || 'Failed to submit test', 'error');
       }
-
-      const combinedResults = {
-        totalQuestions: currentTest.questions.length,
-        correctAnswers: results.reduce((sum, r) => sum + (r.correctAnswers || 0), 0),
-        score: results.length > 0 ? results.reduce((sum, r) => sum + (r.score || 0), 0) / results.length : 0,
-        passed: results.every(r => r.passed),
-        timeTaken: 600 - timeLeft,
-        categoryResults: results,
-        performance: results.length > 0 ? 'Satisfactory' : 'Poor'
-      };
-
-      setTestResults(combinedResults);
-      setCurrentTest(null);
-      setActiveTab('results');
-      setShowConfirmSubmit(false);
-      localStorage.removeItem(`test_answers_${currentTest.testId}`);
-      showToast('Test submitted successfully!', 'success');
-      fetchTestHistory();
     } catch (error) {
       showToast('Error submitting test', 'error');
     }
-  }, [currentTest, answers, allTestData, categories, API, token, timeLeft, showToast, fetchTestHistory]);
+  }, [currentTest, answers, API, token, showToast, fetchTestHistory]);
 
   useEffect(() => {
     const checkActiveTest = async () => {
@@ -725,10 +674,12 @@ const ProviderTestPage = () => {
                   <h2 className="text-2xl font-semibold text-secondary mb-2">
                     Question {currentQuestionIndex + 1} of {currentTest.questions.length}
                   </h2>
-                  <p className="text-secondary/80 flex items-center">
-                    <BookOpen className="w-4 h-4 mr-2" />
-                    {categories.find(cat => cat._id === currentTest.questions[currentQuestionIndex]?.categoryId)?.name || 'Category'}
-                  </p>
+                    <p className="text-secondary/80 flex items-center">
+                      <BookOpen className="w-4 h-4 mr-2" />
+                      {currentTest.questions[currentQuestionIndex]?.categoryName || 
+                       categories.find(cat => cat._id === currentTest.questions[currentQuestionIndex]?.categoryId)?.name || 
+                       'Category'}
+                    </p>
                 </div>
                 <TimerDisplay
                   timeLeft={timeLeft}
