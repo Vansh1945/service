@@ -36,6 +36,7 @@ const Dashboard = () => {
     ratings: null,
     profile: null,
     totalEarnings: 0,
+    todaysEarnings: 0,
     pendingRequests: [],
     activeJobs: [],
     recentBookings: []
@@ -79,6 +80,7 @@ const Dashboard = () => {
         ratings: ratings?.data || null,
         profile: profile?.provider || null,
         totalEarnings: summary?.data?.totalEarnings || 0,
+        todaysEarnings: summary?.data?.todaysEarnings || 0,
         pendingRequests: new Array(summary?.data?.pendingBookings || 0),
         activeJobs: combinedBookings,
         recentBookings: combinedBookings.slice(0, 5)
@@ -113,7 +115,7 @@ const Dashboard = () => {
 
   if (loading) return <Loader />;
 
-  const { summary, earnings, bookings, wallet, ratings, profile, totalEarnings, pendingRequests, recentBookings } = dashboardData;
+  const { summary, earnings, bookings, wallet, ratings, profile, totalEarnings, todaysEarnings, pendingRequests, recentBookings } = dashboardData;
   const COLORS = ['#0D9488', '#F97316', '#F59E0B', '#EF4444', '#8B5CF6'];
 
   return (
@@ -136,15 +138,27 @@ const Dashboard = () => {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           <Link to="/provider/earnings" className="bg-white rounded-2xl shadow-sm p-4 border-l-4 border-primary hover:shadow-md transition-shadow">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-primary/10 rounded-xl">
                 <FiDollarSign className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <p className="text-xs text-secondary/50 uppercase tracking-wide">Earnings</p>
+                <p className="text-xs text-secondary/50 uppercase tracking-wide">Total Earning</p>
                 <p className="text-xl font-bold text-secondary">{formatCurrency(totalEarnings)}</p>
+              </div>
+            </div>
+          </Link>
+
+          <Link to="/provider/earnings" className="bg-white rounded-2xl shadow-sm p-4 border-l-4 border-emerald-500 hover:shadow-md transition-shadow">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-emerald-50 rounded-xl">
+                <FiDollarSign className="w-5 h-5 text-emerald-600" />
+              </div>
+              <div>
+                <p className="text-xs text-secondary/50 uppercase tracking-wide">Today's Earning</p>
+                <p className="text-xl font-bold text-secondary">{formatCurrency(todaysEarnings)}</p>
               </div>
             </div>
           </Link>

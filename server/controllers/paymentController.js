@@ -223,9 +223,32 @@ const getEarningsSummary = async (req, res) => {
       ? pendingWithdrawals[0].totalPendingWithdrawals
       : 0;
 
+    // Get today's earnings
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const todayEarningsResult = await ProviderEarning.aggregate([
+      {
+        $match: {
+          ...baseMatchConditions,
+          createdAt: { $gte: today, $lt: tomorrow }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalEarnings: { $sum: '$netAmount' }
+        }
+      }
+    ]);
+    const todayEarnings = todayEarningsResult.length > 0 ? todayEarningsResult[0].totalEarnings : 0;
+
     res.json({
       success: true,
       totalEarnings: totalEarnings,
+      todayEarnings: todayEarnings,
       availableBalance: availableBalance,
       totalWithdrawn: totalWithdrawn,
       pendingWithdrawals: totalPendingWithdrawals

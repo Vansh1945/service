@@ -71,7 +71,7 @@ const ProviderEarningsDashboard = () => {
   ];
 
   const [loading, setLoading] = useState(false);
-  const [summary, setSummary] = useState({ totalEarnings: 0, totalWithdrawn: 0, availableBalance: 0, totalPendingWithdrawals: 0 });
+  const [summary, setSummary] = useState({ totalEarnings: 0, todayEarnings: 0, totalWithdrawn: 0, availableBalance: 0, totalPendingWithdrawals: 0 });
   const [earningsReport, setEarningsReport] = useState([]);
   const [withdrawalReport, setWithdrawalReport] = useState([]);
   const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
@@ -120,6 +120,7 @@ const ProviderEarningsDashboard = () => {
       if (data.success) {
         setSummary({
           totalEarnings: data.totalEarnings || 0,
+          todayEarnings: data.todayEarnings || 0,
           totalWithdrawn: data.totalWithdrawn || 0,
           availableBalance: data.availableBalance || 0,
           totalPendingWithdrawals: data.pendingWithdrawals || 0
@@ -315,8 +316,9 @@ const ProviderEarningsDashboard = () => {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
           <StatCard title="Total Earnings" value={formatCurrency(summary.totalEarnings)} icon={TrendingUp} subtext={`This ${timeFilter}`} />
+          <StatCard title="Today's Earning" value={formatCurrency(summary.todayEarnings)} icon={Activity} subtext="Earned today" />
           <StatCard title="Available Balance" value={formatCurrency(summary.availableBalance)} icon={Wallet} subtext="Ready to withdraw" />
           <StatCard title="Total Withdrawn" value={formatCurrency(summary.totalWithdrawn)} icon={FileText} subtext={`This ${timeFilter}`} />
           <StatCard title="Processing" value={formatCurrency(summary.totalPendingWithdrawals)} icon={Clock} subtext="Awaiting clearance" />
