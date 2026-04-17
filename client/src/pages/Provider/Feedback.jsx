@@ -59,7 +59,7 @@ const ProviderFeedback = () => {
                     service: feedback.booking?.services?.[0]?.service?.title || 'Service',
                     date: feedback.createdAt,
                     rating: feedback.providerFeedback?.rating || 0,
-                    comment: feedback.providerFeedback?.comment || 'No comment provided',
+                    comment: feedback.providerFeedback?.comment || '',
                     isEdited: feedback.providerFeedback?.isEdited || false,
                     bookingDate: feedback.booking?.date || 'N/A'
                 }));
@@ -164,8 +164,9 @@ const ProviderFeedback = () => {
     };
 
     const filteredFeedback = feedbackData
+        .filter(item => item.comment && item.comment.trim() !== '')
         .filter(item => filterRating === 'all' || item.rating === parseInt(filterRating))
-        .filter(item => item.customerName.toLowerCase().includes(searchTerm.toLowerCase()) || item.service.toLowerCase().includes(searchTerm.toLowerCase()) || item.bookingId.toLowerCase().includes(searchTerm.toLowerCase()));
+        .filter(item => item.service.toLowerCase().includes(searchTerm.toLowerCase()) || item.bookingId.toLowerCase().includes(searchTerm.toLowerCase()));
 
     const finalFilteredFeedback = filterFeedbackByTimeRange(filteredFeedback);
     const totalPages = Math.ceil(finalFilteredFeedback.length / itemsPerPage);
@@ -208,15 +209,11 @@ const ProviderFeedback = () => {
         <div className="bg-white rounded-xl p-4 border border-gray-100">
             <div className="flex items-start justify-between gap-4">
                 <div className="flex items-center gap-3">
-                    {feedback.customerAvatar ? (
-                        <img src={feedback.customerAvatar} alt={feedback.customerName} className="w-10 h-10 rounded-full object-cover" />
-                    ) : (
-                        <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                            <User className="w-5 h-5 text-primary" />
-                        </div>
-                    )}
+                    <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                        <MessageSquare className="w-5 h-5 text-primary" />
+                    </div>
                     <div>
-                        <p className="font-medium text-secondary">{feedback.customerName}</p>
+                        <p className="font-medium text-secondary">ID: #{feedback.bookingId.slice(-8)}</p>
                         <p className="text-xs text-secondary/40">{feedback.service}</p>
                     </div>
                 </div>

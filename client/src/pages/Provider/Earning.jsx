@@ -97,19 +97,30 @@ const ProviderEarningsDashboard = () => {
     try {
       const now = new Date();
       let start, end;
-      if (timeFilter === 'week') {
+      if (timeFilter === 'day') {
+        start = new Date(now);
+        start.setHours(0, 0, 0, 0);
+        end = new Date(now);
+      } else if (timeFilter === 'week') {
         const d = new Date(now);
         const day = d.getDay();
-        const diff = d.getDate() - day;
+        const diff = d.getDate() - day; // Start from Sunday
         start = new Date(d.setDate(diff));
         start.setHours(0, 0, 0, 0);
         end = new Date();
       } else if (timeFilter === 'month') {
         start = new Date(now.getFullYear(), now.getMonth(), 1);
+        start.setHours(0, 0, 0, 0);
         end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
       } else if (timeFilter === 'year') {
         start = new Date(now.getFullYear(), 0, 1);
+        start.setHours(0, 0, 0, 0);
         end = new Date(now.getFullYear(), 11, 31);
+      } else {
+        // Default to month if something goes wrong
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+        start.setHours(0, 0, 0, 0);
+        end = new Date();
       }
       end.setHours(23, 59, 59, 999);
 
@@ -309,6 +320,7 @@ const ProviderEarningsDashboard = () => {
             onChange={(e) => setTimeFilter(e.target.value)}
             className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm text-secondary/70 focus:outline-none focus:ring-2 focus:ring-primary/20"
           >
+            <option value="day">Today</option>
             <option value="week">This Week</option>
             <option value="month">This Month</option>
             <option value="year">This Year</option>

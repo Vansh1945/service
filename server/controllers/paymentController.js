@@ -180,12 +180,14 @@ const getEarningsSummary = async (req, res) => {
     const totalEarnings = lifetimeEarnings.length > 0 ? lifetimeEarnings[0].totalEarnings : 0;
 
     let periodEarnings = totalEarnings;
+    let periodWithdrawn = totalWithdrawn;
 
     if (startDate && endDate) {
       const start = new Date(startDate);
       const end = new Date(endDate);
       end.setHours(23, 59, 59, 999);
 
+      // Period Earnings
       const periodConditions = {
         ...baseMatchConditions,
         createdAt: { $gte: start, $lte: end }
@@ -201,6 +203,24 @@ const getEarningsSummary = async (req, res) => {
         }
       ]);
       periodEarnings = periodEarningsResult.length > 0 ? periodEarningsResult[0].totalEarnings : 0;
+
+      // Period Withdrawals
+      const withdrawalConditions = {
+        provider: providerId,
+        status: 'completed',
+        createdAt: { $gte: start, $lte: end }
+      };
+
+      const withdrawalResult = await PaymentRecord.aggregate([
+        { $match: withdrawalConditions },
+        {
+          $group: {
+            _id: null,
+            totalWithdrawn: { $sum: '$amount' }
+          }
+        }
+      ]);
+      periodWithdrawn = withdrawalResult.length > 0 ? withdrawalResult[0].totalWithdrawn : 0;
     }
 
     // Get total pending withdrawals
@@ -208,7 +228,7 @@ const getEarningsSummary = async (req, res) => {
       {
         $match: {
           provider: providerId,
-          status: { $in: ['requested', 'processing', 'under_review'] }
+          status: { $in: ['requested', 'processing', 'under_review', 'approved'] }
         }
       },
       {
@@ -247,10 +267,12 @@ const getEarningsSummary = async (req, res) => {
 
     res.json({
       success: true,
-      totalEarnings: totalEarnings,
+      totalEarnings: periodEarnings,
+      lifetimeEarnings: totalEarnings,
       todayEarnings: todayEarnings,
       availableBalance: availableBalance,
-      totalWithdrawn: totalWithdrawn,
+      totalWithdrawn: periodWithdrawn,
+      lifetimeWithdrawn: totalWithdrawn,
       pendingWithdrawals: totalPendingWithdrawals
     });
 
