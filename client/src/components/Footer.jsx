@@ -238,17 +238,14 @@ const Footer = () => {
 
             {/* Legal Links */}
             <div className="flex flex-wrap justify-center gap-x-6 gap-y-2">
-              <Link to="/terms" className="hover:text-primary transition-colors duration-300 hover:underline underline-offset-4">
+              <Link to="/terms-and-conditions" className="hover:text-primary transition-colors duration-300 hover:underline underline-offset-4">
                 Terms & Conditions
               </Link>
-              <Link to="/privacy" className="hover:text-primary transition-colors duration-300 hover:underline underline-offset-4">
+              <Link to="/privacy-policy" className="hover:text-primary transition-colors duration-300 hover:underline underline-offset-4">
                 Privacy Policy
               </Link>
-              <Link to="/refund" className="hover:text-primary transition-colors duration-300 hover:underline underline-offset-4">
+              <Link to="/refund-policy" className="hover:text-primary transition-colors duration-300 hover:underline underline-offset-4">
                 Refund Policy
-              </Link>
-              <Link to="/sitemap" className="hover:text-primary transition-colors duration-300 hover:underline underline-offset-4">
-                Sitemap
               </Link>
             </div>
 

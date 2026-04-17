@@ -19,7 +19,10 @@ const ForgotPassword = lazy(() => import("./pages/ForgetPassword"));
 const CustomerRegistration = lazy(() => import("./pages/Customer/Customer-Register"));
 const ProviderRegistration = lazy(() => import("./pages/Provider/Provider-Register"));
 const Unauthorized = lazy(() => import("./pages/Unauthorized"));
+const TermsAndConditions = lazy(() => import("./pages/TermsAndConditions"));
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 import LoadingSpinner from "./components/Loader";
+import RefundPolicy from "./pages/RefundPolicy";
 
 // Routes (Optimized: Lazy loaded)
 const AdminRoutes = lazy(() => import("./routes/AdminRoutes"));
@@ -175,7 +178,9 @@ const App = () => {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/unauthorized" element={<Unauthorized />} />
-
+          <Route path="/terms-and-conditions" element={<TermsAndConditions />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+          <Route path="/refund-policy" element={<RefundPolicy />} />
           {/*Protected admin routes */}
 
           <Route path="admin/*" element={<AdminRoutes />} />
