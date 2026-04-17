@@ -101,7 +101,7 @@ const ProviderBooking = () => {
   const calculateNetAmount = useCallback((booking) => {
     if (!booking) return 0;
     const totalAmount = booking.totalAmount || calculateSubtotal(booking);
-    const commissionAmount = booking.commission?.amount || 0;
+    const commissionAmount = booking.commission?.amount || booking.commissionAmount || 0;
     return (totalAmount - commissionAmount).toFixed(2);
   }, [calculateSubtotal]);
 
@@ -131,9 +131,9 @@ const ProviderBooking = () => {
     const cashPaid = completed.filter(b => b.paymentMethod === 'cash' && b.paymentStatus === 'paid');
     const totalCashCollected = cashPaid.reduce((sum, b) => {
       const sub = b.services ? b.services.reduce((s, i) => s + (i.price * i.quantity) - (i.discountAmount || 0), 0) : 0;
-      return sum + sub + (b.booking?.visitingCharge || 0);
+      return sum + sub + (b.visitingCharge || 0);
     }, 0);
-    const commissionPayable = cashPaid.reduce((sum, b) => sum + (b.commission?.amount || 0), 0);
+    const commissionPayable = cashPaid.reduce((sum, b) => sum + (b.commission?.amount || b.commissionAmount || 0), 0);
     return { totalBookings: allBookings.length, completedBookings: completed.length, pendingBookings: pending.length, totalCashCollected, commissionPayable, netEarnings: totalCashCollected - commissionPayable };
   }, []);
 
@@ -772,10 +772,10 @@ const ProviderBooking = () => {
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-gray-500">Payment Status</span>
                         <span className={`px-2 py-0.5 rounded-lg text-xs font-semibold ${selectedBooking.paymentStatus === 'paid'
-                            ? 'bg-primary/10 text-primary'
-                            : (selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentType === 'pay_after_service')
-                              ? 'bg-yellow-100 text-yellow-700'
-                              : 'bg-accent/10 text-accent'
+                          ? 'bg-primary/10 text-primary'
+                          : (selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentType === 'pay_after_service')
+                            ? 'bg-yellow-100 text-yellow-700'
+                            : 'bg-accent/10 text-accent'
                           }`}>
                           {selectedBooking.paymentStatus === 'paid' ? 'Paid' : (selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentType === 'pay_after_service') ? 'Pending Collection' : 'Unpaid'}
                         </span>
@@ -800,8 +800,8 @@ const ProviderBooking = () => {
                         { label: 'Service Amount', value: formatCurrency(calculateServiceSubtotal(selectedBooking)) },
                         ...(calculateTotalDiscount(selectedBooking) > 0 ? [{ label: 'Discount', value: `-${formatCurrency(calculateTotalDiscount(selectedBooking))}`, color: 'text-primary' }] : []),
                         { label: 'Subtotal', value: formatCurrency(calculateSubtotal(selectedBooking)) },
-                        ...(selectedBooking.booking?.visitingCharge > 0 ? [{ label: 'Visiting Charge', value: `+${formatCurrency(selectedBooking.booking.visitingCharge)}`, color: 'text-accent' }] : []),
-                        { label: 'Platform Commission', value: `-${formatCurrency(selectedBooking.commission?.amount || 0)}`, color: 'text-gray-500' },
+                        ...(selectedBooking.visitingCharge > 0 ? [{ label: 'Visiting Charge', value: `+${formatCurrency(selectedBooking.visitingCharge)}`, color: 'text-accent' }] : []),
+                        { label: 'Platform Commission', value: `-${formatCurrency(selectedBooking.commission?.amount || selectedBooking.commissionAmount || 0)}`, color: 'text-gray-500' },
                       ].map(({ label, value, color }) => (
                         <div key={label} className="flex justify-between text-sm">
                           <span className="text-gray-500">{label}</span>

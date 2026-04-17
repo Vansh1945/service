@@ -1206,8 +1206,7 @@ const getProviderBookingById = async (req, res) => {
     }
 
     const commissionRule = await CommissionRule.getCommissionForProvider(
-      providerId,
-      provider.performanceScore
+      providerId
     );
 
     const servicesInCategory = await Service.find({
@@ -1309,8 +1308,7 @@ const getBookingsByStatus = async (req, res) => {
     }
 
     const commissionRule = await CommissionRule.getCommissionForProvider(
-      providerId,
-      provider.performanceScore
+      providerId
     );
 
     const servicesInCategory = await Service.find({
