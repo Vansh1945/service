@@ -78,12 +78,37 @@ const getTestCategories = async (req, res) => {
             }}
         ]);
 
+        // Check for 24-hour retake policy cooldown
+        let cooldown = null;
+        const lastFailedTest = await ProviderTest.findOne({
+            provider: provider._id,
+            passed: false,
+            status: 'completed'
+        }).sort({ completedAt: -1 });
+
+        if (lastFailedTest) {
+            const lastAttemptTime = new Date(lastFailedTest.completedAt).getTime();
+            const timeSinceLastAttempt = Date.now() - lastAttemptTime;
+            const cooldownPeriod = 24 * 60 * 60 * 1000;
+
+            if (timeSinceLastAttempt < cooldownPeriod) {
+                const remainingTimeMs = cooldownPeriod - timeSinceLastAttempt;
+                cooldown = {
+                    isCooldown: true,
+                    remainingHours: Math.floor(remainingTimeMs / (1000 * 60 * 60)),
+                    remainingMinutes: Math.floor((remainingTimeMs % (1000 * 60 * 60)) / (1000 * 60)),
+                    remainingMs: remainingTimeMs
+                };
+            }
+        }
+
         res.json({
             success: true,
             data: {
                 categories,
                 lockedCategories: [...new Set(lockedCategories)],
-                attemptCounts
+                attemptCounts,
+                cooldown
             }
         });
     } catch (error) {
@@ -136,6 +161,30 @@ const startTest = async (req, res) => {
                 success: false,
                 message: 'You have already passed a test for one of these categories'
             });
+        }
+
+        // Check for 24-hour retake policy after failure
+        const lastFailedTest = await ProviderTest.findOne({
+            provider: provider._id,
+            passed: false,
+            status: 'completed'
+        }).sort({ completedAt: -1 });
+
+        if (lastFailedTest) {
+            const lastAttemptTime = new Date(lastFailedTest.completedAt).getTime();
+            const timeSinceLastAttempt = Date.now() - lastAttemptTime;
+            const cooldownPeriod = 24 * 60 * 60 * 1000; // 24 hours
+
+            if (timeSinceLastAttempt < cooldownPeriod) {
+                const remainingTimeMs = cooldownPeriod - timeSinceLastAttempt;
+                const hours = Math.floor(remainingTimeMs / (1000 * 60 * 60));
+                const minutes = Math.floor((remainingTimeMs % (1000 * 60 * 60)) / (1000 * 60));
+                
+                return res.status(403).json({
+                    success: false,
+                    message: `You failed your last attempt. Please wait ${hours}h ${minutes}m before trying again.`
+                });
+            }
         }
 
         const attemptCount = await ProviderTest.countDocuments({
@@ -332,7 +381,8 @@ const submitTest = async (req, res) => {
                 {
                     $addToSet: { passedTestCategories: { $each: test.testCategories } },
                     testScore: score,
-                    testCompletionDate: new Date()
+                    testCompletionDate: new Date(),
+                    testPassed: true
                 },
                 { new: true }
             );

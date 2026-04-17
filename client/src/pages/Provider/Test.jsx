@@ -282,6 +282,7 @@ const ProviderTestPage = () => {
   const [currentCategoryIndex, setCurrentCategoryIndex] = useState(0);
   const [testQuestions, setTestQuestions] = useState([]);
   const [allTestData, setAllTestData] = useState({});
+  const [cooldown, setCooldown] = useState(null);
 
   const { timeLeft, formatTime, isWarning, setTimeLeft } = useTestTimer(
     600,
@@ -496,6 +497,7 @@ const ProviderTestPage = () => {
         const data = await response.json();
         if (data.success) {
           setCategories(data.data.categories || []);
+          setCooldown(data.data.cooldown || null);
         }
       } catch (error) {
         console.error('Fetch categories error:', error);
@@ -620,13 +622,18 @@ const ProviderTestPage = () => {
             <div className="flex flex-col sm:flex-row gap-4">
               <button
                 onClick={handleStartTest}
-                disabled={testAttemptsLeft <= 0 || selectedCategories.length === 0}
-                className={`flex-1 sm:flex-none px-8 py-4 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center space-x-2 transform hover:scale-105 ${testAttemptsLeft <= 0 || selectedCategories.length === 0
+                disabled={testAttemptsLeft <= 0 || selectedCategories.length === 0 || cooldown?.isCooldown}
+                className={`flex-1 sm:flex-none px-8 py-4 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center space-x-2 transform hover:scale-105 ${testAttemptsLeft <= 0 || selectedCategories.length === 0 || cooldown?.isCooldown
                   ? 'bg-red-500 text-white cursor-not-allowed opacity-75'
                   : 'bg-primary text-white hover:bg-primary/90 hover:shadow-lg'
                   }`}
               >
-                {testAttemptsLeft <= 0 ? (
+                {cooldown?.isCooldown ? (
+                  <>
+                    <Clock className="w-5 h-5" />
+                    <span>Wait {cooldown.remainingHours}h {cooldown.remainingMinutes}m</span>
+                  </>
+                ) : testAttemptsLeft <= 0 ? (
                   <>
                     <XCircle className="w-5 h-5" />
                     <span>No Attempts Remaining</span>
@@ -661,6 +668,17 @@ const ProviderTestPage = () => {
                   <AlertCircle className="w-5 h-5 mr-2" />
                   <span className="font-medium">
                     You have used all 3 lifetime test attempts and cannot take more tests.
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {cooldown?.isCooldown && (
+              <div className="mt-6 p-4 bg-yellow-50/80 border border-yellow-200/50 rounded-lg backdrop-blur-sm">
+                <div className="flex items-center text-yellow-800">
+                  <Clock className="w-5 h-5 mr-2" />
+                  <span className="font-medium">
+                    Test attempt failed. To ensure quality, please review the material and try again after {cooldown.remainingHours}h {cooldown.remainingMinutes}m.
                   </span>
                 </div>
               </div>

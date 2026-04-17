@@ -55,8 +55,13 @@ const ProviderLayout = () => {
         { name: 'Test', path: '/provider/test', icon: <FiActivity className="w-5 h-5" />, requireTest: false }
     ];
 
-    // If test not passed, only show Dashboard and Test in sidebar
-    const menuItems = allMenuItems.filter(item => !item.requireTest || testPassed);
+    // Adjust menu items based on test status
+    const menuItems = allMenuItems.filter(item => {
+        // If it's the Test item and test is passed, hide it
+        if (item.name === 'Test' && testPassed) return false;
+        // Check other permissions
+        return !item.requireTest || testPassed;
+    });
 
     const isDashboardActive = location.pathname === '/provider' || location.pathname === '/provider/dashboard';
 
