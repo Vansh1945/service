@@ -17,6 +17,7 @@ const cloudinary = require('../services/cloudinary');
 const mongoose = require('mongoose');
 const { sendNotification } = require('../utils/notificationHelper');
 const generateProviderId = require('../utils/generateUniqueId');
+const { sendMail } = require('../utils/sendmail');
 
 /**
  * Register a new admin
@@ -200,7 +201,8 @@ const getAllCustomers = async (req, res) => {
 const approveProvider = async (req, res) => {
     try {
         const queryId = req.params.id;
-        const { status, remarks } = req.body;
+        const { status, remarks, rejectionReason } = req.body;
+        const finalRemarks = remarks || rejectionReason || '';
 
         if (!['approved', 'rejected'].includes(status)) {
             return res.status(400).json({
@@ -242,12 +244,36 @@ const approveProvider = async (req, res) => {
                     provider._id,
                     'provider',
                     'Account Approved 🎓',
-                    `Congratulations! Your provider account has been approved. ${remarks ? '\nRemarks: ' + remarks : ''}`,
+                    `Congratulations! Your provider account has been approved. ${finalRemarks ? '\nRemarks: ' + finalRemarks : ''}`,
                     'approved',
                     provider._id
                 );
             } catch (fcmError) {
                 console.error('Failed to send approval notification:', fcmError);
+            }
+
+            // Send approval email
+            try {
+                await sendMail({
+                    to: provider.email,
+                    subject: 'Congratulations! Your Provider Account is Approved',
+                    html: `
+                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+                            <h2 style="color: #2c3e50; text-align: center;">Account Approved!</h2>
+                            <p>Dear ${provider.name},</p>
+                            <p>We are excited to inform you that your provider account on our platform has been <strong>Approved</strong>.</p>
+                            <p>Your Provider ID is: <strong>${provider.providerId}</strong></p>
+                            ${finalRemarks ? `<p><strong>Admin Remarks:</strong> ${finalRemarks}</p>` : ''}
+                            <p>You can now log in to your dashboard and start accepting bookings.</p>
+                            <div style="text-align: center; margin-top: 30px;">
+                                <a href="${process.env.FRONTEND_URL}/login" style="background-color: #0D9488; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">Login to Dashboard</a>
+                            </div>
+                            <p style="margin-top: 30px; font-size: 12px; color: #7f8c8d;">If you have any questions, please contact our support team.</p>
+                        </div>
+                    `
+                });
+            } catch (mailError) {
+                console.error('Failed to send approval email:', mailError);
             }
 
             return res.status(200).json({
@@ -260,7 +286,7 @@ const approveProvider = async (req, res) => {
         if (status === 'rejected') {
             provider.approved = false;
             provider.kycStatus = 'rejected';
-            provider.rejectionReason = remarks || 'No reason provided';
+            provider.rejectionReason = finalRemarks || 'No reason provided';
             provider.isActive = false;
 
             await provider.save();
@@ -277,6 +303,26 @@ const approveProvider = async (req, res) => {
                 );
             } catch (fcmError) {
                 console.error('Failed to send rejection notification:', fcmError);
+            }
+
+            // Send rejection email
+            try {
+                await sendMail({
+                    to: provider.email,
+                    subject: 'Update Regarding Your Provider Account',
+                    html: `
+                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+                            <h2 style="color: #c0392b; text-align: center;">Account Update</h2>
+                            <p>Dear ${provider.name},</p>
+                            <p>We regret to inform you that your provider account application has been <strong>Rejected</strong> at this time.</p>
+                            <p><strong>Reason for Rejection:</strong> ${provider.rejectionReason}</p>
+                            <p>If you believe this was an error or you have updated your documents, you can update your profile and resubmit for verification.</p>
+                            <p style="margin-top: 30px; font-size: 12px; color: #7f8c8d;">For further assistance, please reach out to our support team.</p>
+                        </div>
+                    `
+                });
+            } catch (mailError) {
+                console.error('Failed to send rejection email:', mailError);
             }
 
             return res.status(200).json({
@@ -390,7 +436,7 @@ const getPendingProviders = async (req, res) => {
             } else if (rating >= 3.5 && completion >= 85 && onTime >= 85) {
                 performanceBadge = 'Silver';
             }
-            
+
             provider.performanceBadge = performanceBadge;
             provider.completionRate = completion;
             provider.onTimeRate = onTime;
@@ -510,7 +556,7 @@ const getAllProviders = async (req, res) => {
             } else if (rating >= 3.5 && completion >= 85 && onTime >= 85) {
                 performanceBadge = 'Silver';
             }
-            
+
             provider.performanceBadge = performanceBadge;
             provider.completionRate = completion;
             provider.onTimeRate = onTime;
@@ -623,7 +669,7 @@ const getProviderDetails = async (req, res) => {
         } else if (rating >= 3.5 && completion >= 85 && onTime >= 85) {
             performanceBadge = 'Silver';
         }
-        
+
         provider.performanceBadge = performanceBadge;
         provider.completionRate = completion;
         provider.onTimeRate = onTime;

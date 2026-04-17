@@ -47,7 +47,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/uploads", express.static("uploads"));
 app.use("/assets", express.static("assets"));
 
-const rateLimit = require('express-rate-limit');
+// const rateLimit = require('express-rate-limit');
 
 // Global API Rate Limiter
 // const globalLimiter = rateLimit({

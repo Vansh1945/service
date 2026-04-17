@@ -119,7 +119,10 @@ const AdminProvidersPage = () => {
 
   // Memoized provider filtering
   useEffect(() => {
-    const pendingOnly = allProviders.filter(provider => !provider.approved && provider.kycStatus !== 'rejected');
+    const pendingOnly = allProviders.filter(provider => 
+      (!provider.approved && provider.kycStatus !== 'rejected') || 
+      (provider.bankDetails && !provider.bankDetails.verified && provider.bankDetails.accountNo)
+    );
     setPendingProviders(pendingOnly);
   }, [allProviders]);
 
@@ -387,16 +390,6 @@ const AdminProvidersPage = () => {
 
     if (approvalAction === 'rejected' && !approvalRemarks.trim()) {
       showToast('Please provide a reason for rejection', 'error');
-      return;
-    }
-
-    if (approvalAction === 'approved' && approvalConfirmation !== 'APPROVE') {
-      showToast('Please type "APPROVE" to confirm', 'error');
-      return;
-    }
-
-    if (approvalAction === 'rejected' && approvalConfirmation !== 'REJECT') {
-      showToast('Please type "REJECT" to confirm', 'error');
       return;
     }
 
@@ -962,22 +955,21 @@ const AdminProvidersPage = () => {
               </div>
             </div>
 
-            {/* Action Buttons */}
-            {status === 'pending' && (
+            {(status === 'pending' || (selectedProvider.bankDetails && !selectedProvider.bankDetails.verified && selectedProvider.bankDetails.accountNo)) && (
               <div className="mt-8 flex gap-4">
                 <button
                   onClick={() => openApprovalModal('approved', selectedProvider)}
                   className="flex-1 flex items-center justify-center px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-sm hover:shadow-md font-semibold"
                 >
                   <CheckCircle className="w-5 h-5 mr-2" />
-                  Approve Provider
+                  {status === 'approved' ? 'Verify Bank Details' : 'Approve Provider'}
                 </button>
                 <button
                   onClick={() => openApprovalModal('rejected', selectedProvider)}
                   className="flex-1 flex items-center justify-center px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:from-red-600 hover:to-red-700 transition-all duration-200 shadow-sm hover:shadow-md font-semibold"
                 >
                   <XCircle className="w-5 h-5 mr-2" />
-                  Reject Provider
+                  {status === 'approved' ? 'Reject Bank Details' : 'Reject Provider'}
                 </button>
               </div>
             )}
@@ -1269,32 +1261,17 @@ const ApprovalModal = ({
             Are you sure you want to {isApprove ? 'approve' : 'reject'} <strong>{providerName}</strong>?
           </p>
 
-          {isReject && (
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Reason for Rejection <span className="text-red-500">*</span>
-              </label>
-              <textarea
-                value={remarks}
-                onChange={onRemarksChange}
-                placeholder="Please provide a reason for rejection..."
-                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-200 resize-none"
-                rows={3}
-                required
-              />
-            </div>
-          )}
-
-          <div className="mb-6">
+          <div className="mb-6 text-left">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Type <strong>{isApprove ? 'APPROVE' : 'REJECT'}</strong> to confirm
+              {isApprove ? 'Remarks' : 'Reason for Rejection'} {!isApprove && <span className="text-red-500">*</span>}
             </label>
             <textarea
-              type="text"
-              value={confirmation}
-              onChange={(e) => onConfirmationChange(e.target.value)}
-              placeholder={isApprove ? 'APPROVE' : 'REJECT'}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200 font-mono "
+              value={remarks}
+              onChange={onRemarksChange}
+              placeholder={isApprove ? 'Optional remarks for approval...' : 'Please provide a reason for rejection...'}
+              className={`w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 ${isApprove ? 'focus:ring-primary' : 'focus:ring-red-500'} focus:border-transparent transition-all duration-200 resize-none`}
+              rows={3}
+              required={!isApprove}
             />
           </div>
 
@@ -1307,8 +1284,7 @@ const ApprovalModal = ({
               Cancel
             </button>
             <button
-              onClick={onConfirm}
-              disabled={processing || (isApprove && confirmation !== 'APPROVE') || (isReject && confirmation !== 'REJECT')}
+              disabled={processing || (!isApprove && !remarks.trim())}
               className={`flex-1 px-4 py-3 text-white rounded-lg transition-all duration-200 font-semibold ${isApprove
                 ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 disabled:opacity-50'
                 : 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 disabled:opacity-50'

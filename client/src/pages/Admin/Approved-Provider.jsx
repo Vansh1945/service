@@ -106,6 +106,9 @@ const AdminProviders = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
   const [loading, setLoading] = useState(false);
+  const [processingAction, setProcessingAction] = useState(null);
+  const [approvalRemarks, setApprovalRemarks] = useState('');
+  const [showConfirmModal, setShowConfirmModal] = useState({ show: false, action: null });
 
   // ─── Derived state via useMemo (replaces two separate useEffects) ────────────────
   const filteredProviders = useMemo(() => {
@@ -167,7 +170,48 @@ const AdminProviders = () => {
   const handleViewClick = useCallback((provider) => {
     setSelectedProvider(provider);
     setShowViewModal(true);
+    setApprovalRemarks('');
   }, []);
+
+  const handleStatusUpdate = async (action) => {
+    if (!selectedProvider) return;
+
+    if (action === 'rejected' && !approvalRemarks.trim()) {
+      showToast('Please provide a reason for rejection', 'error');
+      return;
+    }
+
+    try {
+      setProcessingAction(action);
+      const response = await fetch(`${API}/admin/providers/${selectedProvider._id}/status`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          status: action === 'approved' ? 'approved' : 'rejected',
+          rejectionReason: approvalRemarks
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        showToast(`Bank details ${action === 'approved' ? 'verified' : 'rejected'} successfully`, 'success');
+        fetchProviders();
+        setShowViewModal(false);
+        setShowConfirmModal({ show: false, action: null });
+      } else {
+        showToast(data.message || 'Failed to update status', 'error');
+      }
+    } catch (error) {
+      console.error('Error updating status:', error);
+      showToast('Failed to update status', 'error');
+    } finally {
+      setProcessingAction(null);
+    }
+  };
 
   // Pagination
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -663,6 +707,46 @@ const AdminProviders = () => {
                         }`}>
                         {selectedProvider.bankDetails.verified ? 'Verified' : 'Pending Verification'}
                       </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Bank Verification Actions */}
+              {selectedProvider.bankDetails && !selectedProvider.bankDetails.verified && selectedProvider.bankDetails.accountNo && (
+                <div className="bg-yellow-50 p-5 rounded-xl border border-yellow-200 mt-6">
+                  <h4 className="text-lg font-semibold text-yellow-800 mb-4 flex items-center">
+                    <AlertCircle className="w-5 h-5 mr-2" />
+                    Verify Bank Details
+                  </h4>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Remarks (Optional for approval, required for rejection)
+                      </label>
+                      <textarea
+                        value={approvalRemarks}
+                        onChange={(e) => setApprovalRemarks(e.target.value)}
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                        placeholder="Enter remarks..."
+                        rows="3"
+                      ></textarea>
+                    </div>
+                    <div className="flex gap-4">
+                      <button
+                        onClick={() => handleStatusUpdate('approved')}
+                        disabled={processingAction}
+                        className="flex-1 flex items-center justify-center px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all font-semibold disabled:opacity-50"
+                      >
+                        {processingAction === 'approved' ? 'Verifying...' : 'Verify Bank Details'}
+                      </button>
+                      <button
+                        onClick={() => handleStatusUpdate('rejected')}
+                        disabled={processingAction}
+                        className="flex-1 flex items-center justify-center px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all font-semibold disabled:opacity-50"
+                      >
+                        {processingAction === 'rejected' ? 'Rejecting...' : 'Reject Bank Details'}
+                      </button>
                     </div>
                   </div>
                 </div>
