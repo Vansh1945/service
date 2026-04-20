@@ -17,6 +17,7 @@ const ProviderBookingDashboard = lazyWithPreload(() => import("../pages/Provider
 const ProviderTestPage = lazyWithPreload(() => import("../pages/Provider/Test"));
 const ProviderEarning = lazyWithPreload(() => import("../pages/Provider/Earning"));
 const ProviderFeedback = lazyWithPreload(() => import("../pages/Provider/Feedback"));
+const ProviderSupport = lazyWithPreload(() => import("../pages/Provider/Support"));
 
 const ProviderRoutes = () => {
     // ⚡ Preload critical components on mount for smoother interactions
@@ -37,6 +38,7 @@ const ProviderRoutes = () => {
                         <Route path="booking-requests" element={<ProviderBookingDashboard />} />
                         <Route path="earnings" element={<ProviderEarning />} />
                         <Route path="feedbacks" element={<ProviderFeedback />} />
+                        <Route path="support" element={<ProviderSupport />} />
                     </Route>
                 </Route>
             </Routes>

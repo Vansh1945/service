@@ -11,6 +11,7 @@ const cloudinary = require('../services/cloudinary');
 const mongoose = require('mongoose');
 const Booking = require('../models/Booking-model');
 const Feedback = require('../models/Feedback-model');
+const Complaint = require('../models/Complaint-model');
 const User = require('../models/User-model');
 const Admin = require('../models/Admin-model');
 
@@ -1209,7 +1210,10 @@ exports.getDashboardSummary = async (req, res) => {
                         totalReviews: { $sum: 1 }
                     }
                 }
-            ])
+            ]),
+
+            // Total Complaints Received
+            Complaint.countDocuments({ provider: providerId })
         ]);
 
         // Process booking stats
@@ -1238,6 +1242,7 @@ exports.getDashboardSummary = async (req, res) => {
         // Process today's earnings
         const todaysEarnings = todayEarnings.length > 0 ? todayEarnings[0].totalEarnings : 0;
         const totalEarnings = totalEarningsRaw.length > 0 ? totalEarningsRaw[0].totalEarnings : 0;
+        const totalComplaints = results[6] || 0;
 
         // Process rating stats
         const averageRating = ratingStats.length > 0 ? parseFloat(ratingStats[0].averageRating.toFixed(1)) : 0;
@@ -1251,7 +1256,8 @@ exports.getDashboardSummary = async (req, res) => {
                 cancelledJobs: stats.cancelledJobs,
                 todaysEarnings,
                 totalEarnings,
-                averageRating
+                averageRating,
+                totalComplaints
             }
         });
 

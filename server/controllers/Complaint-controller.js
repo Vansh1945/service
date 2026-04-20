@@ -11,7 +11,8 @@ const { generateComplaintId } = require('../utils/generateUniqueId');
 const submitComplaint = async (req, res) => {
   try {
     const { title, description, category, bookingId } = req.body;
-    const customerId = req.user._id;
+    const userId = req.user._id;
+    const userRole = req.user.role;
 
     // 1. Validation
     if (!title || !description || !category) {
@@ -20,13 +21,20 @@ const submitComplaint = async (req, res) => {
 
     let booking = null;
     let provider = null;
+    let customer = null;
 
-    if (category === 'Service issue') {
+    if (userRole === 'provider') {
+      provider = userId;
+    } else {
+      customer = userId;
+    }
+
+    if (category === 'Service issue' && userRole === 'customer') {
       if (!bookingId) {
         return res.status(400).json({ message: 'Booking ID is required for service-related complaints.' });
       }
       booking = await Booking.findById(bookingId);
-      if (!booking || booking.customer.toString() !== customerId.toString()) {
+      if (!booking || booking.customer.toString() !== userId.toString()) {
         return res.status(404).json({ message: 'Booking not found or you are not authorized.' });
       }
       if (!booking.provider) {
@@ -39,26 +47,30 @@ const submitComplaint = async (req, res) => {
     let images = [];
     if (req.files && req.files.length > 0) {
       images = req.files.map(file => ({
-        secure_url: file.path, // courtesy of multer-storage-cloudinary
-        public_id: file.filename, // courtesy of multer-storage-cloudinary
+        secure_url: file.path,
+        public_id: file.filename,
       }));
     }
 
     // 3. Create Complaint
     const complaint = await Complaint.create({
       complaintId: generateComplaintId(),
-      customer: customerId,
-      booking: booking ? bookingId : undefined,
-      provider: provider,
+      customer: customer || undefined,
+      provider: provider || undefined,
+      booking: booking ? bookingId : (bookingId || undefined),
       title,
       description,
       category,
-      images
+      images,
+      userType: userRole,
+      userId: userRole === 'customer' ? userId : undefined,
+      providerId: userRole === 'provider' ? userId : undefined,
+      role: userRole // Optional: track who submitted it
     });
 
     res.status(201).json({
       success: true,
-      message: 'Complaint submitted successfully',
+      message: 'Support ticket submitted successfully',
       complaint
     });
 
@@ -95,12 +107,16 @@ const getAllComplaints = async (req, res) => {
       search,
       startDate,
       endDate,
+      userType,
+      providerId
     } = req.query;
 
     // Build the query
     const query = {};
     if (status) query.status = status;
     if (category) query.category = category;
+    if (userType) query.userType = userType;
+    if (providerId) query.providerId = providerId;
 
     if (search) {
       query.$or = [
@@ -120,6 +136,8 @@ const getAllComplaints = async (req, res) => {
     const complaints = await Complaint.find(query)
       .populate('customer', 'name email')
       .populate('provider', 'name email')
+      .populate('userId', 'name email')
+      .populate('providerId', 'name email')
       .populate('booking', 'date services bookingId')
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
@@ -129,9 +147,18 @@ const getAllComplaints = async (req, res) => {
     // Get total count for pagination
     const total = await Complaint.countDocuments(query);
 
+    // Add total complaints count for the provider involved in each complaint
+    const complaintsWithStats = await Promise.all(complaints.map(async (c) => {
+      let providerComplaintsCount = 0;
+      if (c.provider) {
+        providerComplaintsCount = await Complaint.countDocuments({ provider: c.provider._id || c.provider });
+      }
+      return { ...c, providerComplaintsCount };
+    }));
+
     res.json({
       success: true,
-      data: complaints,
+      data: complaintsWithStats,
       total,
       page: parseInt(page),
       pages: Math.ceil(total / limit),
@@ -153,9 +180,9 @@ const getMyComplaints = async (req, res) => {
     let query = {};
 
     if (req.user.role === 'provider') {
-      query = { provider: req.user._id };
+      query = { providerId: req.user._id };
     } else if (req.user.role === 'customer') {
-      query = { customer: req.user._id };
+      query = { userId: req.user._id };
     } else {
       return res.status(403).json({
         success: false,
@@ -191,6 +218,8 @@ const getComplaint = async (req, res) => {
     const complaint = await Complaint.findById(req.params.id)
       .populate('customer', 'name email phone')
       .populate('provider', 'name email phone')
+      .populate('userId', 'name email phone')
+      .populate('providerId', 'name email phone')
       .populate('booking', 'date services bookingId')
       .lean();
 
@@ -201,19 +230,25 @@ const getComplaint = async (req, res) => {
       });
     }
 
-    // Check authorization
-    if (req.user.role === 'customer' && complaint.customer._id.toString() !== req.user._id.toString()) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to access this complaint'
-      });
+    // Check authorization using role-based userId/providerId fields
+    if (req.user.role === 'customer') {
+      const isOwner = complaint.userId && complaint.userId._id.toString() === req.user._id.toString();
+      if (!isOwner) {
+        return res.status(403).json({
+          success: false,
+          message: 'Not authorized to access this complaint'
+        });
+      }
     }
 
-    if (req.user.role === 'provider' && complaint.provider._id.toString() !== req.user._id.toString()) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to access this complaint'
-      });
+    if (req.user.role === 'provider') {
+      const isOwner = complaint.providerId && complaint.providerId._id.toString() === req.user._id.toString();
+      if (!isOwner) {
+        return res.status(403).json({
+          success: false,
+          message: 'Not authorized to access this complaint'
+        });
+      }
     }
 
     res.json({
@@ -317,10 +352,12 @@ const getComplaintDetails = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Find complaint by ID and populate references
+    // Find complaint by ID and populate all references
     const complaint = await Complaint.findById(id)
       .populate("customer", "name email phone")
       .populate("provider", "name email phone")
+      .populate("userId", "name email phone")
+      .populate("providerId", "name email phone")
       .populate("booking", "bookingId serviceName date")
       .populate("resolvedBy", "name email")
       .lean();
@@ -332,9 +369,21 @@ const getComplaintDetails = async (req, res) => {
       });
     }
 
+    // Add total complaints count for the provider involved
+    let providerComplaintsCount = 0;
+    if (complaint.providerId) {
+      providerComplaintsCount = await Complaint.countDocuments({
+        providerId: complaint.providerId._id || complaint.providerId
+      });
+    } else if (complaint.provider) {
+      providerComplaintsCount = await Complaint.countDocuments({
+        provider: complaint.provider._id || complaint.provider
+      });
+    }
+
     res.status(200).json({
       success: true,
-      data: complaint
+      data: { ...complaint, providerComplaintsCount }
     });
   } catch (error) {
     console.error("Error fetching complaint details:", error);
@@ -367,7 +416,13 @@ const reopenComplaint = async (req, res) => {
       });
     }
 
-    if (complaint.customer.toString() !== req.user._id.toString()) {
+    const isCustomerOwner = complaint.userId && complaint.userId.toString() === req.user._id.toString();
+    const isProviderOwner = complaint.providerId && complaint.providerId.toString() === req.user._id.toString();
+    // Fallback to legacy fields
+    const isLegacyCustomerOwner = complaint.customer && complaint.customer.toString() === req.user._id.toString();
+    const isLegacyProviderOwner = complaint.provider && complaint.provider.toString() === req.user._id.toString();
+
+    if (!isCustomerOwner && !isProviderOwner && !isLegacyCustomerOwner && !isLegacyProviderOwner) {
       return res.status(403).json({
         success: false,
         message: "You are not authorized to reopen this complaint."

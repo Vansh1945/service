@@ -2,8 +2,8 @@ const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/Admin-controller');
 const adminAuthMiddleware = require('../middlewares/Admin-middleware');
-const { roleMiddleware } = require('../middlewares/Role-Middleware');
-const { uploadProfilePic } = require('../middlewares/upload'); // Import the specific upload instance
+const { roleMiddleware } = require('../middlewares/role-middleware');
+const { uploadProfilePic } = require('../middlewares/upload');
 
 // Public routes
 router.post('/register', uploadProfilePic.single('profilePic'), adminController.registerAdmin);

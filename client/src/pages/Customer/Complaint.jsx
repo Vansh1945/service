@@ -10,7 +10,7 @@ import {
   ChevronRight, FileText, ShieldCheck, Headphones, ArrowLeft, Tag
 } from 'lucide-react';
 import { getCustomerBookings } from '../../services/BookingService';
-import { getComplaint, getCustomerComplaints } from '../../services/ComplaintService';
+import { getComplaint, getCustomerComplaints, submitComplaint as submitComplaintAPI, reopenComplaint as reopenComplaintAPI } from '../../services/ComplaintService';
 
 const COMPLAINT_CATEGORIES = ["Service issue", "Payment issue", "Delivery issue", "Suggestion", "Other"];
 
@@ -125,7 +125,7 @@ const ComplaintsPage = () => {
     return valid;
   };
 
-  const submitComplaint = async () => {
+  const handleSubmitComplaint = async () => {
     if (!validateForm()) return;
     try {
       const fd = new FormData();
@@ -134,7 +134,7 @@ const ComplaintsPage = () => {
       fd.append('description', formData.description);
       fd.append('category', formData.category);
       formData.images.forEach(img => fd.append('images', img));
-      await submitComplaint(fd);
+      await submitComplaintAPI(fd);
       toast.success('Complaint submitted successfully!');
       setOpenNewComplaint(false);
       resetForm();
@@ -159,10 +159,10 @@ const ComplaintsPage = () => {
     }
   };
 
-  const reopenComplaint = async () => {
+  const handleReopenComplaint = async () => {
     if (!reopenReason.trim()) { toast.error('Please provide a reason'); return; }
     try {
-      await reopenComplaint(selectedComplaint._id, { reason: reopenReason });
+      await reopenComplaintAPI(selectedComplaint._id, { reason: reopenReason });
       toast.success('Complaint reopened!');
       setOpenComplaintDetail(false);
       setReopenReason('');
@@ -222,6 +222,78 @@ const ComplaintsPage = () => {
 
       <div className="max-w-7xl mx-auto px-4 py-5 space-y-5">
 
+        {/* My Support History Section - Moved to Top */}
+        <div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+          <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+            <div>
+              <h2 className="text-sm font-bold text-secondary flex items-center gap-2">
+                <MessageSquare className="h-4 w-4 text-primary" />
+                My Support History
+              </h2>
+              <p className="text-[10px] text-gray-400">Track and manage your previous tickets</p>
+            </div>
+            <span className="text-[10px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+              {complaints.length} Total
+            </span>
+          </div>
+
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 text-primary animate-spin mb-2" />
+              <p className="text-xs text-gray-400">Loading history...</p>
+            </div>
+          ) : error ? (
+            <div className="text-center py-12">
+              <AlertCircle className="h-10 w-10 text-red-400 mx-auto mb-2" />
+              <p className="text-xs text-red-500">{error}</p>
+            </div>
+          ) : complaints.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                <MessageSquare className="h-5 w-5 text-gray-400" />
+              </div>
+              <p className="text-sm font-medium text-secondary">No history found</p>
+              <p className="text-[10px] text-gray-400">Tickets you create will appear here</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-50 max-h-[400px] overflow-y-auto">
+              {complaints.map((complaint) => {
+                const s = getStatusStyle(complaint.status);
+                return (
+                  <div
+                    key={complaint._id}
+                    onClick={() => viewComplaintDetails(complaint._id)}
+                    className="px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors flex items-center justify-between group"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`w-8 h-8 ${complaint.status === 'Solved' ? 'bg-green-50' : 'bg-primary/5'} rounded-lg flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform`}>
+                        <FileText className={`h-4 w-4 ${complaint.status === 'Solved' ? 'text-green-600' : 'text-primary'}`} />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <p className="text-sm font-semibold text-secondary truncate max-w-[150px]">{complaint.title || 'Support Request'}</p>
+                          <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-tighter ${s.bg} ${s.text}`}>
+                            {complaint.status}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-gray-400 flex items-center gap-1">
+                          <Tag className="h-3 w-3" />
+                          #{complaint.complaintId || complaint._id.slice(-8)} • {complaint.category}
+                        </p>
+                        <p className="text-[10px] text-gray-500 mt-0.5 opacity-60 flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {formatDate(complaint.createdAt)}
+                        </p>
+                      </div>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-primary transition-colors" />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         {/* Quick Actions */}
         <div className="grid grid-cols-3 gap-3">
           {[
@@ -276,70 +348,6 @@ const ComplaintsPage = () => {
             </div>
           </div>
         )}
-
-        {/* My Tickets Section */}
-        <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
-            <div>
-              <h2 className="text-sm font-semibold text-secondary">My Tickets</h2>
-              <p className="text-xs text-gray-400">{complaints.length} tickets</p>
-            </div>
-            {/* Refresh button removed */}
-          </div>
-
-          {loading ? (
-            <div className="flex flex-col items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 text-primary animate-spin mb-2" />
-              <p className="text-xs text-gray-400">Loading tickets...</p>
-            </div>
-          ) : error ? (
-            <div className="text-center py-12">
-              <AlertCircle className="h-10 w-10 text-red-400 mx-auto mb-2" />
-              <p className="text-xs text-red-500">{error}</p>
-            </div>
-          ) : complaints.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <MessageSquare className="h-6 w-6 text-gray-400" />
-              </div>
-              <p className="text-sm font-medium text-secondary mb-1">No tickets yet</p>
-              <p className="text-xs text-gray-400 mb-4">Have an issue? Create a support ticket</p>
-              <button onClick={() => setOpenNewComplaint(true)} className="bg-primary text-white px-5 py-2 rounded-lg text-sm font-medium">
-                + New Ticket
-              </button>
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-50">
-              {complaints.map((complaint) => {
-                const s = getStatusStyle(complaint.status);
-                return (
-                  <div
-                    key={complaint._id}
-                    onClick={() => viewComplaintDetails(complaint._id)}
-                    className="px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors flex items-center justify-between"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <FileText className="h-4 w-4 text-primary" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <p className="text-sm font-medium text-secondary">{complaint.title || 'Support Request'}</p>
-                          <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${s.bg} ${s.text}`}>
-                            {complaint.status}
-                          </span>
-                        </div>
-                        <p className="text-xs text-gray-400">#{complaint.complaintId || complaint._id.slice(-8)} • {complaint.category}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">{formatDate(complaint.createdAt)}</p>
-                      </div>
-                    </div>
-                    <ChevronRight className="h-4 w-4 text-gray-300" />
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
 
         {/* Support Contact */}
         <div className="bg-secondary text-white rounded-xl p-4 flex items-center justify-between">
@@ -453,7 +461,7 @@ const ComplaintsPage = () => {
 
             <div className="px-5 py-4 border-t border-gray-100 flex gap-3">
               <button onClick={() => { setOpenNewComplaint(false); resetForm(); }} className="flex-1 py-2 border rounded-lg text-sm font-medium hover:bg-gray-50">Cancel</button>
-              <button onClick={submitComplaint} disabled={isFormDisabled} className={`flex-1 py-2 rounded-lg text-sm font-medium text-white ${isFormDisabled ? 'bg-primary/50 cursor-not-allowed' : 'bg-primary hover:bg-primary/90'}`}>Submit</button>
+        <button onClick={handleSubmitComplaint} disabled={isFormDisabled} className={`flex-1 py-2 rounded-lg text-sm font-medium text-white ${isFormDisabled ? 'bg-primary/50 cursor-not-allowed' : 'bg-primary hover:bg-primary/90'}`}>Submit</button>
             </div>
           </div>
         </div>
@@ -506,10 +514,10 @@ const ComplaintsPage = () => {
               )}
 
               {/* Admin Response */}
-              {selectedComplaint.responseByAdmin && (
+              {selectedComplaint.resolutionNotes && (
                 <div className="bg-blue-50 rounded-xl p-4">
                   <h4 className="text-xs font-semibold text-blue-600 mb-2">Admin Response</h4>
-                  <p className="text-sm text-blue-700">{selectedComplaint.responseByAdmin}</p>
+                  <p className="text-sm text-blue-700">{selectedComplaint.resolutionNotes}</p>
                 </div>
               )}
 
@@ -518,7 +526,7 @@ const ComplaintsPage = () => {
                 <div className="border-t border-gray-100 pt-4">
                   <h4 className="text-xs font-semibold text-gray-400 mb-2">Not satisfied?</h4>
                   <textarea rows="2" value={reopenReason} onChange={(e) => setReopenReason(e.target.value)} placeholder="Why do you want to reopen this ticket?" className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-primary/20 resize-none" />
-                  <button onClick={reopenComplaint} disabled={!reopenReason.trim()} className="mt-2 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium disabled:opacity-50">Reopen Ticket</button>
+                  <button onClick={handleReopenComplaint} disabled={!reopenReason.trim()} className="mt-2 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium disabled:opacity-50">Reopen Ticket</button>
                 </div>
               )}
             </div>

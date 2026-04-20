@@ -4,7 +4,7 @@ import {
     FiMenu, FiX, FiHome, FiCalendar, FiDollarSign,
     FiFileText, FiMessageSquare, FiUser, FiChevronDown,
     FiLogOut, FiBell, FiCreditCard, FiCheckCircle,
-    FiActivity, FiSettings
+    FiActivity, FiSettings, FiHeadphones
 } from 'react-icons/fi';
 import { useAuth } from '../context/auth';
 import NotificationBell from '../components/NotificationBell';
@@ -52,6 +52,7 @@ const ProviderLayout = () => {
         { name: 'Booking Requests', path: '/provider/booking-requests', icon: <FiCheckCircle className="w-5 h-5" />, requireTest: true },
         { name: 'Earnings', path: '/provider/earnings', icon: <FiDollarSign className="w-5 h-5" />, requireTest: true },
         { name: 'Feedback Viewer', path: '/provider/feedbacks', icon: <FiMessageSquare className="w-5 h-5" />, requireTest: true },
+        { name: 'Support & Help', path: '/provider/support', icon: <FiHeadphones className="w-5 h-5" />, requireTest: false },
         { name: 'Test', path: '/provider/test', icon: <FiActivity className="w-5 h-5" />, requireTest: false }
     ];
 

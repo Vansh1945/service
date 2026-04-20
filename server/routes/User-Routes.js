@@ -8,11 +8,9 @@ const {
     getCustomerDashboardStats
 } = require('../controllers/User-controller');
 const { userAuthMiddleware } = require('../middlewares/User-middleware');
-const adminAuthMiddleware = require('../middlewares/Admin-middleware');
-const { roleMiddleware } = require('../middlewares/Role-Middleware');
+const { roleMiddleware } = require('../middlewares/role-middleware');
 
 const requireCustomer = roleMiddleware(['customer']);
-const requireAdmin = roleMiddleware(['admin']);
 const { uploadProfilePic } = require('../middlewares/upload');
 
 // Public routes (no authentication required)

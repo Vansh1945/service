@@ -24,8 +24,8 @@ const complaintSchema = new mongoose.Schema(
     // 1. Customer Details
     customer: {
       type: mongoose.Schema.Types.ObjectId,
-      required: true,
       ref: "User", // Links to the User who made the complaint
+      required: false,
     },
     booking: {
       type: mongoose.Schema.Types.ObjectId,
@@ -36,6 +36,22 @@ const complaintSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Provider", // Assuming you have a Provider model
       required: function () { return this.category === 'Service issue'; },
+    },
+
+    // New Fields for Role-Based Complaints
+    userType: {
+      type: String,
+      enum: ["customer", "provider"],
+      required: true,
+      default: "customer"
+    },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    providerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Provider",
     },
 
     // Complaint Details
@@ -51,7 +67,7 @@ const complaintSchema = new mongoose.Schema(
     category: {
       type: String,
       required: true,
-      enum: ["Service issue", "Payment issue", "Delivery issue", "Suggestion", "Other"],
+      enum: ["Service issue", "Payment issue", "Delivery issue", "Suggestion", "Payment", "Booking", "Account", "Other"],
     },
 
     // 5. File Storage (Cloudinary)
@@ -126,6 +142,9 @@ complaintSchema.index({ booking: 1 });
 complaintSchema.index({ customer: 1 });
 complaintSchema.index({ status: 1 });
 complaintSchema.index({ createdAt: -1 });
+complaintSchema.index({ userId: 1 });
+complaintSchema.index({ providerId: 1 });
+complaintSchema.index({ userType: 1 });
 
 const Complaint = mongoose.model("Complaint", complaintSchema);
 

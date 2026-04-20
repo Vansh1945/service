@@ -42,6 +42,7 @@ const Dashboard = () => {
     recentBookings: []
   });
   const [actionLoading, setActionLoading] = useState({});
+  const [complaintsCount, setComplaintsCount] = useState(0);
 
   const formatAddress = useCallback((address) => {
     if (!address) return 'Address not specified';
@@ -91,6 +92,20 @@ const Dashboard = () => {
       setLoading(false);
     }
   }, [API, token, showToast, dateRange]);
+
+  // Fetch provider's complaint count
+  useEffect(() => {
+    const fetchComplaintsCount = async () => {
+      try {
+        const res = await fetch(`${API}/complaint/my-complaints`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = res.ok ? await res.json() : null;
+        if (data?.success) setComplaintsCount(data.data?.length || 0);
+      } catch (e) { /* silent */ }
+    };
+    if (token) fetchComplaintsCount();
+  }, [API, token]);
 
   const handleBookingAction = async (bookingId, action) => {
     try {
@@ -200,6 +215,18 @@ const Dashboard = () => {
               </div>
             </div>
           </div>
+          <Link to="/provider/support" className="bg-white rounded-2xl shadow-sm p-4 border-l-4 border-red-400 hover:shadow-md transition-shadow">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-red-50 rounded-xl">
+                <FiAlertCircle className="w-5 h-5 text-red-500" />
+              </div>
+              <div>
+                <p className="text-xs text-secondary/50 uppercase tracking-wide">My Complaints</p>
+                <p className="text-xl font-bold text-secondary">{complaintsCount}</p>
+                <p className="text-[10px] text-red-500 font-medium">Total Complaints Received</p>
+              </div>
+            </div>
+          </Link>
         </div>
 
         {/* Performance Card */}
