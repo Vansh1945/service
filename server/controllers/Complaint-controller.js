@@ -218,7 +218,7 @@ const getComplaint = async (req, res) => {
     const complaint = await Complaint.findById(req.params.id)
       .populate('customer', 'name email phone')
       .populate('provider', 'name email phone')
-      .populate('userid', 'name email phone')
+      .populate('userId', 'name email phone')
       .populate('providerId', 'name email phone')
       .populate('booking', 'date services bookingId')
       .lean();
@@ -232,7 +232,8 @@ const getComplaint = async (req, res) => {
 
     // Check authorization using role-based userId/providerId fields
     if (req.user.role === 'customer') {
-      const isOwner = complaint.userId && complaint.userId._id.toString() === req.user._id.toString();
+      const complaintUserId = complaint.userId?._id || complaint.userId;
+      const isOwner = complaintUserId && complaintUserId.toString() === req.user._id.toString();
       if (!isOwner) {
         return res.status(403).json({
           success: false,
@@ -242,7 +243,8 @@ const getComplaint = async (req, res) => {
     }
 
     if (req.user.role === 'provider') {
-      const isOwner = complaint.providerId && complaint.providerId._id.toString() === req.user._id.toString();
+      const complaintProviderId = complaint.providerId?._id || complaint.providerId;
+      const isOwner = complaintProviderId && complaintProviderId.toString() === req.user._id.toString();
       if (!isOwner) {
         return res.status(403).json({
           success: false,
@@ -416,11 +418,16 @@ const reopenComplaint = async (req, res) => {
       });
     }
 
-    const isCustomerOwner = complaint.userId && complaint.userId.toString() === req.user._id.toString();
-    const isProviderOwner = complaint.providerId && complaint.providerId.toString() === req.user._id.toString();
+    const complaintUserId = complaint.userId?._id || complaint.userId;
+    const complaintProviderId = complaint.providerId?._id || complaint.providerId;
+    const isCustomerOwner = complaintUserId && complaintUserId.toString() === req.user._id.toString();
+    const isProviderOwner = complaintProviderId && complaintProviderId.toString() === req.user._id.toString();
+    
     // Fallback to legacy fields
-    const isLegacyCustomerOwner = complaint.customer && complaint.customer.toString() === req.user._id.toString();
-    const isLegacyProviderOwner = complaint.provider && complaint.provider.toString() === req.user._id.toString();
+    const complaintCustomer = complaint.customer?._id || complaint.customer;
+    const complaintProvider = complaint.provider?._id || complaint.provider;
+    const isLegacyCustomerOwner = complaintCustomer && complaintCustomer.toString() === req.user._id.toString();
+    const isLegacyProviderOwner = complaintProvider && complaintProvider.toString() === req.user._id.toString();
 
     if (!isCustomerOwner && !isProviderOwner && !isLegacyCustomerOwner && !isLegacyProviderOwner) {
       return res.status(403).json({

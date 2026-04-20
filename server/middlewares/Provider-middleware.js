@@ -60,6 +60,7 @@ const providerAuthMiddleware = async (req, res, next) => {
 
         // Attach provider to request
         req.provider = provider;
+        req.user = provider; 
         req.token = jwtToken;
         req.providerId = provider._id;
         req.role = 'provider';
