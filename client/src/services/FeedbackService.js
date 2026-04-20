@@ -1,44 +1,41 @@
 import axiosInstance from "../api/axiosInstance";
 
-// customer routes
+// Customer routes
 export const submitFeedback = (data) => {
     return axiosInstance.post("/feedback", data);
 };
 
-export const getCustomerFeedbacks = (data) => {
-    return axiosInstance.get("/feedback/my-feedbacks", data);
+export const getCustomerFeedbacks = () => {
+    return axiosInstance.get("/feedback/my-feedbacks");
 };
 
 export const getFeedback = (feedbackId) => {
     return axiosInstance.get(`/feedback/${feedbackId}`);
 };
 
-
 export const editFeedback = (feedbackId, data) => {
     return axiosInstance.put(`/feedback/edit/${feedbackId}`, data);
 };
 
-
-// provider routes
-export const getProviderFeedbacks = (data) => {
-    return axiosInstance.get("/feedback/provider/my-feedbacks", data);
+// Provider routes
+export const getProviderFeedbacks = () => {
+    return axiosInstance.get("/feedback/provider/my-feedbacks");
 };
 
-export const getProviderAverageRating = (data) => {
-    return axiosInstance.get("/feedback/provider/average-rating", data);
+export const getProviderAverageRating = () => {
+    return axiosInstance.get("/feedback/provider/average-rating");
 };
 
-
-// admin routes
-export const getAllFeedbacks = (data) => {
-    return axiosInstance.get("/feedback/admin/all-feedbacks", data);
+// Admin routes
+export const getAllFeedbacks = () => {
+    return axiosInstance.get("/feedback/admin/all-feedbacks");
 };
 
-export const getFeedbackadmin = (data) => {
-    return axiosInstance.get("/feedback/admin/:feedbackId", data);
+export const getFeedbackAdmin = (feedbackId) => {
+    return axiosInstance.get(`/feedback/admin/${feedbackId}`);
 };
 
-// public route
-export const getServiceFeedbacks = (data) => {
-    return axiosInstance.get("/feedback/service/:serviceId", data);
+// Public route
+export const getServiceFeedbacks = (serviceId) => {
+    return axiosInstance.get(`/feedback/service/${serviceId}`);
 };

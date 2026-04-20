@@ -10,7 +10,7 @@ export const getAllCoupons = (data) => {
 
 
 export const updateCoupon = (id, data) => {
-    return axiosInstance.put(`/coupon/admin/coupons/${id}`, data);
+    return axiosInstance.put(`/coupon/admin/coupon/${id}`, data);
 };
 
 export const deleteCoupon = (id) => {
