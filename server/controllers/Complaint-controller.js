@@ -218,7 +218,7 @@ const getComplaint = async (req, res) => {
     const complaint = await Complaint.findById(req.params.id)
       .populate('customer', 'name email phone')
       .populate('provider', 'name email phone')
-      .populate('userId', 'name email phone')
+      .populate('userid', 'name email phone')
       .populate('providerId', 'name email phone')
       .populate('booking', 'date services bookingId')
       .lean();
