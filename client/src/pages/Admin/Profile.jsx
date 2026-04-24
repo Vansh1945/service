@@ -7,6 +7,7 @@ import {
   FiSearch, FiChevronLeft, FiChevronRight, FiCalendar,
   FiEdit, FiEye, FiEyeOff, FiUpload, FiTrash2, FiLoader
 } from 'react-icons/fi';
+import * as AdminService from '../../services/AdminService';
 
 // Debounce hook for search optimization
 const useDebounce = (value, delay) => {
@@ -65,17 +66,10 @@ const AdminProfile = () => {
   const fetchProfile = useCallback(async () => {
     try {
       setIsLoading(true);
-      const response = await fetch(`${API}/admin/profile`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || 'Failed to fetch profile');
+      const response = await AdminService.getAdminProfile();
+      const data = response.data;
 
       setProfile(data.admin);
-      // Set edit data with current profile values
       setEditData({
         name: data.admin.name,
         email: data.admin.email,
@@ -90,7 +84,7 @@ const AdminProfile = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [API]);
+  }, []);
 
   useEffect(() => {
     fetchProfile();
@@ -147,16 +141,7 @@ const AdminProfile = () => {
         formData.append('profilePic', registerData.profilePic);
       }
 
-      const response = await fetch(`${API}/admin/register`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: formData
-      });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || 'Registration failed');
+      await AdminService.registerAdmin(formData);
 
       toast.success('New admin registered successfully!');
       setIsRegisterOpen(false);
@@ -168,12 +153,11 @@ const AdminProfile = () => {
         profilePic: null
       });
 
-      // Refresh admin list if it's currently shown
       if (showAdminList) {
         fetchAdmins();
       }
     } catch (error) {
-      toast.error(error.message);
+      toast.error(error.response?.data?.message || error.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -197,22 +181,13 @@ const AdminProfile = () => {
       if (editData.newPassword) formData.append('newPassword', editData.newPassword);
       if (editData.profilePic) formData.append('profilePic', editData.profilePic);
 
-      const response = await fetch(`${API}/admin/profile`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: formData
-      });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || 'Update failed');
+      const response = await AdminService.updateAdminProfile(formData);
+      const data = response.data;
 
       toast.success('Profile updated successfully!');
       setIsEditOpen(false);
       setProfile(data.admin);
 
-      // Reset password fields only
       setEditData({
         ...editData,
         currentPassword: '',
@@ -220,7 +195,7 @@ const AdminProfile = () => {
         confirmNewPassword: ''
       });
     } catch (error) {
-      toast.error(error.message);
+      toast.error(error.response?.data?.message || error.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -230,20 +205,14 @@ const AdminProfile = () => {
   const fetchAdmins = useCallback(async (page = 1, search = '') => {
     try {
       setIsLoading(true);
-      const queryParams = new URLSearchParams({
-        page: page.toString(),
-        limit: '10',
+      const params = {
+        page: page,
+        limit: 10,
         ...(search && { search })
-      });
+      };
 
-      const response = await fetch(`${API}/admin/admins?${queryParams}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || 'Failed to fetch admins');
+      const response = await AdminService.getAllAdmins(params);
+      const data = response.data;
 
       setAdmins(data.admins);
       setAdminStats({
@@ -256,7 +225,7 @@ const AdminProfile = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [API]);
+  }, []);
 
   // Delete admin
   const handleDeleteAdmin = async (adminId) => {
@@ -265,16 +234,7 @@ const AdminProfile = () => {
     }
 
     try {
-      const response = await fetch(`${API}/admin/admins/${adminId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || 'Failed to delete admin');
-
+      await AdminService.deleteAdmin(adminId);
       toast.success('Admin deleted successfully!');
       fetchAdmins(currentPage, searchTerm);
     } catch (error) {

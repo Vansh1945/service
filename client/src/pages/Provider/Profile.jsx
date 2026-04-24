@@ -6,6 +6,7 @@ import 'react-datepicker/dist/react-datepicker.css';
 import 'react-toastify/dist/ReactToastify.css';
 import { Loader2, AlertCircle, Edit2, X, Check, Upload, Eye, Camera, FileText, CreditCard } from 'lucide-react';
 import * as ProviderService from '../../services/ProviderService';
+import * as SystemService from '../../services/SystemService';
 
 const ProviderProfile = () => {
   const { token, API, showToast, logoutUser } = useAuth();
@@ -97,9 +98,8 @@ const ProviderProfile = () => {
     const fetchServices = async () => {
       try {
         setProviderServicesLoading(true);
-        const response = await fetch(`${API}/system-setting/categories`);
-        if (!response.ok) throw new Error('Failed to fetch service categories');
-        const data = await response.json();
+        const response = await SystemService.getCategories();
+        const data = response.data;
         if (data.success) setProviderServices(data.data || []);
       } catch (error) {
         showToast(error.message, 'error');

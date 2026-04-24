@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../../context/auth';
 import Loader from '../../components/Loader';
+import * as BookingService from '../../services/BookingService';
+import * as AdminService from '../../services/AdminService';
 import {
     Search,
     Calendar,
@@ -230,52 +232,30 @@ const AdminBookingsView = () => {
     // Fetch all providers for assignment — useCallback keeps reference stable
     const fetchProviders = useCallback(async () => {
         try {
-            const response = await fetch(`${API}/admin/providers`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                setProviders(data.providers || data.data || []);
-            } else {
-                const errorData = await response.json();
-                throw new Error(errorData.message);
-            }
+            const response = await AdminService.getAllProviders();
+            const data = response.data;
+            setProviders(data.providers || data.data || []);
         } catch (error) {
             console.error('Error fetching providers:', error);
             showToast(error.message, 'error');
         }
-    }, [API, token, showToast]);
+    }, [showToast]);
 
     // Fetch bookings with filters and pagination
     const fetchBookings = useCallback(async () => {
         try {
             setLoading(true);
 
-            const queryParams = new URLSearchParams({
-                page: pagination.page.toString(),
-                limit: pagination.limit.toString()
-            });
+            const params = {
+                page: pagination.page,
+                limit: pagination.limit,
+                ...Object.fromEntries(Object.entries(filters).filter(([_, v]) => v !== ''))
+            };
 
-            // Add filters
-            if (filters.status) queryParams.append('status', filters.status);
-            if (filters.startDate) queryParams.append('startDate', filters.startDate);
-            if (filters.endDate) queryParams.append('endDate', filters.endDate);
-            if (filters.search) queryParams.append('search', filters.search);
-            if (filters.paymentStatus) queryParams.append('paymentStatus', filters.paymentStatus);
+            const response = await BookingService.getAllBookings(params);
+            const data = response.data;
 
-            const response = await fetch(`${API}/booking/admin/bookings?${queryParams}`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            if (response.ok) {
-                const data = await response.json();
+            if (data.success || response.status === 200) {
                 const fetchedBookings = data.data || [];
 
                 setBookings(fetchedBookings);
@@ -285,11 +265,7 @@ const AdminBookingsView = () => {
                     pages: data.pages || 1
                 }));
 
-                // Calculate stats
                 calculateStats(fetchedBookings);
-            } else {
-                const errorData = await response.json();
-                throw new Error(errorData.message);
             }
         } catch (error) {
             console.error('Error fetching bookings:', error);
@@ -297,7 +273,7 @@ const AdminBookingsView = () => {
         } finally {
             setLoading(false);
         }
-    }, [API, token, showToast, filters, pagination.page, pagination.limit]);
+    }, [showToast, filters, pagination.page, pagination.limit]);
 
     // Calculate statistics — pure function, no side effects other than setState
     const calculateStats = useCallback((bookingsData) => {
@@ -326,110 +302,62 @@ const AdminBookingsView = () => {
     const fetchBookingDetails = useCallback(async (bookingId) => {
         try {
             setActionLoading(true);
-            const response = await fetch(`${API}/booking/bookings/${bookingId}`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                setSelectedBooking(data.data);
-                setShowModal(true);
-            } else {
-                const errorData = await response.json();
-                throw new Error(errorData.message);
-            }
+            const response = await BookingService.getBookingDetails(bookingId);
+            const data = response.data;
+            setSelectedBooking(data.data);
+            setShowModal(true);
         } catch (error) {
             console.error('Error fetching booking details:', error);
             showToast(error.message, 'error');
         } finally {
             setActionLoading(false);
         }
-    }, [API, token, showToast]);
+    }, [showToast]);
 
     // Delete booking
     const handleDeleteBooking = useCallback(async (bookingId) => {
         try {
             setActionLoading(true);
-            const response = await fetch(`${API}/booking/admin/${bookingId}`, {
-                method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            if (response.ok) {
-                showToast('Booking deleted successfully', 'success');
-                setDeleteConfirm(null);
-                fetchBookings();
-                setShowModal(false);
-            } else {
-                const errorData = await response.json();
-                throw new Error(errorData.message);
-            }
+            await BookingService.deleteBooking(bookingId);
+            showToast('Booking deleted successfully', 'success');
+            setDeleteConfirm(null);
+            fetchBookings();
+            setShowModal(false);
         } catch (error) {
             console.error('Error deleting booking:', error);
             showToast(error.message, 'error');
         } finally {
             setActionLoading(false);
         }
-    }, [API, token, showToast, fetchBookings]);
+    }, [showToast, fetchBookings]);
 
     // Delete user booking
     const handleDeleteUserBooking = useCallback(async (userId, bookingId) => {
         try {
             setActionLoading(true);
-            const response = await fetch(`${API}/booking/admin/user/${userId}/booking/${bookingId}`, {
-                method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            if (response.ok) {
-                showToast('User booking deleted successfully', 'success');
-                setDeleteConfirm(null);
-                fetchBookings();
-                setShowModal(false);
-            } else {
-                const errorData = await response.json();
-                throw new Error(errorData.message);
-            }
+            await BookingService.deleteUserBooking(userId, bookingId);
+            showToast('User booking deleted successfully', 'success');
+            setDeleteConfirm(null);
+            fetchBookings();
+            setShowModal(false);
         } catch (error) {
             console.error('Error deleting user booking:', error);
             showToast(error.message, 'error');
         } finally {
             setActionLoading(false);
         }
-    }, [API, token, showToast, fetchBookings]);
+    }, [showToast, fetchBookings]);
 
     // Assign provider to booking
     const handleAssignProvider = useCallback(async (bookingId, providerId) => {
         try {
             setActionLoading(true);
-            const response = await fetch(`${API}/booking/admin/${bookingId}/assign`, {
-                method: 'PATCH',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ providerId })
-            });
-
-            if (response.ok) {
-                showToast('Provider assigned successfully', 'success');
-                fetchBookings();
-                setShowAssignProviderModal(false);
-                if (selectedBooking) {
-                    fetchBookingDetails(selectedBooking._id);
-                }
-            } else {
-                const errorData = await response.json();
-                throw new Error(errorData.message);
+            await BookingService.assignProvider(bookingId, { providerId });
+            showToast('Provider assigned successfully', 'success');
+            fetchBookings();
+            setShowAssignProviderModal(false);
+            if (selectedBooking) {
+                fetchBookingDetails(selectedBooking._id);
             }
         } catch (error) {
             console.error('Error assigning provider:', error);
@@ -437,7 +365,7 @@ const AdminBookingsView = () => {
         } finally {
             setActionLoading(false);
         }
-    }, [API, token, showToast, fetchBookings, fetchBookingDetails, selectedBooking]);
+    }, [showToast, fetchBookings, fetchBookingDetails, selectedBooking]);
 
     // Reschedule booking
     const handleRescheduleBooking = useCallback(async (bookingId, newDate, newTime) => {
@@ -447,31 +375,18 @@ const AdminBookingsView = () => {
             if (newDate) body.date = newDate;
             if (newTime) body.time = newTime;
 
-            const response = await fetch(`${API}/booking/admin/${bookingId}/reschedule`, {
-                method: 'PATCH',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(body)
-            });
-
-            if (response.ok) {
-                showToast('Booking rescheduled successfully', 'success');
-                fetchBookings();
-                setShowRescheduleModal(false);
-                setShowModal(false);
-            } else {
-                const errorData = await response.json();
-                throw new Error(errorData.message);
-            }
+            await BookingService.updateBookingDateTimeAdmin(bookingId, body);
+            showToast('Booking rescheduled successfully', 'success');
+            fetchBookings();
+            setShowRescheduleModal(false);
+            setShowModal(false);
         } catch (error) {
             console.error('Error rescheduling booking:', error);
             showToast(error.message, 'error');
         } finally {
             setActionLoading(false);
         }
-    }, [API, token, showToast, fetchBookings]);
+    }, [showToast, fetchBookings]);
 
     // Download booking report
     const handleDownloadReport = useCallback(async () => {
@@ -481,40 +396,31 @@ const AdminBookingsView = () => {
         }
         try {
             setActionLoading(true);
-            const queryParams = new URLSearchParams();
+            const params = {
+                startDate: filters.startDate,
+                endDate: filters.endDate
+            };
 
-            if (filters.startDate) queryParams.append('startDate', filters.startDate);
-            if (filters.endDate) queryParams.append('endDate', filters.endDate);
+            const response = await BookingService.downloadBookingReport(params, { responseType: 'blob' });
+            
+            const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `booking_report_${new Date().toISOString().split('T')[0]}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
 
-            const response = await fetch(`${API}/booking/admin/booking-report?${queryParams}`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
-
-            if (response.ok) {
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `booking_report_${new Date().toISOString().split('T')[0]}.xlsx`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(url);
-
-                showToast('Report downloaded successfully', 'success');
-            } else {
-                const errorData = await response.json();
-                throw new Error(errorData.message);
-            }
+            showToast('Report downloaded successfully', 'success');
         } catch (error) {
             console.error('Error downloading report:', error);
             showToast(error.message, 'error');
         } finally {
             setActionLoading(false);
         }
-    }, [API, token, showToast, filters.startDate, filters.endDate]);
+    }, [showToast, filters.startDate, filters.endDate]);
 
     // Handle filter changes — useCallback avoids recreation on every render
     const handleFilterChange = useCallback((key, value) => {

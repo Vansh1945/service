@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/auth';
+import * as FeedbackService from '../../services/FeedbackService';
 import {
   Search, Star, User, MessageSquare, Eye, X,
   ChevronLeft, ChevronRight, Calendar, BarChart3
@@ -34,23 +35,22 @@ const AdminFeedback = () => {
   const fetchFeedbacks = async () => {
     try {
       setLoading(true);
-      const q = new URLSearchParams({ page: pagination.page.toString(), limit: pagination.limit.toString() });
-      if (filters.rating) q.append('rating', filters.rating);
-      if (filters.type) q.append('type', filters.type);
-      if (filters.search) q.append('search', filters.search);
-      if (filters.startDate) q.append('startDate', filters.startDate);
-      if (filters.endDate) q.append('endDate', filters.endDate);
+      const params = {
+        page: pagination.page,
+        limit: pagination.limit,
+        ...(filters.rating && { rating: filters.rating }),
+        ...(filters.type && { type: filters.type }),
+        ...(filters.search && { search: filters.search }),
+        ...(filters.startDate && { startDate: filters.startDate }),
+        ...(filters.endDate && { endDate: filters.endDate })
+      };
 
-      const res = await fetch(`${API}/feedback/admin/all-feedbacks?${q}`, {
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const list = data.data || [];
-        setFeedbacks(list);
-        setPagination(p => ({ ...p, total: data.total || 0, pages: data.pages || 1 }));
-        calculateStats(list);
-      } else throw new Error('Failed to fetch feedbacks');
+      const response = await FeedbackService.getAllFeedbacks(params);
+      const data = response.data;
+      const list = data.data || [];
+      setFeedbacks(list);
+      setPagination(p => ({ ...p, total: data.total || 0, pages: data.pages || 1 }));
+      calculateStats(list);
     } catch (err) {
       showToast('Failed to fetch feedbacks', 'error');
     } finally {
@@ -69,12 +69,13 @@ const AdminFeedback = () => {
 
   const fetchFeedbackDetails = async (id) => {
     try {
-      const res = await fetch(`${API}/feedback/admin/${id}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) { const data = await res.json(); setSelectedFeedback(data.data); setShowModal(true); }
-      else throw new Error();
-    } catch { showToast('Failed to fetch feedback details', 'error'); }
+      const response = await FeedbackService.getFeedbackAdmin(id);
+      const data = response.data;
+      setSelectedFeedback(data.data);
+      setShowModal(true);
+    } catch {
+      showToast('Failed to fetch feedback details', 'error');
+    }
   };
 
   const handleFilterChange = (key, value) => {

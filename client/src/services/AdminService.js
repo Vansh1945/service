@@ -9,11 +9,11 @@ export const getAdminProfile = () => {
 };
 
 export const updateAdminProfile = (data) => {
-    return axiosInstance.patch("/admin/profile", data);
+    return axiosInstance.put("/admin/profile", data);
 };
 
-export const getAllAdmins = () => {
-    return axiosInstance.get("/admin/admins");
+export const getAllAdmins = (params) => {
+    return axiosInstance.get("/admin/admins", { params });
 };
 
 export const deleteAdmin = (id) => {
@@ -32,8 +32,8 @@ export const getPendingProviders = () => {
     return axiosInstance.get("/admin/providers/pending");
 };
 
-export const approveProvider = (id) => {
-    return axiosInstance.put(`/admin/providers/${id}/status`);
+export const updateProviderStatus = (id, data) => {
+    return axiosInstance.put(`/admin/providers/${id}/status`, data);
 };
 
 export const getAllProviders = () => {
@@ -48,30 +48,30 @@ export const getDashboardStats = () => {
     return axiosInstance.get("/admin/dashboard/stats");
 };
 
-export const getDashboardSummary = () => {
-    return axiosInstance.get("/admin/dashboard/summary");
+export const getDashboardSummary = (params) => {
+    return axiosInstance.get("/admin/dashboard/summary", { params });
 };
 
-export const getDashboardRevenue = () => {
-    return axiosInstance.get("/admin/dashboard/revenue");
+export const getDashboardRevenue = (params) => {
+    return axiosInstance.get("/admin/dashboard/revenue", { params });
 };
 
-export const getDashboardBookingsStatus = () => {
-    return axiosInstance.get("/admin/dashboard/bookings-status");
+export const getDashboardBookingsStatus = (params) => {
+    return axiosInstance.get("/admin/dashboard/bookings-status", { params });
 };
 
-export const getDashboardTopProviders = () => {
-    return axiosInstance.get("/admin/dashboard/top-providers");
+export const getDashboardTopProviders = (params) => {
+    return axiosInstance.get("/admin/dashboard/top-providers", { params });
 };
 
-export const getDashboardPendingActions = () => {
-    return axiosInstance.get("/admin/dashboard/pending-actions");
+export const getDashboardPendingActions = (params) => {
+    return axiosInstance.get("/admin/dashboard/pending-actions", { params });
 };
 
-export const getDashboardLiveStats = () => {
-    return axiosInstance.get("/admin/dashboard/live-stats");
+export const getDashboardLiveStats = (params) => {
+    return axiosInstance.get("/admin/dashboard/live-stats", { params });
 };
 
-export const getDashboardRecentActivity = () => {
-    return axiosInstance.get("/admin/dashboard/recent-activity");
+export const getDashboardRecentActivity = (params) => {
+    return axiosInstance.get("/admin/dashboard/recent-activity", { params });
 };

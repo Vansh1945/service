@@ -1,8 +1,8 @@
 import axiosInstance from "../api/axiosInstance";
 
 // All roles (Customer, Provider, Admin)
-export const getNotifications = () => {
-    return axiosInstance.get("/notifications/");
+export const getNotifications = (params) => {
+    return axiosInstance.get("/notifications/", { params });
 };
 
 export const getUnreadCount = () => {

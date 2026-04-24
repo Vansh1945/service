@@ -11,6 +11,9 @@ import {
 } from 'recharts';
 import Loader from '../../components/Loader';
 import { useAuth } from '../../context/auth';
+import * as ProviderService from '../../services/ProviderService';
+import * as BookingService from '../../services/BookingService';
+import * as ComplaintService from '../../services/ComplaintService';
 
 const Dashboard = () => {
   const { token, API, showToast } = useAuth();
@@ -54,23 +57,24 @@ const Dashboard = () => {
   const fetchDashboardData = useCallback(async () => {
     try {
       setLoading(true);
-      const [summaryRes, earningsRes, bookingsRes, walletRes, ratingsRes, profileRes] = await Promise.all([
-        fetch(`${API}/provider/dashboard/summary`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${API}/provider/dashboard/earnings?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${API}/provider/dashboard/bookings`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${API}/provider/dashboard/wallet`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${API}/provider/dashboard/ratings`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${API}/provider/profile`, { headers: { 'Authorization': `Bearer ${token}` } })
+      const [summaryRes, earningsRes, bookingsRes, walletRes, ratingsRes, profileRes, analyticsRes] = await Promise.all([
+        ProviderService.getDashboardSummary(),
+        ProviderService.getEarningsAnalytics({ startDate: dateRange.startDate, endDate: dateRange.endDate }),
+        ProviderService.getBookingStatusBreakdown(),
+        ProviderService.getWalletInfo(),
+        ProviderService.getPerformanceRatings(),
+        ProviderService.getProfile(),
+        ProviderService.getDashboardAnalytics()
       ]);
 
-      const summary = summaryRes.ok ? await summaryRes.json() : null;
-      const earnings = earningsRes.ok ? await earningsRes.json() : null;
-      const bookings = bookingsRes.ok ? await bookingsRes.json() : null;
-      const wallet = walletRes.ok ? await walletRes.json() : null;
-      const ratings = ratingsRes.ok ? await ratingsRes.json() : null;
-      const profile = profileRes.ok ? await profileRes.json() : null;
+      const summary = summaryRes.data;
+      const earnings = earningsRes.data;
+      const bookings = bookingsRes.data;
+      const wallet = walletRes.data;
+      const ratings = ratingsRes.data;
+      const profile = profileRes.data;
+      const analyticsData = analyticsRes.data?.data || null;
 
-      const analyticsData = (await (await fetch(`${API}/provider/dashboard/analytics`, { headers: { 'Authorization': `Bearer ${token}` } })).json())?.data || null;
       const combinedBookings = [...(analyticsData?.todayJobs || []), ...(analyticsData?.upcomingJobs || [])];
 
       setDashboardData({
@@ -91,34 +95,35 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, [API, token, showToast, dateRange]);
+  }, [showToast, dateRange]);
 
   // Fetch provider's complaint count
   useEffect(() => {
     const fetchComplaintsCount = async () => {
       try {
-        const res = await fetch(`${API}/complaint/my-complaints`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = res.ok ? await res.json() : null;
+        const response = await ComplaintService.getMyComplaints();
+        const data = response.data;
         if (data?.success) setComplaintsCount(data.data?.length || 0);
       } catch (e) { /* silent */ }
     };
     if (token) fetchComplaintsCount();
-  }, [API, token]);
+  }, [token]);
 
   const handleBookingAction = async (bookingId, action) => {
     try {
       setActionLoading(prev => ({ ...prev, [bookingId]: action }));
-      const response = await fetch(`${API}/booking/provider/${bookingId}/${action}`, {
-        method: 'PATCH',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-      });
-      if (!response.ok) throw new Error(`Failed to ${action} booking`);
+      
+      let response;
+      if (action === 'accept') response = await BookingService.acceptBooking(bookingId);
+      else if (action === 'reject') response = await BookingService.rejectBooking(bookingId);
+      else if (action === 'start') response = await BookingService.startBooking(bookingId);
+      else if (action === 'complete') response = await BookingService.completeBooking(bookingId);
+      else throw new Error('Invalid action');
+
       showToast(`Booking ${action}ed successfully`, 'success');
       fetchDashboardData();
     } catch (error) {
-      showToast(error.message, 'error');
+      showToast(error.response?.data?.message || error.message, 'error');
     } finally {
       setActionLoading(prev => ({ ...prev, [bookingId]: null }));
     }

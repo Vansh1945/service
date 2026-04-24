@@ -40,6 +40,7 @@ import {
   Star
 } from 'lucide-react';
 import { useAuth } from '../../context/auth';
+import * as AdminService from '../../services/AdminService';
 import LoadingSpinner from '../../components/Loader';
 
 const AdminProvidersPage = () => {
@@ -139,19 +140,8 @@ const AdminProvidersPage = () => {
   const fetchProviders = async () => {
     try {
       setLoading(true);
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-
-      const response = await fetch(`${API}/admin/providers/pending`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-      const data = await response.json();
+      const response = await AdminService.getPendingProviders();
+      const data = response.data;
 
       if (data.success) {
         setAllProviders(data.providers || []);
@@ -159,12 +149,8 @@ const AdminProvidersPage = () => {
         showToast('Failed to fetch providers', 'error');
       }
     } catch (error) {
-      if (error.name === 'AbortError') {
-        showToast('Request timeout. Please try again.', 'error');
-      } else {
-        console.error('Error fetching providers:', error);
-        showToast('Failed to fetch providers', 'error');
-      }
+      console.error('Error fetching providers:', error);
+      showToast('Failed to fetch providers', 'error');
     } finally {
       setLoading(false);
     }
@@ -343,13 +329,8 @@ const AdminProvidersPage = () => {
 
   const fetchProviderDetails = useCallback(async (providerId) => {
     try {
-      const response = await fetch(`${API}/admin/providers/${providerId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      const data = await response.json();
+      const response = await AdminService.getProviderDetails(providerId);
+      const data = response.data;
       if (data.success) {
         setSelectedProvider(data.provider || data.data);
       } else {
@@ -359,7 +340,7 @@ const AdminProvidersPage = () => {
       console.error('Error fetching provider details:', error);
       showToast('Failed to fetch provider details', 'error');
     }
-  }, [API, showToast]);
+  }, [showToast]);
 
 
 
@@ -396,19 +377,12 @@ const AdminProvidersPage = () => {
     try {
       setProcessingAction(approvalAction);
 
-      const response = await fetch(`${API}/admin/providers/${selectedProvider._id}/status`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          status: approvalAction,
-          rejectionReason: approvalRemarks
-        })
+      const response = await AdminService.updateProviderStatus(selectedProvider._id, {
+        status: approvalAction,
+        rejectionReason: approvalRemarks
       });
 
-      const data = await response.json();
+      const data = response.data;
 
       if (data.success) {
         showToast(`Provider ${approvalAction} successfully`, 'success');

@@ -1,11 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/auth';
-import {
-  TrendingUp, DollarSign, Clock, Download, CreditCard, FileText,
-  AlertCircle, CheckCircle, XCircle, Calendar, ArrowDownLeft,
-  ChevronDown, ChevronUp, BarChart3, Activity, Wallet, Receipt,
   Filter, Loader2, X, Info, TrendingDown, Eye, Banknote, Building
 } from 'lucide-react';
+import * as PaymentService from '../../services/PaymentService';
+import * as ProviderService from '../../services/ProviderService';
 
 // ── Utility Helpers ──────────────────────────────────────────────────────────
 
@@ -104,7 +102,7 @@ const ProviderEarningsDashboard = () => {
       } else if (timeFilter === 'week') {
         const d = new Date(now);
         const day = d.getDay();
-        const diff = d.getDate() - day; // Start from Sunday
+        const diff = d.getDate() - day;
         start = new Date(d.setDate(diff));
         start.setHours(0, 0, 0, 0);
         end = new Date();
@@ -117,17 +115,19 @@ const ProviderEarningsDashboard = () => {
         start.setHours(0, 0, 0, 0);
         end = new Date(now.getFullYear(), 11, 31);
       } else {
-        // Default to month if something goes wrong
         start = new Date(now.getFullYear(), now.getMonth(), 1);
         start.setHours(0, 0, 0, 0);
         end = new Date();
       }
       end.setHours(23, 59, 59, 999);
 
-      const res = await fetch(`${API}/payment/summary?startDate=${start.toISOString().split('T')[0]}&endDate=${end.toISOString().split('T')[0]}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
+      const params = {
+        startDate: start.toISOString().split('T')[0],
+        endDate: end.toISOString().split('T')[0]
+      };
+
+      const response = await PaymentService.getEarningsSummary(params);
+      const data = response.data;
       if (data.success) {
         setSummary({
           totalEarnings: data.totalEarnings || 0,
@@ -138,7 +138,7 @@ const ProviderEarningsDashboard = () => {
         });
       }
     } catch (err) { console.error('Error fetching summary:', err); }
-  }, [API, token, timeFilter]);
+  }, [timeFilter]);
 
   const processWeeklyData = useCallback((earnings) => {
     const currentDate = new Date();
@@ -182,53 +182,57 @@ const ProviderEarningsDashboard = () => {
       const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
       const startOfYear = new Date(currentDate.getFullYear(), 0, 1);
       const endOfYear = new Date(currentDate.getFullYear(), 11, 31);
+      
       const [weeklyRes, monthlyRes] = await Promise.all([
-        fetch(`${API}/payment/earnings-report?startDate=${startOfMonth.toISOString().split('T')[0]}&endDate=${endOfMonth.toISOString().split('T')[0]}`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${API}/payment/earnings-report?startDate=${startOfYear.toISOString().split('T')[0]}&endDate=${endOfYear.toISOString().split('T')[0]}`, { headers: { 'Authorization': `Bearer ${token}` } })
+        PaymentService.getEarningsReport({ startDate: startOfMonth.toISOString().split('T')[0], endDate: endOfMonth.toISOString().split('T')[0] }),
+        PaymentService.getEarningsReport({ startDate: startOfYear.toISOString().split('T')[0], endDate: endOfYear.toISOString().split('T')[0] })
       ]);
-      const weeklyData = await weeklyRes.json();
-      const monthlyData = await monthlyRes.json();
+      
+      const weeklyData = weeklyRes.data;
+      const monthlyData = monthlyRes.data;
       if (weeklyData.success) processWeeklyData(weeklyData.earnings);
       if (monthlyData.success) processMonthlyData(monthlyData.earnings);
     } catch (err) { console.error('Error fetching trends:', err); }
-  }, [API, token, processWeeklyData, processMonthlyData]);
+  }, [processWeeklyData, processMonthlyData]);
 
   const fetchEarningsReport = useCallback(async (page = 1, limit = 20) => {
     try {
-      const params = new URLSearchParams({ page: page.toString(), limit: limit.toString() });
-      if (dateFilter.startDate) params.append('startDate', dateFilter.startDate);
-      if (dateFilter.endDate) params.append('endDate', dateFilter.endDate);
-      const res = await fetch(`${API}/payment/earnings-report?${params}`, { headers: { 'Authorization': `Bearer ${token}` } });
-      const data = await res.json();
+      const params = { page, limit };
+      if (dateFilter.startDate) params.startDate = dateFilter.startDate;
+      if (dateFilter.endDate) params.endDate = dateFilter.endDate;
+      
+      const response = await PaymentService.getEarningsReport(params);
+      const data = response.data;
       if (data.success) {
         setEarningsReport(data.earnings || []);
         setPagination({ currentPage: page, pageSize: limit, totalEarnings: data.totalCount || 0 });
       }
     } catch (err) { showToast('Failed to fetch earnings', 'error'); }
-  }, [API, token, dateFilter, showToast]);
+  }, [dateFilter, showToast]);
 
   const fetchWithdrawalReport = useCallback(async () => {
     try {
-      const params = new URLSearchParams();
-      if (dateFilter.startDate) params.append('startDate', dateFilter.startDate);
-      if (dateFilter.endDate) params.append('endDate', dateFilter.endDate);
-      const res = await fetch(`${API}/payment/withdrawal-report?${params}`, { headers: { 'Authorization': `Bearer ${token}` } });
-      const data = await res.json();
+      const params = {};
+      if (dateFilter.startDate) params.startDate = dateFilter.startDate;
+      if (dateFilter.endDate) params.endDate = dateFilter.endDate;
+      
+      const response = await PaymentService.getWithdrawalReport(params);
+      const data = response.data;
       if (data.success) setWithdrawalReport(data.records || []);
     } catch (err) { showToast('Failed to fetch withdrawals', 'error'); }
-  }, [API, token, dateFilter, showToast]);
+  }, [dateFilter, showToast]);
 
   const fetchProviderProfile = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/provider/profile`, { headers: { 'Authorization': `Bearer ${token}` } });
-      const data = await res.json();
+      const response = await ProviderService.getProfile();
+      const data = response.data;
       if (data.provider?.bankDetails) {
         setProviderBankDetails(data.provider.bankDetails);
         return data.provider.bankDetails;
       }
     } catch (err) { console.error('Profile fetch error:', err); }
     return null;
-  }, [API, token]);
+  }, []);
 
   const handleWithdrawalRequest = async () => {
     if (!withdrawalForm.amount || withdrawalForm.amount < 500) { showToast('Minimum ₹500 required', 'error'); return; }
@@ -237,19 +241,15 @@ const ProviderEarningsDashboard = () => {
     setConfirmAction(() => async () => {
       try {
         setProcessingWithdrawal(true);
-        const res = await fetch(`${API}/payment/withdraw`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ amount: parseFloat(withdrawalForm.amount) })
-        });
-        const data = await res.json();
+        const response = await PaymentService.withdraw({ amount: parseFloat(withdrawalForm.amount) });
+        const data = response.data;
         if (data.success) {
           showToast('Withdrawal requested!', 'success');
           setShowWithdrawalModal(false);
           setWithdrawalForm({ amount: '' });
           refreshAll();
         } else { showToast(data.error || 'Withdrawal failed', 'error'); }
-      } catch (err) { showToast('Processing error', 'error'); } finally { setProcessingWithdrawal(false); }
+      } catch (err) { showToast(err.response?.data?.message || err.message || 'Processing error', 'error'); } finally { setProcessingWithdrawal(false); }
     });
     setShowConfirmModal(true);
   };
@@ -258,9 +258,17 @@ const ProviderEarningsDashboard = () => {
     if (!dateFilter.startDate || !dateFilter.endDate) { showToast('Select date range', 'error'); return; }
     try {
       setDownloading(prev => ({ ...prev, [type]: true }));
-      const endpoint = type === 'earnings' ? 'earnings-report' : 'withdrawal-report';
-      const res = await fetch(`${API}/payment/${endpoint}?startDate=${dateFilter.startDate}&endDate=${dateFilter.endDate}&download=true`, { headers: { 'Authorization': `Bearer ${token}` } });
-      const blob = await res.blob();
+      const params = {
+        startDate: dateFilter.startDate,
+        endDate: dateFilter.endDate,
+        download: 'true'
+      };
+      
+      const res = type === 'earnings' 
+        ? await PaymentService.downloadEarningsReport(params, { responseType: 'blob' })
+        : await PaymentService.downloadWithdrawalReport(params, { responseType: 'blob' });
+      
+      const blob = res.data;
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

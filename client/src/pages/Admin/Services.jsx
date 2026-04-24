@@ -32,6 +32,8 @@ import {
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useAuth } from '../../context/auth';
+import * as ServiceService from '../../services/ServiceService';
+import * as SystemService from '../../services/SystemService';
 
 
 
@@ -217,49 +219,26 @@ const AdminServices = () => {
   // Fetch all services
   const fetchServices = useCallback(async () => {
     try {
-      const response = await fetch(`${API}/service/admin/services`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          localStorage.clear();
-          window.location.href = '/login';
-          return;
-        }
-        throw new Error('Failed to fetch services');
-      }
-
-      const data = await response.json();
+      const response = await ServiceService.getAllServices();
+      const data = response.data;
       setServices(data.data || []);
     } catch (error) {
       console.error('Fetch services error:', error);
       toast.error(error.message || 'Failed to fetch services');
     }
-  }, [API, token]);
+  }, []);
 
   // Fetch categories
   const fetchCategories = useCallback(async () => {
     try {
-      const response = await fetch(`${API}/system-setting/categories`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch categories');
-      }
-
-      const data = await response.json();
+      const response = await SystemService.getCategories();
+      const data = response.data;
       setCategories(data.data || []);
     } catch (error) {
       console.error('Fetch categories error:', error);
       toast.error(error.message || 'Failed to fetch categories');
     }
-  }, [API, token]);
+  }, []);
 
   // Check admin access
   useEffect(() => {
@@ -441,25 +420,14 @@ const AdminServices = () => {
       formData.append('specialNotes', JSON.stringify(createForm.specialNotes));
       formData.append('materialsUsed', JSON.stringify(createForm.materialsUsed));
 
-      // Append all images - use the correct field name 'image' (not 'images')
+      // Append all images
       createForm.images.forEach(image => {
         formData.append('image', image);
       });
 
-      const response = await fetch(`${API}/service/admin/services`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        body: formData
-      });
+      const response = await ServiceService.createService(formData);
+      const data = response.data;
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to create service');
-      }
-
-      const data = await response.json();
       setServices(prev => [data.data, ...prev]);
       toast.success('Service created successfully!');
       resetCreateForm();
@@ -493,27 +461,16 @@ const AdminServices = () => {
         formData.append('existingImages', JSON.stringify(editForm.existingImages));
       }
 
-      // Append new images - use the correct field name 'image' (not 'images')
+      // Append new images
       if (editForm.images) {
         editForm.images.forEach(image => {
           formData.append('image', image);
         });
       }
 
-      const response = await fetch(`${API}/service/admin/service/${selectedService._id}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        body: formData
-      });
+      const response = await ServiceService.updateService(selectedService._id, formData);
+      const data = response.data;
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to update service');
-      }
-
-      const data = await response.json();
       setServices(prev => prev.map(s => s._id === data.data._id ? data.data : s));
       toast.success('Service updated successfully!');
       setShowEditModal(false);
@@ -526,21 +483,8 @@ const AdminServices = () => {
   // Update service price
   const handleUpdatePrice = async (serviceId, newPrice) => {
     try {
-      const response = await fetch(`${API}/service/admin/services/${serviceId}/price`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ basePrice: newPrice })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to update price');
-      }
-
-      const data = await response.json();
+      const response = await ServiceService.updateBasePrice(serviceId, { basePrice: newPrice });
+      const data = response.data;
       setServices(prev => prev.map(s => s._id === data.data._id ? data.data : s));
       toast.success('Price updated successfully!');
     } catch (error) {
@@ -552,31 +496,12 @@ const AdminServices = () => {
   // Toggle service status
   const handleToggleStatus = useCallback(async (service) => {
     try {
-      let response;
-
       if (service.isActive) {
         // Deactivate service using DELETE endpoint
-        response = await fetch(`${API}/service/admin/services/${service._id}`, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
+        await ServiceService.deleteService(service._id);
       } else {
         // Activate service using PUT endpoint to update isActive field
-        response = await fetch(`${API}/service/admin/service/${service._id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({ isActive: true })
-        });
-      }
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to update service status');
+        await ServiceService.updateService(service._id, { isActive: true });
       }
 
       // Refetch services to get updated status
@@ -586,7 +511,7 @@ const AdminServices = () => {
       console.error('Toggle status error:', error);
       toast.error(error.message || 'Failed to update service status');
     }
-  }, [API, token, fetchServices]);
+  }, [fetchServices]);
 
   // Handle bulk import
   const handleBulkImport = async (e) => {
@@ -600,20 +525,8 @@ const AdminServices = () => {
       const formData = new FormData();
       formData.append('servicesFile', bulkFile);
 
-      const response = await fetch(`${API}/service/admin/bulk-import`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        body: formData
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to import services');
-      }
-
-      const data = await response.json();
+      const response = await ServiceService.bulkImportServices(formData);
+      const data = response.data;
       toast.success(`Successfully imported ${data.importedCount} services!`);
 
       if (data.errorCount > 0) {
@@ -632,19 +545,10 @@ const AdminServices = () => {
   // Export services to Excel
   const handleExportServices = async () => {
     try {
-      const response = await fetch(`${API}/service/admin/services-export`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to export services');
-      }
-
+      const response = await ServiceService.exportServicesToExcel({ responseType: 'blob' });
+      
       // Create blob from response
-      const blob = await response.blob();
+      const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.style.display = 'none';

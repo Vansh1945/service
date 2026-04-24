@@ -12,7 +12,7 @@ import {
   FiAlertCircle,
   FiRefreshCw
 } from 'react-icons/fi';
-import axios from 'axios';
+import * as PaymentService from '../../services/PaymentService';
 import { useAuth } from '../../context/auth';
 
 const AdminEarningReports = () => {
@@ -112,18 +112,29 @@ const AdminEarningReports = () => {
       setLoading(true);
       setActiveReport(reportId);
 
-      let url = '';
       const params = {};
+      // Add filters if provided
+      if (dateRange.startDate && dateRange.endDate) {
+        params.fromDate = dateRange.startDate;
+        params.toDate = dateRange.endDate;
+      }
+      
+      if (providerId && reportId !== 'provider-ledger') {
+        params.providerId = providerId;
+      }
+
+      const config = { responseType: 'blob' };
+      let response;
 
       switch (reportId) {
         case 'withdrawal':
-          url = `${API}/payment/admin/withdrawal-report`;
+          response = await PaymentService.generateWithdrawalReport(params, config);
           break;
         case 'provider-earnings':
-          url = `${API}/payment/admin/provider-earnings-report`;
+          response = await PaymentService.generateProviderEarningsReport(params, config);
           break;
         case 'commission':
-          url = `${API}/payment/admin/commission-report`;
+          response = await PaymentService.getCommissionReport(params, config);
           break;
         case 'provider-ledger':
           if (!specificProviderId) {
@@ -132,14 +143,14 @@ const AdminEarningReports = () => {
             setActiveReport(null);
             return;
           }
-          url = `${API}/payment/admin/provider-ledger/${specificProviderId}`;
+          response = await PaymentService.providerLedgerReport(specificProviderId, params, config);
           break;
         case 'earnings-summary':
-          url = `${API}/payment/admin/earnings-summary-report`;
           params.groupBy = groupBy;
+          response = await PaymentService.earningsSummaryReport(params, config);
           break;
         case 'outstanding-balance':
-          url = `${API}/payment/admin/outstanding-balance-report`;
+          response = await PaymentService.outstandingBalanceReport(params, config);
           break;
         default:
           showToast?.('Invalid report type', 'error');
@@ -147,25 +158,6 @@ const AdminEarningReports = () => {
           setActiveReport(null);
           return;
       }
-
-      // Add filters if provided
-      if (dateRange.startDate && dateRange.endDate) {
-        params.fromDate = dateRange.startDate;
-        params.toDate = dateRange.endDate;
-      }
-      
-      // Add global providerId filter if present (unless it's already used as a path param)
-      if (providerId && reportId !== 'provider-ledger') {
-        params.providerId = providerId;
-      }
-
-      const response = await axios.get(url, {
-        params,
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        responseType: 'blob'
-      });
 
       const reportName = reports.find(r => r.id === reportId)?.title || reportId;
       const blob = new Blob([response.data], {

@@ -8,12 +8,13 @@ import 'react-toastify/dist/ReactToastify.css';
 import { useAuth } from '../context/auth';
 import Rating from '@mui/material/Rating';
 import LoadingSpinner from '../components/Loader';
+import { getActiveServices } from '../services/ServiceService';
 
 const Services = ({ limit }) => {
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const { API, user } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -21,12 +22,8 @@ const Services = ({ limit }) => {
       try {
         setLoading(true);
         setError(null);
-        const response = await fetch(`${API}/service/services`);
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.message || 'Failed to fetch services');
-        }
+        const response = await getActiveServices();
+        const data = response.data;
 
         if (data.success && data.data) {
           const transformedData = data.data.map(service => ({
@@ -46,7 +43,7 @@ const Services = ({ limit }) => {
     };
 
     fetchServices();
-  }, [API]);
+  }, []);
 
   const handleBookNow = (serviceId, isActive) => {
     if (!isActive) {

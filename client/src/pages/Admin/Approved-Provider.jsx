@@ -28,6 +28,7 @@ import {
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useAuth } from '../../context/auth';
+import * as AdminService from '../../services/AdminService';
 
 // ─── Pure helpers at module scope ───────────────────────────────────────────
 const formatDate = (dateString) => {
@@ -148,18 +149,13 @@ const AdminProviders = () => {
   const fetchProviders = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API}/admin/providers`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      if (!response.ok) throw new Error(`Failed to fetch providers: ${response.status}`);
-      const data = await response.json();
-      setProviders(data.providers || data.data || []);
+      const res = await AdminService.getAllProviders();
+      if (res.data?.success || res.data?.providers || res.data?.data) {
+        setProviders(res.data.providers || res.data.data || []);
+      }
     } catch (error) {
       console.error('Fetch providers error:', error);
-      toast.error(error.message || 'Failed to fetch providers');
+      toast.error(error.response?.data?.message || 'Failed to fetch providers');
     } finally {
       setLoading(false);
     }
@@ -183,19 +179,12 @@ const AdminProviders = () => {
 
     try {
       setProcessingAction(action);
-      const response = await fetch(`${API}/admin/providers/${selectedProvider._id}/status`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          status: action === 'approved' ? 'approved' : 'rejected',
-          rejectionReason: approvalRemarks
-        })
+      const res = await AdminService.updateProviderStatus(selectedProvider._id, {
+        status: action === 'approved' ? 'approved' : 'rejected',
+        rejectionReason: approvalRemarks
       });
 
-      const data = await response.json();
+      const data = res.data;
 
       if (data.success) {
         showToast(`Bank details ${action === 'approved' ? 'verified' : 'rejected'} successfully`, 'success');

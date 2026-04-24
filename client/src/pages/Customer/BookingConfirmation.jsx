@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation, useParams, Link } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
-import axios from 'axios';
 import { toast } from 'react-toastify';
 import {
   ArrowLeft, CreditCard, Wallet, CheckCircle, Calendar, MapPin,
@@ -9,7 +8,8 @@ import {
   Truck, Phone, Mail, ChevronRight, MessageCircle, AlertCircle
 } from 'lucide-react';
 import { getPublicServiceById } from '../../services/ServiceService';
-import { getBooking } from '../../services/BookingService';
+import { getBooking, updateBookingPayment } from '../../services/BookingService';
+import * as TransactionService from '../../services/TransactionService';
 import Loader from '../../components/Loader';
 
 const BookingConfirmation = () => {
@@ -232,16 +232,12 @@ const BookingConfirmation = () => {
     }
 
     try {
-      const orderResponse = await axios.post(
-        `${API}/transaction/create-order`,
-        {
-          bookingId: bookingDetails._id,
-          amount: Math.round(bookingDetails.totalAmount * 100),
-          currency: 'INR',
-          paymentMethod: 'online'
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const orderResponse = await TransactionService.createOrder({
+        bookingId: bookingDetails._id,
+        amount: Math.round(bookingDetails.totalAmount * 100),
+        currency: 'INR',
+        paymentMethod: 'online'
+      });
 
       if (!orderResponse.data?.success) throw new Error('Failed to create payment order');
 
@@ -259,17 +255,13 @@ const BookingConfirmation = () => {
         order_id: order.id,
         handler: async function (response) {
           try {
-            const verifyResponse = await axios.post(
-              `${API}/transaction/verify`,
-              {
-                orderId: response.razorpay_order_id,
-                paymentId: response.razorpay_payment_id,
-                signature: response.razorpay_signature,
-                bookingId: bookingDetails._id,
-                transactionId: transactionId
-              },
-              { headers: { Authorization: `Bearer ${token}` } }
-            );
+            const verifyResponse = await TransactionService.verifyPayment({
+              orderId: response.razorpay_order_id,
+              paymentId: response.razorpay_payment_id,
+              signature: response.razorpay_signature,
+              bookingId: bookingDetails._id,
+              transactionId: transactionId
+            });
 
             if (!verifyResponse.data?.success) throw new Error('Payment verification failed');
 

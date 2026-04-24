@@ -3,14 +3,14 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
-import axios from 'axios';
 import { toast } from 'react-toastify';
 import { ArrowLeft, CheckCircle, Plus, Minus, Tag, Clock, Calendar, Shield, Lock, Star, IndianRupee, Truck, RotateCcw, Check, CalendarDays, CreditCard } from 'lucide-react';
 import AddressSelector from '../../components/AddressSelector';
 import Loader from '../../components/Loader';
 import { getPublicServiceById } from '../../services/ServiceService';
-import { getAvailableCoupons } from '../../services/CouponService';
+import { getAvailableCoupons, applyCoupon as applyCouponAPI } from '../../services/CouponService';
 import { createBooking } from '../../services/BookingService';
+import * as CustomerService from '../../services/CustomerService';
 
 const BookService = () => {
   const { serviceId } = useParams();
@@ -114,9 +114,7 @@ const BookService = () => {
   // Fetch user addresses
   const fetchUserAddresses = async () => {
     try {
-      const response = await axios.get(`${API}/customer/profile`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await CustomerService.getProfile();
       return response.data.user.address ? [response.data.user.address] : [];
     } catch (err) {
       console.error('Error fetching user addresses:', err);
@@ -152,7 +150,7 @@ const BookService = () => {
     }
 
     try {
-      const response = await applyCoupon(
+      const response = await applyCouponAPI(
         {
           code: formData.couponCode.trim().toUpperCase(),
           bookingValue: service.basePrice * formData.quantity

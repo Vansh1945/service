@@ -4,6 +4,10 @@ import { jwtDecode } from "jwt-decode";
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
+import * as AdminService from "../services/AdminService";
+import * as ProviderService from "../services/ProviderService";
+import * as CustomerService from "../services/CustomerService";
+
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
@@ -137,16 +141,17 @@ export const AuthProvider = ({ children }) => {
             if (!token || !role) return;
 
             try {
-                const endpoint = role === 'admin' ? '/admin/profile'
-                    : role === 'provider' ? '/provider/profile'
-                        : '/customer/profile';
+                let res;
+                if (role === 'admin') {
+                    res = await AdminService.getAdminProfile();
+                } else if (role === 'provider') {
+                    res = await ProviderService.getProfile();
+                } else {
+                    res = await CustomerService.getProfile();
+                }
 
-                const response = await fetch(`${API}${endpoint}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
+                if (res.data?.success || res.status === 200) {
+                    const data = res.data;
                     const userData = data.admin || data.provider || data.user || data.data;
 
                     if (userData) {
@@ -157,17 +162,17 @@ export const AuthProvider = ({ children }) => {
                         setUser(userObj);
                         localStorage.setItem("user", JSON.stringify(userObj));
                     }
-                } else if (response.status === 401) {
-                    // Token is invalid/expired - clear session
-                    logoutUser();
                 }
             } catch (error) {
                 console.error("Failed to restore session data:", error);
+                if (error.response?.status === 401) {
+                    logoutUser();
+                }
             }
         };
 
         restoreSession();
-    }, [token, role, API]);
+    }, [token, role]);
 
     // Context value
     const contextValue = useMemo(() => ({

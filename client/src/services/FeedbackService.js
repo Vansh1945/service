@@ -27,8 +27,8 @@ export const getProviderAverageRating = () => {
 };
 
 // Admin routes
-export const getAllFeedbacks = () => {
-    return axiosInstance.get("/feedback/admin/all-feedbacks");
+export const getAllFeedbacks = (params) => {
+    return axiosInstance.get("/feedback/admin/all-feedbacks", { params });
 };
 
 export const getFeedbackAdmin = (feedbackId) => {

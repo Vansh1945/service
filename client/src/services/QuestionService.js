@@ -21,8 +21,8 @@ export const deleteQuestion = (id) => {
     return axiosInstance.delete(`/question/${id}`);
 };
 
-export const getAllQuestions = () => {
-    return axiosInstance.get("/question/get");
+export const getAllQuestions = (params) => {
+    return axiosInstance.get("/question/get", { params });
 };
 
 export const getQuestion = (id) => {
@@ -33,6 +33,6 @@ export const createBulkQuestions = (data) => {
     return axiosInstance.post("/question/bulk", data);
 };
 
-export const downloadQuestionsPDF = () => {
-    return axiosInstance.get("/question/download/pdf");
+export const downloadQuestionsPDF = (params, config) => {
+    return axiosInstance.get("/question/download/pdf", { params, ...config });
 };

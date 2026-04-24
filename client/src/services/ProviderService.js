@@ -41,8 +41,8 @@ export const getDashboardSummary = () => {
     return axiosInstance.get("/provider/dashboard/summary");
 };
 
-export const getEarningsAnalytics = () => {
-    return axiosInstance.get("/provider/dashboard/earnings");
+export const getEarningsAnalytics = (params) => {
+    return axiosInstance.get("/provider/dashboard/earnings", { params });
 };
 
 export const getBookingStatusBreakdown = () => {

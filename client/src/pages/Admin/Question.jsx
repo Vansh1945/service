@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../../context/auth';
+import * as QuestionService from '../../services/QuestionService';
+import * as SystemService from '../../services/SystemService';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useNavigate } from 'react-router-dom';
@@ -63,17 +65,8 @@ const AdminQuestions = () => {
   // Fetch categories
   const fetchCategories = async () => {
     try {
-      const response = await fetch(`${API}/system-setting/categories`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch categories');
-      }
-
-      const data = await response.json();
+      const response = await SystemService.getCategories();
+      const data = response.data;
       setCategories(data.data || []);
     } catch (error) {
       showToast(error.message, 'error');
@@ -90,27 +83,13 @@ const AdminQuestions = () => {
   const fetchQuestions = async () => {
     try {
       setLoading(true);
-      const queryParams = new URLSearchParams();
+      const params = {};
+      if (filters.search) params.search = filters.search;
+      if (filters.category) params.category = filters.category;
+      if (filters.isActive) params.isActive = filters.isActive;
 
-      if (filters.search) queryParams.append('search', filters.search);
-      if (filters.category) queryParams.append('category', filters.category);
-      if (filters.isActive) queryParams.append('isActive', filters.isActive);
-
-      const response = await fetch(`${API}/question/get?${queryParams.toString()}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          logoutUser();
-          throw new Error('Session expired. Please login again.');
-        }
-        throw new Error('Failed to fetch questions');
-      }
-
-      const data = await response.json();
+      const response = await QuestionService.getAllQuestions(params);
+      const data = response.data;
       setQuestions(data.questions || []);
     } catch (error) {
       showToast(error.message, 'error');
@@ -199,41 +178,22 @@ const AdminQuestions = () => {
   // Submit question
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     if (!validateForm()) return;
 
     try {
-      const url = editingId
-        ? `${API}/question/edit/${editingId}`
-        : `${API}/question/`;
-
-      const method = editingId ? 'PUT' : 'POST';
-
-      // Ensure correctAnswer is within bounds
       const payload = {
         ...formData,
         correctAnswer: Math.min(formData.correctAnswer, formData.options.length - 1)
       };
 
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          logoutUser();
-          throw new Error('Session expired. Please login again.');
-        }
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to save question');
+      let response;
+      if (editingId) {
+        response = await QuestionService.updateQuestion(editingId, payload);
+      } else {
+        response = await QuestionService.createQuestion(payload);
       }
 
-      const data = await response.json();
+      const data = response.data;
       showToast(editingId ? 'Question updated successfully' : 'Question added successfully');
       resetForm();
       if (showEditDialog) setShowEditDialog(false);
@@ -268,22 +228,7 @@ const AdminQuestions = () => {
     if (!window.confirm('Are you sure you want to delete this question?')) return;
 
     try {
-      const response = await fetch(`${API}/question/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          logoutUser();
-          throw new Error('Session expired. Please login again.');
-        }
-        throw new Error('Failed to delete question');
-      }
-
+      await QuestionService.deleteQuestion(id);
       showToast('Question deleted successfully');
       fetchQuestions();
     } catch (error) {
@@ -294,23 +239,7 @@ const AdminQuestions = () => {
   // Toggle question status
   const toggleStatus = async (id, currentStatus) => {
     try {
-      const response = await fetch(`${API}/question/edit/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ isActive: !currentStatus })
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          logoutUser();
-          throw new Error('Session expired. Please login again.');
-        }
-        throw new Error('Failed to update question status');
-      }
-
+      await QuestionService.updateQuestion(id, { isActive: !currentStatus });
       showToast(`Question ${currentStatus ? 'deactivated' : 'activated'} successfully`);
       fetchQuestions();
     } catch (error) {
@@ -330,7 +259,6 @@ const AdminQuestions = () => {
     }
 
     try {
-      // Parse bulk questions
       const questionsArray = bulkQuestions.split('\n\n').map(q => {
         const lines = q.split('\n').filter(line => line.trim());
         if (lines.length < 3) return null;
@@ -357,25 +285,8 @@ const AdminQuestions = () => {
         throw new Error('No valid questions found in the input');
       }
 
-      const response = await fetch(`${API}/question/bulk`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ questions: questionsArray })
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          logoutUser();
-          throw new Error('Session expired. Please login again.');
-        }
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to upload bulk questions');
-      }
-
-      const data = await response.json();
+      const response = await QuestionService.createBulkQuestions({ questions: questionsArray });
+      const data = response.data;
       showToast(`${data.count} questions added successfully`);
       setBulkQuestions('');
       setShowBulkUpload(false);
@@ -389,35 +300,18 @@ const AdminQuestions = () => {
   const handleDownloadPDF = async () => {
     try {
       setLoading(true);
-      const queryParams = new URLSearchParams();
+      const params = {};
+      if (filters.category) params.category = filters.category;
+      if (filters.subcategory) params.subcategory = filters.subcategory;
 
-      if (filters.category) queryParams.append('category', filters.category);
-      if (filters.subcategory) queryParams.append('subcategory', filters.subcategory);
-
-      const response = await fetch(`${API}/question/download/pdf?${queryParams.toString()}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          logoutUser();
-          throw new Error('Session expired. Please login again.');
-        }
-        throw new Error('Failed to download PDF');
-      }
-
-      // Get the filename from the Content-Disposition header
-      const contentDisposition = response.headers.get('Content-Disposition');
+      const response = await QuestionService.downloadQuestionsPDF(params, { responseType: 'blob' });
+      
+      const contentDisposition = response.headers['content-disposition'];
       const filename = contentDisposition
         ? contentDisposition.split('filename=')[1].replace(/"/g, '')
         : 'questions.pdf';
 
-      // Convert the response to a blob
-      const blob = await response.blob();
-
-      // Create a download link and trigger the download
+      const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -425,7 +319,6 @@ const AdminQuestions = () => {
       document.body.appendChild(a);
       a.click();
 
-      // Clean up
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
 

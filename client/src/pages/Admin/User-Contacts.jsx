@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/auth';
+import * as ContactService from '../../services/ContactService';
 import {
   Search,
   MessageSquare,
@@ -279,24 +280,15 @@ const UserContacts = () => {
   const fetchContacts = async () => {
     setLoading(true);
     try {
-      const queryParams = new URLSearchParams({
-        page: pagination.page.toString(),
-        limit: pagination.limit.toString()
-      });
+      const params = {
+        page: pagination.page,
+        limit: pagination.limit,
+        status: filters.status || undefined,
+        dateRange: filters.dateRange || undefined
+      };
 
-      if (filters.status) queryParams.append('status', filters.status);
-      if (filters.dateRange) queryParams.append('dateRange', filters.dateRange);
-
-      const response = await fetch(`${API}/contact/admin?${queryParams}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch contacts');
-
-      const data = await response.json();
+      const res = await ContactService.getAllContacts(params);
+      const data = res.data;
 
       if (data.success) {
         setContacts(data.data || []);
@@ -321,16 +313,8 @@ const UserContacts = () => {
   // Fetch contact details
   const fetchContactDetails = async (contactId) => {
     try {
-      const response = await fetch(`${API}/contact/${contactId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch contact details');
-
-      const data = await response.json();
+      const res = await ContactService.getContactById(contactId);
+      const data = res.data;
 
       if (data.success) {
         setSelectedContact(data.data);
@@ -346,18 +330,8 @@ const UserContacts = () => {
   // Reply to contact
   const replyToContact = async (contactId, message) => {
     try {
-      const response = await fetch(`${API}/contact/${contactId}/reply`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ message })
-      });
-
-      if (!response.ok) throw new Error('Failed to send reply');
-
-      const data = await response.json();
+      const res = await ContactService.replyToContact(contactId, { message });
+      const data = res.data;
 
       if (data.success) {
         await fetchContacts();

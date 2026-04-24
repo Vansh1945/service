@@ -1,7 +1,7 @@
 import axiosInstance from "../api/axiosInstance";
 
-export const createService = () => {
-    return axiosInstance.post("/service/admin/services");
+export const createService = (data) => {
+    return axiosInstance.post("/service/admin/services", data);
 };
 
 export const updateService = (id, data) => {
@@ -24,12 +24,12 @@ export const getServiceById = (id) => {
     return axiosInstance.get(`/service/admin/services/${id}`)
 }
 
-export const bulkImportServices = () => {
-    return axiosInstance.post("/service/admin/bulk-import")
+export const bulkImportServices = (data) => {
+    return axiosInstance.post("/service/admin/bulk-import", data)
 }
 
-export const exportServicesToExcel = () => {
-    return axiosInstance.get("/service/admin/services-export")
+export const exportServicesToExcel = (config) => {
+    return axiosInstance.get("/service/admin/services-export", config)
 }
 
 //PROVIDER ROUTES

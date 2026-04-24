@@ -73,14 +73,14 @@ export const completeBooking = (id) => {
     return axiosInstance.patch(`/booking/provider/${id}/complete`);
 };
 
-export const providerBookingReport = () => {
-    return axiosInstance.get("/booking/provider/booking-report");
+export const providerBookingReport = (params, config) => {
+    return axiosInstance.get("/booking/provider/booking-report", { params, ...config });
 };
 
 
 // Admin related routes
-export const getAllBookings = () => {
-    return axiosInstance.get("/booking/admin/bookings");
+export const getAllBookings = (params) => {
+    return axiosInstance.get("/booking/admin/bookings", { params });
 };
 
 export const getBookingDetails = (id) => {
@@ -103,6 +103,6 @@ export const updateBookingDateTimeAdmin = (id, data) => {
     return axiosInstance.patch(`/booking/admin/${id}/reschedule`, data);
 };
 
-export const downloadBookingReport = () => {
-    return axiosInstance.get("/booking/admin/booking-report");
+export const downloadBookingReport = (params, config) => {
+    return axiosInstance.get("/booking/admin/booking-report", { params, ...config });
 };

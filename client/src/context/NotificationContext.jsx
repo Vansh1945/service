@@ -5,6 +5,8 @@ import { useAuth } from './auth';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 
+import * as NotificationService from '../services/NotificationService';
+
 const NotificationContext = createContext(null);
 
 export const NotificationProvider = ({ children }) => {
@@ -21,15 +23,8 @@ export const NotificationProvider = ({ children }) => {
         if (localStorage.getItem("fcmToken") === newToken) return;
 
         try {
-            const res = await fetch(`${API}/notifications/save-token`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${authToken}`
-                },
-                body: JSON.stringify({ token: newToken })
-            });
-            if (res.ok) {
+            const res = await NotificationService.saveToken({ token: newToken });
+            if (res.data?.success) {
                 localStorage.setItem("fcmToken", newToken);
                 console.log('[FCM] Token saved to backend successfully.');
             }

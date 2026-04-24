@@ -12,6 +12,7 @@ import {
   Home, Info, Shield, FileDigit, PhoneCall
 } from 'lucide-react';
 import LoadingSpinner from '../../components/Loader';
+import * as BookingService from '../../services/BookingService';
 
 // ── Confirmation Dialog ──────────────────────────────────────────────────────
 const ConfirmationDialog = ({ isOpen, onClose, onConfirm, title, message, type = 'default' }) => {
@@ -112,18 +113,14 @@ const ProviderBooking = () => {
   // ── API calls ────────────────────────────────────────────────────────────
   const fetchBookings = useCallback(async (status) => {
     try {
-      const response = await fetch(`${API}/booking/provider/status/${status}`, {
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'Accept': 'application/json' }
-      });
-      if (!response.ok) { const err = await response.json(); throw new Error(err.message || `Failed to fetch ${status} bookings`); }
-      const data = await response.json();
+      const response = await BookingService.getBookingsByStatus(status);
+      const data = response.data;
       return data.data || [];
     } catch (err) {
-      console.error(`Error fetching ${status} bookings:`, err);
       showToast(`Failed to load ${status} bookings`, 'error');
       return [];
     }
-  }, [API, token, showToast]);
+  }, [showToast]);
 
   const calculateStats = useCallback((allBookings) => {
     const completed = allBookings.filter(b => b.status === 'completed');
@@ -173,53 +170,50 @@ const ProviderBooking = () => {
     try {
       if (!dateFilter.startDate || !dateFilter.endDate) { showToast('Please select a date range first', 'error'); return; }
       setDownloading(true);
-      let url, filename;
-      if (reportType === 'providerBooking' || reportType === 'booking') {
-        url = `${API}/booking/provider/booking-report?startDate=${dateFilter.startDate}&endDate=${dateFilter.endDate}`;
-        filename = `provider_booking_report_${dateFilter.startDate}_to_${dateFilter.endDate}.xlsx`;
-      } else { showToast('Invalid report type', 'error'); setDownloading(false); return; }
-      const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
-      if (!response.ok) { const err = await response.json(); throw new Error(err.message || 'Failed to download report'); }
-      const blob = await response.blob();
+      if (reportType !== 'providerBooking' && reportType !== 'booking') { 
+        showToast('Invalid report type', 'error'); 
+        setDownloading(false); 
+        return; 
+      }
+      
+      const filename = `provider_booking_report_${dateFilter.startDate}_to_${dateFilter.endDate}.xlsx`;
+      const response = await BookingService.providerBookingReport(
+        { startDate: dateFilter.startDate, endDate: dateFilter.endDate },
+        { responseType: 'blob' }
+      );
+      
+      const blob = response.data;
       const a = document.createElement('a');
       a.href = window.URL.createObjectURL(blob);
       a.download = filename;
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       window.URL.revokeObjectURL(a.href);
       showToast('Report downloaded successfully', 'success');
-    } catch (err) { console.error('Error downloading report:', err); showToast(err.message || 'Failed to download report', 'error'); }
-    finally { setDownloading(false); }
-  }, [API, token, dateFilter, showToast]);
+    } catch (err) { 
+      showToast(err.response?.data?.message || err.message || 'Failed to download report', 'error'); 
+    } finally { 
+      setDownloading(false); 
+    }
+  }, [dateFilter, showToast]);
 
   const executeBookingAction = useCallback(async (bookingId, action, additionalData = {}) => {
     try {
       if (!bookingId) { showToast('Booking ID is missing. Please refresh and try again.', 'error'); return; }
-      let endpoint, method, body = {};
-      switch (action) {
-        case 'accept': endpoint = `${API}/booking/provider/${bookingId}/accept`; method = 'PATCH'; if (selectedBooking?.time) body.time = selectedBooking.time; break;
-        case 'reject': endpoint = `${API}/booking/provider/${bookingId}/reject`; method = 'PATCH'; body.reason = additionalData.reason || 'Provider rejected'; break;
-        case 'start': endpoint = `${API}/booking/provider/${bookingId}/start`; method = 'PATCH'; break;
-        case 'complete': endpoint = `${API}/booking/provider/${bookingId}/complete`; method = 'PATCH'; break;
-        default: throw new Error('Invalid action');
-      }
-      const response = await fetch(endpoint, {
-        method, headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: Object.keys(body).length > 0 ? JSON.stringify(body) : undefined
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        let errorMessage = errorData.message || `Failed to ${action} booking`;
-        if (response.status === 409) { showToast(errorMessage, 'warning'); throw new Error(errorMessage); }
-        if (response.status === 404) errorMessage = action === 'complete' ? 'Booking Not Available for Completion' : 'Booking Not Found';
-        else if (response.status === 403) errorMessage = 'Permission Denied';
-        else if (response.status === 400) errorMessage = 'Invalid Request';
-        showToast(errorMessage, 'error'); throw new Error(errorMessage);
-      }
-      const result = await response.json();
+      
+      let response;
+      if (action === 'accept') response = await BookingService.acceptBooking(bookingId);
+      else if (action === 'reject') response = await BookingService.rejectBooking(bookingId);
+      else if (action === 'start') response = await BookingService.startBooking(bookingId);
+      else if (action === 'complete') response = await BookingService.completeBooking(bookingId);
+      else throw new Error('Invalid action');
+
+      const result = response.data;
       showToast(result.message || `Booking ${action}ed successfully`, 'success');
       refreshData(); setShowModal(false); setSelectedBooking(null); setConfirmDialog({ isOpen: false, type: '', data: null });
-    } catch (err) { console.error(`Error ${action}ing booking ${bookingId}:`, err); }
-  }, [API, token, selectedBooking, showToast, refreshData]);
+    } catch (err) { 
+      showToast(err.response?.data?.message || err.message, 'error');
+    }
+  }, [showToast, refreshData]);
 
   const handleBookingAction = useCallback(async (bookingId, action, additionalData = {}) => {
     if (['reject', 'complete'].includes(action)) {
@@ -254,14 +248,14 @@ const ProviderBooking = () => {
 
   const getBookingDetails = useCallback(async (bookingId) => {
     try {
-      const response = await fetch(`${API}/booking/provider-booking/${bookingId}`, {
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'Accept': 'application/json' }
-      });
-      if (!response.ok) { const err = await response.json(); throw new Error(err.message || 'Failed to fetch booking details'); }
-      const data = await response.json();
+      const response = await BookingService.getProviderBookingById(bookingId);
+      const data = response.data;
       setSelectedBooking(data.data || null); setShowModal(true);
-    } catch (err) { showToast(err.message, 'error'); setShowModal(false); }
-  }, [API, token, showToast]);
+    } catch (err) { 
+      showToast(err.response?.data?.message || err.message, 'error'); 
+      setShowModal(false); 
+    }
+  }, [showToast]);
 
   // ── Formatters ───────────────────────────────────────────────────────────
   const formatAddress = useCallback((address) => {

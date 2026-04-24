@@ -1,7 +1,7 @@
 // src/pages/admin/ComplaintsPage.jsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/auth';
-import axios from 'axios';
+import * as ComplaintService from '../../services/ComplaintService';
 import {
   FiSearch, FiRefreshCw, FiEye, FiCheckCircle, FiAlertTriangle,
   FiUsers, FiUser, FiTool, FiClock, FiBarChart2, FiX,
@@ -438,18 +438,13 @@ const ComplaintsPage = () => {
   const fetchComplaints = async () => {
     setLoading(true);
     try {
-      const q = new URLSearchParams({ page: pagination.page.toString(), limit: pagination.limit.toString() });
-      if (filters.status) q.append('status', filters.status);
-      if (filters.category) q.append('category', filters.category);
-      if (filters.userType) q.append('userType', filters.userType);
-      if (filters.providerId) q.append('providerId', filters.providerId);
-      if (filters.search) q.append('search', filters.search);
-      if (filters.startDate) q.append('startDate', filters.startDate);
-      if (filters.endDate) q.append('endDate', filters.endDate);
+      const params = {
+        page: pagination.page,
+        limit: pagination.limit,
+        ...filters
+      };
 
-      const res = await axios.get(`${API}/complaint?${q}`, {
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-      });
+      const res = await ComplaintService.getAllComplaints(params);
       if (res.data?.success) {
         setComplaints(res.data.data || []);
         setPagination(p => ({ ...p, total: res.data.total || 0, pages: res.data.pages || 1 }));
@@ -460,7 +455,7 @@ const ComplaintsPage = () => {
 
   const fetchComplaintDetails = async (id) => {
     try {
-      const res = await axios.get(`${API}/complaint/${id}/details`, { headers: { 'Authorization': `Bearer ${token}` } });
+      const res = await ComplaintService.getComplaintDetails(id);
       if (res.data?.success) { setSelectedComplaint(res.data.data); setShowModal(true); }
       else showToast('Failed to fetch complaint details', 'error');
     } catch { showToast('Failed to fetch complaint details', 'error'); }
@@ -469,7 +464,7 @@ const ComplaintsPage = () => {
   const updateComplaintStatus = async (id, status) => {
     setUpdating(true);
     try {
-      const res = await axios.put(`${API}/complaint/${id}/status`, { status }, { headers: { 'Authorization': `Bearer ${token}` } });
+      const res = await ComplaintService.updateComplaintStatus(id, status);
       if (res.data?.success) {
         await fetchComplaints();
         if (selectedComplaint?._id === id) setSelectedComplaint(p => ({ ...p, status }));
@@ -483,7 +478,7 @@ const ComplaintsPage = () => {
   const resolveComplaint = async (id, resolutionNotes) => {
     setUpdating(true);
     try {
-      const res = await axios.put(`${API}/complaint/${id}/resolve`, { resolutionNotes }, { headers: { 'Authorization': `Bearer ${token}` } });
+      const res = await ComplaintService.resolveComplaint(id, { resolutionNotes });
       if (res.data?.success) { await fetchComplaints(); setShowModal(false); return true; }
       showToast('Failed to resolve complaint', 'error'); return false;
     } catch { showToast('Failed to resolve complaint', 'error'); return false; }

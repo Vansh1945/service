@@ -18,7 +18,8 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/auth';
-import { getSystemSetting } from '../services/SystemService';
+import * as SystemService from '../services/SystemService';
+import * as ContactService from '../services/ContactService';
 
 const Contact = () => {
   const { API, showToast } = useAuth();
@@ -52,7 +53,7 @@ const Contact = () => {
   useEffect(() => {
     const fetchSystemData = async () => {
       try {
-        const response = await getSystemSetting();
+        const response = await SystemService.getSystemSetting();
         const data = response.data;
         if (data.success) {
           setSystemData(data.data);
@@ -68,7 +69,7 @@ const Contact = () => {
     };
 
     fetchSystemData();
-  }, [API]);
+  }, []);
 
   const handleChange = (e) => {
     setFormData({
@@ -82,15 +83,8 @@ const Contact = () => {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch(`${API}/contact`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData)
-      });
-
-      const data = await response.json();
+      const res = await ContactService.submitContact(formData);
+      const data = res.data;
 
       if (data.success) {
         showToast(data.message || 'Thank you for your message! We will get back to you soon.');

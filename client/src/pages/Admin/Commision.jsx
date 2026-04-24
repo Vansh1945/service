@@ -16,6 +16,8 @@ import {
   Info
 } from 'lucide-react';
 import { format } from 'date-fns';
+import * as CommissionService from '../../services/CommissionService';
+import * as AdminService from '../../services/AdminService';
 
 const AdminCommissionPage = () => {
   const { API, token, showToast } = useAuth();
@@ -74,25 +76,20 @@ const AdminCommissionPage = () => {
   // Fetch commission rules
   const fetchCommissionRules = async (page = 1, limit = 10) => {
     setLoading(true);
-
     try {
-      const queryParams = new URLSearchParams({
-        page: page.toString(),
-        limit: limit.toString(),
+      const params = {
+        page: page,
+        limit: limit,
         ...(filters.isActive && { isActive: filters.isActive }),
         ...(filters.applyTo && { applyTo: filters.applyTo })
-      });
+      };
 
-      const response = await fetch(`${API}/commission/rules?${queryParams}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      const data = await response.json();
+      const response = await CommissionService.listCommissionRules(params);
+      const data = response.data;
       if (data.success) {
         setCommissionRules(data.data);
         setPagination(data.pagination);
 
-        // Calculate stats
         const activeCount = data.data.filter(rule => rule.isActive).length;
         setStats(prev => ({
           ...prev,
@@ -100,7 +97,6 @@ const AdminCommissionPage = () => {
           totalRules: data.pagination.total
         }));
 
-        // Calculate average commission rate
         if (data.data.length > 0) {
           const percentageRules = data.data.filter(rule => rule.type === 'percentage');
           const avgRate = percentageRules.length > 0
@@ -120,11 +116,8 @@ const AdminCommissionPage = () => {
   const fetchCommissionRuleById = async (ruleId) => {
     setLoading(true);
     try {
-      const response = await fetch(`${API}/commission/rules/${ruleId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      const data = await response.json();
+      const response = await CommissionService.getCommissionRuleById(ruleId);
+      const data = response.data;
       if (data.success) {
         setViewingRule(data.data);
         setShowRuleDetailsModal(true);
@@ -141,10 +134,8 @@ const AdminCommissionPage = () => {
   // Fetch providers
   const fetchProviders = async () => {
     try {
-      const response = await fetch(`${API}/admin/providers?limit=100`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await response.json();
+      const response = await AdminService.getAllProviders({ limit: 100 });
+      const data = response.data;
       if (data.success) {
         setProviders(data.providers || []);
         setStats(prev => ({
@@ -162,19 +153,16 @@ const AdminCommissionPage = () => {
 
   // Create commission rule
   const createCommissionRule = async () => {
-    // Validate required fields
     if (!ruleForm.name || !ruleForm.value || ruleForm.value < 0) {
       showToast('Please fill all required fields with valid values', 'error');
       return;
     }
 
-    // Validate percentage value
     if (ruleForm.type === 'percentage' && ruleForm.value > 100) {
       showToast('Percentage commission cannot exceed 100%', 'error');
       return;
     }
 
-    // Validate conditional fields
     if (ruleForm.applyTo === 'performanceScore' && !ruleForm.performanceScore) {
       showToast('Performance tier is required when applyTo is performanceScore', 'error');
       return;
@@ -185,7 +173,6 @@ const AdminCommissionPage = () => {
       return;
     }
 
-    // Validate dates
     if (ruleForm.effectiveUntil && new Date(ruleForm.effectiveUntil) <= new Date(ruleForm.effectiveFrom)) {
       showToast('Effective until date must be after effective from date', 'error');
       return;
@@ -205,16 +192,8 @@ const AdminCommissionPage = () => {
         ...(ruleForm.effectiveUntil && { effectiveUntil: ruleForm.effectiveUntil })
       };
 
-      const response = await fetch(`${API}/commission/rules`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await response.json();
+      const response = await CommissionService.createCommissionRule(payload);
+      const data = response.data;
       if (data.success) {
         showToast('Rule created successfully');
         setShowRuleModal(false);
@@ -232,19 +211,16 @@ const AdminCommissionPage = () => {
 
   // Update commission rule
   const updateCommissionRule = async () => {
-    // Validate required fields
     if (!ruleForm.name || !ruleForm.value || ruleForm.value < 0) {
       showToast('Please fill all required fields with valid values', 'error');
       return;
     }
 
-    // Validate percentage value
     if (ruleForm.type === 'percentage' && ruleForm.value > 100) {
       showToast('Percentage commission cannot exceed 100%', 'error');
       return;
     }
 
-    // Validate conditional fields
     if (ruleForm.applyTo === 'performanceScore' && !ruleForm.performanceScore) {
       showToast('Performance tier is required when applyTo is performanceScore', 'error');
       return;
@@ -255,7 +231,6 @@ const AdminCommissionPage = () => {
       return;
     }
 
-    // Validate dates
     if (ruleForm.effectiveUntil && new Date(ruleForm.effectiveUntil) <= new Date(ruleForm.effectiveFrom)) {
       showToast('Effective until date must be after effective from date', 'error');
       return;
@@ -275,16 +250,8 @@ const AdminCommissionPage = () => {
         ...(ruleForm.effectiveUntil && { effectiveUntil: ruleForm.effectiveUntil })
       };
 
-      const response = await fetch(`${API}/commission/rules/${editingRule._id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await response.json();
+      const response = await CommissionService.updateCommissionRule(editingRule._id, payload);
+      const data = response.data;
       if (data.success) {
         showToast('Rule updated successfully');
         setShowRuleModal(false);
@@ -304,11 +271,8 @@ const AdminCommissionPage = () => {
   // Toggle rule status
   const toggleRuleStatus = async (ruleId) => {
     try {
-      const response = await fetch(`${API}/commission/rules/${ruleId}/toggle-status`, {
-        method: 'PATCH',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await response.json();
+      const response = await CommissionService.toggleCommissionRuleStatus(ruleId);
+      const data = response.data;
       if (data.success) {
         showToast(data.message || 'Rule status updated');
         fetchCommissionRules(pagination.page, pagination.limit);
@@ -325,11 +289,8 @@ const AdminCommissionPage = () => {
     if (!window.confirm('Are you sure you want to delete this commission rule?')) return;
 
     try {
-      const response = await fetch(`${API}/commission/rules/${ruleId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await response.json();
+      const response = await CommissionService.deleteCommissionRule(ruleId);
+      const data = response.data;
       if (data.success) {
         showToast('Commission rule deleted successfully');
         fetchCommissionRules(pagination.page, pagination.limit);

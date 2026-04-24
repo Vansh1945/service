@@ -4,6 +4,7 @@ import {
     ChevronLeft, ChevronRight, TrendingUp, Clock, Filter, Loader2
 } from 'lucide-react';
 import { useAuth } from '../../context/auth';
+import * as FeedbackService from '../../services/FeedbackService';
 
 const ProviderFeedback = () => {
     const { API, token, showToast } = useAuth();
@@ -45,11 +46,9 @@ const ProviderFeedback = () => {
         try {
             setIsLoading(true);
             setError(null);
-            const response = await fetch(`${API}/feedback/provider/my-feedbacks`, {
-                method: 'GET',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-            });
-            const data = await response.json();
+            const response = await FeedbackService.getProviderFeedbacks();
+            const data = response.data;
+            
             if (data.success) {
                 const formattedFeedbacks = data.data.map(feedback => ({
                     id: feedback._id,
@@ -65,11 +64,8 @@ const ProviderFeedback = () => {
                 }));
                 setFeedbackData(formattedFeedbacks);
                 calculateStats(formattedFeedbacks);
-            } else {
-                throw new Error(data.message || 'Failed to fetch feedbacks');
             }
         } catch (error) {
-            console.error('Error fetching feedbacks:', error);
             setError(error.message);
             showToast('Failed to load feedbacks', 'error');
         } finally {
@@ -79,17 +75,13 @@ const ProviderFeedback = () => {
 
     const fetchProviderRating = async () => {
         try {
-            const response = await fetch(`${API}/feedback/provider/average-rating`, {
-                method: 'GET',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-            });
-            const data = await response.json();
+            const response = await FeedbackService.getProviderAverageRating();
+            const data = response.data;
             if (data.success) {
                 return { averageRating: data.data.averageRating || 0, ratingCount: data.data.ratingCount || 0 };
             }
             return { averageRating: 0, ratingCount: 0 };
         } catch (error) {
-            console.error('Error fetching rating:', error);
             return { averageRating: 0, ratingCount: 0 };
         }
     };

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/auth';
+import * as PaymentService from '../../services/PaymentService';
 import { ToastContainer, toast } from 'react-toastify';
 import DatePicker from 'react-datepicker';
 import TimePicker from 'react-time-picker';
@@ -35,21 +36,19 @@ const AdminPayout = () => {
   const fetchWithdrawals = async () => {
     try {
       setLoading(true);
-      const q = new URLSearchParams({ page: page.toString(), limit: limit.toString() });
-      if (filters.status) q.append('status', filters.status);
-      if (filters.startDate) q.append('startDate', filters.startDate);
-      if (filters.endDate) q.append('endDate', filters.endDate);
-      if (filters.providerSearch) q.append('providerSearch', filters.providerSearch);
-      if (filters.sortBy) q.append('sortBy', filters.sortBy);
+      const params = {
+        page: page,
+        limit: limit,
+        ...Object.fromEntries(Object.entries(filters).filter(([_, v]) => v !== ''))
+      };
 
-      const res = await fetch(`${API}/payment/admin/withdrawal-requests?${q}`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      });
-      if (!res.ok) throw new Error('Failed to fetch withdrawal requests');
-      const data = await res.json();
-      if (!data.success) throw new Error(data.message);
-      setWithdrawals(data.data || []);
-      setTotal(data.total || 0);
+      const response = await PaymentService.getAllWithdrawalRequests(params);
+      const data = response.data;
+      
+      if (data.success) {
+        setWithdrawals(data.data || []);
+        setTotal(data.total || 0);
+      }
     } catch (err) {
       toast.error(err.message || 'Failed to load withdrawal requests');
     } finally {
@@ -69,12 +68,10 @@ const AdminPayout = () => {
     if (!rejectReason.trim()) { toast.error('Please enter a rejection reason'); return; }
     setSubmitting(true);
     try {
-      const res = await fetch(`${API}/payment/admin/withdrawal-request/${selectedWithdrawal._id}/reject`, {
-        method: 'PUT',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rejectionReason: rejectReason, adminRemark: 'Rejected via admin dashboard' })
+      await PaymentService.rejectWithdrawalRequest(selectedWithdrawal._id, {
+        rejectionReason: rejectReason,
+        adminRemark: 'Rejected via admin dashboard'
       });
-      if (!res.ok) throw new Error('Failed to reject withdrawal');
       toast.success('Withdrawal rejected successfully');
       setShowRejectModal(false); setSelectedWithdrawal(null); fetchWithdrawals();
     } catch (err) { toast.error(err.message || 'Failed to reject withdrawal'); }
@@ -86,18 +83,13 @@ const AdminPayout = () => {
     if (!approveForm.utrNo || !approveForm.transferDate || !approveForm.transferTime) { toast.error('Please fill all required fields'); return; }
     setSubmitting(true);
     try {
-      const res = await fetch(`${API}/payment/admin/withdrawal-request/${selectedWithdrawal._id}/approve`, {
-        method: 'PUT',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          transactionReference: approveForm.utrNo,
-          utrNo: approveForm.utrNo,
-          transferDate: approveForm.transferDate,
-          transferTime: approveForm.transferTime,
-          notes: approveForm.adminRemark
-        })
+      await PaymentService.approveWithdrawalRequest(selectedWithdrawal._id, {
+        transactionReference: approveForm.utrNo,
+        utrNo: approveForm.utrNo,
+        transferDate: approveForm.transferDate,
+        transferTime: approveForm.transferTime,
+        notes: approveForm.adminRemark
       });
-      if (!res.ok) throw new Error('Failed to approve withdrawal');
       toast.success('Withdrawal approved successfully');
       setShowApproveModal(false); setSelectedWithdrawal(null); fetchWithdrawals();
     } catch (err) { toast.error(err.message || 'Failed to approve withdrawal'); }

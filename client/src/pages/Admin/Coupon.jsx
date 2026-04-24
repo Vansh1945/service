@@ -26,6 +26,8 @@ import {
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useAuth } from '../../context/auth';
+import * as CouponService from '../../services/CouponService';
+import * as AdminService from '../../services/AdminService';
 
 const AdminCoupons = () => {
   const { API, token } = useAuth();
@@ -119,17 +121,8 @@ const AdminCoupons = () => {
   const fetchCoupons = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API}/coupon/admin/coupons`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch coupons: ${response.status}`);
-      }
-
-      const data = await response.json();
+      const response = await CouponService.getAllCoupons();
+      const data = response.data;
       setCoupons(data.data || data.coupons || []);
     } catch (error) {
       console.error('Fetch coupons error:', error);
@@ -142,15 +135,11 @@ const AdminCoupons = () => {
   // Fetch users for assignment
   const fetchUsers = async () => {
     try {
-      const response = await fetch(`${API}/admin/customers?limit=10000`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      const data = await response.json();
+      const response = await AdminService.getAllCustomers({ limit: 10000 });
+      const data = response.data;
 
-      if (response.ok) {
-        const usersList = data.users || [];
+      if (data.success || response.status === 200) {
+        const usersList = data.users || data.customers || [];
         setUsers(usersList);
       } else {
         throw new Error(data.message || 'Failed to load users list');
@@ -191,19 +180,8 @@ const AdminCoupons = () => {
         assignedTo: createForm.assignedTo || null
       };
 
-      const response = await fetch(`${API}/coupon/admin/coupons`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(couponData)
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to create coupon');
-      }
+      const response = await CouponService.createCoupon(couponData);
+      const data = response.data;
 
       setCoupons(prev => [data.data, ...prev]);
       toast.success(data.message);
@@ -219,16 +197,12 @@ const AdminCoupons = () => {
   const handleUpdateCoupon = async (e) => {
     e.preventDefault();
     try {
-      // Prepare update data - don't send fields that shouldn't be modified if coupon has been used
       const updateData = { ...editForm };
-
-      // Convert numeric fields to numbers
       updateData.discountValue = Number(updateData.discountValue);
       updateData.minBookingValue = Number(updateData.minBookingValue) || 0;
       updateData.usageLimit = updateData.usageLimit ? Number(updateData.usageLimit) : null;
 
       if (selectedCoupon.usedBy && selectedCoupon.usedBy.length > 0) {
-        // Remove restricted fields if coupon has been used
         delete updateData.code;
         delete updateData.discountType;
         delete updateData.discountValue;
@@ -236,21 +210,8 @@ const AdminCoupons = () => {
         delete updateData.isFirstBooking;
       }
 
-      const response = await fetch(`${API}/coupon/admin/coupon/${selectedCoupon._id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(updateData)
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to update coupon');
-      }
-
-      const data = await response.json();
+      const response = await CouponService.updateCoupon(selectedCoupon._id, updateData);
+      const data = response.data;
       setCoupons(prev => prev.map(c => c._id === data.data._id ? data.data : c));
       toast.success(data.message);
       setShowEditModal(false);
@@ -263,18 +224,8 @@ const AdminCoupons = () => {
   // Deactivate coupon
   const handleDeleteCoupon = async (couponId) => {
     try {
-      const response = await fetch(`${API}/coupon/admin/coupons/${couponId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message);
-      }
-
+      const response = await CouponService.deleteCoupon(couponId);
+      const data = response.data;
       toast.success(data.message);
       await fetchCoupons();
     } catch (error) {
@@ -293,18 +244,8 @@ const AdminCoupons = () => {
     if (!couponToDelete) return;
 
     try {
-      const response = await fetch(`${API}/coupon/admin/coupons/${couponToDelete}/hard`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message);
-      }
-
+      const response = await CouponService.hardDeleteCoupon(couponToDelete);
+      const data = response.data;
       await fetchCoupons();
       toast.success(data.message);
     } catch (error) {

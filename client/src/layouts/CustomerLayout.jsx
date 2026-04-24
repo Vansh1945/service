@@ -9,6 +9,8 @@ import { FaBolt } from 'react-icons/fa';
 import { useAuth } from '../context/auth';
 import NotificationBell from '../components/NotificationBell';
 
+import * as SystemService from '../services/SystemService';
+
 const CustomerLayout = () => {
     const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
     const [systemSettings, setSystemSettings] = useState({
@@ -23,11 +25,9 @@ const CustomerLayout = () => {
     useEffect(() => {
         const fetchSystemSettings = async () => {
             try {
-                const response = await fetch(`${API}/system-setting/system-data`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (response.ok) {
-                    const data = await response.json();
+                const response = await SystemService.getSystemSetting();
+                if (response.data?.success) {
+                    const data = response.data;
                     setSystemSettings({
                         companyName: data.data?.companyName || '',
                         logo: data.data?.logo,
@@ -42,7 +42,7 @@ const CustomerLayout = () => {
         if (token) {
             fetchSystemSettings();
         }
-    }, [API, token]);
+    }, [token]);
 
     const navigationItems = [
         { name: 'Services', path: '/customer/services', icon: <FiShoppingBag className="w-5 h-5" /> },

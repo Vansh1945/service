@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/auth';
+import * as SystemService from '../../services/SystemService';
 import { FaSave, FaUpload, FaStore, FaPhone, FaEnvelope, FaMapMarkerAlt, FaFacebook, FaInstagram, FaTwitter, FaLinkedin, FaYoutube } from 'react-icons/fa';
 import { MapPin, Phone, Mail, Facebook, Instagram, Twitter, Linkedin, Youtube } from 'lucide-react';
 
@@ -51,16 +52,8 @@ const SystemSetting = () => {
 
   const fetchSystemSettings = async () => {
     try {
-      const response = await fetch(`${API}/system-setting/admin/system-setting`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to fetch system settings');
-      }
-
-      const settingsData = await response.json();
+      const response = await SystemService.getSystemSettingAdmin();
+      const settingsData = response.data;
 
       if (settingsData.success && settingsData.data) {
         setSystemSettings({
@@ -80,7 +73,6 @@ const SystemSetting = () => {
           }
         });
 
-        // Set previews from fetched data
         if (settingsData.data.logo) setPreviewLogo(settingsData.data.logo);
         if (settingsData.data.favicon) setPreviewFavicon(settingsData.data.favicon);
       }
@@ -115,21 +107,10 @@ const SystemSetting = () => {
         formData.append('favicon', faviconFile);
       }
 
-      const response = await fetch(`${API}/system-setting/admin/system-setting`, {
-        method: 'PUT',
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: formData
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to save system settings');
-      }
-
-      const data = await response.json();
+      const response = await SystemService.updateSystemSetting(formData);
+      const data = response.data;
 
       if (data.success) {
-        setMessage('System settings saved successfully');
         showToast('System settings saved successfully');
         setLogoFile(null);
         setFaviconFile(null);
@@ -138,7 +119,7 @@ const SystemSetting = () => {
         throw new Error(data.message || 'Failed to save system settings');
       }
     } catch (error) {
-      setMessage('Error saving system settings: ' + error.message);
+      showToast('Error saving system settings: ' + error.message, 'error');
       console.error('Save error:', error);
     }
   };

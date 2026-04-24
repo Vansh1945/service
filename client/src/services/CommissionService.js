@@ -4,16 +4,16 @@ export const createCommissionRule = (data) => {
     return axiosInstance.post("/commission/rules", data);
 };
 
-export const listCommissionRules = (data) => {
-    return axiosInstance.get("/commission/rules", data);
+export const listCommissionRules = (params) => {
+    return axiosInstance.get("/commission/rules", { params });
 };
 
 export const getCommissionRuleById = (id) => {
     return axiosInstance.get(`/commission/rules/${id}`);
 };
 
-export const toggleCommissionRuleStatus = (id, data) => {
-    return axiosInstance.patch(`/commission/rules/${id}/toggle-status`, data);
+export const toggleCommissionRuleStatus = (id) => {
+    return axiosInstance.patch(`/commission/rules/${id}/toggle-status`);
 };
 
 export const updateCommissionRule = (id, data) => {

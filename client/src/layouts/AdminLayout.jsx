@@ -9,6 +9,8 @@ import {
 import { useAuth } from '../context/auth';
 import NotificationBell from '../components/NotificationBell';
 
+import * as SystemService from '../services/SystemService';
+
 const AdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
@@ -23,11 +25,9 @@ const AdminLayout = () => {
   useEffect(() => {
     const fetchSystemSettings = async () => {
       try {
-        const response = await fetch(`${API}/system-setting/system-data`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (response.ok) {
-          const data = await response.json();
+        const response = await SystemService.getSystemSetting();
+        if (response.data?.success) {
+          const data = response.data;
           setSystemSettings({
             companyName: data.data?.companyName || '',
             logo: data.data?.logo
@@ -41,7 +41,7 @@ const AdminLayout = () => {
     if (token) {
       fetchSystemSettings();
     }
-  }, [API, token]);
+  }, [token]);
 
   const menuItems = [
     { name: 'Dashboard', path: '/admin/dashboard', icon: <FiHome className="w-5 h-5" /> },

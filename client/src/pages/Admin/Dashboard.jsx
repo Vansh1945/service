@@ -9,6 +9,7 @@ import {
   FiCheckCircle, FiXCircle, FiAlertTriangle, FiActivity,
   FiFilter, FiRefreshCw
 } from 'react-icons/fi';
+import * as AdminService from '../../services/AdminService';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   BarChart, Bar, PieChart, Pie, Cell, ResponsiveContainer
@@ -55,54 +56,22 @@ const AdminDashboard = () => {
         liveRes,
         activityRes
       ] = await Promise.all([
-        fetch(`${API}/admin/dashboard/summary`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        }),
-        fetch(`${API}/admin/dashboard/revenue?period=${filters.period}`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        }),
-        fetch(`${API}/admin/dashboard/bookings-status`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        }),
-        fetch(`${API}/admin/dashboard/top-providers`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        }),
-        fetch(`${API}/admin/dashboard/pending-actions`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        }),
-        fetch(`${API}/admin/dashboard/live-stats`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        }),
-        fetch(`${API}/admin/dashboard/recent-activity`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        })
+        AdminService.getDashboardSummary(),
+        AdminService.getDashboardRevenue({ period: filters.period }),
+        AdminService.getDashboardBookingsStatus(),
+        AdminService.getDashboardTopProviders(),
+        AdminService.getDashboardPendingActions(),
+        AdminService.getDashboardLiveStats(),
+        AdminService.getDashboardRecentActivity()
       ]);
 
-      const [
-        summaryData,
-        revenueData,
-        bookingsData,
-        providersData,
-        pendingData,
-        liveData,
-        activityData
-      ] = await Promise.all([
-        summaryRes.json(),
-        revenueRes.json(),
-        bookingsRes.json(),
-        providersRes.json(),
-        pendingRes.json(),
-        liveRes.json(),
-        activityRes.json()
-      ]);
-
-      if (summaryData.success) setSummary(summaryData.data);
-      if (revenueData.success) setRevenueData(revenueData.data);
-      if (bookingsData.success) setBookingsStatus(bookingsData.data);
-      if (providersData.success) setTopProviders(providersData.data);
-      if (pendingData.success) setPendingActions(pendingData.data);
-      if (liveData.success) setLiveStats(liveData.data);
-      if (activityData.success) setRecentActivity(activityData.data);
+      if (summaryRes.data?.success) setSummary(summaryRes.data.data);
+      if (revenueRes.data?.success) setRevenueData(revenueRes.data.data);
+      if (bookingsRes.data?.success) setBookingsStatus(bookingsRes.data.data);
+      if (providersRes.data?.success) setTopProviders(providersRes.data.data);
+      if (pendingRes.data?.success) setPendingActions(pendingRes.data.data);
+      if (liveRes.data?.success) setLiveStats(liveRes.data.data);
+      if (activityRes.data?.success) setRecentActivity(activityRes.data.data);
 
     } catch (error) {
       toast.error(error.message || 'Failed to load dashboard');

@@ -29,6 +29,8 @@ const AdminRoutes = lazy(() => import("./routes/AdminRoutes"));
 const CustomerRoutes = lazy(() => import("./routes/CustomerRoutes"));
 const ProviderRoutes = lazy(() => import("./routes/ProviderRoutes"));
 
+import * as SystemService from "./services/SystemService";
+
 const App = () => {
   const location = useLocation();
   const { API } = useAuth();
@@ -71,12 +73,12 @@ const App = () => {
       }
 
       try {
-        const response = await fetch(`${API}/system-setting/system-data`);
-        if (response.ok) {
-          const data = await response.json();
+        const response = await SystemService.getSystemSetting();
+        if (response.data?.success) {
+          const data = response.data.data;
           const settings = {
-            companyName: data.data?.companyName || "SAFEVOLT SOLUTIONS",
-            favicon: data.data?.favicon || null,
+            companyName: data?.companyName || "SAFEVOLT SOLUTIONS",
+            favicon: data?.favicon || null,
           };
           setSystemSettings(settings);
 
@@ -105,7 +107,7 @@ const App = () => {
     };
 
     fetchSystemSettings();
-  }, [API]);
+  }, []);
 
   const { isDeepLink, setIsDeepLink, isAuthenticated, role: userRole, isAdmin, setIntendedRoute, resetDeepLink, user } = useAuth();
   const navigate_fn = useNavigate();

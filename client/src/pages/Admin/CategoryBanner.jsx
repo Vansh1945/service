@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/auth';
 import { toast } from 'react-toastify';
 import { FaEdit, FaTrash, FaToggleOn, FaToggleOff, FaPlus, FaSave, FaTimes, FaImage, FaTag, FaBullhorn, FaCalendar, FaUpload } from 'react-icons/fa';
+import * as SystemService from '../../services/SystemService';
 
 const CategoryBanner = () => {
   const [categories, setCategories] = useState([]);
@@ -50,20 +51,12 @@ const CategoryBanner = () => {
   const fetchData = async () => {
     try {
       const [categoriesRes, bannersRes] = await Promise.all([
-        fetch(`${API}/system-setting/admin/categories`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }),
-        fetch(`${API}/system-setting/admin/banners`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
+        SystemService.getCategoriesAdmin(),
+        SystemService.getBannersAdmin()
       ]);
 
-      if (!categoriesRes.ok || !bannersRes.ok) {
-        throw new Error('Failed to fetch data');
-      }
-
-      const categoriesData = await categoriesRes.json();
-      const bannersData = await bannersRes.json();
+      const categoriesData = categoriesRes.data;
+      const bannersData = bannersRes.data;
 
       setCategories(categoriesData.data || []);
       setBanners(bannersData.data || []);
@@ -90,23 +83,14 @@ const CategoryBanner = () => {
         formData.append('image', newBanner.image);
       }
 
-      const response = await fetch(`${API}/system-setting/admin/banners`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: formData
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to add banner');
-      }
-
-      const data = await response.json();
+      const response = await SystemService.createBanner(formData);
+      const data = response.data;
       setBanners([...banners, data.data]);
       setNewBanner({ image: '', title: '', subtitle: '', startDate: '', endDate: '', noExpiry: false });
       toast.success('Banner added successfully');
     } catch (error) {
       console.error(error);
+      toast.error(error.response?.data?.message || 'Failed to add banner');
     }
   };
 
@@ -122,16 +106,7 @@ const CategoryBanner = () => {
         formData.append('image', bannerImageFile);
       }
 
-      const response = await fetch(`${API}/system-setting/admin/banners/${editingBanner._id}`, {
-        method: 'PUT',
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: formData
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to update banner');
-      }
+      await SystemService.updateBanner(editingBanner._id, formData);
 
       setEditingBanner(null);
       setNewBanner({ image: '', title: '', subtitle: '', startDate: '', endDate: '', noExpiry: false });
@@ -140,6 +115,7 @@ const CategoryBanner = () => {
       toast.success('Banner updated successfully');
     } catch (error) {
       console.error(error);
+      toast.error(error.response?.data?.message || 'Failed to update banner');
     }
   };
 
@@ -147,20 +123,12 @@ const CategoryBanner = () => {
     if (!window.confirm('Are you sure you want to remove this banner?')) return;
 
     try {
-      const response = await fetch(`${API}/system-setting/admin/banners/${id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to remove banner');
-      }
-
+      await SystemService.deleteBanner(id);
       setBanners(banners.filter(banner => banner._id !== id));
       toast.success('Banner removed successfully');
     } catch (error) {
       console.error(error);
+      toast.error(error.response?.data?.message || 'Failed to remove banner');
     }
   };
 
@@ -181,13 +149,7 @@ const CategoryBanner = () => {
         formData.append('icon', categoryIconFile);
       }
 
-      const response = await fetch(`${API}/system-setting/admin/categories`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: formData
-      });
-
-      if (!response.ok) throw new Error('Failed to create category');
+      await SystemService.createCategory(formData);
 
       setNewCategory({ name: '', icon: '', description: '' });
       setCategoryIconFile(null);
@@ -195,6 +157,7 @@ const CategoryBanner = () => {
       toast.success('Category created successfully');
     } catch (error) {
       console.error(error);
+      toast.error(error.response?.data?.message || 'Failed to create category');
     }
   };
 
@@ -207,16 +170,7 @@ const CategoryBanner = () => {
         formData.append('icon', categoryIconFile);
       }
 
-      const response = await fetch(`${API}/system-setting/admin/categories/${editingCategory._id}`, {
-        method: 'PUT',
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: formData
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to update category');
-      }
+      await SystemService.updateCategory(editingCategory._id, formData);
 
       setEditingCategory(null);
       setNewCategory({ name: '', icon: '', description: '' });
@@ -225,6 +179,7 @@ const CategoryBanner = () => {
       toast.success('Category updated successfully');
     } catch (error) {
       console.error(error);
+      toast.error(error.response?.data?.message || 'Failed to update category');
     }
   };
 
@@ -232,36 +187,23 @@ const CategoryBanner = () => {
     if (!window.confirm('Are you sure you want to delete this category?')) return;
 
     try {
-      const response = await fetch(`${API}/system-setting/admin/categories/${id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (!response.ok) throw new Error('Failed to delete category');
-
+      await SystemService.deleteCategory(id);
       fetchData();
       toast.success('Category deleted successfully');
     } catch (error) {
       console.error(error);
+      toast.error(error.response?.data?.message || 'Failed to delete category');
     }
   };
 
   const toggleCategoryStatus = async (id) => {
     try {
-      const response = await fetch(`${API}/system-setting/admin/categories/${id}/toggle`, {
-        method: 'PATCH',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to toggle category status');
-      }
-
+      await SystemService.toggleCategoryStatus(id);
       fetchData();
       toast.success('Category status updated successfully');
     } catch (error) {
       console.error(error);
+      toast.error(error.response?.data?.message || 'Failed to toggle category status');
     }
   };
 

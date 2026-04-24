@@ -11,7 +11,7 @@ import {
   FiMail
 } from 'react-icons/fi';
 import { Link, useLocation } from 'react-router-dom';
-import { useAuth } from '../context/auth';
+import * as SystemService from '../services/SystemService';
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -64,9 +64,9 @@ const Navbar = () => {
   useEffect(() => {
     const fetchSystemSettings = async () => {
       try {
-        const response = await fetch(`${API}/system-setting/system-data`);
-        if (response.ok) {
-          const data = await response.json();
+        const response = await SystemService.getSystemSetting();
+        if (response.data?.success) {
+          const data = response.data;
           setSystemSettings({
             companyName: data.data?.companyName || '',
             logo: data.data?.logo || null
@@ -78,7 +78,7 @@ const Navbar = () => {
     };
 
     fetchSystemSettings();
-  }, [API]);
+  }, []);
 
   // Navigation links data with icons
   const navLinks = [

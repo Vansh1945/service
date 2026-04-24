@@ -6,8 +6,8 @@ export const submitContact = (data) => {
 };
 
 // Admin Routes
-export const getAllContacts = () => {
-    return axiosInstance.get("/contact/admin");
+export const getAllContacts = (params) => {
+    return axiosInstance.get("/contact/admin", { params });
 };
 
 export const getContactById = (id) => {

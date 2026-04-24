@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/auth';
+import * as NotificationService from '../../services/NotificationService';
 import {
     FiBell, FiSend, FiUsers, FiLink, FiCheckCircle, FiAlertCircle,
     FiLoader, FiMessageSquare, FiTarget, FiClock, FiRefreshCw, FiSmile
@@ -73,12 +74,9 @@ const AdminNotification = () => {
     const fetchHistory = async () => {
         try {
             setLoadingHistory(true);
-            const res = await fetch(`${API}/notifications/history`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const data = await res.json();
-            if (data.success) {
-                setHistory(data.history);
+            const res = await NotificationService.getBroadcastHistory();
+            if (res.data?.success) {
+                setHistory(res.data.history);
             }
         } catch (error) {
             console.error('Error fetching history:', error);
@@ -131,23 +129,16 @@ const AdminNotification = () => {
         setResult(null);
 
         try {
-            const res = await fetch(`${API}/notifications/send-broadcast`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type':  'application/json',
-                    'Authorization': `Bearer ${token}`,
-                },
-                body: JSON.stringify({
-                    audience: form.audience,
-                    title:    form.title.trim(),
-                    body:     form.body.trim(),
-                    url:      form.url.trim() || '/',
-                    type:     'broadcast',
-                    scheduledTime: isScheduled && form.scheduledTime ? form.scheduledTime : null,
-                }),
+            const res = await NotificationService.sendBroadcast({
+                audience: form.audience,
+                title:    form.title.trim(),
+                body:     form.body.trim(),
+                url:      form.url.trim() || '/',
+                type:     'broadcast',
+                scheduledTime: isScheduled && form.scheduledTime ? form.scheduledTime : null,
             });
 
-            const data = await res.json();
+            const data = res.data;
 
             if (data.success) {
                 setStatus('success');

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../../context/auth';
+import * as TestService from '../../services/TestService';
 import {
   Clock, CheckCircle, XCircle, Play, RotateCcw, Award, AlertCircle,
   BookOpen, Target, TrendingUp, Calendar, User, ChevronLeft,
@@ -40,20 +41,14 @@ const useTestData = (token, API, showToast) => {
 
   const fetchTestHistory = useCallback(async () => {
     try {
-      const response = await fetch(`${API}/test/results`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      const data = await response.json();
-      if (data.success) {
-        setTestHistory(data.data);
+      const res = await TestService.getTestResults();
+      if (res.data?.success) {
+        setTestHistory(res.data.data);
       }
     } catch (error) {
       showToast('Error fetching test history', 'error');
     }
-  }, [API, token, showToast]);
+  }, [showToast]);
 
   return {
     testHistory,
@@ -350,27 +345,15 @@ const ProviderTestPage = () => {
 
     try {
       // Start test with all selected categories in one request
-      const response = await fetch(`${API}/test/start`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ categories: selectedCategories })
-      });
+      const res = await TestService.startTest({ categories: selectedCategories });
+      const data = res.data;
 
-      const data = await response.json();
       if (data.success) {
         // Fetch the full test details including questions
         const testId = data.testId;
-        const detailsResponse = await fetch(`${API}/test/details/${testId}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
+        const detailsRes = await TestService.getTestDetails(testId);
+        const detailsData = detailsRes.data;
         
-        const detailsData = await detailsResponse.json();
         if (detailsData.success) {
           const testData = detailsData.data;
           
@@ -391,7 +374,7 @@ const ProviderTestPage = () => {
       console.error('Error starting test:', error);
       showToast('Error starting test', 'error');
     }
-  }, [selectedCategories, testAttemptsLeft, API, token, showToast, setTimeLeft]);
+  }, [selectedCategories, testAttemptsLeft, showToast, setTimeLeft]);
 
   const handleAnswerSelect = useCallback((questionId, optionIndex) => {
     setAnswers(prev => ({
@@ -421,19 +404,12 @@ const ProviderTestPage = () => {
         selectedOption
       }));
 
-      const response = await fetch(`${API}/test/submit`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          testId: currentTest.testId,
-          answers: formattedAnswers
-        })
+      const res = await TestService.submitTest({
+        testId: currentTest.testId,
+        answers: formattedAnswers
       });
 
-      const data = await response.json();
+      const data = res.data;
       if (data.success) {
         setTestResults(data.results);
         setCurrentTest(null);
@@ -448,18 +424,13 @@ const ProviderTestPage = () => {
     } catch (error) {
       showToast('Error submitting test', 'error');
     }
-  }, [currentTest, answers, API, token, showToast, fetchTestHistory]);
+  }, [currentTest, answers, showToast, fetchTestHistory]);
 
   useEffect(() => {
     const checkActiveTest = async () => {
       try {
-        const response = await fetch(`${API}/test/active`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        const data = await response.json();
+        const res = await TestService.getActiveTest();
+        const data = res.data;
 
         if (data.success && data.data) {
           const activeTest = data.data;
@@ -485,27 +456,24 @@ const ProviderTestPage = () => {
 
     fetchTestHistory();
     checkActiveTest();
-  }, [API, token, showToast, fetchTestHistory]);
+  }, [showToast, fetchTestHistory]);
 
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const response = await fetch(`${API}/test/categories`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (!response.ok) throw new Error('Failed to fetch categories');
-        const data = await response.json();
+        const res = await TestService.getTestCategories();
+        const data = res.data;
         if (data.success) {
           setCategories(data.data.categories || []);
           setCooldown(data.data.cooldown || null);
         }
       } catch (error) {
         console.error('Fetch categories error:', error);
-        showToast(error.message || 'Failed to fetch categories', 'error');
+        showToast(error.response?.data?.message || 'Failed to fetch categories', 'error');
       }
     };
     fetchCategories();
-  }, [API, token, showToast]);
+  }, [showToast]);
 
   useEffect(() => {
     const attemptsUsed = testHistory.length;

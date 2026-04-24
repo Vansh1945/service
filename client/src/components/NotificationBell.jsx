@@ -3,6 +3,8 @@ import { useAuth } from '../context/auth';
 import { getSocket } from '../socket/socket';
 import { Bell, X, Check, CheckCheck, BookOpen, CreditCard, AlertCircle } from 'lucide-react';
 
+import * as NotificationService from '../services/NotificationService';
+
 const NotificationBell = () => {
     const { token, API, user } = useAuth();
     const [notifications, setNotifications] = useState([]);
@@ -15,20 +17,17 @@ const NotificationBell = () => {
         if (!token) return;
         try {
             setLoading(true);
-            const res = await fetch(`${API}/notifications?limit=15`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            const data = await res.json();
-            if (data.success) {
-                setNotifications(data.data || []);
-                setUnreadCount(data.unreadCount || 0);
+            const res = await NotificationService.getNotifications({ limit: 15 });
+            if (res.data?.success) {
+                setNotifications(res.data.data || []);
+                setUnreadCount(res.data.unreadCount || 0);
             }
         } catch (err) {
             console.error('Failed to fetch notifications:', err);
         } finally {
             setLoading(false);
         }
-    }, [token, API]);
+    }, [token]);
 
     // Initial fetch
     useEffect(() => {
@@ -70,10 +69,7 @@ const NotificationBell = () => {
 
     const markRead = async (id) => {
         try {
-            await fetch(`${API}/notifications/read/${id}`, {
-                method: 'PATCH',
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            await NotificationService.markRead(id);
             setNotifications(prev => prev.map(n => n._id === id ? { ...n, isRead: true } : n));
             setUnreadCount(c => Math.max(0, c - 1));
         } catch (err) { console.error(err); }
@@ -81,10 +77,7 @@ const NotificationBell = () => {
 
     const markAllRead = async () => {
         try {
-            await fetch(`${API}/notifications/read-all`, {
-                method: 'PATCH',
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            await NotificationService.markAllRead();
             setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
             setUnreadCount(0);
         } catch (err) { console.error(err); }

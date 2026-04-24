@@ -1,5 +1,6 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/auth';
+import * as AdminService from '../../services/AdminService';
 import {
     Search,
     Users,
@@ -54,16 +55,8 @@ const AdminCustomersDashboard = () => {
     const fetchCustomers = async () => {
         setLoading(true);
         try {
-            const response = await fetch(`${API}/admin/customers`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            if (!response.ok) throw new Error('Failed to fetch customers');
-
-            const data = await response.json();
+            const response = await AdminService.getAllCustomers();
+            const data = response.data;
 
             if (data.success) {
                 const customersData = data.users || data.customers || [];

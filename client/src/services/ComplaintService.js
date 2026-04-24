@@ -18,8 +18,8 @@ export const reopenComplaint = (id, data) => {
 
 
 // Admin routes
-export const getAllComplaints = (data) => {
-    return axiosInstance.get(`/complaint/`, data);
+export const getAllComplaints = (params) => {
+    return axiosInstance.get("/complaint", { params });
 };
 
 export const getComplaintDetails = (id) => {
@@ -30,7 +30,7 @@ export const resolveComplaint = (id, data) => {
     return axiosInstance.put(`/complaint/${id}/resolve`, data);
 };
 
-export const updateComplaintStatus = (id, data) => {
-    return axiosInstance.put(`/complaint/${id}/status`, data);
+export const updateComplaintStatus = (id, status) => {
+    return axiosInstance.put(`/complaint/${id}/status`, { status });
 };
 
