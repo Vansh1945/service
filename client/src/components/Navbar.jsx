@@ -12,6 +12,7 @@ import {
 } from 'react-icons/fi';
 import { Link, useLocation } from 'react-router-dom';
 import * as SystemService from '../services/SystemService';
+import { useAuth } from '../context/auth';
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
