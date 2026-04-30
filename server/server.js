@@ -4,7 +4,7 @@ const cors = require("cors");
 
 const connectDB = require("./config/db");
 const frontend = process.env.FRONTEND_URL;
-
+const PORT = process.env.PORT || 5000;
 
 
 // Initialize express app
@@ -132,8 +132,6 @@ app.use((err, req, res, next) => {
 
 
 
-// Connect to MongoDB
-connectDB();
 
 
 // Create HTTP server (required for Socket.io)
@@ -144,8 +142,17 @@ const server = http.createServer(app);
 // Initialize Socket.io
 initSocket(server);
 
-// Start server
-const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
-  console.log(`Server running on ${PORT}`);
-});
+// Start server after ensuring MongoDB is connected
+const startServer = async () => {
+  try {
+    await connectDB();
+    server.listen(PORT, () => {
+      console.log(`Server is running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error("MongoDB connection failed:", error);
+    process.exit(1);
+  }
+};
+
+startServer();

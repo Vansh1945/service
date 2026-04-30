@@ -15,17 +15,17 @@ const { uploadComplaintImage } = require("../middlewares/upload");
 const { userAuthMiddleware } = require("../middlewares/User-middleware");
 const { providerAuthMiddleware } = require("../middlewares/Provider-middleware");
 const adminAuthMiddleware = require("../middlewares/Admin-middleware");
-const { roleMiddleware } = require("../middlewares/role-middleware");
+const { roleMiddleware } = require("../middlewares/Role-Middleware");
 
 // Unified Auth for Customer and Provider
 const sharedAuth = (req, res, next) => {
   const token = req.header('Authorization');
   if (!token) return res.status(401).json({ success: false, message: "Authorization required" });
-  
+
   try {
     const jwtToken = token.replace("Bearer ", "").trim();
     const decoded = jwt.verify(jwtToken, process.env.JWT_SECRET);
-    
+
     if (decoded.role === 'provider') {
       return providerAuthMiddleware(req, res, next);
     } else {
