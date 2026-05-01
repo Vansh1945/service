@@ -14,15 +14,47 @@ const transactionSchema = new Schema({
     type: String,
     unique: true
   },
+  booking: {
+    type: Schema.Types.ObjectId,
+    ref: 'Booking',
+    required: true
+  },
+  bookingId: {
+    type: String,
+    required: true
+  },
+  user: {
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  customerId: {
+    type: String
+  },
+  provider: {
+    type: Schema.Types.ObjectId,
+    ref: 'Provider'
+  },
+  providerId: {
+    type: String
+  },
   amount: {
     type: Number,
     required: true,
     min: 0
   },
+  commission: {
+    type: Number,
+    default: 0
+  },
+  providerEarning: {
+    type: Number,
+    default: 0
+  },
   paymentStatus: {
     type: String,
     required: true,
-    enum: ['pending', 'processing', 'completed', 'failed', 'refunded'],
+    enum: ['pending', 'success', 'failed', 'processing', 'completed', 'refunded'],
     default: 'pending'
   },
   currency: {
@@ -31,18 +63,8 @@ const transactionSchema = new Schema({
   },
   paymentMethod: {
     type: String,
-    enum: ['card', 'netbanking', 'wallet', 'upi', 'emi', 'cash', 'online'], // Added 'online'
+    enum: ['card', 'netbanking', 'wallet', 'upi', 'emi', 'cash', 'online', 'UPI', 'Card', 'Cash'],
     default: 'online'
-  },
-  booking: {
-    type: Schema.Types.ObjectId,
-    ref: 'Booking',
-    required: true
-  },
-  user: {
-    type: Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
   },
   razorpayOrderId: String,
   razorpayPaymentId: String,

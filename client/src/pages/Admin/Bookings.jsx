@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
 import Loader from '../../components/Loader';
 import * as BookingService from '../../services/BookingService';
@@ -181,6 +182,8 @@ const BookingRow = React.memo(({ booking, onDetails, onReschedule, onAssign, onD
 
 const AdminBookingsView = () => {
     const { token, API, showToast } = useAuth();
+    const navigate = useNavigate();
+    const location = useLocation();
     const [bookings, setBookings] = useState([]);
     const [selectedBooking, setSelectedBooking] = useState(null);
     const [showModal, setShowModal] = useState(false);
@@ -199,22 +202,40 @@ const AdminBookingsView = () => {
     const [showRescheduleModal, setShowRescheduleModal] = useState(false);
     const [showAssignProviderModal, setShowAssignProviderModal] = useState(false);
 
-    // Filter states
-    const [filters, setFilters] = useState({
-        status: '',
-        startDate: '',
-        endDate: '',
-        search: '',
-        paymentStatus: ''
+    // Filter states - initialize from URL to prevent race conditions and flashes
+    const [filters, setFilters] = useState(() => {
+        const params = new URLSearchParams(window.location.search);
+        return {
+            status: '',
+            startDate: '',
+            endDate: '',
+            search: params.get('search') || '',
+            paymentStatus: ''
+        };
     });
 
     // Pagination state
-    const [pagination, setPagination] = useState({
-        page: 1,
-        limit: 10,
-        total: 0,
-        pages: 0
+    const [pagination, setPagination] = useState(() => {
+        const params = new URLSearchParams(window.location.search);
+        return {
+            page: parseInt(params.get('page')) || 1,
+            limit: 10,
+            total: 0,
+            pages: 0
+        };
     });
+
+    // Update filters when URL search param changes (for in-page navigation)
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const searchParam = params.get('search');
+        
+        // Only update if the search filter actually changed to avoid infinite loops
+        if (searchParam !== undefined && searchParam !== filters.search) {
+            setFilters(prev => ({ ...prev, search: searchParam || '' }));
+            setPagination(prev => ({ ...prev, page: 1 }));
+        }
+    }, [location.search]);
 
     // Fetch all providers for assignment — useCallback keeps reference stable
     const fetchProviders = useCallback(async () => {
@@ -414,6 +435,14 @@ const AdminBookingsView = () => {
         setFilters(prev => ({ ...prev, [key]: value }));
         setPagination(prev => ({ ...prev, page: 1 }));
     }, []);
+
+    const navigateToTransaction = (bookingId) => {
+        if (!bookingId) {
+            showToast('No booking ID available', 'error');
+            return;
+        }
+        navigate(`/admin/transactions?bookingId=${bookingId}`);
+    };
 
     // Clear all filters
     const clearFilters = useCallback(() => {
@@ -683,7 +712,7 @@ const AdminBookingsView = () => {
                 </div>
 
                 {/* Active Filters Badges */}
-                <div className="flex flex-wrap gap-2 mt-4">
+                <div className="flex flex-wrap items-center gap-2 mt-4">
                     {filters.status && (
                         <span className="inline-flex items-center px-2 py-1 bg-teal-50 text-primary text-sm rounded-full border border-teal-100">
                             Status: {statusOptions.find(s => s.value === filters.status)?.label}
@@ -697,10 +726,18 @@ const AdminBookingsView = () => {
                         </span>
                     )}
                     {filters.search && (
-                        <span className="inline-flex items-center px-2 py-1 bg-teal-50 text-primary text-sm rounded-full border border-teal-100">
-                            Search: {filters.search}
-                            <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => handleFilterChange('search', '')} />
-                        </span>
+                        <div className="flex items-center gap-2">
+                            <span className="inline-flex items-center px-2 py-1 bg-blue-50 text-blue-600 text-sm font-semibold rounded-full border border-blue-100">
+                                Filtered by Booking ID: {filters.search}
+                                <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => handleFilterChange('search', '')} />
+                            </span>
+                            <button 
+                                onClick={() => handleFilterChange('search', '')}
+                                className="text-xs text-red-500 hover:underline font-medium"
+                            >
+                                Clear Filter
+                            </button>
+                        </div>
                     )}
                 </div>
             </div>
@@ -984,11 +1021,29 @@ const AdminBookingsView = () => {
                                                     <span className="text-sm text-gray-600">Payment Status:</span>
                                                     <span className="text-sm font-medium capitalize">{selectedBooking.payment?.status || 'N/A'}</span>
                                                 </div>
-                                                {selectedBooking.payment.details?.transactionId && (
-                                                    <div className="flex justify-between">
+                                                {selectedBooking.payment.details?.transactionId ? (
+                                                    <div className="flex justify-between items-center group">
                                                         <span className="text-sm text-gray-600">Transaction ID:</span>
-                                                        <span className="text-sm font-medium">{selectedBooking.payment.details.transactionId}</span>
+                                                        <button 
+                                                            onClick={() => navigateToTransaction(selectedBooking.booking.bookingId || selectedBooking.booking._id)}
+                                                            className="text-sm font-bold text-primary hover:underline flex items-center gap-1"
+                                                        >
+                                                            {selectedBooking.payment.details.transactionId}
+                                                            <ExternalLink className="w-3 h-3" />
+                                                        </button>
                                                     </div>
+                                                ) : (
+                                                    selectedBooking.booking.paymentStatus === 'paid' && (
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-sm text-gray-600">Transaction:</span>
+                                                            <button 
+                                                                onClick={() => navigateToTransaction(selectedBooking.booking.bookingId || selectedBooking.booking._id)}
+                                                                className="text-sm font-bold text-primary hover:underline flex items-center gap-1"
+                                                            >
+                                                                View Transaction <ExternalLink className="w-3 h-3" />
+                                                            </button>
+                                                        </div>
+                                                    )
                                                 )}
                                             </div>
                                         </div>

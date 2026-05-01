@@ -115,11 +115,17 @@ const createOrder = async (req, res) => {
 
     // Create transaction record ONLY for online payments
     const transaction = new Transaction({
-      amount: amount,
+      amount: amount / 100, // Convert paise to standard currency units (Rupees)
       currency: 'INR',
       paymentMethod: 'online', // Force online payment method
       booking: bookingId,
+      bookingId: booking.bookingId, // Human readable booking ID
       user: userId,
+      customerId: req.user.customerId || userId.toString(), // Store customer string ID if available
+      provider: booking.provider,
+      providerId: booking.providerId || (booking.provider ? booking.provider.toString() : null),
+      commission: booking.commissionAmount || 0,
+      providerEarning: booking.providerEarnings || 0,
       razorpayOrderId: order.id,
       paymentStatus: 'pending'
     });
@@ -201,7 +207,7 @@ const verifyPayment = async (req, res) => {
 
     transaction.razorpayPaymentId = paymentId;
     transaction.razorpaySignature = signature;
-    transaction.paymentStatus = 'completed';
+    transaction.paymentStatus = 'success'; // Changed from 'completed' to 'success' to match reqs
     transaction.razorpayResponse = req.body;
     await transaction.save();
 
@@ -302,7 +308,7 @@ const handleSuccessfulPayment = async (payment, session) => {
   const transaction = await Transaction.findOneAndUpdate(
     { razorpayOrderId: payment.order_id },
     {
-      paymentStatus: 'completed',
+      paymentStatus: 'success',
       razorpayPaymentId: payment.id,
       razorpayResponse: payment,
       paymentMethod: payment.method || 'online',
@@ -341,7 +347,7 @@ const handleFailedPayment = async (payment, session) => {
   await Transaction.findOneAndUpdate(
     { razorpayOrderId: payment.order_id },
     {
-      status: 'failed',
+      paymentStatus: 'failed',
       razorpayPaymentId: payment.id,
       razorpayResponse: payment,
       updatedAt: new Date()
@@ -364,8 +370,94 @@ const handleFailedPayment = async (payment, session) => {
 };
 
 
+/**
+ * Get all transactions for admin
+ */
+const getAllTransactions = async (req, res) => {
+  try {
+    const { bookingId, status, page = 1, limit = 10 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const filter = {};
+    if (bookingId) {
+      filter.$or = [
+        { bookingId: { $regex: bookingId, $options: 'i' } },
+        { transactionId: { $regex: bookingId, $options: 'i' } }
+      ];
+    }
+    if (status && status !== 'all') {
+      filter.paymentStatus = status;
+    }
+
+    const transactions = await Transaction.find(filter)
+      .populate('user', 'name email phone')
+      .populate({
+        path: 'booking',
+        select: 'bookingId services totalAmount status'
+      })
+      .populate('provider', 'name email phone providerId')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit))
+      .lean();
+
+    const total = await Transaction.countDocuments(filter);
+
+    res.status(200).json({
+      success: true,
+      count: transactions.length,
+      total,
+      page: parseInt(page),
+      pages: Math.ceil(total / limit),
+      data: transactions
+    });
+  } catch (error) {
+    console.error('Get transactions error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching transactions'
+    });
+  }
+};
+
+/**
+ * Get single transaction details
+ */
+const getTransactionById = async (req, res) => {
+  try {
+    const transaction = await Transaction.findById(req.params.id)
+      .populate('user', 'name email phone')
+      .populate({
+        path: 'booking',
+        populate: { path: 'services.service', select: 'title' }
+      })
+      .populate('provider', 'name email phone providerId')
+      .lean();
+
+    if (!transaction) {
+      return res.status(404).json({
+        success: false,
+        message: 'Transaction not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: transaction
+    });
+  } catch (error) {
+    console.error('Get transaction details error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching transaction details'
+    });
+  }
+};
+
 module.exports = {
   createOrder,
   verifyPayment,
-  handleWebhook
+  handleWebhook,
+  getAllTransactions,
+  getTransactionById
 };

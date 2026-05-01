@@ -53,7 +53,7 @@ export default defineConfig(({ mode }) => {
         registerType: 'autoUpdate',
         manifestFilename: 'manifest.json',
         devOptions: {
-          enabled: true,
+          enabled: false,
           type: 'classic'
         },
         injectManifest: {

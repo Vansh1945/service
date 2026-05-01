@@ -16,3 +16,12 @@ export const verifyPayment = (data) => {
 export const handleWebhook = (data) => {
     return axiosInstance.post("/transaction/webhook", data);
 };
+
+// Admin Routes
+export const getAllTransactions = (params) => {
+    return axiosInstance.get("/transaction/admin/all", { params });
+};
+
+export const getTransactionById = (id) => {
+    return axiosInstance.get(`/transaction/admin/details/${id}`);
+};

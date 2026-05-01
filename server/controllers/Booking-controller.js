@@ -781,11 +781,15 @@ const payBooking = async (req, res) => {
       booking: booking._id,
       amount: booking.totalAmount,
       paymentMethod: 'online',
-      paymentStatus: 'paid',
+      paymentStatus: 'success',
+      bookingId: booking.bookingId,
+      provider: booking.provider,
+      providerId: booking.providerId,
+      commission: booking.commissionAmount || 0,
+      providerEarning: booking.providerEarnings || 0,
       transactionId: paymentResult.transactionId,
       razorpayOrderId: paymentResult.razorpayOrderId,
-      razorpayPaymentId: paymentResult.razorpayPaymentId,
-      status: 'completed'
+      razorpayPaymentId: paymentResult.razorpayPaymentId
     }], { session });
 
     await session.commitTransaction();
@@ -1737,10 +1741,17 @@ const completeBooking = async (req, res) => {
         amount: booking.totalAmount,
         paymentMethod: 'cash',
         paymentStatus: 'completed',
+        bookingId: booking.bookingId,
+        user: booking.customer,
+        customerId: booking.customer?.toString(),
+        provider: booking.provider,
+        providerId: booking.provider?.toString(),
+        commission: booking.commissionAmount || 0,
+        providerEarning: booking.providerEarnings || 0,
         transactionId: `CASH-${Date.now()}-${booking._id.toString().slice(-6)}`,
         currency: 'INR',
         completedAt: new Date(),
-        description: `Cash payment for booking ${booking._id}`
+        description: `Cash payment for booking ${booking.bookingId || booking._id}`
       });
 
       await cashTransaction.save({ session });
@@ -2146,13 +2157,14 @@ const getAllBookings = async (req, res) => {
 
       const searchMatch = {
         $or: [
+          { bookingId: search }, // Prioritize exact match for bookingId
           { 'customer.name': searchRegex },
           { 'customer.email': searchRegex },
           { 'provider.name': searchRegex },
           { 'provider.email': searchRegex },
           { 'serviceDetails.title': searchRegex },
           { status: searchRegex },
-          { bookingId: searchRegex },
+          { bookingId: searchRegex }, // Keep fuzzy match as fallback
           { 'address.street': searchRegex },
           { 'address.city': searchRegex },
           { 'address.postalCode': searchRegex },
