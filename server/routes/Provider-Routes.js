@@ -3,7 +3,7 @@ const router = express.Router();
 const providerController = require('../controllers/Provider-controller');
 const { providerAuthMiddleware } = require('../middlewares/Provider-middleware');
 const adminAuthMiddleware = require('../middlewares/Admin-middleware');
-const { roleMiddleware } = require('../middlewares/Role-Middleware');
+const { roleMiddleware } = require('../middlewares/role-middleware');
 const { upload } = require('../middlewares/upload');
 
 const requireProvider = roleMiddleware(['provider']);

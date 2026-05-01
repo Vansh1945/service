@@ -15,7 +15,7 @@ const { uploadComplaintImage } = require("../middlewares/upload");
 const { userAuthMiddleware } = require("../middlewares/User-middleware");
 const { providerAuthMiddleware } = require("../middlewares/Provider-middleware");
 const adminAuthMiddleware = require("../middlewares/Admin-middleware");
-const { roleMiddleware } = require("../middlewares/Role-Middleware");
+const { roleMiddleware } = require("../middlewares/role-middleware");
 
 // Unified Auth for Customer and Provider
 const sharedAuth = (req, res, next) => {
