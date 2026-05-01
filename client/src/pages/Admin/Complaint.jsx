@@ -36,13 +36,18 @@ const StatusBadge = ({ status }) => {
 };
 
 // ── UserType Badge ─────────────────────────────────────────────
-const TypeBadge = ({ type }) => (
-  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wide
-    ${type === 'customer' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
-    {type === 'customer' ? <FiUser size={10} /> : <FiTool size={10} />}
-    {type}
-  </span>
-);
+const TypeBadge = ({ type }) => {
+  const t = type || 'unknown';
+  const isCustomer = t.toLowerCase() === 'customer';
+  const isProvider = t.toLowerCase() === 'provider';
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wide
+      ${isCustomer ? 'bg-blue-100 text-blue-600' : isProvider ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-600'}`}>
+      {isCustomer ? <FiUser size={10} /> : isProvider ? <FiTool size={10} /> : null}
+      {t}
+    </span>
+  );
+};
 
 // ── Skeleton Row ──────────────────────────────────────────────
 const SkeletonRow = () => (
@@ -56,24 +61,7 @@ const SkeletonRow = () => (
   </tr>
 );
 
-// ── Skeleton Card (mobile) ────────────────────────────────────
-const SkeletonCard = () => (
-  <div className="animate-pulse p-4 border-b border-gray-50">
-    <div className="flex justify-between mb-2">
-      <div className="h-3 bg-gray-200 rounded-full w-16" />
-      <div className="flex gap-1.5">
-        <div className="h-4 bg-gray-200 rounded-full w-16" />
-        <div className="h-4 bg-gray-200 rounded-full w-14" />
-      </div>
-    </div>
-    <div className="h-4 bg-gray-200 rounded-full w-3/4 mb-1.5" />
-    <div className="h-3 bg-gray-100 rounded-full w-full mb-3" />
-    <div className="flex justify-between">
-      <div className="h-3 bg-gray-200 rounded-full w-24" />
-      <div className="h-6 bg-gray-200 rounded-lg w-14" />
-    </div>
-  </div>
-);
+
 
 // ── Stat Card ─────────────────────────────────────────────────
 const StatCard = ({ label, value, icon: Icon, gradient, iconBg, delay = 0 }) => (
@@ -112,7 +100,8 @@ const ComplaintDetailsModal = ({ complaint, onClose, onUpdateStatus, onResolve }
 
   if (!complaint) return null;
 
-  const submitterInfo = complaint.userType === 'customer'
+  const actualUserType = complaint.userType || (complaint.userId || complaint.customer ? 'customer' : 'provider');
+  const submitterInfo = actualUserType === 'customer'
     ? (complaint.userId || complaint.customer)
     : (complaint.providerId || complaint.provider);
 
@@ -189,7 +178,7 @@ const ComplaintDetailsModal = ({ complaint, onClose, onUpdateStatus, onResolve }
                   </div>
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-gray-400">User Type</span>
-                    <TypeBadge type={complaint.userType} />
+                    <TypeBadge type={actualUserType} />
                   </div>
                 </div>
 
@@ -200,7 +189,7 @@ const ComplaintDetailsModal = ({ complaint, onClose, onUpdateStatus, onResolve }
                   </h4>
                   {submitterInfo ? (
                     <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${complaint.userType === 'customer' ? 'bg-blue-500' : 'bg-purple-500'}`}>
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${actualUserType === 'customer' ? 'bg-blue-500' : 'bg-purple-500'}`}>
                         <FiUser className="text-white" size={16} />
                       </div>
                       <div>
@@ -232,11 +221,6 @@ const ComplaintDetailsModal = ({ complaint, onClose, onUpdateStatus, onResolve }
                           {complaint.provider?.email && (
                             <p className="text-xs text-gray-400 flex items-center gap-1">
                               <FiMail size={10} /> {complaint.provider.email}
-                            </p>
-                          )}
-                          {complaint.providerComplaintsCount > 0 && (
-                            <p className="text-[11px] text-red-500 font-semibold mt-0.5 bg-red-50 px-2 py-0.5 rounded-full inline-block">
-                              ⚠ Total Complaints on this Provider: {complaint.providerComplaintsCount}
                             </p>
                           )}
                         </div>
@@ -619,81 +603,13 @@ const ComplaintsPage = () => {
             </span>
           </div>
 
-          {/* ── MOBILE: Card List (below lg) ── */}
-          <div className="lg:hidden divide-y divide-gray-50">
-            {loading ? (
-              Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} />)
-            ) : complaints.length === 0 ? (
-              <div className="py-16 flex flex-col items-center gap-3 px-6 text-center">
-                <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center">
-                  <FiInbox className="w-7 h-7 text-gray-300" />
-                </div>
-                <p className="text-secondary font-semibold text-sm">No complaints found</p>
-                <p className="text-xs text-gray-400">
-                  {Object.values(filters).some(f => f) ? 'Try adjusting your filters' : 'No complaints yet'}
-                </p>
-                {Object.values(filters).some(f => f) && (
-                  <button onClick={clearFilters} className="text-primary text-xs font-medium hover:underline">Clear Filters</button>
-                )}
-              </div>
-            ) : (
-              complaints.map((c, idx) => (
-                <div
-                  key={c._id}
-                  className="p-4 hover:bg-gray-50/60 transition-colors animate-slide-up"
-                  style={{ animationDelay: `${idx * 25}ms` }}
-                >
-                  {/* Row 1: ID + badges */}
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] font-mono font-semibold text-gray-400">
-                      #{(c.complaintId || (c._id || '').slice(-6)).toString().toUpperCase()}
-                    </span>
-                    <div className="flex items-center gap-1.5">
-                      <TypeBadge type={c.userType} />
-                      <StatusBadge status={c.status} />
-                    </div>
-                  </div>
-                  {/* Title + description */}
-                  <p className="text-sm font-semibold text-secondary truncate">{c.title || 'No Title'}</p>
-                  <p className="text-xs text-gray-400 line-clamp-1 mt-0.5">{c.description || '—'}</p>
-                  {/* Submitter + date + action */}
-                  <div className="flex items-center justify-between mt-2.5">
-                    <div>
-                      <p className="text-xs font-medium text-secondary">
-                        {c.userType === 'customer' ? (c.userId?.name || 'Unknown') : (c.providerId?.name || 'Provider')}
-                      </p>
-                      <p className="text-[10px] text-gray-400">{fmtDate(c.createdAt)}</p>
-                    </div>
-                    <button
-                      onClick={() => fetchComplaintDetails(c._id)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white text-xs font-semibold rounded-lg hover:bg-primary/90 transition-all"
-                    >
-                      <FiEye size={11} /> View
-                    </button>
-                  </div>
-                  {/* Affected provider */}
-                  {(c.providerId || c.provider) && (
-                    <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between">
-                      <p className="text-[11px] text-gray-500">
-                        Provider: <span className="font-medium text-secondary">{c.providerId?.name || c.provider?.name}</span>
-                      </p>
-                      {c.providerComplaintsCount > 0 && (
-                        <p className="text-[10px] text-red-500 font-semibold">⚠ {c.providerComplaintsCount} complaints</p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-
-          {/* ── DESKTOP: Table (lg and above) ── */}
-          <div className="hidden lg:block">
-            <table className="w-full">
+          {/* ── TABLE (all screen sizes, horizontal scroll on mobile) ── */}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[700px]">
               <thead className="bg-gray-50 border-b border-gray-100">
                 <tr>
-                  {['#', 'Title & Description', 'Submitter', 'Type', 'Status', 'Provider', 'Date', 'Action'].map(h => (
-                    <th key={h} className="px-4 py-3 text-left text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                  {['#', 'Title & Category', 'Submitter', 'User Type', 'Status', 'Provider', 'Date', 'Action'].map(h => (
+                    <th key={h} className="px-4 py-3 text-left text-[11px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">
                       {h}
                     </th>
                   ))}
@@ -720,28 +636,31 @@ const ComplaintsPage = () => {
                     </td>
                   </tr>
                 ) : (
-                  complaints.map((c, idx) => (
+                  complaints.map((c, idx) => {
+                    const actualUserType = c.userType || (c.userId || c.customer ? 'customer' : 'provider');
+                    const submitter = actualUserType === 'customer' ? (c.userId || c.customer) : (c.providerId || c.provider);
+                    return (
                     <tr
                       key={c._id}
                       className="hover:bg-gray-50/80 transition-colors duration-150 animate-slide-up"
                       style={{ animationDelay: `${idx * 25}ms` }}
                     >
-                      <td className="px-4 py-3.5 text-xs font-mono font-semibold text-gray-400">
+                      <td className="px-4 py-3.5 text-xs font-mono font-semibold text-gray-400 whitespace-nowrap">
                         #{(c.complaintId || (c._id || '').slice(-6)).toString().toUpperCase()}
                       </td>
                       <td className="px-4 py-3.5 max-w-[180px]">
                         <p className="text-sm font-semibold text-secondary truncate">{c.title || 'No Title'}</p>
-                        <p className="text-xs text-gray-400 truncate mt-0.5">{c.description || '—'}</p>
+                        <p className="text-xs text-gray-400 truncate mt-0.5">{c.category || '—'}</p>
                       </td>
                       <td className="px-4 py-3.5 max-w-[140px]">
                         <p className="text-sm font-medium text-secondary truncate">
-                          {c.userType === 'customer' ? (c.userId?.name || 'Unknown') : (c.providerId?.name || 'Provider')}
+                          {submitter?.name || 'Unknown'}
                         </p>
                         <p className="text-[11px] text-gray-400 truncate">
-                          {c.userType === 'customer' ? (c.userId?.email || '—') : (c.providerId?.email || '—')}
+                          {submitter?.email || '—'}
                         </p>
                       </td>
-                      <td className="px-4 py-3.5"><TypeBadge type={c.userType} /></td>
+                      <td className="px-4 py-3.5"><TypeBadge type={actualUserType} /></td>
                       <td className="px-4 py-3.5"><StatusBadge status={c.status} /></td>
                       <td className="px-4 py-3.5 max-w-[120px]">
                         {(c.providerId || c.provider) ? (
@@ -749,9 +668,6 @@ const ComplaintsPage = () => {
                             <p className="text-sm font-medium text-secondary truncate">
                               {c.providerId?.name || c.provider?.name || 'N/A'}
                             </p>
-                            {c.providerComplaintsCount > 0 && (
-                              <p className="text-[10px] text-red-500 font-semibold">⚠ {c.providerComplaintsCount}</p>
-                            )}
                           </div>
                         ) : <span className="text-xs text-gray-300">—</span>}
                       </td>
@@ -765,7 +681,8 @@ const ComplaintsPage = () => {
                         </button>
                       </td>
                     </tr>
-                  ))
+                  );
+                  })
                 )}
               </tbody>
             </table>

@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/auth';
 import {
-  Filter, Loader2, X, Info, TrendingDown, Eye, Banknote, Building
+  Filter, Loader2, X, Info, TrendingDown, Eye, Banknote, Building,
+  BarChart3, CreditCard, FileText, Download, TrendingUp, Activity,
+  Wallet, Clock, CheckCircle, XCircle, AlertCircle, ChevronUp,
+  ChevronDown, ArrowDownLeft, DollarSign, Calendar, Receipt
 } from 'lucide-react';
 import * as PaymentService from '../../services/PaymentService';
 import * as ProviderService from '../../services/ProviderService';
