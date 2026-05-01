@@ -422,7 +422,7 @@ const ServiceDetailPage = () => {
                   : 'border-transparent text-gray-400 hover:text-gray-600'
                   }`}
               >
-                {tab === 'Reviews' ? `Customer Reviews (${service.ratingCount || 0})` : tab}
+                {tab === 'Reviews' ? `Customer Reviews (${service.feedback?.filter(r => r.comment && r.comment.trim() !== "").length || 0})` : tab}
               </button>
             ))}
           </nav>
@@ -549,36 +549,36 @@ const ServiceDetailPage = () => {
                   {/* Comments Grid */}
                   <div className="flex-1">
                     <div className="grid grid-cols-1 gap-6">
-                      {service.feedback?.length > 0 ? (
-                        service.feedback.map((review, index) => (
-                          <div key={index} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow group">
-                            <div className="flex items-center gap-4 mb-4">
-                              <div className="w-10 h-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center font-bold">
-                                {review.customer?.name?.[0]?.toUpperCase() || 'U'}
-                              </div>
-                              <div className="flex-1">
-                                <div className="text-sm font-bold text-secondary group-hover:text-primary transition-colors">{review.customer?.name || 'Verified Customer'}</div>
-                                <div className="text-[10px] uppercase font-black text-gray-400 tracking-widest">
-                                  {new Date(review.createdAt).toLocaleDateString()}
+                      {service.feedback?.filter(r => r.comment && r.comment.trim() !== "").length > 0 ? (
+                        service.feedback
+                          .filter(review => review.comment && review.comment.trim() !== "")
+                          .map((review, index) => (
+                            <div key={index} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow group">
+                              <div className="flex items-center gap-4 mb-4">
+                                <div className="w-10 h-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center font-bold">
+                                  {review.customer?.name?.[0]?.toUpperCase() || 'U'}
+                                </div>
+                                <div className="flex-1">
+                                  <div className="text-sm font-bold text-secondary group-hover:text-primary transition-colors">{review.customer?.name || 'Verified Customer'}</div>
+                                  <div className="text-[10px] uppercase font-black text-gray-400 tracking-widest">
+                                    {new Date(review.createdAt).toLocaleDateString()}
+                                  </div>
+                                </div>
+                                <div className="flex gap-0.5">
+                                  {[1, 2, 3, 4, 5].map(s => (
+                                    <MdStar key={s} className={`w-3 h-3 ${s <= review.rating ? 'text-yellow-400' : 'text-gray-200'}`} />
+                                  ))}
                                 </div>
                               </div>
-                              <div className="flex gap-0.5">
-                                {[1, 2, 3, 4, 5].map(s => (
-                                  <MdStar key={s} className={`w-3 h-3 ${s <= review.rating ? 'text-yellow-400' : 'text-gray-200'}`} />
-                                ))}
-                              </div>
-                            </div>
-                            {review.comment && (
                               <p className="text-gray-600 text-sm leading-relaxed italic border-l-2 border-gray-100 pl-4">
                                 {review.comment}
                               </p>
-                            )}
-                          </div>
-                        ))
+                            </div>
+                          ))
                       ) : (
                         <div className="py-12 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
                           <ChatBubbleLeftEllipsisIcon className="w-12 h-12 text-gray-200 mx-auto mb-4" />
-                          <p className="text-gray-400 font-bold uppercase text-xs">No reviews yet</p>
+                          <p className="text-gray-400 font-bold uppercase text-xs">No reviews with comments yet</p>
                         </div>
                       )}
                     </div>
