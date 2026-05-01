@@ -8,6 +8,7 @@ import {
   FiEdit, FiEye, FiEyeOff, FiUpload, FiTrash2, FiLoader
 } from 'react-icons/fi';
 import * as AdminService from '../../services/AdminService';
+import Pagination from '../../components/Pagination';
 
 // Debounce hook for search optimization
 const useDebounce = (value, delay) => {
@@ -360,31 +361,15 @@ const AdminProfile = () => {
         )}
 
         {/* Pagination */}
-        {admins.length > 0 && adminStats.pages > 1 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between mt-6 pt-4 border-t border-gray-200 space-y-4 sm:space-y-0">
-            <div className="text-sm text-secondary">
-              Showing page {adminStats.page} of {adminStats.pages}
-            </div>
-            <div className="flex space-x-2">
-              <button
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage === 1}
-                className="flex items-center px-3 py-2 text-sm font-medium text-secondary bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <FiChevronLeft className="mr-1" />
-                Previous
-              </button>
-              <button
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage === adminStats.pages}
-                className="flex items-center px-3 py-2 text-sm font-medium text-secondary bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Next
-                <FiChevronRight className="ml-1" />
-              </button>
-            </div>
-          </div>
-        )}
+        <div className="mt-6 pt-4 border-t border-gray-200">
+          <Pagination
+            currentPage={adminStats.page}
+            totalPages={adminStats.pages}
+            totalItems={adminStats.total}
+            limit={10}
+            onPageChange={handlePageChange}
+          />
+        </div>
       </div>
     );
   }, [showAdminList, searchTerm, adminStats, isLoading, admins, currentPage, profile, handleDeleteAdmin, handlePageChange]);

@@ -8,6 +8,7 @@ import {
   FiChevronLeft, FiChevronRight, FiMail, FiPhone, FiMessageSquare,
   FiFilter, FiCalendar, FiInbox
 } from 'react-icons/fi';
+import Pagination from '../../components/Pagination';
 
 // ── Helpers ───────────────────────────────────────────────────
 const fmtDate = (d, withTime = false) => {
@@ -689,46 +690,13 @@ const ComplaintsPage = () => {
           </div>
 
           {/* Pagination */}
-          {pagination.pages > 1 && (
-            <div className="px-4 md:px-6 py-4 border-t border-gray-100 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs text-gray-400">
-                Showing{' '}
-                <span className="font-semibold text-secondary">
-                  {(pagination.page - 1) * pagination.limit + 1}–{Math.min(pagination.page * pagination.limit, pagination.total)}
-                </span>{' '}of{' '}
-                <span className="font-semibold text-secondary">{pagination.total}</span>
-              </p>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))}
-                  disabled={pagination.page === 1}
-                  className="p-2 text-secondary border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                >
-                  <FiChevronLeft size={15} />
-                </button>
-                {Array.from({ length: pagination.pages }, (_, i) => i + 1)
-                  .filter(p => p >= pagination.page - 1 && p <= pagination.page + 1)
-                  .map(p => (
-                    <button
-                      key={p}
-                      onClick={() => setPagination(prev => ({ ...prev, page: p }))}
-                      className={`w-8 h-8 text-sm rounded-lg font-medium transition-all ${
-                        p === pagination.page ? 'bg-primary text-white shadow-sm' : 'text-secondary hover:bg-gray-100'
-                      }`}
-                    >
-                      {p}
-                    </button>
-                  ))}
-                <button
-                  onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))}
-                  disabled={pagination.page === pagination.pages}
-                  className="p-2 text-secondary border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                >
-                  <FiChevronRight size={15} />
-                </button>
-              </div>
-            </div>
-          )}
+          <Pagination
+            currentPage={pagination.page}
+            totalPages={pagination.pages}
+            totalItems={pagination.total}
+            limit={pagination.limit}
+            onPageChange={(page) => setPagination(prev => ({ ...prev, page }))}
+          />
         </div>
       </div>
 

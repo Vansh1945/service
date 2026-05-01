@@ -5,6 +5,7 @@ import {
   Search, Star, User, MessageSquare, Eye, X,
   ChevronLeft, ChevronRight, Calendar, BarChart3
 } from 'lucide-react';
+import Pagination from '../../components/Pagination';
 
 const AdminFeedback = () => {
   const { token, API, showToast } = useAuth();
@@ -264,38 +265,13 @@ const AdminFeedback = () => {
           </div>
 
           {/* Pagination */}
-          {pagination.pages > 1 && (
-            <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
-              <p className="text-sm text-gray-500">
-                Showing {(pagination.page - 1) * pagination.limit + 1}–{Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}
-              </p>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))}
-                  disabled={pagination.page === 1}
-                  className="flex items-center px-3 py-1.5 text-sm font-medium text-secondary bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  <ChevronLeft size={16} />
-                </button>
-                {Array.from({ length: pagination.pages }, (_, i) => i + 1)
-                  .filter(p => p >= pagination.page - 1 && p <= pagination.page + 1)
-                  .map(p => (
-                    <button
-                      key={p}
-                      onClick={() => setPagination(prev => ({ ...prev, page: p }))}
-                      className={`w-8 h-8 text-sm rounded-lg ${p === pagination.page ? 'bg-primary text-white' : 'text-secondary hover:bg-gray-100'}`}
-                    >{p}</button>
-                  ))}
-                <button
-                  onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))}
-                  disabled={pagination.page === pagination.pages}
-                  className="flex items-center px-3 py-1.5 text-sm font-medium text-secondary bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-            </div>
-          )}
+          <Pagination
+            currentPage={pagination.page}
+            totalPages={pagination.pages}
+            totalItems={pagination.total}
+            limit={pagination.limit}
+            onPageChange={(page) => setPagination(prev => ({ ...prev, page }))}
+          />
         </div>
       </div>
 

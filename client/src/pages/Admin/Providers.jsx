@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import Pagination from '../../components/Pagination';
 import {
   Users,
   Search,
@@ -953,47 +954,6 @@ const AdminProvidersPage = () => {
     );
   };
 
-  const Pagination = () => (
-    <div className="flex flex-col sm:flex-row items-center justify-between mt-8 gap-4">
-      <div className="text-sm text-gray-600">
-        Showing {startIndex + 1}-{Math.min(endIndex, filteredProviders.length)} of {filteredProviders.length} providers
-      </div>
-      <div className="flex gap-2">
-        <button
-          onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-          disabled={currentPage === 1}
-          className="flex items-center px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium"
-        >
-          <ChevronLeft className="w-4 h-4 mr-2" />
-          Previous
-        </button>
-
-        <div className="flex items-center gap-1">
-          {[...Array(totalPages)].map((_, index) => (
-            <button
-              key={index + 1}
-              onClick={() => setCurrentPage(index + 1)}
-              className={`px-3 py-2 rounded-lg transition-all duration-200 font-medium ${currentPage === index + 1
-                ? 'bg-gradient-to-r from-primary to-teal-600 text-white shadow-sm'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-            >
-              {index + 1}
-            </button>
-          ))}
-        </div>
-
-        <button
-          onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-          disabled={currentPage === totalPages}
-          className="flex items-center px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium"
-        >
-          Next
-          <ChevronRight className="w-4 h-4 ml-2" />
-        </button>
-      </div>
-    </div>
-  );
 
   const FilterSection = () => (
     <div className="bg-white p-4 rounded-xl shadow-lg border border-gray-200 mb-6">
@@ -1169,7 +1129,17 @@ const AdminProvidersPage = () => {
                 </table>
               </div>
             </div>
-            {totalPages > 1 && <Pagination />}
+            {totalPages > 1 && (
+              <div className="mt-4 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  totalItems={filteredProviders.length}
+                  limit={itemsPerPage}
+                  onPageChange={setCurrentPage}
+                />
+              </div>
+            )}
           </>
         )}
 

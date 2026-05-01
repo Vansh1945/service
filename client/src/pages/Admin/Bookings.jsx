@@ -3,6 +3,7 @@ import { useAuth } from '../../context/auth';
 import Loader from '../../components/Loader';
 import * as BookingService from '../../services/BookingService';
 import * as AdminService from '../../services/AdminService';
+import Pagination from '../../components/Pagination';
 import {
     Search,
     Calendar,
@@ -773,34 +774,13 @@ const AdminBookingsView = () => {
                 </div>
 
                 {/* Pagination */}
-                {pagination.pages > 1 && (
-                    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
-                        <div className="text-sm text-gray-700">
-                            Showing {((pagination.page - 1) * pagination.limit) + 1} to{' '}
-                            {Math.min(pagination.page * pagination.limit, pagination.total)} of{' '}
-                            {pagination.total} results
-                        </div>
-                        <div className="flex items-center space-x-2">
-                            <button
-                                onClick={prevPage}
-                                disabled={pagination.page === 1}
-                                className="p-1 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
-                            >
-                                <ChevronLeft className="w-5 h-5" />
-                            </button>
-
-                            {getPaginationItems()}
-
-                            <button
-                                onClick={nextPage}
-                                disabled={pagination.page === pagination.pages}
-                                className="p-1 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
-                            >
-                                <ChevronRight className="w-5 h-5" />
-                            </button>
-                        </div>
-                    </div>
-                )}
+                <Pagination
+                    currentPage={pagination.page}
+                    totalPages={pagination.pages}
+                    totalItems={pagination.total}
+                    limit={pagination.limit}
+                    onPageChange={(page) => goToPage(page)}
+                />
             </div>
 
             {/* Booking Details Modal */}

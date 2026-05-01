@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import Pagination from '../../components/Pagination';
 import {
   Search,
   Filter,
@@ -455,44 +456,15 @@ const AdminProviders = () => {
                 </div>
 
                 {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="px-4 md:px-6 py-4 border-t border-gray-200 flex flex-col md:flex-row items-center justify-between bg-gray-50 gap-3">
-                    <div className="text-sm text-gray-600">
-                      Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredProviders.length)} of {filteredProviders.length} results
-                    </div>
-                    <div className="flex items-center space-x-1 md:space-x-2">
-                      <button
-                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                        disabled={currentPage === 1}
-                        className="px-2 py-1 md:px-3 md:py-2 text-sm text-gray-600 hover:text-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Previous
-                      </button>
-                      {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-                        const page = i + 1;
-                        return (
-                          <button
-                            key={page}
-                            onClick={() => setCurrentPage(page)}
-                            className={`px-2 py-1 md:px-3 md:py-2 text-sm rounded-lg ${currentPage === page
-                              ? 'bg-primary text-white'
-                              : 'text-gray-600 hover:text-primary hover:bg-gray-100'
-                              }`}
-                          >
-                            {page}
-                          </button>
-                        );
-                      })}
-                      <button
-                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                        disabled={currentPage === totalPages}
-                        className="px-2 py-1 md:px-3 md:py-2 text-sm text-gray-600 hover:text-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Next
-                      </button>
-                    </div>
-                  </div>
-                )}
+                <div className="mt-4">
+                  <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    totalItems={filteredProviders.length}
+                    limit={itemsPerPage}
+                    onPageChange={setCurrentPage}
+                  />
+                </div>
               </>
             )}
           </div>

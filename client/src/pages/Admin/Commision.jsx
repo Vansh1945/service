@@ -18,6 +18,7 @@ import {
 import { format } from 'date-fns';
 import * as CommissionService from '../../services/CommissionService';
 import * as AdminService from '../../services/AdminService';
+import Pagination from '../../components/Pagination';
 
 const AdminCommissionPage = () => {
   const { API, token, showToast } = useAuth();
@@ -639,79 +640,13 @@ const AdminCommissionPage = () => {
             </div>
 
             {/* Pagination */}
-            {pagination.pages > 1 && (
-              <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200">
-                <div className="flex-1 flex justify-between sm:hidden">
-                  <button
-                    onClick={() => fetchCommissionRules(pagination.page - 1, pagination.limit)}
-                    disabled={pagination.page <= 1}
-                    className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-secondary bg-white hover:bg-gray-50 disabled:opacity-50"
-                  >
-                    Previous
-                  </button>
-                  <button
-                    onClick={() => fetchCommissionRules(pagination.page + 1, pagination.limit)}
-                    disabled={pagination.page >= pagination.pages}
-                    className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-secondary bg-white hover:bg-gray-50 disabled:opacity-50"
-                  >
-                    Next
-                  </button>
-                </div>
-                <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-sm text-secondary">
-                      Showing <span className="font-medium">{((pagination.page - 1) * pagination.limit) + 1}</span> to{' '}
-                      <span className="font-medium">
-                        {Math.min(pagination.page * pagination.limit, pagination.total)}
-                      </span>{' '}
-                      of <span className="font-medium">{pagination.total}</span> results
-                    </p>
-                  </div>
-                  <div>
-                    <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
-                      <button
-                        onClick={() => fetchCommissionRules(pagination.page - 1, pagination.limit)}
-                        disabled={pagination.page <= 1}
-                        className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-secondary hover:bg-gray-50 disabled:opacity-50"
-                      >
-                        <ChevronLeft className="h-5 w-5" />
-                      </button>
-                      {Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
-                        let pageNum;
-                        if (pagination.pages <= 5) {
-                          pageNum = i + 1;
-                        } else if (pagination.page <= 3) {
-                          pageNum = i + 1;
-                        } else if (pagination.page >= pagination.pages - 2) {
-                          pageNum = pagination.pages - 4 + i;
-                        } else {
-                          pageNum = pagination.page - 2 + i;
-                        }
-                        return (
-                          <button
-                            key={pageNum}
-                            onClick={() => fetchCommissionRules(pageNum, pagination.limit)}
-                            className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${pagination.page === pageNum
-                              ? 'z-10 bg-primary border-primary text-white'
-                              : 'bg-white border-gray-300 text-secondary hover:bg-gray-50'
-                              }`}
-                          >
-                            {pageNum}
-                          </button>
-                        );
-                      })}
-                      <button
-                        onClick={() => fetchCommissionRules(pagination.page + 1, pagination.limit)}
-                        disabled={pagination.page >= pagination.pages}
-                        className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-secondary hover:bg-gray-50 disabled:opacity-50"
-                      >
-                        <ChevronRight className="h-5 w-5" />
-                      </button>
-                    </nav>
-                  </div>
-                </div>
-              </div>
-            )}
+            <Pagination
+              currentPage={pagination.page}
+              totalPages={pagination.pages}
+              totalItems={pagination.total}
+              limit={pagination.limit}
+              onPageChange={(page) => fetchCommissionRules(page, pagination.limit)}
+            />
           </div>
         </div>
 

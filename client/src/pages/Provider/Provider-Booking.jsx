@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import LoadingSpinner from '../../components/Loader';
 import * as BookingService from '../../services/BookingService';
+import Pagination from '../../components/Pagination';
 
 // ── Confirmation Dialog ──────────────────────────────────────────────────────
 const ConfirmationDialog = ({ isOpen, onClose, onConfirm, title, message, type = 'default' }) => {
@@ -644,27 +645,13 @@ const ProviderBooking = () => {
             </div>
 
             {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex justify-center items-center gap-1.5 py-4">
-                <button
-                  onClick={() => paginate(currentPage - 1)}
-                  disabled={currentPage === 1}
-                  className="px-3 py-2 rounded-xl bg-white border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >Prev</button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
-                  <button
-                    key={n}
-                    onClick={() => paginate(n)}
-                    className={`px-3 py-2 rounded-xl text-sm transition-colors ${currentPage === n ? 'bg-primary text-white border border-primary' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                  >{n}</button>
-                ))}
-                <button
-                  onClick={() => paginate(currentPage + 1)}
-                  disabled={currentPage === totalPages}
-                  className="px-3 py-2 rounded-xl bg-white border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >Next</button>
-              </div>
-            )}
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={currentBookings.length}
+              limit={bookingsPerPage}
+              onPageChange={paginate}
+            />
           </>
         )}
       </div>

@@ -12,6 +12,7 @@ import {
   ChevronRight, X, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { cancelBooking, userUpdateBookingDateTime, getCustomerBookings } from '../../services/BookingService';
+import Pagination from '../../components/Pagination';
 
 // ─── Pure helpers ─────────────────────────────────────────────────────────────
 
@@ -697,19 +698,13 @@ const CustomerBookingsPage = () => {
         )}
 
         {/* Pagination */}
-        {pagination.totalPages > 1 && (
-          <div className="flex items-center justify-center gap-3 mt-8">
-            <button disabled={currentPage <= 1} onClick={() => setCurrentPage(p => p - 1)}
-              className="flex items-center gap-1 px-4 py-2 text-sm font-semibold rounded-xl border border-gray-300 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-              <ChevronLeft className="w-4 h-4" /> Prev
-            </button>
-            <span className="text-sm text-gray-600 font-medium">{currentPage} / {pagination.totalPages}</span>
-            <button disabled={currentPage >= pagination.totalPages} onClick={() => setCurrentPage(p => p + 1)}
-              className="flex items-center gap-1 px-4 py-2 text-sm font-semibold rounded-xl border border-gray-300 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-              Next <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        )}
+        <Pagination
+          currentPage={currentPage}
+          totalPages={pagination.totalPages}
+          totalItems={pagination.totalBookings || bookings.length}
+          limit={20}
+          onPageChange={(page) => setCurrentPage(page)}
+        />
       </div>
 
       {/* Modals */}

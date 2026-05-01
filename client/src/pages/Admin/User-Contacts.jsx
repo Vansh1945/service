@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/auth';
 import * as ContactService from '../../services/ContactService';
+import Pagination from '../../components/Pagination';
 import {
   Search,
   MessageSquare,
@@ -640,66 +641,13 @@ const UserContacts = () => {
           </div>
 
           {/* Pagination */}
-          {pagination.pages > 1 && (
-            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="text-sm text-gray-600">
-                  Showing <span className="font-medium">{(pagination.page - 1) * pagination.limit + 1}</span> to{' '}
-                  <span className="font-medium">
-                    {Math.min(pagination.page * pagination.limit, pagination.total)}
-                  </span>{' '}
-                  of <span className="font-medium">{pagination.total}</span> results
-                </div>
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={prevPage}
-                    disabled={!pagination.hasPrev}
-                    className="px-3 py-2 text-sm font-medium text-secondary bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center"
-                  >
-                    <ChevronLeft className="w-4 h-4 mr-1" />
-                    Previous
-                  </button>
-
-                  <div className="hidden sm:flex items-center space-x-1">
-                    {Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
-                      let pageNumber;
-                      if (pagination.pages <= 5) {
-                        pageNumber = i + 1;
-                      } else if (pagination.page <= 3) {
-                        pageNumber = i + 1;
-                      } else if (pagination.page >= pagination.pages - 2) {
-                        pageNumber = pagination.pages - 4 + i;
-                      } else {
-                        pageNumber = pagination.page - 2 + i;
-                      }
-
-                      return (
-                        <button
-                          key={pageNumber}
-                          onClick={() => setPagination(prev => ({ ...prev, page: pageNumber }))}
-                          className={`w-8 h-8 text-sm rounded ${pagination.page === pageNumber
-                              ? 'bg-primary text-white'
-                              : 'bg-white text-gray-700 hover:bg-gray-100 border'
-                            }`}
-                        >
-                          {pageNumber}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <button
-                    onClick={nextPage}
-                    disabled={!pagination.hasNext}
-                    className="px-3 py-2 text-sm font-medium text-secondary bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center"
-                  >
-                    Next
-                    <ChevronRight className="w-4 h-4 ml-1" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+          <Pagination
+            currentPage={pagination.page}
+            totalPages={pagination.pages}
+            totalItems={pagination.total}
+            limit={pagination.limit}
+            onPageChange={(page) => setPagination(prev => ({ ...prev, page }))}
+          />
         </div>
 
         {/* Contact Details Modal */}

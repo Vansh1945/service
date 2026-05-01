@@ -4,6 +4,7 @@ import {
     ChevronLeft, ChevronRight, TrendingUp, Clock, Filter, Loader2
 } from 'lucide-react';
 import { useAuth } from '../../context/auth';
+import Pagination from '../../components/Pagination';
 import * as FeedbackService from '../../services/FeedbackService';
 
 const ProviderFeedback = () => {
@@ -389,17 +390,15 @@ const ProviderFeedback = () => {
                         </div>
 
                         {/* Pagination */}
-                        {totalPages > 1 && (
-                            <div className="flex justify-center items-center gap-2">
-                                <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm disabled:opacity-50 flex items-center gap-1 hover:bg-gray-50">
-                                    <ChevronLeft className="w-4 h-4" /> Previous
-                                </button>
-                                <span className="text-sm text-secondary/60">Page {currentPage} of {totalPages}</span>
-                                <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm disabled:opacity-50 flex items-center gap-1 hover:bg-gray-50">
-                                    Next <ChevronRight className="w-4 h-4" />
-                                </button>
-                            </div>
-                        )}
+                        <div className="mt-4">
+                            <Pagination
+                                currentPage={currentPage}
+                                totalPages={totalPages}
+                                totalItems={finalFilteredFeedback.length}
+                                limit={itemsPerPage}
+                                onPageChange={setCurrentPage}
+                            />
+                        </div>
                     </div>
                 )}
             </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import Pagination from '../../components/Pagination';
 import { useAuth } from '../../context/auth';
 import * as QuestionService from '../../services/QuestionService';
 import * as SystemService from '../../services/SystemService';
@@ -866,41 +867,15 @@ const AdminQuestions = () => {
                     </div>
                   ))}
                   {/* Pagination Controls */}
-                  {totalPages > 1 && (
-                    <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-                      <div className="text-sm text-gray-600">
-                        Showing {((currentPage - 1) * itemsPerPage) + 1}–{Math.min(currentPage * itemsPerPage, sortedQuestions.length)} of {sortedQuestions.length}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
-                          disabled={currentPage === 1}
-                          className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          Previous
-                        </button>
-                        {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => i + 1).map(p => (
-                          <button
-                            key={p}
-                            onClick={() => setCurrentPage(p)}
-                            className={`px-3 py-1.5 text-sm rounded-lg ${currentPage === p
-                              ? 'bg-primary text-white'
-                              : 'border border-gray-300 hover:bg-gray-50'
-                              }`}
-                          >
-                            {p}
-                          </button>
-                        ))}
-                        <button
-                          onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
-                          disabled={currentPage === totalPages}
-                          className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          Next
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                  <div className="pt-4 border-t border-gray-200">
+                    <Pagination
+                      currentPage={currentPage}
+                      totalPages={totalPages}
+                      totalItems={sortedQuestions.length}
+                      limit={itemsPerPage}
+                      onPageChange={setCurrentPage}
+                    />
+                  </div>
                 </div>
               )}
             </div>

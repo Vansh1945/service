@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Pagination from '../../components/Pagination';
 import { useAuth } from '../../context/auth';
 import * as PaymentService from '../../services/PaymentService';
 import { ToastContainer, toast } from 'react-toastify';
@@ -302,31 +303,15 @@ const AdminPayout = () => {
           </div>
 
           {/* Pagination */}
-          {total > limit && (
-            <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
-              <p className="text-sm text-gray-500">
-                Showing {(page - 1) * limit + 1}–{Math.min(page * limit, total)} of {total}
-              </p>
-              <div className="flex items-center gap-1">
-                <button onClick={() => setPage(p => Math.max(p - 1, 1))} disabled={page === 1}
-                  className="p-2 text-secondary border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                  <ChevronLeft size={16} />
-                </button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1)
-                  .filter(p => p >= page - 1 && p <= page + 1)
-                  .map(p => (
-                    <button key={p} onClick={() => setPage(p)}
-                      className={`w-8 h-8 text-sm rounded-lg transition-colors ${p === page ? 'bg-primary text-white' : 'text-secondary hover:bg-gray-100'}`}>
-                      {p}
-                    </button>
-                  ))}
-                <button onClick={() => setPage(p => p + 1)} disabled={page >= totalPages}
-                  className="p-2 text-secondary border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-            </div>
-          )}
+          <div className="border-t border-gray-100">
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              totalItems={total}
+              limit={limit}
+              onPageChange={setPage}
+            />
+          </div>
         </div>
       </div>
 
