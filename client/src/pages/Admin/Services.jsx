@@ -35,6 +35,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import { useAuth } from '../../context/auth';
 import * as ServiceService from '../../services/ServiceService';
 import * as SystemService from '../../services/SystemService';
+import useCategory from '../../hooks/useCategory';
 
 
 
@@ -111,7 +112,7 @@ const ServiceRow = React.memo(({ service, onViewClick, onEditClick, onToggleStat
       </td>
       <td className="px-4 md:px-6 py-4 whitespace-nowrap">
         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-800">
-          {typeof service.category === 'object' ? service.category.name : service.category}
+          {typeof service.category === 'object' ? (service.category.name || service.category.label) : service.category}
         </span>
       </td>
       <td className="px-4 md:px-6 py-4 whitespace-nowrap">
@@ -190,7 +191,7 @@ const AdminServices = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
-  const [categories, setCategories] = useState([]);
+  const { categories, loading: categoriesLoading } = useCategory();
 
   // Form states
   const [createForm, setCreateForm] = useState({
@@ -229,23 +230,11 @@ const AdminServices = () => {
     }
   }, []);
 
-  // Fetch categories
-  const fetchCategories = useCallback(async () => {
-    try {
-      const response = await SystemService.getCategories();
-      const data = response.data;
-      setCategories(data.data || []);
-    } catch (error) {
-      console.error('Fetch categories error:', error);
-      toast.error(error.message || 'Failed to fetch categories');
-    }
-  }, []);
 
   // Check admin access
   useEffect(() => {
     fetchServices();
-    fetchCategories();
-  }, [fetchServices, fetchCategories]);
+  }, [fetchServices]);
 
   // Use useMemo to avoid maintaining redundant state
   const filteredServices = useMemo(() => {
@@ -256,7 +245,7 @@ const AdminServices = () => {
       filtered = filtered.filter(service =>
         service.title?.toLowerCase().includes(lower) ||
         service.description?.toLowerCase().includes(lower) ||
-        (typeof service.category === 'object' ? service.category.name : service.category)?.toLowerCase().includes(lower)
+        (typeof service.category === 'object' ? (service.category.name || service.category.label) : service.category)?.toLowerCase().includes(lower)
       );
     }
 
@@ -590,7 +579,7 @@ const AdminServices = () => {
     setSelectedService(service);
     setEditForm({
       title: service.title,
-      category: service.category?._id || service.category,
+      category: service.category?._id || service.category?.value || service.category,
       description: service.description,
       basePrice: service.basePrice,
       duration: service.duration,
@@ -1372,7 +1361,7 @@ const AdminServices = () => {
 
                   <div className="flex flex-wrap gap-2 mb-4">
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-teal-100 text-teal-800">
-                      {typeof selectedService.category === 'object' ? selectedService.category.name : selectedService.category}
+                      {typeof selectedService.category === 'object' ? (selectedService.category.name || selectedService.category.label) : selectedService.category}
                     </span>
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                       <Clock className="w-3 h-3 mr-1" />
@@ -1612,8 +1601,8 @@ const CategorySelect = React.memo(({ value, onChange, label, required, includeAl
         <option value="" disabled hidden>Select Category</option>
         {includeAll && <option value="">All Categories</option>}
         {categories.map(category => (
-          <option key={category._id} value={category._id}>
-            {category.name}
+          <option key={category.value} value={category.value}>
+            {category.label}
           </option>
         ))}
       </select>

@@ -13,6 +13,9 @@ import { toast } from 'react-toastify';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import 'react-toastify/dist/ReactToastify.css';
+import useCategory from '../../hooks/useCategory';
+import * as SystemService from '../../services/SystemService';
+import * as ProviderService from '../../services/ProviderService';
 
 // ─── Static sub-components (defined OUTSIDE the main component to avoid remount) ─
 
@@ -108,9 +111,7 @@ const ProviderRegistration = () => {
   const [otpExpiryTime, setOtpExpiryTime] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedServices, setSelectedServices] = useState([]);
-  const [providerServices, setProviderServices] = useState([]);
-  const [providerServicesLoading, setProviderServicesLoading] = useState(true);
-  const [providerServicesError, setProviderServicesError] = useState(null);
+  const { categories: providerServices, loading: providerServicesLoading, error: providerServicesError } = useCategory();
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
 
   // ── OTP countdown timer ──
@@ -136,36 +137,6 @@ const ProviderRegistration = () => {
     return () => clearInterval(timer);
   }, [otpSentTime, otpExpiryTime]);
 
-  // ── Fetch service categories ──
-  useEffect(() => {
-    const fetchServiceCategories = async () => {
-      try {
-        setProviderServicesLoading(true);
-        const response = await SystemService.getCategories();
-        const data = response.data;
-        if (data.success && Array.isArray(data.data)) {
-          setProviderServices(
-            data.data.map((c) => ({
-              _id: c._id,
-              name: c.name,
-              title: c.name,
-              category: c.name,
-              icon: c.icon,
-              description: c.description,
-            }))
-          );
-          setProviderServicesError(null);
-        } else {
-          throw new Error(data.message || 'Failed to load categories');
-        }
-      } catch (error) {
-        setProviderServicesError(error.message);
-      } finally {
-        setProviderServicesLoading(false);
-      }
-    };
-    fetchServiceCategories();
-  }, []);
 
   // ── Handlers ──
   const handleChange = (e) => {
@@ -178,7 +149,7 @@ const ProviderRegistration = () => {
   };
 
   const handleServiceChange = (service) => {
-    const serviceId = service.id || service._id;
+    const serviceId = service.value || service._id;
     setSelectedServices((prev) => {
       if (prev.includes(serviceId)) return prev.filter((id) => id !== serviceId);
       if (prev.length < 3) return [...prev, serviceId];
@@ -617,8 +588,8 @@ const renderStepContent = () => {
                         {selectedServices.length >= 3 ? 'Max 3 selected' : 'Select a category...'}
                       </option>
                       {providerServices.map((svc) => (
-                        <option key={svc._id} value={svc._id} disabled={selectedServices.includes(svc._id)}>
-                          {svc.name}
+                        <option key={svc.value} value={svc.value} disabled={selectedServices.includes(svc.value)}>
+                          {svc.label}
                         </option>
                       ))}
                     </select>
@@ -629,16 +600,16 @@ const renderStepContent = () => {
                     <>
                       <div className="flex flex-wrap gap-2">
                         {selectedServices.map((id) => {
-                          const svc = providerServices.find((s) => s._id === id) || { name: 'Unknown' };
+                          const svc = providerServices.find((s) => s.value === id) || { label: 'Unknown' };
                           return (
                             <span
                               key={id}
                               className="inline-flex items-center gap-1.5 px-3 py-1 bg-primary/10 text-primary border border-primary/30 rounded-full text-xs font-semibold"
                             >
-                              {svc.name}
+                              {svc.label}
                               <button
                                 type="button"
-                                onClick={() => handleServiceChange({ _id: id })}
+                                onClick={() => handleServiceChange({ value: id })}
                                 className="hover:text-primary/60 transition-colors"
                               >
                                 <X className="w-3 h-3" />

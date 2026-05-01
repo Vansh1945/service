@@ -7,6 +7,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import { Loader2, AlertCircle, Edit2, X, Check, Upload, Eye, Camera, FileText, CreditCard } from 'lucide-react';
 import * as ProviderService from '../../services/ProviderService';
 import * as SystemService from '../../services/SystemService';
+import useCategory from '../../hooks/useCategory';
 
 const ProviderProfile = () => {
   const { token, API, showToast, logoutUser } = useAuth();
@@ -65,11 +66,10 @@ const ProviderProfile = () => {
 
   const [editMode, setEditMode] = useState({ basic: false, professional: false, address: false, bank: false });
   const [fileUploads, setFileUploads] = useState({ profilePic: null, resume: null, passbookImage: null });
-  const [providerServices, setProviderServices] = useState([]);
-  const [providerServicesLoading, setProviderServicesLoading] = useState(true);
+  const { categories: providerServices, loading: providerServicesLoading } = useCategory();
   const [loading, setLoading] = useState(false);
 
-  const serviceMap = providerServices.reduce((acc, s) => { acc[s._id] = s.name; return acc; }, {});
+  const serviceMap = providerServices.reduce((acc, s) => { acc[s.value] = s.label; return acc; }, {});
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -95,21 +95,7 @@ const ProviderProfile = () => {
       }
     };
 
-    const fetchServices = async () => {
-      try {
-        setProviderServicesLoading(true);
-        const response = await SystemService.getCategories();
-        const data = response.data;
-        if (data.success) setProviderServices(data.data || []);
-      } catch (error) {
-        showToast(error.message, 'error');
-      } finally {
-        setProviderServicesLoading(false);
-      }
-    };
-
     fetchProfile();
-    fetchServices();
   }, [token, API, showToast]);
 
   const handleServiceChange = (serviceId) => {
@@ -602,21 +588,15 @@ const ProviderProfile = () => {
                         <div>
                           <label className="block text-xs font-semibold text-gray-600 mb-2 uppercase">Services (Max 3)</label>
                           <div className="grid grid-cols-2 gap-3 bg-white p-4 rounded-lg border border-gray-200 max-h-48 overflow-y-auto">
-                            {providerServicesLoading ? (
-                              <div className="col-span-2 text-center py-8 text-gray-500">
-                                <Loader2 className="w-5 h-5 animate-spin mx-auto" />
-                              </div>
-                            ) : (
-                              providerServices.map(service => (
-                                <label key={service._id} className="flex items-center gap-2">
-                                  <input type="checkbox" checked={(profileData.services || []).includes(service._id)}
-                                    onChange={() => handleServiceChange(service._id)}
-                                    disabled={(profileData.services || []).length >= 3 && !(profileData.services || []).includes(service._id)}
-                                    className="w-4 h-4 text-primary rounded" />
-                                  <span className="text-sm text-gray-700">{service.name}</span>
-                                </label>
-                              ))
-                            )}
+                            {providerServices.map(service => (
+                                  <label key={service.value} className="flex items-center gap-2">
+                                    <input type="checkbox" checked={(profileData.services || []).includes(service.value)}
+                                      onChange={() => handleServiceChange(service.value)}
+                                      disabled={(profileData.services || []).length >= 3 && !(profileData.services || []).includes(service.value)}
+                                      className="w-4 h-4 text-primary rounded" />
+                                    <span className="text-sm text-gray-700">{service.label}</span>
+                                  </label>
+                                ))}
                           </div>
                           <p className="text-xs text-gray-500 mt-2">Selected: {(profileData.services || []).length}/3</p>
                         </div>

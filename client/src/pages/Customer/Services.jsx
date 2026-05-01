@@ -12,7 +12,7 @@ import LoadingSpinner from '../../components/Loader';
 import HeroSection from '../../components/HeroSection';
 import ErrorState from '../../components/Error';
 import { getPublicServices } from '../../services/ServiceService';
-import { getCategories } from '../../services/SystemService';
+import useCategory from '../../hooks/useCategory';
 
 const ServiceListingPage = () => {
   const { API, user } = useAuth();
@@ -31,24 +31,12 @@ const ServiceListingPage = () => {
   const [retryCount, setRetryCount] = useState(0);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedRatings, setSelectedRatings] = useState([]);
-  const [categoriesData, setCategoriesData] = useState([]);
+  const { categories: categoriesData } = useCategory();
   const [maxPrice, setMaxPrice] = useState(10000);
 
   const searchTimeoutRef = useRef(null);
   const isInitialMount = useRef(true);
 
-  // Fetch categories
-  const fetchCategories = async () => {
-    try {
-      const response = await getCategories();
-      const responseData = response.data;
-      if (responseData.success && Array.isArray(responseData.data)) {
-        setCategoriesData(responseData.data);
-      }
-    } catch (error) {
-      console.error('Fetch categories error:', error);
-    }
-  };
 
   // Fetch all services
   const fetchAllServices = async () => {
@@ -98,7 +86,7 @@ const ServiceListingPage = () => {
 
     const getCatName = (cat) => {
       if (typeof cat === 'object' && cat !== null) return cat.name || '';
-      return categoriesData.find(c => c._id === cat)?.name || '';
+      return categoriesData.find(c => c.value === cat)?.label || '';
     };
 
     if (searchValue?.trim()) {
@@ -144,7 +132,6 @@ const ServiceListingPage = () => {
   useEffect(() => {
     if (isInitialMount.current) {
       fetchAllServices();
-      fetchCategories();
       isInitialMount.current = false;
     }
   }, []);
@@ -156,7 +143,7 @@ const ServiceListingPage = () => {
   }, [searchTerm, selectedCategory]);
 
   const categoriesForFilter = useMemo(() => {
-    return [{ _id: 'All', name: 'All' }, ...categoriesData];
+    return [{ value: 'All', label: 'All' }, ...categoriesData];
   }, [categoriesData]);
 
   // Filter and sort services
@@ -272,7 +259,7 @@ const ServiceListingPage = () => {
               className="px-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
             >
               {categoriesForFilter.map(cat => (
-                <option key={cat._id} value={cat._id}>{cat.name}</option>
+                <option key={cat.value} value={cat.value}>{cat.label}</option>
               ))}
             </select>
             <button
@@ -390,7 +377,7 @@ const ServiceListingPage = () => {
               <ServiceCard
                 key={service._id}
                 service={service}
-                categoryMap={categoriesData.reduce((acc, cat) => ({ ...acc, [cat._id]: cat.name }), {})}
+                categoryMap={categoriesData.reduce((acc, cat) => ({ ...acc, [cat.value]: cat.label }), {})}
                 onBook={handleBookNow}
               />
             ))}

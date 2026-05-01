@@ -3,9 +3,10 @@ import { useAuth } from '../../context/auth';
 import { toast } from 'react-toastify';
 import { FaEdit, FaTrash, FaToggleOn, FaToggleOff, FaPlus, FaSave, FaTimes, FaImage, FaTag, FaBullhorn, FaCalendar, FaUpload } from 'react-icons/fa';
 import * as SystemService from '../../services/SystemService';
+import useCategory from '../../hooks/useCategory';
 
 const CategoryBanner = () => {
-  const [categories, setCategories] = useState([]);
+  const { categories, loading: categoriesLoading, refresh: refreshCategories } = useCategory(true);
   const [banners, setBanners] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -50,15 +51,8 @@ const CategoryBanner = () => {
 
   const fetchData = async () => {
     try {
-      const [categoriesRes, bannersRes] = await Promise.all([
-        SystemService.getCategoriesAdmin(),
-        SystemService.getBannersAdmin()
-      ]);
-
-      const categoriesData = categoriesRes.data;
+      const bannersRes = await SystemService.getBannersAdmin();
       const bannersData = bannersRes.data;
-
-      setCategories(categoriesData.data || []);
       setBanners(bannersData.data || []);
     } catch (error) {
       console.error(error);
@@ -153,7 +147,7 @@ const CategoryBanner = () => {
 
       setNewCategory({ name: '', icon: '', description: '' });
       setCategoryIconFile(null);
-      fetchData();
+      refreshCategories();
       toast.success('Category created successfully');
     } catch (error) {
       console.error(error);
@@ -175,7 +169,7 @@ const CategoryBanner = () => {
       setEditingCategory(null);
       setNewCategory({ name: '', icon: '', description: '' });
       setCategoryIconFile(null);
-      fetchData();
+      refreshCategories();
       toast.success('Category updated successfully');
     } catch (error) {
       console.error(error);
@@ -188,7 +182,7 @@ const CategoryBanner = () => {
 
     try {
       await SystemService.deleteCategory(id);
-      fetchData();
+      refreshCategories();
       toast.success('Category deleted successfully');
     } catch (error) {
       console.error(error);
@@ -199,7 +193,7 @@ const CategoryBanner = () => {
   const toggleCategoryStatus = async (id) => {
     try {
       await SystemService.toggleCategoryStatus(id);
-      fetchData();
+      refreshCategories();
       toast.success('Category status updated successfully');
     } catch (error) {
       console.error(error);
@@ -209,7 +203,7 @@ const CategoryBanner = () => {
 
   const editCategory = (category) => {
     setEditingCategory(category);
-    setNewCategory({ name: category.name, description: category.description });
+    setNewCategory({ name: category.label || category.name, description: category.description });
     setPreviewCategoryIcon(category.icon || '');
   };
 
@@ -239,7 +233,7 @@ const CategoryBanner = () => {
     setPreviewCategoryIcon('');
   };
 
-  if (loading) {
+  if (loading || categoriesLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
         <div className="text-center">
@@ -635,7 +629,7 @@ const CategoryBanner = () => {
                       {categories.map((category) => (
                         <tr key={category._id} className="hover:bg-gray-50 transition-colors">
                           <td className="px-6 py-4">
-                            <div className="font-medium text-secondary font-inter">{category.name}</div>
+                            <div className="font-medium text-secondary font-inter">{category.label || category.name}</div>
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center">

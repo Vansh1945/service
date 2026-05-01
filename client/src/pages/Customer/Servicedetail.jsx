@@ -15,7 +15,7 @@ import LoadingSpinner from '../../components/Loader';
 import RelatedServicesComponent from '../../components/RelatedServices';
 import ErrorState from '../../components/Error';
 import { getPublicServiceById, getServicesByCategory } from '../../services/ServiceService';
-import { getCategories } from '../../services/SystemService';
+import useCategory from '../../hooks/useCategory';
 
 const ServiceDetailPage = () => {
   const { id } = useParams();
@@ -32,7 +32,7 @@ const ServiceDetailPage = () => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [imageLoading, setImageLoading] = useState(true);
   const [allImages, setAllImages] = useState([]);
-  const [categories, setCategories] = useState([]);
+  const { categories } = useCategory();
 
   // ==================== HELPER FUNCTIONS ====================
   const formatDuration = (hours) => {
@@ -67,16 +67,20 @@ const ServiceDetailPage = () => {
   // ==================== MEMOIZED VALUES ====================
   const categoryName = useMemo(() => {
     if (!service?.category) return 'Uncategorized';
-    if (typeof service.category === 'object' && service.category.name) {
-      return service.category.name;
+    if (typeof service.category === 'object' && (service.category.name || service.category.label)) {
+      return service.category.name || service.category.label;
     }
     if (typeof service.category === 'string' && categories.length > 0) {
-      const category = categories.find(cat => cat._id === service.category);
-      return category ? category.name : 'Uncategorized';
+      const category = categories.find(cat => cat.value === service.category);
+      return category ? category.label : 'Uncategorized';
+    }
+    if (typeof service.category === 'object' && service.category.value && categories.length > 0) {
+      const category = categories.find(cat => cat.value === service.category.value);
+      return category ? category.label : 'Uncategorized';
     }
     if (typeof service.category === 'object' && service.category._id && categories.length > 0) {
-      const category = categories.find(cat => cat._id === service.category._id);
-      return category ? category.name : 'Uncategorized';
+      const category = categories.find(cat => cat.value === service.category._id);
+      return category ? category.label : 'Uncategorized';
     }
     return 'Uncategorized';
   }, [service, categories]);
@@ -105,17 +109,6 @@ const ServiceDetailPage = () => {
   }, [service?.feedback]);
 
   // ==================== API CALLS ====================
-  const fetchCategories = async () => {
-    try {
-      const response = await getCategories();
-      const responseData = response.data;
-      if (responseData.success) {
-        setCategories(responseData.data || []);
-      }
-    } catch (error) {
-      console.error('Error fetching categories:', error);
-    }
-  };
 
   const fetchServiceData = async () => {
     try {
@@ -167,12 +160,16 @@ const ServiceDetailPage = () => {
       return relatedCategory.name;
     }
     if (typeof relatedCategory === 'string' && categories.length > 0) {
-      const category = categories.find(cat => cat._id === relatedCategory);
-      return category ? category.name : 'Uncategorized';
+      const category = categories.find(cat => cat.value === relatedCategory);
+      return category ? category.label : 'Uncategorized';
+    }
+    if (typeof relatedCategory === 'object' && relatedCategory.value && categories.length > 0) {
+      const category = categories.find(cat => cat.value === relatedCategory.value);
+      return category ? category.label : 'Uncategorized';
     }
     if (typeof relatedCategory === 'object' && relatedCategory._id && categories.length > 0) {
-      const category = categories.find(cat => cat._id === relatedCategory._id);
-      return category ? category.name : 'Uncategorized';
+      const category = categories.find(cat => cat.value === relatedCategory._id);
+      return category ? category.label : 'Uncategorized';
     }
     return 'Uncategorized';
   };
@@ -213,9 +210,6 @@ const ServiceDetailPage = () => {
   };
 
   // ==================== EFFECTS ====================
-  useEffect(() => {
-    fetchCategories();
-  }, [API]);
 
   useEffect(() => {
     if (id) fetchServiceData();

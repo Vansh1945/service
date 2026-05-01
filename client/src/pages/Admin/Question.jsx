@@ -5,6 +5,7 @@ import * as QuestionService from '../../services/QuestionService';
 import * as SystemService from '../../services/SystemService';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import useCategory from '../../hooks/useCategory';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -50,7 +51,7 @@ const AdminQuestions = () => {
   const [sortBy, setSortBy] = useState('newest');
   const [showPreview, setShowPreview] = useState(false);
   const [previewQuestion, setPreviewQuestion] = useState(null);
-  const [categories, setCategories] = useState([]);
+  const { categories, loading: categoriesLoading } = useCategory();
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
 
@@ -63,22 +64,6 @@ const AdminQuestions = () => {
     }
   }, [isAdmin, navigate, showToast, token]);
 
-  // Fetch categories
-  const fetchCategories = async () => {
-    try {
-      const response = await SystemService.getCategories();
-      const data = response.data;
-      setCategories(data.data || []);
-    } catch (error) {
-      showToast(error.message, 'error');
-    }
-  };
-
-  useEffect(() => {
-    if (token) {
-      fetchCategories();
-    }
-  }, [token]);
 
   // Fetch questions
   const fetchQuestions = async () => {
@@ -212,7 +197,7 @@ const AdminQuestions = () => {
       questionText: question.questionText,
       options: question.options,
       correctAnswer: question.correctAnswer,
-      category: question.category?.name || question.category,
+      category: question.category?.name || question.category?.label || question.category,
       isActive: question.isActive
     });
     setEditingId(question._id);
@@ -591,8 +576,8 @@ const AdminQuestions = () => {
                   >
                     <option value="">Select Category</option>
                     {categories.map((category) => (
-                      <option key={category._id} value={category.name}>
-                        {category.name}
+                      <option key={category.value} value={category.label}>
+                        {category.label}
                       </option>
                     ))}
                   </select>
@@ -674,8 +659,8 @@ const AdminQuestions = () => {
                     >
                       <option value="">Select Category</option>
                       {categories.map((category) => (
-                        <option key={category._id} value={category.name}>
-                          {category.name}
+                        <option key={category.value} value={category.label}>
+                          {category.label}
                         </option>
                       ))}
                     </select>
@@ -751,8 +736,8 @@ const AdminQuestions = () => {
                   >
                     <option value="">All Categories</option>
                     {categories.map((category) => (
-                      <option key={category._id} value={category.name}>
-                        {category.name}
+                      <option key={category.value} value={category.label}>
+                        {category.label}
                       </option>
                     ))}
                   </select>
@@ -966,8 +951,8 @@ const AdminQuestions = () => {
                   >
                     <option value="">Select Category</option>
                     {categories.map((category) => (
-                      <option key={category._id} value={category.name}>
-                        {category.name}
+                      <option key={category.value} value={category.label}>
+                        {category.label}
                       </option>
                     ))}
                   </select>
