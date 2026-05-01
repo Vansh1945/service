@@ -29,6 +29,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import { useAuth } from '../../context/auth';
 import * as CouponService from '../../services/CouponService';
 import * as AdminService from '../../services/AdminService';
+import { formatCurrency, formatDate } from '../../utils/format';
 
 const AdminCoupons = () => {
   const { API, token } = useAuth();
@@ -296,14 +297,6 @@ const AdminCoupons = () => {
     setShowViewModal(true);
   };
 
-  // Format currency
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      maximumFractionDigits: 0
-    }).format(amount || 0);
-  };
 
   // Format address
   const formatAddress = (address) => {
@@ -312,14 +305,6 @@ const AdminCoupons = () => {
     return [city, state].filter(Boolean).join(', ');
   };
 
-  // Format date
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    });
-  };
 
   // Check if coupon is expired
   const isExpired = (expiryDate) => {

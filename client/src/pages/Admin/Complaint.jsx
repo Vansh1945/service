@@ -9,14 +9,9 @@ import {
   FiFilter, FiCalendar, FiInbox
 } from 'react-icons/fi';
 import Pagination from '../../components/Pagination';
+import { formatDate, formatDateTime } from '../../utils/format';
 
 // ── Helpers ───────────────────────────────────────────────────
-const fmtDate = (d, withTime = false) => {
-  if (!d) return 'N/A';
-  const opts = { year: 'numeric', month: 'short', day: 'numeric' };
-  if (withTime) { opts.hour = '2-digit'; opts.minute = '2-digit'; }
-  return new Date(d).toLocaleDateString('en-IN', opts);
-};
 
 // ── Status Badge ──────────────────────────────────────────────
 const StatusBadge = ({ status }) => {
@@ -165,8 +160,8 @@ const ComplaintDetailsModal = ({ complaint, onClose, onUpdateStatus, onResolve }
                   {[
                     ['Title', complaint.title],
                     ['Category', complaint.category],
-                    ['Created', fmtDate(complaint.createdAt, true)],
-                    ...(complaint.resolvedAt ? [['Resolved', fmtDate(complaint.resolvedAt, true)]] : []),
+                    ['Created', formatDateTime(complaint.createdAt)],
+                    ...(complaint.resolvedAt ? [['Resolved', formatDateTime(complaint.resolvedAt)]] : []),
                   ].map(([lbl, val]) => (
                     <div key={lbl} className="flex justify-between text-sm">
                       <span className="text-gray-400">{lbl}</span>
@@ -290,7 +285,7 @@ const ComplaintDetailsModal = ({ complaint, onClose, onUpdateStatus, onResolve }
                       <div className="flex-1 bg-white rounded-xl p-3 border border-gray-100 shadow-sm">
                         <div className="flex justify-between items-center">
                           <StatusBadge status={h.status} />
-                          <span className="text-xs text-gray-400">{fmtDate(h.updatedAt, true)}</span>
+                          <span className="text-xs text-gray-400">{formatDateTime(h.updatedAt)}</span>
                         </div>
                         {h.status === 'Solved' && complaint.resolutionNotes && (
                           <div className="mt-2 p-2 bg-green-50 rounded-lg border-l-4 border-green-400">
@@ -318,7 +313,7 @@ const ComplaintDetailsModal = ({ complaint, onClose, onUpdateStatus, onResolve }
                         <div className="flex-1 bg-orange-50 rounded-xl p-3 border border-orange-100">
                           <div className="flex justify-between mb-1">
                             <span className="text-sm font-medium text-orange-700">Reopened</span>
-                            <span className="text-xs text-gray-400">{fmtDate(h.reopenedAt, true)}</span>
+                            <span className="text-xs text-gray-400">{formatDateTime(h.reopenedAt)}</span>
                           </div>
                           <p className="text-xs text-gray-600">{h.reason}</p>
                         </div>
@@ -672,7 +667,7 @@ const ComplaintsPage = () => {
                           </div>
                         ) : <span className="text-xs text-gray-300">—</span>}
                       </td>
-                      <td className="px-4 py-3.5 text-xs text-gray-400 whitespace-nowrap">{fmtDate(c.createdAt)}</td>
+                      <td className="px-4 py-3.5 text-xs text-gray-400 whitespace-nowrap">{formatDate(c.createdAt)}</td>
                       <td className="px-4 py-3.5">
                         <button
                           onClick={() => fetchComplaintDetails(c._id)}

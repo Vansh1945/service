@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Pagination from '../../components/Pagination';
 import { useAuth } from '../../context/auth';
 import * as AdminService from '../../services/AdminService';
+import { formatDate } from '../../utils/format';
 import {
     Search,
     Users,
@@ -155,15 +156,6 @@ const AdminCustomersDashboard = () => {
         setShowViewModal(true);
     };
 
-    // Format date
-    const formatDate = (dateString) => {
-        if (!dateString) return 'N/A';
-        return new Date(dateString).toLocaleDateString('en-IN', {
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric'
-        });
-    };
 
     // Format address
     const formatAddress = (address) => {

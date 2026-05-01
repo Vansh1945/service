@@ -8,14 +8,10 @@ import {
 } from 'lucide-react';
 import * as PaymentService from '../../services/PaymentService';
 import * as ProviderService from '../../services/ProviderService';
+import { formatDate, formatTime, formatCurrency, formatNumber } from '../../utils/format';
 
 // ── Utility Helpers ──────────────────────────────────────────────────────────
 
-const formatCurrency = (amount) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(amount || 0);
-
-const formatDate = (dateString) => dateString ? new Date(dateString).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A';
-
-const formatTime = (dateString) => dateString ? new Date(dateString).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : 'N/A';
 
 const getStatusConfig = (status) => {
   const configs = {

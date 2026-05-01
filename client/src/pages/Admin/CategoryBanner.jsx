@@ -4,6 +4,7 @@ import { toast } from 'react-toastify';
 import { FaEdit, FaTrash, FaToggleOn, FaToggleOff, FaPlus, FaSave, FaTimes, FaImage, FaTag, FaBullhorn, FaCalendar, FaUpload } from 'react-icons/fa';
 import * as SystemService from '../../services/SystemService';
 import useCategory from '../../hooks/useCategory';
+import { formatDate } from '../../utils/format';
 
 const CategoryBanner = () => {
   const { categories, loading: categoriesLoading, refresh: refreshCategories } = useCategory(true);
@@ -473,8 +474,8 @@ const CategoryBanner = () => {
                           <p className="text-gray-600 text-sm mb-3 truncate font-inter">{banner.subtitle}</p>
                         )}
                         <div className="flex justify-between text-xs text-gray-500 font-inter">
-                          <span>Start: {banner.startDate ? new Date(banner.startDate).toLocaleDateString() : 'N/A'}</span>
-                          <span>End: {banner.endDate ? new Date(banner.endDate).toLocaleDateString() : 'N/A'}</span>
+                          <span>Start: {formatDate(banner.startDate)}</span>
+                          <span>End: {formatDate(banner.endDate)}</span>
                         </div>
                       </div>
                     </div>

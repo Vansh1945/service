@@ -11,6 +11,7 @@ import {
   RefreshCw,
   ChevronRight
 } from 'lucide-react';
+import { formatDate } from '../utils/format';
 
 const TermsAndConditions = () => {
   useEffect(() => {
@@ -88,11 +89,7 @@ const TermsAndConditions = () => {
     }
   ];
 
-  const currentDate = new Date().toLocaleDateString('en-US', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric'
-  });
+  const currentDate = formatDate(new Date());
 
   const scrollToSection = (id) => {
     const element = document.getElementById(id);

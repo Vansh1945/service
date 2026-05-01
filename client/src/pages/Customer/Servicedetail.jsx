@@ -16,6 +16,7 @@ import RelatedServicesComponent from '../../components/RelatedServices';
 import ErrorState from '../../components/Error';
 import { getPublicServiceById, getServicesByCategory } from '../../services/ServiceService';
 import useCategory from '../../hooks/useCategory';
+import { formatCurrency, formatDate, formatDuration } from '../../utils/format';
 
 const ServiceDetailPage = () => {
   const { id } = useParams();
@@ -35,13 +36,6 @@ const ServiceDetailPage = () => {
   const { categories } = useCategory();
 
   // ==================== HELPER FUNCTIONS ====================
-  const formatDuration = (hours) => {
-    const hrs = Math.floor(hours);
-    const mins = Math.round((hours - hrs) * 60);
-    if (hrs === 0) return `${mins} min`;
-    if (mins === 0) return `${hrs} hr`;
-    return `${hrs} hr ${mins} min`;
-  };
 
   const toggleAccordion = (index) => {
     setOpenAccordion(openAccordion === index ? null : index);
@@ -337,7 +331,7 @@ const ServiceDetailPage = () => {
                 {/* Price Section */}
                 <div className="bg-primary/5 p-4 rounded-2xl border border-primary/10">
                   <div className="flex items-baseline gap-3">
-                    <span className="text-4xl font-bold text-primary">₹{service.basePrice?.toLocaleString()}</span>
+                    <span className="text-4xl font-bold text-primary">{formatCurrency(service.basePrice)}</span>
                   </div>
                   <p className="text-gray-400 text-xs mt-2 font-medium">• Inclusive of all taxes • Direct Professional Service</p>
                 </div>
@@ -555,7 +549,7 @@ const ServiceDetailPage = () => {
                                 <div className="flex-1">
                                   <div className="text-sm font-bold text-secondary group-hover:text-primary transition-colors">{review.customer?.name || 'Verified Customer'}</div>
                                   <div className="text-[10px] uppercase font-black text-gray-400 tracking-widest">
-                                    {new Date(review.createdAt).toLocaleDateString()}
+                                    {formatDate(review.createdAt)}
                                   </div>
                                 </div>
                                 <div className="flex gap-0.5">

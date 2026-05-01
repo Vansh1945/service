@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/auth';
 import * as ContactService from '../../services/ContactService';
 import Pagination from '../../components/Pagination';
+import { formatDate, formatDateTime } from '../../utils/format';
 import {
   Search,
   MessageSquare,
@@ -77,16 +78,6 @@ const ContactDetailsModal = ({ contact, onClose, onReply }) => {
   const [isReplying, setIsReplying] = useState(false);
   const { showToast } = useAuth();
 
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
 
   const handleReply = async () => {
     if (!replyMessage.trim()) {
@@ -172,7 +163,7 @@ const ContactDetailsModal = ({ contact, onClose, onReply }) => {
                   <Calendar className="w-5 h-5 text-primary" />
                   <div>
                     <p className="text-sm text-gray-600">Created</p>
-                    <p className="font-medium text-secondary">{formatDate(contact.createdAt)}</p>
+                    <p className="font-medium text-secondary">{formatDateTime(contact.createdAt)}</p>
                   </div>
                 </div>
                 <StatusBadge status={contact.status} />
@@ -193,7 +184,7 @@ const ContactDetailsModal = ({ contact, onClose, onReply }) => {
             <div className="bg-green-50 border-l-4 border-green-500 rounded-r-lg p-4">
               <div className="flex items-center justify-between mb-2">
                 <h4 className="text-lg font-semibold text-secondary">Admin Reply</h4>
-                <span className="text-sm text-gray-600">{formatDate(contact.adminReply.repliedAt)}</span>
+                <span className="text-sm text-gray-600">{formatDateTime(contact.adminReply.repliedAt)}</span>
               </div>
               <div className="bg-white p-4 rounded-lg border border-green-100">
                 <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">{contact.adminReply.message}</p>
@@ -376,13 +367,6 @@ const UserContacts = () => {
     }
   };
 
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric'
-    });
-  };
 
   // Stats
   const newCount = contacts.filter(c => c.status === 'NEW').length;

@@ -4,6 +4,7 @@ import Loader from '../../components/Loader';
 import * as BookingService from '../../services/BookingService';
 import * as AdminService from '../../services/AdminService';
 import Pagination from '../../components/Pagination';
+import { formatDate, formatCurrency } from '../../utils/format';
 import {
     Search,
     Calendar,
@@ -80,21 +81,6 @@ const getStatusIcon = (status) => {
     }
 };
 
-const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-    });
-};
-
-const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-IN', {
-        style: 'currency',
-        currency: 'INR'
-    }).format(amount || 0);
-};
 
 // Memoized Booking Row to prevent unnecessary re-renders
 const BookingRow = React.memo(({ booking, onDetails, onReschedule, onAssign, onDelete }) => (

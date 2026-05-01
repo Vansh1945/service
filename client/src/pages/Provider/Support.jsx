@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { getBookingsByStatus } from '../../services/BookingService';
 import { getComplaint, getCustomerComplaints, submitComplaint as submitComplaintAPI } from '../../services/ComplaintService';
+import { formatDate, formatDateTime } from '../../utils/format';
 
 const SUPPORT_CATEGORIES = ["Payment", "Booking", "Account", "Other"];
 
@@ -152,10 +153,6 @@ const ProviderSupportPage = () => {
     setFormErrors({ bookingId: '', title: '', description: '', category: '' });
   };
 
-  const formatDate = (dateString) =>
-    new Date(dateString).toLocaleDateString('en-IN', {
-      year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-    });
 
   const STATUS_CONFIG = {
     'Open': { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', dot: 'bg-amber-400' },
@@ -264,7 +261,7 @@ const ProviderSupportPage = () => {
                               </span>
                             </div>
                             <p className="text-xs text-gray-400">#{complaint.complaintId || complaint._id.slice(-8)} • {complaint.category}</p>
-                            <p className="text-xs text-gray-400 mt-0.5">{formatDate(complaint.createdAt)}</p>
+                            <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(complaint.createdAt)}</p>
                           </div>
                         </div>
                         <ChevronRight className="h-4 w-4 text-gray-300" />

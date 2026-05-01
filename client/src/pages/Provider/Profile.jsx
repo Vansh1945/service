@@ -8,6 +8,7 @@ import { Loader2, AlertCircle, Edit2, X, Check, Upload, Eye, Camera, FileText, C
 import * as ProviderService from '../../services/ProviderService';
 import * as SystemService from '../../services/SystemService';
 import useCategory from '../../hooks/useCategory';
+import { formatDate, formatCurrency } from '../../utils/format';
 
 const ProviderProfile = () => {
   const { token, API, showToast, logoutUser } = useAuth();
@@ -305,7 +306,7 @@ const ProviderProfile = () => {
           </div>
           <div className="bg-background rounded-2xl shadow-sm p-4 border border-teal-100">
             <p className="text-primary text-[10px] uppercase tracking-widest font-black">Wallet</p>
-            <p className="text-2xl font-black text-secondary mt-1">₹{profileData.wallet?.availableBalance || 0}</p>
+            <p className="text-2xl font-black text-secondary mt-1">{formatCurrency(profileData.wallet?.availableBalance || 0)}</p>
           </div>
         </div>
 
@@ -338,7 +339,7 @@ const ProviderProfile = () => {
                       <div className="flex justify-between items-center p-4 bg-white border border-gray-100 rounded-2xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)]">
                         <span className="text-sm text-gray-500 font-medium font-inter">Member Since</span>
                         <span className="text-sm font-bold text-secondary">
-                          {profileData.createdAt ? new Date(profileData.createdAt).toLocaleDateString() : 'N/A'}
+                          {formatDate(profileData.createdAt)}
                         </span>
                       </div>
                       <div className="flex justify-between items-center p-4 bg-white border border-gray-100 rounded-2xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)]">
@@ -377,16 +378,16 @@ const ProviderProfile = () => {
                     <div className="space-y-3">
                       <div className="flex justify-between items-center p-4 bg-primary/5 border border-primary/10 rounded-2xl">
                         <span className="text-sm text-primary font-bold font-inter">Available</span>
-                        <span className="text-xl font-black text-secondary">₹{profileData.wallet?.availableBalance || 0}</span>
+                        <span className="text-xl font-black text-secondary">{formatCurrency(profileData.wallet?.availableBalance || 0)}</span>
                       </div>
                       <div className="flex justify-between items-center p-4 bg-white border border-gray-100 rounded-2xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)]">
                         <span className="text-sm text-gray-500 font-medium font-inter">Withdrawn</span>
-                        <span className="text-sm font-bold text-secondary">₹{profileData.wallet?.totalWithdrawn || 0}</span>
+                        <span className="text-sm font-bold text-secondary">{formatCurrency(profileData.wallet?.totalWithdrawn || 0)}</span>
                       </div>
                       <div className="flex justify-between items-center p-4 bg-white border border-gray-100 rounded-2xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)]">
                         <span className="text-sm text-gray-500 font-medium font-inter">Last Update</span>
                         <span className="text-sm font-bold text-secondary text-right">
-                          {profileData.wallet?.lastUpdated ? new Date(profileData.wallet.lastUpdated).toLocaleDateString() : 'N/A'}
+                          {formatDate(profileData.wallet?.lastUpdated)}
                         </span>
                       </div>
                     </div>
@@ -395,7 +396,7 @@ const ProviderProfile = () => {
 
                 {profileData.blockedTill && (
                   <div className="p-4 bg-red-50 border border-red-200 rounded-xl">
-                    <p className="text-sm text-red-700"><span className="font-semibold">🔒 Account Blocked</span> until {new Date(profileData.blockedTill).toLocaleDateString()}</p>
+                    <p className="text-sm text-red-700"><span className="font-semibold">🔒 Account Blocked</span> until {formatDate(profileData.blockedTill)}</p>
                   </div>
                 )}
                 {profileData.kycStatus === 'rejected' && (
@@ -564,7 +565,7 @@ const ProviderProfile = () => {
                         <div className="flex justify-between items-center">
                           <span className="text-sm text-gray-400 font-medium">Date of Birth</span>
                           <span className="text-sm font-bold text-secondary">
-                            {profileData.dateOfBirth ? new Date(profileData.dateOfBirth).toLocaleDateString() : '—'}
+                            {formatDate(profileData.dateOfBirth)}
                           </span>
                         </div>
                       </div>

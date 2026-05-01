@@ -6,6 +6,7 @@ import {
   Star, MessageSquare, Plus, ArrowLeft, Calendar,
   User, Eye, Edit2, CheckCircle, Clock, ChevronRight, X
 } from 'lucide-react';
+import { formatDate } from '../../utils/format';
 import LoadingSpinner from '../../components/Loader';
 import { getCustomerBookings } from '../../services/BookingService';
 import { 
@@ -19,12 +20,6 @@ const Feedback = () => {
   const { token, API } = useAuth();
   const navigate = useNavigate();
 
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return 'Invalid Date';
-    return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-  };
 
   const [completedBookings, setCompletedBookings] = useState([]);
   const [feedbacks, setFeedbacks] = useState([]);

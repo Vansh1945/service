@@ -7,6 +7,7 @@ import {
   CheckCircle, Slash
 } from 'lucide-react';
 import Pagination from '../../components/Pagination';
+import { formatDate } from '../../utils/format';
 
 const AdminFeedback = () => {
   const { token, API, showToast } = useAuth();
@@ -114,7 +115,6 @@ const AdminFeedback = () => {
 
   useEffect(() => { fetchFeedbacks(); }, [filters, pagination.page]);
 
-  const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
 
   const renderStars = (rating) => (
     <div className="flex items-center gap-0.5">

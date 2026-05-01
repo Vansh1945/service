@@ -7,6 +7,7 @@ import {
   ChevronRight, Bookmark, BookmarkCheck, RefreshCw, Download,
   Timer, Zap, Star, Trophy, BarChart3, Activity, X, ChevronDown, Loader2
 } from 'lucide-react';
+import { formatDate } from '../../utils/format';
 
 const useTestTimer = (initialTime, isActive, onTimeUp) => {
   const [timeLeft, setTimeLeft] = useState(initialTime);
@@ -954,7 +955,7 @@ const ProviderTestPage = () => {
                         <div className="flex items-center text-sm text-secondary/70 space-x-4">
                           <span className="flex items-center">
                             <Calendar className="w-4 h-4 mr-1" />
-                            {new Date(test.date).toLocaleDateString()}
+                            {formatDate(test.date)}
                           </span>
                           <span className="flex items-center">
                             <Clock className="w-4 h-4 mr-1" />

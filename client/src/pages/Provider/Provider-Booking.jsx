@@ -14,6 +14,7 @@ import {
 import LoadingSpinner from '../../components/Loader';
 import * as BookingService from '../../services/BookingService';
 import Pagination from '../../components/Pagination';
+import { formatDate, formatTime, formatCurrency, formatDuration } from '../../utils/format';
 
 // ── Confirmation Dialog ──────────────────────────────────────────────────────
 const ConfirmationDialog = ({ isOpen, onClose, onConfirm, title, message, type = 'default' }) => {
@@ -281,25 +282,6 @@ const ProviderBooking = () => {
     return <Package className="w-4 h-4 text-gray-400" />;
   }, []);
 
-  const formatDate = useCallback((dateString) => {
-    if (!dateString) return 'N/A';
-    try { const d = new Date(dateString); return isNaN(d.getTime()) ? 'Invalid date' : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }); }
-    catch { return 'Invalid date'; }
-  }, []);
-
-  const formatTime = useCallback((timeString) => {
-    if (!timeString) return '--:--';
-    try { const [h, m] = timeString.split(':'); const d = new Date(); d.setHours(h, m); return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }); }
-    catch { return timeString; }
-  }, []);
-
-  const formatDuration = useCallback((hours) => {
-    if (!hours) return 'N/A';
-    const wh = Math.floor(hours), min = Math.round((hours - wh) * 60);
-    return `${wh > 0 ? `${wh} hr` : ''} ${min > 0 ? `${min} min` : ''}`.trim();
-  }, []);
-
-  const formatCurrency = (amount) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount || 0);
 
   // ── Filtered bookings ────────────────────────────────────────────────────
   const currentBookings = useMemo(() => {

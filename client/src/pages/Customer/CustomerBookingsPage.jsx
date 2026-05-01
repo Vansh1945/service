@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { cancelBooking, userUpdateBookingDateTime, getCustomerBookings } from '../../services/BookingService';
 import Pagination from '../../components/Pagination';
+import { formatDate, formatDateTime, formatCurrency } from '../../utils/format';
 
 // ─── Pure helpers ─────────────────────────────────────────────────────────────
 
@@ -28,8 +29,6 @@ const STATUS_CONFIG = {
 
 const getStatusCfg = (status) => STATUS_CONFIG[status] || { color: 'bg-gray-100 text-gray-600 border-gray-200', bar: 'bg-gray-400', icon: AlertCircle, label: status || 'Unknown' };
 
-const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Not specified';
-const formatDateTime = (d) => d ? new Date(d).toLocaleString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
 const needsPayment = (b) => {
   if (b.paymentStatus === 'paid' || b.status === 'cancelled') return false;
@@ -66,7 +65,7 @@ const BookingTimeline = ({ booking }) => {
     ]
     : [
       { key: 'booked', label: 'Booking Placed', icon: ShoppingCart, done: true, time: booking.createdAt, desc: 'Your booking has been placed.' },
-      { key: 'payment', label: 'Payment', icon: booking.paymentMethod === 'cash' ? DollarSign : CreditCard, done: booking.paymentStatus === 'paid', active: booking.paymentStatus === 'pending' && !booking.confirmedBooking, time: booking.paymentDate || getTs('payment_pending'), desc: booking.paymentStatus === 'paid' ? `₹${booking.totalAmount} paid via ${booking.paymentMethod}` : booking.paymentMethod === 'cash' ? 'Pay after service' : 'Payment pending' },
+      { key: 'payment', label: 'Payment', icon: booking.paymentMethod === 'cash' ? DollarSign : CreditCard, done: booking.paymentStatus === 'paid', active: booking.paymentStatus === 'pending' && !booking.confirmedBooking, time: booking.paymentDate || getTs('payment_pending'), desc: booking.paymentStatus === 'paid' ? `${formatCurrency(booking.totalAmount)} paid via ${booking.paymentMethod}` : booking.paymentMethod === 'cash' ? 'Pay after service' : 'Payment pending' },
       { key: 'assigned', label: 'Provider Assigned', icon: User, done: ['accepted', 'in-progress', 'completed'].includes(booking.status), active: !!(booking.providerDetails || booking.provider) && booking.status === 'pending', time: getTs('accepted') || getTs('assigned'), desc: (booking.providerDetails || booking.provider) ? `${(booking.providerDetails || booking.provider).name} (ID: ${(booking.providerDetails || booking.provider).providerId || 'N/A'}) has been assigned.` : 'Waiting for provider.' },
       { key: 'in_progress', label: 'Work Started', icon: Wrench, done: ['in-progress', 'completed'].includes(booking.status), active: booking.status === 'in-progress', time: booking.serviceStartedAt || getTs('in-progress'), desc: booking.status === 'in-progress' ? 'Provider has started work.' : 'Work will begin soon.' },
       { key: 'completed', label: 'Completed', icon: CheckCircle, done: booking.status === 'completed', time: booking.serviceCompletedAt || getTs('completed'), desc: booking.status === 'completed' ? 'Service completed successfully.' : 'Awaiting completion.' },
@@ -179,8 +178,8 @@ const PaymentDetails = ({ booking }) => (
       {[
         ['Method', <span className="capitalize">{booking.paymentMethod || 'N/A'}</span>],
         ['Status', <span className={booking.paymentStatus === 'paid' ? 'text-emerald-600 font-semibold' : 'text-accent font-semibold'}>{booking.paymentStatus === 'paid' ? 'Paid' : 'Pending'}</span>],
-        ['Subtotal', `₹${booking.subtotal || 0}`],
-        ...(booking.totalDiscount > 0 ? [['Discount', <span className="text-emerald-600">-₹{booking.totalDiscount}</span>]] : []),
+        ['Subtotal', formatCurrency(booking.subtotal || 0)],
+        ...(booking.totalDiscount > 0 ? [['Discount', <span className="text-emerald-600">-{formatCurrency(booking.totalDiscount)}</span>]] : []),
         ...(booking.couponApplied?.isValid ? [['Coupon', <span className="text-blue-600">{booking.couponApplied.code}</span>]] : []),
       ].map(([label, val]) => (
         <div key={label} className="flex justify-between items-center">
@@ -190,7 +189,7 @@ const PaymentDetails = ({ booking }) => (
       ))}
       <div className="border-t border-gray-200 pt-2 mt-1 flex justify-between font-bold text-secondary">
         <span>Total</span>
-        <span>₹{booking.totalAmount || 0}</span>
+        <span>{formatCurrency(booking.totalAmount || 0)}</span>
       </div>
     </div>
     {booking.transactionId && (
@@ -225,13 +224,13 @@ const ServiceDetails = ({ services, useServiceDetails = false }) => (
           <div key={i} className="bg-white rounded-lg p-3 border border-gray-200">
             <div className="flex justify-between items-start mb-2">
               <p className="font-semibold text-secondary text-sm">{svc?.title || 'Service'}</p>
-              <span className="text-sm font-bold text-primary">₹{item.price || 0}</span>
+              <span className="text-sm font-bold text-primary">{formatCurrency(item.price || 0)}</span>
             </div>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-600">
               <div><span className="font-medium">Category:</span> <span className="uppercase">{typeof svc?.category === 'object' ? svc.category.name : (svc?.category || 'N/A')}</span></div>
               <div><span className="font-medium">Qty:</span> {item.quantity || 1}</div>
               <div><span className="font-medium">Duration:</span> {svc?.duration ? `${svc.duration} hrs` : 'N/A'}</div>
-              <div><span className="font-medium">Discount:</span> ₹{item.discountAmount || 0}</div>
+              <div><span className="font-medium">Discount:</span> {formatCurrency(item.discountAmount || 0)}</div>
             </div>
           </div>
         );
@@ -406,7 +405,7 @@ const BookingCard = ({ booking, onView, onPayNow, onReschedule, onCancel, onCall
                 <p className="text-xs text-gray-400">{booking.bookingId || `#${booking._id?.slice(-8).toUpperCase()}`}</p>
               </div>
               <div className="text-right flex-shrink-0">
-                <p className="text-lg font-bold text-secondary">₹{booking.totalAmount || 0}</p>
+                <p className="text-lg font-bold text-secondary">{formatCurrency(booking.totalAmount || 0)}</p>
                 <p className={`text-xs font-bold px-2 py-0.5 rounded-full ${booking.paymentStatus === 'paid' ? 'bg-green-100 text-green-600' : (booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service' ? 'bg-yellow-100 text-yellow-600' : 'bg-red-50 text-accent')}`}>
                   {booking.paymentStatus === 'paid' ? `✓ Paid` : (booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service' ? 'Pay After Service' : 'Unpaid')}
                 </p>

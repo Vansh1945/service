@@ -11,6 +11,7 @@ import { getPublicServiceById } from '../../services/ServiceService';
 import { getBooking, updateBookingPayment } from '../../services/BookingService';
 import * as TransactionService from '../../services/TransactionService';
 import Loader from '../../components/Loader';
+import { formatDate, formatCurrency } from '../../utils/format';
 
 const BookingConfirmation = () => {
   const { bookingId } = useParams();
@@ -129,18 +130,6 @@ const BookingConfirmation = () => {
     if (!isInitialized) initializeComponent();
   }, [bookingId, isAuthenticated, token, location.state, isInitialized]);
 
-  const formatDate = (dateString) => {
-    if (!dateString) return 'Date not set';
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return 'Invalid Date';
-      return date.toLocaleDateString('en-US', {
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-      });
-    } catch {
-      return 'Date formatting error';
-    }
-  };
 
   const getServiceInfo = () => {
     if (serviceDetails) {
@@ -379,7 +368,7 @@ const BookingConfirmation = () => {
                   <div className="mt-2">
                     <div className="flex items-baseline gap-1">
                       <IndianRupee className="w-3.5 h-3.5 text-secondary" />
-                      <span className="text-xl font-bold text-primary">{serviceInfo.basePrice?.toFixed(2) || 0}</span>
+                      <span className="text-xl font-bold text-primary">{formatCurrency(serviceInfo.basePrice || 0)}</span>
                       <span className="text-xs text-gray-400">/service</span>
                     </div>
                   </div>
@@ -474,18 +463,18 @@ const BookingConfirmation = () => {
                 <div className="space-y-3">
                   <div className="flex justify-between text-xs">
                     <span className="text-gray-500">Service Price ({quantity} item)</span>
-                    <span className="text-secondary font-medium">₹{subtotal.toFixed(2)}</span>
+                    <span className="text-secondary font-medium">{formatCurrency(subtotal)}</span>
                   </div>
 
                   {discount > 0 && (
                     <>
                       <div className="flex justify-between text-xs">
                         <span className="text-gray-500">Discount Applied</span>
-                        <span className="text-green-600 font-medium">-₹{discount.toFixed(2)}</span>
+                        <span className="text-green-600 font-medium">-{formatCurrency(discount)}</span>
                       </div>
                       <div className="flex justify-between text-xs pt-1 border-t border-gray-50">
                         <span className="text-gray-600 font-semibold">Price after Discount</span>
-                        <span className="text-secondary font-bold">₹{(subtotal - discount).toFixed(2)}</span>
+                        <span className="text-secondary font-bold">{formatCurrency(subtotal - discount)}</span>
                       </div>
                     </>
                   )}
@@ -498,7 +487,7 @@ const BookingConfirmation = () => {
                   <div className="border-t border-gray-100 pt-3 mt-1">
                     <div className="flex justify-between items-center">
                       <span className="font-bold text-secondary text-base">Total Amount</span>
-                      <span className="font-bold text-primary text-xl">₹{totalAmount.toFixed(2)}</span>
+                      <span className="font-bold text-primary text-xl">{formatCurrency(totalAmount)}</span>
                     </div>
                   </div>
                 </div>
@@ -518,7 +507,7 @@ const BookingConfirmation = () => {
                       className="w-full flex items-center justify-center gap-2 py-2.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:bg-gray-300"
                     >
                       <CreditCard className="w-4 h-4" />
-                      Pay Online ₹{totalAmount.toFixed(2)}
+                      Pay Online {formatCurrency(totalAmount)}
                     </button>
                     <button
                       onClick={() => setShowCashModal(true)}
@@ -571,17 +560,17 @@ const BookingConfirmation = () => {
                 <div className="space-y-2 pt-4 border-t border-gray-100">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-400">Service Price</span>
-                    <span className="font-medium text-secondary">₹{subtotal.toFixed(2)}</span>
+                    <span className="font-medium text-secondary">{formatCurrency(subtotal)}</span>
                   </div>
                   {discount > 0 && (
                     <>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-400">Discount</span>
-                        <span className="font-medium text-green-600">-₹{discount.toFixed(2)}</span>
+                        <span className="font-medium text-green-600">-{formatCurrency(discount)}</span>
                       </div>
                       <div className="flex justify-between text-sm pt-1 border-t border-gray-50">
                         <span className="text-gray-500 font-semibold">Price after Discount</span>
-                        <span className="font-medium text-secondary">₹{(subtotal - discount).toFixed(2)}</span>
+                        <span className="font-medium text-secondary">{formatCurrency(subtotal - discount)}</span>
                       </div>
                     </>
                   )}
@@ -591,7 +580,7 @@ const BookingConfirmation = () => {
                   </div>
                   <div className="flex justify-between pt-2 border-t border-gray-50">
                     <span className="font-bold text-secondary">Total to Pay</span>
-                    <span className="font-bold text-primary text-lg">₹{totalAmount.toFixed(2)}</span>
+                    <span className="font-bold text-primary text-lg">{formatCurrency(totalAmount)}</span>
                   </div>
                 </div>
               </div>

@@ -14,13 +14,9 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   BarChart, Bar, PieChart, Pie, Cell, ResponsiveContainer
 } from 'recharts';
+import { formatDate, formatCurrency } from '../../utils/format';
 
 // Pure helpers at module scope — created once, never re-allocated
-const formatCurrency = (amount) => {
-  if (typeof amount !== 'number' || amount === null) return '\u20b90';
-  return `\u20b9${amount.toLocaleString()}`;
-};
-const formatDate = (date) => new Date(date).toLocaleDateString();
 
 const STATUS_COLORS = {
   completed: '#10B981',

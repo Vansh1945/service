@@ -43,6 +43,7 @@ import {
 import { useAuth } from '../../context/auth';
 import * as AdminService from '../../services/AdminService';
 import LoadingSpinner from '../../components/Loader';
+import { formatDate } from '../../utils/format';
 
 const AdminProvidersPage = () => {
   const { token, API, showToast } = useAuth();
@@ -512,7 +513,7 @@ const AdminProvidersPage = () => {
         </td>
         <td className="p-4">
           <div className="text-sm text-gray-900">
-            {new Date(provider.createdAt || provider.registrationDate).toLocaleDateString()}
+            {formatDate(provider.createdAt || provider.registrationDate)}
           </div>
         </td>
         <td className="p-4">
@@ -676,7 +677,7 @@ const AdminProvidersPage = () => {
                   <div className="flex justify-between items-center py-2 border-b border-teal-50">
                     <span className="text-sm text-gray-600">Date of Birth</span>
                     <span className="font-medium text-secondary">
-                      {selectedProvider.dateOfBirth ? new Date(selectedProvider.dateOfBirth).toLocaleDateString() : 'N/A'}
+                      {formatDate(selectedProvider.dateOfBirth)}
                     </span>
                   </div>
                   <div className="flex justify-between items-center py-2 border-b border-teal-50">
@@ -686,7 +687,7 @@ const AdminProvidersPage = () => {
                   <div className="flex justify-between items-center py-2 border-b border-teal-50">
                     <span className="text-sm text-gray-600">Registration Date</span>
                     <span className="font-medium text-secondary">
-                      {new Date(selectedProvider.registrationDate || selectedProvider.createdAt).toLocaleDateString()}
+                      {formatDate(selectedProvider.registrationDate || selectedProvider.createdAt)}
                     </span>
                   </div>
                   <div className="flex justify-between items-center py-2">

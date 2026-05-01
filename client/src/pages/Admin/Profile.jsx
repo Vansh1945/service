@@ -9,6 +9,7 @@ import {
 } from 'react-icons/fi';
 import * as AdminService from '../../services/AdminService';
 import Pagination from '../../components/Pagination';
+import { formatDate } from '../../utils/format';
 
 // Debounce hook for search optimization
 const useDebounce = (value, delay) => {
@@ -314,11 +315,7 @@ const AdminProfile = () => {
                     <div className="text-right hidden sm:block">
                       <div className="flex items-center text-sm text-gray-500 mb-1">
                         <FiCalendar className="mr-1 flex-shrink-0" />
-                        <span className="truncate">Joined {new Date(admin.createdAt).toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric'
-                        })}</span>
+                        <span className="truncate">Joined {formatDate(admin.createdAt)}</span>
                       </div>
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-800">
                         <FiShield className="mr-1" />
@@ -340,11 +337,7 @@ const AdminProfile = () => {
                 <div className="sm:hidden mt-3 pt-3 border-t border-gray-100">
                   <div className="flex items-center text-sm text-gray-500">
                     <FiCalendar className="mr-1" />
-                    Joined {new Date(admin.createdAt).toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric'
-                    })}
+                    Joined {formatDate(admin.createdAt)}
                   </div>
                 </div>
               </div>
@@ -466,21 +459,13 @@ const AdminProfile = () => {
                   <div>
                     <p className="text-sm text-secondary">Member Since</p>
                     <p className="text-base sm:text-lg font-medium">
-                      {profile && new Date(profile.createdAt).toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric'
-                      })}
+                      {formatDate(profile?.createdAt)}
                     </p>
                   </div>
                   <div>
                     <p className="text-sm text-secondary">Last Updated</p>
                     <p className="text-base sm:text-lg font-medium">
-                      {profile && new Date(profile.updatedAt).toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric'
-                      })}
+                      {formatDate(profile?.updatedAt)}
                     </p>
                   </div>
                 </div>

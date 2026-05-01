@@ -14,17 +14,10 @@ import { useAuth } from '../../context/auth';
 import * as ProviderService from '../../services/ProviderService';
 import * as BookingService from '../../services/BookingService';
 import * as ComplaintService from '../../services/ComplaintService';
+import { formatCurrency, formatDate } from '../../utils/format';
 
 const Dashboard = () => {
   const { token, API, showToast } = useAuth();
-
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      minimumFractionDigits: 0
-    }).format(amount || 0);
-  };
 
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState({
@@ -406,7 +399,7 @@ const Dashboard = () => {
                           <div>
                             <h4 className="text-sm font-medium text-secondary">{booking.customer?.name || 'Customer'}</h4>
                             <p className="text-xs text-secondary/50">
-                              {new Date(booking.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} at {booking.time}
+                              {formatDate(booking.date)} at {booking.time}
                             </p>
                           </div>
                         </div>

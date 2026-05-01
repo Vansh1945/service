@@ -6,6 +6,7 @@ import {
 import { useAuth } from '../../context/auth';
 import Pagination from '../../components/Pagination';
 import * as FeedbackService from '../../services/FeedbackService';
+import { formatDate } from '../../utils/format';
 
 const ProviderFeedback = () => {
     const { API, token, showToast } = useAuth();
@@ -27,10 +28,6 @@ const ProviderFeedback = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 
-    const formatDate = (dateString) => {
-        if (!dateString) return 'N/A';
-        return new Date(dateString).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-    };
 
     const StarRating = ({ rating, size = 'w-4 h-4', showNumber = false }) => (
         <div className="flex items-center gap-1">

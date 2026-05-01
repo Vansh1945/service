@@ -14,6 +14,7 @@ import {
   Info,
   ArrowRight
 } from 'lucide-react';
+import { formatDate } from '../utils/format';
 
 const PrivacyPolicy = () => {
   useEffect(() => {
@@ -93,11 +94,7 @@ const PrivacyPolicy = () => {
     }
   ];
 
-  const currentDate = new Date().toLocaleDateString('en-US', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric'
-  });
+  const currentDate = formatDate(new Date());
 
   return (
     <div className="min-h-screen bg-white font-inter">

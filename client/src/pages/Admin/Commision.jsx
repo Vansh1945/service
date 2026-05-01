@@ -15,7 +15,7 @@ import {
   Percent,
   Info
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatCurrency, formatDate } from '../../utils/format';
 import * as CommissionService from '../../services/CommissionService';
 import * as AdminService from '../../services/AdminService';
 import Pagination from '../../components/Pagination';
@@ -547,7 +547,7 @@ const AdminCommissionPage = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-secondary">
-                            {rule.type === 'percentage' ? `${rule.value}%` : `₹${rule.value.toFixed(2)}`}
+                            {rule.type === 'percentage' ? `${rule.value}%` : formatCurrency(rule.value)}
                           </div>
                           <div className="text-xs text-gray-500 capitalize">{rule.type}</div>
                         </td>
@@ -577,7 +577,7 @@ const AdminCommissionPage = () => {
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {format(new Date(rule.createdAt), 'dd MMM yyyy')}
+                          {formatDate(rule.createdAt)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <div className="flex space-x-2">

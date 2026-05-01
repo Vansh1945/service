@@ -30,12 +30,9 @@ import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useAuth } from '../../context/auth';
 import * as AdminService from '../../services/AdminService';
+import { formatDate } from '../../utils/format';
 
 // ─── Pure helpers at module scope ───────────────────────────────────────────
-const formatDate = (dateString) => {
-  if (!dateString) return 'N/A';
-  return new Date(dateString).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-};
 
 const formatAddress = (address) => {
   if (!address) return 'N/A';

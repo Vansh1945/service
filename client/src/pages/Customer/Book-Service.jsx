@@ -11,6 +11,7 @@ import { getPublicServiceById } from '../../services/ServiceService';
 import { getAvailableCoupons, applyCoupon as applyCouponAPI } from '../../services/CouponService';
 import { createBooking } from '../../services/BookingService';
 import * as CustomerService from '../../services/CustomerService';
+import { formatDate, formatCurrency } from '../../utils/format';
 
 const BookService = () => {
   const { serviceId } = useParams();
@@ -91,10 +92,6 @@ const BookService = () => {
 
   const timeSlots = generateTimeSlots();
 
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-GB');
-  };
 
   // Fetch service details
   const fetchService = async () => {
@@ -451,8 +448,7 @@ const BookService = () => {
                   </div>
                   <div className="mt-2">
                     <div className="flex items-baseline gap-1">
-                      <IndianRupee className="w-3.5 h-3.5 text-secondary" />
-                      <span className="text-xl font-bold text-primary">{service.basePrice.toFixed(2)}</span>
+                      <span className="text-xl font-bold text-primary">{formatCurrency(service.basePrice)}</span>
                     </div>
                   </div>
                 </div>
@@ -637,12 +633,12 @@ const BookService = () => {
                 <div className="space-y-2">
                   <div className="flex justify-between text-xs">
                     <span className="text-gray-500">Price ({formData.quantity} item)</span>
-                    <span className="text-secondary font-medium">₹{baseAmount.toFixed(2)}</span>
+                    <span className="text-secondary font-medium">{formatCurrency(baseAmount)}</span>
                   </div>
                   {formData.appliedCoupon && (
                     <div className="flex justify-between text-xs">
                       <span className="text-gray-500">Discount</span>
-                      <span className="text-green-600 font-medium">-₹{discountAmount.toFixed(2)}</span>
+                      <span className="text-green-600 font-medium">-{formatCurrency(discountAmount)}</span>
                     </div>
                   )}
                   <div className="flex justify-between text-xs">
@@ -652,7 +648,7 @@ const BookService = () => {
                   <div className="border-t border-gray-100 pt-2 mt-2">
                     <div className="flex justify-between">
                       <span className="font-bold text-secondary text-sm">Total</span>
-                      <span className="font-bold text-primary text-base">₹{totalAmount.toFixed(2)}</span>
+                      <span className="font-bold text-primary text-base">{formatCurrency(totalAmount)}</span>
                     </div>
                   </div>
                 </div>
@@ -732,7 +728,7 @@ const BookService = () => {
                         onClick={() => setFormData(prev => ({ ...prev, couponCode: coupon.code }))}
                       >
                         <span className="font-medium text-primary">{coupon.code}</span>
-                        <span className="text-gray-400 ml-1">{coupon.discountType === 'percent' ? `${coupon.discountValue}% OFF` : `₹${coupon.discountValue} OFF`}</span>
+                        <span className="text-gray-400 ml-1">{coupon.discountType === 'percent' ? `${coupon.discountValue}% OFF` : `${formatCurrency(coupon.discountValue)} OFF`}</span>
                       </div>
                     ))}
                   </div>
@@ -753,7 +749,7 @@ const BookService = () => {
                 ) : (
                   <>
                     <CheckCircle className="w-4 h-4" />
-                    {formData.paymentMethod === 'cash' ? `Confirm Booking • ₹${totalAmount.toFixed(2)}` : `Pay ₹${totalAmount.toFixed(2)}`}
+                    {formData.paymentMethod === 'cash' ? `Confirm Booking • ${formatCurrency(totalAmount)}` : `Pay ${formatCurrency(totalAmount)}`}
                   </>
                 )}
               </button>

@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { getCustomerBookings } from '../../services/BookingService';
 import { getComplaint, getCustomerComplaints, submitComplaint as submitComplaintAPI, reopenComplaint as reopenComplaintAPI } from '../../services/ComplaintService';
+import { formatDate, formatDateTime } from '../../utils/format';
 
 const COMPLAINT_CATEGORIES = ["Service issue", "Payment issue", "Delivery issue", "Suggestion", "Other"];
 
@@ -176,10 +177,6 @@ const ComplaintsPage = () => {
     setFormErrors({ bookingId: '', title: '', description: '', category: '' });
   };
 
-  const formatDate = (dateString) =>
-    new Date(dateString).toLocaleDateString('en-IN', {
-      year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-    });
 
   const STATUS_CONFIG = {
     'Open': { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', dot: 'bg-amber-400' },
@@ -281,7 +278,7 @@ const ComplaintsPage = () => {
                         </p>
                         <p className="text-[10px] text-gray-500 mt-0.5 opacity-60 flex items-center gap-1">
                           <Clock className="h-3 w-3" />
-                          {formatDate(complaint.createdAt)}
+                          {formatDateTime(complaint.createdAt)}
                         </p>
                       </div>
                     </div>
@@ -487,7 +484,7 @@ const ComplaintsPage = () => {
                 </div>
                 <div className="flex items-center justify-between mt-2 text-xs text-gray-500">
                   <span>Category: {selectedComplaint.category}</span>
-                  <span>Submitted: {formatDate(selectedComplaint.createdAt)}</span>
+                  <span>Submitted: {formatDateTime(selectedComplaint.createdAt)}</span>
                 </div>
               </div>
 

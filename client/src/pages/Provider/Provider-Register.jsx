@@ -16,6 +16,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import useCategory from '../../hooks/useCategory';
 import * as SystemService from '../../services/SystemService';
 import * as ProviderService from '../../services/ProviderService';
+import { formatTime } from '../../utils/format';
 
 // ─── Static sub-components (defined OUTSIDE the main component to avoid remount) ─
 
@@ -321,8 +322,6 @@ const handleResendOTP = async () => {
   });
 };
 
-const formatExpiry = (date) =>
-  date ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
 
 // ── Step content ──────────────────────────────────────────────────────────
 
@@ -380,7 +379,7 @@ const renderStepContent = () => {
                 {otpExpiryTime ? (
                   <>
                     Expires at{' '}
-                    <span className="font-medium text-secondary">{formatExpiry(otpExpiryTime)}</span>
+                    <span className="font-medium text-secondary">{formatTime(otpExpiryTime)}</span>
                     {' • '}
                     {canResendOtp ? (
                       <button

@@ -36,26 +36,12 @@ import { useAuth } from '../../context/auth';
 import * as ServiceService from '../../services/ServiceService';
 import * as SystemService from '../../services/SystemService';
 import useCategory from '../../hooks/useCategory';
+import { formatCurrency, formatDuration } from '../../utils/format';
 
 
 
 
 
-// Format currency
-const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    maximumFractionDigits: 0
-  }).format(amount || 0);
-};
-
-// Format duration
-const formatDuration = (duration) => {
-  const hours = Math.floor(duration);
-  const minutes = Math.round((duration - hours) * 60);
-  return `${hours > 0 ? `${hours}h ` : ''}${minutes > 0 ? `${minutes}m` : ''}`.trim();
-};
 
 const parseArrayField = (field) => {
   if (!field) {
@@ -623,21 +609,6 @@ const AdminServices = () => {
     }
   };
 
-  // Format currency
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      maximumFractionDigits: 0
-    }).format(amount || 0);
-  };
-
-  // Format duration
-  const formatDuration = (duration) => {
-    const hours = Math.floor(duration);
-    const minutes = Math.round((duration - hours) * 60);
-    return `${hours > 0 ? `${hours}h ` : ''}${minutes > 0 ? `${minutes}m` : ''}`.trim();
-  };
 
   const parseArrayField = (field) => {
     if (!field) {

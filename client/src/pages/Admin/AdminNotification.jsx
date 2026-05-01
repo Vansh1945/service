@@ -5,6 +5,7 @@ import {
     FiBell, FiSend, FiUsers, FiLink, FiCheckCircle, FiAlertCircle,
     FiLoader, FiMessageSquare, FiTarget, FiClock, FiRefreshCw, FiSmile
 } from 'react-icons/fi';
+import { formatDate } from '../../utils/format';
 import EmojiPicker from 'emoji-picker-react';
 
 // ─── Audience Options ────────────────────────────────────────────────────────
@@ -563,7 +564,7 @@ const AdminNotification = () => {
                                     </div>
                                     <div className="flex items-center gap-1.5">
                                         <FiClock className="text-primary/70" />
-                                        <span>{new Date(item.sentAt || item.createdAt).toLocaleDateString()}</span>
+                                        <span>{formatDate(item.sentAt || item.createdAt)}</span>
                                     </div>
                                 </div>
 

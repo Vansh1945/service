@@ -13,6 +13,7 @@ import {
   Eye, Check, X, RefreshCw, ChevronLeft, ChevronRight,
   User, CreditCard, FileText, Calendar
 } from 'lucide-react';
+import { formatDate, formatDateTime, formatTime, formatCurrency, formatNumber } from '../../utils/format';
 
 const AdminPayout = () => {
   const { user, API } = useAuth();
@@ -113,8 +114,6 @@ const AdminPayout = () => {
     );
   };
 
-  const formatDate     = (d) => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-  const formatDateTime = (d) => new Date(d).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
   const totalPages = Math.ceil(total / limit);
 
@@ -267,11 +266,11 @@ const AdminPayout = () => {
                       )}
                       <p className="text-xs text-gray-400">{w.provider?.email || 'N/A'}</p>
                       <span className="inline-flex items-center gap-1 mt-1 text-xs text-primary font-medium bg-primary bg-opacity-10 px-2 py-0.5 rounded">
-                        ₹{(w.provider?.wallet?.availableBalance || 0).toLocaleString('en-IN')} wallet
+                        {formatCurrency(w.provider?.wallet?.availableBalance || 0)} wallet
                       </span>
                     </td>
                     <td className="px-5 py-4">
-                      <p className="text-sm font-bold text-secondary">₹{w.amount?.toLocaleString()}</p>
+                      <p className="text-sm font-bold text-secondary">{formatCurrency(w.amount)}</p>
                       <p className="text-xs text-gray-400 capitalize mt-0.5">{w.withdrawalType || 'Bank Transfer'}</p>
                     </td>
                     <td className="px-5 py-4">{getStatusBadge(w.status)}</td>
@@ -335,7 +334,7 @@ const AdminPayout = () => {
                 <Check className="w-5 h-5 text-white" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-secondary">₹{selectedWithdrawal.amount?.toLocaleString()}</p>
+                <p className="text-sm font-semibold text-secondary">{formatCurrency(selectedWithdrawal.amount)}</p>
                 <p className="text-xs text-gray-500">{selectedWithdrawal.provider?.name}</p>
               </div>
             </div>
@@ -414,7 +413,7 @@ const AdminPayout = () => {
                 <X className="w-5 h-5 text-red-500" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-secondary">₹{selectedWithdrawal.amount?.toLocaleString()}</p>
+                <p className="text-sm font-semibold text-secondary">{formatCurrency(selectedWithdrawal.amount)}</p>
                 <p className="text-xs text-gray-500">{selectedWithdrawal.provider?.name}</p>
               </div>
             </div>
@@ -462,7 +461,7 @@ const AdminPayout = () => {
               <div className="flex items-center justify-between bg-gray-50 rounded-xl p-4 border border-gray-100">
                 <div>
                   <p className="text-xs text-gray-400">Withdrawal Amount</p>
-                  <p className="text-2xl font-bold text-primary mt-0.5">₹{selectedDetails.amount?.toLocaleString()}</p>
+                  <p className="text-2xl font-bold text-primary mt-0.5">{formatCurrency(selectedDetails.amount)}</p>
                 </div>
                 {getStatusBadge(selectedDetails.status)}
               </div>
@@ -478,7 +477,7 @@ const AdminPayout = () => {
                     ['Provider ID', selectedDetails.provider?.providerId],
                     ['Email', selectedDetails.provider?.email],
                     ['Phone', selectedDetails.provider?.phone],
-                    ['Wallet Balance', `₹${(selectedDetails.provider?.wallet?.availableBalance || 0).toLocaleString('en-IN')}`],
+                    ['Wallet Balance', formatCurrency(selectedDetails.provider?.wallet?.availableBalance || 0)],
                   ].map(([label, val]) => (
                     <div key={label} className="flex justify-between py-2 border-b border-gray-100 last:border-0">
                       <span className="text-xs text-gray-400">{label}</span>
@@ -522,7 +521,7 @@ const AdminPayout = () => {
                     {selectedDetails.transferDate && selectedDetails.transferTime && (
                       <div className="flex justify-between">
                         <span className="text-xs text-gray-400">Transfer Date & Time</span>
-                        <span className="text-xs font-medium text-secondary">{formatDate(selectedDetails.transferDate)} at {selectedDetails.transferTime}</span>
+                        <span className="text-xs font-medium text-secondary">{formatDate(selectedDetails.transferDate)} at {formatTime(selectedDetails.transferTime)}</span>
                       </div>
                     )}
                     {selectedDetails.adminRemark && (
