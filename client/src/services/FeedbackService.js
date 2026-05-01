@@ -35,6 +35,10 @@ export const getFeedbackAdmin = (feedbackId) => {
     return axiosInstance.get(`/feedback/admin/${feedbackId}`);
 };
 
+export const toggleFeedbackApproval = (feedbackId) => {
+    return axiosInstance.patch(`/feedback/admin/toggle-approval/${feedbackId}`);
+};
+
 // Public route
 export const getServiceFeedbacks = (serviceId) => {
     return axiosInstance.get(`/feedback/service/${serviceId}`);

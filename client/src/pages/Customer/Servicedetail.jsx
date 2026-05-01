@@ -568,7 +568,11 @@ const ServiceDetailPage = () => {
                                 ))}
                               </div>
                             </div>
-                            <p className="text-gray-600 text-sm leading-relaxed italic border-l-2 border-gray-100 pl-4">{review.comment}</p>
+                            {review.comment && (
+                              <p className="text-gray-600 text-sm leading-relaxed italic border-l-2 border-gray-100 pl-4">
+                                {review.comment}
+                              </p>
+                            )}
                           </div>
                         ))
                       ) : (

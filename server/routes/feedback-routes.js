@@ -8,7 +8,8 @@ const {
   getAllFeedbacks,
   getFeedback,
   editFeedback,
-  getServiceFeedbacks
+  getServiceFeedbacks,
+  toggleFeedbackApproval
 } = require('../controllers/feedback-controller');
 const { userAuthMiddleware } = require('../middlewares/User-middleware');
 const { providerAuthMiddleware } = require('../middlewares/Provider-middleware');
@@ -30,6 +31,7 @@ router.get('/provider/average-rating', providerAuthMiddleware, getProviderAverag
 // Admin routes
 router.get('/admin/all-feedbacks', adminAuthMiddleware, getAllFeedbacks);
 router.get('/admin/:feedbackId', adminAuthMiddleware, getFeedback);
+router.patch('/admin/toggle-approval/:feedbackId', adminAuthMiddleware, toggleFeedbackApproval);
 
 
 module.exports = router;

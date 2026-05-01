@@ -25,6 +25,9 @@ const updateServiceFeedback = async (serviceId, feedbackId, updateData) => {
     if (updateData.comment !== undefined) {
       service.feedback[feedbackIndex].comment = updateData.comment;
     }
+    if (updateData.isApproved !== undefined) {
+      service.feedback[feedbackIndex].isApproved = updateData.isApproved;
+    }
     service.feedback[feedbackIndex].updatedAt = new Date();
 
     await service.save();
@@ -581,7 +584,8 @@ const getServiceFeedbacks = async (req, res, next) => {
     const formattedFeedbacks = feedbacks.map(feedback => ({
       _id: feedback._id,
       rating: feedback.serviceFeedback.rating,
-      comment: feedback.serviceFeedback.comment,
+      comment: feedback.serviceFeedback.isApproved ? feedback.serviceFeedback.comment : '',
+      isApproved: feedback.serviceFeedback.isApproved,
       isEdited: feedback.serviceFeedback.isEdited,
       createdAt: feedback.createdAt,
       customer: {
@@ -610,6 +614,48 @@ const getServiceFeedbacks = async (req, res, next) => {
   }
 };
 
+/**
+ * @desc    Toggle feedback approval (admin only)
+ * @route   PATCH /api/feedback/admin/toggle-approval/:feedbackId
+ * @access  Private (Admin)
+ */
+const toggleFeedbackApproval = async (req, res) => {
+  try {
+    const { feedbackId } = req.params;
+
+    const feedback = await Feedback.findById(feedbackId);
+    if (!feedback) {
+      return res.status(404).json({
+        success: false,
+        message: 'Feedback not found'
+      });
+    }
+
+    // Toggle approval status
+    feedback.serviceFeedback.isApproved = !feedback.serviceFeedback.isApproved;
+    await feedback.save();
+
+    // Sync with Service model
+    await updateServiceFeedback(
+      feedback.serviceFeedback.service,
+      feedback._id,
+      { isApproved: feedback.serviceFeedback.isApproved }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: `Feedback ${feedback.serviceFeedback.isApproved ? 'approved' : 'unapproved'} successfully`,
+      data: feedback
+    });
+  } catch (error) {
+    console.error('Error toggling feedback approval:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error while toggling feedback approval'
+    });
+  }
+};
+
 module.exports = {
   submitFeedback,
   getCustomerFeedbacks,
@@ -620,5 +666,6 @@ module.exports = {
   getProviderAverageRating,
   getAllFeedbacks,
   updateServiceAverageRating,
-  getServiceFeedbacks
+  getServiceFeedbacks,
+  toggleFeedbackApproval
 };

@@ -3,7 +3,8 @@ import { useAuth } from '../../context/auth';
 import * as FeedbackService from '../../services/FeedbackService';
 import {
   Search, Star, User, MessageSquare, Eye, X,
-  ChevronLeft, ChevronRight, Calendar, BarChart3
+  ChevronLeft, ChevronRight, Calendar, BarChart3,
+  CheckCircle, Slash
 } from 'lucide-react';
 import Pagination from '../../components/Pagination';
 
@@ -76,6 +77,29 @@ const AdminFeedback = () => {
       setShowModal(true);
     } catch {
       showToast('Failed to fetch feedback details', 'error');
+    }
+  };
+
+  const handleToggleApproval = async (id) => {
+    try {
+      const response = await FeedbackService.toggleFeedbackApproval(id);
+      if (response.data.success) {
+        showToast(response.data.message, 'success');
+        // Update local state
+        setFeedbacks(prev => prev.map(f =>
+          f._id === id
+            ? { ...f, serviceFeedback: { ...f.serviceFeedback, isApproved: !f.serviceFeedback.isApproved } }
+            : f
+        ));
+        if (selectedFeedback && selectedFeedback._id === id) {
+          setSelectedFeedback(prev => ({
+            ...prev,
+            serviceFeedback: { ...prev.serviceFeedback, isApproved: !prev.serviceFeedback.isApproved }
+          }));
+        }
+      }
+    } catch (err) {
+      showToast('Failed to update approval status', 'error');
     }
   };
 
@@ -199,7 +223,7 @@ const AdminFeedback = () => {
             <table className="min-w-full divide-y divide-gray-100">
               <thead className="bg-gray-50">
                 <tr>
-                  {['Customer', 'Provider', 'Service', 'Provider Rating', 'Service Rating', 'Date', 'Actions'].map(h => (
+                  {['Customer', 'Provider', 'Service', 'Provider Rating', 'Service Rating', 'Date', 'Status', 'Actions'].map(h => (
                     <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-secondary uppercase tracking-wider">{h}</th>
                   ))}
                 </tr>
@@ -231,25 +255,50 @@ const AdminFeedback = () => {
                     <td className="px-5 py-4 text-sm text-secondary">{fb.serviceFeedback?.service?.title || 'N/A'}</td>
                     <td className="px-5 py-4">
                       {fb.providerFeedback?.rating ? (
-                        <div className="flex items-center gap-2">
-                          {renderStars(fb.providerFeedback.rating)}
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${getRatingColor(fb.providerFeedback.rating)}`}>
-                            {fb.providerFeedback.rating}
-                          </span>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            {renderStars(fb.providerFeedback.rating)}
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${getRatingColor(fb.providerFeedback.rating)}`}>
+                              {fb.providerFeedback.rating}
+                            </span>
+                          </div>
+                          {fb.providerFeedback.comment && (
+                            <p className="text-[10px] text-gray-400 italic line-clamp-1 max-w-[120px]" title={fb.providerFeedback.comment}>
+                              "{fb.providerFeedback.comment}"
+                            </p>
+                          )}
                         </div>
                       ) : <span className="text-xs text-gray-400">—</span>}
                     </td>
                     <td className="px-5 py-4">
                       {fb.serviceFeedback?.rating ? (
-                        <div className="flex items-center gap-2">
-                          {renderStars(fb.serviceFeedback.rating)}
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${getRatingColor(fb.serviceFeedback.rating)}`}>
-                            {fb.serviceFeedback.rating}
-                          </span>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            {renderStars(fb.serviceFeedback.rating)}
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${getRatingColor(fb.serviceFeedback.rating)}`}>
+                              {fb.serviceFeedback.rating}
+                            </span>
+                          </div>
+                          {fb.serviceFeedback.comment && (
+                            <p className="text-[10px] text-gray-400 italic line-clamp-1 max-w-[120px]" title={fb.serviceFeedback.comment}>
+                              "{fb.serviceFeedback.comment}"
+                            </p>
+                          )}
                         </div>
                       ) : <span className="text-xs text-gray-400">—</span>}
                     </td>
                     <td className="px-5 py-4 text-sm text-gray-500">{formatDate(fb.createdAt)}</td>
+                    <td className="px-5 py-4">
+                      {fb.serviceFeedback?.isApproved ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-50 text-green-700 border border-green-200">
+                          <CheckCircle size={10} /> Approved
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-yellow-50 text-yellow-700 border border-yellow-200">
+                          <Slash size={10} /> Pending
+                        </span>
+                      )}
+                    </td>
                     <td className="px-5 py-4">
                       <button
                         onClick={() => fetchFeedbackDetails(fb._id)}
@@ -356,6 +405,22 @@ const AdminFeedback = () => {
                     <p className="mt-1 p-3 bg-white rounded border border-gray-100 text-secondary text-sm">
                       {selectedFeedback.serviceFeedback?.comment || 'No comment provided'}
                     </p>
+                  </div>
+                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-200">
+                    <span className="text-sm font-medium text-secondary">Comment Visibility</span>
+                    <button
+                      onClick={() => handleToggleApproval(selectedFeedback._id)}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${selectedFeedback.serviceFeedback?.isApproved
+                        ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200'
+                        : 'bg-green-50 text-green-600 hover:bg-green-100 border border-green-200'
+                        }`}
+                    >
+                      {selectedFeedback.serviceFeedback?.isApproved ? (
+                        <><Slash size={16} /> Hide Comment</>
+                      ) : (
+                        <><CheckCircle size={16} /> Approve Comment</>
+                      )}
+                    </button>
                   </div>
                 </div>
               </div>

@@ -74,6 +74,10 @@ const feedbackSchema = new Schema({
     isEdited: {
       type: Boolean,
       default: false
+    },
+    isApproved: {
+      type: Boolean,
+      default: false
     }
   }
 }, {

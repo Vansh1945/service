@@ -511,7 +511,8 @@ const getPublicServiceById = async (req, res) => {
         const transformedFeedback = feedbacks.map(feedback => ({
             _id: feedback._id,
             rating: feedback.serviceFeedback.rating,
-            comment: feedback.serviceFeedback.comment || '',
+            comment: feedback.serviceFeedback.isApproved ? (feedback.serviceFeedback.comment || '') : '',
+            isApproved: feedback.serviceFeedback.isApproved || false,
             customer: feedback.customer,
             createdAt: feedback.createdAt,
             updatedAt: feedback.updatedAt || feedback.createdAt,
