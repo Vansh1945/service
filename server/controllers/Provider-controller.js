@@ -1160,7 +1160,8 @@ exports.getDashboardSummary = async (req, res) => {
             bookingStats,
             todayEarnings,
             totalEarningsRaw,
-            ratingStats
+            ratingStats,
+            totalComplaintsCount
         ] = await Promise.all([
             // Booking statistics
             Booking.aggregate([
@@ -1242,7 +1243,7 @@ exports.getDashboardSummary = async (req, res) => {
         // Process today's earnings
         const todaysEarnings = todayEarnings.length > 0 ? todayEarnings[0].totalEarnings : 0;
         const totalEarnings = totalEarningsRaw.length > 0 ? totalEarningsRaw[0].totalEarnings : 0;
-        const totalComplaints = results[6] || 0;
+        const totalComplaints = totalComplaintsCount || 0;
 
         // Process rating stats
         const averageRating = ratingStats.length > 0 ? parseFloat(ratingStats[0].averageRating.toFixed(1)) : 0;

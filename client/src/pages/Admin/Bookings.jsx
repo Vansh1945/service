@@ -37,7 +37,8 @@ import {
     Target,
     X,
     ChevronLeft,
-    ChevronRight
+    ChevronRight,
+    ExternalLink
 } from 'lucide-react';
 
 // Static option arrays outside component — never change between renders
@@ -1011,6 +1012,25 @@ const AdminBookingsView = () => {
                                             <div className="flex justify-between items-center">
                                                 <span className="text-sm font-bold text-secondary">Total Amount Paid</span>
                                                 <span className="font-bold text-primary text-lg">{formatCurrency(selectedBooking.payment.totalAmount)}</span>
+                                            </div>
+
+                                            {/* Commission Breakdown for Admin */}
+                                            <div className="mt-3 pt-3 border-t border-dashed border-gray-200 bg-white/50 p-2 rounded-lg">
+                                                <div className="flex justify-between items-center text-xs">
+                                                    <span className="text-gray-500 font-medium">Platform Commission:</span>
+                                                    <span className="font-bold text-red-500">-{formatCurrency(selectedBooking.commission?.amount || selectedBooking.booking?.commissionAmount || 0)}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center text-sm mt-1">
+                                                    <span className="text-gray-600 font-bold">Provider Net Earning:</span>
+                                                    <span className="font-black text-green-600">
+                                                        {formatCurrency(selectedBooking.booking?.providerEarnings || (selectedBooking.payment.totalAmount - (selectedBooking.commission?.amount || 0)))}
+                                                    </span>
+                                                </div>
+                                                {selectedBooking.commission?.rule && (
+                                                    <div className="text-[10px] text-gray-400 mt-1 text-right italic">
+                                                        Applied Rule: {selectedBooking.commission.rule.name || 'Platform Standard'}
+                                                    </div>
+                                                )}
                                             </div>
                                             <div className="pt-2">
                                                 <div className="flex justify-between">

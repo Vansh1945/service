@@ -4,7 +4,7 @@ import { useAuth } from '../../context/auth';
 import Loader from '../../components/Loader';
 import * as TransactionService from '../../services/TransactionService';
 import Pagination from '../../components/Pagination';
-import { formatDate, formatCurrency } from '../../utils/format';
+import { formatDate, formatDateTime, formatCurrency } from '../../utils/format';
 import {
     Search,
     Filter,
@@ -292,11 +292,19 @@ const AdminTransactions = () => {
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex flex-col items-end">
                                                 <span className="text-sm font-bold text-secondary">
-                                                    {formatCurrency(txn.amount)}
+                                                    {formatCurrency(txn.paymentMethod?.toLowerCase() === 'online' || txn.paymentMethod?.toLowerCase() === 'upi' ? txn.amount / 100 : txn.amount)}
                                                 </span>
-                                                <span className="text-[10px] text-gray-400">
-                                                    Comm: {formatCurrency(txn.commission)}
-                                                </span>
+                                                {(txn.commission > 0 || txn.provider) && (
+                                                    <div className="flex flex-col items-end mt-0.5">
+                                                        <span className="text-[10px] text-gray-400">
+                                                            Comm: {formatCurrency(txn.paymentMethod?.toLowerCase() === 'online' || txn.paymentMethod?.toLowerCase() === 'upi' ? (txn.commission || 0) / 100 : (txn.commission || 0))}
+                                                            {txn.commissionRule?.name && <span className="ml-1 opacity-70 italic text-[9px]">({txn.commissionRule.name})</span>}
+                                                        </span>
+                                                        <span className="text-[10px] text-gray-400">
+                                                            Provider: {formatCurrency(txn.paymentMethod?.toLowerCase() === 'online' || txn.paymentMethod?.toLowerCase() === 'upi' ? (txn.providerEarning || 0) / 100 : (txn.providerEarning || 0))}
+                                                        </span>
+                                                    </div>
+                                                )}
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
@@ -308,7 +316,10 @@ const AdminTransactions = () => {
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 text-right text-sm text-gray-500">
-                                            {formatDate(txn.createdAt)}
+                                            <div className="flex flex-col items-end">
+                                                <span className="whitespace-nowrap">{formatDateTime(txn.createdAt).split('at')[0]}</span>
+                                                <span className="text-[10px] text-gray-400">{formatDateTime(txn.createdAt).split('at')[1]}</span>
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4">
                                             <div className="flex justify-center">
@@ -364,7 +375,9 @@ const AdminTransactions = () => {
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="p-5 rounded-2xl bg-gray-50 border border-gray-100">
                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Total Paid</span>
-                                    <p className="text-3xl font-black text-secondary">{formatCurrency(selectedTransaction.amount)}</p>
+                                    <p className="text-3xl font-black text-secondary">
+                                        {formatCurrency(selectedTransaction.paymentMethod?.toLowerCase() === 'online' || selectedTransaction.paymentMethod?.toLowerCase() === 'upi' ? selectedTransaction.amount / 100 : selectedTransaction.amount)}
+                                    </p>
                                 </div>
                                 <div className="p-5 rounded-2xl bg-gray-50 border border-gray-100">
                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Payment Status</span>
@@ -426,8 +439,12 @@ const AdminTransactions = () => {
                                         </div>
                                         <div>
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Provider</span>
-                                            <p className="text-sm font-semibold text-secondary">{selectedTransaction.provider?.name || 'Unassigned'}</p>
-                                            <p className="text-[10px] text-gray-400">{selectedTransaction.provider?.providerId || '---'}</p>
+                                            <p className="text-sm font-semibold text-secondary">
+                                                {selectedTransaction.provider?.name || selectedTransaction.booking?.provider?.name || 'Unassigned'}
+                                            </p>
+                                            <p className="text-[10px] text-gray-400">
+                                                {selectedTransaction.provider?.providerId || selectedTransaction.booking?.provider?.providerId || '---'}
+                                            </p>
                                         </div>
                                     </div>
                                 </div>
@@ -438,16 +455,39 @@ const AdminTransactions = () => {
                                 <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Financial Breakdown</h4>
                                 <div className="space-y-3">
                                     <div className="flex justify-between items-center text-sm">
-                                        <span className="text-gray-500">Service Amount</span>
-                                        <span className="font-semibold text-secondary">{formatCurrency(selectedTransaction.amount)}</span>
+                                        <span className="text-gray-500">Service Amount (Subtotal)</span>
+                                        <span className="font-semibold text-secondary">
+                                            {formatCurrency(selectedTransaction.booking?.subtotal || (selectedTransaction.paymentMethod?.toLowerCase() === 'online' || selectedTransaction.paymentMethod?.toLowerCase() === 'upi' ? selectedTransaction.amount / 100 : selectedTransaction.amount))}
+                                        </span>
                                     </div>
+                                    
+                                    {selectedTransaction.booking?.totalDiscount > 0 && (
+                                        <div className="flex justify-between items-center text-sm">
+                                            <span className="text-gray-500">Discount {selectedTransaction.booking?.couponApplied?.code && `(${selectedTransaction.booking.couponApplied.code})`}</span>
+                                            <span className="font-semibold text-green-600">
+                                                -{formatCurrency(selectedTransaction.booking.totalDiscount)}
+                                            </span>
+                                        </div>
+                                    )}
+
                                     <div className="flex justify-between items-center text-sm">
-                                        <span className="text-gray-500">Commission (Platform)</span>
-                                        <span className="font-semibold text-red-500">-{formatCurrency(selectedTransaction.commission)}</span>
+                                        <div className="flex flex-col">
+                                            <span className="text-gray-500">Commission (Platform)</span>
+                                            {selectedTransaction.commissionRule?.name && (
+                                                <span className="text-[10px] text-gray-400 italic">
+                                                    Rule: {selectedTransaction.commissionRule.name} ({selectedTransaction.commissionRule.rate}{selectedTransaction.commissionRule.type === 'percentage' ? '%' : ' Fixed'})
+                                                </span>
+                                            )}
+                                        </div>
+                                        <span className="font-semibold text-red-500">
+                                            -{formatCurrency(selectedTransaction.paymentMethod?.toLowerCase() === 'online' || selectedTransaction.paymentMethod?.toLowerCase() === 'upi' ? (selectedTransaction.commission || 0) / 100 : (selectedTransaction.commission || 0))}
+                                        </span>
                                     </div>
                                     <div className="pt-3 border-t border-gray-200 flex justify-between items-center">
                                         <span className="font-bold text-secondary">Provider Earning</span>
-                                        <span className="text-lg font-black text-green-600">{formatCurrency(selectedTransaction.providerEarning)}</span>
+                                        <span className="text-lg font-black text-green-600">
+                                            {formatCurrency(selectedTransaction.paymentMethod?.toLowerCase() === 'online' || selectedTransaction.paymentMethod?.toLowerCase() === 'upi' ? (selectedTransaction.providerEarning || 0) / 100 : (selectedTransaction.providerEarning || 0))}
+                                        </span>
                                     </div>
                                 </div>
                             </div>
@@ -469,7 +509,7 @@ const AdminTransactions = () => {
                                         <div className="p-1.5 bg-gray-100 rounded-lg">
                                             <Calendar className="w-4 h-4 text-secondary" />
                                         </div>
-                                        <span className="text-sm font-semibold text-secondary">{formatDate(selectedTransaction.createdAt)}</span>
+                                        <span className="text-sm font-semibold text-secondary">{formatDateTime(selectedTransaction.createdAt)}</span>
                                     </div>
                                 </div>
                             </div>

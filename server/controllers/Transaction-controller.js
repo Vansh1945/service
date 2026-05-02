@@ -89,8 +89,9 @@ const createOrder = async (req, res) => {
     }
 
     // Create Razorpay order with better error handling
+    // frontend sends amount in paise (Rupees * 100)
     const options = {
-      amount: amount, // Convert to paise
+      amount: Math.round(amount), // Already in paise from frontend
       currency: 'INR',
       receipt: `booking_${bookingId}`,
       payment_capture: 1,
@@ -113,19 +114,51 @@ const createOrder = async (req, res) => {
       });
     }
 
+    // Calculate commission and provider earnings if missing (e.g. for new bookings)
+    let commission = booking.commissionAmount || 0;
+    let providerEarning = booking.providerEarnings || 0;
+    let commissionRuleId = booking.commissionRule || null;
+
+    if (commission === 0 && providerEarning === 0) {
+      try {
+        const CommissionRule = mongoose.model('CommissionRule');
+        const rule = await CommissionRule.getCommissionForProvider(booking.provider || null);
+
+        if (rule) {
+          const { commission: calculatedComm, netAmount } = CommissionRule.calculateCommission(booking.totalAmount, rule);
+          commission = calculatedComm || 0;
+          providerEarning = netAmount || booking.totalAmount;
+          commissionRuleId = rule._id;
+        } else {
+          providerEarning = booking.totalAmount;
+        }
+      } catch (err) {
+        console.error('Error calculating initial commission:', err);
+        providerEarning = booking.totalAmount;
+      }
+    }
+
+    // IMPORTANT: Store online payment values in paise for consistency with existing data
+    // amount is already in paise from frontend
+    const isOnline = true; // Since this is createOrder (Razorpay)
+    const finalAmount = amount;
+    const finalCommission = commission * 100;
+    const finalProviderEarning = providerEarning * 100;
+
     // Create transaction record ONLY for online payments
     const transaction = new Transaction({
-      amount: amount / 100, // Convert paise to standard currency units (Rupees)
+      amount: finalAmount,
       currency: 'INR',
       paymentMethod: 'online', // Force online payment method
       booking: bookingId,
       bookingId: booking.bookingId, // Human readable booking ID
       user: userId,
-      customerId: req.user.customerId || userId.toString(), // Store customer string ID if available
+      customerId: req.user.customerId || userId.toString(),
       provider: booking.provider,
       providerId: booking.providerId || (booking.provider ? booking.provider.toString() : null),
-      commission: booking.commissionAmount || 0,
-      providerEarning: booking.providerEarnings || 0,
+      commission: finalCommission,
+      providerEarning: finalProviderEarning,
+      commissionRule: commissionRuleId,
       razorpayOrderId: order.id,
       paymentStatus: 'pending'
     });
@@ -380,9 +413,26 @@ const getAllTransactions = async (req, res) => {
 
     const filter = {};
     if (bookingId) {
+      const mongoose = require('mongoose');
+      const Booking = require('../models/Booking-model');
+
+      // 1. Find any bookings that match the search term (human-readable ID or internal ID)
+      const matchingBookings = await Booking.find({
+        $or: [
+          { bookingId: { $regex: bookingId, $options: 'i' } },
+          ...(mongoose.Types.ObjectId.isValid(bookingId) ? [{ _id: bookingId }] : [])
+        ]
+      }).select('_id');
+
+      const bookingObjectIds = matchingBookings.map(b => b._id);
+
+      // 2. Build a comprehensive search filter for the transaction
       filter.$or = [
         { bookingId: { $regex: bookingId, $options: 'i' } },
-        { transactionId: { $regex: bookingId, $options: 'i' } }
+        { transactionId: { $regex: bookingId, $options: 'i' } },
+        { razorpayOrderId: { $regex: bookingId, $options: 'i' } },
+        { razorpayPaymentId: { $regex: bookingId, $options: 'i' } },
+        { booking: { $in: bookingObjectIds } }
       ];
     }
     if (status && status !== 'all') {
@@ -393,8 +443,10 @@ const getAllTransactions = async (req, res) => {
       .populate('user', 'name email phone')
       .populate({
         path: 'booking',
-        select: 'bookingId services totalAmount status'
+        select: 'bookingId services totalAmount status subtotal totalDiscount couponApplied',
+        populate: { path: 'services.service', select: 'title' }
       })
+      // .populate('commissionRule', 'name rate type')
       .populate('provider', 'name email phone providerId')
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -429,8 +481,10 @@ const getTransactionById = async (req, res) => {
       .populate('user', 'name email phone')
       .populate({
         path: 'booking',
+        select: 'bookingId services totalAmount status subtotal totalDiscount couponApplied',
         populate: { path: 'services.service', select: 'title' }
       })
+      // .populate('commissionRule', 'name rate type')
       .populate('provider', 'name email phone providerId')
       .lean();
 

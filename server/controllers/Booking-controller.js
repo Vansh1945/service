@@ -1458,6 +1458,27 @@ const acceptBooking = async (req, res) => {
 
     await booking.save();
 
+    // Sync transaction record with the new provider and calculated commission
+    try {
+      const isOnline = booking.paymentMethod?.toLowerCase() === 'online' || booking.paymentMethod?.toLowerCase() === 'upi';
+      await Transaction.updateMany(
+        { booking: booking._id },
+        {
+          provider: booking.provider,
+          providerId: booking.provider.toString(),
+          commission: isOnline ? (booking.commissionAmount * 100) : (booking.commissionAmount || 0),
+          providerEarning: isOnline ? (booking.providerEarnings * 100) : (booking.providerEarnings || 0),
+          commissionRule: booking.commissionRule,
+          // Sync payment status if booking is already paid
+          ...(booking.paymentStatus === 'paid' && { 
+            paymentStatus: isOnline ? 'success' : 'completed' 
+          })
+        }
+      );
+    } catch (transError) {
+      console.error('Error syncing transaction on booking acceptance:', transError);
+    }
+
     // Populate booking details for response
     const populatedBooking = await Booking.findById(booking._id)
       .populate('customer', 'name email phone')
@@ -2410,16 +2431,35 @@ const assignProvider = async (req, res) => {
       });
     }
 
-    const updatedBooking = await Booking.findByIdAndUpdate(
-      id,
-      { provider: providerId, status: 'scheduled' },
-      { new: true, runValidators: true }
-    );
+    booking.provider = providerId;
+    booking.status = 'scheduled';
+    await booking.save();
+
+    // Sync transaction record with the new provider and calculated commission
+    try {
+      const isOnline = booking.paymentMethod?.toLowerCase() === 'online' || booking.paymentMethod?.toLowerCase() === 'upi';
+      await Transaction.updateMany(
+        { booking: booking._id },
+        {
+          provider: booking.provider,
+          providerId: booking.provider.toString(),
+          commission: isOnline ? (booking.commissionAmount * 100) : (booking.commissionAmount || 0),
+          providerEarning: isOnline ? (booking.providerEarnings * 100) : (booking.providerEarnings || 0),
+          commissionRule: booking.commissionRule,
+          // Sync payment status if booking is already paid
+          ...(booking.paymentStatus === 'paid' && { 
+            paymentStatus: isOnline ? 'success' : 'completed' 
+          })
+        }
+      );
+    } catch (transError) {
+      console.error('Error syncing transaction on provider assignment:', transError);
+    }
 
     res.json({
       success: true,
       message: 'Provider assigned successfully',
-      data: updatedBooking
+      data: booking
     });
   } catch (error) {
     res.status(500).json({

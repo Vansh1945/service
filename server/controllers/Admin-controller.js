@@ -1114,7 +1114,7 @@ const getDashboardSummary = async (req, res) => {
             {
                 $group: {
                     _id: null,
-                    total: { $sum: '$amount' }
+                    total: { $sum: '$netAmount' }
                 }
             }
         ]);
@@ -1611,7 +1611,7 @@ const getDashboardRecentActivity = async (req, res) => {
             .lean();
 
         recentPayments.forEach(payment => {
-            const displayAmount = payment.paymentMethod === 'online' ? payment.amount / 100 : payment.amount;
+            const displayAmount = payment.amount;
             activities.push({
                 type: 'payment',
                 message: `${payment.paymentMethod} of ₹${displayAmount} by ${payment.user?.name || 'User'}`,
