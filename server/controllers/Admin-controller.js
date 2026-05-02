@@ -1656,6 +1656,232 @@ const getDashboardRecentActivity = async (req, res) => {
     }
 };
 
+/**
+ * Get consolidated dashboard analytics
+ */
+const getDashboardAnalytics = async (req, res) => {
+    try {
+        const { period = '7d' } = req.query;
+        let startDate;
+        const now = new Date();
+
+        switch (period) {
+            case '1d':
+                startDate = moment().startOf('day').toDate();
+                break;
+            case '24h':
+                startDate = moment().subtract(24, 'hours').toDate();
+                break;
+            case '7d':
+                startDate = moment().subtract(7, 'days').startOf('day').toDate();
+                break;
+            case '30d':
+                startDate = moment().subtract(30, 'days').startOf('day').toDate();
+                break;
+            case '90d':
+                startDate = moment().subtract(90, 'days').startOf('day').toDate();
+                break;
+            case '180d':
+                startDate = moment().subtract(180, 'days').startOf('day').toDate();
+                break;
+            case '365d':
+                startDate = moment().subtract(365, 'days').startOf('day').toDate();
+                break;
+            default:
+                startDate = moment().subtract(7, 'days').startOf('day').toDate();
+        }
+
+        const matchStage = {
+            createdAt: { $gte: startDate }
+        };
+
+        // 1. Booking & Revenue Analytics
+        const bookingStatsAgg = await Booking.aggregate([
+            { $match: matchStage },
+            {
+                $facet: {
+                    statusDistribution: [
+                        { $group: { _id: "$status", count: { $sum: 1 } } }
+                    ],
+                    revenueOverview: [
+                        { $match: { status: 'completed' } },
+                        {
+                            $group: {
+                                _id: null,
+                                totalRevenue: { $sum: "$totalAmount" },
+                                totalCommission: { $sum: "$commissionAmount" },
+                                totalPayout: { $sum: "$providerEarnings" },
+                                completedCount: { $sum: 1 }
+                            }
+                        }
+                    ],
+                    chartData: [
+                        { $match: { status: 'completed' } },
+                        {
+                            $group: {
+                                _id: { 
+                                    $cond: {
+                                        if: { $in: [period, ['90d', '180d', '365d']] },
+                                        then: { $dateToString: { format: "%Y-%m", date: "$createdAt" } },
+                                        else: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }
+                                    }
+                                },
+                                revenue: { $sum: "$totalAmount" }
+                            }
+                        },
+                        { $sort: { _id: 1 } }
+                    ],
+                    cancellationReasons: [
+                        { $match: { status: 'cancelled' } },
+                        {
+                            $group: {
+                                _id: { $ifNull: ["$cancellationProgress.reason", "Unknown"] },
+                                count: { $sum: 1 }
+                            }
+                        },
+                        { $project: { reason: "$_id", count: 1, _id: 0 } }
+                    ]
+                }
+            }
+        ]);
+
+        const stats = bookingStatsAgg[0];
+
+        // 2. Top Performing Providers
+        const topProvidersAgg = await Booking.aggregate([
+            { $match: { ...matchStage, status: 'completed' } },
+            {
+                $group: {
+                    _id: "$provider",
+                    jobs: { $sum: 1 },
+                    earnings: { $sum: "$providerEarnings" }
+                }
+            },
+            { $sort: { jobs: -1, earnings: -1 } },
+            { $limit: 10 },
+            {
+                $lookup: {
+                    from: 'providers',
+                    localField: '_id',
+                    foreignField: '_id',
+                    as: 'providerInfo'
+                }
+            },
+            { $unwind: "$providerInfo" },
+            {
+                $project: {
+                    name: "$providerInfo.name",
+                    jobs: 1,
+                    earnings: 1,
+                    id: "$providerInfo.providerId",
+                    profilePic: "$providerInfo.profilePicUrl"
+                }
+            }
+        ]);
+
+        // 3. Customer Stats
+        const customerStatsAgg = await User.aggregate([
+            {
+                $facet: {
+                    new: [
+                        { $match: { role: 'customer', createdAt: { $gte: startDate } } },
+                        { $count: "count" }
+                    ],
+                    total: [
+                        { $match: { role: 'customer' } },
+                        { $count: "count" }
+                    ]
+                }
+            }
+        ]);
+
+        // 4. Pending Actions & Live Activity
+        const [pendingProviders, pendingWithdrawals, pendingDisputes] = await Promise.all([
+            Provider.countDocuments({ approved: false, kycStatus: 'pending' }),
+            PaymentRecord.countDocuments({ status: { $in: ['requested', 'processing'] } }),
+            Complaint.countDocuments({ status: { $in: ['Open', 'In-Progress'] } })
+        ]);
+
+        const [recentBookings, recentlyCompleted, latestUsers] = await Promise.all([
+            Booking.find().sort({ createdAt: -1 }).limit(10).populate('customer', 'name').populate('provider', 'name').lean(),
+            Booking.find({ status: 'completed' }).sort({ serviceCompletedAt: -1 }).limit(5).populate('customer', 'name').populate('provider', 'name').lean(),
+            User.find({ role: 'customer' }).sort({ createdAt: -1 }).limit(5).lean()
+        ]);
+
+        // Process Live Activity into flat list
+        const liveActivity = [
+            ...recentBookings.map(b => ({
+                type: 'booking',
+                message: `New booking by ${b.customer?.name || 'Customer'}`,
+                timestamp: b.createdAt,
+                amount: b.totalAmount,
+                status: b.status
+            })),
+            ...recentlyCompleted.map(b => ({
+                type: 'completion',
+                message: `Job completed by ${b.provider?.name || 'Provider'}`,
+                timestamp: b.serviceCompletedAt || b.createdAt,
+                amount: b.totalAmount,
+                status: 'completed'
+            })),
+            ...latestUsers.map(u => ({
+                type: 'registration',
+                message: `New user: ${u.name}`,
+                timestamp: u.createdAt,
+                status: 'new_user'
+            }))
+        ].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 15);
+
+        const totalBookings = stats.statusDistribution.reduce((acc, curr) => acc + curr.count, 0);
+        const cancelledCount = stats.statusDistribution.find(s => s._id === 'cancelled')?.count || 0;
+
+        const result = {
+            bookingStats: {
+                total: totalBookings,
+                completed: stats.revenueOverview[0]?.completedCount || 0,
+                cancelled: cancelledCount,
+                inProgress: stats.statusDistribution.find(s => s._id === 'in-progress')?.count || 0,
+                pending: stats.statusDistribution.find(s => s._id === 'pending')?.count || 0,
+            },
+            revenueStats: {
+                totalRevenue: stats.revenueOverview[0]?.totalRevenue || 0,
+                growth: 0, // Placeholder
+                platformCommission: stats.revenueOverview[0]?.totalCommission || 0,
+                providerPayout: stats.revenueOverview[0]?.totalPayout || 0,
+                chartData: stats.chartData
+            },
+            customerStats: {
+                new: customerStatsAgg[0].new[0]?.count || 0,
+                total: customerStatsAgg[0].total[0]?.count || 0
+            },
+            cancelledStats: {
+                rate: totalBookings > 0 ? ((cancelledCount / totalBookings) * 100).toFixed(1) : 0,
+                reasons: stats.cancellationReasons
+            },
+            topProviders: topProvidersAgg,
+            liveActivity,
+            pendingActions: {
+                pendingVerifications: pendingProviders,
+                pendingWithdrawals: pendingWithdrawals,
+                pendingDisputes: pendingDisputes
+            }
+        };
+
+        res.status(200).json({
+            success: true,
+            ...result
+        });
+
+    } catch (error) {
+        console.error('Get dashboard analytics error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error while fetching dashboard analytics'
+        });
+    }
+};
+
+
 module.exports = {
     registerAdmin,
     getAdminProfile,
@@ -1675,5 +1901,7 @@ module.exports = {
     getDashboardTopProviders,
     getDashboardPendingActions,
     getDashboardLiveStats,
-    getDashboardRecentActivity
+    getDashboardRecentActivity,
+    getDashboardAnalytics
 };
+

@@ -37,5 +37,6 @@ router.get('/dashboard/top-providers', adminController.getDashboardTopProviders)
 router.get('/dashboard/pending-actions', adminController.getDashboardPendingActions);
 router.get('/dashboard/live-stats', adminController.getDashboardLiveStats);
 router.get('/dashboard/recent-activity', adminController.getDashboardRecentActivity);
+router.get('/dashboard/analytics', adminController.getDashboardAnalytics);
 
 module.exports = router;

@@ -75,3 +75,7 @@ export const getDashboardLiveStats = (params) => {
 export const getDashboardRecentActivity = (params) => {
     return axiosInstance.get("/admin/dashboard/recent-activity", { params });
 };
+
+export const getDashboardAnalytics = (params) => {
+    return axiosInstance.get("/admin/dashboard/analytics", { params });
+};
