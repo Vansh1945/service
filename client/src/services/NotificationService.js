@@ -30,6 +30,22 @@ export const sendBroadcast = (data) => {
     return axiosInstance.post("/notifications/send-broadcast", data);
 };
 
-export const getBroadcastHistory = () => {
-    return axiosInstance.get("/notifications/history");
+export const getBroadcastHistory = (params) => {
+    return axiosInstance.get("/notifications/history", { params });
+};
+
+export const updateNotification = (id, data) => {
+    return axiosInstance.patch(`/notifications/admin/${id}`, data);
+};
+
+export const deleteNotification = (id) => {
+    return axiosInstance.delete(`/notifications/admin/${id}`);
+};
+
+export const cancelNotification = (id) => {
+    return axiosInstance.patch(`/notifications/admin/cancel/${id}`);
+};
+
+export const resendNotification = (id) => {
+    return axiosInstance.post(`/notifications/admin/resend/${id}`);
 };

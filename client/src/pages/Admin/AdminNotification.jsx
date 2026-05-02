@@ -3,50 +3,86 @@ import { useAuth } from '../../context/auth';
 import * as NotificationService from '../../services/NotificationService';
 import {
     FiBell, FiSend, FiUsers, FiLink, FiCheckCircle, FiAlertCircle,
-    FiLoader, FiMessageSquare, FiTarget, FiClock, FiRefreshCw, FiSmile
+    FiLoader, FiMessageSquare, FiTarget, FiClock, FiRefreshCw, FiSmile,
+    FiEdit2, FiTrash2, FiXCircle, FiFilter, FiCalendar
 } from 'react-icons/fi';
-import { formatDate } from '../../utils/format';
+import { formatDate, formatDateTime } from '../../utils/format';
 import EmojiPicker from 'emoji-picker-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import toast from 'react-hot-toast';
 
 // ─── Audience Options ────────────────────────────────────────────────────────
 const AUDIENCE_OPTIONS = [
-    { value: 'all',      label: 'All Users',      desc: 'Customers + Providers', icon: '👥' },
-    { value: 'customer', label: 'Customers',      desc: 'Registered customers',  icon: '🛒' },
-    { value: 'provider', label: 'Providers',      desc: 'Service providers',     icon: '🔧' },
+    { value: 'all', label: 'All Users', desc: 'Customers + Providers', icon: '👥' },
+    { value: 'customer', label: 'Customers', desc: 'Registered customers', icon: '🛒' },
+    { value: 'provider', label: 'Providers', desc: 'Service providers', icon: '🔧' },
 ];
 
 // ─── Quick Deep-link Suggestions ─────────────────────────────────────────────
 const QUICK_LINKS = [
-    { label: 'Home',         url: '/'                        },
-    { label: 'Services',     url: '/customer/services'       },
-    { label: 'Bookings',     url: '/customer/bookings'       },
-    { label: 'Providers',    url: '/provider/dashboard'      },
+    { label: 'Home', url: '/' },
+    { label: 'Services', url: '/customer/services' },
+    { label: 'Bookings', url: '/customer/bookings' },
+    { label: 'Providers', url: '/provider/dashboard' },
 ];
 
 // ─── Notification Type Presets ────────────────────────────────────────────────
 const PRESETS = [
     {
-        label:    '🎉 Festival Offer',
-        title:    'Special Festival Discount!',
-        body:     'Get up to 30% off on all services this festive season. Book now!',
-        url:      '/customer/services',
+        label: '🎉 Festival Offer',
+        title: 'Special Festival Discount!',
+        body: 'Get up to 30% off on all services this festive season. Book now!',
+        url: '/customer/services',
         audience: 'all',
     },
     {
-        label:    '📅 Booking Reminder',
-        title:    'Your Service is Due Soon',
-        body:     "Don't forget your upcoming service booking. Stay on schedule!",
-        url:      '/customer/bookings',
+        label: '📅 Booking Reminder',
+        title: 'Your Service is Due Soon',
+        body: "Don't forget your upcoming service booking. Stay on schedule!",
+        url: '/customer/bookings',
         audience: 'customer',
     },
     {
-        label:    '🔔 Provider Alert',
-        title:    'New Opportunity',
-        body:     'New service requests are available in your area. Check dashboard.',
-        url:      '/provider/dashboard',
+        label: '🔔 Provider Alert',
+        title: 'New Opportunity',
+        body: 'New service requests are available in your area. Check dashboard.',
+        url: '/provider/dashboard',
         audience: 'provider',
     },
 ];
+
+const STATUS_COLORS = {
+    sent: 'bg-green-100 text-green-700 border-green-200',
+    pending: 'bg-blue-100 text-blue-700 border-blue-200',
+    failed: 'bg-red-100 text-red-700 border-red-200',
+    cancelled: 'bg-gray-100 text-gray-700 border-gray-200',
+};
+
+// ─── Modal Components ────────────────────────────────────────────────────────
+const Modal = ({ isOpen, onClose, title, children }) => (
+    <AnimatePresence>
+        {isOpen && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                    className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden"
+                >
+                    <div className="px-6 py-4 border-b flex items-center justify-between bg-gray-50">
+                        <h3 className="font-bold text-gray-900">{title}</h3>
+                        <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
+                            <FiXCircle size={20} className="text-gray-500" />
+                        </button>
+                    </div>
+                    <div className="p-6">
+                        {children}
+                    </div>
+                </motion.div>
+            </div>
+        )}
+    </AnimatePresence>
+);
 
 // ─── Component ────────────────────────────────────────────────────────────────
 const AdminNotification = () => {
@@ -54,14 +90,14 @@ const AdminNotification = () => {
 
     const [form, setForm] = useState({
         audience: 'all',
-        title:    '',
-        body:     '',
-        url:      '/',
+        title: '',
+        body: '',
+        url: '/',
         scheduledTime: '',
     });
     const [isScheduled, setIsScheduled] = useState(false);
-    const [status,  setStatus]  = useState(null); // null | 'loading' | 'success' | 'error'
-    const [result,  setResult]  = useState(null);
+    const [status, setStatus] = useState(null); // null | 'loading' | 'success' | 'error'
+    const [result, setResult] = useState(null);
     const [message, setMessage] = useState('');
     const [showPicker, setShowPicker] = useState(null); // 'title' | 'body' | null
     const [logoLoaded, setLogoLoaded] = useState(false);
@@ -70,17 +106,34 @@ const AdminNotification = () => {
     const [loadingHistory, setLoadingHistory] = useState(true);
     const [filter, setFilter] = useState('all');
 
+    // Advanced filtering state
+    const [filters, setFilters] = useState({
+        status: '',
+        startDate: '',
+        endDate: '',
+        page: 1,
+        limit: 10
+    });
+
+    // Modal States
+    const [editModal, setEditModal] = useState({ open: false, item: null });
+    const [confirmModal, setConfirmModal] = useState({ open: false, type: '', id: null, title: '' });
+
     const filteredHistory = history.filter(h => filter === 'all' || h.audience === filter);
 
     const fetchHistory = async () => {
         try {
             setLoadingHistory(true);
-            const res = await NotificationService.getBroadcastHistory();
+            const res = await NotificationService.getBroadcastHistory({
+                ...filters,
+                audience: filter === 'all' ? '' : filter
+            });
             if (res.data?.success) {
-                setHistory(res.data.history);
+                setHistory(res.data.data || res.data.history);
             }
         } catch (error) {
             console.error('Error fetching history:', error);
+            toast.error('Failed to load history');
         } finally {
             setLoadingHistory(false);
         }
@@ -88,7 +141,7 @@ const AdminNotification = () => {
 
     useEffect(() => {
         fetchHistory();
-    }, []);
+    }, [filter, filters.status, filters.startDate, filters.endDate]);
 
     const handleResend = (item) => {
         applyPreset({
@@ -109,9 +162,9 @@ const AdminNotification = () => {
     const applyPreset = (preset) => {
         setForm({
             audience: preset.audience,
-            title:    preset.title,
-            body:     preset.body,
-            url:      preset.url,
+            title: preset.title,
+            body: preset.body,
+            url: preset.url,
         });
         setStatus(null);
         setResult(null);
@@ -123,6 +176,7 @@ const AdminNotification = () => {
         if (!form.title.trim() || !form.body.trim()) {
             setStatus('error');
             setMessage('Title and message are required.');
+            toast.error('Title and message are required.');
             return;
         }
 
@@ -132,10 +186,10 @@ const AdminNotification = () => {
         try {
             const res = await NotificationService.sendBroadcast({
                 audience: form.audience,
-                title:    form.title.trim(),
-                body:     form.body.trim(),
-                url:      form.url.trim() || '/',
-                type:     'broadcast',
+                title: form.title.trim(),
+                body: form.body.trim(),
+                url: form.url.trim() || '/',
+                type: 'broadcast',
                 scheduledTime: isScheduled && form.scheduledTime ? form.scheduledTime : null,
             });
 
@@ -144,17 +198,60 @@ const AdminNotification = () => {
             if (data.success) {
                 setStatus('success');
                 setMessage(data.message || 'Broadcast scheduled successfully!');
+                toast.success(data.message || 'Sent successfully!');
                 setResult(data.data);
                 fetchHistory(); // Refresh history
+                resetForm();
             } else {
                 setStatus('error');
-                setMessage(data.message || 'Broadcast failed. Check if users have notifications enabled.');
+                setMessage(data.message || 'Broadcast failed.');
+                toast.error(data.message);
                 setResult(data.data || null);
             }
         } catch (err) {
             console.error('[AdminNotification] Error:', err);
             setStatus('error');
-            setMessage('Network error. Please check your connection and try again.');
+            setMessage('Network error. Please try again.');
+            toast.error('Failed to send notification');
+        }
+    };
+
+    // ── Admin Actions ─────────────────────────────────────────────────────────
+    const handleAction = async (type, id) => {
+        try {
+            let res;
+            if (type === 'delete') res = await NotificationService.deleteNotification(id);
+            else if (type === 'cancel') res = await NotificationService.cancelNotification(id);
+            else if (type === 'resend') res = await NotificationService.resendNotification(id);
+
+            if (res.data.success) {
+                toast.success(res.data.message || 'Action completed');
+                fetchHistory();
+            }
+        } catch (error) {
+            toast.error('Action failed');
+        } finally {
+            setConfirmModal({ open: false, type: '', id: null, title: '' });
+        }
+    };
+
+    const handleUpdate = async (e) => {
+        e.preventDefault();
+        const { item } = editModal;
+        try {
+            const res = await NotificationService.updateNotification(item._id, {
+                title: item.title,
+                message: item.message,
+                url: item.url,
+                scheduledTime: item.scheduledTime
+            });
+            if (res.data.success) {
+                toast.success('Notification updated');
+                fetchHistory();
+                setEditModal({ open: false, item: null });
+            }
+        } catch (error) {
+            toast.error('Update failed');
         }
     };
 
@@ -178,7 +275,7 @@ const AdminNotification = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 p-4 md:p-6">
-            
+
             {/* ── Page Header ── */}
             <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
@@ -191,7 +288,7 @@ const AdminNotification = () => {
 
             {/* ── Main Layout ── */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-                
+
                 {/* ── Left Column: Compose Form ── */}
                 <div className="lg:col-span-2">
                     <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-sm border p-5 md:p-6">
@@ -208,11 +305,10 @@ const AdminNotification = () => {
                                 {AUDIENCE_OPTIONS.map(opt => (
                                     <label
                                         key={opt.value}
-                                        className={`relative flex flex-col p-4 cursor-pointer rounded-lg border-2 transition-all duration-200 ${
-                                            form.audience === opt.value 
-                                            ? 'border-primary bg-primary/5' 
-                                            : 'border-gray-200 hover:border-primary/30 bg-gray-50'
-                                        }`}
+                                        className={`relative flex flex-col p-4 cursor-pointer rounded-lg border-2 transition-all duration-200 ${form.audience === opt.value
+                                                ? 'border-primary bg-primary/5'
+                                                : 'border-gray-200 hover:border-primary/30 bg-gray-50'
+                                            }`}
                                     >
                                         <input
                                             type="radio"
@@ -227,7 +323,7 @@ const AdminNotification = () => {
                                             {opt.label}
                                         </span>
                                         <span className="text-xs text-gray-500 mt-1">{opt.desc}</span>
-                                        
+
                                         {/* Status checkmark */}
                                         {form.audience === opt.value && (
                                             <div className="absolute top-3 right-3 text-primary">
@@ -257,8 +353,8 @@ const AdminNotification = () => {
                                         required
                                         className="w-full pl-4 pr-10 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors duration-200"
                                     />
-                                    <button 
-                                        type="button" 
+                                    <button
+                                        type="button"
                                         onClick={() => setShowPicker(prev => prev === 'title' ? null : 'title')}
                                         className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-gray-400 hover:text-primary transition-colors rounded-full hover:bg-gray-100"
                                         title="Add Emoji"
@@ -267,7 +363,7 @@ const AdminNotification = () => {
                                     </button>
                                 </div>
                                 <div className="text-xs text-gray-400 text-right mt-1">{form.title.length}/80 chars</div>
-                                
+
                                 {showPicker === 'title' && (
                                     <div className="absolute z-50 mt-1 right-0 w-[300px] max-w-[calc(100vw-3rem)] sm:max-w-none shadow-2xl rounded-xl border border-gray-100">
                                         <EmojiPicker onEmojiClick={handleEmojiClick} skinTonesDisabled width="100%" height={380} />
@@ -292,8 +388,8 @@ const AdminNotification = () => {
                                         rows={3}
                                         className="w-full pl-4 pr-10 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors duration-200 resize-y"
                                     />
-                                    <button 
-                                        type="button" 
+                                    <button
+                                        type="button"
                                         onClick={() => setShowPicker(prev => prev === 'body' ? null : 'body')}
                                         className="absolute right-2 top-2 p-1.5 text-gray-400 hover:text-primary transition-colors rounded-full hover:bg-gray-100"
                                         title="Add Emoji"
@@ -330,11 +426,10 @@ const AdminNotification = () => {
                                             key={ql.url}
                                             type="button"
                                             onClick={() => setForm(prev => ({ ...prev, url: ql.url }))}
-                                            className={`px-3 py-1 text-xs rounded-full border transition-colors ${
-                                                form.url === ql.url 
-                                                ? 'bg-primary/10 border-primary text-primary font-medium' 
-                                                : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
-                                            }`}
+                                            className={`px-3 py-1 text-xs rounded-full border transition-colors ${form.url === ql.url
+                                                    ? 'bg-primary/10 border-primary text-primary font-medium'
+                                                    : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                                                }`}
                                         >
                                             {ql.label}
                                         </button>
@@ -345,9 +440,9 @@ const AdminNotification = () => {
                             {/* Scheduling Section */}
                             <div className="pt-2">
                                 <label className="flex items-center gap-2 cursor-pointer mb-3">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={isScheduled} 
+                                    <input
+                                        type="checkbox"
+                                        checked={isScheduled}
                                         onChange={(e) => setIsScheduled(e.target.checked)}
                                         className="rounded border-gray-300 text-primary focus:ring-primary h-4 w-4"
                                     />
@@ -430,51 +525,73 @@ const AdminNotification = () => {
 
                 {/* ── Right Column: Preview & Presets ── */}
                 <div className="flex flex-col gap-6">
-                    
+
                     {/* Live Preview Card */}
-                    <div className="bg-white rounded-lg shadow-sm border p-5">
-                        <h3 className="text-sm font-bold text-gray-800 mb-4 px-1">Native Preview</h3>
-                        
-                        <div className="bg-gray-100 rounded-xl overflow-hidden shadow-inner border border-gray-200/60">
-                            {/* Device Header Simulator */}
-                            <div className="bg-gray-800 px-3 py-1.5 flex items-center gap-1.5">
-                                <div className="w-2.5 h-2.5 rounded-full bg-red-500"></div>
-                                <div className="w-2.5 h-2.5 rounded-full bg-yellow-500"></div>
-                                <div className="w-2.5 h-2.5 rounded-full bg-green-500"></div>
-                            </div>
+                    <div className="bg-white rounded-xl shadow-sm border p-5">
+                        <h3 className="text-sm font-bold text-gray-800 mb-6 px-1 flex items-center gap-2">
+                            <FiBell className="text-primary" /> Notification View
+                        </h3>
+
+                        <div className="relative mx-auto w-[240px] h-[420px] border-[6px] border-gray-900 rounded-[2.5rem] shadow-xl overflow-hidden bg-gray-50 scale-95 origin-top">
+                            {/* Phone Notch */}
+                            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-5 bg-gray-900 rounded-b-xl z-20"></div>
                             
-                            {/* Alert Body Simulator */}
-                            <div className="p-4 bg-white/90 m-2 rounded-lg shadow-sm border border-gray-100">
-                                <div className="flex items-start gap-3">
-                                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 border border-primary/20 overflow-hidden">
-                                        {!logoLoaded && <FiBell className="text-primary" size={18} />}
+                            {/* Wallpaper/Bg */}
+                            <div className="absolute inset-0 bg-gradient-to-br from-teal-500/10 via-white to-blue-500/10"></div>
+
+                            {/* Status Bar */}
+                            <div className="px-5 pt-3.5 flex justify-between items-center relative z-10 text-[9px] font-bold text-gray-500">
+                                <span>9:41</span>
+                                <div className="flex gap-1 items-center">
+                                    <div className="w-2.5 h-1.5 border border-gray-400 rounded-sm"></div>
+                                    <div className="w-2 h-2 bg-gray-400 rounded-full scale-50"></div>
+                                </div>
+                            </div>
+
+                            {/* Notification Bubble */}
+                            <div className="mt-4 px-2 relative z-10">
+                                <motion.div 
+                                    initial={{ opacity: 0, y: -20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    key={form.title + form.body}
+                                    className="bg-white/90 backdrop-blur-md rounded-xl shadow-lg border border-white/50 p-3 flex gap-2.5 items-start"
+                                >
+                                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 border border-primary/20 overflow-hidden">
+                                        {!logoLoaded && <FiBell className="text-primary" size={14} />}
                                         <img
                                             src="/icon-192.png"
                                             alt="App"
-                                            className={`w-8 h-8 object-contain transition-opacity duration-200 ${logoLoaded ? 'opacity-100' : 'opacity-0 absolute'}`}
+                                            className={`w-6 h-6 object-contain transition-opacity duration-200 ${logoLoaded ? 'opacity-100' : 'opacity-0 absolute'}`}
                                             onLoad={() => setLogoLoaded(true)}
                                             onError={() => setLogoLoaded(false)}
                                         />
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <div className="text-sm font-bold text-gray-900 truncate">
+                                        <div className="flex justify-between items-center mb-0.5">
+                                            <span className="text-[8px] font-black text-primary uppercase tracking-tight">SERVICE APP</span>
+                                            <span className="text-[8px] text-gray-400">now</span>
+                                        </div>
+                                        <div className="text-[11px] font-bold text-gray-900 leading-tight truncate">
                                             {form.title || "Notification Title"}
                                         </div>
-                                        <div className="text-xs text-gray-600 line-clamp-2 mt-0.5 leading-relaxed">
+                                        <div className="text-[10px] text-gray-600 line-clamp-2 mt-0.5 leading-snug">
                                             {form.body || "Your message body will appear here..."}
                                         </div>
                                     </div>
-                                </div>
+                                </motion.div>
                             </div>
+                            
+                            {/* Bottom Home Indicator */}
+                            <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-16 h-1 bg-gray-300 rounded-full"></div>
                         </div>
 
-                        <div className="mt-4 flex items-center justify-between text-xs px-1 text-gray-500">
+                        <div className="mt-4 flex items-center justify-between text-[10px] px-2 text-gray-400 font-bold uppercase tracking-wider">
                             <div className="flex items-center gap-1">
-                                <FiUsers className="text-primary" />
+                                <FiUsers className="text-primary" size={12} />
                                 <span className="capitalize">{form.audience}</span>
                             </div>
-                            <div className="flex items-center gap-1 max-w-[120px] truncate">
-                                <FiLink className="text-primary" />
+                            <div className="flex items-center gap-1 max-w-[100px] truncate">
+                                <FiLink className="text-primary" size={12} />
                                 <span className="truncate">{form.url}</span>
                             </div>
                         </div>
@@ -506,18 +623,17 @@ const AdminNotification = () => {
                     <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                         <FiClock className="text-primary" /> Broadcast History
                     </h2>
-                    
+
                     {/* Filters */}
                     <div className="flex flex-wrap overflow-x-auto whitespace-nowrap scrollbar-hide p-1 bg-gray-100 rounded-lg">
                         {['all', 'customer', 'provider'].map(f => (
                             <button
                                 key={f}
                                 onClick={() => setFilter(f)}
-                                className={`px-4 py-1.5 text-xs font-medium rounded-md capitalize transition-all ${
-                                    filter === f 
-                                    ? 'bg-white text-primary shadow-sm' 
-                                    : 'text-gray-600 hover:text-gray-900'
-                                }`}
+                                className={`px-4 py-1.5 text-xs font-medium rounded-md capitalize transition-all ${filter === f
+                                        ? 'bg-white text-primary shadow-sm'
+                                        : 'text-gray-600 hover:text-gray-900'
+                                    }`}
                             >
                                 {f}
                             </button>
@@ -541,18 +657,36 @@ const AdminNotification = () => {
                             <div key={item._id} className="border border-gray-200 rounded-xl p-4 hover:border-primary/30 hover:shadow-sm transition-all bg-white relative group">
                                 <div className="flex justify-between items-start gap-4">
                                     <div className="flex-1">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${STATUS_COLORS[item.status] || 'bg-gray-100'}`}>
+                                                {item.status}
+                                            </span>
+                                            {item.scheduledTime && item.status === 'pending' && (
+                                                <span className="text-[10px] font-medium text-blue-600 flex items-center gap-1">
+                                                    <FiClock size={10} /> {formatDateTime(item.scheduledTime)}
+                                                </span>
+                                            )}
+                                        </div>
                                         <h4 className="font-bold text-gray-900 text-sm">{item.title}</h4>
                                         <p className="text-xs text-gray-600 mt-1 line-clamp-2 leading-relaxed">{item.message}</p>
                                     </div>
-                                    <button
-                                        onClick={() => handleResend(item)}
-                                        className="flex-shrink-0 text-primary bg-primary/10 hover:bg-primary hover:text-white px-2 py-1.5 rounded text-xs font-semibold flex items-center gap-1 transition-colors"
-                                        title="Reuse exactly this template"
-                                    >
-                                        <FiRefreshCw size={12} /> <span className="hidden sm:inline">Resend</span>
-                                    </button>
+                                    <div className="flex flex-col gap-1.5">
+                                        <button
+                                            onClick={() => handleResend(item)}
+                                            className="text-primary bg-primary/10 hover:bg-primary hover:text-white px-2 py-1.5 rounded text-[10px] font-bold flex items-center gap-1 transition-colors"
+                                            title="Reuse Template"
+                                        >
+                                            <FiRefreshCw size={12} /> Reuse
+                                        </button>
+                                        <button
+                                            onClick={() => setEditModal({ open: true, item })}
+                                            className="text-gray-600 bg-gray-100 hover:bg-gray-200 px-2 py-1.5 rounded text-[10px] font-bold flex items-center gap-1 transition-colors"
+                                        >
+                                            <FiEdit2 size={12} /> Edit
+                                        </button>
+                                    </div>
                                 </div>
-                                
+
                                 <div className="mt-4 pt-3 border-t border-gray-100 flex flex-wrap gap-x-4 gap-y-2 text-xs text-gray-500">
                                     <div className="flex items-center gap-1.5">
                                         <FiUsers className="text-primary/70" />
@@ -568,22 +702,124 @@ const AdminNotification = () => {
                                     </div>
                                 </div>
 
-                                <div className="mt-3 flex flex-wrap gap-2">
-                                    <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-[10px] font-bold">
-                                        Tgt: {item.totalSent || 0}
-                                    </span>
-                                    <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-[10px] font-bold">
-                                        OK: {item.successCount || 0}
-                                    </span>
-                                    <span className="px-2 py-1 bg-red-100 text-red-700 rounded text-[10px] font-bold">
-                                        Fail: {item.failureCount || 0}
-                                    </span>
+                                <div className="mt-3 flex items-center justify-between">
+                                    <div className="flex flex-wrap gap-2">
+                                        <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-[10px] font-bold">
+                                            Tgt: {item.totalSent || 0}
+                                        </span>
+                                        <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-[10px] font-bold">
+                                            OK: {item.successCount || 0}
+                                        </span>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        {item.status === 'pending' && (
+                                            <button
+                                                onClick={() => setConfirmModal({ open: true, type: 'cancel', id: item._id, title: 'Cancel Notification?' })}
+                                                className="text-orange-600 hover:text-orange-700 p-1"
+                                                title="Cancel"
+                                            >
+                                                <FiXCircle size={16} />
+                                            </button>
+                                        )}
+                                        <button
+                                            onClick={() => setConfirmModal({ open: true, type: 'delete', id: item._id, title: 'Delete from history?' })}
+                                            className="text-red-600 hover:text-red-700 p-1"
+                                            title="Delete"
+                                        >
+                                            <FiTrash2 size={16} />
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         ))}
                     </div>
                 )}
             </div>
+
+            {/* ── Modals ── */}
+            <Modal
+                isOpen={editModal.open}
+                onClose={() => setEditModal({ open: false, item: null })}
+                title="Edit Notification"
+            >
+                {editModal.item && (
+                    <form onSubmit={handleUpdate} className="space-y-4">
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Title</label>
+                            <input
+                                type="text"
+                                value={editModal.item.title}
+                                onChange={(e) => setEditModal(prev => ({ ...prev, item: { ...prev.item, title: e.target.value } }))}
+                                className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Message</label>
+                            <textarea
+                                rows={3}
+                                value={editModal.item.message}
+                                onChange={(e) => setEditModal(prev => ({ ...prev, item: { ...prev.item, message: e.target.value } }))}
+                                className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary/20 outline-none transition-all resize-none"
+                            />
+                        </div>
+                        {editModal.item.status === 'pending' && (
+                            <>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">URL</label>
+                                    <input
+                                        type="text"
+                                        value={editModal.item.url}
+                                        onChange={(e) => setEditModal(prev => ({ ...prev, item: { ...prev.item, url: e.target.value } }))}
+                                        className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary/20 font-mono text-sm outline-none transition-all"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Scheduled Time</label>
+                                    <input
+                                        type="datetime-local"
+                                        value={editModal.item.scheduledTime ? new Date(editModal.item.scheduledTime).toISOString().slice(0, 16) : ''}
+                                        onChange={(e) => setEditModal(prev => ({ ...prev, item: { ...prev.item, scheduledTime: e.target.value } }))}
+                                        className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                                    />
+                                </div>
+                            </>
+                        )}
+                        <div className="pt-2 flex gap-2">
+                            <button type="submit" className="flex-1 bg-primary text-white py-2 rounded-md font-bold hover:bg-teal-700 transition-all">Save Changes</button>
+                            <button type="button" onClick={() => setEditModal({ open: false, item: null })} className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-md font-bold hover:bg-gray-200 transition-all">Cancel</button>
+                        </div>
+                    </form>
+                )}
+            </Modal>
+
+            <Modal
+                isOpen={confirmModal.open}
+                onClose={() => setConfirmModal({ open: false, type: '', id: null, title: '' })}
+                title={confirmModal.title}
+            >
+                <div className="text-center">
+                    <FiAlertCircle className="mx-auto text-red-500 mb-3" size={40} />
+                    <p className="text-sm text-gray-600 mb-6">
+                        {confirmModal.type === 'delete'
+                            ? "Are you sure? This will hide the notification from your history. Scheduled ones will be cancelled."
+                            : "Are you sure you want to cancel this scheduled notification?"}
+                    </p>
+                    <div className="flex gap-3">
+                        <button
+                            onClick={() => handleAction(confirmModal.type, confirmModal.id)}
+                            className="flex-1 bg-red-600 text-white py-2 rounded-md font-bold hover:bg-red-700 transition-all"
+                        >
+                            Yes, Confirm
+                        </button>
+                        <button
+                            onClick={() => setConfirmModal({ open: false, type: '', id: null, title: '' })}
+                            className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-md font-bold hover:bg-gray-200 transition-all"
+                        >
+                            No, Back
+                        </button>
+                    </div>
+                </div>
+            </Modal>
         </div>
     );
 };

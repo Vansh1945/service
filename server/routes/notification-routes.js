@@ -51,5 +51,17 @@ router.post('/send-broadcast', flexAuth, adminOnly, notificationController.sendB
 // GET /api/notifications/history — Admin only
 router.get('/history', flexAuth, adminOnly, notificationController.getBroadcastHistory);
 
+// PATCH /api/notifications/admin/:id — Edit (Admin only)
+router.patch('/admin/:id', flexAuth, adminOnly, notificationController.updateNotification);
+
+// DELETE /api/notifications/admin/:id — Delete/Cancel (Admin only)
+router.delete('/admin/:id', flexAuth, adminOnly, notificationController.deleteNotification);
+
+// PATCH /api/notifications/admin/cancel/:id — Cancel specifically (Admin only)
+router.patch('/admin/cancel/:id', flexAuth, adminOnly, notificationController.cancelNotification);
+
+// POST /api/notifications/admin/resend/:id — Resend (Admin only)
+router.post('/admin/resend/:id', flexAuth, adminOnly, notificationController.resendNotification);
+
 module.exports = router;
 

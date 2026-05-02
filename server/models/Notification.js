@@ -64,12 +64,16 @@ const notificationSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['pending', 'sent', 'failed'],
+        enum: ['pending', 'sent', 'failed', 'cancelled'],
         default: 'sent' // Backward compatibility: existing immediate notifications are 'sent'
     },
     retries: {
         type: Number,
         default: 0
+    },
+    isDeletedByAdmin: {
+        type: Boolean,
+        default: false
     }
 }, { timestamps: true });
 

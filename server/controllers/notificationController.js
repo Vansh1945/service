@@ -258,22 +258,187 @@ const removeToken = async (req, res) => {
 };
 
 /**
- * GET /api/notifications/history
- * Admin-only: Get broadcast history
+ * GET /api/notifications/admin
+ * Admin-only: Get notification history with filters
  */
-const getBroadcastHistory = async (req, res) => {
+const getAdminNotifications = async (req, res) => {
     try {
-        const history = await Notification.find({ type: 'broadcast' })
-            .sort({ createdAt: -1 })
-            .limit(50);
+        const { type, audience, status, startDate, endDate, page = 1, limit = 20 } = req.query;
+        const query = { isDeletedByAdmin: false };
+
+        if (type) query.type = type;
+        if (audience) query.audience = audience;
+        if (status) query.status = status;
+
+        if (startDate || endDate) {
+            query.createdAt = {};
+            if (startDate) query.createdAt.$gte = new Date(startDate);
+            if (endDate) query.createdAt.$lte = new Date(endDate);
+        }
+
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+
+        const [notifications, total] = await Promise.all([
+            Notification.find(query)
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(parseInt(limit))
+                .lean(),
+            Notification.countDocuments(query)
+        ]);
 
         return res.status(200).json({
             success: true,
-            history
+            data: notifications,
+            pagination: {
+                total,
+                page: parseInt(page),
+                limit: parseInt(limit),
+                totalPages: Math.ceil(total / limit)
+            }
         });
     } catch (error) {
-        console.error('getBroadcastHistory error:', error);
-        return res.status(500).json({ success: false, message: 'Failed to fetch broadcast history' });
+        console.error('getAdminNotifications error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to fetch admin notifications' });
+    }
+};
+
+/**
+ * PATCH /api/notifications/admin/:id
+ * Admin-only: Edit notification
+ */
+const updateNotification = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { title, message, url, scheduledTime } = req.body;
+
+        const notification = await Notification.findById(id);
+        if (!notification) {
+            return res.status(404).json({ success: false, message: 'Notification not found' });
+        }
+
+        // Rules:
+        // If notification is already sent -> only allow minor edits (title/message for history)
+        // If scheduled -> allow full edit
+
+        if (notification.status === 'sent') {
+            notification.title = title || notification.title;
+            notification.message = message || notification.message;
+        } else if (notification.status === 'pending') {
+            notification.title = title || notification.title;
+            notification.message = message || notification.message;
+            notification.url = url || notification.url;
+            if (scheduledTime) {
+                notification.scheduledTime = new Date(scheduledTime);
+            }
+        } else {
+            return res.status(400).json({ success: false, message: 'Cannot edit notification in current status' });
+        }
+
+        await notification.save();
+        return res.status(200).json({ success: true, data: notification });
+    } catch (error) {
+        console.error('updateNotification error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to update notification' });
+    }
+};
+
+/**
+ * DELETE /api/notifications/admin/:id
+ * Admin-only: Delete notification (soft delete for history, cancel if pending)
+ */
+const deleteNotification = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const notification = await Notification.findById(id);
+
+        if (!notification) {
+            return res.status(404).json({ success: false, message: 'Notification not found' });
+        }
+
+        if (notification.status === 'pending') {
+            notification.status = 'cancelled';
+        }
+
+        notification.isDeletedByAdmin = true;
+        await notification.save();
+
+        return res.status(200).json({ success: true, message: 'Notification deleted/cancelled' });
+    } catch (error) {
+        console.error('deleteNotification error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to delete notification' });
+    }
+};
+
+/**
+ * PATCH /api/notifications/admin/cancel/:id
+ * Admin-only: Cancel scheduled notification
+ */
+const cancelNotification = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const notification = await Notification.findOneAndUpdate(
+            { _id: id, status: 'pending' },
+            { $set: { status: 'cancelled' } },
+            { new: true }
+        );
+
+        if (!notification) {
+            return res.status(404).json({ success: false, message: 'Notification not found or already sent' });
+        }
+
+        return res.status(200).json({ success: true, message: 'Notification cancelled', data: notification });
+    } catch (error) {
+        console.error('cancelNotification error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to cancel notification' });
+    }
+};
+
+/**
+ * POST /api/notifications/admin/resend/:id
+ * Admin-only: Resend a broadcast notification
+ */
+const resendNotification = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const notification = await Notification.findById(id);
+
+        if (!notification) {
+            return res.status(404).json({ success: false, message: 'Notification not found' });
+        }
+
+        // Use existing sendBroadcastNotification function
+        const result = await sendBroadcastNotification(notification.audience || 'all', {
+            title: notification.title,
+            body: notification.message,
+            url: notification.url,
+            data: { type: notification.type, url: notification.url }
+        });
+
+        // Update existing record or create new history? 
+        // Typically resending should probably create a new record for tracking success/failure of the new attempt.
+        // But for simplicity and to match the "extension" request, let's create a new one.
+        
+        await Notification.create({
+            title: notification.title,
+            message: notification.message,
+            type: 'broadcast',
+            audience: notification.audience,
+            url: notification.url,
+            totalSent: result.total || 0,
+            successCount: result.sent || 0,
+            failureCount: result.failed || 0,
+            status: 'sent'
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: `Resent successfully to ${result.sent} devices`,
+            data: result
+        });
+    } catch (error) {
+        console.error('resendNotification error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to resend notification' });
     }
 };
 
@@ -285,5 +450,9 @@ module.exports = {
     saveToken,
     removeToken,
     sendBroadcast,
-    getBroadcastHistory
+    getBroadcastHistory: getAdminNotifications, // Maintain backward compatibility if needed, or rename
+    updateNotification,
+    deleteNotification,
+    cancelNotification,
+    resendNotification
 };
