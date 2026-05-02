@@ -134,6 +134,12 @@ export const NotificationProvider = ({ children }) => {
                 navigate(targetRoute, { state: { fromNotification: true } });
             };
 
+            // Role-based filtering: only show notifications intended for the current user's role
+            if (requiredRole && requiredRole !== userRole && !(requiredRole === 'admin' && isAdmin)) {
+                console.log(`[FCM] Ignoring notification for role ${requiredRole} (current user role: ${userRole})`);
+                return;
+            }
+
             toast.info(`${title}: ${body}`, {
                 onClick: handleNavigation,
                 autoClose: 6000,
@@ -155,7 +161,7 @@ export const NotificationProvider = ({ children }) => {
         });
 
         return () => unsubscribe();
-    }, [isAuthenticated, token]);
+    }, [isAuthenticated, token, userRole, isAdmin]);
 
     const contextValue = {
         fcmToken,

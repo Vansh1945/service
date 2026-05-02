@@ -84,11 +84,13 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
                     title,
                     body: message,
                     url: generatedUrl,
+                    role: role,
                     data: {
                         bookingId: referenceId ? referenceId.toString() : '',
                         userId: userId.toString(),
                         type: type,
-                        url: generatedUrl
+                        url: generatedUrl,
+                        role: role
                     }
                 });
             } catch (fcmError) {
@@ -113,10 +115,12 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
                         title,
                         body: message,
                         url: generatedUrl,
+                        role: 'admin',
                         data: {
                             referenceId: referenceId ? referenceId.toString() : '',
                             type: type,
-                            url: generatedUrl
+                            url: generatedUrl,
+                            role: 'admin'
                         }
                     });
                 } catch (fcmError) {

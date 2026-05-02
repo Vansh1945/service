@@ -84,6 +84,7 @@ const ProviderBooking = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [bookingsPerPage, setBookingsPerPage] = useState(10);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [actionLoading, setActionLoading] = useState({ id: null, type: null });
 
   // ── Calculation helpers ──────────────────────────────────────────────────
   const calculateSubtotal = useCallback((booking) => {
@@ -202,6 +203,8 @@ const ProviderBooking = () => {
     try {
       if (!bookingId) { showToast('Booking ID is missing. Please refresh and try again.', 'error'); return; }
       
+      setActionLoading({ id: bookingId, type: action });
+      
       let response;
       if (action === 'accept') response = await BookingService.acceptBooking(bookingId);
       else if (action === 'reject') response = await BookingService.rejectBooking(bookingId);
@@ -210,10 +213,20 @@ const ProviderBooking = () => {
       else throw new Error('Invalid action');
 
       const result = response.data;
+      
+      // Clear any pending toasts to ensure only the latest one shows if needed
+      // toast.dismiss(); // Optional: uncomment if you want to be extremely aggressive
+
       showToast(result.message || `Booking ${action}ed successfully`, 'success');
-      refreshData(); setShowModal(false); setSelectedBooking(null); setConfirmDialog({ isOpen: false, type: '', data: null });
+      
+      await refreshData(); 
+      setShowModal(false); 
+      setSelectedBooking(null); 
+      setConfirmDialog({ isOpen: false, type: '', data: null });
     } catch (err) { 
       showToast(err.response?.data?.message || err.message, 'error');
+    } finally {
+      setActionLoading({ id: null, type: null });
     }
   }, [showToast, refreshData]);
 
@@ -415,15 +428,22 @@ const ProviderBooking = () => {
             {booking.status === 'pending' && (!booking.provider || booking.provider === user?._id) && (
               <>
                 <button
+                  disabled={actionLoading.id === booking._id}
                   onClick={() => handleBookingAction(booking._id, 'accept')}
-                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white bg-primary hover:bg-primary/90 transition-colors w-full"
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white bg-primary hover:bg-primary/90 transition-colors w-full disabled:bg-gray-300 disabled:cursor-not-allowed"
                 >
-                  <Check className="w-3.5 h-3.5" /> Accept
+                  {actionLoading.id === booking._id && actionLoading.type === 'accept' ? (
+                    <Loader className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Check className="w-3.5 h-3.5" />
+                  )}
+                  {actionLoading.id === booking._id && actionLoading.type === 'accept' ? 'Accepting...' : 'Accept'}
                 </button>
                 {booking.paymentStatus !== 'paid' && (
                   <button
+                    disabled={actionLoading.id === booking._id}
                     onClick={() => handleBookingAction(booking._id, 'reject', { reason: 'Provider declined' })}
-                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white bg-accent hover:bg-accent/90 transition-colors w-full"
+                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white bg-accent hover:bg-accent/90 transition-colors w-full disabled:bg-gray-300 disabled:cursor-not-allowed"
                   >
                     <X className="w-3.5 h-3.5" /> Reject
                   </button>
@@ -434,20 +454,32 @@ const ProviderBooking = () => {
             {/* Accepted: Start Service */}
             {booking.status === 'accepted' && (
               <button
+                disabled={actionLoading.id === booking._id}
                 onClick={() => handleBookingAction(booking._id, 'start')}
-                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white bg-primary hover:bg-primary/90 transition-colors w-full"
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white bg-primary hover:bg-primary/90 transition-colors w-full disabled:bg-gray-300 disabled:cursor-not-allowed"
               >
-                <Play className="w-3.5 h-3.5" /> Start Service
+                {actionLoading.id === booking._id && actionLoading.type === 'start' ? (
+                  <Loader className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Play className="w-3.5 h-3.5" />
+                )}
+                {actionLoading.id === booking._id && actionLoading.type === 'start' ? 'Starting...' : 'Start Service'}
               </button>
             )}
 
             {/* In-Progress: Complete */}
             {booking.status === 'in-progress' && (
               <button
+                disabled={actionLoading.id === booking._id}
                 onClick={() => handleBookingAction(booking._id, 'complete')}
-                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white bg-primary hover:bg-primary/90 transition-colors w-full"
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white bg-primary hover:bg-primary/90 transition-colors w-full disabled:bg-gray-300 disabled:cursor-not-allowed"
               >
-                <Check className="w-3.5 h-3.5" /> Complete
+                {actionLoading.id === booking._id && actionLoading.type === 'complete' ? (
+                  <Loader className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Check className="w-3.5 h-3.5" />
+                )}
+                {actionLoading.id === booking._id && actionLoading.type === 'complete' ? 'Completing...' : 'Complete'}
               </button>
             )}
           </div>
