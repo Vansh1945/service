@@ -3,7 +3,6 @@ import { getToken, onMessage } from 'firebase/messaging';
 import { messaging } from '../../firebase';
 import { useAuth } from './auth';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'react-toastify';
 
 import * as NotificationService from '../services/NotificationService';
 
@@ -140,10 +139,8 @@ export const NotificationProvider = ({ children }) => {
                 return;
             }
 
-            toast.info(`${title}: ${body}`, {
-                onClick: handleNavigation,
-                autoClose: 6000,
-            });
+            // Removed toast.info to avoid duplicate UI popups, 
+            // relying purely on system-level Notification.
             
             if (Notification.permission === 'granted') {
                 const notif = new Notification(title, {

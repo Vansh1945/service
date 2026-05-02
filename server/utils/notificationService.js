@@ -163,10 +163,21 @@ const notifyAllAdmins = async (payload) => {
 const sendBroadcastNotification = async (audience, payload) => {
     try {
         let allTokens = [];
+        let notificationsToSave = [];
 
         if (audience === 'all' || audience === 'customer') {
-            const users = await User.find({}, 'fcmTokens');
+            const users = await User.find({}, '_id fcmTokens');
             users.forEach(u => {
+                notificationsToSave.push({
+                    userId: u._id,
+                    role: 'customer',
+                    title: payload.title,
+                    message: payload.body,
+                    type: payload.data?.type || 'broadcast',
+                    referenceId: payload.data?.referenceId || null,
+                    url: payload.url || '/',
+                    isRead: false
+                });
                 if (u.fcmTokens && u.fcmTokens.length > 0) {
                     u.fcmTokens.forEach(t => allTokens.push(t.token));
                 }
@@ -174,12 +185,26 @@ const sendBroadcastNotification = async (audience, payload) => {
         }
 
         if (audience === 'all' || audience === 'provider') {
-            const providers = await Provider.find({ isDeleted: false }, 'fcmTokens');
+            const providers = await Provider.find({ isDeleted: false }, '_id fcmTokens');
             providers.forEach(p => {
+                notificationsToSave.push({
+                    userId: p._id,
+                    role: 'provider',
+                    title: payload.title,
+                    message: payload.body,
+                    type: payload.data?.type || 'broadcast',
+                    referenceId: payload.data?.referenceId || null,
+                    url: payload.url || '/',
+                    isRead: false
+                });
                 if (p.fcmTokens && p.fcmTokens.length > 0) {
                     p.fcmTokens.forEach(t => allTokens.push(t.token));
                 }
             });
+        }
+
+        if (notificationsToSave.length > 0) {
+            await Notification.insertMany(notificationsToSave);
         }
 
         const uniqueTokens = [...new Set(allTokens.filter(t => t && t.trim()))];
