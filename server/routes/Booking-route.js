@@ -7,7 +7,7 @@ const bookingController = require('../controllers/Booking-controller');
 const { userAuthMiddleware } = require('../middlewares/User-middleware');
 const { providerAuthMiddleware, providerTestPassedMiddleware } = require('../middlewares/Provider-middleware');
 const adminAuthMiddleware = require('../middlewares/Admin-middleware');
-const { roleMiddleware } = require('../middlewares/role-middleware');
+const { roleMiddleware } = require('../middlewares/Role-Middleware');
 
 // Specific role checkers
 const requireCustomer = roleMiddleware(['customer']);
@@ -16,7 +16,7 @@ const requireAdmin = roleMiddleware(['admin']);
 
 // USER ROUTES
 router.post('/', userAuthMiddleware, requireCustomer, bookingController.createBooking);
-router.post('/confirm', userAuthMiddleware, requireCustomer, bookingController.confirmBooking); 
+router.post('/confirm', userAuthMiddleware, requireCustomer, bookingController.confirmBooking);
 router.patch('/:id/status', userAuthMiddleware, requireCustomer, bookingController.updateBookingStatus);
 router.get('/user', userAuthMiddleware, requireCustomer, bookingController.getUserBookings);
 router.get('/customer', userAuthMiddleware, requireCustomer, bookingController.getCustomerBookings);

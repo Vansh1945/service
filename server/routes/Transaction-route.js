@@ -3,7 +3,7 @@ const router = express.Router();
 const paymentController = require('../controllers/Transaction-controller');
 const { userAuthMiddleware } = require('../middlewares/User-middleware');
 const adminAuthMiddleware = require('../middlewares/Admin-middleware');
-const { roleMiddleware } = require('../middlewares/role-middleware');
+const { roleMiddleware } = require('../middlewares/Role-Middleware');
 
 const adminRoleCheck = roleMiddleware(['admin']);
 

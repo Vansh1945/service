@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/Admin-controller');
 const adminAuthMiddleware = require('../middlewares/Admin-middleware');
-const { roleMiddleware } = require('../middlewares/role-middleware');
+const { roleMiddleware } = require('../middlewares/Role-Middleware');
 const { uploadProfilePic } = require('../middlewares/upload');
 
 // Public routes

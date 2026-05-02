@@ -8,7 +8,7 @@ const {
     getCustomerDashboardStats
 } = require('../controllers/User-controller');
 const { userAuthMiddleware } = require('../middlewares/User-middleware');
-const { roleMiddleware } = require('../middlewares/role-middleware');
+const { roleMiddleware } = require('../middlewares/Role-Middleware');
 
 const requireCustomer = roleMiddleware(['customer']);
 const { uploadProfilePic } = require('../middlewares/upload');

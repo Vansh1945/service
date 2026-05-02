@@ -3,7 +3,7 @@ const router = express.Router();
 const providerController = require('../controllers/Provider-controller');
 const { providerAuthMiddleware } = require('../middlewares/Provider-middleware');
 const adminAuthMiddleware = require('../middlewares/Admin-middleware');
-const { roleMiddleware } = require('../middlewares/role-middleware');
+const { roleMiddleware } = require('../middlewares/Role-Middleware');
 const { upload } = require('../middlewares/upload');
 
 const requireProvider = roleMiddleware(['provider']);
@@ -16,8 +16,8 @@ router.post('/login-for-completion', providerController.loginForCompletion);
 
 
 // Profile Completion Route (Private)
-router.put('/profile/complete', 
-  providerAuthMiddleware, 
+router.put('/profile/complete',
+  providerAuthMiddleware,
   requireProvider,
   upload.fields([
     { name: 'profilePic', maxCount: 1 },
@@ -31,8 +31,8 @@ router.put('/profile/complete',
 router.get('/profile', providerAuthMiddleware, requireProvider, providerController.getProfile);
 
 // Unified Profile Update Route (Protected) - handles all profile updates
-router.put('/profile', 
-  providerAuthMiddleware, 
+router.put('/profile',
+  providerAuthMiddleware,
   requireProvider,
   upload.fields([
     { name: 'profilePic', maxCount: 1 },
