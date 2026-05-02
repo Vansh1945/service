@@ -32,6 +32,10 @@ export const exportServicesToExcel = (config) => {
     return axiosInstance.get("/service/admin/services-export", config)
 }
 
+export const downloadServiceTemplate = (config) => {
+    return axiosInstance.get("/service/admin/services-template", config);
+};
+
 //PROVIDER ROUTES
 
 export const getServicesForProvider = () => {

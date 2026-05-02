@@ -6,6 +6,7 @@ const excelJS = require('exceljs');
 const fs = require('fs');
 const path = require('path');
 const cloudinary = require('../services/cloudinary');
+const { Category } = require('../models/SystemSetting');
 
 /**
  * ADMIN CONTROLLERS
@@ -19,9 +20,8 @@ const createService = async (req, res) => {
         // Handle category conversion from string to ObjectId
         let categoryId = category;
         if (typeof category === 'string') {
-            const { Category } = require('../models/SystemSetting');
             // First try to find by _id, then by name
-            let categoryDoc = await Category.findById(category);
+            let categoryDoc = await Category.findById(category).catch(() => null);
             if (!categoryDoc) {
                 categoryDoc = await Category.findOne({ name: new RegExp('^' + category + '$', 'i') });
             }
@@ -119,9 +119,8 @@ const updateService = async (req, res) => {
 
         // Handle category conversion from string to ObjectId
         if (updates.category && typeof updates.category === 'string') {
-            const { Category } = require('../models/SystemSetting');
             // First try to find by _id, then by name
-            let categoryDoc = await Category.findById(updates.category);
+            let categoryDoc = await Category.findById(updates.category).catch(() => null);
             if (!categoryDoc) {
                 categoryDoc = await Category.findOne({ name: new RegExp('^' + updates.category + '$', 'i') });
             }
@@ -607,80 +606,143 @@ const bulkImportServices = async (req, res) => {
         }
 
         const workbook = new excelJS.Workbook();
-        const filePath = path.join(__dirname, '../uploads', req.file.filename);
+        const filePath = req.file.path;
 
-        // Load the Excel file
         await workbook.xlsx.readFile(filePath);
-        const worksheet = workbook.getWorksheet(1); // Get first sheet
+        const worksheet = workbook.getWorksheet(1);
 
-        const services = [];
+        const importedServices = [];
         const errors = [];
         let successCount = 0;
 
-        // Process each row
-        worksheet.eachRow({ includeEmpty: false }, async (row, rowNumber) => {
-            // Skip header row
-            if (rowNumber === 1) return;
+        // Get all categories for matching
+        const allCategories = await Category.find({ isActive: true });
+
+        // Iterate through rows (start from row 2 to skip headers)
+        for (let i = 2; i <= worksheet.rowCount; i++) {
+            const row = worksheet.getRow(i);
+            if (!row.getCell(1).value) continue; // Skip empty rows
 
             try {
+                const title = row.getCell(1).value?.toString().trim();
+                const categoryName = row.getCell(2).value?.toString().trim();
+                const description = row.getCell(3).value?.toString().trim();
+                const basePrice = parseFloat(row.getCell(4).value);
+                const duration = parseFloat(row.getCell(5).value);
+                const specialNotes = row.getCell(6).value?.toString().split(',').map(s => s.trim()).filter(Boolean) || [];
+                const materialsUsed = row.getCell(7).value?.toString().split(',').map(s => s.trim()).filter(Boolean) || [];
+
+                // Basic validation
+                if (!title || !categoryName || isNaN(basePrice) || isNaN(duration)) {
+                    throw new Error(`Missing or invalid required fields (Title, Category, Price, Duration)`);
+                }
+
+                // Match category
+                const categoryDoc = allCategories.find(c => 
+                    c.name.toLowerCase() === categoryName.toLowerCase() || 
+                    c._id.toString() === categoryName
+                );
+
+                if (!categoryDoc) {
+                    throw new Error(`Category "${categoryName}" not found in system`);
+                }
+
                 const serviceData = {
-                    title: row.getCell(1).value,
-                    category: row.getCell(2).value,
-                    description: row.getCell(3).value,
-                    basePrice: row.getCell(4).value,
-                    duration: row.getCell(5).value,
+                    title,
+                    category: categoryDoc._id,
+                    description: description || 'No description provided',
+                    basePrice,
+                    duration,
+                    specialNotes,
+                    materialsUsed,
                     createdBy: req.adminID,
                     isActive: true
                 };
 
-                // Validate required fields
-                if (!serviceData.title || !serviceData.category || !serviceData.basePrice) {
-                    throw new Error('Missing required fields');
-                }
-
-                // Validate category
-                if (!['Electrical', 'AC', 'Appliance Repair', 'Other'].includes(serviceData.category)) {
-                    throw new Error('Invalid category');
-                }
-
-                // Handle category conversion from string to ObjectId
-                const { Category } = require('../models/SystemSetting');
-                const categoryDoc = await Category.findOne({ name: new RegExp('^' + serviceData.category + '$', 'i') });
-                if (!categoryDoc) {
-                    throw new Error('Invalid category');
-                }
-                serviceData.category = categoryDoc._id;
-
-                // Create service
-                const service = await Service.createService(req.adminID, serviceData);
-                services.push(service);
+                const service = new Service(serviceData);
+                await service.save();
+                importedServices.push(service);
                 successCount++;
-            } catch (error) {
+            } catch (err) {
                 errors.push({
-                    row: rowNumber,
-                    error: error.message
+                    row: i,
+                    title: row.getCell(1).value || 'Unknown',
+                    message: err.message
                 });
             }
-        });
+        }
 
-        // Delete the uploaded file after processing
-        fs.unlinkSync(filePath);
+        // Clean up file
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
 
         return res.json({
             success: true,
-            message: 'Bulk import completed',
+            message: `Import completed: ${successCount} success, ${errors.length} failed`,
             importedCount: successCount,
             errorCount: errors.length,
             errors,
-            services
+            data: importedServices
         });
 
     } catch (error) {
-        console.error('Error in bulk import:', error);
+        console.error('Bulk import error:', error);
+        if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
         return res.status(500).json({
             success: false,
             message: error.message || 'Failed to process bulk import'
         });
+    }
+};
+
+// Download Service Import Template
+const downloadServiceTemplate = async (req, res) => {
+    try {
+        const workbook = new excelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Service Template');
+
+        // Headers
+        worksheet.columns = [
+            { header: 'Service Title*', key: 'title', width: 30 },
+            { header: 'Category Name*', key: 'category', width: 20 },
+            { header: 'Description*', key: 'description', width: 50 },
+            { header: 'Base Price (INR)*', key: 'basePrice', width: 15 },
+            { header: 'Duration (Hours)*', key: 'duration', width: 15 },
+            { header: 'Special Notes (Comma Separated)', key: 'specialNotes', width: 30 },
+            { header: 'Materials Used (Comma Separated)', key: 'materialsUsed', width: 30 }
+        ];
+
+        // Add some instructions/sample
+        const categories = await Category.find({ isActive: true }).select('name');
+        const categoryNames = categories.map(c => c.name).join(', ');
+
+        worksheet.addRow({
+            title: 'Example Service',
+            category: categories[0]?.name || 'Electrical',
+            description: 'Provide a detailed description of the service here.',
+            basePrice: 500,
+            duration: 1.5,
+            specialNotes: 'Note 1, Note 2',
+            materialsUsed: 'Wire, Tape'
+        });
+
+        // Add instructions row at the end or as a comment
+        const infoSheet = workbook.addWorksheet('Instructions');
+        infoSheet.columns = [
+            { header: 'Instruction', key: 'inst', width: 80 }
+        ];
+        infoSheet.addRow({ inst: '1. Fields marked with * are required.' });
+        infoSheet.addRow({ inst: `2. Category Name must be one of the following: ${categoryNames}` });
+        infoSheet.addRow({ inst: '3. Duration should be in decimal hours (e.g., 1.5 for 1 hour 30 mins).' });
+        infoSheet.addRow({ inst: '4. Base Price should be a number without currency symbols.' });
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename=service_import_template.xlsx');
+
+        await workbook.xlsx.write(res);
+        res.end();
+    } catch (error) {
+        console.error('Error generating template:', error);
+        res.status(500).json({ success: false, message: 'Failed to generate template' });
     }
 };
 
@@ -764,6 +826,7 @@ module.exports = {
     getServiceById,
     bulkImportServices,
     exportServicesToExcel,
+    downloadServiceTemplate,
 
     // Provider controllers
     getServicesForProvider,

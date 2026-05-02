@@ -518,6 +518,27 @@ const AdminServices = () => {
     }
   };
 
+  // Download Service Import Template
+  const handleDownloadTemplate = async () => {
+    try {
+      const response = await ServiceService.downloadServiceTemplate({ responseType: 'blob' });
+      const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = 'service_import_template.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success('Template downloaded successfully!');
+    } catch (error) {
+      console.error('Download template error:', error);
+      toast.error('Failed to download template');
+    }
+  };
+
   // Export services to Excel
   const handleExportServices = async () => {
     try {
@@ -1515,19 +1536,31 @@ const AdminServices = () => {
                     <span className="text-sm text-gray-600">{bulkFile.name}</span>
                   )}
                 </div>
+                <div className="mt-4">
+                  <button
+                    type="button"
+                    onClick={handleDownloadTemplate}
+                    className="flex items-center text-primary hover:text-teal-700 text-sm font-medium underline transition-all duration-200"
+                  >
+                    <Download className="w-4 h-4 mr-1" />
+                    Download Excel Format Requirements (Template)
+                  </button>
+                </div>
                 <p className="text-sm text-gray-500 mt-2">
-                  Upload an Excel file with columns: Title, Category, Description, Base Price, Duration
+                  Please use the template above for best results.
                 </p>
               </div>
 
               <div className="bg-blue-50 p-3 md:p-4 rounded-lg">
                 <h4 className="text-sm font-medium text-blue-800 mb-2">Excel Format Requirements:</h4>
                 <ul className="text-sm text-blue-700 space-y-1">
-                  <li>Column 1: Title (required)</li>
-                  <li>Column 2: Category (Electrical, AC, Appliance Repair, Other)</li>
-                  <li>Column 3: Description (required)</li>
-                  <li>Column 4: Base Price (required, number)</li>
-                  <li>Column 5: Duration in hours (required, number)</li>
+                  <li><strong>Service Title*</strong>: Max 100 characters</li>
+                  <li><strong>Category Name*</strong>: Must exist in system (e.g., Electrical, AC)</li>
+                  <li><strong>Description*</strong>: Max 500 characters</li>
+                  <li><strong>Base Price*</strong>: Numeric value</li>
+                  <li><strong>Duration*</strong>: Decimal hours (e.g., 1.5)</li>
+                  <li><strong>Special Notes</strong>: Comma separated values</li>
+                  <li><strong>Materials</strong>: Comma separated values</li>
                 </ul>
               </div>
 

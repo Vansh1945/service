@@ -54,6 +54,11 @@ router.get('/admin/services-export',
     serviceController.exportServicesToExcel
 );
 
+router.get('/admin/services-template',
+    adminAuthMiddleware,
+    serviceController.downloadServiceTemplate
+);
+
 /**
  * PROVIDER ROUTES
  */
