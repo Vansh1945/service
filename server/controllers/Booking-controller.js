@@ -2104,22 +2104,47 @@ const getAllBookings = async (req, res) => {
         sort[key] = order === 'desc' ? -1 : 1;
       });
     } else {
-      sort = { date: -1 }; // Sort by date descending as requested
+      sort = { date: -1 };
     }
 
-    const pipeline = [];
     const match = {};
 
-    if (req.query.status) {
-      match.status = { $in: req.query.status.split(',') };
+    // 1. Time Range Filter
+    if (req.query.timeRange) {
+      const now = new Date();
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+      
+      switch (req.query.timeRange) {
+        case 'today':
+          match.date = { $gte: start };
+          break;
+        case 'week':
+          start.setDate(now.getDate() - 7);
+          match.date = { $gte: start };
+          break;
+        case 'month':
+          start.setMonth(now.getMonth() - 1);
+          match.date = { $gte: start };
+          break;
+        case 'quarterly':
+          start.setMonth(now.getMonth() - 3);
+          match.date = { $gte: start };
+          break;
+        case 'half-year':
+          start.setMonth(now.getMonth() - 6);
+          match.date = { $gte: start };
+          break;
+        case 'year':
+          start.setFullYear(now.getFullYear() - 1);
+          match.date = { $gte: start };
+          break;
+      }
     }
 
-    if (req.query.paymentStatus) {
-      match.paymentStatus = { $in: req.query.paymentStatus.split(',') };
-    }
-
+    // 2. Manual Date Filters
     if (req.query.startDate || req.query.endDate) {
-      match.date = {};
+      if (!match.date) match.date = {};
       if (req.query.startDate) {
         match.date.$gte = new Date(req.query.startDate);
       }
@@ -2128,6 +2153,19 @@ const getAllBookings = async (req, res) => {
       }
     }
 
+    // Clone match for stats (before adding status/payment/search filters)
+    const statsMatch = { ...match };
+
+    // 3. Status and Payment Status Filters
+    if (req.query.status) {
+      match.status = { $in: req.query.status.split(',') };
+    }
+
+    if (req.query.paymentStatus) {
+      match.paymentStatus = { $in: req.query.paymentStatus.split(',') };
+    }
+
+    const pipeline = [];
     if (Object.keys(match).length > 0) {
       pipeline.push({ $match: match });
     }
@@ -2236,19 +2274,52 @@ const getAllBookings = async (req, res) => {
       }
     });
 
+    // Stats Pipeline (independent of search and pagination)
+    const statsPipeline = [
+      { $match: statsMatch },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: 1 },
+          pending: { $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] } },
+          accepted: { $sum: { $cond: [{ $eq: ['$status', 'accepted'] }, 1, 0] } },
+          completed: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] } },
+          cancelled: { $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] } },
+          revenue: { 
+            $sum: { 
+              $cond: [
+                { $and: [{ $eq: ['$status', 'completed'] }, { $eq: ['$paymentStatus', 'paid'] }] }, 
+                '$totalAmount', 
+                0
+              ] 
+            } 
+          }
+        }
+      }
+    ];
+
     const countPipeline = [...pipeline, { $count: 'total' }];
 
     pipeline.push({ $sort: sort });
     pipeline.push({ $skip: skip });
     pipeline.push({ $limit: limit });
 
-    const [bookings, totalResult] = await Promise.all([
+    const [bookings, totalResult, statsResult] = await Promise.all([
       Booking.aggregate(pipeline),
-      Booking.aggregate(countPipeline)
+      Booking.aggregate(countPipeline),
+      Booking.aggregate(statsPipeline)
     ]);
 
     const total = totalResult.length > 0 ? totalResult[0].total : 0;
     const pages = Math.ceil(total / limit);
+    const stats = statsResult.length > 0 ? statsResult[0] : {
+      total: 0,
+      pending: 0,
+      accepted: 0,
+      completed: 0,
+      cancelled: 0,
+      revenue: 0
+    };
 
     res.status(200).json({
       success: true,
@@ -2256,6 +2327,7 @@ const getAllBookings = async (req, res) => {
       page,
       pages,
       total,
+      stats,
       data: bookings
     });
 

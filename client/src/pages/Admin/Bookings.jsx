@@ -59,6 +59,16 @@ const paymentStatusOptions = [
     { value: 'refunded', label: 'Refunded' }
 ];
 
+const timeRangeOptions = [
+    { value: '', label: 'All Time' },
+    { value: 'today', label: 'Today' },
+    { value: 'week', label: 'Last 7 Days' },
+    { value: 'month', label: 'Last 30 Days' },
+    { value: 'quarterly', label: 'Quarterly' },
+    { value: 'half-year', label: 'Half Year' },
+    { value: 'year', label: 'Yearly' }
+];
+
 // Helper functions outside component to prevent recreation on every render
 const getStatusColor = (status) => {
     switch (status) {
@@ -211,7 +221,8 @@ const AdminBookingsView = () => {
             startDate: '',
             endDate: '',
             search: params.get('search') || '',
-            paymentStatus: ''
+            paymentStatus: '',
+            timeRange: ''
         };
     });
 
@@ -274,7 +285,10 @@ const AdminBookingsView = () => {
                     pages: data.pages || 1
                 }));
 
-                calculateStats(fetchedBookings);
+                // Set global stats from backend instead of local calculation
+                if (data.stats) {
+                    setStats(data.stats);
+                }
             }
         } catch (error) {
             console.error('Error fetching bookings:', error);
@@ -284,28 +298,7 @@ const AdminBookingsView = () => {
         }
     }, [showToast, filters, pagination.page, pagination.limit]);
 
-    // Calculate statistics — pure function, no side effects other than setState
-    const calculateStats = useCallback((bookingsData) => {
-        const newStats = {
-            total: bookingsData.length,
-            pending: 0,
-            accepted: 0,
-            completed: 0,
-            cancelled: 0,
-            revenue: 0
-        };
 
-        bookingsData.forEach(booking => {
-            if (booking.status) {
-                newStats[booking.status] = (newStats[booking.status] || 0) + 1;
-            }
-            if (booking.status === 'completed' && booking.paymentStatus === 'paid') {
-                newStats.revenue += booking.totalAmount || 0;
-            }
-        });
-
-        setStats(newStats);
-    }, []);
 
     // Fetch booking details
     const fetchBookingDetails = useCallback(async (bookingId) => {
@@ -452,7 +445,8 @@ const AdminBookingsView = () => {
             startDate: '',
             endDate: '',
             search: '',
-            paymentStatus: ''
+            paymentStatus: '',
+            timeRange: ''
         });
         setPagination(prev => ({ ...prev, page: 1 }));
     }, []);
@@ -641,7 +635,7 @@ const AdminBookingsView = () => {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                     {/* Search */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
@@ -682,6 +676,22 @@ const AdminBookingsView = () => {
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                         >
                             {paymentStatusOptions.map(option => (
+                                <option key={option.value} value={option.value}>
+                                    {option.label}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Time Range Filter */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Time Range</label>
+                        <select
+                            value={filters.timeRange}
+                            onChange={(e) => handleFilterChange('timeRange', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                        >
+                            {timeRangeOptions.map(option => (
                                 <option key={option.value} value={option.value}>
                                     {option.label}
                                 </option>
