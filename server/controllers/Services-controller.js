@@ -703,7 +703,7 @@ const downloadServiceTemplate = async (req, res) => {
         // Headers
         worksheet.columns = [
             { header: 'Service Title*', key: 'title', width: 30 },
-            { header: 'Category Name*', key: 'category', width: 20 },
+            { header: 'Category Name*', key: 'category', width: 25 },
             { header: 'Description*', key: 'description', width: 50 },
             { header: 'Base Price (INR)*', key: 'basePrice', width: 15 },
             { header: 'Duration (Hours)*', key: 'duration', width: 15 },
@@ -711,13 +711,20 @@ const downloadServiceTemplate = async (req, res) => {
             { header: 'Materials Used (Comma Separated)', key: 'materialsUsed', width: 30 }
         ];
 
-        // Add some instructions/sample
+        // Fetch active categories
         const categories = await Category.find({ isActive: true }).select('name');
-        const categoryNames = categories.map(c => c.name).join(', ');
+        const categoryNames = categories.map(c => c.name);
 
+        // Add a hidden sheet for categories to use as a source for data validation
+        const catSheet = workbook.addWorksheet('CategoriesData', { state: 'hidden' });
+        categoryNames.forEach((name, index) => {
+            catSheet.getCell(index + 1, 1).value = name;
+        });
+
+        // Add sample row
         worksheet.addRow({
             title: 'Example Service',
-            category: categories[0]?.name || 'Electrical',
+            category: categoryNames[0] || 'Electrical',
             description: 'Provide a detailed description of the service here.',
             basePrice: 500,
             duration: 1.5,
@@ -725,15 +732,31 @@ const downloadServiceTemplate = async (req, res) => {
             materialsUsed: 'Wire, Tape'
         });
 
-        // Add instructions row at the end or as a comment
+        // Apply Data Validation (Dropdown) for Category Name column (Column B)
+        // We apply it to rows 2 to 1000
+        const categoryListRange = `'CategoriesData'!$A$1:$A$${categoryNames.length || 1}`;
+        for (let i = 2; i <= 1000; i++) {
+            worksheet.getCell(`B${i}`).dataValidation = {
+                type: 'list',
+                allowBlank: false,
+                formulae: [categoryListRange],
+                showErrorMessage: true,
+                errorStyle: 'stop',
+                errorTitle: 'Invalid Category',
+                error: 'Please select a category from the dropdown list.'
+            };
+        }
+
+        // Add instructions sheet
         const infoSheet = workbook.addWorksheet('Instructions');
         infoSheet.columns = [
             { header: 'Instruction', key: 'inst', width: 80 }
         ];
         infoSheet.addRow({ inst: '1. Fields marked with * are required.' });
-        infoSheet.addRow({ inst: `2. Category Name must be one of the following: ${categoryNames}` });
+        infoSheet.addRow({ inst: `2. Category Name MUST be selected from the dropdown in Column B.` });
         infoSheet.addRow({ inst: '3. Duration should be in decimal hours (e.g., 1.5 for 1 hour 30 mins).' });
         infoSheet.addRow({ inst: '4. Base Price should be a number without currency symbols.' });
+        infoSheet.addRow({ inst: '5. Special Notes and Materials Used should be comma-separated.' });
 
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', 'attachment; filename=service_import_template.xlsx');
