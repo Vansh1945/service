@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/auth';
 import { getSocket } from '../socket/socket';
-import { Bell, X, Check, CheckCheck, BookOpen, CreditCard, AlertCircle } from 'lucide-react';
+import { Bell, X, Check, CheckCheck, BookOpen, CreditCard, AlertCircle, ShieldCheck, Wallet } from 'lucide-react';
 
 import * as NotificationService from '../services/NotificationService';
 
@@ -89,6 +89,10 @@ const NotificationBell = () => {
             case 'booking': return <BookOpen className={`${cls} text-blue-500`} />;
             case 'payment': return <CreditCard className={`${cls} text-green-500`} />;
             case 'withdrawal': return <CreditCard className={`${cls} text-purple-500`} />;
+            case 'complaint': return <ShieldCheck className={`${cls} text-orange-500`} />;
+            case 'refund': return <Wallet className={`${cls} text-indigo-500`} />;
+            case 'dispute_raised': return <ShieldCheck className={`${cls} text-red-500`} />;
+            case 'payout_held': return <AlertCircle className={`${cls} text-orange-500`} />;
             default: return <AlertCircle className={`${cls} text-gray-500`} />;
         }
     };

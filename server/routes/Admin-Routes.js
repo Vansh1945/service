@@ -38,5 +38,9 @@ router.get('/dashboard/pending-actions', adminController.getDashboardPendingActi
 router.get('/dashboard/live-stats', adminController.getDashboardLiveStats);
 router.get('/dashboard/recent-activity', adminController.getDashboardRecentActivity);
 router.get('/dashboard/analytics', adminController.getDashboardAnalytics);
+// Refund management
+router.post('/refund/:bookingId/process', adminController.processAdminRefund);
+router.post('/refund/:bookingId/reject', adminController.rejectAdminRefund);
+router.patch('/payout/:bookingId/hold', adminController.togglePayoutHold);
 
 module.exports = router;

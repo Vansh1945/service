@@ -55,7 +55,48 @@ const userSchema = new mongoose.Schema({
     token: { type: String, required: true },
     deviceId: { type: String, required: true },
     lastActive: { type: Date, default: Date.now }
-  }]
+  }],
+  wallet: {
+    availableBalance: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    totalRefunded: {
+      type: Number,
+      default: 0
+    },
+    walletTransactions: [
+      {
+        type: {
+          type: String,
+          enum: ['credit', 'debit'],
+          required: true
+        },
+        amount: {
+          type: Number,
+          required: true
+        },
+        reason: {
+          type: String,
+          required: true
+        },
+        booking: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'Booking',
+          default: null
+        },
+        createdAt: {
+          type: Date,
+          default: Date.now
+        }
+      }
+    ],
+    lastUpdated: {
+      type: Date,
+      default: Date.now
+    }
+  }
 }, {
   timestamps: true
 });

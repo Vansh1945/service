@@ -146,6 +146,18 @@ initSocket(server);
 const startServer = async () => {
   try {
     await connectDB();
+    
+    // Initialize background tasks
+    const { releaseHeldEarnings } = require('./controllers/paymentController');
+    // Run every hour
+    setInterval(async () => {
+      console.log('Running background task: releaseHeldEarnings');
+      await releaseHeldEarnings();
+    }, 60 * 60 * 1000);
+    
+    // Initial run on startup
+    releaseHeldEarnings().catch(err => console.error('Initial releaseHeldEarnings failed:', err));
+
     server.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
     });

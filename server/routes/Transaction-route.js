@@ -20,9 +20,15 @@ router.post('/verify', userAuthMiddleware, paymentController.verifyPayment);
 // @desc    Razorpay webhook handler
 // @route   POST /api/transaction/webhook
 // @access  Public
-router.post('/webhook', paymentController.handleWebhook);
+router.post('/webhook', express.raw({ type: 'application/json' }), paymentController.handleWebhook);
+
+// @desc    Get customer transaction history
+// @route   GET /api/transaction/customer/all
+// @access  Private (user)
+router.get('/customer/all', userAuthMiddleware, roleMiddleware(['customer']), paymentController.getCustomerTransactions);
 
 // Admin Routes
+
 router.get('/admin/all', adminAuthMiddleware, adminRoleCheck, paymentController.getAllTransactions);
 router.get('/admin/details/:id', adminAuthMiddleware, adminRoleCheck, paymentController.getTransactionById);
 

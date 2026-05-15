@@ -28,6 +28,7 @@ const BookingConfirmation = () => {
   const [razorpayLoaded, setRazorpayLoaded] = useState(false);
   const [error, setError] = useState(null);
   const [showCashModal, setShowCashModal] = useState(false);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
   // Load Razorpay script
   useEffect(() => {
@@ -220,6 +221,8 @@ const BookingConfirmation = () => {
       return;
     }
 
+    setIsProcessingPayment(true);
+
     try {
       const orderResponse = await TransactionService.createOrder({
         bookingId: bookingDetails._id,
@@ -262,17 +265,27 @@ const BookingConfirmation = () => {
         },
         prefill: { name: user?.name, email: user?.email, contact: user?.phone },
         theme: { color: '#0D9488' },
-        modal: { ondismiss: () => showToast('Payment cancelled', 'info') }
+        modal: { 
+          ondismiss: () => {
+            setIsProcessingPayment(false);
+            showToast('Payment cancelled', 'info');
+          }
+        }
       };
 
       const rzp = new window.Razorpay(options);
+      rzp.on('payment.failed', function (response) {
+        setIsProcessingPayment(false);
+      });
       rzp.open();
     } catch (error) {
+      setIsProcessingPayment(false);
       showToast('Failed to initialize payment', 'error');
     }
   };
 
   const handleCashPayment = async () => {
+    setIsProcessingPayment(true);
     try {
       setShowCashModal(false);
       showToast('Confirming booking...', 'info');
@@ -284,7 +297,9 @@ const BookingConfirmation = () => {
       showToast('Booking Confirmed! Pay after service completion.', 'success');
       setTimeout(() => navigate('/customer/bookings'), 2000);
     } catch (error) {
-      showToast('Failed to confirm booking', 'error');
+      showToast(error.response?.data?.message || 'Failed to confirm booking', 'error');
+    } finally {
+      setIsProcessingPayment(false);
     }
   };
 
@@ -503,15 +518,25 @@ const BookingConfirmation = () => {
                   <div className="space-y-3">
                     <button
                       onClick={handleOnlinePayment}
-                      disabled={!razorpayLoaded}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:bg-gray-300"
+                      disabled={!razorpayLoaded || isProcessingPayment}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
                     >
-                      <CreditCard className="w-4 h-4" />
-                      Pay Online {formatCurrency(totalAmount)}
+                      {isProcessingPayment ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <CreditCard className="w-4 h-4" />
+                          Pay Online {formatCurrency(totalAmount)}
+                        </>
+                      )}
                     </button>
                     <button
                       onClick={() => setShowCashModal(true)}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors"
+                      disabled={isProcessingPayment}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Wallet className="w-4 h-4" />
                       Pay Cash Later

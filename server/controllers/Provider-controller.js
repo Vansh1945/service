@@ -15,6 +15,21 @@ const Complaint = require('../models/Complaint-model');
 const User = require('../models/User-model');
 const Admin = require('../models/Admin-model');
 
+// Helper to get synchronized payout status
+const getPayoutStatus = (earning, booking) => {
+    if (!earning) return 'Not Processed';
+    if (booking.disputeRaised || booking.disputeStatus === 'under_review') return 'Dispute Hold';
+
+    switch (earning.status) {
+        case 'held': return 'Payout On Hold';
+        case 'available': return 'Payout Ready';
+        case 'paid':
+        case 'withdrawn': return 'Payout Released';
+        case 'cancelled': return 'Refund Adjusted';
+        default: return earning.status;
+    }
+};
+
 // Helper function to delete file from Cloudinary
 const deleteFile = async (publicId) => {
     try {
@@ -1179,7 +1194,8 @@ exports.getDashboardSummary = async (req, res) => {
                 {
                     $match: {
                         provider: new mongoose.Types.ObjectId(providerId),
-                        createdAt: { $gte: today, $lt: tomorrow }
+                        createdAt: { $gte: today, $lt: tomorrow },
+                        status: { $ne: 'cancelled' }
                     }
                 },
                 {
@@ -1192,7 +1208,7 @@ exports.getDashboardSummary = async (req, res) => {
 
             // Total lifetime earnings
             ProviderEarning.aggregate([
-                { $match: { provider: new mongoose.Types.ObjectId(providerId) } },
+                { $match: { provider: new mongoose.Types.ObjectId(providerId), status: { $ne: 'cancelled' } } },
                 {
                     $group: {
                         _id: null,
@@ -1303,7 +1319,8 @@ exports.getEarningsAnalytics = async (req, res) => {
                 {
                     $match: {
                         provider: new mongoose.Types.ObjectId(providerId),
-                        createdAt: { $gte: start, $lte: end }
+                        createdAt: { $gte: start, $lte: end },
+                        status: { $ne: 'cancelled' }
                     }
                 },
                 {
@@ -1488,29 +1505,32 @@ exports.getDashboardAnalytics = async (req, res) => {
                 .lean()
         ]);
 
+        const ProviderEarning = mongoose.model('ProviderEarning');
+        const jobsWithPayoutStatus = async (jobs) => {
+            return Promise.all(jobs.map(async job => {
+                const earning = await ProviderEarning.findOne({ booking: job._id }).lean();
+                return {
+                    _id: job._id,
+                    customer: job.customer,
+                    services: job.services,
+                    date: job.date,
+                    time: job.time,
+                    location: job.address,
+                    status: job.status,
+                    totalAmount: job.totalAmount,
+                    payoutStatus: getPayoutStatus(earning, job),
+                    disputeRaised: job.disputeRaised,
+                    disputeStatus: job.disputeStatus,
+                    payoutHoldUntil: job.payoutHoldUntil
+                };
+            }));
+        };
+
         res.status(200).json({
             success: true,
             data: {
-                todayJobs: todayJobs.map(job => ({
-                    _id: job._id,
-                    customer: job.customer,
-                    services: job.services,
-                    date: job.date,
-                    time: job.time,
-                    location: job.address,
-                    status: job.status,
-                    totalAmount: job.totalAmount
-                })),
-                upcomingJobs: upcomingJobs.map(job => ({
-                    _id: job._id,
-                    customer: job.customer,
-                    services: job.services,
-                    date: job.date,
-                    time: job.time,
-                    location: job.address,
-                    status: job.status,
-                    totalAmount: job.totalAmount
-                }))
+                todayJobs: await jobsWithPayoutStatus(todayJobs),
+                upcomingJobs: await jobsWithPayoutStatus(upcomingJobs)
             }
         });
 
@@ -1545,13 +1565,31 @@ exports.getWalletInfo = async (req, res) => {
         // Get available balance from provider wallet
         const availableBalance = provider.wallet?.availableBalance || 0;
 
+        // Get held earnings balance
+        const ProviderEarning = mongoose.model('ProviderEarning');
+        const heldEarnings = await ProviderEarning.aggregate([
+            {
+                $match: {
+                    provider: new mongoose.Types.ObjectId(providerId),
+                    status: 'held'
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalHeld: { $sum: '$netAmount' }
+                }
+            }
+        ]);
+        const heldBalance = heldEarnings.length > 0 ? heldEarnings[0].totalHeld : 0;
+
         // Get pending payouts (if any payment records exist)
         const PaymentRecord = mongoose.model('PaymentRecord');
         const pendingPayouts = await PaymentRecord.aggregate([
             {
                 $match: {
                     provider: new mongoose.Types.ObjectId(providerId),
-                    status: { $in: ['pending', 'processing'] }
+                    status: { $in: ['pending', 'processing', 'requested'] }
                 }
             },
             {
@@ -1561,6 +1599,40 @@ exports.getWalletInfo = async (req, res) => {
                 }
             }
         ]);
+
+        // Get refunded deductions (cancelled earnings)
+        const refundedEarnings = await ProviderEarning.aggregate([
+            {
+                $match: {
+                    provider: new mongoose.Types.ObjectId(providerId),
+                    status: 'cancelled'
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalRefunded: { $sum: '$netAmount' } // Note: If netAmount was reduced to 0, you might want to track originalAmount or just consider the 0. Let's just track totalWithdrawn or cancelled. Wait, if cancelled, we can sum grossAmount or commission. We will just sum grossAmount or whatever. Let's sum netAmount. Wait, if it was reduced to 0, sum is 0. If we just want a count or estimate, let's sum grossAmount.
+                }
+            }
+        ]);
+        const refundedDeductions = refundedEarnings.length > 0 ? refundedEarnings[0].totalRefunded : 0;
+
+        // Get total released payouts (earnings that are available or paid or withdrawn)
+        const releasedEarnings = await ProviderEarning.aggregate([
+            {
+                $match: {
+                    provider: new mongoose.Types.ObjectId(providerId),
+                    status: { $in: ['available', 'paid', 'withdrawn'] }
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalReleased: { $sum: '$netAmount' }
+                }
+            }
+        ]);
+        const releasedPayouts = releasedEarnings.length > 0 ? releasedEarnings[0].totalReleased : 0;
 
         // Get last payout date
         const lastPayout = await PaymentRecord.findOne({
@@ -1578,9 +1650,12 @@ exports.getWalletInfo = async (req, res) => {
             success: true,
             data: {
                 currentBalance: availableBalance,
+                heldBalance: heldBalance,
                 pendingPayout: pendingPayouts.length > 0 ? pendingPayouts[0].totalPending : 0,
                 lastPayoutDate: lastPayout ? lastPayout.updatedAt : null,
-                canWithdraw
+                canWithdraw,
+                refundedDeductions,
+                releasedPayouts
             }
         });
 

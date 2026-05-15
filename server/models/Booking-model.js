@@ -261,7 +261,67 @@ const bookingSchema = new Schema({
   commissionProcessed: {
     type: Boolean,
     default: false
-  }
+  },
+
+  // Payout Hold & Dispute Logic
+  payoutHoldUntil: {
+    type: Date,
+    default: null
+  },
+  disputeRaised: {
+    type: Boolean,
+    default: false
+  },
+  disputeStatus: {
+    type: String,
+    enum: ['none', 'under_review', 'provider_responded', 'customer_responded', 'resolved', 'refund_approved', 'refund_rejected'],
+    default: 'none'
+  },
+  adminRefundDecision: {
+    type: String,
+    enum: ['none', 'approved', 'rejected', 'partial'],
+    default: 'none'
+  },
+
+  // Photo Proof System
+  providerWorkProof: {
+    beforeImages: [
+      {
+        url: { type: String, required: true },
+        uploadedAt: { type: Date, default: Date.now }
+      }
+    ],
+    afterImages: [
+      {
+        url: { type: String, required: true },
+        uploadedAt: { type: Date, default: Date.now }
+      }
+    ],
+    startLocation: {
+      latitude: Number,
+      longitude: Number
+    },
+    completionLocation: {
+      latitude: Number,
+      longitude: Number
+    }
+  },
+
+  complaintProofs: [
+    {
+      uploadedBy: {
+        type: String,
+        enum: ["customer", "provider", "admin"]
+      },
+      images: [
+        {
+          url: { type: String, required: true }
+        }
+      ],
+      message: String,
+      createdAt: { type: Date, default: Date.now }
+    }
+  ]
 }, {
   toJSON: {
     virtuals: true,
@@ -322,6 +382,16 @@ bookingSchema.pre('save', async function (next) {
     this.statusHistory.push(statusChange);
   }
 
+  // Track payment status changes to refunded
+  if (this.isModified('paymentStatus') && this.paymentStatus === 'refunded') {
+    this.statusHistory.push({
+      status: this.status,
+      timestamp: new Date(),
+      note: `Payment Refunded: ₹${this.cancellationProgress?.refundAmount || this.totalAmount} added to wallet`,
+      updatedBy: 'system'
+    });
+  }
+
   // Commission calculation
   if (this.provider && (this.isModified('transaction') || this.isModified('provider') || this.isNew || this.isModified('totalAmount'))) {
     try {
@@ -357,6 +427,12 @@ bookingSchema.pre('save', async function (next) {
 
 // Payment confirmation will be handled through Transaction model updates
 // in the booking controller
+
+// Virtual for booking progress status
+bookingSchema.virtual('progressStatus').get(function () {
+  const { getBookingProgress } = require('../utils/bookingHelper');
+  return getBookingProgress(this);
+});
 
 // Indexes for query optimization
 bookingSchema.index({ customer: 1 });

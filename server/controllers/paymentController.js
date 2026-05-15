@@ -8,8 +8,51 @@ const Booking = require('../models/Booking-model');
 const Transaction = require('../models/Transaction-model');
 const ExcelJS = require('exceljs');
 const { sendNotification, notifyAdmins } = require('../utils/notificationHelper');
+const { sendMail } = require('../utils/sendmail');
+const bcrypt = require('bcryptjs');
 
 
+
+// Helper to sync earnings status based on time and disputes
+const syncEarningsStatus = async (providerId) => {
+  // We can just call the global release task but filter for this provider
+  // Or just let the background task handle it. 
+  // For immediate UI update, we'll implement a targeted version.
+  const now = new Date();
+  const heldEarnings = await ProviderEarning.find({
+    provider: providerId,
+    status: 'held',
+    isHeldByAdmin: false,
+    availableAfter: { $lte: now }
+  }).populate('booking');
+
+  if (heldEarnings.length === 0) return;
+
+  const session = await mongoose.startSession();
+  try {
+    for (const earning of heldEarnings) {
+      if (earning.booking && !earning.booking.disputeRaised && earning.booking.disputeStatus === 'none') {
+        await session.withTransaction(async () => {
+          earning.status = 'available';
+          await earning.save({ session });
+
+          await Provider.findByIdAndUpdate(
+            providerId,
+            {
+              $inc: { 'wallet.availableBalance': earning.netAmount },
+              $set: { 'wallet.lastUpdated': new Date() }
+            },
+            { session }
+          );
+        });
+      }
+    }
+  } catch (err) {
+    console.error(`Error in syncEarningsStatus for provider ${providerId}:`, err);
+  } finally {
+    await session.endSession();
+  }
+};
 
 // Handle Razorpay Webhook
 const handleWebhook = async (req, res) => {
@@ -69,24 +112,35 @@ const handlePaymentCaptured = async (payment) => {
   try {
     await session.withTransaction(async () => {
       // Update Transaction status
-      const transaction = await Transaction.findOneAndUpdate(
-        { razorpayOrderId: payment.order_id },
-        {
-          paymentStatus: 'completed',
-          razorpayPaymentId: payment.id,
-          updatedAt: new Date()
-        },
-        { session, new: true }
-      );
+      const existingTxn = await Transaction.findOne({ razorpayOrderId: payment.order_id }).session(session);
 
-      if (!transaction) {
+      if (!existingTxn) {
         console.error(`Transaction not found for order: ${payment.order_id}`);
         throw new Error('Transaction not found');
       }
 
+      // Check for duplicate payment success
+      if (existingTxn.paymentStatus === 'completed' || existingTxn.paymentStatus === 'success' || existingTxn.razorpayPaymentId === payment.id) {
+        console.log(`Payment already processed for order: ${payment.order_id}`);
+        try {
+          notifyAdmins(
+            'Duplicate Payment Alert',
+            `Duplicate payment success received for order ${payment.order_id}, payment ID: ${payment.id}. Already processed.`,
+            'payment_alert',
+            existingTxn._id
+          );
+        } catch (e) { }
+        return;
+      }
+
+      existingTxn.paymentStatus = 'completed';
+      existingTxn.razorpayPaymentId = payment.id;
+      existingTxn.updatedAt = new Date();
+      await existingTxn.save({ session });
+
       // Update Booking status to confirmed
       const booking = await Booking.findByIdAndUpdate(
-        transaction.booking,
+        existingTxn.booking,
         {
           paymentStatus: 'paid',
           status: 'confirmed',
@@ -95,7 +149,7 @@ const handlePaymentCaptured = async (payment) => {
         { session, new: true }
       );
 
-      console.log(`Payment captured: ${payment.id}, Transaction: ${transaction._id}`);
+      console.log(`Payment captured: ${payment.id}, Transaction: ${existingTxn._id}`);
 
       // Notify customer
       try {
@@ -148,11 +202,11 @@ const handlePaymentFailed = async (payment) => {
 // Provider - Get earnings summary
 const getEarningsSummary = async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.provider._id)) {
-      return res.status(400).json({ success: false, error: 'Invalid provider ID' });
-    }
-
     const providerId = new mongoose.Types.ObjectId(req.provider._id);
+
+    // Auto-release eligible earnings before calculating summary
+    await syncEarningsStatus(providerId);
+
     const { startDate, endDate } = req.query;
 
     // Get provider wallet info
@@ -243,6 +297,30 @@ const getEarningsSummary = async (req, res) => {
       ? pendingWithdrawals[0].totalPendingWithdrawals
       : 0;
 
+    // Get held earnings
+    const heldEarningsResult = await ProviderEarning.aggregate([
+      {
+        $match: {
+          provider: providerId,
+          status: { $in: ['held', 'under_review', 'pending_release'] }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalHeld: { $sum: '$netAmount' }
+        }
+      }
+    ]);
+    const totalHeldEarnings = heldEarningsResult.length > 0 ? heldEarningsResult[0].totalHeld : 0;
+
+    // Get dispute count
+    const disputeCount = await mongoose.model('Booking').countDocuments({
+      provider: providerId,
+      disputeRaised: true,
+      status: { $ne: 'cancelled' }
+    });
+
     // Get today's earnings
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -271,9 +349,15 @@ const getEarningsSummary = async (req, res) => {
       lifetimeEarnings: totalEarnings,
       todayEarnings: todayEarnings,
       availableBalance: availableBalance,
+      heldAmount: totalHeldEarnings,
+      disputeCount: disputeCount,
       totalWithdrawn: periodWithdrawn,
       lifetimeWithdrawn: totalWithdrawn,
-      pendingWithdrawals: totalPendingWithdrawals
+      pendingWithdrawals: totalPendingWithdrawals,
+      withdrawalSecurity: {
+        lastRequestTime: provider.withdrawalSecurity?.lastRequestTime,
+        isFlagged: provider.withdrawalSecurity?.isFlagged
+      }
     });
 
   } catch (err) {
@@ -283,75 +367,195 @@ const getEarningsSummary = async (req, res) => {
 };
 
 
-// Provider - Request bulk withdrawal
+// Provider - Request bulk withdrawal (Initiate OTP)
 const requestBulkWithdrawal = async (req, res) => {
-  const session = await mongoose.startSession();
-
   try {
-    await session.withTransaction(async () => {
-      const providerId = req.provider._id;
-      const { amount } = req.body;
+    const providerId = req.provider._id;
+    const { amount } = req.body;
 
-      // Validate amount
-      if (!amount || isNaN(amount) || amount < 500) {
-        throw new Error("Minimum withdrawal ₹500");
+    // STEP 1: Basic Validations
+    if (!amount || isNaN(amount) || amount < 500) {
+      return res.status(400).json({ success: false, error: "Minimum withdrawal ₹500" });
+    }
+
+    const provider = await Provider.findById(providerId)
+      .select("bankDetails name email wallet approved kycStatus withdrawalSecurity fcmTokens");
+
+    if (!provider) return res.status(404).json({ success: false, error: "Provider not found." });
+
+    // SECURITY IMPROVEMENTS: Validate provider status
+    if (!provider.approved || provider.kycStatus !== 'approved') {
+      return res.status(403).json({ success: false, error: "Your account/KYC must be approved before withdrawal." });
+    }
+
+    if (!provider.bankDetails?.accountNo || !provider.bankDetails?.verified) {
+      return res.status(400).json({ success: false, error: "Verified bank details are required." });
+    }
+
+    // Check for active disputes or hold
+    const activeDispute = await Booking.findOne({
+      provider: providerId,
+      disputeRaised: true,
+      status: { $nin: ['cancelled', 'completed'] }
+    });
+    if (activeDispute) {
+      return res.status(403).json({ success: false, error: "Withdrawal locked due to active dispute. Please resolve it first." });
+    }
+
+    // WITHDRAWAL COOLDOWN: 24 hours
+    const lastWithdrawal = provider.withdrawalSecurity?.lastRequestTime;
+    if (lastWithdrawal) {
+      const hoursSinceLast = (new Date() - new Date(lastWithdrawal)) / (1000 * 60 * 60);
+      if (hoursSinceLast < 24) {
+        return res.status(403).json({ success: false, error: "Please wait 24 hours before making another withdrawal request." });
       }
+    }
 
-      // Get provider bank details and wallet
-      const provider = await Provider.findById(providerId)
-        .select("bankDetails name wallet")
-        .session(session);
-
-      if (!provider) throw new Error("Provider not found.");
-      if (!provider.bankDetails?.accountNo) throw new Error("Bank details missing.");
-
-      // Bank Verification Check
-      if (!provider.bankDetails?.verified) {
-        throw new Error("Bank account is not verified yet.");
-      }
-
-      const baseAvailableBalance = provider?.wallet?.availableBalance || 0;
-
-      // Withdrawal Validation
-      if (baseAvailableBalance <= 0) {
-        throw new Error("Insufficient balance for withdrawal");
-      }
-      if (baseAvailableBalance < 500) {
-        throw new Error("Minimum withdrawal ₹500");
-      }
-
-      // Get total pending withdrawals
-      const pendingWithdrawals = await PaymentRecord.aggregate([
-        {
-          $match: {
-            provider: new mongoose.Types.ObjectId(providerId),
-            status: { $in: ['requested', 'processing', 'under_review'] }
-          }
-        },
-        {
-          $group: {
-            _id: null,
-            totalPendingWithdrawals: { $sum: '$amount' }
-          }
+    // Validate balance and pending requests
+    const baseAvailableBalance = provider?.wallet?.availableBalance || 0;
+    const pendingWithdrawals = await PaymentRecord.aggregate([
+      {
+        $match: {
+          provider: new mongoose.Types.ObjectId(providerId),
+          status: { $in: ['requested', 'processing', 'under_review', 'approved'] }
         }
-      ]).session(session);
+      },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
+    ]);
 
-      const totalPendingWithdrawals = pendingWithdrawals.length > 0
-        ? pendingWithdrawals[0].totalPendingWithdrawals
-        : 0;
+    const totalPending = pendingWithdrawals.length > 0 ? pendingWithdrawals[0].total : 0;
+    if (totalPending > 0) {
+      return res.status(400).json({ success: false, error: "You already have a pending withdrawal request." });
+    }
 
-      if (totalPendingWithdrawals > 0) {
-        throw new Error("You already have a pending withdrawal request.");
+    if (amount > baseAvailableBalance) {
+      return res.status(400).json({ success: false, error: "Insufficient balance for withdrawal" });
+    }
+
+    // SUSPICIOUS WITHDRAWAL DETECTION
+    let isFlagged = false;
+    let flagReason = "";
+
+    // CASE 1: Large withdrawal threshold (e.g. > 50,000)
+    if (amount > 50000) {
+      isFlagged = true;
+      flagReason += "Large withdrawal amount. ";
+    }
+
+    // CASE 2: Check for multiple OTP attempts (rate limiting)
+    if (provider.withdrawalSecurity?.attempts >= 5 && (new Date() - provider.withdrawalSecurity.otpExpires < 30 * 60 * 1000)) {
+      return res.status(429).json({ success: false, error: "Too many failed attempts. Try again later." });
+    }
+
+    // STEP 2: Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpires = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+
+    // Hash OTP before storing
+    const salt = await bcrypt.genSalt(10);
+    const hashedOtp = await bcrypt.hash(otp, salt);
+
+    // Update Provider with OTP info
+    provider.withdrawalSecurity = {
+      otp: hashedOtp,
+      otpExpires,
+      attempts: 0,
+      pendingAmount: amount,
+      isFlagged,
+      flagReason
+    };
+    await provider.save();
+
+    // STEP 3: Send OTP via Email + FCM
+    // Email
+    try {
+      await sendMail({
+        to: provider.email,
+        subject: "Withdrawal Verification OTP",
+        html: `
+          <div style="font-family: sans-serif; padding: 20px;">
+            <h2>Withdrawal Verification</h2>
+            <p>Your withdrawal OTP is: <strong>${otp}</strong></p>
+            <p>This OTP is valid for 5 minutes.</p>
+            <p>Amount: ₹${amount}</p>
+            <p>Do not share this OTP with anyone.</p>
+          </div>
+        `
+      });
+    } catch (e) { console.error("OTP Email Error:", e); }
+
+    // FCM
+    if (provider.fcmTokens && provider.fcmTokens.length > 0) {
+      try {
+        const lastToken = provider.fcmTokens[provider.fcmTokens.length - 1].token;
+        sendNotification(
+          providerId,
+          'provider',
+          'Withdrawal OTP Verification',
+          `Your withdrawal OTP is ${otp}. Valid for 5 minutes.`,
+          'withdrawal_otp',
+          null
+        );
+      } catch (e) { console.error("OTP FCM Error:", e); }
+    }
+
+    res.json({
+      success: true,
+      message: "OTP sent to your email and phone",
+      otpExpires: 5 * 60
+    });
+
+  } catch (error) {
+    console.error("Request Withdrawal Error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// Provider - Verify Withdrawal OTP and Create Request
+const verifyWithdrawalOTP = async (req, res) => {
+  const session = await mongoose.startSession();
+  try {
+    const providerId = req.provider._id;
+    const { otp } = req.body;
+
+    if (!otp) return res.status(400).json({ success: false, error: "OTP is required" });
+
+    const provider = await Provider.findById(providerId);
+    if (!provider || !provider.withdrawalSecurity?.otp) {
+      return res.status(400).json({ success: false, error: "No active withdrawal request found." });
+    }
+
+    const security = provider.withdrawalSecurity;
+
+    // Validate Expiry
+    if (new Date() > security.otpExpires) {
+      provider.withdrawalSecurity.otp = undefined;
+      await provider.save();
+      return res.status(400).json({ success: false, error: "OTP has expired. Please request again." });
+    }
+
+    // Validate Attempts
+    if (security.attempts >= 5) {
+      return res.status(403).json({ success: false, error: "Max attempts reached. Please request a new OTP." });
+    }
+
+    // Verify Hash
+    const isMatch = await bcrypt.compare(otp, security.otp);
+    if (!isMatch) {
+      provider.withdrawalSecurity.attempts += 1;
+      await provider.save();
+      return res.status(400).json({ success: false, error: "Invalid OTP. Remaining attempts: " + (5 - provider.withdrawalSecurity.attempts) });
+    }
+
+    // Success - Create the withdrawal request
+    await session.withTransaction(async () => {
+      const amount = security.pendingAmount;
+
+      // Final balance check
+      if (provider.wallet.availableBalance < amount) {
+        throw new Error("Insufficient balance");
       }
 
-      // Calculate actual available balance after deducting pending withdrawals
-      const actualAvailableBalance = Math.max(0, baseAvailableBalance - totalPendingWithdrawals);
-
-      if (amount > actualAvailableBalance) {
-        throw new Error('Insufficient balance for withdrawal');
-      }
-
-      // Create PaymentRecord
       const paymentRecord = new PaymentRecord({
         provider: providerId,
         amount,
@@ -363,43 +567,54 @@ const requestBulkWithdrawal = async (req, res) => {
           ifscCode: provider.bankDetails.ifsc,
           bankName: provider.bankDetails.bankName,
         },
-        status: 'requested',
+        status: security.isFlagged ? 'under_review' : 'requested',
         withdrawalType: 'manual_bulk',
-        notes: "Manual bulk withdrawal",
+        notes: security.isFlagged ? `Flagged: ${security.flagReason}` : "Manual bulk withdrawal",
         transactionReference: `WDL-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
       });
 
       await paymentRecord.save({ session });
 
-      // Notify Admin about new withdrawal request
-      try {
+      // Clear OTP and update cooldown
+      provider.withdrawalSecurity = {
+        lastRequestTime: new Date(),
+        otp: undefined,
+        otpExpires: undefined,
+        attempts: 0,
+        pendingAmount: 0
+      };
+      await provider.save({ session });
+
+      // Notify Admin
+      if (security.isFlagged) {
+        notifyAdmins(
+          'Suspicious Withdrawal Alert',
+          `Provider ${provider.name} attempted suspicious withdrawal activity. Amount: ₹${amount}. Reason: ${security.flagReason}`,
+          'withdrawal_alert',
+          paymentRecord._id
+        );
+      } else {
         notifyAdmins(
           'New Withdrawal Request',
           `Provider ${provider.name} has requested a withdrawal of ₹${amount}.`,
           'withdrawal',
           paymentRecord._id
         );
-      } catch (err) { /* ignore */ }
-
-      // Calculate updated available balance (since pending withdrawals are deducted from display)
-      const updatedAvailableBalance = actualAvailableBalance - amount;
+      }
 
       res.json({
         success: true,
-        message: "Manual bulk withdrawal requested successfully",
+        message: security.isFlagged ? "Withdrawal request submitted and under security review." : "Withdrawal requested successfully",
         data: {
           reference: paymentRecord.transactionReference,
-          amount: paymentRecord.amount,
-          status: paymentRecord.status,
-          withdrawalType: paymentRecord.withdrawalType,
-          method: paymentRecord.paymentMethod,
-          createdAt: paymentRecord.createdAt,
-          availableBalance: updatedAvailableBalance
+          status: paymentRecord.status
         }
       });
     });
+
   } catch (error) {
-    res.status(400).json({ success: false, error: error.message });
+    console.error("Verify OTP Error:", error);
+    res.status(500).json({ success: false, error: error.message });
   } finally {
     await session.endSession();
   }
@@ -411,9 +626,21 @@ const requestBulkWithdrawal = async (req, res) => {
 const downloadEarningsReport = async (req, res) => {
   try {
     const providerId = req.provider._id;
-    const { startDate, endDate, download, page = 1, limit = 20 } = req.query;
+
+    // Auto-release eligible earnings before fetching report
+    await syncEarningsStatus(providerId);
+
+    const { startDate, endDate, download, status, page = 1, limit = 20 } = req.query;
 
     let filter = { provider: new mongoose.Types.ObjectId(providerId) };
+
+    if (status) {
+      if (status === 'held') {
+        filter.status = { $in: ['held', 'under_review', 'pending_release'] };
+      } else {
+        filter.status = status;
+      }
+    }
 
     if (download === "true") {
       if (!startDate || !endDate) {
@@ -462,14 +689,56 @@ const downloadEarningsReport = async (req, res) => {
       {
         $addFields: {
           paymentMethod: "$bookingInfo.paymentMethod",
-          status: {
-            $cond: {
-              if: { $and: [{ $ne: ["$paymentInfo", null] }, { $eq: ["$paymentInfo.status", "completed"] }] },
-              then: "Withdrawn",
-              else: "Available"
-            }
+          bookingId: "$bookingInfo.bookingId",
+          disputeStatus: "$bookingInfo.disputeStatus",
+          holdUntil: { $ifNull: ["$availableAfter", { $add: ["$createdAt", 48 * 60 * 60 * 1000] }] },
+          holdReason: {
+            $cond: [
+              { $eq: ["$bookingInfo.disputeRaised", true] },
+              "Active customer dispute under admin review",
+              {
+                $cond: [
+                  { $in: ["$status", ["held", "under_review", "pending_release"]] },
+                  "48h customer protection window",
+                  "$holdReason"
+                ]
+              }
+            ]
+          },
+          isWithdrawable: {
+            $and: [
+              { $in: ["$status", ["available", "paid", "withdrawn"]] },
+              { $ne: ["$bookingInfo.disputeRaised", true] },
+              { $ne: ["$isHeldByAdmin", true] }
+            ]
+          },
+          payoutStatus: {
+            $cond: [
+              { $eq: ["$bookingInfo.disputeRaised", true] },
+              "held",
+              {
+                $cond: [
+                  { $eq: ["$isHeldByAdmin", true] },
+                  "held",
+                  {
+                    $cond: [
+                      { $in: ["$status", ["held", "under_review", "pending_release"]] },
+                      "held",
+                      "$status"
+                    ]
+                  }
+                ]
+              }
+            ]
           }
         },
+      },
+      {
+        $addFields: {
+          // Overlay status with payoutStatus for backward compatibility if needed
+          // but we will keep the original status field as well
+          displayStatus: "$payoutStatus"
+        }
       },
       {
         $sort: { createdAt: -1 } // Sort by latest first
@@ -483,6 +752,7 @@ const downloadEarningsReport = async (req, res) => {
       {
         $project: {
           booking: 1,
+          bookingId: 1,
           grossAmount: 1,
           commissionRate: 1,
           commissionAmount: 1,
@@ -490,6 +760,13 @@ const downloadEarningsReport = async (req, res) => {
           createdAt: 1,
           paymentMethod: 1,
           status: 1,
+          payoutStatus: 1,
+          displayStatus: 1,
+          availableAfter: 1,
+          holdUntil: 1,
+          disputeStatus: 1,
+          holdReason: 1,
+          isWithdrawable: 1
         },
       },
     ]);
@@ -524,10 +801,15 @@ const downloadEarningsReport = async (req, res) => {
           $addFields: {
             paymentMethod: "$bookingInfo.paymentMethod",
             status: {
-              $cond: {
-                if: { $and: [{ $ne: ["$paymentInfo", null] }, { $eq: ["$paymentInfo.status", "completed"] }] },
-                then: "Withdrawn",
-                else: "Available"
+              $switch: {
+                branches: [
+                  { case: { $eq: ["$status", "held"] }, then: "Held (48h Review)" },
+                  { case: { $eq: ["$status", "available"] }, then: "Available" },
+                  { case: { $eq: ["$status", "paid"] }, then: "Paid (Cash)" },
+                  { case: { $eq: ["$status", "withdrawn"] }, then: "Withdrawn" },
+                  { case: { $eq: ["$status", "cancelled"] }, then: "Cancelled" }
+                ],
+                default: "Available"
               }
             }
           },
@@ -1891,6 +2173,75 @@ const outstandingBalanceReport = async (req, res) => {
 };
 
 
+// Auto-release held earnings after 48 hours
+const releaseHeldEarnings = async () => {
+  const session = await mongoose.startSession();
+  try {
+    const now = new Date();
+
+    // Find earnings that are held and ready to be released
+    const heldEarnings = await ProviderEarning.find({
+      status: 'held',
+      availableAfter: { $lte: now }
+    }).populate('booking');
+
+    if (heldEarnings.length === 0) return;
+
+    console.log(`Processing ${heldEarnings.length} held earnings for release...`);
+
+    for (const earning of heldEarnings) {
+      // Check if dispute is raised on the booking
+      if (earning.booking) {
+        if (earning.booking.disputeRaised || earning.booking.disputeStatus === 'pending' || earning.booking.disputeStatus === 'under_review') {
+          console.log(`Skipping release for earning ${earning._id} - Dispute Active on booking ${earning.booking._id}`);
+          continue;
+        }
+        if (earning.booking.paymentStatus === 'refunded' || earning.booking.adminRefundDecision === 'approved') {
+          console.log(`Cancelling earning ${earning._id} - Booking refunded/approved for refund`);
+          earning.status = 'cancelled';
+          await earning.save();
+          continue;
+        }
+      }
+
+      await session.withTransaction(async () => {
+        // Update earning status
+        earning.status = 'available';
+        await earning.save({ session });
+
+        // Update provider wallet
+        const provider = await Provider.findById(earning.provider).session(session);
+        if (provider) {
+          if (!provider.wallet) {
+            provider.wallet = { availableBalance: 0, totalWithdrawn: 0, lastUpdated: new Date() };
+          }
+          provider.wallet.availableBalance += earning.netAmount;
+          provider.wallet.lastUpdated = new Date();
+          await provider.save({ session });
+
+          // Notify provider
+          try {
+            sendNotification(
+              provider._id,
+              'provider',
+              'Earnings Released',
+              `Your earning of ₹${earning.netAmount} for booking ${earning.booking?.bookingId || earning.booking?._id} has been released and is now available in your wallet.`,
+              'earning_released',
+              earning.booking?._id
+            );
+          } catch (err) { /* ignore */ }
+        }
+      });
+      console.log(`Released earning ${earning._id} to provider ${earning.provider}`);
+    }
+  } catch (error) {
+    console.error('Error in releaseHeldEarnings:', error);
+  } finally {
+    await session.endSession();
+  }
+};
+
+
 module.exports = {
   // Webhook
   handleWebhook,
@@ -1898,6 +2249,7 @@ module.exports = {
   // Provider
   getEarningsSummary,
   requestBulkWithdrawal,
+  verifyWithdrawalOTP,
   downloadEarningsReport,
   downloadWithdrawalReport,
 
@@ -1913,5 +2265,6 @@ module.exports = {
   providerLedgerReport,
   earningsSummaryReport,
   payoutHistoryReport,
-  outstandingBalanceReport
+  outstandingBalanceReport,
+  releaseHeldEarnings
 };

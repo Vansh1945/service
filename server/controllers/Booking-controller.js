@@ -10,8 +10,22 @@ const ProviderEarning = require('../models/ProviderEarning-model');
 const ExcelJS = require('exceljs');
 const { sendNotification, notifyAdmins } = require('../utils/notificationHelper');
 const { generateBookingId } = require('../utils/generateUniqueId');
+const { getBookingTimeline } = require('../utils/bookingHelper');
 
+// Helper to get synchronized payout status
+const getPayoutStatus = (earning, booking) => {
+  if (!earning) return 'Not Processed';
+  if (booking.disputeRaised || booking.disputeStatus === 'under_review') return 'Dispute Hold';
 
+  switch (earning.status) {
+    case 'held': return 'Payout On Hold';
+    case 'available': return 'Payout Ready';
+    case 'paid':
+    case 'withdrawn': return 'Payout Released';
+    case 'cancelled': return 'Refund Adjusted';
+    default: return earning.status;
+  }
+};
 
 
 // USER BOOKING CONTROLLERS
@@ -45,12 +59,12 @@ const createBooking = async (req, res) => {
     }
 
     // Validate payment method
-    if (!['online', 'cash'].includes(paymentMethod)) {
+    if (!['online', 'cash', 'wallet', 'mixed'].includes(paymentMethod)) {
       await session.abortTransaction();
       session.endSession();
       return res.status(400).json({
         success: false,
-        message: 'Payment method must be either "online" or "cash"'
+        message: 'Payment method must be either "online", "cash", "wallet" or "mixed"'
       });
     }
 
@@ -75,30 +89,6 @@ const createBooking = async (req, res) => {
         message: 'Invalid date format'
       });
     }
-
-    // CHECK FOR DUPLICATE BOOKING (Idempotency)
-    const existingBooking = await Booking.findOne({
-      customer: req.user._id,
-      'services.service': serviceId,
-      date: bookingDate,
-      time: time || null,
-      status: { $nin: ['cancelled'] }
-    }).session(session);
-
-    if (existingBooking) {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(200).json({
-        success: true,
-        message: 'Existing booking found. Returning current booking.',
-        data: existingBooking.toObject(),
-        bookingId: existingBooking.bookingId || existingBooking._id,
-        _id: existingBooking._id,
-        isDuplicate: true
-      });
-    }
-
-
 
     // Calculate amounts
     let subtotal = service.basePrice * quantity;
@@ -164,6 +154,30 @@ const createBooking = async (req, res) => {
     }
 
     const totalAmount = subtotal - totalDiscount;
+
+    // CHECK FOR DUPLICATE BOOKING (Idempotency)
+    const existingBooking = await Booking.findOne({
+      customer: req.user._id,
+      'services.service': serviceId,
+      date: bookingDate,
+      time: time || null,
+      totalAmount: totalAmount,
+      status: { $nin: ['cancelled'] },
+      paymentStatus: { $in: ['pending', 'processing'] }
+    }).session(session);
+
+    if (existingBooking) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(200).json({
+        success: true,
+        message: 'Existing booking found. Returning current booking.',
+        data: existingBooking.toObject(),
+        bookingId: existingBooking.bookingId || existingBooking._id,
+        _id: existingBooking._id,
+        isDuplicate: true
+      });
+    }
 
     // Create booking
     const booking = new Booking({
@@ -316,16 +330,86 @@ const confirmBooking = async (req, res) => {
     // Process payment
     let paymentResult;
     switch (paymentMethod) {
-      case 'credit_card':
       case 'online':
-        // Process online payment
-        paymentResult = await processOnlinePayment({
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({
+          success: false,
+          message: 'Direct online processing is deprecated. Please use the secure Razorpay payment flow via /api/transaction/create-order'
+        });
+
+      case 'wallet': {
+        const userWallet = await User.findById(userId).session(session);
+        const bal = userWallet.wallet?.availableBalance || 0;
+        if (bal < booking.totalAmount) {
+          return { success: false, message: 'Insufficient wallet balance' };
+        }
+        userWallet.wallet.availableBalance -= booking.totalAmount;
+        userWallet.wallet.walletTransactions.push({
+          type: 'debit',
           amount: booking.totalAmount,
-          bookingId: booking._id,
-          paymentDetails,
-          userId
-        }, session);
+          reason: 'Booking Payment',
+          booking: booking._id
+        });
+        userWallet.wallet.lastUpdated = new Date();
+        await userWallet.save({ session });
+
+        paymentResult = {
+          success: true,
+          transactionId: `TXN-WLT-${Date.now()}`,
+          paymentStatus: 'paid'
+        };
         break;
+      }
+
+      case 'mixed': {
+        const userMixed = await User.findById(userId).session(session);
+        const walletBal = userMixed.wallet?.availableBalance || 0;
+
+        if (walletBal <= 0) {
+          await session.abortTransaction();
+          session.endSession();
+          return res.status(400).json({
+            success: false,
+            message: 'No wallet balance available for mixed payment. Please use online payment.'
+          });
+        }
+
+        const walletDeduction = Math.min(walletBal, booking.totalAmount);
+        const remainingAmount = booking.totalAmount - walletDeduction;
+
+        if (remainingAmount > 0) {
+          await session.abortTransaction();
+          session.endSession();
+          return res.status(400).json({
+            success: false,
+            isMixedRequired: true,
+            message: 'Partial wallet balance applied. Please complete the remaining payment via Razorpay.',
+            data: {
+              walletDeduction,
+              remainingAmount
+            }
+          });
+        } else {
+          // Full coverage by wallet
+          userMixed.wallet.availableBalance -= walletDeduction;
+          userMixed.wallet.walletTransactions.push({
+            type: 'debit',
+            amount: walletDeduction,
+            reason: 'Booking Payment',
+            booking: booking._id
+          });
+          userMixed.wallet.lastUpdated = new Date();
+          await userMixed.save({ session });
+
+          paymentResult = {
+            success: true,
+            transactionId: `TXN-WLT-${Date.now()}`,
+            paymentStatus: 'paid'
+          };
+        }
+        break;
+      }
 
       case 'cash':
         // Cash payment - just record it
@@ -359,7 +443,7 @@ const confirmBooking = async (req, res) => {
     booking.status = 'pending';
     booking.confirmedBooking = true;
 
-    // Update transaction
+    // Update or create transaction
     const transaction = await Transaction.findOneAndUpdate(
       { booking: bookingId },
       {
@@ -369,9 +453,14 @@ const confirmBooking = async (req, res) => {
         razorpayOrderId: paymentResult.razorpayOrderId,
         razorpayPaymentId: paymentResult.razorpayPaymentId,
         amount: booking.totalAmount,
-        completedAt: new Date()
+        completedAt: new Date(),
+        user: userId,
+        customerId: userId.toString(),
+        bookingId: booking.bookingId,
+        provider: booking.provider,
+        providerId: booking.provider ? booking.provider.toString() : undefined
       },
-      { new: true, session }
+      { new: true, upsert: true, session }
     );
 
     await booking.save({ session });
@@ -404,41 +493,6 @@ const confirmBooking = async (req, res) => {
   }
 };
 
-// Helper function to process online payments
-async function processOnlinePayment({ amount, bookingId, paymentDetails, userId }, session) {
-  try {
-
-
-    // Validate payment details
-    if (!paymentDetails || !paymentDetails.cardNumber || !paymentDetails.expiry || !paymentDetails.cvv) {
-      return { success: false, message: 'Card details are required for online payment' };
-    }
-
-    // Simulate payment processing
-    const paymentSuccess = Math.random() > 0.1; // 90% success rate
-
-    if (paymentSuccess) {
-      return {
-        success: true,
-        transactionId: `TXN-${Date.now()}`,
-        razorpayOrderId: `ORDER-${Date.now()}`,
-        razorpayPaymentId: `PAY-${Date.now()}`,
-        paymentStatus: 'paid'
-      };
-    } else {
-      return {
-        success: false,
-        message: 'Payment declined by bank'
-      };
-    }
-  } catch (error) {
-    console.error('Payment processing error:', error);
-    return {
-      success: false,
-      message: 'Payment processing failed'
-    };
-  }
-}
 
 
 // Update booking status
@@ -610,6 +664,12 @@ const getUserBookings = async (req, res) => {
           bookingObj.paymentDate = transaction.updatedAt;
         }
 
+        // Add payout status and timeline
+        const earning = await ProviderEarning.findOne({ booking: booking._id }).lean();
+        const pStatus = getPayoutStatus(earning, bookingObj);
+        bookingObj.payoutStatus = pStatus;
+        bookingObj.timeline = getBookingTimeline(bookingObj, pStatus);
+
         return bookingObj;
       })
     );
@@ -661,18 +721,18 @@ const updateBookingPayment = async (req, res) => {
     }
 
     // Validate payment method
-    if (!['online', 'cash'].includes(paymentMethod)) {
+    if (!['online', 'cash', 'wallet', 'mixed'].includes(paymentMethod)) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid payment method. Must be "online" or "cash"'
+        message: 'Invalid payment method. Must be "online", "cash", "wallet" or "mixed"'
       });
     }
 
     // Validate payment status
-    if (!['pending', 'paid', 'failed'].includes(paymentStatus)) {
+    if (!['pending', 'processing', 'paid', 'failed'].includes(paymentStatus)) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid payment status. Must be "pending", "paid", or "failed"'
+        message: 'Invalid payment status. Must be "pending", "processing", "paid", or "failed"'
       });
     }
 
@@ -694,6 +754,34 @@ const updateBookingPayment = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Cannot update payment for cancelled booking'
+      });
+    }
+
+    // Enforce valid payment status transitions
+    const validPaymentTransitions = {
+      'pending': ['processing', 'paid', 'failed'],
+      'processing': ['paid', 'failed'],
+      'paid': [],
+      'failed': ['pending', 'processing', 'paid']
+    };
+
+    if (booking.paymentStatus && !validPaymentTransitions[booking.paymentStatus]?.includes(paymentStatus)) {
+      if (booking.paymentStatus === paymentStatus) {
+        // Already in that state, ignore duplicate
+        return res.status(200).json({
+          success: true,
+          message: 'Payment details already up to date',
+          data: {
+            bookingId: booking._id,
+            paymentMethod: booking.paymentMethod,
+            paymentStatus: booking.paymentStatus,
+            status: booking.status
+          }
+        });
+      }
+      return res.status(400).json({
+        success: false,
+        message: `Invalid payment status transition from ${booking.paymentStatus} to ${paymentStatus}`
       });
     }
 
@@ -756,13 +844,80 @@ const payBooking = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Booking already paid' });
     }
 
-    // Process online payment
-    const paymentResult = await processOnlinePayment({
-      amount: booking.totalAmount,
-      bookingId: booking._id,
-      paymentDetails,
-      userId
-    }, session);
+    let paymentResult;
+    if (paymentDetails?.paymentMethod === 'wallet') {
+      const userWallet = await User.findById(userId).session(session);
+      const bal = userWallet.wallet?.availableBalance || 0;
+      if (bal < booking.totalAmount) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({ success: false, message: 'Insufficient wallet balance' });
+      }
+      userWallet.wallet.availableBalance -= booking.totalAmount;
+      userWallet.wallet.walletTransactions.push({
+        type: 'debit',
+        amount: booking.totalAmount,
+        reason: 'Booking Payment',
+        booking: booking._id
+      });
+      userWallet.wallet.lastUpdated = new Date();
+      await userWallet.save({ session });
+
+      paymentResult = {
+        success: true,
+        transactionId: `TXN-WLT-${Date.now()}`,
+        paymentStatus: 'paid'
+      };
+      booking.paymentMethod = 'wallet';
+    } else if (paymentDetails?.paymentMethod === 'mixed') {
+      const userMixed = await User.findById(userId).session(session);
+      const walletBal = userMixed.wallet?.availableBalance || 0;
+      if (walletBal <= 0) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({ success: false, message: 'No wallet balance available for mixed payment' });
+      }
+
+      const walletDeduction = Math.min(walletBal, booking.totalAmount);
+      const remainingAmount = booking.totalAmount - walletDeduction;
+
+      if (remainingAmount > 0) {
+        paymentResult = await processOnlinePayment({
+          amount: remainingAmount,
+          bookingId: booking._id,
+          paymentDetails,
+          userId
+        }, session);
+      } else {
+        paymentResult = {
+          success: true,
+          transactionId: `TXN-MIX-${Date.now()}`,
+          paymentStatus: 'paid'
+        };
+      }
+
+      if (paymentResult.success) {
+        userMixed.wallet.availableBalance -= walletDeduction;
+        userMixed.wallet.walletTransactions.push({
+          type: 'debit',
+          amount: walletDeduction,
+          reason: 'Booking Payment',
+          booking: booking._id
+        });
+        userMixed.wallet.lastUpdated = new Date();
+        await userMixed.save({ session });
+      }
+      booking.paymentMethod = 'mixed';
+    } else {
+      // Process online payment
+      paymentResult = await processOnlinePayment({
+        amount: booking.totalAmount,
+        bookingId: booking._id,
+        paymentDetails,
+        userId
+      }, session);
+      booking.paymentMethod = 'online';
+    }
 
     if (!paymentResult.success) {
       await session.abortTransaction();
@@ -771,16 +926,16 @@ const payBooking = async (req, res) => {
     }
 
     // Update booking
-    booking.paymentMethod = 'online';
     booking.paymentStatus = 'paid';
     await booking.save({ session });
 
     // Record Transaction
     await Transaction.create([{
-      customer: userId,
+      user: userId,
+      customerId: userId.toString(),
       booking: booking._id,
       amount: booking.totalAmount,
-      paymentMethod: 'online',
+      paymentMethod: booking.paymentMethod,
       paymentStatus: 'success',
       bookingId: booking.bookingId,
       provider: booking.provider,
@@ -915,6 +1070,9 @@ const getBooking = async (req, res) => {
       booking: booking._id
     }).sort({ createdAt: -1 });
 
+    // Fetch earning for payout status
+    const earning = await ProviderEarning.findOne({ booking: booking._id }).lean();
+
     const bookingObj = booking;
 
     if (transactions.length > 0) {
@@ -929,6 +1087,9 @@ const getBooking = async (req, res) => {
       bookingObj.paymentDate = completedTransaction.updatedAt;
       bookingObj.transactions = transactions;
     }
+
+    bookingObj.payoutStatus = getPayoutStatus(earning, bookingObj);
+    bookingObj.timeline = getBookingTimeline(bookingObj, bookingObj.payoutStatus);
 
     res.status(200).json({
       success: true,
@@ -971,7 +1132,7 @@ const cancelBooking = async (req, res) => {
       session.endSession();
       return res.status(400).json({
         success: false,
-        message: 'Cannot cancel completed booking'
+        message: 'Cannot cancel completed booking. Please file a complaint for refund requests.'
       });
     }
 
@@ -984,72 +1145,173 @@ const cancelBooking = async (req, res) => {
       });
     }
 
-    const previousStatus = booking.status;
-
-    // Step 1: Mark booking as cancelled
-    booking.status = 'cancelled';
-    booking.cancellationProgress.status = 'cancelled';
-    booking.cancellationProgress.reason = reason || 'Customer requested cancellation';
-    booking.cancellationProgress.cancelledAt = new Date();
-
-    await booking.save({ session });
-
-    // Update user stats
-    await User.findByIdAndUpdate(userId, {
-      $inc: { totalBookings: -1 }
-    }, { session });
-
-    // Update provider stats if booking was already accepted
-    if (previousStatus === 'accepted' && booking.provider) {
-      await Provider.findByIdAndUpdate(booking.provider, {
-        $inc: { canceledBookings: 1 }
-      }, { session });
+    // --- NEW STRICT EARNING STATUS CHECKS ---
+    const earning = await ProviderEarning.findOne({ booking: booking._id }).session(session);
+    if (earning && (earning.status === 'available' || earning.status === 'withdrawn' || earning.status === 'paid')) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({
+        success: false,
+        message: `Cancellation with automatic refund is blocked because the payout is already ${earning.status}. Please contact support.`
+      });
     }
 
+    const previousStatus = booking.status;
+    const isStarted = !!booking.serviceStartedAt;
     let refundDetails = null;
 
-    // Step 2: Process refund if payment was made
-    if (booking.paymentStatus === 'paid') {
-      booking.cancellationProgress.status = 'processing_refund';
-      booking.cancellationProgress.refundAmount = booking.totalAmount;
+    if (isStarted) {
+      // CASE 2: After serviceStartedAt but before completed
+      booking.status = 'cancelled';
+      booking.disputeRaised = true;
+      booking.disputeStatus = 'pending';
+      booking.cancellationProgress.status = 'cancelled';
+      booking.cancellationProgress.reason = reason || 'Customer requested cancellation after start';
+      booking.cancellationProgress.cancelledAt = new Date();
+
       await booking.save({ session });
 
-      refundDetails = {
-        amount: booking.totalAmount,
-        method: booking.paymentMethod,
-        status: 'processing',
-        estimatedCompletion: booking.paymentMethod === 'online' ? '3-5 business days' : 'Immediate'
-      };
-    }
-
-    await session.commitTransaction();
-    session.endSession();
-
-    // Return response with e-commerce style progress information
-    res.json({
-      success: true,
-      message: 'Booking cancelled successfully',
-      data: {
-        bookingId: booking._id,
-        status: booking.status,
-        cancellationProgress: {
-          status: booking.cancellationProgress.status,
-          reason: booking.cancellationProgress.reason,
-          cancelledAt: booking.cancellationProgress.cancelledAt,
-          refundAmount: booking.cancellationProgress.refundAmount,
-          estimatedRefundTime: refundDetails?.estimatedCompletion
-        },
-        nextSteps: refundDetails ? [
-          'Cancellation confirmed',
-          'Refund is being processed',
-          'You will receive refund confirmation email',
-          `Refund will be credited in ${refundDetails.estimatedCompletion}`
-        ] : [
-          'Cancellation confirmed',
-          'No refund applicable'
-        ]
+      // Update provider stats if booking was already accepted
+      if (booking.provider) {
+        await Provider.findByIdAndUpdate(booking.provider, {
+          $inc: { canceledBookings: 1 }
+        }, { session });
       }
-    });
+
+      await session.commitTransaction();
+      session.endSession();
+
+      // Notify customer that it's under review
+      try {
+        sendNotification(
+          userId,
+          'customer',
+          'Cancellation Under Review',
+          `Your cancellation for booking ${booking._id} is under review for refund as the service had already started.`,
+          'refund_processing',
+          booking._id
+        );
+      } catch (err) { }
+
+      // Notify Admin
+      try {
+        notifyAdmins(
+          'Refund Dispute Raised',
+          `Booking ${booking._id} was cancelled after service started. Admin review required for refund.`,
+          'dispute',
+          booking._id
+        );
+      } catch (err) { }
+
+      return res.json({
+        success: true,
+        message: 'Booking cancelled. Since the service had already started, a refund dispute has been raised for admin review.',
+        data: {
+          bookingId: booking._id,
+          status: booking.status,
+          disputeRaised: true,
+          cancellationProgress: booking.cancellationProgress
+        }
+      });
+    } else {
+      // CASE 1: Before serviceStartedAt
+      booking.status = 'cancelled';
+      booking.cancellationProgress.status = 'cancelled';
+      booking.cancellationProgress.reason = reason || 'Customer requested cancellation';
+      booking.cancellationProgress.cancelledAt = new Date();
+
+      if (booking.paymentStatus === 'paid' && ['online', 'wallet', 'mixed'].includes(booking.paymentMethod)) {
+        const previouslyRefunded = booking.cancellationProgress?.refundAmount || 0;
+        const refundAmount = booking.totalAmount - previouslyRefunded;
+
+        if (refundAmount > 0) {
+          // Lock transaction to prevent double refund
+          const transaction = await Transaction.findOneAndUpdate(
+            { booking: booking._id, paymentStatus: { $in: ['completed', 'paid', 'success'] }, refundStatus: { $ne: 'completed' } },
+            {
+              refundStatus: 'completed',
+              refundReason: reason || 'Customer cancelled before service start',
+              refundedAt: new Date(),
+              paymentStatus: 'refunded',
+              refundedAmount: refundAmount
+            },
+            { session, new: true }
+          );
+
+          if (!transaction) {
+            console.warn(`[Refund Engine] Duplicate cancellation refund attempt for booking ${booking._id}`);
+            throw new Error('Transaction not found or already refunded');
+          }
+
+          // Full refund to wallet
+          const user = await User.findById(userId).session(session);
+          if (!user.wallet) {
+            user.wallet = { availableBalance: 0, totalRefunded: 0, lastUpdated: new Date() };
+          }
+          user.wallet.availableBalance += refundAmount;
+          user.wallet.totalRefunded += refundAmount;
+          user.wallet.walletTransactions.push({
+            type: 'credit',
+            amount: refundAmount,
+            reason: 'Booking Refund',
+            booking: booking._id
+          });
+          user.wallet.lastUpdated = new Date();
+          await user.save({ session });
+
+          booking.paymentStatus = 'refunded';
+          booking.cancellationProgress.status = 'refund_completed';
+          booking.cancellationProgress.refundAmount = previouslyRefunded + refundAmount;
+          booking.cancellationProgress.refundCompletedAt = new Date();
+
+          refundDetails = {
+            amount: refundAmount,
+            method: 'wallet',
+            status: 'completed'
+          };
+
+          // Notify customer
+          try {
+            sendNotification(
+              userId,
+              'customer',
+              'Refund Completed',
+              `A full refund of ₹${refundAmount} has been added to your wallet.`,
+              'refund',
+              booking._id
+            );
+          } catch (err) { }
+        }
+      }
+
+      await booking.save({ session });
+
+      // Update user stats
+      await User.findByIdAndUpdate(userId, {
+        $inc: { totalBookings: -1 }
+      }, { session });
+
+      // Update provider stats if booking was already accepted
+      if (previousStatus === 'accepted' && booking.provider) {
+        await Provider.findByIdAndUpdate(booking.provider, {
+          $inc: { canceledBookings: 1 }
+        }, { session });
+      }
+
+      await session.commitTransaction();
+      session.endSession();
+
+      return res.json({
+        success: true,
+        message: refundDetails ? 'Booking cancelled and full refund added to wallet.' : 'Booking cancelled successfully.',
+        data: {
+          bookingId: booking._id,
+          status: booking.status,
+          refundDetails,
+          cancellationProgress: booking.cancellationProgress
+        }
+      });
+    }
 
     // Real-time notification for provider if booking was accepted
     try {
@@ -1238,6 +1500,10 @@ const getProviderBookingById = async (req, res) => {
       });
     }
 
+    // Fetch earning and transaction details
+    const earning = await ProviderEarning.findOne({ booking: id }).lean();
+    const transactions = await Transaction.find({ booking: id }).sort({ createdAt: -1 }).lean();
+
     const { commission, netAmount } = CommissionRule.calculateCommission(
       booking.totalAmount,
       commissionRule
@@ -1255,7 +1521,16 @@ const getProviderBookingById = async (req, res) => {
         amount: commission
       },
       netAmount,
-      providerCommissionRate: commissionRule ? commissionRule.value : 0
+      providerCommissionRate: commissionRule ? commissionRule.value : 0,
+      feedback: booking.feedback,
+      complaint: booking.complaint,
+      adminRemark: booking.adminRemark,
+      payoutHoldUntil: booking.payoutHoldUntil,
+      earningHoldStatus: earning ? earning.status : 'none',
+      payoutStatus: getPayoutStatus(earning, booking),
+      earningDetails: earning,
+      refundData: booking.cancellationProgress,
+      transactions: transactions
     };
 
     res.status(200).json({
@@ -1456,6 +1731,14 @@ const acceptBooking = async (req, res) => {
     if (time) booking.time = time;
     booking.updatedAt = new Date();
 
+    // Add to status history
+    booking.statusHistory.push({
+      status: 'accepted',
+      timestamp: new Date(),
+      note: `Booking accepted by provider: ${provider.name}`,
+      updatedBy: 'provider'
+    });
+
     await booking.save();
 
     // Sync transaction record with the new provider and calculated commission
@@ -1470,8 +1753,8 @@ const acceptBooking = async (req, res) => {
           providerEarning: isOnline ? (booking.providerEarnings * 100) : (booking.providerEarnings || 0),
           commissionRule: booking.commissionRule,
           // Sync payment status if booking is already paid
-          ...(booking.paymentStatus === 'paid' && { 
-            paymentStatus: isOnline ? 'success' : 'completed' 
+          ...(booking.paymentStatus === 'paid' && {
+            paymentStatus: isOnline ? 'success' : 'completed'
           })
         }
       );
@@ -1554,10 +1837,39 @@ const startBooking = async (req, res) => {
       });
     }
 
+    // Handle before-work proof images (Mandatory: min 1)
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Before work proof images are required before starting service'
+      });
+    }
+
+    const { latitude, longitude } = req.body;
+
     // Update booking status to in-progress
     booking.status = 'in-progress';
-    booking.startedAt = new Date();
+    booking.serviceStartedAt = new Date();
     booking.updatedAt = new Date();
+
+    const beforeImages = req.files.map(file => ({
+      url: file.path || file.secure_url,
+      uploadedAt: new Date()
+    }));
+
+    booking.providerWorkProof = {
+      ...booking.providerWorkProof,
+      beforeImages: beforeImages,
+      startLocation: latitude && longitude ? { latitude: parseFloat(latitude), longitude: parseFloat(longitude) } : undefined
+    };
+
+    // Add to status history
+    booking.statusHistory.push({
+      status: 'in-progress',
+      timestamp: new Date(),
+      note: 'Work proof submitted. Service started.',
+      updatedBy: 'provider'
+    });
 
     await booking.save();
 
@@ -1707,7 +2019,7 @@ const completeBooking = async (req, res) => {
     const booking = await Booking.findOne({
       _id: id,
       provider: providerId,
-      status: { $in: ['accepted', 'in-progress'] }
+      status: 'in-progress'
     }).populate('customer', '_id name').session(session);
 
     if (!booking) {
@@ -1721,7 +2033,7 @@ const completeBooking = async (req, res) => {
           message: 'Booking already completed.'
         });
       }
-      throw new Error('Booking not found or cannot be completed.');
+      throw new Error('Booking must be In Progress before it can be completed.');
     }
 
     // Prevent duplicate commission
@@ -1734,10 +2046,45 @@ const completeBooking = async (req, res) => {
       });
     }
 
+    // Handle after-work proof images (Required: min 1)
+    if (!req.files || req.files.length === 0) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({
+        success: false,
+        message: 'Completion proof images are required before completing service'
+      });
+    }
+
+    const afterImages = req.files.map(file => ({
+      url: file.path || file.secure_url,
+      uploadedAt: new Date()
+    }));
+
+    const { latitude, longitude } = req.body;
+
+    booking.providerWorkProof = {
+      ...booking.providerWorkProof,
+      afterImages: afterImages,
+      completionLocation: latitude && longitude ? { latitude: parseFloat(latitude), longitude: parseFloat(longitude) } : undefined
+    };
+
     booking.status = 'completed';
     booking.completedAt = new Date();
     booking.paymentStatus = 'paid';
     booking.commissionProcessed = true;
+
+    // 48-hour payout hold logic
+    const holdPeriodHours = 48;
+    booking.payoutHoldUntil = new Date(Date.now() + holdPeriodHours * 60 * 60 * 1000);
+
+    // Add status history note for payout hold
+    booking.statusHistory.push({
+      status: 'completed',
+      timestamp: new Date(),
+      note: `Service completed. Payout held for ${holdPeriodHours} hours for dispute review.`,
+      updatedBy: 'system'
+    });
 
     await booking.save({ session });
 
@@ -1763,7 +2110,6 @@ const completeBooking = async (req, res) => {
         paymentMethod: 'cash',
         paymentStatus: 'completed',
         bookingId: booking.bookingId,
-        user: booking.customer,
         customerId: booking.customer?.toString(),
         provider: booking.provider,
         providerId: booking.provider?.toString(),
@@ -1772,31 +2118,14 @@ const completeBooking = async (req, res) => {
         transactionId: `CASH-${Date.now()}-${booking._id.toString().slice(-6)}`,
         currency: 'INR',
         completedAt: new Date(),
+        type: 'payment',
         description: `Cash payment for booking ${booking.bookingId || booking._id}`
       });
 
       await cashTransaction.save({ session });
     }
 
-    // ------------------------------
-    //  PREVENT DUPLICATE EARNING RECORD
-    // ------------------------------
-    const existingEarning = await ProviderEarning.findOne({
-      booking: booking._id,
-      provider: providerId
-    }).session(session);
-
-    if (existingEarning) {
-      await session.commitTransaction();
-      session.endSession();
-      return res.status(409).json({
-        success: false,
-        message: 'Earning already recorded!'
-      });
-    }
-
-    // ------------------------------
-    //  EARNING RELEASE DATE & STATUS
+    //  PREVENT DUPLICATE EARNING RECORD USING UPSERT
     // ------------------------------
     let earningStatus, availableAfter;
 
@@ -1804,25 +2133,39 @@ const completeBooking = async (req, res) => {
       earningStatus = "paid"; // provider already received cash
       availableAfter = new Date();
     } else {
-      earningStatus = "available";
-      availableAfter = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+      earningStatus = "held"; // 48h hold for online payments
+      availableAfter = booking.payoutHoldUntil;
     }
 
-    const providerEarning = new ProviderEarning({
-      provider: providerId,
-      booking: booking._id,
-      grossAmount: booking.totalAmount,
-      commissionRate: commissionRule ? commissionRule.value : 0,
-      commissionAmount: commission,
-      netAmount: netAmount,
-      status: earningStatus,
-      availableAfter
-    });
+    const providerEarningResult = await ProviderEarning.findOneAndUpdate(
+      { booking: booking._id, provider: providerId },
+      {
+        $setOnInsert: {
+          grossAmount: booking.totalAmount,
+          commissionRate: commissionRule ? commissionRule.value : 0,
+          commissionAmount: commission,
+          netAmount: netAmount,
+          status: earningStatus,
+          availableAfter
+        }
+      },
+      { session, upsert: true, new: true, rawResult: true }
+    );
 
-    await providerEarning.save({ session });
+    if (providerEarningResult.lastErrorObject && providerEarningResult.lastErrorObject.updatedExisting) {
+      await session.commitTransaction();
+      session.endSession();
+      return res.status(409).json({
+        success: false,
+        message: 'Earning already recorded for this booking!'
+      });
+    }
 
     // ------------------------------
-    //  FIXED WALLET LOGIC
+    // Earning was safely created in the DB through the upsert above.
+
+    // ------------------------------
+    //  FIXED WALLET LOGIC (Updated for 48h hold)
     // ------------------------------
     if (!provider.wallet) {
       provider.wallet = { availableBalance: 0, totalWithdrawn: 0, lastUpdated: new Date() };
@@ -1830,7 +2173,6 @@ const completeBooking = async (req, res) => {
 
     if (booking.paymentMethod === "cash") {
       // Cash Booking Commission Logic
-      // Check if trying to complete booking without enough balance
       if (provider.wallet.availableBalance < commission) {
         await session.commitTransaction();
         session.endSession();
@@ -1841,10 +2183,24 @@ const completeBooking = async (req, res) => {
       }
       // Immediately deduct commission
       provider.wallet.availableBalance -= commission;
-
     } else {
-      // Online payment → provider gets only netAmount (do NOT add full amount)
-      provider.wallet.availableBalance += netAmount;
+      // Online payment → DO NOT add to availableBalance yet.
+      // It will be added after 48h hold period expires.
+      // We only log the earning in ProviderEarning model with 'held' status.
+    }
+
+    // Notify provider about payout hold
+    if (booking.paymentMethod !== "cash") {
+      try {
+        sendNotification(
+          providerId,
+          'provider',
+          'Payout Under Review',
+          `Booking ${booking.bookingId || booking._id} completed. Your payout of ₹${netAmount} is under review for 48 hours.`,
+          'payout_hold',
+          booking._id
+        );
+      } catch (err) { /* ignore */ }
     }
 
     provider.wallet.lastUpdated = new Date();
@@ -2114,7 +2470,7 @@ const getAllBookings = async (req, res) => {
       const now = new Date();
       const start = new Date();
       start.setHours(0, 0, 0, 0);
-      
+
       switch (req.query.timeRange) {
         case 'today':
           match.date = { $gte: start };
@@ -2207,6 +2563,42 @@ const getAllBookings = async (req, res) => {
           foreignField: '_id',
           as: 'serviceDetails'
         }
+      },
+      {
+        $lookup: {
+          from: 'providerearnings',
+          localField: '_id',
+          foreignField: 'booking',
+          as: 'earning'
+        }
+      },
+      {
+        $addFields: {
+          earningStatus: { $ifNull: [{ $arrayElemAt: ['$earning.status', 0] }, 'N/A'] },
+          payoutStatus: {
+            $cond: {
+              if: { $eq: [{ $size: '$earning' }, 0] },
+              then: 'Not Processed',
+              else: {
+                $cond: {
+                  if: { $or: [{ $eq: ['$disputeRaised', true] }, { $eq: ['$disputeStatus', 'under_review'] }] },
+                  then: 'Dispute Hold',
+                  else: {
+                    $switch: {
+                      branches: [
+                        { case: { $eq: [{ $arrayElemAt: ['$earning.status', 0] }, 'held'] }, then: 'Payout On Hold' },
+                        { case: { $eq: [{ $arrayElemAt: ['$earning.status', 0] }, 'available'] }, then: 'Payout Ready' },
+                        { case: { $in: [{ $arrayElemAt: ['$earning.status', 0] }, ['paid', 'withdrawn']] }, then: 'Payout Released' },
+                        { case: { $eq: [{ $arrayElemAt: ['$earning.status', 0] }, 'cancelled'] }, then: 'Refund Adjusted' }
+                      ],
+                      default: { $arrayElemAt: ['$earning.status', 0] }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     );
 
@@ -2285,14 +2677,14 @@ const getAllBookings = async (req, res) => {
           accepted: { $sum: { $cond: [{ $eq: ['$status', 'accepted'] }, 1, 0] } },
           completed: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] } },
           cancelled: { $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] } },
-          revenue: { 
-            $sum: { 
+          revenue: {
+            $sum: {
               $cond: [
-                { $and: [{ $eq: ['$status', 'completed'] }, { $eq: ['$paymentStatus', 'paid'] }] }, 
-                '$totalAmount', 
+                { $and: [{ $eq: ['$status', 'completed'] }, { $eq: ['$paymentStatus', 'paid'] }] },
+                '$totalAmount',
                 0
-              ] 
-            } 
+              ]
+            }
           }
         }
       }
@@ -2376,6 +2768,10 @@ const getBookingDetails = async (req, res) => {
       });
     }
 
+    // Get earning hold status
+    const ProviderEarning = mongoose.model('ProviderEarning');
+    const earning = await ProviderEarning.findOne({ booking: booking._id }).select('status availableAfter').lean();
+
     // Format services with service details
     const formattedServices = booking.services.map(item => ({
       _id: item._id,
@@ -2402,9 +2798,10 @@ const getBookingDetails = async (req, res) => {
 
     if (transactions.length > 0 && booking.paymentMethod === 'online') {
       const transaction = transactions[0];
+      const isOnline = transaction.paymentMethod === 'online' || transaction.paymentMethod === 'upi';
       paymentDetails = {
         transactionId: transaction.transactionId,
-        amount: transaction.amount,
+        amount: isOnline ? (transaction.amount / 100) : transaction.amount,
         paymentStatus: transaction.paymentStatus,
         paymentMethod: transaction.paymentMethod,
         currency: transaction.currency,
@@ -2414,30 +2811,38 @@ const getBookingDetails = async (req, res) => {
       };
     }
 
+    // Explicitly add refund status from the first transaction if exists
+    const firstTx = transactions[0] || {};
+    const isOnlineRefund = firstTx.paymentMethod === 'online' || firstTx.paymentMethod === 'upi';
+    const refundData = transactions.length > 0 ? {
+      status: firstTx.refundStatus,
+      refundedAmount: isOnlineRefund ? (firstTx.refundedAmount / 100) : firstTx.refundedAmount,
+      refundReason: firstTx.refundReason,
+      refundedAt: firstTx.refundedAt
+    } : null;
+
+    // Map transactions for history view
+    const formattedTransactions = transactions.map(tx => {
+      const isTxOnline = tx.paymentMethod === 'online' || tx.paymentMethod === 'upi';
+      return {
+        ...tx.toObject ? tx.toObject() : tx,
+        amount: isTxOnline ? (tx.amount / 100) : tx.amount,
+        refundedAmount: isTxOnline ? (tx.refundedAmount / 100) : tx.refundedAmount
+      };
+    });
+
     // Format the response
     const response = {
       booking: {
-        _id: booking._id,
-        bookingId: booking.bookingId,
-        date: booking.date,
-        time: booking.time,
-        status: booking.status,
-        address: booking.address,
-        specialInstructions: booking.specialInstructions,
-        createdAt: booking.createdAt,
-        updatedAt: booking.updatedAt,
-        bookingDateTime: booking.bookingDateTime,
-        isUpcoming: booking.isUpcoming,
-        confirmedBooking: booking.confirmedBooking,
-        statusHistory: booking.statusHistory,
-        serviceStartedAt: booking.serviceStartedAt,
-        serviceCompletedAt: booking.serviceCompletedAt,
-        completedAt: booking.completedAt
+        ...booking,
+        providerWorkProof: booking.providerWorkProof || { beforeImages: [], afterImages: [] },
+        complaintProofs: booking.complaintProofs || []
       },
       customer: booking.customer,
       provider: booking.provider,
       services: formattedServices,
       payment: {
+        ...booking.payment,
         method: booking.paymentMethod,
         status: booking.paymentStatus,
         subtotal: booking.subtotal,
@@ -2452,7 +2857,15 @@ const getBookingDetails = async (req, res) => {
       },
       feedback: booking.feedback,
       complaint: booking.complaint,
-      adminRemark: booking.adminRemark
+      adminRemark: booking.adminRemark,
+      payoutHoldUntil: booking.payoutHoldUntil,
+      earningHoldStatus: earning ? earning.status : 'N/A',
+      payoutStatus: getPayoutStatus(earning, booking),
+      disputeRaised: booking.disputeRaised,
+      disputeStatus: booking.disputeStatus,
+      timeline: getBookingTimeline(booking, getPayoutStatus(earning, booking)),
+      transactions: formattedTransactions,
+      refundData: refundData
     };
 
     res.json({
@@ -2519,8 +2932,8 @@ const assignProvider = async (req, res) => {
           providerEarning: isOnline ? (booking.providerEarnings * 100) : (booking.providerEarnings || 0),
           commissionRule: booking.commissionRule,
           // Sync payment status if booking is already paid
-          ...(booking.paymentStatus === 'paid' && { 
-            paymentStatus: isOnline ? 'success' : 'completed' 
+          ...(booking.paymentStatus === 'paid' && {
+            paymentStatus: isOnline ? 'success' : 'completed'
           })
         }
       );

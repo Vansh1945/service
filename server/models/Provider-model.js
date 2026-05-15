@@ -204,6 +204,16 @@ const providerSchema = new mongoose.Schema({
         deviceId: { type: String, required: true },
         lastActive: { type: Date, default: Date.now }
     }],
+    withdrawalSecurity: {
+        otp: String,
+        otpExpires: Date,
+        attempts: { type: Number, default: 0 },
+        lastRequestTime: Date,
+        isFlagged: { type: Boolean, default: false },
+        flagReason: String,
+        pendingAmount: Number,
+        pendingRequestTime: Date
+    },
 }, {
     timestamps: true,
     toJSON: {

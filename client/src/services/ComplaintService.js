@@ -34,3 +34,9 @@ export const updateComplaintStatus = (id, status) => {
     return axiosInstance.put(`/complaint/${id}/status`, { status });
 };
 
+export const replyToComplaint = (id, data) => {
+    return axiosInstance.post(`/complaint/${id}/reply`, data, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+    });
+};
+

@@ -646,13 +646,53 @@ const getCustomerDashboardStats = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Get customer wallet history
+ * @route   GET /api/user/wallet/history
+ * @access  Private (Customer)
+ */
+const getWalletHistory = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id)
+      .select('wallet')
+      .populate({
+        path: 'wallet.walletTransactions.booking',
+        select: 'bookingId status totalAmount'
+      });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const transactions = user.wallet?.walletTransactions || [];
+
+    res.status(200).json({
+      success: true,
+      count: transactions.length,
+      data: transactions.sort(
+        (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+      )
+    });
+  } catch (error) {
+    console.error('Wallet history error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch wallet history'
+    });
+  }
+};
+
 
 module.exports = {
   register,
   getProfile,
   updateProfile,
   uploadProfilePicture,
-  getCustomerDashboardStats
+  getCustomerDashboardStats,
+  getWalletHistory
 };
 
 

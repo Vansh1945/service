@@ -66,11 +66,23 @@ const transactionSchema = new Schema({
     enum: ['card', 'netbanking', 'wallet', 'upi', 'emi', 'cash', 'online', 'UPI', 'Card', 'Cash'],
     default: 'online'
   },
+  type: {
+    type: String,
+    enum: ['payment', 'refund'],
+    default: 'payment'
+  },
   razorpayOrderId: String,
   razorpayPaymentId: String,
   razorpaySignature: String,
   razorpayResponse: Object,
   description: String,
+  refundStatus: {
+    type: String,
+    enum: ['none', 'pending', 'completed'],
+    default: 'none'
+  },
+  refundReason: String,
+  refundedAt: Date,
   createdAt: {
     type: Date,
     default: Date.now

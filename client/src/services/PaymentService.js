@@ -16,6 +16,10 @@ export const getEarningsReport = (params) => {
     return axiosInstance.get("/payment/earnings-report", { params });
 };
 
+export const getHeldEarnings = (params) => {
+    return axiosInstance.get("/payment/earnings-report", { params: { ...params, status: 'held' } });
+};
+
 export const getWithdrawalReport = (params) => {
     return axiosInstance.get("/payment/withdrawal-report", { params });
 };

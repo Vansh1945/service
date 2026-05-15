@@ -10,6 +10,7 @@ const {
   updateComplaintStatus,
   reopenComplaint,
   getComplaintDetails,
+  replyToComplaint
 } = require("../controllers/Complaint-controller");
 const { uploadComplaintImage } = require("../middlewares/upload");
 const { userAuthMiddleware } = require("../middlewares/User-middleware");
@@ -51,6 +52,14 @@ router.post(
 router.get("/my-complaints", sharedAuth, getMyComplaints);
 router.get("/:id", sharedAuth, getComplaint);
 router.put("/:id/reopen", sharedAuth, reopenComplaint);
+
+// Reply route (Admin and Provider)
+router.post(
+  "/:id/reply",
+  sharedAuth,
+  uploadComplaintImage.array("images", 5),
+  replyToComplaint
+);
 
 // Admin routes
 router.get("/", adminAuthMiddleware, requireAdmin, getAllComplaints);

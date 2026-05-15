@@ -30,6 +30,10 @@ const ProviderSupportPage = () => {
     bookingId: '', title: '', description: '', category: '', images: [], previewImages: []
   });
   const [formErrors, setFormErrors] = useState({ bookingId: '', title: '', description: '', category: '' });
+  const [replyText, setReplyText] = useState('');
+  const [replyImages, setReplyImages] = useState([]);
+  const [replyPreviews, setReplyPreviews] = useState([]);
+  const [submittingReply, setSubmittingReply] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) navigate('/login');
@@ -137,15 +141,49 @@ const ProviderSupportPage = () => {
   const viewComplaintDetails = async (complaintId) => {
     try {
       const response = await getComplaint(complaintId);
-      const c = {
-        ...response.data.data,
-        images: response.data.data.images ? response.data.data.images.map(img => typeof img === 'string' ? `${API_URL_IMAGE}/${img.replace(/\\/g, '/')}` : img.secure_url) : []
-      };
+      const c = response.data.data;
+      // Handle image URLs (backend already returns secure_url for Cloudinary)
       setSelectedComplaint(c);
       setOpenComplaintDetail(true);
     } catch (err) {
       toast.error('Failed to fetch ticket details');
     }
+  };
+
+  const handleReplySubmit = async () => {
+    if (!replyText.trim()) { toast.error('Please enter a reply message'); return; }
+    setSubmittingReply(true);
+    try {
+      const { replyToComplaint } = require('../../services/ComplaintService');
+      const fd = new FormData();
+      fd.append('message', replyText);
+      replyImages.forEach(img => fd.append('images', img));
+
+      await replyToComplaint(selectedComplaint._id, fd);
+      toast.success('Reply submitted successfully!');
+      setReplyText('');
+      setReplyImages([]);
+      setReplyPreviews([]);
+      // Refresh details
+      viewComplaintDetails(selectedComplaint._id);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to submit reply');
+    } finally {
+      setSubmittingReply(false);
+    }
+  };
+
+  const handleReplyImageUpload = (e) => {
+    const files = Array.from(e.target.files);
+    const validFiles = [], validPreviews = [];
+    files.forEach(file => {
+      if (!file.type.match('image.*')) { toast.error('Images only'); return; }
+      if (file.size > 5 * 1024 * 1024) { toast.error('Max 5MB per image'); return; }
+      validFiles.push(file);
+      validPreviews.push(URL.createObjectURL(file));
+    });
+    setReplyImages(prev => [...prev, ...validFiles]);
+    setReplyPreviews(prev => [...prev, ...validPreviews]);
   };
 
   const resetForm = () => {
@@ -432,25 +470,125 @@ const ProviderSupportPage = () => {
                 </div>
               </div>
               <div>
-                <h4 className="text-xs font-semibold text-gray-400 mb-2">Subject</h4>
+                <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2">Subject</h4>
                 <p className="text-sm font-bold text-secondary">{selectedComplaint.title}</p>
-                <h4 className="text-xs font-semibold text-gray-400 mt-4 mb-2">Description</h4>
-                <p className="text-sm text-gray-600">{selectedComplaint.description}</p>
+                {selectedComplaint.complaintType && selectedComplaint.complaintType !== 'N/A' && (
+                  <span className="inline-block mt-1 text-[10px] font-bold bg-red-50 text-red-600 px-2 py-0.5 rounded-full border border-red-100 uppercase">
+                    {selectedComplaint.complaintType.replace('_', ' ')}
+                  </span>
+                )}
+                <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mt-4 mb-2">Description</h4>
+                <p className="text-sm text-gray-600 leading-relaxed">
+                  {selectedComplaint.description?.includes(']') 
+                    ? selectedComplaint.description.split(']').slice(1).join(']').trim() 
+                    : selectedComplaint.description}
+                </p>
               </div>
-              {selectedComplaint.images?.length > 0 && (
-                <div>
-                  <h4 className="text-xs font-semibold text-gray-300 mb-2">Attachments</h4>
-                  <div className="flex gap-2 overflow-x-auto">
-                    {selectedComplaint.images.map((img, idx) => (
-                      <img key={idx} src={img} className="w-20 h-20 object-cover rounded-lg border" alt="" />
-                    ))}
+
+              {/* Evidence Comparison */}
+              {selectedComplaint.evidenceComparison && (
+                <div className="rounded-xl border border-gray-100 overflow-hidden">
+                  <div className="bg-gray-50 px-4 py-2 border-b border-gray-100 flex justify-between items-center">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Evidence Comparison</p>
+                    <span className="text-[9px] text-primary font-bold">Before | After | Proof</span>
+                  </div>
+                  <div className="grid grid-cols-3 divide-x divide-gray-100 h-20">
+                    <div className="p-2 flex flex-col items-center">
+                      <p className="text-[8px] font-bold text-gray-400 mb-1">BEFORE</p>
+                      <div className="flex gap-1 overflow-x-auto w-full justify-center">
+                        {selectedComplaint.evidenceComparison.beforeWorkImages?.length > 0 ? (
+                          selectedComplaint.evidenceComparison.beforeWorkImages.map((img, i) => (
+                            <img key={i} src={img} className="w-8 h-8 object-cover rounded border" alt="" />
+                          ))
+                        ) : <span className="text-[8px] text-gray-300">None</span>}
+                      </div>
+                    </div>
+                    <div className="p-2 flex flex-col items-center">
+                      <p className="text-[8px] font-bold text-gray-400 mb-1">AFTER</p>
+                      <div className="flex gap-1 overflow-x-auto w-full justify-center">
+                        {selectedComplaint.evidenceComparison.afterWorkImages?.length > 0 ? (
+                          selectedComplaint.evidenceComparison.afterWorkImages.map((img, i) => (
+                            <img key={i} src={img} className="w-8 h-8 object-cover rounded border" alt="" />
+                          ))
+                        ) : <span className="text-[8px] text-gray-300">None</span>}
+                      </div>
+                    </div>
+                    <div className="p-2 flex flex-col items-center bg-red-50/20">
+                      <p className="text-[8px] font-bold text-red-400 mb-1">CUSTOMER</p>
+                      <div className="flex gap-1 overflow-x-auto w-full justify-center">
+                        {selectedComplaint.evidenceComparison.complaintImages?.length > 0 ? (
+                          selectedComplaint.evidenceComparison.complaintImages.map((img, i) => (
+                            <img key={i} src={img} className="w-8 h-8 object-cover rounded border border-red-100" alt="" />
+                          ))
+                        ) : <span className="text-[8px] text-gray-300">None</span>}
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
-              {selectedComplaint.resolutionNotes && (
-                <div className="bg-blue-50 rounded-xl p-4">
-                  <h4 className="text-xs font-semibold text-blue-600 mb-1">Admin Response</h4>
-                  <p className="text-sm text-blue-700">{selectedComplaint.resolutionNotes}</p>
+
+              {/* Resolution History / Timeline */}
+              {selectedComplaint.resolutionHistory?.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-3">Resolution History</p>
+                  <div className="relative pl-6">
+                    <div className="absolute left-[10px] top-2 bottom-2 w-px bg-gray-100" />
+                    <div className="space-y-4">
+                      {selectedComplaint.resolutionHistory.map((step, i) => (
+                        <div key={i} className="relative">
+                          <div className={`absolute -left-[20px] top-1.5 w-2 h-2 rounded-full border-2 bg-white ${
+                            step.event.includes('Resolved') ? 'border-green-500' :
+                            step.event.includes('Replied') ? 'border-primary' : 'border-gray-300'
+                          }`} />
+                          <div className="flex justify-between items-start">
+                            <p className="text-[11px] font-bold text-secondary">{step.event}</p>
+                            <span className="text-[9px] text-gray-400">{formatDateTime(step.timestamp)}</span>
+                          </div>
+                          {step.note && <p className="text-[10px] text-gray-500 italic mt-0.5">"{step.note}"</p>}
+                          <p className="text-[9px] text-gray-400 mt-1 uppercase">By: {step.by}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Reply Form (Only if ticket is not closed) */}
+              {!['Solved', 'Closed'].includes(selectedComplaint.status) && (
+                <div className="border-t pt-5 mt-5">
+                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-primary mb-3">Submit Your Response</h4>
+                  <div className="space-y-3">
+                    <textarea 
+                      value={replyText} 
+                      onChange={(e) => setReplyText(e.target.value)}
+                      placeholder="Explain your side or provide clarification..."
+                      rows="3"
+                      className="w-full px-3 py-2 text-sm border rounded-xl focus:ring-2 focus:ring-primary/20 outline-none resize-none"
+                    />
+                    
+                    <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-2 px-3 py-1.5 border border-dashed rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                        <Upload className="w-3.5 h-3.5 text-gray-400" />
+                        <span className="text-xs text-gray-500">Attach Evidence</span>
+                        <input type="file" multiple className="sr-only" onChange={handleReplyImageUpload} accept="image/*" />
+                      </label>
+                      <div className="flex gap-1 overflow-x-auto">
+                        {replyPreviews.map((p, i) => (
+                          <img key={i} src={p} className="w-8 h-8 object-cover rounded border" alt="" />
+                        ))}
+                      </div>
+                    </div>
+
+                    <button 
+                      onClick={handleReplySubmit}
+                      disabled={submittingReply || !replyText.trim()}
+                      className="w-full py-2 bg-primary text-white rounded-xl text-sm font-bold shadow-md hover:bg-primary/90 disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {submittingReply ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
+                      Submit Response
+                    </button>
+                    <p className="text-[9px] text-gray-400 text-center italic">This response will be visible to the Customer and Support Team.</p>
+                  </div>
                 </div>
               )}
             </div>

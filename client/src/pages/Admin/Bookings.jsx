@@ -38,7 +38,9 @@ import {
     X,
     ChevronLeft,
     ChevronRight,
-    ExternalLink
+    ExternalLink,
+    Lock,
+    Unlock
 } from 'lucide-react';
 
 // Static option arrays outside component — never change between renders
@@ -191,6 +193,24 @@ const BookingRow = React.memo(({ booking, onDetails, onReschedule, onAssign, onD
     </tr>
 ));
 
+const PayoutStatusBadge = ({ status }) => {
+    const cfg = {
+        'Payout On Hold': 'bg-orange-100 text-orange-700 border-orange-200',
+        'Payout Ready': 'bg-green-100 text-green-700 border-green-200',
+        'Payout Released': 'bg-blue-100 text-blue-700 border-blue-200',
+        'Refund Adjusted': 'bg-gray-100 text-gray-500 border-gray-200',
+        'Dispute Hold': 'bg-red-100 text-red-700 border-red-200',
+        'Not Processed': 'bg-gray-50 text-gray-400 border-gray-100',
+    };
+
+    return (
+        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${cfg[status] || 'bg-gray-100 text-gray-500 border-gray-200'}`}>
+            {status === 'Payout On Hold' || status === 'Dispute Hold' ? <Lock size={10} /> : <Unlock size={10} />}
+            {status || 'Unknown'}
+        </span>
+    );
+};
+
 const AdminBookingsView = () => {
     const { token, API, showToast } = useAuth();
     const navigate = useNavigate();
@@ -241,7 +261,7 @@ const AdminBookingsView = () => {
     useEffect(() => {
         const params = new URLSearchParams(location.search);
         const searchParam = params.get('search');
-        
+
         // Only update if the search filter actually changed to avoid infinite loops
         if (searchParam !== undefined && searchParam !== filters.search) {
             setFilters(prev => ({ ...prev, search: searchParam || '' }));
@@ -404,7 +424,7 @@ const AdminBookingsView = () => {
             };
 
             const response = await BookingService.downloadBookingReport(params, { responseType: 'blob' });
-            
+
             const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -742,7 +762,7 @@ const AdminBookingsView = () => {
                                 Filtered by Booking ID: {filters.search}
                                 <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => handleFilterChange('search', '')} />
                             </span>
-                            <button 
+                            <button
                                 onClick={() => handleFilterChange('search', '')}
                                 className="text-xs text-red-500 hover:underline font-medium"
                             >
@@ -977,6 +997,128 @@ const AdminBookingsView = () => {
 
                                 {/* Right Column */}
                                 <div className="space-y-4">
+                                    {/* Photo Proofs Section - Enhanced Side-by-Side View */}
+                                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 shadow-inner">
+                                        <h3 className="font-bold text-secondary mb-4 flex items-center text-sm uppercase tracking-wide">
+                                            <Activity className="w-4 h-4 mr-2 text-primary" />
+                                            Service Evidence (Before vs After)
+                                        </h3>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
+                                            {/* Before Work Column */}
+                                            <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
+                                                <div className="flex justify-between items-center mb-3">
+                                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Before Service</p>
+                                                    {selectedBooking?.booking?.providerWorkProof?.startLocation && (
+                                                        <a 
+                                                            href={`https://www.google.com/maps?q=${selectedBooking.booking.providerWorkProof.startLocation.latitude},${selectedBooking.booking.providerWorkProof.startLocation.longitude}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="text-[10px] font-bold text-primary flex items-center gap-1 hover:underline bg-primary/5 px-2 py-0.5 rounded-full"
+                                                        >
+                                                            <MapPin className="w-3 h-3" /> Map
+                                                        </a>
+                                                    )}
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    {selectedBooking?.booking?.providerWorkProof?.beforeImages?.length > 0 ? (
+                                                        selectedBooking.booking.providerWorkProof.beforeImages.map((img, idx) => (
+                                                            <a key={idx} href={img.url} target="_blank" rel="noopener noreferrer" className="relative aspect-square rounded-lg overflow-hidden border border-gray-100 hover:border-primary transition-all group">
+                                                                <img src={img.url} alt={`Before ${idx}`} className="w-full h-full object-cover" />
+                                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                                    <Eye className="w-4 h-4 text-white" />
+                                                                </div>
+                                                            </a>
+                                                        ))
+                                                    ) : (
+                                                        <div className="col-span-2 py-4 flex flex-col items-center justify-center border border-dashed border-gray-200 rounded-lg">
+                                                            <p className="text-[10px] text-gray-400 italic">No Before Photos</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                {selectedBooking?.booking?.serviceStartedAt && (
+                                                    <p className="text-[9px] text-gray-500 mt-2 flex items-center gap-1 font-medium">
+                                                        <Clock className="w-2.5 h-2.5" /> {new Date(selectedBooking.booking.serviceStartedAt).toLocaleString()}
+                                                    </p>
+                                                )}
+                                            </div>
+
+                                            {/* After Work Column */}
+                                            <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
+                                                <div className="flex justify-between items-center mb-3">
+                                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">After Service</p>
+                                                    {selectedBooking?.booking?.providerWorkProof?.completionLocation && (
+                                                        <a 
+                                                            href={`https://www.google.com/maps?q=${selectedBooking.booking.providerWorkProof.completionLocation.latitude},${selectedBooking.booking.providerWorkProof.completionLocation.longitude}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="text-[10px] font-bold text-emerald-600 flex items-center gap-1 hover:underline bg-emerald-50 px-2 py-0.5 rounded-full"
+                                                        >
+                                                            <MapPin className="w-3 h-3" /> Map
+                                                        </a>
+                                                    )}
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    {selectedBooking?.booking?.providerWorkProof?.afterImages?.length > 0 ? (
+                                                        selectedBooking.booking.providerWorkProof.afterImages.map((img, idx) => (
+                                                            <a key={idx} href={img.url} target="_blank" rel="noopener noreferrer" className="relative aspect-square rounded-lg overflow-hidden border border-gray-100 hover:border-emerald-500 transition-all group">
+                                                                <img src={img.url} alt={`After ${idx}`} className="w-full h-full object-cover" />
+                                                                <div className="absolute inset-0 bg-emerald-500/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                                    <CheckSquare className="w-4 h-4 text-white" />
+                                                                </div>
+                                                            </a>
+                                                        ))
+                                                    ) : (
+                                                        <div className="col-span-2 py-4 flex flex-col items-center justify-center border border-dashed border-gray-200 rounded-lg">
+                                                            <p className="text-[10px] text-gray-400 italic">No Completion Photos</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                {selectedBooking?.booking?.serviceCompletedAt && (
+                                                    <p className="text-[9px] text-emerald-600 font-bold mt-2 flex items-center gap-1">
+                                                        <CheckSquare className="w-2.5 h-2.5" /> {new Date(selectedBooking.booking.serviceCompletedAt).toLocaleString()}
+                                                    </p>
+                                                )}
+                                            </div>
+
+                                            {/* Complaint Proofs */}
+                                            <div className="bg-white p-3 rounded-lg border border-gray-200">
+                                                <p className="text-[10px] font-bold text-gray-400 uppercase mb-3 border-b border-gray-100 pb-1">Complaint & Dispute Logs</p>
+                                                {selectedBooking?.booking?.complaintProofs?.length > 0 ? (
+                                                    <div className="space-y-4">
+                                                        {selectedBooking.booking.complaintProofs.map((proof, pIdx) => (
+                                                            <div key={pIdx} className="bg-gray-50/50 p-2 rounded border border-gray-100">
+                                                                <div className="flex justify-between items-center mb-2">
+                                                                    <span className={`text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded ${proof.uploadedBy === 'customer'
+                                                                            ? 'bg-blue-100 text-blue-700'
+                                                                            : 'bg-primary/10 text-primary'
+                                                                        }`}>
+                                                                        {proof.uploadedBy}
+                                                                    </span>
+                                                                    <span className="text-[10px] text-gray-400 font-mono">
+                                                                        {proof.createdAt ? new Date(proof.createdAt).toLocaleString() : 'Date N/A'}
+                                                                    </span>
+                                                                </div>
+                                                                <p className="text-xs text-gray-700 font-medium leading-relaxed mb-2 px-1">{proof.message}</p>
+                                                                <div className="flex flex-wrap gap-2 px-1">
+                                                                    {proof.images?.map((img, iIdx) => (
+                                                                        <a key={iIdx} href={img.url} target="_blank" rel="noopener noreferrer" className="w-14 h-14 rounded overflow-hidden border border-gray-200 hover:shadow-md transition-shadow block">
+                                                                            <img src={img.url} alt={`Proof ${iIdx}`} className="w-full h-full object-cover" />
+                                                                        </a>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <div className="py-4 flex flex-col items-center justify-center">
+                                                        <AlertCircle className="w-5 h-5 text-gray-300 mb-1" />
+                                                        <p className="text-[10px] text-gray-400 italic">No complaint or dispute data recorded</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     {/* Address Information */}
                                     <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
                                         <h3 className="font-semibold text-secondary mb-3">Service Address</h3>
@@ -993,7 +1135,7 @@ const AdminBookingsView = () => {
 
                                     {/* Payment Information */}
                                     <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
-                                        <h3 className="font-semibold text-secondary mb-3">Payment Breakdown</h3>
+                                        <h3 className="font-semibold text-secondary mb-3">Payment & Financial Details</h3>
                                         <div className="space-y-2">
                                             {selectedBooking.services?.map((item, index) => (
                                                 <div key={index} className="flex justify-between">
@@ -1002,6 +1144,8 @@ const AdminBookingsView = () => {
                                                 </div>
                                             ))}
                                             <div className="border-t border-gray-200 my-2"></div>
+                                            
+                                            {/* Financial Splits */}
                                             <div className="flex justify-between">
                                                 <span className="text-sm text-gray-600">Subtotal</span>
                                                 <span className="text-sm font-medium">{formatCurrency(selectedBooking.payment.subtotal)}</span>
@@ -1018,10 +1162,24 @@ const AdminBookingsView = () => {
                                                     <span className="text-sm font-medium text-orange-600">+ {formatCurrency(selectedBooking.booking.visitingCharge)}</span>
                                                 </div>
                                             )}
-                                            <div className="border-t border-gray-200 my-2"></div>
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-sm font-bold text-secondary">Total Amount Paid</span>
-                                                <span className="font-bold text-primary text-lg">{formatCurrency(selectedBooking.payment.totalAmount)}</span>
+                                            
+                                            <div className="border-t border-gray-200 my-2 pt-2">
+                                                {selectedBooking.payment.walletAmountUsed > 0 && (
+                                                    <div className="flex justify-between mb-1">
+                                                        <span className="text-xs text-gray-500 italic">Paid via Wallet</span>
+                                                        <span className="text-xs font-bold text-purple-600">-{formatCurrency(selectedBooking.payment.walletAmountUsed)}</span>
+                                                    </div>
+                                                )}
+                                                {selectedBooking.payment.onlineAmountPaid > 0 && (
+                                                    <div className="flex justify-between mb-1">
+                                                        <span className="text-xs text-gray-500 italic">Paid Online</span>
+                                                        <span className="text-xs font-bold text-blue-600">-{formatCurrency(selectedBooking.payment.onlineAmountPaid)}</span>
+                                                    </div>
+                                                )}
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-sm font-bold text-secondary">Total Booking Value</span>
+                                                    <span className="font-bold text-primary text-lg">{formatCurrency(selectedBooking.payment.totalAmount)}</span>
+                                                </div>
                                             </div>
 
                                             {/* Commission Breakdown for Admin */}
@@ -1036,46 +1194,62 @@ const AdminBookingsView = () => {
                                                         {formatCurrency(selectedBooking.booking?.providerEarnings || (selectedBooking.payment.totalAmount - (selectedBooking.commission?.amount || 0)))}
                                                     </span>
                                                 </div>
-                                                {selectedBooking.commission?.rule && (
-                                                    <div className="text-[10px] text-gray-400 mt-1 text-right italic">
-                                                        Applied Rule: {selectedBooking.commission.rule.name || 'Platform Standard'}
+                                            </div>
+
+                                            {/* Financial Statuses */}
+                                            <div className="pt-2 space-y-1.5 border-t border-gray-100 mt-2">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-xs text-gray-600">Payment Status:</span>
+                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                                        selectedBooking.payment?.status === 'paid' ? 'bg-green-100 text-green-700' : 
+                                                        selectedBooking.payment?.status === 'refunded' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                                                    }`}>
+                                                        {selectedBooking.payment?.status || 'N/A'}
+                                                    </span>
+                                                </div>
+                                                {selectedBooking.refundData?.decision && (
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-xs text-gray-600">Admin Refund:</span>
+                                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                                            selectedBooking.refundData.decision === 'approved' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                                        }`}>
+                                                            {selectedBooking.refundData.decision}
+                                                        </span>
                                                     </div>
                                                 )}
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-xs text-gray-600">Payout Status:</span>
+                                                    <PayoutStatusBadge status={selectedBooking.payoutStatus} />
+                                                </div>
+                                                {selectedBooking.earningHoldStatus === 'held' && selectedBooking.payoutHoldUntil && (
+                                                    <p className="text-[9px] text-red-400 text-right italic">Hold expires {new Date(selectedBooking.payoutHoldUntil).toLocaleString()}</p>
+                                                )}
                                             </div>
-                                            <div className="pt-2">
-                                                <div className="flex justify-between">
-                                                    <span className="text-sm text-gray-600">Payment Method:</span>
-                                                    <span className="text-sm font-medium capitalize">{selectedBooking.payment?.method || 'N/A'}</span>
+
+                                            {selectedBooking.payment.details?.transactionId ? (
+                                                <div className="flex justify-between items-center group pt-2">
+                                                    <span className="text-sm text-gray-600">Transaction ID:</span>
+                                                    <button
+                                                        onClick={() => navigateToTransaction(selectedBooking.booking.bookingId || selectedBooking.booking._id)}
+                                                        className="text-sm font-bold text-primary hover:underline flex items-center gap-1"
+                                                    >
+                                                        {selectedBooking.payment.details.transactionId}
+                                                        <ExternalLink className="w-3 h-3" />
+                                                    </button>
                                                 </div>
-                                                <div className="flex justify-between">
-                                                    <span className="text-sm text-gray-600">Payment Status:</span>
-                                                    <span className="text-sm font-medium capitalize">{selectedBooking.payment?.status || 'N/A'}</span>
-                                                </div>
-                                                {selectedBooking.payment.details?.transactionId ? (
-                                                    <div className="flex justify-between items-center group">
-                                                        <span className="text-sm text-gray-600">Transaction ID:</span>
-                                                        <button 
+                                            ) : (
+                                                selectedBooking.booking.paymentStatus === 'paid' && (
+                                                    <div className="flex justify-between items-center pt-2">
+                                                        <span className="text-sm text-gray-600">Transaction:</span>
+                                                        <button
                                                             onClick={() => navigateToTransaction(selectedBooking.booking.bookingId || selectedBooking.booking._id)}
                                                             className="text-sm font-bold text-primary hover:underline flex items-center gap-1"
                                                         >
-                                                            {selectedBooking.payment.details.transactionId}
-                                                            <ExternalLink className="w-3 h-3" />
+                                                            View Transaction <ExternalLink className="w-3 h-3" />
                                                         </button>
                                                     </div>
-                                                ) : (
-                                                    selectedBooking.booking.paymentStatus === 'paid' && (
-                                                        <div className="flex justify-between items-center">
-                                                            <span className="text-sm text-gray-600">Transaction:</span>
-                                                            <button 
-                                                                onClick={() => navigateToTransaction(selectedBooking.booking.bookingId || selectedBooking.booking._id)}
-                                                                className="text-sm font-bold text-primary hover:underline flex items-center gap-1"
-                                                            >
-                                                                View Transaction <ExternalLink className="w-3 h-3" />
-                                                            </button>
-                                                        </div>
-                                                    )
-                                                )}
-                                            </div>
+                                                )
+                                            )}
                                         </div>
                                     </div>
 
@@ -1137,6 +1311,8 @@ const AdminBookingsView = () => {
                                             </li>
                                         </ul>
                                     </div>
+
+
 
                                     {/* Action Buttons */}
                                     <div className="flex space-x-3">

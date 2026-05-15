@@ -6,8 +6,10 @@ import { getProfile, updateProfile, updateprofilepic } from '../../services/Cust
 import AddressSelector from '../../components/AddressSelector';
 import {
     User, MapPin, Mail, Phone, Camera, LogOut, Shield,
-    ChevronRight, ArrowLeft, CreditCard, Package, Edit2, CheckCircle, Gift
+    ChevronRight, ArrowLeft, CreditCard, Package, Edit2, CheckCircle, Gift, Wallet, ArrowDownLeft, RotateCcw
 } from 'lucide-react';
+import { getWalletHistory } from '../../services/CustomerService';
+import { formatCurrency, formatDate, formatDateTime } from '../../utils/format';
 
 const UserProfile = () => {
     const { user, logoutUser } = useAuth();
@@ -20,15 +22,35 @@ const UserProfile = () => {
         profilePicUrl: '',
         firstBookingUsed: false,
         totalBookings: 0,
-        customDiscount: 0
+        customDiscount: 0,
+        wallet: { availableBalance: 0, totalRefunded: 0, lastUpdated: new Date() }
     });
     const [isEditing, setIsEditing] = useState(false);
+    const [activeTab, setActiveTab] = useState('profile');
+    const [transactions, setTransactions] = useState({ data: [], summary: {} });
     const [selectedFile, setSelectedFile] = useState(null);
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        if (user) fetchProfile();
+        if (user) {
+            fetchProfile();
+            fetchTransactions();
+        }
     }, [user]);
+
+    const fetchTransactions = async () => {
+        try {
+            const res = await getWalletHistory();
+            if (res.data?.success) {
+                setTransactions({
+                    data: res.data.data || [],
+                    summary: {} // Summary is now handled differently if needed
+                });
+            }
+        } catch (error) {
+            console.error('Failed to fetch wallet history', error);
+        }
+    };
 
     const fetchProfile = async () => {
         try {
@@ -122,27 +144,30 @@ const UserProfile = () => {
                         <div className="bg-white rounded-xl border border-gray-100 p-2 shadow-sm">
                             {[
                                 { id: 'profile', label: 'My Profile', icon: <User className="w-4 h-4" /> },
-                                { id: 'payments', label: 'Payments', icon: <CreditCard className="w-4 h-4" />, secondary: true },
+                                { id: 'payments', label: 'Wallet & Payments', icon: <Wallet className="w-4 h-4" /> },
                                 { id: 'offers', label: 'Offers', icon: <Gift className="w-4 h-4" />, secondary: true },
                                 { id: 'support', label: 'Support', icon: <Shield className="w-4 h-4" />, secondary: true, action: () => navigate('/customer/complaints') },
                             ].map((item) => (
                                 <button
                                     key={item.id}
-                                    onClick={() => item.action ? item.action() : setIsEditing(false)}
-                                    className={`w-full flex items-center justify-between p-3 rounded-lg transition-all group mt-1 first:mt-0 ${item.id === 'profile' && !isEditing
+                                    onClick={() => {
+                                        if (item.action) item.action();
+                                        else { setActiveTab(item.id); setIsEditing(false); }
+                                    }}
+                                    className={`w-full flex items-center justify-between p-3 rounded-lg transition-all group mt-1 first:mt-0 ${activeTab === item.id
                                         ? 'bg-primary/5 text-primary'
                                         : 'text-gray-500 hover:bg-gray-50'
                                         }`}
                                 >
                                     <div className="flex items-center gap-3">
-                                        <div className={`transition-colors ${item.id === 'profile' && !isEditing ? 'text-primary' : 'text-gray-400 group-hover:text-secondary'}`}>
+                                        <div className={`transition-colors ${activeTab === item.id ? 'text-primary' : 'text-gray-400 group-hover:text-secondary'}`}>
                                             {item.icon}
                                         </div>
-                                        <span className={`text-sm font-semibold tracking-tight ${item.id === 'profile' && !isEditing ? 'text-primary' : 'text-gray-600 group-hover:text-secondary'}`}>
+                                        <span className={`text-sm font-semibold tracking-tight ${activeTab === item.id ? 'text-primary' : 'text-gray-600 group-hover:text-secondary'}`}>
                                             {item.label}
                                         </span>
                                     </div>
-                                    <ChevronRight className={`w-4 h-4 transition-transform ${item.id === 'profile' && !isEditing ? 'opacity-100 translate-x-1' : 'opacity-0'}`} />
+                                    <ChevronRight className={`w-4 h-4 transition-transform ${activeTab === item.id ? 'opacity-100 translate-x-1' : 'opacity-0'}`} />
                                 </button>
                             ))}
                         </div>
@@ -221,14 +246,17 @@ const UserProfile = () => {
                                 {/* Mobile Quick Links - Only visible on small screens */}
                                 <div className="grid grid-cols-3 gap-2 mt-6 lg:hidden border-t border-gray-50 pt-4">
                                     {[
-                                        { label: 'Payments', icon: <CreditCard className="w-4 h-4 text-primary" /> },
-                                        { label: 'Offers', icon: <Gift className="w-4 h-4 text-accent" /> },
-                                        { label: 'Support', icon: <Shield className="w-4 h-4 text-blue-500" />, action: () => navigate('/customer/complaints') },
+                                        { id: 'payments', label: 'Wallet', icon: <Wallet className="w-4 h-4 text-primary" /> },
+                                        { id: 'offers', label: 'Offers', icon: <Gift className="w-4 h-4 text-accent" /> },
+                                        { id: 'support', label: 'Support', icon: <Shield className="w-4 h-4 text-blue-500" />, action: () => navigate('/customer/complaints') },
                                     ].map((link, idx) => (
                                         <button
                                             key={idx}
-                                            onClick={link.action}
-                                            className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-gray-50 active:bg-gray-100 transition-colors"
+                                            onClick={() => {
+                                                if (link.action) link.action();
+                                                else { setActiveTab(link.id); setIsEditing(false); }
+                                            }}
+                                            className={`flex flex-col items-center gap-1.5 p-3 rounded-xl transition-colors ${activeTab === link.id ? 'bg-primary/10 border border-primary/20' : 'bg-gray-50 hover:bg-gray-100'}`}
                                         >
                                             {link.icon}
                                             <span className="text-[10px] font-bold text-gray-600 uppercase tracking-tighter">{link.label}</span>
@@ -239,10 +267,11 @@ const UserProfile = () => {
                         </div>
 
                         {/* Profile Details Form/View */}
-                        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-                            {isEditing ? (
-                                <form onSubmit={handleSubmit} className="space-y-4">
-                                    <div>
+                        {activeTab === 'profile' && (
+                            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+                                {isEditing ? (
+                                    <form onSubmit={handleSubmit} className="space-y-4">
+                                        <div>
                                         <label className="block text-xs font-semibold text-gray-500 mb-1">Full Name *</label>
                                         <input
                                             type="text"
@@ -340,6 +369,127 @@ const UserProfile = () => {
                                 </div>
                             )}
                         </div>
+                        )}
+
+                        {/* Payments & Wallet View */}
+                        {activeTab === 'payments' && (
+                            <div className="space-y-5">
+                                {/* Wallet Balance Card */}
+                                <div className="bg-gradient-to-br from-secondary to-gray-900 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden border border-white/5">
+                                    <div className="absolute top-0 right-0 -mt-8 -mr-8 w-40 h-40 bg-primary/20 rounded-full blur-3xl"></div>
+                                    <div className="absolute bottom-0 left-0 -mb-8 -ml-8 w-32 h-32 bg-accent/10 rounded-full blur-2xl"></div>
+                                    <div className="relative z-10">
+                                        {/* Balance Header */}
+                                        <div className="flex items-center justify-between mb-5">
+                                            <p className="text-white/60 text-[10px] uppercase tracking-widest font-black flex items-center gap-2">
+                                                <Wallet className="w-4 h-4 text-primary"/> My Wallet
+                                            </p>
+                                            <button
+                                                onClick={() => { fetchProfile(); fetchTransactions(); }}
+                                                className="p-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-all active:scale-90"
+                                                title="Sync Balance"
+                                            >
+                                                <RotateCcw className={`w-3.5 h-3.5 text-primary ${loading ? 'animate-spin' : ''}`} />
+                                            </button>
+                                        </div>
+
+                                        {/* Main balance */}
+                                        <div className="mb-6">
+                                            <p className="text-white/40 text-xs mb-1">Available Balance</p>
+                                            <h3 className="text-5xl font-black tracking-tighter text-white">
+                                                {formatCurrency(profile.wallet?.availableBalance || 0)}
+                                            </h3>
+                                        </div>
+
+                                        {/* 4-stat grid */}
+                                        <div className="grid grid-cols-3 gap-3">
+                                            <div className="bg-white/5 rounded-xl p-3 border border-white/10">
+                                                <p className="text-[9px] text-primary uppercase tracking-wider font-black mb-1">Refund Credits</p>
+                                                <p className="text-base font-black text-white">{formatCurrency(profile.wallet?.totalRefunded || 0)}</p>
+                                            </div>
+                                            <div className="bg-white/5 rounded-xl p-3 border border-white/10">
+                                                <p className="text-[9px] text-white/40 uppercase tracking-wider font-black mb-1">Total Debit</p>
+                                                <p className="text-base font-black text-white">
+                                                    {formatCurrency(transactions.data.filter(t => t.type === 'debit').reduce((acc, t) => acc + t.amount, 0))}
+                                                </p>
+                                            </div>
+                                            <div className="bg-white/5 rounded-xl p-3 border border-white/10">
+                                                <p className="text-[9px] text-accent uppercase tracking-wider font-black mb-1">Cashback</p>
+                                                <p className="text-base font-black text-white/40">—</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Wallet Activity */}
+                                <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                                    <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
+                                        <div>
+                                            <h3 className="text-sm font-bold text-secondary">Wallet Activity</h3>
+                                            <p className="text-[10px] text-gray-400 mt-0.5">Refunds & wallet payments only</p>
+                                        </div>
+                                        <span className="text-[10px] font-bold bg-primary/10 text-primary px-2.5 py-1 rounded-full">
+                                            {transactions?.data?.length || 0} entries
+                                        </span>
+                                    </div>
+
+                                    <div className="p-4">
+                                        {(transactions?.data?.length || 0) > 0 ? (
+                                            <div className="space-y-3">
+                                                {transactions.data.map(entry => {
+                                                    const isCredit = entry.type === 'credit';
+                                                    const amountColor = isCredit ? 'text-emerald-600' : 'text-red-500';
+                                                    const IconComponent = isCredit ? ArrowDownLeft : Wallet;
+                                                    const iconBg = isCredit 
+                                                        ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
+                                                        : 'bg-red-50 text-red-500 border border-red-100';
+
+                                                    return (
+                                                        <div key={entry._id} className="flex items-center justify-between p-3.5 rounded-xl border border-gray-100 hover:border-gray-200 hover:shadow-sm transition-all bg-white">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconBg}`}>
+                                                                    <IconComponent className="w-4 h-4" />
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-sm font-bold text-secondary leading-none mb-1">{entry.reason}</p>
+                                                                    <p className="text-[10px] text-gray-400 mt-0.5 font-mono">
+                                                                        {entry.booking?.bookingId ? `Booking: #${entry.booking.bookingId}` : 'Transaction ID: ' + (entry._id.slice(-8).toUpperCase())}
+                                                                    </p>
+                                                                    <p className="text-[10px] text-gray-400 mt-0.5">{formatDateTime(entry.createdAt)}</p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="text-right shrink-0 ml-3">
+                                                                <p className={`text-base font-black ${amountColor}`}>
+                                                                    {isCredit ? '+' : '−'}{formatCurrency(entry.amount)}
+                                                                </p>
+                                                                <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                                                                    isCredit
+                                                                        ? 'bg-emerald-50 text-emerald-600'
+                                                                        : 'bg-red-50 text-red-500'
+                                                                }`}>
+                                                                    {isCredit ? 'Credit' : 'Debit'}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        ) : (
+                                            <div className="text-center py-12">
+                                                <div className="w-14 h-14 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-gray-100">
+                                                    <Wallet className="w-7 h-7 text-gray-300"/>
+                                                </div>
+                                                <p className="text-sm font-bold text-gray-500">No wallet activity yet</p>
+                                                <p className="text-xs text-gray-400 mt-1.5 max-w-[200px] mx-auto">
+                                                    Refunds and wallet payments will appear here.
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                     </div>
                 </div>
             </div>

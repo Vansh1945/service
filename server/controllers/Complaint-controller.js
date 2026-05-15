@@ -10,13 +10,19 @@ const { generateComplaintId } = require('../utils/generateUniqueId');
 // @access  Private (Customer)
 const submitComplaint = async (req, res) => {
   try {
-    const { title, description, category, bookingId } = req.body;
+    const { title, description, category, bookingId, complaintType } = req.body;
     const userId = req.user._id;
     const userRole = req.user.role;
 
     // 1. Validation
     if (!title || !description || !category) {
       return res.status(400).json({ message: 'Please provide title, description, and category.' });
+    }
+
+    // Validate Complaint Type if provided
+    const validTypes = ['bad_work', 'late_arrival', 'rude_behavior', 'incomplete_work', 'overcharge'];
+    if (complaintType && !validTypes.includes(complaintType)) {
+      return res.status(400).json({ message: 'Invalid complaint type.' });
     }
 
     let booking = null;
@@ -52,20 +58,23 @@ const submitComplaint = async (req, res) => {
       }));
     }
 
-    // 3. Create Complaint
+    // 3. Prepare Description with Complaint Type
+    const formattedDescription = complaintType ? `[${complaintType}]\n${description}` : description;
+
+    // 4. Create Complaint
     const complaint = await Complaint.create({
       complaintId: generateComplaintId(),
       customer: customer || undefined,
       provider: provider || undefined,
       booking: booking ? bookingId : (bookingId || undefined),
       title,
-      description,
+      description: formattedDescription,
       category,
       images,
       userType: userRole,
       userId: userRole === 'customer' ? userId : undefined,
       providerId: userRole === 'provider' ? userId : undefined,
-      role: userRole // Optional: track who submitted it
+      role: userRole
     });
 
     res.status(201).json({
@@ -73,6 +82,54 @@ const submitComplaint = async (req, res) => {
       message: 'Support ticket submitted successfully',
       complaint
     });
+
+    // Update Booking with complaint proof and set dispute status
+    if (bookingId) {
+      try {
+        const updateData = {
+          $push: {
+            complaintProofs: {
+              uploadedBy: userRole,
+              images: images.map(img => ({ url: img.secure_url })),
+              message: description,
+              createdAt: new Date()
+            }
+          }
+        };
+
+        // If customer raises service issue, mark as dispute
+        if (category === 'Service issue' && userRole === 'customer') {
+          updateData.disputeRaised = true;
+          updateData.disputeStatus = 'under_review'; // Consistent with existing enum in model if possible, or lowercase
+
+          // Hold provider earnings if they exist
+          const ProviderEarning = mongoose.model('ProviderEarning');
+          await ProviderEarning.findOneAndUpdate(
+            { booking: bookingId },
+            { status: 'held' }
+          );
+
+          // Notify Provider
+          if (provider) {
+            try {
+              const { sendNotification } = require('../utils/notificationHelper');
+              sendNotification(
+                provider,
+                'provider',
+                'Dispute Raised ⚠️',
+                `A dispute has been raised for booking #${bookingId.toString().slice(-6)}. Your payout is held.`,
+                'dispute_raised',
+                bookingId
+              );
+            } catch (e) { }
+          }
+        }
+
+        await Booking.findByIdAndUpdate(bookingId, updateData);
+      } catch (err) {
+        console.error('Error updating booking with complaint proof:', err);
+      }
+    }
 
     // Notify Admins
     try {
@@ -138,7 +195,7 @@ const getAllComplaints = async (req, res) => {
       .populate('provider', 'name email')
       .populate('userId', 'name email')
       .populate('providerId', 'name email')
-      .populate('booking', 'date services bookingId')
+      .populate('booking', 'date services bookingId complaintProofs providerWorkProof disputeStatus adminRefundDecision paymentStatus statusHistory cancellationProgress totalAmount')
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(parseInt(limit))
@@ -193,7 +250,7 @@ const getMyComplaints = async (req, res) => {
     const complaints = await Complaint.find(query)
       .populate('customer', 'name email')
       .populate('provider', 'name email')
-      .populate('booking', 'date services bookingId')
+      .populate('booking', 'date services bookingId complaintProofs providerWorkProof disputeStatus adminRefundDecision paymentStatus statusHistory cancellationProgress totalAmount')
       .sort({ createdAt: -1 })
       .lean();
 
@@ -213,6 +270,108 @@ const getMyComplaints = async (req, res) => {
 // @desc    Get a single complaint by ID
 // @route   GET /api/complaints/:id
 // @access  Private
+// Helper to enrich complaint data with history, evidence, etc.
+const enrichComplaintData = async (complaint) => {
+  if (!complaint) return null;
+
+  // Extract Complaint Type from description if present
+  let complaintType = 'N/A';
+  const descriptionMatch = complaint.description?.match(/^\[(bad_work|late_arrival|rude_behavior|incomplete_work|overcharge)\]/);
+  if (descriptionMatch) {
+    complaintType = descriptionMatch[1];
+  }
+
+  // Add total complaints count for the provider involved
+  let providerComplaintsCount = 0;
+  const Complaint = mongoose.model('Complaint');
+  if (complaint.providerId) {
+    providerComplaintsCount = await Complaint.countDocuments({
+      providerId: complaint.providerId._id || complaint.providerId
+    });
+  } else if (complaint.provider) {
+    providerComplaintsCount = await Complaint.countDocuments({
+      provider: complaint.provider._id || complaint.provider
+    });
+  }
+
+  // Add transaction, payout, and refund data
+  let transactionData = null;
+  let providerPayoutStatus = 'N/A';
+  let refundStatus = 'N/A';
+  let evidenceComparison = {
+    beforeWorkImages: [],
+    afterWorkImages: [],
+    complaintImages: complaint.images?.map(img => img.secure_url) || []
+  };
+
+  if (complaint.booking) {
+    const Transaction = require('../models/Transaction-model');
+    const ProviderEarning = require('../models/ProviderEarning-model');
+
+    transactionData = await Transaction.findOne({ booking: complaint.booking._id }).sort({ createdAt: -1 }).lean();
+
+    if (transactionData) {
+      refundStatus = transactionData.refundStatus || 'N/A';
+    }
+
+    const earning = await ProviderEarning.findOne({ booking: complaint.booking._id }).select('status').lean();
+    if (earning) {
+      providerPayoutStatus = earning.status;
+    }
+
+    // Populate evidence comparison from booking proofs
+    if (complaint.booking.providerWorkProof) {
+      evidenceComparison.beforeWorkImages = complaint.booking.providerWorkProof.beforeImages?.map(img => img.url) || [];
+      evidenceComparison.afterWorkImages = complaint.booking.providerWorkProof.afterImages?.map(img => img.url) || [];
+    }
+  }
+
+  // Format Resolution History
+  const resolutionHistory = [
+    {
+      event: "Complaint Created",
+      timestamp: complaint.createdAt,
+      by: complaint.userType === 'customer' ? 'Customer' : 'Provider',
+      note: complaint.title
+    },
+    ...(complaint.statusHistory || []).map(h => ({
+      event: `Status changed to ${h.status}`,
+      timestamp: h.updatedAt || h.timestamp,
+      by: 'System/Admin'
+    }))
+  ];
+
+  // Include replies from booking.complaintProofs as part of resolution history
+  if (complaint.booking?.complaintProofs) {
+    complaint.booking.complaintProofs.forEach(proof => {
+      resolutionHistory.push({
+        event: `${proof.uploadedBy.charAt(0).toUpperCase() + proof.uploadedBy.slice(1)} Replied`,
+        timestamp: proof.createdAt,
+        by: proof.uploadedBy,
+        note: proof.message,
+        images: proof.images?.map(img => img.url)
+      });
+    });
+  }
+
+  // Sort history by timestamp
+  resolutionHistory.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+  return {
+    ...complaint,
+    complaintType,
+    providerComplaintsCount,
+    transaction: transactionData,
+    providerPayoutStatus,
+    refundStatus,
+    evidenceComparison,
+    resolutionHistory
+  };
+};
+
+// @desc    Get a single complaint by ID
+// @route   GET /api/complaints/:id
+// @access  Private
 const getComplaint = async (req, res) => {
   try {
     const complaint = await Complaint.findById(req.params.id)
@@ -220,7 +379,7 @@ const getComplaint = async (req, res) => {
       .populate('provider', 'name email phone')
       .populate('userId', 'name email phone')
       .populate('providerId', 'name email phone')
-      .populate('booking', 'date services bookingId')
+      .populate('booking', 'date services bookingId complaintProofs providerWorkProof disputeStatus adminRefundDecision paymentStatus statusHistory payoutHoldUntil totalAmount cancellationProgress')
       .lean();
 
     if (!complaint) {
@@ -253,9 +412,11 @@ const getComplaint = async (req, res) => {
       }
     }
 
+    const enrichedData = await enrichComplaintData(complaint);
+
     res.json({
       success: true,
-      data: complaint
+      data: enrichedData
     });
   } catch (error) {
     console.error('Error fetching complaint:', error);
@@ -360,7 +521,7 @@ const getComplaintDetails = async (req, res) => {
       .populate("provider", "name email phone")
       .populate("userId", "name email phone")
       .populate("providerId", "name email phone")
-      .populate("booking", "bookingId serviceName date")
+      .populate("booking", "bookingId serviceName date complaintProofs providerWorkProof disputeStatus adminRefundDecision paymentStatus statusHistory payoutHoldUntil totalAmount")
       .populate("resolvedBy", "name email")
       .lean();
 
@@ -371,21 +532,11 @@ const getComplaintDetails = async (req, res) => {
       });
     }
 
-    // Add total complaints count for the provider involved
-    let providerComplaintsCount = 0;
-    if (complaint.providerId) {
-      providerComplaintsCount = await Complaint.countDocuments({
-        providerId: complaint.providerId._id || complaint.providerId
-      });
-    } else if (complaint.provider) {
-      providerComplaintsCount = await Complaint.countDocuments({
-        provider: complaint.provider._id || complaint.provider
-      });
-    }
+    const enrichedData = await enrichComplaintData(complaint);
 
     res.status(200).json({
       success: true,
-      data: { ...complaint, providerComplaintsCount }
+      data: enrichedData
     });
   } catch (error) {
     console.error("Error fetching complaint details:", error);
@@ -422,7 +573,7 @@ const reopenComplaint = async (req, res) => {
     const complaintProviderId = complaint.providerId?._id || complaint.providerId;
     const isCustomerOwner = complaintUserId && complaintUserId.toString() === req.user._id.toString();
     const isProviderOwner = complaintProviderId && complaintProviderId.toString() === req.user._id.toString();
-    
+
     // Fallback to legacy fields
     const complaintCustomer = complaint.customer?._id || complaint.customer;
     const complaintProvider = complaint.provider?._id || complaint.provider;
@@ -464,6 +615,57 @@ const reopenComplaint = async (req, res) => {
   }
 };
 
+// @desc    Add a reply/proof to a complaint
+// @route   POST /api/complaints/:id/reply
+// @access  Private (Admin, Provider)
+const replyToComplaint = async (req, res) => {
+  try {
+    const { message } = req.body;
+    const complaintId = req.params.id;
+    const userRole = req.user?.role || req.admin?.role || 'admin';
+    const userId = req.user?._id || req.admin?._id;
+
+    const complaint = await Complaint.findById(complaintId);
+    if (!complaint) {
+      return res.status(404).json({ success: false, message: 'Complaint not found' });
+    }
+
+    // Handle Image Uploads
+    let images = [];
+    if (req.files && req.files.length > 0) {
+      images = req.files.map(file => ({
+        url: file.path || file.secure_url
+      }));
+    }
+
+    if (images.length === 0 && !message) {
+      return res.status(400).json({ success: false, message: 'Message or images are required' });
+    }
+
+    // Update associated booking
+    if (complaint.booking) {
+      await Booking.findByIdAndUpdate(complaint.booking, {
+        $push: {
+          complaintProofs: {
+            uploadedBy: userRole,
+            images: images,
+            message: message || 'Reply submitted',
+            createdAt: new Date()
+          }
+        }
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Reply submitted successfully'
+    });
+  } catch (error) {
+    console.error('Error replying to complaint:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
 module.exports = {
   submitComplaint,
   getAllComplaints,
@@ -472,5 +674,6 @@ module.exports = {
   resolveComplaint,
   updateComplaintStatus,
   reopenComplaint,
-  getComplaintDetails
+  getComplaintDetails,
+  replyToComplaint
 };

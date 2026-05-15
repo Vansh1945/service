@@ -15,6 +15,7 @@ import LoadingSpinner from '../../components/Loader';
 import * as BookingService from '../../services/BookingService';
 import Pagination from '../../components/Pagination';
 import { formatDate, formatTime, formatCurrency, formatDuration } from '../../utils/format';
+import * as ComplaintService from '../../services/ComplaintService';
 
 // ── Confirmation Dialog ──────────────────────────────────────────────────────
 const ConfirmationDialog = ({ isOpen, onClose, onConfirm, title, message, type = 'default' }) => {
@@ -62,6 +63,147 @@ const ConfirmationDialog = ({ isOpen, onClose, onConfirm, title, message, type =
   );
 };
 
+// ── Proof Upload Modal ──────────────────────────────────────────────────────
+const ProofModal = ({ isOpen, onClose, onConfirm, action, loading, progress }) => {
+  const [images, setImages] = useState([]);
+  const [location, setLocation] = useState(null);
+  const [gettingLocation, setGettingLocation] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setImages([]);
+      // Auto-capture location
+      setGettingLocation(true);
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            setLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
+            setGettingLocation(false);
+          },
+          (err) => {
+            console.error('Location error:', err);
+            setGettingLocation(false);
+          },
+          { timeout: 10000 }
+        );
+      } else {
+        setGettingLocation(false);
+      }
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  const handleFileChange = (e) => {
+    const files = Array.from(e.target.files);
+    setImages(prev => [...prev, ...files]);
+  };
+
+  const handleRemoveImage = (idx) => {
+    setImages(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const isStart = action === 'start';
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-gray-100">
+        <div className="p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className={`p-2.5 rounded-xl ${isStart ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>
+              {isStart ? <Play className="w-6 h-6" /> : <CheckSquare className="w-6 h-6" />}
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-secondary">
+                {isStart ? 'Start Service Proof' : 'Complete Service Proof'}
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {isStart ? 'Upload before-work images to begin' : 'Upload after-work images to finish'}
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            {/* Image Upload Area */}
+            <div>
+              <label className="block text-sm font-bold text-secondary mb-3">
+                {isStart ? 'Before-Work Photos' : 'Completion Photos'} <span className="text-red-500">*</span>
+              </label>
+              
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                {images.map((img, idx) => (
+                  <div key={idx} className="relative group aspect-square rounded-xl overflow-hidden border border-gray-200 shadow-sm">
+                    <img src={URL.createObjectURL(img)} className="w-full h-full object-cover" alt="Proof" />
+                    <button 
+                      onClick={() => handleRemoveImage(idx)}
+                      className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+                
+                {images.length < 6 && (
+                  <label className="aspect-square rounded-xl border-2 border-dashed border-gray-200 hover:border-primary hover:bg-primary/5 transition-all flex flex-col items-center justify-center cursor-pointer group">
+                    <DownloadCloud className="w-6 h-6 text-gray-400 group-hover:text-primary transition-colors" />
+                    <span className="text-[10px] font-bold text-gray-400 group-hover:text-primary mt-1">Add Photo</span>
+                    <input type="file" multiple accept="image/*" className="hidden" onChange={handleFileChange} />
+                  </label>
+                )}
+              </div>
+              <p className="text-[10px] text-gray-400 italic">Minimum 1 image required. Maximum 6.</p>
+            </div>
+
+            {/* Location Status */}
+            <div className={`p-4 rounded-xl border flex items-center justify-between ${location ? 'bg-green-50 border-green-100 text-green-700' : 'bg-gray-50 border-gray-100 text-gray-500'}`}>
+              <div className="flex items-center gap-2">
+                <MapPin className={`w-4 h-4 ${location ? 'text-green-500' : 'text-gray-400'}`} />
+                <span className="text-xs font-bold uppercase tracking-wider">
+                  {gettingLocation ? 'Capturing Location...' : location ? 'Location Captured' : 'Location Optional'}
+                </span>
+              </div>
+              {gettingLocation && <Loader className="w-3.5 h-3.5 animate-spin" />}
+              {location && <Check className="w-4 h-4" />}
+            </div>
+
+            {/* Progress Bar */}
+            {loading && progress > 0 && (
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-[10px] font-bold text-primary uppercase">
+                  <span>Uploading Proofs...</span>
+                  <span>{progress}%</span>
+                </div>
+                <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                  <div className="bg-primary h-1.5 transition-all duration-300" style={{ width: `${progress}%` }}></div>
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-3 pt-2">
+              <button 
+                onClick={onClose} 
+                disabled={loading}
+                className="flex-1 px-4 py-3 border border-gray-200 rounded-xl text-sm font-bold text-secondary hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={loading || images.length === 0}
+                onClick={() => onConfirm(images, location)}
+                className={`flex-1 px-4 py-3 rounded-xl text-sm font-bold text-white shadow-lg shadow-primary/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50 disabled:bg-gray-300 disabled:shadow-none ${isStart ? 'bg-primary' : 'bg-emerald-600'}`}
+              >
+                {loading ? <Loader className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+                {isStart ? 'Start Work' : 'Complete Work'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ── Main Component ───────────────────────────────────────────────────────────
 const ProviderBooking = () => {
   const navigate = useNavigate();
@@ -73,8 +215,9 @@ const ProviderBooking = () => {
   const [expandedSections, setExpandedSections] = useState({ booking: true, customer: true, service: true, payment: true, address: true });
   const [activeTab, setActiveTab] = useState('all');
   const [filter, setFilter] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
+   const [searchQuery, setSearchQuery] = useState('');
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, type: '', data: null });
+  const [proofModal, setProofModal] = useState({ isOpen: false, action: null, bookingId: null });
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ totalBookings: 0, completedBookings: 0, pendingBookings: 0, totalCashCollected: 0, commissionPayable: 0, netEarnings: 0 });
   const [dateFilter, setDateFilter] = useState({ startDate: '', endDate: '' });
@@ -85,6 +228,13 @@ const ProviderBooking = () => {
   const [bookingsPerPage, setBookingsPerPage] = useState(10);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState({ id: null, type: null });
+  const [selectedImages, setSelectedImages] = useState([]);
+  const [uploadProgress, setUploadProgress] = useState(0);
+
+  const [disputeResponseText, setDisputeResponseText] = useState('');
+  const [disputeImages, setDisputeImages] = useState([]);
+  const [isSubmittingResponse, setIsSubmittingResponse] = useState(false);
+  const [previewImage, setPreviewImage] = useState(null);
 
   // ── Calculation helpers ──────────────────────────────────────────────────
   const calculateSubtotal = useCallback((booking) => {
@@ -204,12 +354,38 @@ const ProviderBooking = () => {
       if (!bookingId) { showToast('Booking ID is missing. Please refresh and try again.', 'error'); return; }
       
       setActionLoading({ id: bookingId, type: action });
+      setUploadProgress(0);
       
+      const config = {
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setUploadProgress(percentCompleted);
+        }
+      };
+
       let response;
       if (action === 'accept') response = await BookingService.acceptBooking(bookingId);
       else if (action === 'reject') response = await BookingService.rejectBooking(bookingId);
-      else if (action === 'start') response = await BookingService.startBooking(bookingId);
-      else if (action === 'complete') response = await BookingService.completeBooking(bookingId);
+      else if (action === 'start') {
+        const formData = new FormData();
+        const images = additionalData.images || selectedImages;
+        images.forEach(image => formData.append('images', image));
+        if (additionalData.location) {
+          formData.append('latitude', additionalData.location.latitude);
+          formData.append('longitude', additionalData.location.longitude);
+        }
+        response = await BookingService.startBooking(bookingId, formData, config);
+      }
+      else if (action === 'complete') {
+        const formData = new FormData();
+        const images = additionalData.images || selectedImages;
+        images.forEach(image => formData.append('images', image));
+        if (additionalData.location) {
+          formData.append('latitude', additionalData.location.latitude);
+          formData.append('longitude', additionalData.location.longitude);
+        }
+        response = await BookingService.completeBooking(bookingId, formData, config);
+      }
       else throw new Error('Invalid action');
 
       const result = response.data;
@@ -222,16 +398,24 @@ const ProviderBooking = () => {
       await refreshData(); 
       setShowModal(false); 
       setSelectedBooking(null); 
+      setSelectedImages([]);
+      setUploadProgress(0);
       setConfirmDialog({ isOpen: false, type: '', data: null });
     } catch (err) { 
       showToast(err.response?.data?.message || err.message, 'error');
     } finally {
       setActionLoading({ id: null, type: null });
+      setUploadProgress(0);
     }
-  }, [showToast, refreshData]);
+  }, [showToast, refreshData, selectedImages]);
 
   const handleBookingAction = useCallback(async (bookingId, action, additionalData = {}) => {
-    if (['reject', 'complete'].includes(action)) {
+    if (action === 'start' || action === 'complete') {
+      setProofModal({ isOpen: true, action, bookingId });
+      return;
+    }
+
+    if (action === 'reject') {
       setConfirmDialog({
         isOpen: true, type: action === 'reject' ? 'danger' : 'success',
         data: { bookingId, action, additionalData },
@@ -254,7 +438,7 @@ const ProviderBooking = () => {
       });
     }
     await executeBookingAction(bookingId, action, additionalData);
-  }, [executeBookingAction, user]);
+  }, [executeBookingAction, user, selectedImages, showToast]);
 
   const handleConfirmAction = useCallback(() => {
     const { data } = confirmDialog;
@@ -271,6 +455,32 @@ const ProviderBooking = () => {
       setShowModal(false); 
     }
   }, [showToast]);
+
+  const handleDisputeReply = async () => {
+    if (!disputeResponseText.trim()) {
+      showToast('Response text is required', 'error');
+      return;
+    }
+    try {
+      setIsSubmittingResponse(true);
+      const formData = new FormData();
+      formData.append('message', disputeResponseText);
+      disputeImages.forEach(img => formData.append('images', img));
+
+      await ComplaintService.replyToComplaint(selectedBooking.complaint, formData);
+      showToast('Response submitted successfully', 'success');
+      
+      setDisputeResponseText('');
+      setDisputeImages([]);
+      
+      // Refresh details
+      await getBookingDetails(selectedBooking._id);
+    } catch (err) {
+      showToast(err.response?.data?.message || err.message || 'Failed to submit response', 'error');
+    } finally {
+      setIsSubmittingResponse(false);
+    }
+  };
 
   // ── Formatters ───────────────────────────────────────────────────────────
   const formatAddress = useCallback((address) => {
@@ -396,7 +606,7 @@ const ProviderBooking = () => {
             </div>
 
             {/* Payment tags */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               {(booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service') ? (
                 <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-yellow-700 bg-yellow-50 border border-yellow-200 px-2 py-0.5 rounded-md">
                   <Banknote className="w-3 h-3" /> Pay After Service
@@ -409,6 +619,17 @@ const ProviderBooking = () => {
               {booking.paymentStatus === 'paid' && (
                 <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-md">
                   <CheckSquare className="w-3 h-3" /> Paid
+                </span>
+              )}
+              {/* Dispute / Hold Badges */}
+              {booking.disputeRaised && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded-md">
+                  <AlertTriangle className="w-3 h-3" /> Under Review
+                </span>
+              )}
+              {booking.payoutHoldUntil && new Date(booking.payoutHoldUntil) > new Date() && !booking.disputeRaised && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase text-orange-700 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-md">
+                  <AlertCircle className="w-3 h-3" /> Payout On Hold
                 </span>
               )}
             </div>
@@ -885,16 +1106,268 @@ const ProviderBooking = () => {
                         { label: 'Created', value: formatDate(selectedBooking.createdAt) },
                         { label: 'Scheduled Date', value: formatDate(selectedBooking.date) },
                         { label: 'Time Slot', value: formatTime(selectedBooking.time) },
-                      ].map(({ label, value }) => (
+                        ...(selectedBooking.startedAt ? [{ label: 'Service Started', value: formatDate(selectedBooking.startedAt), color: 'text-blue-600' }] : []),
+                        ...(selectedBooking.providerWorkProof?.beforeImages?.length > 0 ? [{ label: 'Work Started Images Uploaded', value: 'Yes', color: 'text-gray-600' }] : []),
+                        ...(selectedBooking.completedAt ? [{ label: 'Completed', value: formatDate(selectedBooking.completedAt), color: 'text-green-600' }] : []),
+                        ...(selectedBooking.providerWorkProof?.afterImages?.length > 0 ? [{ label: 'Work Completed Images Uploaded', value: 'Yes', color: 'text-gray-600' }] : []),
+                        ...(selectedBooking.payoutHoldUntil ? [{ label: 'Payout Hold Until', value: formatDate(selectedBooking.payoutHoldUntil), color: 'text-orange-500' }] : []),
+                        ...(selectedBooking.disputeRaised ? [{ label: 'Dispute Raised', value: selectedBooking.disputeStatus || 'UNDER_REVIEW', color: 'text-red-500' }] : []),
+                        ...(selectedBooking.adminRefundDecision ? [{ label: 'Admin Decision', value: selectedBooking.adminRefundDecision, color: 'text-purple-600' }] : []),
+                      ].map(({ label, value, color }) => (
                         <div key={label} className="flex justify-between text-sm">
                           <span className="text-gray-500">{label}</span>
-                          <span className="font-medium text-secondary">{value}</span>
+                          <span className={`font-medium ${color || 'text-secondary'}`}>{value}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Payout Hold Countdown */}
+                    {selectedBooking.payoutHoldUntil && new Date(selectedBooking.payoutHoldUntil) > new Date() && (
+                      <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded-xl">
+                        <p className="text-xs font-bold text-orange-700 flex items-center gap-1.5">
+                          <AlertCircle className="w-3.5 h-3.5" />
+                          Payout held until {formatDate(selectedBooking.payoutHoldUntil)}
+                        </p>
+                        <p className="text-[10px] text-orange-600 mt-1">
+                          Your earnings are temporarily on hold. They will be released automatically after the review period or when admin clears it.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Dispute Alert */}
+                    {selectedBooking.disputeRaised && (
+                      <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-xl">
+                        <p className="text-xs font-bold text-red-700 flex items-center gap-1.5">
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          Dispute: {selectedBooking.disputeStatus?.replace('_', ' ')}
+                        </p>
+                        {selectedBooking.adminRefundDecision && (
+                          <p className="text-[10px] text-red-600 mt-1">
+                            Admin Decision: <span className="font-bold capitalize">{selectedBooking.adminRefundDecision}</span>
+                          </p>
+                        )}
+                        <p className="text-[10px] text-red-500 mt-1">Refund Status: {selectedBooking.paymentStatus}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Photo Proofs Section */}
+              <div className="mt-6 bg-gray-50 rounded-2xl p-5 border border-gray-100">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-primary/10 rounded-lg"><Activity className="w-4 h-4 text-primary" /></div>
+                    <h3 className="font-semibold text-secondary">Work & Complaint Proofs</h3>
+                  </div>
+                  {(['accepted', 'in-progress'].includes(selectedBooking.status)) && (
+                    <label className="cursor-pointer bg-primary/10 hover:bg-primary/20 text-primary px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors">
+                      <DownloadCloud className="w-3.5 h-3.5" />
+                      Add Photos
+                      <input 
+                        type="file" 
+                        multiple 
+                        accept="image/*" 
+                        className="hidden" 
+                        onChange={(e) => {
+                          const files = Array.from(e.target.files);
+                          setSelectedImages(prev => [...prev, ...files]);
+                        }} 
+                      />
+                    </label>
+                  )}
+                </div>
+
+                {/* Selected Images Preview */}
+                {selectedImages.length > 0 && (
+                  <div className="mb-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">To be uploaded ({selectedImages.length})</p>
+                      {uploadProgress > 0 && uploadProgress < 100 && (
+                        <span className="text-[10px] font-bold text-primary">{uploadProgress}% Uploading...</span>
+                      )}
+                    </div>
+                    {uploadProgress > 0 && uploadProgress < 100 && (
+                      <div className="w-full bg-gray-200 rounded-full h-1.5 mb-3 overflow-hidden">
+                        <div className="bg-primary h-1.5 rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }}></div>
+                      </div>
+                    )}
+                    <div className="flex flex-wrap gap-2">
+                      {selectedImages.map((file, idx) => (
+                        <div key={idx} className="relative group w-16 h-16 rounded-lg overflow-hidden border border-primary/30">
+                          <img src={URL.createObjectURL(file)} alt="preview" className="w-full h-full object-cover" />
+                          <button 
+                            onClick={() => setSelectedImages(prev => prev.filter((_, i) => i !== idx))}
+                            className="absolute top-0 right-0 p-0.5 bg-red-500 text-white rounded-bl-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                            disabled={uploadProgress > 0}
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
                         </div>
                       ))}
                     </div>
                   </div>
+                )}
+
+                {/* Existing Proofs - Comparison UI */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Before Section */}
+                  <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-[10px] font-black text-secondary/40 uppercase tracking-wider">Before Service</p>
+                      {selectedBooking.providerWorkProof?.startLocation && (
+                        <a 
+                          href={`https://www.google.com/maps?q=${selectedBooking.providerWorkProof.startLocation.latitude},${selectedBooking.providerWorkProof.startLocation.longitude}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] font-bold text-primary flex items-center gap-1 hover:underline"
+                        >
+                          <MapPin className="w-3 h-3" /> Location Captured
+                        </a>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      {selectedBooking.providerWorkProof?.beforeImages?.length > 0 ? (
+                        selectedBooking.providerWorkProof.beforeImages.map((img, idx) => (
+                          <div key={idx} onClick={() => setPreviewImage(img.url)} className="relative aspect-square rounded-xl overflow-hidden border border-gray-100 hover:border-primary transition-all cursor-pointer group">
+                            <img src={img.url} alt="Before" className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <Eye className="w-4 h-4 text-white" />
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="col-span-3 py-8 text-center border-2 border-dashed border-gray-100 rounded-xl">
+                          <Activity className="w-6 h-6 text-gray-200 mx-auto mb-2" />
+                          <p className="text-xs text-gray-400">No before-work photos</p>
+                        </div>
+                      )}
+                    </div>
+                    {selectedBooking.serviceStartedAt && (
+                      <p className="text-[10px] text-gray-400 mt-3 flex items-center gap-1">
+                        <Clock className="w-3 h-3" /> Started: {new Date(selectedBooking.serviceStartedAt).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* After Section */}
+                  <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-[10px] font-black text-secondary/40 uppercase tracking-wider">After Service</p>
+                      {selectedBooking.providerWorkProof?.completionLocation && (
+                        <a 
+                          href={`https://www.google.com/maps?q=${selectedBooking.providerWorkProof.completionLocation.latitude},${selectedBooking.providerWorkProof.completionLocation.longitude}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] font-bold text-emerald-600 flex items-center gap-1 hover:underline"
+                        >
+                          <MapPin className="w-3 h-3" /> Location Captured
+                        </a>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      {selectedBooking.providerWorkProof?.afterImages?.length > 0 ? (
+                        selectedBooking.providerWorkProof.afterImages.map((img, idx) => (
+                          <div key={idx} onClick={() => setPreviewImage(img.url)} className="relative aspect-square rounded-xl overflow-hidden border border-gray-100 hover:border-emerald-500 transition-all cursor-pointer group">
+                            <img src={img.url} alt="After" className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                            <div className="absolute inset-0 bg-emerald-500/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <CheckSquare className="w-4 h-4 text-white" />
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="col-span-3 py-8 text-center border-2 border-dashed border-gray-100 rounded-xl">
+                          <Activity className="w-6 h-6 text-gray-200 mx-auto mb-2" />
+                          <p className="text-xs text-gray-400">No completion photos</p>
+                        </div>
+                      )}
+                    </div>
+                    {selectedBooking.serviceCompletedAt && (
+                      <p className="text-[10px] text-emerald-600 mt-3 flex items-center gap-1 font-medium">
+                        <CheckSquare className="w-3 h-3" /> Completed: {new Date(selectedBooking.serviceCompletedAt).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
+
+              {/* Dispute Thread & Response Section */}
+              {selectedBooking.disputeRaised && (
+                <div className="mt-6 bg-red-50/30 rounded-2xl p-5 border border-red-100">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="p-1.5 bg-red-100 rounded-lg"><AlertTriangle className="w-4 h-4 text-red-600" /></div>
+                    <h3 className="font-semibold text-secondary">Dispute Timeline & Responses</h3>
+                  </div>
+
+                  {/* Existing Thread */}
+                  <div className="space-y-4 mb-6">
+                    {selectedBooking.complaintProofs?.map((proof, pIdx) => (
+                      <div key={pIdx} className={`bg-white rounded-xl p-4 border ${proof.uploadedBy === 'customer' ? 'border-red-100' : proof.uploadedBy === 'admin' ? 'border-purple-100' : 'border-blue-100'}`}>
+                        <div className="flex justify-between items-center mb-2">
+                          <span className={`text-[10px] font-bold uppercase ${proof.uploadedBy === 'customer' ? 'text-red-600' : proof.uploadedBy === 'admin' ? 'text-purple-600' : 'text-blue-600'}`}>
+                            {proof.uploadedBy}
+                          </span>
+                          <span className="text-[10px] text-gray-400">{formatDate(proof.createdAt)}</span>
+                        </div>
+                        <p className="text-sm text-gray-700 mb-3">{proof.message}</p>
+                        {proof.images?.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {proof.images.map((img, iIdx) => (
+                              <div key={iIdx} onClick={() => setPreviewImage(img.url)} className="w-12 h-12 rounded-lg overflow-hidden border border-gray-100 hover:border-primary transition-colors cursor-pointer">
+                                <img src={img.url} alt="Proof" className="w-full h-full object-cover" />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Provider Response Form (Only if dispute is not fully resolved/refunded by admin) */}
+                  {selectedBooking.disputeStatus !== 'resolved' && selectedBooking.disputeStatus !== 'refunded' && selectedBooking.complaint && (
+                    <div className="bg-white rounded-xl p-4 border border-red-200">
+                      <h4 className="text-sm font-bold text-secondary mb-3">Add Your Response</h4>
+                      <textarea
+                        value={disputeResponseText}
+                        onChange={(e) => setDisputeResponseText(e.target.value)}
+                        placeholder="Explain your side of the dispute clearly..."
+                        className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:outline-none focus:border-red-300 focus:ring-1 focus:ring-red-300 mb-3 min-h-[100px]"
+                      />
+                      
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <label className="cursor-pointer inline-flex items-center gap-2 text-xs font-bold text-primary bg-primary/5 hover:bg-primary/10 px-3 py-2 rounded-xl transition-colors">
+                          <DownloadCloud className="w-4 h-4" /> Add Evidence Photos
+                          <input 
+                            type="file" multiple accept="image/*" className="hidden"
+                            onChange={(e) => setDisputeImages(Array.from(e.target.files))}
+                          />
+                        </label>
+                        <button
+                          onClick={handleDisputeReply}
+                          disabled={isSubmittingResponse || !disputeResponseText.trim()}
+                          className="bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-colors inline-flex items-center justify-center gap-2"
+                        >
+                          {isSubmittingResponse ? <Loader className="w-4 h-4 animate-spin" /> : 'Submit Response'}
+                        </button>
+                      </div>
+
+                      {/* Evidence Preview */}
+                      {disputeImages.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-2 p-2 bg-gray-50 rounded-xl">
+                          {disputeImages.map((file, idx) => (
+                            <div key={idx} className="relative group w-12 h-12 rounded-lg overflow-hidden border border-gray-200">
+                              <img src={URL.createObjectURL(file)} alt="preview" className="w-full h-full object-cover" />
+                              <button onClick={() => setDisputeImages(prev => prev.filter((_, i) => i !== idx))} className="absolute top-0 right-0 bg-red-500 text-white rounded-bl-lg p-0.5">
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Modal Actions */}
               <div className="mt-6 pt-5 border-t border-gray-100">
@@ -929,6 +1402,19 @@ const ProviderBooking = () => {
         </div>
       )}
 
+      {/* ── Proof Upload Modal ── */}
+      <ProofModal
+        isOpen={proofModal.isOpen}
+        onClose={() => setProofModal({ isOpen: false, action: null, bookingId: null })}
+        action={proofModal.action}
+        loading={actionLoading.id === proofModal.bookingId}
+        progress={uploadProgress}
+        onConfirm={(images, location) => {
+          executeBookingAction(proofModal.bookingId, proofModal.action, { images, location });
+          setProofModal({ isOpen: false, action: null, bookingId: null });
+        }}
+      />
+
       {/* ── Confirmation Dialog ── */}
       <ConfirmationDialog
         isOpen={confirmDialog.isOpen}
@@ -938,6 +1424,16 @@ const ProviderBooking = () => {
         message={confirmDialog.message}
         type={confirmDialog.type}
       />
+
+      {/* Image Preview Gallery Modal */}
+      {previewImage && (
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[99999]" onClick={(e) => { e.stopPropagation(); setPreviewImage(null); }}>
+          <button className="absolute top-4 right-4 p-2 text-white/70 hover:text-white bg-black/50 hover:bg-black/80 rounded-full transition-all" onClick={(e) => { e.stopPropagation(); setPreviewImage(null); }}>
+            <X className="w-6 h-6" />
+          </button>
+          <img src={previewImage} className="max-w-[95vw] max-h-[90vh] object-contain rounded-lg shadow-2xl" alt="Preview" onClick={e => e.stopPropagation()} />
+        </div>
+      )}
     </div>
   );
 };

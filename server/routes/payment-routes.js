@@ -13,6 +13,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), paymentContro
 
 router.get('/summary', providerAuthMiddleware, paymentController.getEarningsSummary);
 router.post('/withdraw', providerAuthMiddleware, paymentController.requestBulkWithdrawal);
+router.post('/verify-withdraw-otp', providerAuthMiddleware, paymentController.verifyWithdrawalOTP);
 router.get("/earnings-report", providerAuthMiddleware, paymentController.downloadEarningsReport);
 router.get("/withdrawal-report", providerAuthMiddleware, paymentController.downloadWithdrawalReport);
 

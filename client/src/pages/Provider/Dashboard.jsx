@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   FiDollarSign, FiCalendar, FiCheckCircle, FiStar,
   FiTrendingUp, FiClock, FiAlertCircle, FiCreditCard,
-  FiPieChart, FiBriefcase, FiChevronRight
+  FiPieChart, FiBriefcase, FiChevronRight, FiLock, FiUnlock, FiAlertTriangle
 } from 'react-icons/fi';
 import {
   LineChart, Line, PieChart, Pie, Cell,
@@ -15,6 +15,24 @@ import * as ProviderService from '../../services/ProviderService';
 import * as BookingService from '../../services/BookingService';
 import * as ComplaintService from '../../services/ComplaintService';
 import { formatCurrency, formatDate } from '../../utils/format';
+
+const PayoutStatusBadge = ({ status }) => {
+  const cfg = {
+    'Payout On Hold': 'bg-orange-100 text-orange-700 border-orange-200',
+    'Payout Ready': 'bg-green-100 text-green-700 border-green-200',
+    'Payout Released': 'bg-blue-100 text-blue-700 border-blue-200',
+    'Refund Adjusted': 'bg-gray-100 text-gray-500 border-gray-200',
+    'Dispute Hold': 'bg-red-100 text-red-700 border-red-200',
+    'Not Processed': 'bg-gray-50 text-gray-400 border-gray-100',
+  };
+
+  return (
+    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${cfg[status] || 'bg-gray-100 text-gray-500 border-gray-200'}`}>
+      {status === 'Payout On Hold' || status === 'Dispute Hold' ? <FiLock size={10} /> : <FiUnlock size={10} />}
+      {status || 'Unknown'}
+    </span>
+  );
+};
 
 const Dashboard = () => {
   const { token, API, showToast } = useAuth();
@@ -35,7 +53,10 @@ const Dashboard = () => {
     todaysEarnings: 0,
     pendingRequests: [],
     activeJobs: [],
-    recentBookings: []
+    recentBookings: [],
+    heldPayouts: 0,
+    disputesCount: 0,
+    pendingReviews: 0
   });
   const [actionLoading, setActionLoading] = useState({});
   const [complaintsCount, setComplaintsCount] = useState(0);
@@ -70,6 +91,12 @@ const Dashboard = () => {
 
       const combinedBookings = [...(analyticsData?.todayJobs || []), ...(analyticsData?.upcomingJobs || [])];
 
+      // Calculate dispute/hold metrics from bookings
+      const allBookingsFlat = [...(analyticsData?.todayJobs || []), ...(analyticsData?.upcomingJobs || [])];
+      const heldPayouts = allBookingsFlat.filter(b => b.payoutHoldUntil && new Date(b.payoutHoldUntil) > new Date()).length;
+      const disputesCount = allBookingsFlat.filter(b => b.disputeRaised).length;
+      const pendingReviews = allBookingsFlat.filter(b => b.disputeStatus === 'UNDER_REVIEW').length;
+
       setDashboardData({
         summary: summary?.data || null,
         earnings: earnings?.data || null,
@@ -81,7 +108,10 @@ const Dashboard = () => {
         todaysEarnings: summary?.data?.todaysEarnings || 0,
         pendingRequests: new Array(summary?.data?.pendingBookings || 0),
         activeJobs: combinedBookings,
-        recentBookings: combinedBookings.slice(0, 5)
+        recentBookings: combinedBookings.slice(0, 5),
+        heldPayouts,
+        disputesCount,
+        pendingReviews
       });
     } catch (error) {
       showToast('Failed to load dashboard data', 'error');
@@ -105,7 +135,7 @@ const Dashboard = () => {
   const handleBookingAction = async (bookingId, action) => {
     try {
       setActionLoading(prev => ({ ...prev, [bookingId]: action }));
-      
+
       let response;
       if (action === 'accept') response = await BookingService.acceptBooking(bookingId);
       else if (action === 'reject') response = await BookingService.rejectBooking(bookingId);
@@ -128,7 +158,7 @@ const Dashboard = () => {
 
   if (loading) return <Loader />;
 
-  const { summary, earnings, bookings, wallet, ratings, profile, totalEarnings, todaysEarnings, pendingRequests, recentBookings } = dashboardData;
+  const { summary, earnings, bookings, wallet, ratings, profile, totalEarnings, todaysEarnings, pendingRequests, recentBookings, heldPayouts, disputesCount, pendingReviews } = dashboardData;
   const COLORS = ['#0D9488', '#F97316', '#F59E0B', '#EF4444', '#8B5CF6'];
 
   return (
@@ -151,7 +181,7 @@ const Dashboard = () => {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
           <Link to="/provider/earnings" className="bg-white rounded-2xl shadow-sm p-4 border-l-4 border-primary hover:shadow-md transition-shadow">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-primary/10 rounded-xl">
@@ -182,11 +212,35 @@ const Dashboard = () => {
                 <FiTrendingUp className="w-5 h-5 text-accent" />
               </div>
               <div>
-                <p className="text-xs text-secondary/50 uppercase tracking-wide">Balance</p>
+                <p className="text-xs text-secondary/50 uppercase tracking-wide">Wallet Balance</p>
                 <p className="text-xl font-bold text-secondary">{formatCurrency(wallet?.currentBalance || 0)}</p>
               </div>
             </div>
           </Link>
+
+          <div className="bg-white rounded-2xl shadow-sm p-4 border-l-4 border-indigo-500">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-indigo-50 rounded-xl">
+                <FiCheckCircle className="w-5 h-5 text-indigo-600" />
+              </div>
+              <div>
+                <p className="text-xs text-secondary/50 uppercase tracking-wide">Released Payouts</p>
+                <p className="text-xl font-bold text-secondary">{formatCurrency(wallet?.releasedPayouts || 0)}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-sm p-4 border-l-4 border-red-500">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-red-50 rounded-xl">
+                <FiTrendingUp className="w-5 h-5 text-red-600 rotate-180" />
+              </div>
+              <div>
+                <p className="text-xs text-secondary/50 uppercase tracking-wide">Refund Deductions</p>
+                <p className="text-xl font-bold text-secondary">{formatCurrency(wallet?.refundedDeductions || 0)}</p>
+              </div>
+            </div>
+          </div>
 
           <div className="bg-white rounded-2xl shadow-sm p-4 border-l-4 border-green-500">
             <div className="flex items-center gap-3">
@@ -213,15 +267,41 @@ const Dashboard = () => {
               </div>
             </div>
           </div>
+
+          <div className="bg-white rounded-2xl shadow-sm p-4 border-l-4 border-orange-400">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-orange-50 rounded-xl">
+                <FiLock className="w-5 h-5 text-orange-500" />
+              </div>
+              <div>
+                <p className="text-xs text-secondary/50 uppercase tracking-wide">Held Payouts</p>
+                <p className="text-xl font-bold text-secondary">{heldPayouts}</p>
+                <p className="text-[10px] text-orange-500 font-medium">Awaiting Release</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-sm p-4 border-l-4 border-purple-400">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-purple-50 rounded-xl">
+                <FiAlertTriangle className="w-5 h-5 text-purple-500" />
+              </div>
+              <div>
+                <p className="text-xs text-secondary/50 uppercase tracking-wide">Disputes</p>
+                <p className="text-xl font-bold text-secondary">{disputesCount}</p>
+                <p className="text-[10px] text-purple-500 font-medium">{pendingReviews} Under Review</p>
+              </div>
+            </div>
+          </div>
+
           <Link to="/provider/support" className="bg-white rounded-2xl shadow-sm p-4 border-l-4 border-red-400 hover:shadow-md transition-shadow">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-red-50 rounded-xl">
                 <FiAlertCircle className="w-5 h-5 text-red-500" />
               </div>
               <div>
-                <p className="text-xs text-secondary/50 uppercase tracking-wide">My Complaints</p>
+                <p className="text-xs text-secondary/50 uppercase tracking-wide">Complaints</p>
                 <p className="text-xl font-bold text-secondary">{complaintsCount}</p>
-                <p className="text-[10px] text-red-500 font-medium">Total Complaints Received</p>
               </div>
             </div>
           </Link>
@@ -393,8 +473,11 @@ const Dashboard = () => {
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-3">
-                          <div className={`p-2 rounded-lg ${booking.status === 'pending' ? 'bg-orange-50 text-accent' : 'bg-primary/10 text-primary'}`}>
-                            <FiCalendar className="w-4 h-4" />
+                          <div className={`p-2 rounded-lg ${booking.disputeRaised ? 'bg-red-50 text-red-500' : booking.status === 'pending' ? 'bg-orange-50 text-accent' : 'bg-primary/10 text-primary'}`}>
+                            {booking.disputeRaised
+                              ? <FiAlertTriangle className="w-4 h-4" />
+                              : <FiCalendar className="w-4 h-4" />
+                            }
                           </div>
                           <div>
                             <h4 className="text-sm font-medium text-secondary">{booking.customer?.name || 'Customer'}</h4>
@@ -403,9 +486,22 @@ const Dashboard = () => {
                             </p>
                           </div>
                         </div>
-                        <div className="mt-2 flex items-center justify-between">
+                        <div className="mt-2 flex items-center justify-between flex-wrap gap-2">
                           <span className="text-xs text-secondary/50">{formatAddress(booking.location)}</span>
-                          <span className="text-sm font-semibold text-primary">{formatCurrency(booking.totalAmount)}</span>
+                          <div className="flex items-center gap-2">
+                            {booking.disputeRaised && (
+                              <span className="text-[10px] font-bold uppercase text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-md">Under Review</span>
+                            )}
+                            <div className="flex flex-col items-end gap-1">
+                              <PayoutStatusBadge status={booking.payoutStatus} />
+                              {booking.payoutHoldUntil && new Date(booking.payoutHoldUntil) > new Date() && booking.payoutStatus === 'Payout On Hold' && (
+                                <span className="text-[9px] text-gray-400 italic">
+                                  Hold ends {new Date(booking.payoutHoldUntil).toLocaleDateString()}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-sm font-semibold text-primary">{formatCurrency(booking.totalAmount)}</span>
+                          </div>
                         </div>
                       </div>
                       <div className="ml-3">

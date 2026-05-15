@@ -4,11 +4,12 @@ import {
   Filter, Loader2, X, Info, TrendingDown, Eye, Banknote, Building,
   BarChart3, CreditCard, FileText, Download, TrendingUp, Activity,
   Wallet, Clock, CheckCircle, XCircle, AlertCircle, ChevronUp,
-  ChevronDown, ArrowDownLeft, DollarSign, Calendar, Receipt
+  ChevronDown, ArrowDownLeft, DollarSign, Calendar, Receipt, Lock, ShieldAlert
 } from 'lucide-react';
 import * as PaymentService from '../../services/PaymentService';
 import * as ProviderService from '../../services/ProviderService';
-import { formatDate, formatTime, formatCurrency, formatNumber } from '../../utils/format';
+import { formatDate, formatTime, formatDateTime, formatCurrency, formatNumber } from '../../utils/format';
+import Loader from '../../components/Loader';
 
 // ── Utility Helpers ──────────────────────────────────────────────────────────
 
@@ -23,7 +24,12 @@ const getStatusConfig = (status) => {
     approved: { color: 'bg-teal-50 text-teal-700', icon: CheckCircle, label: 'Approved' },
     requested: { color: 'bg-yellow-50 text-yellow-700', icon: Clock, label: 'Requested' },
     failed: { color: 'bg-red-50 text-red-700', icon: XCircle, label: 'Failed' },
-    rejected: { color: 'bg-red-50 text-red-700', icon: XCircle, label: 'Rejected' }
+    rejected: { color: 'bg-red-50 text-red-700', icon: XCircle, label: 'Rejected' },
+    withdrawn: { color: 'bg-indigo-50 text-indigo-700', icon: CheckCircle, label: 'Withdrawn' },
+    'dispute hold': { color: 'bg-red-50 text-red-700', icon: ShieldAlert, label: 'Dispute Hold' },
+    'admin hold': { color: 'bg-orange-50 text-orange-700', icon: Lock, label: 'Admin Hold' },
+    'held': { color: 'bg-orange-50 text-orange-700 border border-orange-200', icon: Lock, label: 'Held' },
+    'available': { color: 'bg-emerald-50 text-emerald-700 border border-emerald-200', icon: CheckCircle, label: 'Ready for withdrawal' }
   };
   return configs[status?.toLowerCase()] || { color: 'bg-gray-100 text-gray-600', icon: AlertCircle, label: status || 'Unknown' };
 };
@@ -56,6 +62,10 @@ const Badge = ({ status }) => {
   );
 };
 
+const Spinner = ({ className = "w-5 h-5", variant = "border-white" }) => (
+  <div className={`animate-spin rounded-full border-b-2 ${variant} ${className}`}></div>
+);
+
 // ── Main Dashboard Component ─────────────────────────────────────────────────
 
 const ProviderEarningsDashboard = () => {
@@ -63,14 +73,21 @@ const ProviderEarningsDashboard = () => {
 
   const tabs = [
     { id: 'dashboard', label: 'Overview', icon: BarChart3 },
-    { id: 'earnings', label: 'Earnings', icon: CreditCard },
+    { id: 'earnings', label: 'Available', icon: Wallet },
+    { id: 'held', label: 'Held', icon: Lock },
     { id: 'withdrawals', label: 'Withdrawals', icon: FileText },
     { id: 'reports', label: 'Reports', icon: Download },
   ];
 
   const [loading, setLoading] = useState(false);
-  const [summary, setSummary] = useState({ totalEarnings: 0, todayEarnings: 0, totalWithdrawn: 0, availableBalance: 0, totalPendingWithdrawals: 0 });
+  const [summary, setSummary] = useState({
+    totalEarnings: 0, todayEarnings: 0, totalWithdrawn: 0,
+    availableBalance: 0, totalPendingWithdrawals: 0,
+    heldAmount: 0, disputeCount: 0,
+    withdrawalSecurity: null
+  });
   const [earningsReport, setEarningsReport] = useState([]);
+  const [heldEarnings, setHeldEarnings] = useState([]);
   const [withdrawalReport, setWithdrawalReport] = useState([]);
   const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
   const [selectedWithdrawal, setSelectedWithdrawal] = useState(null);
@@ -88,6 +105,10 @@ const ProviderEarningsDashboard = () => {
   const [weeklyData, setWeeklyData] = useState([]);
   const [monthlyData, setMonthlyData] = useState([]);
   const [processingWithdrawal, setProcessingWithdrawal] = useState(false);
+  const [showOTPModal, setShowOTPModal] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [otpTimer, setOtpTimer] = useState(0);
+  const [cooldownTime, setCooldownTime] = useState(null);
 
   // ── API Handlers ─────────────────────────────────────────────────────────────
 
@@ -134,7 +155,10 @@ const ProviderEarningsDashboard = () => {
           todayEarnings: data.todayEarnings || 0,
           totalWithdrawn: data.totalWithdrawn || 0,
           availableBalance: data.availableBalance || 0,
-          totalPendingWithdrawals: data.pendingWithdrawals || 0
+          totalPendingWithdrawals: data.pendingWithdrawals || 0,
+          heldAmount: data.heldAmount || 0,
+          disputeCount: data.disputeCount || 0,
+          withdrawalSecurity: data.withdrawalSecurity || null
         });
       }
     } catch (err) { console.error('Error fetching summary:', err); }
@@ -182,12 +206,12 @@ const ProviderEarningsDashboard = () => {
       const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
       const startOfYear = new Date(currentDate.getFullYear(), 0, 1);
       const endOfYear = new Date(currentDate.getFullYear(), 11, 31);
-      
+
       const [weeklyRes, monthlyRes] = await Promise.all([
         PaymentService.getEarningsReport({ startDate: startOfMonth.toISOString().split('T')[0], endDate: endOfMonth.toISOString().split('T')[0] }),
         PaymentService.getEarningsReport({ startDate: startOfYear.toISOString().split('T')[0], endDate: endOfYear.toISOString().split('T')[0] })
       ]);
-      
+
       const weeklyData = weeklyRes.data;
       const monthlyData = monthlyRes.data;
       if (weeklyData.success) processWeeklyData(weeklyData.earnings);
@@ -200,7 +224,7 @@ const ProviderEarningsDashboard = () => {
       const params = { page, limit };
       if (dateFilter.startDate) params.startDate = dateFilter.startDate;
       if (dateFilter.endDate) params.endDate = dateFilter.endDate;
-      
+
       const response = await PaymentService.getEarningsReport(params);
       const data = response.data;
       if (data.success) {
@@ -210,12 +234,20 @@ const ProviderEarningsDashboard = () => {
     } catch (err) { showToast('Failed to fetch earnings', 'error'); }
   }, [dateFilter, showToast]);
 
+  const fetchHeldEarnings = useCallback(async () => {
+    try {
+      const response = await PaymentService.getHeldEarnings();
+      const data = response.data;
+      if (data.success) setHeldEarnings(data.earnings || []);
+    } catch (err) { console.error('Failed to fetch held earnings:', err); }
+  }, []);
+
   const fetchWithdrawalReport = useCallback(async () => {
     try {
       const params = {};
       if (dateFilter.startDate) params.startDate = dateFilter.startDate;
       if (dateFilter.endDate) params.endDate = dateFilter.endDate;
-      
+
       const response = await PaymentService.getWithdrawalReport(params);
       const data = response.data;
       if (data.success) setWithdrawalReport(data.records || []);
@@ -237,21 +269,46 @@ const ProviderEarningsDashboard = () => {
   const handleWithdrawalRequest = async () => {
     if (!withdrawalForm.amount || withdrawalForm.amount < 500) { showToast('Minimum ₹500 required', 'error'); return; }
     if (withdrawalForm.amount > summary.availableBalance) { showToast(`Insufficient balance. Available: ${formatCurrency(summary.availableBalance)}`, 'error'); return; }
-    setConfirmMessage(`Withdraw ${formatCurrency(withdrawalForm.amount)}? This cannot be undone.`);
-    setConfirmAction(() => async () => {
-      try {
-        setProcessingWithdrawal(true);
-        const response = await PaymentService.withdraw({ amount: parseFloat(withdrawalForm.amount) });
-        const data = response.data;
-        if (data.success) {
-          showToast('Withdrawal requested!', 'success');
-          setShowWithdrawalModal(false);
-          setWithdrawalForm({ amount: '' });
-          refreshAll();
-        } else { showToast(data.error || 'Withdrawal failed', 'error'); }
-      } catch (err) { showToast(err.response?.data?.message || err.message || 'Processing error', 'error'); } finally { setProcessingWithdrawal(false); }
-    });
-    setShowConfirmModal(true);
+
+    try {
+      setProcessingWithdrawal(true);
+      const response = await API.post('/payment/withdraw', { amount: parseFloat(withdrawalForm.amount) });
+      const data = response.data;
+      if (data.success) {
+        showToast('OTP sent to your email and phone!', 'success');
+        setShowWithdrawalModal(false);
+        setShowOTPModal(true);
+        setOtpTimer(300); // 5 minutes
+      } else {
+        showToast(data.error || 'Withdrawal failed', 'error');
+      }
+    } catch (err) {
+      showToast(err.response?.data?.error || err.message || 'Processing error', 'error');
+    } finally {
+      setProcessingWithdrawal(false);
+    }
+  };
+
+  const handleVerifyOTP = async () => {
+    if (!otpCode || otpCode.length !== 6) { showToast('Enter 6-digit OTP', 'error'); return; }
+    try {
+      setProcessingWithdrawal(true);
+      const response = await API.post('/payment/verify-withdraw-otp', { otp: otpCode });
+      const data = response.data;
+      if (data.success) {
+        showToast(data.message || 'Withdrawal requested successfully!', 'success');
+        setShowOTPModal(false);
+        setOtpCode('');
+        setWithdrawalForm({ amount: '' });
+        refreshAll();
+      } else {
+        showToast(data.error || 'Verification failed', 'error');
+      }
+    } catch (err) {
+      showToast(err.response?.data?.error || err.message || 'Verification error', 'error');
+    } finally {
+      setProcessingWithdrawal(false);
+    }
   };
 
   const downloadReport = async (type) => {
@@ -263,11 +320,11 @@ const ProviderEarningsDashboard = () => {
         endDate: dateFilter.endDate,
         download: 'true'
       };
-      
-      const res = type === 'earnings' 
+
+      const res = type === 'earnings'
         ? await PaymentService.downloadEarningsReport(params, { responseType: 'blob' })
         : await PaymentService.downloadWithdrawalReport(params, { responseType: 'blob' });
-      
+
       const blob = res.data;
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -284,14 +341,22 @@ const ProviderEarningsDashboard = () => {
   const refreshAll = useCallback(async () => {
     setLoading(true);
     try {
-      await Promise.all([fetchSummary(), fetchWeeklyMonthlyData(), fetchEarningsReport(), fetchWithdrawalReport()]);
+      await Promise.all([fetchSummary(), fetchWeeklyMonthlyData(), fetchEarningsReport(), fetchWithdrawalReport(), fetchHeldEarnings()]);
     } catch (err) { console.error('Refresh all error:', err); } finally { setLoading(false); }
-  }, [fetchSummary, fetchWeeklyMonthlyData, fetchEarningsReport, fetchWithdrawalReport]);
+  }, [fetchSummary, fetchWeeklyMonthlyData, fetchEarningsReport, fetchWithdrawalReport, fetchHeldEarnings]);
 
   const getTrend = (current, previous) => ({
     trend: previous === 0 ? 'neutral' : current > previous ? 'up' : current < previous ? 'down' : 'neutral',
     percentage: previous === 0 ? 0 : Math.abs(((current - previous) / previous) * 100).toFixed(1)
   });
+
+  useEffect(() => {
+    let timer;
+    if (otpTimer > 0 && showOTPModal) {
+      timer = setInterval(() => setOtpTimer(t => t - 1), 1000);
+    }
+    return () => clearInterval(timer);
+  }, [otpTimer, showOTPModal]);
 
   useEffect(() => { refreshAll(); }, [timeFilter, dateFilter, refreshAll]);
   useEffect(() => {
@@ -300,14 +365,7 @@ const ProviderEarningsDashboard = () => {
   }, [fetchSummary]);
 
   if (loading && !summary.totalEarnings && !earningsReport.length) {
-    return (
-      <div className="min-h-screen flex items-center justify-center font-inter">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
-          <p className="mt-3 text-sm text-secondary/50 font-medium">Loading dashboard...</p>
-        </div>
-      </div>
-    );
+    return <Loader />;
   }
 
   return (
@@ -336,12 +394,14 @@ const ProviderEarningsDashboard = () => {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-7 gap-4">
           <StatCard title="Total Earnings" value={formatCurrency(summary.totalEarnings)} icon={TrendingUp} subtext={`This ${timeFilter}`} />
           <StatCard title="Today's Earning" value={formatCurrency(summary.todayEarnings)} icon={Activity} subtext="Earned today" />
           <StatCard title="Available Balance" value={formatCurrency(summary.availableBalance)} icon={Wallet} subtext="Ready to withdraw" />
           <StatCard title="Total Withdrawn" value={formatCurrency(summary.totalWithdrawn)} icon={FileText} subtext={`This ${timeFilter}`} />
           <StatCard title="Processing" value={formatCurrency(summary.totalPendingWithdrawals)} icon={Clock} subtext="Awaiting clearance" />
+          <StatCard title="Held Payouts" value={formatCurrency(summary.heldAmount)} icon={Lock} subtext="Under review" />
+          <StatCard title="Disputes" value={summary.disputeCount} icon={ShieldAlert} subtext="Active disputes" />
         </div>
 
         {/* Charts Section */}
@@ -427,6 +487,36 @@ const ProviderEarningsDashboard = () => {
           {summary.availableBalance < 500 && (
             <p className="text-xs text-red-500 mt-3">Minimum ₹500 required for withdrawal</p>
           )}
+
+          {summary.withdrawalSecurity?.lastRequestTime && (
+            (() => {
+              const last = new Date(summary.withdrawalSecurity.lastRequestTime);
+              const now = new Date();
+              const hoursDiff = (now - last) / (1000 * 60 * 60);
+              if (hoursDiff < 24) {
+                const remainingHours = Math.floor(24 - hoursDiff);
+                const remainingMinutes = Math.floor((24 - hoursDiff - remainingHours) * 60);
+                return (
+                  <div className="mt-4 p-3 bg-amber-50 border border-amber-100 rounded-lg flex items-center gap-2 text-amber-700">
+                    <Clock className="w-4 h-4" />
+                    <p className="text-xs font-medium">
+                      Cooldown Active: You can request another withdrawal in {remainingHours}h {remainingMinutes}m
+                    </p>
+                  </div>
+                );
+              }
+              return null;
+            })()
+          )}
+
+          {summary.withdrawalSecurity?.isFlagged && (
+            <div className="mt-3 p-3 bg-red-50 border border-red-100 rounded-lg flex items-start gap-2 text-red-700">
+              <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
+              <p className="text-xs font-medium">
+                Suspicious activity detected in previous requests. Your withdrawals may be held for manual security review.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Tabbed Content */}
@@ -503,9 +593,9 @@ const ProviderEarningsDashboard = () => {
               </table>
             )}
 
-            {/* Earnings Tab */}
+            {/* Available Earnings Tab */}
             {activeTab === 'earnings' && (
-              <table className="w-full text-left min-w-[800px]">
+              <table className="w-full text-left min-w-[900px]">
                 <thead>
                   <tr className="border-b border-gray-100">
                     <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Booking ID</th>
@@ -513,15 +603,16 @@ const ProviderEarningsDashboard = () => {
                     <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Amount</th>
                     <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Commission</th>
                     <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Net</th>
-                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Payment Method</th>
+                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Method</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {earningsReport.length > 0 ? (
-                    earningsReport.map((e, i) => (
+                  {earningsReport.filter(e => e.isWithdrawable).length > 0 ? (
+                    earningsReport.filter(e => e.isWithdrawable).map((e, i) => (
                       <tr key={i} className="hover:bg-gray-50 transition-colors">
                         <td className="px-6 py-4 text-xs font-mono font-medium text-secondary/60">
-                          #{e.booking?.slice(-8)}
+                          {e.bookingId || `#${e.booking?.slice(-8)}`}
                         </td>
                         <td className="px-6 py-4 text-center text-sm text-secondary/50">
                           {formatDate(e.createdAt)}
@@ -536,20 +627,99 @@ const ProviderEarningsDashboard = () => {
                         <td className="px-6 py-4 text-right text-sm font-bold text-green-600">
                           +{formatCurrency(e.netAmount)}
                         </td>
-                        <td className="px-6 py-4 text-right text-xs text-secondary/40 uppercase">
-                          {e.paymentMethod?.replace('_', ' ') || 'Online'}
+                        <td className="px-6 py-4">
+                          <Badge status={e.payoutStatus || e.status} />
+                        </td>
+                        <td className="px-6 py-4 text-xs font-medium capitalize text-secondary/60">
+                          {e.paymentMethod || '—'}
                         </td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan="6" className="py-16 text-center text-secondary/30">
-                        No earnings records found
+                      <td colSpan="7" className="py-16 text-center text-secondary/30">
+                        No available earnings records found
                       </td>
                     </tr>
                   )}
                 </tbody>
               </table>
+            )}
+
+            {activeTab === 'held' && (
+              <div className="p-4 space-y-4">
+                <div className="p-4 bg-orange-50 border border-orange-100 rounded-xl flex items-start gap-3">
+                  <Lock className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-bold text-orange-800">Payout Holds</p>
+                    <p className="text-xs text-orange-600 mt-0.5">
+                      Earnings are temporarily held for 48 hours for customer protection or during active disputes.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {heldEarnings.length > 0 ? heldEarnings.map((e, i) => (
+                    <div key={i} className={`bg-white rounded-xl border p-5 transition-all hover:shadow-md ${e.holdReason?.toLowerCase().includes('dispute') ? 'border-red-200 bg-red-50/20' : 'border-orange-200 bg-orange-50/20'
+                      }`}>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className="text-sm font-mono font-bold text-secondary/60">{e.bookingId || `#${e.booking?.slice(-8)}`}</span>
+                            <Badge status={e.payoutStatus || e.status} />
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="flex items-start gap-3">
+                              <div className="p-1.5 bg-white rounded-lg shadow-sm">
+                                <Clock className="w-3.5 h-3.5 text-orange-500" />
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-black text-secondary/40 uppercase tracking-wider">Held Until</p>
+                                <p className="text-sm font-bold text-secondary">
+                                  {e.holdUntil ? new Date(e.holdUntil).toLocaleString('en-IN', {
+                                    day: '2-digit',
+                                    month: 'short',
+                                    year: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  }) : 'Under Review'}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-start gap-3">
+                              <div className="p-1.5 bg-white rounded-lg shadow-sm">
+                                <AlertCircle className="w-3.5 h-3.5 text-orange-500" />
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-black text-secondary/40 uppercase tracking-wider">Reason</p>
+                                <p className="text-sm font-medium text-secondary/80">
+                                  {e.holdReason || 'Standard payout hold'}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="text-right border-t sm:border-t-0 pt-4 sm:pt-0 border-gray-100 min-w-[120px]">
+                          <p className="text-[10px] font-black text-secondary/40 uppercase tracking-wider">Amount</p>
+                          <p className="text-2xl font-black text-secondary">{formatCurrency(e.netAmount)}</p>
+                          <p className="text-[10px] text-secondary/40 mt-1 font-medium">Earned: {formatDate(e.createdAt)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )) : (
+                    <div className="bg-white rounded-xl border border-gray-100 py-16 text-center">
+                      <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <CheckCircle className="w-8 h-8 text-green-500" />
+                      </div>
+                      <p className="text-sm font-bold text-secondary">No Payouts on Hold</p>
+                      <p className="text-xs text-secondary/40 mt-1">All your earnings are available or already withdrawn.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
 
             {/* Withdrawals Tab */}
@@ -645,7 +815,7 @@ const ProviderEarningsDashboard = () => {
                     <div className="p-3 bg-white rounded-lg text-primary mb-4 w-fit">
                       <FileText className="w-6 h-6" />
                     </div>
-                    <h4 className="text-sm font-semibold text-secondary mb-1">Revenue Audit</h4>
+                    <h4 className="text-sm font-semibold text-secondary mb-1">Earnings Report</h4>
                     <p className="text-xs text-secondary/40 mb-5">Full spreadsheet of services, revenue, and commission fees.</p>
                     <button
                       onClick={() => downloadReport('earnings')}
@@ -653,7 +823,7 @@ const ProviderEarningsDashboard = () => {
                       className="w-full py-3 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                       <Download className="w-4 h-4" />
-                      {downloading.earnings ? 'Generating...' : 'Export Excel'}
+                      {downloading.earnings ? 'Generating...' : 'Download Excel'}
                     </button>
                   </div>
 
@@ -662,7 +832,7 @@ const ProviderEarningsDashboard = () => {
                     <div className="p-3 bg-white rounded-lg text-primary mb-4 w-fit">
                       <Receipt className="w-6 h-6" />
                     </div>
-                    <h4 className="text-sm font-semibold text-secondary mb-1">Payout Journal</h4>
+                    <h4 className="text-sm font-semibold text-secondary mb-1">Withdrawal Report</h4>
                     <p className="text-xs text-secondary/40 mb-5">Detailed history of bank transfers and clearance statuses.</p>
                     <button
                       onClick={() => downloadReport('withdrawals')}
@@ -670,7 +840,7 @@ const ProviderEarningsDashboard = () => {
                       className="w-full py-3 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                       <Download className="w-4 h-4" />
-                      {downloading.withdrawals ? 'Generating...' : 'Export Journal'}
+                      {downloading.withdrawals ? 'Generating...' : 'Download Report'}
                     </button>
                   </div>
                 </div>
@@ -722,7 +892,7 @@ const ProviderEarningsDashboard = () => {
                         <p className="text-sm font-bold text-secondary truncate">{providerBankDetails.accountName || providerBankDetails.accountHolderName || 'N/A'}</p>
                       </div>
                     </div>
-                    
+
                     <div className="grid grid-cols-2 gap-4 pl-11">
                       <div>
                         <p className="text-[9px] font-bold text-secondary/30 uppercase tracking-widest leading-none mb-1">Bank Name</p>
@@ -866,6 +1036,67 @@ const ProviderEarningsDashboard = () => {
               >
                 Confirm
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* OTP Verification Modal */}
+      {showOTPModal && (
+        <div className="fixed inset-0 bg-secondary/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-8 animate-scale-up border border-gray-100">
+            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6 text-primary">
+              <ShieldAlert className="w-8 h-8" />
+            </div>
+
+            <h3 className="text-2xl font-bold text-secondary text-center mb-2">Verify Withdrawal</h3>
+            <p className="text-sm text-secondary/50 text-center mb-8">
+              We've sent a 6-digit verification code to your email and phone.
+            </p>
+
+            <div className="space-y-6">
+              <div>
+                <label className="block text-xs font-black text-secondary/40 uppercase tracking-widest mb-3 text-center">
+                  Enter 6-Digit OTP
+                </label>
+                <input
+                  type="text"
+                  maxLength="6"
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                  className="w-full text-center text-3xl font-bold tracking-[0.5em] py-4 bg-gray-50 border-2 border-gray-100 rounded-xl focus:outline-none focus:border-primary/30 transition-all"
+                  placeholder="••••••"
+                />
+              </div>
+
+              <div className="flex items-center justify-between text-xs font-medium">
+                <span className={otpTimer > 0 ? "text-secondary/40" : "text-red-500"}>
+                  {otpTimer > 0 ? `Expires in ${Math.floor(otpTimer / 60)}:${(otpTimer % 60).toString().padStart(2, '0')}` : "OTP Expired"}
+                </span>
+                <button
+                  onClick={() => { handleWithdrawalRequest(); setOtpCode(''); }}
+                  disabled={otpTimer > 60}
+                  className="text-primary hover:underline disabled:opacity-30"
+                >
+                  Resend Code
+                </button>
+              </div>
+
+              <div className="flex gap-4 pt-2">
+                <button
+                  onClick={() => { setShowOTPModal(false); setOtpCode(''); }}
+                  className="flex-1 py-4 bg-gray-100 text-secondary/60 rounded-xl font-bold text-sm hover:bg-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleVerifyOTP}
+                  disabled={processingWithdrawal || otpCode.length !== 6 || otpTimer === 0}
+                  className="flex-1 py-4 bg-primary text-white rounded-xl font-bold text-sm hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 disabled:shadow-none"
+                >
+                  {processingWithdrawal ? <Spinner className="w-5 h-5 mx-auto" variant="border-white" /> : "Verify & Withdraw"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

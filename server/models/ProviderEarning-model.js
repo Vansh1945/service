@@ -42,6 +42,24 @@ const providerEarningSchema = new Schema({
   isVisibleToProvider: {
     type: Boolean,
     default: true
+  },
+  
+  status: {
+    type: String,
+    enum: ['held', 'available', 'paid', 'withdrawn', 'cancelled', 'under_review', 'pending_release'],
+    default: 'held'
+  },
+  availableAfter: {
+    type: Date,
+    default: null
+  },
+  holdReason: {
+    type: String,
+    default: null
+  },
+  isHeldByAdmin: {
+    type: Boolean,
+    default: false
   }
 }, { timestamps: true });
 
@@ -64,7 +82,9 @@ providerEarningSchema.statics.createFromBooking = async function (bookingDoc) {
     commissionRate: bookingDoc.commissionRule ? bookingDoc.commissionRule.rate : 0,
     commissionAmount: bookingDoc.commissionAmount,
     netAmount: bookingDoc.providerEarnings,
-    isVisibleToProvider: true
+    isVisibleToProvider: true,
+    status: bookingDoc.paymentMethod === 'cash' ? 'paid' : 'held',
+    availableAfter: bookingDoc.payoutHoldUntil
   });
 };
 
@@ -77,6 +97,7 @@ providerEarningSchema.statics.getEarningsSummary = async function (providerId) {
       $match: {
         provider: new mongoose.Types.ObjectId(providerId),
         isVisibleToProvider: true,
+        status: { $ne: 'cancelled' }
       },
     },
     {
@@ -132,7 +153,7 @@ providerEarningSchema.statics.getEarningsSummary = async function (providerId) {
                       },
                     },
                     // No paymentInfo exists: check if more than 7 days passed since booking updatedAt
-                    'paid by online', 
+                    'paid by online',
                   ],
                 },
                 'unknown',
@@ -163,7 +184,8 @@ providerEarningSchema.statics.getAvailableBalance = async function (providerId) 
       $match: {
         provider: new mongoose.Types.ObjectId(providerId),
         isVisibleToProvider: true,
-        paymentRecord: { $exists: false }
+        paymentRecord: { $exists: false },
+        status: { $in: ['available', 'held'] }
       }
     },
     {

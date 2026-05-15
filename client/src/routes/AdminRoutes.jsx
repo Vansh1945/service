@@ -14,6 +14,7 @@ const AdminCoupons = lazy(() => import("../pages/Admin/Coupon"));
 const AdminQuestions = lazy(() => import("../pages/Admin/Question"));
 const AdminServices = lazy(() => import("../pages/Admin/Services"));
 const AdminComplaints = lazy(() => import("../pages/Admin/Complaint"));
+const AdminRefund = lazy(() => import("../pages/Admin/Refund"));
 const AdminServiceFeedback = lazy(() => import("../pages/Admin/Feedback"));
 const AdminReports = lazy(() => import("../pages/Admin/Earning-Reports"));
 const AdminPayout = lazy(() => import("../pages/Admin/Payout"));
@@ -40,6 +41,7 @@ const AdminRoutes = () => {
                     <Route path="add-questions" element={<AdminQuestions />} />
                     <Route path="add-services" element={<AdminServices />} />
                     <Route path="complaints" element={<AdminComplaints />} />
+                    <Route path="refunds" element={<AdminRefund />} />
                     <Route path="feedback" element={<AdminServiceFeedback />} />
                     <Route path="earning-reports" element={<AdminReports />} />
                     <Route path="payout" element={<AdminPayout />} />

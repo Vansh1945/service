@@ -9,7 +9,7 @@ import {
   Calendar, Clock, MapPin, User, Phone, DollarSign, CheckCircle,
   XCircle, AlertCircle, Eye, Search, CreditCard, Star, Package,
   ShoppingCart, Timer, Wrench, Activity, Edit3, ChevronLeft,
-  ChevronRight, X, ChevronDown, ChevronUp
+  ChevronRight, X, ChevronDown, ChevronUp, Wallet, ShieldAlert, Home
 } from 'lucide-react';
 import { cancelBooking, userUpdateBookingDateTime, getCustomerBookings } from '../../services/BookingService';
 import Pagination from '../../components/Pagination';
@@ -56,38 +56,71 @@ const StatusBadge = ({ status }) => {
 // ─── Timeline ─────────────────────────────────────────────────────────────────
 
 const BookingTimeline = ({ booking }) => {
-  const getTs = (key) => booking.statusHistory?.find(h => h.status === key)?.timestamp;
+  const timeline = Array.isArray(booking.timeline) ? booking.timeline : [];
+  
+  if (timeline.length === 0) return null;
 
-  const steps = booking.status === 'cancelled'
-    ? [
-      { key: 'booked', label: 'Booking Placed', icon: ShoppingCart, done: true, time: booking.createdAt, desc: 'Your booking was placed.' },
-      { key: 'cancelled', label: 'Booking Cancelled', icon: XCircle, done: false, active: true, time: getTs('cancelled'), desc: booking.cancellationReason ? `Reason: ${booking.cancellationReason}` : 'Booking was cancelled.' },
-    ]
-    : [
-      { key: 'booked', label: 'Booking Placed', icon: ShoppingCart, done: true, time: booking.createdAt, desc: 'Your booking has been placed.' },
-      { key: 'payment', label: 'Payment', icon: booking.paymentMethod === 'cash' ? DollarSign : CreditCard, done: booking.paymentStatus === 'paid', active: booking.paymentStatus === 'pending' && !booking.confirmedBooking, time: booking.paymentDate || getTs('payment_pending'), desc: booking.paymentStatus === 'paid' ? `${formatCurrency(booking.totalAmount)} paid via ${booking.paymentMethod}` : booking.paymentMethod === 'cash' ? 'Pay after service' : 'Payment pending' },
-      { key: 'assigned', label: 'Provider Assigned', icon: User, done: ['accepted', 'in-progress', 'completed'].includes(booking.status), active: !!(booking.providerDetails || booking.provider) && booking.status === 'pending', time: getTs('accepted') || getTs('assigned'), desc: (booking.providerDetails || booking.provider) ? `${(booking.providerDetails || booking.provider).name} (ID: ${(booking.providerDetails || booking.provider).providerId || 'N/A'}) has been assigned.` : 'Waiting for provider.' },
-      { key: 'in_progress', label: 'Work Started', icon: Wrench, done: ['in-progress', 'completed'].includes(booking.status), active: booking.status === 'in-progress', time: booking.serviceStartedAt || getTs('in-progress'), desc: booking.status === 'in-progress' ? 'Provider has started work.' : 'Work will begin soon.' },
-      { key: 'completed', label: 'Completed', icon: CheckCircle, done: booking.status === 'completed', time: booking.serviceCompletedAt || getTs('completed'), desc: booking.status === 'completed' ? 'Service completed successfully.' : 'Awaiting completion.' },
-    ];
+  const getStepIcon = (title) => {
+    const t = title.toLowerCase();
+    if (t.includes('requested')) return ShoppingCart;
+    if (t.includes('payment')) return CreditCard;
+    if (t.includes('assigned')) return User;
+    if (t.includes('accepted')) return CheckCircle;
+    if (t.includes('way')) return Home;
+    if (t.includes('started')) return Wrench;
+    if (t.includes('completed')) return CheckCircle;
+    if (t.includes('protection') || t.includes('review')) return ShieldAlert;
+    if (t.includes('cancelled')) return XCircle;
+    if (t.includes('dispute') || t.includes('complaint')) return AlertCircle;
+    return Activity;
+  };
 
   return (
-    <div>
-      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Booking Progress</p>
-      <div className="relative pl-4">
-        <div className="absolute left-[34px] top-5 bottom-5 w-px bg-gray-200" />
-        <div className="space-y-4">
-          {steps.map((step) => {
-            const Icon = step.icon;
+    <div className="pt-2 pb-4">
+      <div className="relative">
+        {/* Vertical Line */}
+        <div className="absolute left-[18px] top-6 bottom-6 w-0.5 bg-gray-100" />
+        
+        <div className="space-y-8">
+          {timeline.map((step, idx) => {
+            const Icon = getStepIcon(step.title);
+            const isCompleted = step.status === 'completed';
+            const isCurrent = step.status === 'current';
+            const isError = step.status === 'error';
+
             return (
-              <div key={step.key} className="relative flex items-start gap-3">
-                <div className={`relative z-10 w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${step.done ? 'bg-primary text-white shadow-sm' : step.active ? 'bg-accent text-white animate-pulse' : 'bg-gray-100 text-gray-400'}`}>
+              <div key={idx} className="relative flex items-start group">
+                {/* Icon Container */}
+                <div className={`relative z-20 w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-all duration-300 ${
+                  isCompleted 
+                    ? 'bg-emerald-500 text-white shadow-md shadow-emerald-100' 
+                    : isCurrent 
+                      ? 'bg-orange-500 text-white animate-pulse shadow-md shadow-orange-100' 
+                      : isError
+                        ? 'bg-red-500 text-white shadow-md shadow-red-100'
+                        : 'bg-white border-2 border-gray-100 text-gray-300'
+                }`}>
                   <Icon className="w-4 h-4" />
                 </div>
-                <div className="pt-1.5 min-w-0">
-                  <p className={`text-sm font-semibold leading-none ${step.done ? 'text-primary' : step.active ? 'text-accent' : 'text-gray-400'}`}>{step.label}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{step.desc}</p>
-                  {step.time && <p className="text-[11px] text-gray-400 mt-1">{formatDateTime(step.time)}</p>}
+                
+                {/* Content */}
+                <div className="ml-4 pt-1 min-w-0">
+                  <h4 className={`text-sm font-bold leading-none mb-1.5 transition-colors ${
+                    isCompleted ? 'text-secondary font-black' : isCurrent ? 'text-orange-600 font-black' : isError ? 'text-red-600 font-black' : 'text-gray-400'
+                  }`}>
+                    {step.title}
+                  </h4>
+                  {step.time && (
+                    <div className="flex items-center gap-1.5 text-[10px] font-medium text-gray-400 mt-1">
+                      <Clock className="w-3 h-3" />
+                      {formatDateTime(step.time)}
+                    </div>
+                  )}
+                  {isCurrent && (
+                    <span className="inline-block mt-1 px-2 py-0.5 bg-orange-50 text-orange-600 text-[10px] font-bold rounded-full border border-orange-100 animate-pulse">
+                      In Progress
+                    </span>
+                  )}
                 </div>
               </div>
             );
@@ -97,6 +130,7 @@ const BookingTimeline = ({ booking }) => {
     </div>
   );
 };
+
 
 // ─── Provider Card ────────────────────────────────────────────────────────────
 
@@ -181,6 +215,9 @@ const PaymentDetails = ({ booking }) => (
         ['Subtotal', formatCurrency(booking.subtotal || 0)],
         ...(booking.totalDiscount > 0 ? [['Discount', <span className="text-emerald-600">-{formatCurrency(booking.totalDiscount)}</span>]] : []),
         ...(booking.couponApplied?.isValid ? [['Coupon', <span className="text-blue-600">{booking.couponApplied.code}</span>]] : []),
+        ...(booking.paymentStatus === 'refunded' ? [['Refund Status', <span className="text-purple-600 font-black flex items-center gap-1"><Wallet className="w-3 h-3"/> Refunded</span>]] : []),
+        ...(booking.fullData?.walletAmountUsed > 0 ? [['Wallet Used', <span className="text-purple-600 font-bold">-{formatCurrency(booking.fullData.walletAmountUsed)}</span>]] : []),
+        ...(booking.fullData?.onlineAmountPaid > 0 ? [['Paid Online', <span className="text-blue-600 font-bold">{formatCurrency(booking.fullData.onlineAmountPaid)}</span>]] : []),
       ].map(([label, val]) => (
         <div key={label} className="flex justify-between items-center">
           <span className="text-gray-500">{label}</span>
@@ -188,17 +225,40 @@ const PaymentDetails = ({ booking }) => (
         </div>
       ))}
       <div className="border-t border-gray-200 pt-2 mt-1 flex justify-between font-bold text-secondary">
-        <span>Total</span>
+        <span>Total Payable</span>
         <span>{formatCurrency(booking.totalAmount || 0)}</span>
       </div>
     </div>
+    
+    {/* Payout Hold Info for Transparency */}
+    {booking.timeline?.payoutHoldUntil && booking.status === 'completed' && (
+      <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-xl">
+        <div className="flex justify-between items-center text-[10px] mb-1.5">
+          <span className="text-blue-700 font-bold uppercase tracking-wider">Review Protection</span>
+          <span className={`px-2 py-0.5 rounded-full font-bold ${new Date(booking.timeline.payoutHoldUntil) > new Date() ? 'bg-orange-100 text-orange-600' : 'bg-green-100 text-green-600'}`}>
+            {new Date(booking.timeline.payoutHoldUntil) > new Date() ? 'ACTIVE' : 'COMPLETED'}
+          </span>
+        </div>
+        <p className="text-xs text-blue-700 font-medium">
+          {new Date(booking.timeline.payoutHoldUntil) > new Date() 
+            ? "Service under 48-hour review protection" 
+            : "Review period completed"}
+        </p>
+        <p className="text-[10px] text-blue-500 mt-1 italic">
+          {new Date(booking.timeline.payoutHoldUntil) > new Date() 
+            ? `Protection valid until: ${formatDateTime(booking.timeline.payoutHoldUntil)}`
+            : `Protection ended at: ${formatDateTime(booking.timeline.payoutHoldUntil)}`}
+        </p>
+      </div>
+    )}
+
     {booking.transactionId && (
       <div className="mt-3 pt-3 border-t border-gray-200 space-y-1.5">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Transaction</p>
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Transaction Info</p>
         {[
           ['Txn ID', booking.transactionId],
           ...(booking.razorpayPaymentId ? [['Payment ID', booking.razorpayPaymentId]] : []),
-          ...(booking.paymentDate ? [['Paid On', new Date(booking.paymentDate).toLocaleString()]] : []),
+          ...(booking.paymentDate ? [['Date', new Date(booking.paymentDate).toLocaleString()]] : []),
         ].map(([label, val]) => (
           <div key={label} className="flex justify-between text-xs">
             <span className="text-gray-500">{label}</span>
@@ -246,11 +306,16 @@ const AddressBlock = ({ address, phone }) => {
   const parts = [address.street, address.city, address.state, address.postalCode].filter(Boolean).join(', ');
   return (
     <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-        <MapPin className="w-3.5 h-3.5" /> Service Address
+      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+        <Home className="w-3.5 h-3.5 text-primary" /> Service Address
       </p>
-      <p className="text-sm text-gray-700">{parts}</p>
-      {phone && <p className="text-sm text-gray-600 mt-1">📞 {phone}</p>}
+      <p className="text-sm text-gray-700 font-medium">{parts}</p>
+      {phone && (
+        <div className="flex items-center gap-2 mt-2 text-gray-600">
+          <Phone className="w-3.5 h-3.5 text-gray-400" />
+          <p className="text-sm font-medium">{phone}</p>
+        </div>
+      )}
     </div>
   );
 };
@@ -258,18 +323,20 @@ const AddressBlock = ({ address, phone }) => {
 // ─── Modal ────────────────────────────────────────────────────────────────────
 
 const BookingModal = ({ booking, onClose, onPayNow, user }) => {
+  const [previewImage, setPreviewImage] = useState(null);
   const provider = booking.provider || booking.providerDetails;
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-fade-in" onClick={onClose}>
       <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl animate-scale-up" onClick={e => e.stopPropagation()}>
         {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 rounded-t-2xl z-10">
+        <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 rounded-t-2xl z-30">
           <div className="flex justify-between items-start gap-4">
             <div>
-              <h2 className="text-lg font-bold text-secondary">{booking.services?.[0]?.service?.title || 'Booking Details'}</h2>
-              <p className="text-xs text-gray-500">ID: {booking.bookingId || `#${booking._id?.slice(-8).toUpperCase()}`}</p>
+              <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-1">Booking Detail</p>
+              <h2 className="text-lg font-bold text-secondary leading-tight">{booking.services?.[0]?.service?.title || 'Booking Details'}</h2>
+              <p className="text-[10px] font-medium text-gray-400 mt-1">ID: {booking.bookingId || `#${booking._id?.slice(-8).toUpperCase()}`}</p>
             </div>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-lg hover:bg-gray-100">
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors p-2 rounded-xl hover:bg-gray-100">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -278,12 +345,142 @@ const BookingModal = ({ booking, onClose, onPayNow, user }) => {
         {/* Body */}
         <div className="p-6 space-y-5">
           <BookingTimeline booking={booking} />
+
+          {/* Dispute & Refund Info */}
+          {(booking.disputeRaised || booking.paymentStatus === 'refunded' || booking.adminRefundDecision) && (
+            <div className="bg-red-50 rounded-xl p-4 border border-red-100">
+              <p className="text-xs font-semibold text-red-600 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <ShieldAlert className="w-3.5 h-3.5" /> Dispute & Refund Details
+              </p>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between items-center">
+                  <span className="text-red-700">Dispute Status</span>
+                  <span className="font-medium text-red-800 capitalize">{booking.disputeStatus?.replace('_', ' ') || 'Under Review'}</span>
+                </div>
+                {booking.adminRefundDecision && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-red-700">Admin Decision</span>
+                    <span className="font-medium text-red-800 capitalize">{booking.adminRefundDecision}</span>
+                  </div>
+                )}
+                {booking.paymentStatus === 'refunded' && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-red-700">Refund Status</span>
+                    <span className="font-medium text-purple-600 font-bold flex items-center gap-1"><Wallet className="w-4 h-4"/> Refunded to Wallet</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           <ServiceDetails services={booking.services} />
           <PaymentDetails booking={booking} />
+
           <div className="grid sm:grid-cols-2 gap-4">
             <AddressBlock address={booking.address} phone={user?.phone} />
             {provider && ['accepted', 'in_progress', 'in-progress', 'completed'].includes(booking.status) && (
               <ProviderCard provider={provider} status={booking.status} />
+            )}
+          </div>
+
+          {/* Photo Proofs Section */}
+          <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+              <Activity className="w-3.5 h-3.5" /> Work Proofs & Photos
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Before Work Column */}
+              <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                <div className="flex justify-between items-center mb-3">
+                  <p className="text-[10px] font-black text-secondary/40 uppercase tracking-widest">Before Service</p>
+                  {booking.providerWorkProof?.startLocation && (
+                    <div className="text-[10px] font-bold text-primary flex items-center gap-1 bg-primary/5 px-2 py-0.5 rounded-full">
+                      <MapPin className="w-3 h-3" /> Location Verified
+                    </div>
+                  )}
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {booking.providerWorkProof?.beforeImages?.length > 0 ? (
+                    booking.providerWorkProof.beforeImages.map((img, idx) => (
+                      <div key={idx} onClick={() => setPreviewImage(img.url)} className="relative aspect-square rounded-lg overflow-hidden border border-gray-100 hover:border-primary transition-all cursor-pointer group">
+                        <img src={img.url} alt="Before" className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <Eye className="w-4 h-4 text-white" />
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="col-span-3 py-6 text-center border border-dashed border-gray-100 rounded-lg">
+                      <p className="text-[10px] text-gray-400 italic">No before-work photos</p>
+                    </div>
+                  )}
+                </div>
+                {booking.serviceStartedAt && (
+                  <p className="text-[9px] text-gray-400 mt-2 flex items-center gap-1 font-medium">
+                    <Clock className="w-2.5 h-2.5" /> {new Date(booking.serviceStartedAt).toLocaleString()}
+                  </p>
+                )}
+              </div>
+
+              {/* After Work Column */}
+              <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                <div className="flex justify-between items-center mb-3">
+                  <p className="text-[10px] font-black text-secondary/40 uppercase tracking-widest">After Service</p>
+                  {booking.providerWorkProof?.completionLocation && (
+                    <div className="text-[10px] font-bold text-emerald-600 flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded-full">
+                      <MapPin className="w-3 h-3" /> Location Verified
+                    </div>
+                  )}
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {booking.providerWorkProof?.afterImages?.length > 0 ? (
+                    booking.providerWorkProof.afterImages.map((img, idx) => (
+                      <div key={idx} onClick={() => setPreviewImage(img.url)} className="relative aspect-square rounded-lg overflow-hidden border border-gray-100 hover:border-emerald-500 transition-all cursor-pointer group">
+                        <img src={img.url} alt="After" className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-emerald-500/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <CheckSquare className="w-4 h-4 text-white" />
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="col-span-3 py-6 text-center border border-dashed border-gray-100 rounded-lg">
+                      <p className="text-[10px] text-gray-400 italic">No completion photos</p>
+                    </div>
+                  )}
+                </div>
+                {booking.serviceCompletedAt && (
+                  <p className="text-[9px] text-emerald-600 font-bold mt-2 flex items-center gap-1">
+                    <CheckSquare className="w-2.5 h-2.5" /> {new Date(booking.serviceCompletedAt).toLocaleString()}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Complaint Proofs */}
+            {booking.complaintProofs?.length > 0 && (
+              <div className="mt-4 bg-white p-3 rounded-lg border border-gray-200">
+                <p className="text-[10px] font-bold text-gray-400 uppercase mb-2">Complaint & Support Photos</p>
+                <div className="space-y-3">
+                  {booking.complaintProofs.map((proof, pIdx) => (
+                    <div key={pIdx} className="border-b border-gray-50 last:border-0 pb-2 last:pb-0">
+                      <div className="flex justify-between items-center mb-1">
+                        <span className={`text-[10px] font-bold uppercase ${proof.uploadedBy === 'customer' ? 'text-blue-600' : 'text-primary'}`}>
+                          {proof.uploadedBy}
+                        </span>
+                        <span className="text-[10px] text-gray-400">{new Date(proof.createdAt).toLocaleString()}</span>
+                      </div>
+                      <p className="text-xs text-gray-600 mb-2">{proof.message}</p>
+                      <div className="flex flex-wrap gap-2">
+                        {proof.images?.map((img, iIdx) => (
+                          <div key={iIdx} onClick={() => setPreviewImage(img.url)} className="w-10 h-10 rounded-md overflow-hidden border border-gray-100 hover:border-primary transition-colors cursor-pointer">
+                            <img src={img.url} alt="Proof" className="w-full h-full object-cover" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         </div>
@@ -300,6 +497,16 @@ const BookingModal = ({ booking, onClose, onPayNow, user }) => {
           )}
         </div>
       </div>
+
+      {/* Image Preview Gallery Modal */}
+      {previewImage && (
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[99999]" onClick={(e) => { e.stopPropagation(); setPreviewImage(null); }}>
+          <button className="absolute top-4 right-4 p-2 text-white/70 hover:text-white bg-black/50 hover:bg-black/80 rounded-full transition-all" onClick={(e) => { e.stopPropagation(); setPreviewImage(null); }}>
+            <X className="w-6 h-6" />
+          </button>
+          <img src={previewImage} className="max-w-[95vw] max-h-[90vh] object-contain rounded-lg shadow-2xl" alt="Preview" onClick={e => e.stopPropagation()} />
+        </div>
+      )}
     </div>
   );
 };
@@ -351,28 +558,36 @@ const RescheduleModal = ({ booking, onClose, onConfirm }) => {
 
 // ─── Cancel Modal ─────────────────────────────────────────────────────────────
 
-const CancelModal = ({ booking, onClose, onConfirm }) => (
-  <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-    <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl animate-scale-up">
-      <div className="px-6 py-4 border-b border-gray-100">
-        <h2 className="text-lg font-bold text-secondary">Cancel Booking?</h2>
-      </div>
-      <div className="p-6">
-        <div className="flex items-start gap-3 p-4 bg-red-50 rounded-xl border border-red-100">
-          <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-semibold text-red-700">This action cannot be undone</p>
-            <p className="text-xs text-red-600 mt-1">Any payment made will be processed per our refund policy.</p>
+const CancelModal = ({ booking, onClose, onConfirm }) => {
+  const isStarted = !!booking?.serviceStartedAt;
+  
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl animate-scale-up">
+        <div className="px-6 py-4 border-b border-gray-100">
+          <h2 className="text-lg font-bold text-secondary">Cancel Booking?</h2>
+        </div>
+        <div className="p-6">
+          <div className="flex items-start gap-3 p-4 bg-red-50 rounded-xl border border-red-100">
+            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-red-700">This action cannot be undone</p>
+              {isStarted ? (
+                <p className="text-xs text-red-600 mt-1">Service has already started. Cancellation requires admin review and may be treated as a dispute.</p>
+              ) : (
+                <p className="text-xs text-red-600 mt-1">Any valid refund will be added directly to your wallet.</p>
+              )}
+            </div>
           </div>
         </div>
-      </div>
-      <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
-        <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors">Keep Booking</button>
-        <button onClick={onConfirm} className="px-4 py-2 text-sm font-bold text-white bg-red-500 rounded-xl hover:bg-red-600 transition-all">Yes, Cancel</button>
+        <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors">Keep Booking</button>
+          <button onClick={onConfirm} className="px-4 py-2 text-sm font-bold text-white bg-red-500 rounded-xl hover:bg-red-600 transition-all">Yes, Cancel</button>
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 // ─── Booking Card ─────────────────────────────────────────────────────────────
 
@@ -421,6 +636,19 @@ const BookingCard = ({ booking, onView, onPayNow, onReschedule, onCancel, onCall
                 <Clock className="w-3.5 h-3.5" /> {booking.time || 'Not set'}
               </div>
               <StatusBadge status={booking.status} />
+              
+              {/* Badges for Refund/Dispute */}
+              {booking.paymentStatus === 'refunded' && (
+                <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                  <Wallet className="w-3 h-3" /> Refunded
+                </span>
+              )}
+              {booking.disputeRaised && !booking.adminRefundDecision && (
+                <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full bg-orange-50 text-orange-700 border border-orange-200">
+                  <ShieldAlert className="w-3 h-3" /> Under Review
+                </span>
+              )}
+
               {needsPayment(booking) && (
                 <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full bg-orange-50 text-orange-600 border border-orange-200 animate-pulse">
                   <AlertCircle className="w-3 h-3" /> Payment Due
@@ -681,29 +909,38 @@ const CustomerBookingsPage = () => {
             )}
           </div>
         ) : (
-          <div className="space-y-4">
-            {bookings.map(booking => (
-              <BookingCard
-                key={booking._id}
-                booking={booking}
-                onView={fetchBookingDetails}
-                onPayNow={handlePayNow}
-                onReschedule={b => { setBookingToReschedule(b); setShowRescheduleModal(true); }}
-                onCancel={b => { setBookingToCancel(b); setShowCancelModal(true); }}
-                onCall={phone => { if (phone) window.location.href = `tel:${phone}`; else showToast('Phone not available', 'warning'); }}
-              />
-            ))}
+          <div className="space-y-6">
+            <div className="space-y-4">
+              {bookings.map(booking => (
+                <BookingCard
+                  key={booking._id}
+                  booking={booking}
+                  onView={fetchBookingDetails}
+                  onPayNow={handlePayNow}
+                  onReschedule={b => { setBookingToReschedule(b); setShowRescheduleModal(true); }}
+                  onCancel={b => { setBookingToCancel(b); setShowCancelModal(true); }}
+                  onCall={phone => { if (phone) window.location.href = `tel:${phone}`; else showToast('Phone not available', 'warning'); }}
+                />
+              ))}
+            </div>
+
+            {/* Pagination Implementation */}
+            {pagination.totalPages > 1 && (
+              <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={pagination.totalPages}
+                  totalItems={pagination.totalBookings || bookings.length}
+                  limit={20}
+                  onPageChange={(page) => {
+                    setCurrentPage(page);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                />
+              </div>
+            )}
           </div>
         )}
-
-        {/* Pagination */}
-        <Pagination
-          currentPage={currentPage}
-          totalPages={pagination.totalPages}
-          totalItems={pagination.totalBookings || bookings.length}
-          limit={20}
-          onPageChange={(page) => setCurrentPage(page)}
-        />
       </div>
 
       {/* Modals */}

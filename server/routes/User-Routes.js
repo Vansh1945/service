@@ -5,7 +5,8 @@ const {
     getProfile,
     updateProfile,
     uploadProfilePicture,
-    getCustomerDashboardStats
+    getCustomerDashboardStats,
+    getWalletHistory
 } = require('../controllers/User-controller');
 const { userAuthMiddleware } = require('../middlewares/User-middleware');
 const { roleMiddleware } = require('../middlewares/Role-Middleware');
@@ -26,5 +27,6 @@ router.post('/profile-picture',
 );
 
 router.get('/dashboard', userAuthMiddleware, requireCustomer, getCustomerDashboardStats);
+router.get('/wallet/history', userAuthMiddleware, requireCustomer, getWalletHistory);
 
 module.exports = router;

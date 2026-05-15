@@ -17,6 +17,10 @@ export const handleWebhook = (data) => {
     return axiosInstance.post("/transaction/webhook", data);
 };
 
+export const getCustomerTransactions = () => {
+    return axiosInstance.get("/transaction/customer/all");
+};
+
 // Admin Routes
 export const getAllTransactions = (params) => {
     return axiosInstance.get("/transaction/admin/all", { params });

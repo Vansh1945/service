@@ -61,16 +61,22 @@ export const acceptBooking = (id) => {
     return axiosInstance.patch(`/booking/provider/${id}/accept`);
 };
 
-export const startBooking = (id) => {
-    return axiosInstance.patch(`/booking/provider/${id}/start`);
+export const startBooking = (id, data, config = {}) => {
+    return axiosInstance.patch(`/booking/provider/${id}/start`, data, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        ...config
+    });
 };
 
 export const rejectBooking = (id) => {
     return axiosInstance.patch(`/booking/provider/${id}/reject`);
 };
 
-export const completeBooking = (id) => {
-    return axiosInstance.patch(`/booking/provider/${id}/complete`);
+export const completeBooking = (id, data, config = {}) => {
+    return axiosInstance.patch(`/booking/provider/${id}/complete`, data, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        ...config
+    });
 };
 
 export const providerBookingReport = (params, config) => {

@@ -789,6 +789,24 @@ const getDashboardStats = async (req, res) => {
         const totalWithdrawals = withdrawalStats[0]?.totalWithdrawals || 0;
         const withdrawalCount = withdrawalStats[0]?.withdrawalCount || 0;
 
+        // Get dispute analytics
+        const disputeStats = await Booking.aggregate([
+            { $match: { disputeRaised: true } },
+            {
+                $group: {
+                    _id: '$disputeStatus',
+                    count: { $sum: 1 }
+                }
+            }
+        ]);
+
+        const totalDisputes = await Booking.countDocuments({ disputeRaised: true });
+        const totalRefundsCount = await Booking.countDocuments({ paymentStatus: 'refunded' });
+        const heldPayoutsStats = await ProviderEarning.aggregate([
+            { $match: { status: 'held' } },
+            { $group: { _id: null, totalHeld: { $sum: '$netAmount' }, count: { $sum: 1 } } }
+        ]);
+
         const dashboardStats = {
             overview: {
                 totalUsers,
@@ -801,9 +819,14 @@ const getDashboardStats = async (req, res) => {
                 pendingProviders,
                 totalRevenue,
                 totalWithdrawals,
-                withdrawalCount
+                withdrawalCount,
+                totalDisputes,
+                totalRefundsCount,
+                totalHeldPayouts: heldPayoutsStats[0]?.totalHeld || 0,
+                heldPayoutsCount: heldPayoutsStats[0]?.count || 0
             },
-            paymentMethods: paymentMethodStats
+            paymentMethods: paymentMethodStats,
+            disputes: disputeStats
         };
 
         res.json({
@@ -1120,6 +1143,15 @@ const getDashboardSummary = async (req, res) => {
         ]);
         const pendingPayoutAmount = pendingPayoutResult[0]?.total || 0;
 
+        // Total refunded bookings
+        const totalRefunded = await Booking.countDocuments({ ...bookingMatchConditions, paymentStatus: 'refunded' });
+
+        // Total held payouts count
+        const totalHeldPayouts = await ProviderEarning.countDocuments({ status: 'held' });
+
+        // Duplicate payment attempts (if any failed transaction with same booking exists)
+        const duplicateAttempts = await Transaction.countDocuments({ paymentStatus: 'failed', description: /duplicate/i });
+
         res.status(200).json({
             success: true,
             data: {
@@ -1131,7 +1163,11 @@ const getDashboardSummary = async (req, res) => {
                 totalProviders,
                 todayRevenue,
                 monthlyRevenue,
-                pendingPayoutAmount
+                pendingPayoutAmount,
+                totalDisputes,
+                totalRefunded,
+                totalHeldPayouts,
+                duplicateAttempts
             }
         });
 
@@ -1719,7 +1755,7 @@ const getDashboardAnalytics = async (req, res) => {
                         { $match: { status: 'completed' } },
                         {
                             $group: {
-                                _id: { 
+                                _id: {
                                     $cond: {
                                         if: { $in: [period, ['90d', '180d', '365d']] },
                                         then: { $dateToString: { format: "%Y-%m", date: "$createdAt" } },
@@ -1882,6 +1918,365 @@ const getDashboardAnalytics = async (req, res) => {
 };
 
 
+// Admin - Refund Management
+
+// 1. Process Refund (Full or Partial)
+const processAdminRefund = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const { bookingId } = req.params;
+        const { amount, reason, type } = req.body; // type: 'full' or 'partial'
+
+        const booking = await Booking.findById(bookingId).populate('complaint').session(session);
+        if (!booking) {
+            throw new Error('Booking not found');
+        }
+
+        // --- CRITICAL CHECKS ---
+        if (booking.paymentStatus === 'refunded') {
+            throw new Error('Booking already fully refunded');
+        }
+
+        if (booking.adminRefundDecision === 'approved') {
+            throw new Error('Refund already approved for this booking');
+        }
+
+        if (booking.complaint && booking.complaint.status === 'Closed') {
+            throw new Error('Complaint is already closed');
+        }
+
+        // --- NEW STRICT EARNING STATUS CHECKS ---
+        let earning = await ProviderEarning.findOne({ booking: booking._id }).session(session);
+        if (earning) {
+            if (earning.status === 'available' || earning.status === 'withdrawn' || earning.status === 'paid') {
+                throw new Error(`Refund cannot be processed automatically because the payout is already ${earning.status}. Please handle this manually.`);
+            }
+            if (earning.status !== 'held' && earning.status !== 'under_review' && earning.status !== 'pending_release') {
+                throw new Error(`Refund is only allowed when earning status is "held". Current status: ${earning.status}`);
+            }
+        }
+
+        const previouslyRefunded = booking.cancellationProgress?.refundAmount || 0;
+        const remainingRefundable = booking.totalAmount - previouslyRefunded;
+
+        const refundAmount = type === 'full' ? remainingRefundable : amount;
+
+        if (!refundAmount || refundAmount <= 0) {
+            throw new Error('Invalid refund amount or no remaining amount to refund.');
+        }
+
+        if (refundAmount > remainingRefundable) {
+            throw new Error(`Refund amount exceeds remaining refundable amount (₹${remainingRefundable})`);
+        }
+
+        // Lock transaction to prevent double refund
+        const transaction = await Transaction.findOneAndUpdate(
+            { booking: booking._id, paymentStatus: { $in: ['completed', 'paid', 'success'] }, refundStatus: { $ne: 'completed' } },
+            { refundStatus: 'processing' },
+            { session, new: true }
+        );
+
+        if (!transaction) {
+            console.warn(`[Refund Engine] Duplicate or invalid refund attempt for transaction of booking ${booking._id}`);
+            throw new Error('Transaction already refunded or not found.');
+        }
+
+        // Update User wallet
+        const user = await User.findById(booking.customer).session(session);
+        if (!user.wallet) {
+            user.wallet = { availableBalance: 0, totalRefunded: 0, lastUpdated: new Date() };
+        }
+
+        // Create Transaction record for audit
+        const refundTransaction = new Transaction({
+            booking: booking._id,
+            bookingId: booking.bookingId || booking._id,
+            user: booking.customer,
+            amount: refundAmount,
+            paymentStatus: 'completed',
+            paymentMethod: 'wallet',
+            type: 'refund',
+            description: `Admin approved ${type} refund for booking #${booking.bookingId || booking._id}. Reason: ${reason || 'Not specified'}`,
+            refundReason: reason || `Admin approved ${type} refund`
+        });
+        await refundTransaction.save({ session });
+
+        // Update Wallet
+        user.wallet.availableBalance += refundAmount;
+        user.wallet.totalRefunded += refundAmount;
+        user.wallet.walletTransactions.push({
+          type: 'credit',
+          amount: refundAmount,
+          reason: 'Booking Refund',
+          booking: booking._id
+        });
+        user.wallet.lastUpdated = new Date();
+        await user.save({ session });
+
+        // --- SYNCHRONIZED UPDATES ---
+        const newTotalRefunded = previouslyRefunded + refundAmount;
+        const isFullyRefunded = newTotalRefunded >= booking.totalAmount || type === 'full';
+
+        // 1. Update Booking
+        booking.paymentStatus = isFullyRefunded ? 'refunded' : booking.paymentStatus;
+        booking.disputeStatus = isFullyRefunded ? 'refund_approved' : 'under_review'; // Sync with new enum
+        booking.adminRefundDecision = isFullyRefunded ? 'approved' : 'partial';
+        booking.cancellationProgress.status = 'refund_completed';
+        booking.cancellationProgress.refundAmount = newTotalRefunded;
+        booking.cancellationProgress.refundCompletedAt = new Date();
+        booking.adminRemark = reason || `Admin approved ${type} refund`;
+
+        // 2. Update Status History
+        booking.statusHistory.push({
+            status: booking.status,
+            note: `Refund Approved: ₹${refundAmount} (${type} refund). Reason: ${reason || 'Not specified'}`,
+            updatedBy: 'admin',
+            timestamp: new Date()
+        });
+
+        if (isFullyRefunded) {
+            booking.statusHistory.push({
+                status: booking.status,
+                note: `Refund Lock: Booking fully refunded and synchronized.`,
+                updatedBy: 'system',
+                timestamp: new Date()
+            });
+        }
+
+        // 3. Auto-Close Linked Complaint
+        if (booking.complaint) {
+            const Complaint = mongoose.model('Complaint');
+            await Complaint.findByIdAndUpdate(booking.complaint._id, {
+                status: 'Closed',
+                resolutionNotes: `Refund processed successfully. Amount: ₹${refundAmount}. Note: ${reason || 'Admin Approved'}`,
+                resolvedAt: new Date(),
+                $push: {
+                    statusHistory: [
+                        { status: 'Solved', updatedAt: new Date() },
+                        { status: 'Closed', updatedAt: new Date() }
+                    ]
+                }
+            }, { session });
+        }
+
+        await booking.save({ session });
+
+        // 4. Finalize Transaction
+        transaction.refundStatus = isFullyRefunded ? 'completed' : 'partial';
+        transaction.refundReason = reason || `Admin ${type} refund`;
+        transaction.refundedAt = new Date();
+        if (isFullyRefunded) transaction.paymentStatus = 'refunded';
+        transaction.refundedAmount = newTotalRefunded;
+        await transaction.save({ session });
+
+        // 5. Proper Financial Recovery (Synchronized)
+        earning = await ProviderEarning.findOne({ booking: booking._id }).session(session);
+        let recoveryStatus = 'not_required';
+        let recoveredAmount = 0;
+        let totalToRecover = 0;
+
+        if (earning) {
+            totalToRecover = earning.netAmount;
+            
+            if (['held', 'available'].includes(earning.status)) {
+                // CASE 1: Earning not yet paid out
+                earning.status = 'cancelled';
+                recoveryStatus = 'cancelled_held';
+                recoveredAmount = earning.netAmount;
+                await earning.save({ session });
+            } else if (['paid', 'withdrawn'].includes(earning.status)) {
+                // CASE 2: Payout already transferred
+                const provider = await Provider.findById(booking.provider).session(session);
+                if (provider && provider.wallet) {
+                    // Proper deduction from provider wallet
+                    const available = provider.wallet.availableBalance || 0;
+                    // Deduct up to available balance (avoid negative as requested)
+                    const canDeduct = Math.min(available, totalToRecover);
+                    
+                    if (canDeduct > 0) {
+                        provider.wallet.availableBalance -= canDeduct;
+                        provider.wallet.lastUpdated = new Date();
+                        await provider.save({ session });
+                        
+                        recoveredAmount = canDeduct;
+                        recoveryStatus = recoveredAmount >= totalToRecover ? 'fully_recovered' : 'partially_recovered';
+                    } else {
+                        recoveryStatus = 'pending_recovery';
+                    }
+                    
+                    // Mark earning as cancelled and record recovery details
+                    earning.status = 'cancelled';
+                    await earning.save({ session });
+                }
+            }
+        }
+
+        // Save financial recovery logs in booking
+        booking.adminRemark = (booking.adminRemark || '') + 
+            ` | Recovery: ${recoveryStatus} (₹${recoveredAmount}/₹${totalToRecover} recovered from provider)`;
+        
+        await booking.save({ session });
+
+        await session.commitTransaction();
+        session.endSession();
+
+        // --- NOTIFICATIONS ---
+        // Notify Customer
+        try {
+            sendNotification(
+                booking.customer,
+                'customer',
+                'Refund Credited 💰',
+                `A refund of ₹${refundAmount} has been credited to your wallet for booking #${booking.bookingId || booking._id}.`,
+                'refund_processed',
+                booking._id
+            );
+        } catch (err) { }
+
+        // Notify Provider
+        if (booking.provider) {
+            try {
+                const message = recoveryStatus === 'cancelled_held' 
+                    ? `A refund of ₹${refundAmount} was approved. Your held earning of ₹${totalToRecover} has been cancelled.`
+                    : `A refund was approved. ₹${recoveredAmount} has been adjusted from your wallet balance.`;
+                
+                sendNotification(
+                    booking.provider,
+                    'provider',
+                    'Refund Deduction Notice 📉',
+                    message,
+                    'refund_deducted',
+                    booking._id
+                );
+            } catch (err) { }
+        }
+
+        // Notify Admin (System Audit/Log)
+        try {
+            sendNotification(
+                null, // System or all admins
+                'admin',
+                'Refund Completed Successfully ✅',
+                `Refund for booking #${booking.bookingId || booking._id} was successfully processed by Admin.`,
+                'admin_refund_success',
+                booking._id
+            );
+        } catch (err) { }
+
+        res.json({
+            success: true,
+            message: `Refund of ₹${refundAmount} processed successfully. Booking and Complaint synchronized.`,
+            data: { refundAmount, bookingId: booking._id }
+        });
+
+    } catch (error) {
+        if (session.inTransaction()) {
+            await session.abortTransaction();
+        }
+        session.endSession();
+        console.error('Process refund error:', error);
+        res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+// 2. Reject Refund Request
+const rejectAdminRefund = async (req, res) => {
+    try {
+        const { bookingId } = req.params;
+        const { reason } = req.body;
+
+        const booking = await Booking.findById(bookingId);
+        if (!booking) {
+            return res.status(404).json({ success: false, message: 'Booking not found' });
+        }
+
+        booking.disputeStatus = 'refund_rejected';
+        booking.adminRefundDecision = 'rejected';
+        booking.adminRemark = reason || 'Admin rejected refund request';
+
+        // Add to status history
+        booking.statusHistory.push({
+            status: 'rejected',
+            note: `Admin rejected refund request. Reason: ${reason || 'Not specified'}`,
+            updatedBy: 'admin',
+            timestamp: new Date()
+        });
+
+        // Notify customer
+        try {
+            sendNotification(
+                booking.customer,
+                'customer',
+                'Refund Rejected',
+                `Your refund request for booking ${booking.bookingId || booking._id} was rejected. Reason: ${booking.adminRemark}`,
+                'refund_rejected',
+                booking._id
+            );
+        } catch (err) { }
+
+        // Notify provider
+        if (booking.provider) {
+            try {
+                sendNotification(
+                    booking.provider,
+                    'provider',
+                    'Dispute Rejected ✅',
+                    `The dispute for booking #${booking.bookingId || booking._id} has been rejected. Your payout status will be updated soon.`,
+                    'dispute_rejected',
+                    booking._id
+                );
+            } catch (err) { }
+        }
+
+        res.json({
+            success: true,
+            message: 'Refund request rejected.',
+            data: { bookingId: booking._id }
+        });
+
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+
+
+
+// 4. Toggle Payout Hold
+const togglePayoutHold = async (req, res) => {
+    try {
+        const { bookingId } = req.params;
+        const { status, reason } = req.body; // 'held' or 'available'
+
+        const ProviderEarning = mongoose.model('ProviderEarning');
+        const earning = await ProviderEarning.findOneAndUpdate(
+            { booking: bookingId },
+            { 
+                status: status,
+                isHeldByAdmin: status === 'held',
+                holdReason: status === 'held' ? (reason || 'Held by administrator') : null
+            },
+            { new: true }
+        );
+
+        if (!earning) {
+            return res.status(404).json({ success: false, message: 'Earning record not found' });
+        }
+
+        res.json({
+            success: true,
+            message: `Payout status updated to ${status}`,
+            data: earning
+        });
+    } catch (error) {
+        console.error('Toggle payout hold error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+
 module.exports = {
     registerAdmin,
     getAdminProfile,
@@ -1902,6 +2297,9 @@ module.exports = {
     getDashboardPendingActions,
     getDashboardLiveStats,
     getDashboardRecentActivity,
-    getDashboardAnalytics
+    getDashboardAnalytics,
+    processAdminRefund,
+    rejectAdminRefund,
+    togglePayoutHold
 };
 

@@ -79,3 +79,17 @@ export const getDashboardRecentActivity = (params) => {
 export const getDashboardAnalytics = (params) => {
     return axiosInstance.get("/admin/dashboard/analytics", { params });
 };
+
+// Dispute & Refund Management
+export const processRefund = (bookingId, data) => {
+    return axiosInstance.post(`/admin/refund/${bookingId}/process`, data);
+};
+
+export const rejectRefund = (bookingId, data) => {
+    return axiosInstance.post(`/admin/refund/${bookingId}/reject`, data);
+};
+
+
+export const togglePayoutHold = (bookingId, data) => {
+    return axiosInstance.patch(`/admin/payout/${bookingId}/hold`, data);
+};

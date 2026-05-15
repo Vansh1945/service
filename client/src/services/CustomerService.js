@@ -15,3 +15,7 @@ export const updateprofilepic = (data) => {
 export const getDashboardStats = () => {
     return axiosInstance.get("/customer/dashboard");
 };
+
+export const getWalletHistory = () => {
+    return axiosInstance.get("/customer/wallet/history");
+};
