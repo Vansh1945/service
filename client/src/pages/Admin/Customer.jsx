@@ -28,6 +28,7 @@ import {
     XCircle,
     Clock,
     Star,
+    Wallet,
 } from 'lucide-react';
 
 const AdminCustomersDashboard = () => {
@@ -427,6 +428,9 @@ const AdminCustomersDashboard = () => {
                                                     <td className="px-4 md:px-6 py-4">
                                                         {getStatusBadge(customer)}
                                                     </td>
+                                                    <td className="px-4 md:px-6 py-4 font-bold text-teal-600">
+                                                        ₹{(customer.wallet?.availableBalance || 0).toLocaleString()}
+                                                    </td>
                                                     <td className="px-4 md:px-6 py-4">
                                                         <div className="flex items-center space-x-2">
                                                             <button
@@ -544,6 +548,16 @@ const AdminCustomersDashboard = () => {
                                     </div>
                                     <p className="text-lg font-semibold text-gray-900 capitalize">
                                         {selectedCustomer.isActive !== false ? 'Active' : 'Inactive'}
+                                    </p>
+                                </div>
+
+                                <div className="bg-teal-50 p-4 rounded-xl border border-teal-200 shadow-sm">
+                                    <div className="flex items-center mb-2">
+                                        <Wallet className="w-5 h-5 text-teal-600 mr-2" />
+                                        <span className="text-sm font-medium text-teal-700">Wallet Balance</span>
+                                    </div>
+                                    <p className="text-lg font-bold text-teal-600">
+                                        ₹{(selectedCustomer.wallet?.availableBalance || 0).toLocaleString()}
                                     </p>
                                 </div>
                             </div>

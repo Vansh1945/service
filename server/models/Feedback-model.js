@@ -79,6 +79,10 @@ const feedbackSchema = new Schema({
       type: Boolean,
       default: false
     }
+  },
+  metadata: {
+    ip: String,
+    userAgent: String
   }
 }, {
   timestamps: true,

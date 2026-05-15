@@ -77,12 +77,14 @@ const StatCard = ({ label, value, icon: Icon, gradient, iconBg, delay = 0 }) => 
 );
 
 // ── Complaint Details Modal ────────────────────────────────────
-const ComplaintDetailsModal = ({ complaint, onClose, onUpdateStatus, onResolve }) => {
+const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => {
   const { showToast } = useAuth();
   const [activeTab, setActiveTab] = useState('details');
+  const { complaint, booking } = data || {};
   const [statusUpdate, setStatusUpdate] = useState(complaint?.status || '');
   const [resolutionNotes, setResolutionNotes] = useState('');
-  const [refundAmount, setRefundAmount] = useState(complaint?.booking?.totalAmount || 0);
+  const [refundAmount, setRefundAmount] = useState(booking?.totalAmount || complaint?.booking?.totalAmount || 0);
+  const [confirmAction, setConfirmAction] = useState(null); // 'approve_refund', 'reject_refund', 'manual_review'
 
   const previouslyRefunded = complaint?.booking?.cancellationProgress?.refundAmount || 0;
   const isFullyRefunded = complaint?.booking?.paymentStatus === 'refunded' || complaint?.booking?.adminRefundDecision === 'approved' || (complaint?.booking?.totalAmount && previouslyRefunded >= complaint.booking.totalAmount);
@@ -95,8 +97,14 @@ const ComplaintDetailsModal = ({ complaint, onClose, onUpdateStatus, onResolve }
   };
 
   const handleResolve = async () => {
+    if (!confirmAction) return;
     if (!resolutionNotes.trim()) { showToast('Resolution notes required', 'error'); return; }
-    try { await onResolve(complaint._id, resolutionNotes); setResolutionNotes(''); showToast('Complaint resolved!', 'success'); }
+    try { 
+      await onResolve(complaint._id, resolutionNotes, confirmAction); 
+      setResolutionNotes(''); 
+      setConfirmAction(null);
+      showToast('Complaint resolved!', 'success'); 
+    }
     catch { showToast('Failed to resolve', 'error'); }
   };
 
@@ -133,17 +141,29 @@ const ComplaintDetailsModal = ({ complaint, onClose, onUpdateStatus, onResolve }
   };
 
 
-  if (!complaint) return null;
+  if (!data || !complaint) return null;
 
   const actualUserType = complaint.userType || (complaint.userId || complaint.customer ? 'customer' : 'provider');
   const submitterInfo = actualUserType === 'customer'
     ? (complaint.userId || complaint.customer)
     : (complaint.providerId || complaint.provider);
 
+  // Payout Badge Config
+  const payoutBadgeStyles = {
+    'Held': 'bg-orange-100 text-orange-700 border-orange-200',
+    'Available': 'bg-green-100 text-green-700 border-green-200',
+    'Dispute Hold': 'bg-red-100 text-red-700 border-red-200',
+    'Released': 'bg-blue-100 text-blue-700 border-blue-200',
+    'held': 'bg-orange-100 text-orange-700 border-orange-200',
+    'available': 'bg-green-100 text-green-700 border-green-200',
+    'cancelled': 'bg-red-100 text-red-700 border-red-200',
+    'paid': 'bg-blue-100 text-blue-700 border-blue-200',
+  };
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] overflow-y-auto animate-scale-up"
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] overflow-y-auto animate-scale-up"
         onClick={e => e.stopPropagation()}
       >
         {/* Modal Header */}
@@ -188,6 +208,87 @@ const ComplaintDetailsModal = ({ complaint, onClose, onUpdateStatus, onResolve }
           {/* ── Details Tab ── */}
           {activeTab === 'details' && (
             <div className="space-y-4 animate-fade-in">
+              {/* Warnings */}
+              {complaint.warnings?.length > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-2">
+                  {complaint.warnings.map((w, i) => (
+                    <div key={i} className="flex items-center gap-2 text-red-700 text-sm font-bold">
+                      <FiAlertTriangle size={16} /> ⚠ {w}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Payout Status Badge & Booking Summary */}
+              <div className="flex flex-wrap items-center justify-between gap-4 bg-gray-50 p-4 rounded-xl border border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <FiTool className="text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-400 font-bold uppercase">Booking Status</p>
+                    <p className="text-sm font-bold text-secondary uppercase">{booking?.status || 'N/A'}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${booking?.payoutStatus?.toLowerCase() === 'held' ? 'bg-orange-100' : 'bg-green-100'}`}>
+                    <FiBarChart2 className={booking?.payoutStatus?.toLowerCase() === 'held' ? 'text-orange-600' : 'text-green-600'} />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-400 font-bold uppercase">Payout Status</p>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase border ${payoutBadgeStyles[booking?.payoutStatus] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                      {booking?.payoutStatus || 'N/A'}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <FiAlertTriangle className="text-purple-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-400 font-bold uppercase">Dispute Status</p>
+                    <p className="text-sm font-bold text-secondary uppercase">{booking?.disputeStatus || 'None'}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Smart Review Panel (Existing AI Logic) */}
+              {complaint.suggestedDecision && (
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-5 border border-blue-100 shadow-sm">
+                  <h4 className="text-sm font-black text-blue-900 mb-4 flex items-center gap-2">
+                    <FiBarChart2 className="text-blue-600" /> Refund Decision Analysis
+                  </h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                    <div className="bg-white rounded-lg p-3 shadow-sm border border-blue-50">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase">Complaint Score</p>
+                      <p className={`text-xl font-black ${complaint.complaintScore > 60 ? 'text-red-600' : 'text-secondary'}`}>{complaint.complaintScore}/100</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-3 shadow-sm border border-blue-50">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase">Provider Trust</p>
+                      <p className={`text-xl font-black ${complaint.providerTrustScore < 40 ? 'text-red-600' : 'text-green-600'}`}>{complaint.providerTrustScore}/100</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-3 shadow-sm border border-blue-50">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase">Customer Risk</p>
+                      <p className={`text-xl font-black ${complaint.customerFraudScore > 60 ? 'text-red-600' : 'text-green-600'}`}>{complaint.customerFraudScore}/100</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-3 shadow-sm border border-blue-50">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase">Evidence Strength</p>
+                      <p className={`text-xl font-black ${complaint.evidenceStrength > 50 ? 'text-green-600' : 'text-amber-600'}`}>{complaint.evidenceStrength}/100</p>
+                    </div>
+                  </div>
+                  <div className="bg-white p-3 rounded-lg border border-blue-100 flex items-center justify-between">
+                    <span className="text-xs font-bold text-gray-500 uppercase">Suggested Action:</span>
+                    <span className={`px-3 py-1 rounded-full text-xs font-black uppercase ${
+                      complaint.suggestedDecision === 'approve_refund' ? 'bg-green-100 text-green-700' :
+                      complaint.suggestedDecision === 'reject_refund' ? 'bg-red-100 text-red-700' :
+                      'bg-amber-100 text-amber-700'
+                    }`}>
+                      {complaint.suggestedDecision.replace('_', ' ')}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {/* Top info grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
@@ -278,6 +379,65 @@ const ComplaintDetailsModal = ({ complaint, onClose, onUpdateStatus, onResolve }
                 </div>
               </div>
 
+              {/* History Cards Grid */}
+              {(complaint.providerHistory || complaint.customerHistory) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Provider History */}
+                  {complaint.providerHistory && (
+                    <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+                      <h4 className="text-sm font-bold text-secondary mb-3 flex items-center gap-2">
+                        <FiTool className="text-purple-500" /> Provider History
+                      </h4>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div className="bg-gray-50 p-2 rounded-lg">
+                          <p className="text-[10px] text-gray-400 uppercase">Completed</p>
+                          <p className="font-bold text-secondary">{complaint.providerHistory.completedBookings}</p>
+                        </div>
+                        <div className="bg-gray-50 p-2 rounded-lg">
+                          <p className="text-[10px] text-gray-400 uppercase">Avg Rating</p>
+                          <p className="font-bold text-secondary">{complaint.providerHistory.avgRating} ★</p>
+                        </div>
+                        <div className="bg-gray-50 p-2 rounded-lg">
+                          <p className="text-[10px] text-gray-400 uppercase">Complaint Ratio</p>
+                          <p className={`font-bold ${complaint.providerHistory.complaintRatio > 10 ? 'text-red-500' : 'text-secondary'}`}>{complaint.providerHistory.complaintRatio}%</p>
+                        </div>
+                        <div className="bg-gray-50 p-2 rounded-lg">
+                          <p className="text-[10px] text-gray-400 uppercase">Cancel Ratio</p>
+                          <p className={`font-bold ${complaint.providerHistory.cancellationRatio > 20 ? 'text-red-500' : 'text-secondary'}`}>{complaint.providerHistory.cancellationRatio}%</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Customer History */}
+                  {complaint.customerHistory && (
+                    <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+                      <h4 className="text-sm font-bold text-secondary mb-3 flex items-center gap-2">
+                        <FiUser className="text-blue-500" /> Customer Risk Profile
+                      </h4>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div className="bg-gray-50 p-2 rounded-lg">
+                          <p className="text-[10px] text-gray-400 uppercase">Total Bookings</p>
+                          <p className="font-bold text-secondary">{complaint.customerHistory.totalBookings}</p>
+                        </div>
+                        <div className="bg-gray-50 p-2 rounded-lg">
+                          <p className="text-[10px] text-gray-400 uppercase">Refund Requests</p>
+                          <p className={`font-bold ${complaint.customerHistory.refundRequests > 2 ? 'text-red-500' : 'text-secondary'}`}>{complaint.customerHistory.refundRequests}</p>
+                        </div>
+                        <div className="bg-gray-50 p-2 rounded-lg">
+                          <p className="text-[10px] text-gray-400 uppercase">Complaints</p>
+                          <p className={`font-bold ${complaint.customerHistory.complaintCount > 2 ? 'text-red-500' : 'text-secondary'}`}>{complaint.customerHistory.complaintCount}</p>
+                        </div>
+                        <div className="bg-gray-50 p-2 rounded-lg">
+                          <p className="text-[10px] text-gray-400 uppercase">Account Age</p>
+                          <p className={`font-bold ${complaint.customerHistory.accountAgeMonths < 3 ? 'text-amber-500' : 'text-secondary'}`}>{complaint.customerHistory.accountAgeMonths} months</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Description */}
               <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
                 <h4 className="text-sm font-bold text-secondary mb-2">Description</h4>
@@ -294,105 +454,204 @@ const ComplaintDetailsModal = ({ complaint, onClose, onUpdateStatus, onResolve }
                 </div>
               )}
 
-              {/* Evidence Comparison */}
-              {complaint.evidenceComparison && (
-                <div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">
-                  <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-100 flex justify-between items-center">
-                    <h4 className="text-sm font-bold text-secondary">Evidence Comparison</h4>
-                    <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">Before | After | Complaint</span>
-                  </div>
-                  <div className="grid grid-cols-3 divide-x divide-gray-100">
-                    <div className="p-3">
-                      <p className="text-[10px] font-bold text-gray-400 mb-2 uppercase">Before Work</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {complaint.evidenceComparison.beforeWorkImages?.length > 0 ? (
-                          complaint.evidenceComparison.beforeWorkImages.map((img, i) => (
-                            <img key={i} src={img} className="w-12 h-12 object-cover rounded-lg border hover:border-primary cursor-pointer" alt="Before" onClick={() => window.open(img, '_blank')} />
-                          ))
-                        ) : <span className="text-[10px] text-gray-300 italic">No images</span>}
-                      </div>
-                    </div>
-                    <div className="p-3">
-                      <p className="text-[10px] font-bold text-gray-400 mb-2 uppercase">After Work</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {complaint.evidenceComparison.afterWorkImages?.length > 0 ? (
-                          complaint.evidenceComparison.afterWorkImages.map((img, i) => (
-                            <img key={i} src={img} className="w-12 h-12 object-cover rounded-lg border hover:border-primary cursor-pointer" alt="After" onClick={() => window.open(img, '_blank')} />
-                          ))
-                        ) : <span className="text-[10px] text-gray-300 italic">No images</span>}
-                      </div>
-                    </div>
-                    <div className="p-3 bg-red-50/20">
-                      <p className="text-[10px] font-bold text-red-400 mb-2 uppercase">Customer Proof</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {complaint.evidenceComparison.complaintImages?.length > 0 ? (
-                          complaint.evidenceComparison.complaintImages.map((img, i) => (
-                            <img key={i} src={img} className="w-12 h-12 object-cover rounded-lg border border-red-100 hover:border-red-400 cursor-pointer" alt="Proof" onClick={() => window.open(img, '_blank')} />
-                          ))
-                        ) : <span className="text-[10px] text-gray-300 italic">No images</span>}
-                      </div>
+              {/* Image Comparison Section */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-bold text-secondary flex items-center gap-2">
+                  <FiEye className="text-primary" /> Image Comparison
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Customer Complaint Images */}
+                  <div className="bg-red-50/30 rounded-xl p-4 border border-red-100 min-h-[160px]">
+                    <p className="text-[10px] font-black text-red-600 uppercase mb-3 tracking-wider">Customer Proofs</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {booking?.complaintProofs?.length > 0 ? (
+                        booking.complaintProofs.filter(p => p.uploadedBy === 'customer').flatMap(p => p.images || []).map((img, i) => (
+                          <img 
+                            key={i} src={img.url || img.secure_url} 
+                            className="w-full h-20 object-cover rounded-lg border border-red-200 cursor-zoom-in hover:scale-105 transition-all" 
+                            alt="Customer Proof" 
+                            onClick={() => window.open(img.url || img.secure_url, '_blank')} 
+                          />
+                        ))
+                      ) : complaint.images?.length > 0 ? (
+                        complaint.images.map((img, i) => (
+                          <img 
+                            key={i} src={img.secure_url || img.url} 
+                            className="w-full h-20 object-cover rounded-lg border border-red-200 cursor-zoom-in hover:scale-105 transition-all" 
+                            alt="Customer Proof" 
+                            onClick={() => window.open(img.secure_url || img.url, '_blank')} 
+                          />
+                        ))
+                      ) : (
+                        <div className="col-span-2 h-20 flex items-center justify-center bg-gray-100 rounded-lg border border-dashed border-gray-300">
+                          <span className="text-[10px] text-gray-400 font-bold">No images</span>
+                        </div>
+                      )}
                     </div>
                   </div>
-                </div>
-              )}
 
-              {/* Images (Legacy View) */}
-              {!complaint.evidenceComparison && complaint.images?.length > 0 && (
-                <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                  <h4 className="text-sm font-bold text-secondary mb-3">Attachments</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    {complaint.images.map((img, i) => (
-                      <img
-                        key={i} src={img.secure_url} alt={`Evidence ${i + 1}`}
-                        className="rounded-xl w-full h-24 object-cover cursor-pointer hover:opacity-80 hover:scale-105 transition-all shadow-sm"
-                        onClick={() => window.open(img.secure_url, '_blank')}
-                      />
-                    ))}
+                  {/* Provider Before Work */}
+                  <div className="bg-amber-50/30 rounded-xl p-4 border border-amber-100 min-h-[160px]">
+                    <p className="text-[10px] font-black text-amber-600 uppercase mb-3 tracking-wider">Before Work (Provider)</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {booking?.workProof?.beforeImages?.length > 0 ? (
+                        booking.workProof.beforeImages.map((img, i) => (
+                          <img 
+                            key={i} src={img.url} 
+                            className="w-full h-20 object-cover rounded-lg border border-amber-200 cursor-zoom-in hover:scale-105 transition-all" 
+                            alt="Before Work" 
+                            onClick={() => window.open(img.url, '_blank')} 
+                          />
+                        ))
+                      ) : (
+                        <div className="col-span-2 h-20 flex items-center justify-center bg-gray-100 rounded-lg border border-dashed border-gray-300">
+                          <span className="text-[10px] text-gray-400 font-bold">No images</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Provider After Work */}
+                  <div className="bg-green-50/30 rounded-xl p-4 border border-green-100 min-h-[160px]">
+                    <p className="text-[10px] font-black text-green-600 uppercase mb-3 tracking-wider">After Work (Provider)</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {booking?.workProof?.afterImages?.length > 0 ? (
+                        booking.workProof.afterImages.map((img, i) => (
+                          <img 
+                            key={i} src={img.url} 
+                            className="w-full h-20 object-cover rounded-lg border border-green-200 cursor-zoom-in hover:scale-105 transition-all" 
+                            alt="After Work" 
+                            onClick={() => window.open(img.url, '_blank')} 
+                          />
+                        ))
+                      ) : (
+                        <div className="col-span-2 h-20 flex items-center justify-center bg-gray-100 rounded-lg border border-dashed border-gray-300">
+                          <span className="text-[10px] text-gray-400 font-bold">No images</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              )}
+              </div>
+
+              {/* Provider/Admin Reply Card */}
+              <div className="bg-gray-50 rounded-2xl border border-gray-200 overflow-hidden">
+                <div className="bg-white px-4 py-3 border-b border-gray-200 flex justify-between items-center">
+                  <h4 className="text-sm font-bold text-secondary flex items-center gap-2">
+                    <FiMessageSquare className="text-primary" /> Latest Response
+                  </h4>
+                  {booking?.complaintProofs?.length > 0 && (
+                    <span className="text-[10px] text-gray-400 font-medium">
+                      Last updated: {formatDateTime(booking.complaintProofs[booking.complaintProofs.length - 1].createdAt)}
+                    </span>
+                  )}
+                </div>
+                <div className="p-4 space-y-4">
+                  {booking?.complaintProofs?.filter(p => p.uploadedBy !== 'customer').length > 0 ? (
+                    booking.complaintProofs.filter(p => p.uploadedBy !== 'customer').slice(-2).map((reply, idx) => (
+                      <div key={idx} className={`p-3 rounded-xl border ${reply.uploadedBy === 'admin' ? 'bg-blue-50 border-blue-100' : 'bg-purple-50 border-purple-100'}`}>
+                        <div className="flex justify-between items-start mb-2">
+                          <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${reply.uploadedBy === 'admin' ? 'bg-blue-200 text-blue-700' : 'bg-purple-200 text-purple-700'}`}>
+                            {reply.uploadedBy}
+                          </span>
+                          <span className="text-[9px] text-gray-400">{formatDateTime(reply.createdAt)}</span>
+                        </div>
+                        <p className="text-sm text-secondary leading-relaxed">{reply.message || 'No message provided'}</p>
+                        {reply.images?.length > 0 && (
+                          <div className="flex gap-2 mt-3">
+                            {reply.images.map((img, i) => (
+                              <img key={i} src={img.url} className="w-10 h-10 object-cover rounded border border-white shadow-sm" alt="Reply Proof" onClick={() => window.open(img.url, '_blank')} />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="py-4 text-center">
+                      <p className="text-xs text-gray-400 italic">No responses from provider or admin yet</p>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
           {/* ── Timeline Tab ── */}
           {activeTab === 'timeline' && (
             <div className="space-y-4 animate-fade-in">
-              <h4 className="text-sm font-bold text-secondary">Resolution Journey</h4>
-              {complaint.resolutionHistory?.length > 0 ? (
-                <div className="space-y-4">
-                  {complaint.resolutionHistory.map((h, i) => (
-                    <div key={i} className="flex items-start gap-4">
-                      <div className="flex flex-col items-center">
-                        <div className={`w-3 h-3 rounded-full mt-1 ring-4 ${
-                          h.event.includes('Resolved') ? 'bg-green-500 ring-green-100' :
-                          h.event.includes('Replied') ? 'bg-primary ring-primary/10' :
-                          'bg-gray-300 ring-gray-100'
-                        }`} />
-                        {i < complaint.resolutionHistory.length - 1 && <div className="w-0.5 h-12 bg-gray-100 mt-1" />}
-                      </div>
-                      <div className="flex-1 bg-white rounded-xl p-3 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-                        <div className="flex justify-between items-center mb-1">
-                          <p className="text-xs font-bold text-secondary uppercase tracking-tight">{h.event}</p>
-                          <span className="text-[10px] text-gray-400">{formatDateTime(h.timestamp)}</span>
-                        </div>
-                        {h.note && <p className="text-sm text-gray-600 mt-1 leading-relaxed">"{h.note}"</p>}
-                        {h.images?.length > 0 && (
-                          <div className="flex gap-2 mt-2">
-                            {h.images.map((img, j) => (
-                              <img key={j} src={img} className="w-10 h-10 object-cover rounded border" alt="Proof" onClick={() => window.open(img, '_blank')} />
-                            ))}
+              {/* Resolution Journey / Booking Timeline */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Booking Timeline UI */}
+                <div className="space-y-6">
+                  <h4 className="text-sm font-bold text-secondary flex items-center gap-2">
+                    <FiClock className="text-blue-500" /> Booking Progress
+                  </h4>
+                  {booking?.timeline?.length > 0 ? (
+                    <div className="relative pl-6 space-y-8 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-0.5 before:bg-gray-100">
+                      {booking.timeline.map((step, i) => (
+                        <div key={i} className="relative">
+                          <div className={`absolute -left-6 top-1.5 w-6 h-6 rounded-full border-4 border-white shadow-sm flex items-center justify-center
+                            ${i === booking.timeline.length - 1 ? 'bg-primary animate-pulse' : 'bg-gray-300'}`}
+                          >
+                            <div className="w-1.5 h-1.5 bg-white rounded-full" />
                           </div>
-                        )}
-                        <p className="text-[10px] text-gray-400 mt-2 flex items-center gap-1 uppercase font-bold">
-                          <FiUser size={10} /> Action by: {h.by}
-                        </p>
-                      </div>
+                          <div>
+                            <p className="text-xs font-black text-secondary uppercase tracking-tight">{step.label}</p>
+                            <p className="text-[10px] text-gray-400 font-medium">{formatDateTime(step.date)}</p>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  ) : (
+                    <div className="py-8 flex flex-col items-center justify-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                      <FiClock className="text-gray-300 mb-2" size={24} />
+                      <p className="text-xs text-gray-400 italic">No booking timeline available</p>
+                    </div>
+                  )}
                 </div>
-              ) : (
-                <p className="text-gray-400 text-sm text-center py-8 italic">No resolution history available</p>
-              )}
+
+                {/* Complaint History (Resolution History) */}
+                <div className="space-y-6">
+                  <h4 className="text-sm font-bold text-secondary flex items-center gap-2">
+                    <FiMessageSquare className="text-amber-500" /> Resolution Steps
+                  </h4>
+                  {complaint.resolutionHistory?.length > 0 ? (
+                    <div className="space-y-4">
+                      {complaint.resolutionHistory.map((h, i) => (
+                        <div key={i} className="flex items-start gap-4">
+                          <div className="flex flex-col items-center">
+                            <div className={`w-3 h-3 rounded-full mt-1 ring-4 ${
+                              h.event.includes('Resolved') ? 'bg-green-500 ring-green-100' :
+                              h.event.includes('Replied') ? 'bg-primary ring-primary/10' :
+                              'bg-gray-300 ring-gray-100'
+                            }`} />
+                            {i < complaint.resolutionHistory.length - 1 && <div className="w-0.5 h-12 bg-gray-100 mt-1" />}
+                          </div>
+                          <div className="flex-1 bg-white rounded-xl p-3 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                            <div className="flex justify-between items-center mb-1">
+                              <p className="text-xs font-bold text-secondary uppercase tracking-tight">{h.event}</p>
+                              <span className="text-[10px] text-gray-400">{formatDateTime(h.timestamp)}</span>
+                            </div>
+                            {h.note && <p className="text-sm text-gray-600 mt-1 leading-relaxed">"{h.note}"</p>}
+                            {h.images?.length > 0 && (
+                              <div className="flex gap-2 mt-2">
+                                {h.images.map((img, j) => (
+                                  <img key={j} src={img} className="w-10 h-10 object-cover rounded border shadow-sm" alt="Proof" onClick={() => window.open(img, '_blank')} />
+                                ))}
+                              </div>
+                            )}
+                            <p className="text-[10px] text-gray-400 mt-2 flex items-center gap-1 uppercase font-bold">
+                              <FiUser size={10} /> By: {h.by}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-gray-400 text-xs text-center py-8 italic">No resolution history available</p>
+                  )}
+                </div>
+              </div>
 
               {(complaint.reopenHistory || []).length > 0 && (
                 <div className="mt-4">
@@ -459,15 +718,52 @@ const ComplaintDetailsModal = ({ complaint, onClose, onUpdateStatus, onResolve }
                     rows="3"
                     className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 text-sm resize-none mb-3"
                   />
-                  <div className="flex justify-end">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <button
-                      onClick={handleResolve}
-                      disabled={!resolutionNotes.trim()}
-                      className="px-5 py-2.5 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+                      onClick={() => setConfirmAction('approve_refund')}
+                      disabled={!resolutionNotes.trim() || confirmAction}
+                      className="px-4 py-2.5 bg-green-600 text-white text-xs font-bold rounded-lg hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                     >
-                      <FiCheckCircle size={15} /> Mark as Resolved
+                      Approve Refund
+                    </button>
+                    <button
+                      onClick={() => setConfirmAction('reject_refund')}
+                      disabled={!resolutionNotes.trim() || confirmAction}
+                      className="px-4 py-2.5 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                    >
+                      Reject Complaint
+                    </button>
+                    <button
+                      onClick={() => setConfirmAction('manual_review')}
+                      disabled={!resolutionNotes.trim() || confirmAction}
+                      className="px-4 py-2.5 bg-amber-500 text-white text-xs font-bold rounded-lg hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                    >
+                      Hold for Investigation
                     </button>
                   </div>
+
+                  {confirmAction && (
+                    <div className="mt-4 p-4 border border-blue-200 bg-blue-50 rounded-xl animate-fade-in">
+                      <p className="text-sm font-bold text-blue-900 mb-2">
+                        Are you sure you want to {confirmAction.replace('_', ' ')}?
+                      </p>
+                      <p className="text-xs text-blue-700 mb-4">This action will update the complaint status and automatically adjust provider payouts.</p>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={handleResolve}
+                          className="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 transition-all"
+                        >
+                          Confirm
+                        </button>
+                        <button
+                          onClick={() => setConfirmAction(null)}
+                          className="px-4 py-2 bg-white text-gray-600 border border-gray-200 text-xs font-bold rounded-lg hover:bg-gray-50 transition-all"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -591,7 +887,12 @@ const ComplaintsPage = () => {
       const res = await ComplaintService.updateComplaintStatus(id, status);
       if (res.data?.success) {
         await fetchComplaints();
-        if (selectedComplaint?._id === id) setSelectedComplaint(p => ({ ...p, status }));
+        if (selectedComplaint?.complaint?._id === id) {
+          setSelectedComplaint(p => ({
+            ...p,
+            complaint: { ...p.complaint, status }
+          }));
+        }
         return true;
       }
       showToast('Failed to update status', 'error'); return false;
@@ -599,10 +900,10 @@ const ComplaintsPage = () => {
     finally { setUpdating(false); }
   };
 
-  const resolveComplaint = async (id, resolutionNotes) => {
+  const resolveComplaint = async (id, resolutionNotes, decision) => {
     setUpdating(true);
     try {
-      const res = await ComplaintService.resolveComplaint(id, { resolutionNotes });
+      const res = await ComplaintService.resolveComplaint(id, { resolutionNotes, decision });
       if (res.data?.success) { await fetchComplaints(); setShowModal(false); return true; }
       showToast('Failed to resolve complaint', 'error'); return false;
     } catch { showToast('Failed to resolve complaint', 'error'); return false; }
@@ -842,7 +1143,7 @@ const ComplaintsPage = () => {
       {/* ── Modal ── */}
       {showModal && selectedComplaint && (
         <ComplaintDetailsModal
-          complaint={selectedComplaint}
+          data={selectedComplaint}
           onClose={() => setShowModal(false)}
           onUpdateStatus={updateComplaintStatus}
           onResolve={resolveComplaint}

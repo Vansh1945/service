@@ -163,6 +163,10 @@ const submitFeedback = async (req, res) => {
         service: booking.services[0].service._id,
         rating: serviceRating,
         comment: serviceComment || ''
+      },
+      metadata: {
+        ip: req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+        userAgent: req.headers['user-agent']
       }
     });
 

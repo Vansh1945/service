@@ -39,6 +39,9 @@ router.patch('/read-all', flexAuth, notificationController.markAllRead);
 // PATCH /api/notifications/read/:id — mark one as read
 router.patch('/read/:id', flexAuth, notificationController.markRead);
 
+// PATCH /api/notifications/clicked/:id — track click
+router.patch('/clicked/:id', flexAuth, notificationController.markClicked);
+
 // POST /api/notifications/save-token
 router.post('/save-token', flexAuth, notificationController.saveToken);
 
@@ -62,6 +65,9 @@ router.patch('/admin/cancel/:id', flexAuth, adminOnly, notificationController.ca
 
 // POST /api/notifications/admin/resend/:id — Resend (Admin only)
 router.post('/admin/resend/:id', flexAuth, adminOnly, notificationController.resendNotification);
+
+// GET /api/notifications/admin/analytics/:id — Analytics (Admin only)
+router.get('/admin/analytics/:id', flexAuth, adminOnly, notificationController.getAdminAnalytics);
 
 module.exports = router;
 

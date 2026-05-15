@@ -11,6 +11,7 @@ const ExcelJS = require('exceljs');
 const { sendNotification, notifyAdmins } = require('../utils/notificationHelper');
 const { generateBookingId } = require('../utils/generateUniqueId');
 const { getBookingTimeline } = require('../utils/bookingHelper');
+const { invalidateCache } = require('../utils/cacheHelper');
 
 // Helper to get synchronized payout status
 const getPayoutStatus = (earning, booking) => {
@@ -206,7 +207,11 @@ const createBooking = async (req, res) => {
       paymentMethod,
       status: paymentMethod === 'cash' ? 'scheduled' : 'pending',
       paymentStatus: 'pending',
-      confirmedBooking: paymentMethod === 'cash'
+      confirmedBooking: paymentMethod === 'cash',
+      metadata: {
+        ip: req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+        userAgent: req.headers['user-agent']
+      }
     });
 
     // Save booking
@@ -1328,6 +1333,12 @@ const cancelBooking = async (req, res) => {
     } catch (fcmError) {
       console.error('FCM Notification Error (Booking Cancelled):', fcmError);
     }
+    // Invalidate dashboard caches
+    try {
+      await invalidateCache('admin_dashboard_*');
+      await invalidateCache('dashboard_analytics_*');
+    } catch (e) { }
+
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
@@ -1784,6 +1795,12 @@ const acceptBooking = async (req, res) => {
       console.error('FCM Notification Error (Booking Accepted):', fcmError);
     }
 
+    // Invalidate dashboard caches
+    try {
+      await invalidateCache('admin_dashboard_*');
+      await invalidateCache('dashboard_analytics_*');
+    } catch (e) { }
+
     return res.status(200).json({
       success: true,
       message: 'Booking accepted successfully',
@@ -1889,6 +1906,12 @@ const startBooking = async (req, res) => {
       console.error('FCM Notification Error (Service Started):', fcmError);
     }
 
+    // Invalidate dashboard caches
+    try {
+      await invalidateCache('admin_dashboard_*');
+      await invalidateCache('dashboard_analytics_*');
+    } catch (e) { }
+
     return res.status(200).json({
       success: true,
       message: 'Service started successfully',
@@ -1955,6 +1978,12 @@ const rejectBooking = async (req, res) => {
     booking.updatedAt = new Date();
 
     await booking.save();
+
+    // Invalidate dashboard caches
+    try {
+      await invalidateCache('admin_dashboard_*');
+      await invalidateCache('dashboard_analytics_*');
+    } catch (e) { }
 
     res.status(200).json({
       success: true,
@@ -2278,6 +2307,12 @@ const completeBooking = async (req, res) => {
     } catch (fcmError) {
       console.error('FCM Notification Error (Booking Completed):', fcmError);
     }
+
+    // Invalidate dashboard caches
+    try {
+      await invalidateCache('admin_dashboard_*');
+      await invalidateCache('dashboard_analytics_*');
+    } catch (e) { }
 
     return res.json({
       success: true,
@@ -2941,6 +2976,12 @@ const assignProvider = async (req, res) => {
       console.error('Error syncing transaction on provider assignment:', transError);
     }
 
+    // Invalidate dashboard caches
+    try {
+      await invalidateCache('admin_dashboard_*');
+      await invalidateCache('dashboard_analytics_*');
+    } catch (e) { }
+
     res.json({
       success: true,
       message: 'Provider assigned successfully',
@@ -2978,6 +3019,12 @@ const deleteBooking = async (req, res) => {
     const customer = await User.findById(booking.customer);
 
     await Booking.findByIdAndDelete(id);
+
+    // Invalidate dashboard caches
+    try {
+      await invalidateCache('admin_dashboard_*');
+      await invalidateCache('dashboard_analytics_*');
+    } catch (e) { }
 
     res.json({
       success: true,

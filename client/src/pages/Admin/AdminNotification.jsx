@@ -10,6 +10,7 @@ import { formatDate, formatDateTime } from '../../utils/format';
 import EmojiPicker from 'emoji-picker-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
+import * as SystemService from '../../services/SystemService';
 
 // ─── Audience Options ────────────────────────────────────────────────────────
 const AUDIENCE_OPTIONS = [
@@ -94,7 +95,11 @@ const AdminNotification = () => {
         body: '',
         url: '/',
         scheduledTime: '',
+        city: '',
+        providerCategory: '',
+        minBookings: 0,
     });
+    const [categories, setCategories] = useState([]);
     const [isScheduled, setIsScheduled] = useState(false);
     const [status, setStatus] = useState(null); // null | 'loading' | 'success' | 'error'
     const [result, setResult] = useState(null);
@@ -139,8 +144,20 @@ const AdminNotification = () => {
         }
     };
 
+    const fetchCategories = async () => {
+        try {
+            const res = await SystemService.getCategories();
+            if (res.data?.success) {
+                setCategories(res.data.data || []);
+            }
+        } catch (error) {
+            console.error('Error fetching categories:', error);
+        }
+    };
+
     useEffect(() => {
         fetchHistory();
+        fetchCategories();
     }, [filter, filters.status, filters.startDate, filters.endDate]);
 
     const handleResend = (item) => {
@@ -191,6 +208,10 @@ const AdminNotification = () => {
                 url: form.url.trim() || '/',
                 type: 'broadcast',
                 scheduledTime: isScheduled && form.scheduledTime ? form.scheduledTime : null,
+                sendNow: !isScheduled,
+                city: form.city,
+                providerCategory: form.providerCategory,
+                minBookings: form.minBookings
             });
 
             const data = res.data;
@@ -243,7 +264,7 @@ const AdminNotification = () => {
                 title: item.title,
                 message: item.message,
                 url: item.url,
-                scheduledTime: item.scheduledTime
+                scheduledFor: item.scheduledFor
             });
             if (res.data.success) {
                 toast.success('Notification updated');
@@ -256,7 +277,16 @@ const AdminNotification = () => {
     };
 
     const resetForm = () => {
-        setForm({ audience: 'all', title: '', body: '', url: '/', scheduledTime: '' });
+        setForm({ 
+            audience: 'all', 
+            title: '', 
+            body: '', 
+            url: '/', 
+            scheduledTime: '',
+            city: '',
+            providerCategory: '',
+            minBookings: 0
+        });
         setIsScheduled(false);
         setStatus(null);
         setResult(null);
@@ -332,6 +362,53 @@ const AdminNotification = () => {
                                         )}
                                     </label>
                                 ))}
+                            </div>
+                        </div>
+
+                        {/* Audience Filters */}
+                        <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                            <label className="block text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
+                                <FiFilter className="text-primary" /> Audience Filters (Optional)
+                            </label>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Target City</label>
+                                    <input
+                                        type="text"
+                                        name="city"
+                                        value={form.city}
+                                        onChange={handleChange}
+                                        placeholder="e.g. Amritsar"
+                                        className="w-full px-3 py-1.5 border rounded-md text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+                                    />
+                                </div>
+                                {form.audience !== 'customer' && (
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Provider Category</label>
+                                        <select
+                                            name="providerCategory"
+                                            value={form.providerCategory}
+                                            onChange={handleChange}
+                                            className="w-full px-3 py-1.5 border rounded-md text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+                                        >
+                                            <option value="">All Categories</option>
+                                            {categories.map(cat => (
+                                                <option key={cat._id} value={cat._id}>{cat.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Min. Bookings</label>
+                                    <input
+                                        type="number"
+                                        name="minBookings"
+                                        value={form.minBookings}
+                                        onChange={handleChange}
+                                        min="0"
+                                        className="w-full px-3 py-1.5 border rounded-md text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+                                    />
+                                </div>
                             </div>
                         </div>
 
@@ -661,14 +738,22 @@ const AdminNotification = () => {
                                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${STATUS_COLORS[item.status] || 'bg-gray-100'}`}>
                                                 {item.status}
                                             </span>
-                                            {item.scheduledTime && item.status === 'pending' && (
-                                                <span className="text-[10px] font-medium text-blue-600 flex items-center gap-1">
-                                                    <FiClock size={10} /> {formatDateTime(item.scheduledTime)}
+                                            {item.isScheduled && item.status === 'pending' && (
+                                                <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full flex items-center gap-1 border border-blue-100">
+                                                    <FiCalendar size={10} /> Scheduled: {formatDateTime(item.scheduledFor)}
                                                 </span>
                                             )}
                                         </div>
                                         <h4 className="font-bold text-gray-900 text-sm">{item.title}</h4>
                                         <p className="text-xs text-gray-600 mt-1 line-clamp-2 leading-relaxed">{item.message}</p>
+                                        
+                                        {/* Filters Preview */}
+                                        {(item.targetCity || item.minBookings > 0 || item.targetProviderCategory) && (
+                                            <div className="mt-2 flex flex-wrap gap-2">
+                                                {item.targetCity && <span className="text-[9px] bg-gray-100 px-1.5 py-0.5 rounded text-gray-500">📍 {item.targetCity}</span>}
+                                                {item.minBookings > 0 && <span className="text-[9px] bg-gray-100 px-1.5 py-0.5 rounded text-gray-500">⭐ Min: {item.minBookings}</span>}
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="flex flex-col gap-1.5">
                                         <button
@@ -683,6 +768,27 @@ const AdminNotification = () => {
                                             className="text-gray-600 bg-gray-100 hover:bg-gray-200 px-2 py-1.5 rounded text-[10px] font-bold flex items-center gap-1 transition-colors"
                                         >
                                             <FiEdit2 size={12} /> Edit
+                                        </button>
+                                        <button
+                                            onClick={async () => {
+                                                try {
+                                                    const res = await NotificationService.getAnalytics(item._id);
+                                                    if (res.data.success) {
+                                                        const { totalSent, delivered, read, clicked, readRate, clickRate } = res.data.data;
+                                                        toast((t) => (
+                                                            <div className="text-xs">
+                                                                <div className="font-bold border-b mb-1 pb-1">Live Analytics</div>
+                                                                <div>Sent: {totalSent} | Delivered: {delivered}</div>
+                                                                <div>Read: {read} ({readRate}%)</div>
+                                                                <div>Clicked: {clicked} ({clickRate}%)</div>
+                                                            </div>
+                                                        ), { duration: 4000 });
+                                                    }
+                                                } catch (e) { toast.error("Failed to fetch live analytics"); }
+                                            }}
+                                            className="text-teal-600 bg-teal-50 hover:bg-teal-100 px-2 py-1.5 rounded text-[10px] font-bold flex items-center gap-1 transition-colors"
+                                        >
+                                            <FiTarget size={12} /> Stats
                                         </button>
                                     </div>
                                 </div>
@@ -704,12 +810,23 @@ const AdminNotification = () => {
 
                                 <div className="mt-3 flex items-center justify-between">
                                     <div className="flex flex-wrap gap-2">
-                                        <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-[10px] font-bold">
-                                            Tgt: {item.totalSent || 0}
+                                        <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-[10px] font-bold" title="Total Sent">
+                                            Sent: {item.totalSent || 0}
                                         </span>
-                                        <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-[10px] font-bold">
-                                            OK: {item.successCount || 0}
+                                        <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-[10px] font-bold" title="Delivered/Success">
+                                            Del: {item.deliveredCount || item.successCount || 0}
                                         </span>
+                                        <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-[10px] font-bold" title="Read Count">
+                                            Read: {item.readCount || 0}
+                                        </span>
+                                        <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded text-[10px] font-bold" title="Clicked Count">
+                                            Click: {item.clickedCount || 0}
+                                        </span>
+                                        {item.totalSent > 0 && (
+                                            <span className="px-2 py-1 bg-primary/10 text-primary rounded text-[10px] font-bold">
+                                                Read: {((item.readCount || 0) / item.totalSent * 100).toFixed(1)}%
+                                            </span>
+                                        )}
                                     </div>
                                     <div className="flex gap-2">
                                         {item.status === 'pending' && (
@@ -777,8 +894,8 @@ const AdminNotification = () => {
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Scheduled Time</label>
                                     <input
                                         type="datetime-local"
-                                        value={editModal.item.scheduledTime ? new Date(editModal.item.scheduledTime).toISOString().slice(0, 16) : ''}
-                                        onChange={(e) => setEditModal(prev => ({ ...prev, item: { ...prev.item, scheduledTime: e.target.value } }))}
+                                        value={editModal.item.scheduledFor ? new Date(editModal.item.scheduledFor).toISOString().slice(0, 16) : ''}
+                                        onChange={(e) => setEditModal(prev => ({ ...prev, item: { ...prev.item, scheduledFor: e.target.value } }))}
                                         className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary/20 outline-none transition-all"
                                     />
                                 </div>

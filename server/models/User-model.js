@@ -96,6 +96,11 @@ const userSchema = new mongoose.Schema({
       type: Date,
       default: Date.now
     }
+  },
+  metadata: {
+    ip: String,
+    userAgent: String,
+    lastLogin: Date
   }
 }, {
   timestamps: true

@@ -168,7 +168,16 @@ const NotificationBell = () => {
                             notifications.map(n => (
                                 <div
                                     key={n._id}
-                                    onClick={() => !n.isRead && markRead(n._id)}
+                                    onClick={async () => {
+                                        if (!n.isRead) markRead(n._id);
+                                        try {
+                                            await NotificationService.markClicked(n._id);
+                                        } catch (err) { /* silent fail for analytics */ }
+                                        
+                                        if (n.url && n.url !== '/') {
+                                            window.location.href = n.url;
+                                        }
+                                    }}
                                     className={`px-4 py-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50 transition-colors ${!n.isRead ? 'bg-blue-50/40' : ''}`}
                                 >
                                     <div className="flex items-start gap-3">

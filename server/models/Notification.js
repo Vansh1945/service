@@ -58,9 +58,39 @@ const notificationSchema = new mongoose.Schema({
         default: 0
     },
     // Tracking fields for Scheduled Notifications
-    scheduledTime: {
+    scheduledFor: {
         type: Date,
         default: null
+    },
+    isScheduled: {
+        type: Boolean,
+        default: false
+    },
+    // Target Audience Filters
+    targetCity: {
+        type: String,
+        default: null
+    },
+    targetProviderCategory: {
+        type: String,
+        default: null
+    },
+    minBookings: {
+        type: Number,
+        default: 0
+    },
+    // Analytics tracking
+    deliveredCount: {
+        type: Number,
+        default: 0
+    },
+    readCount: {
+        type: Number,
+        default: 0
+    },
+    clickedCount: {
+        type: Number,
+        default: 0
     },
     status: {
         type: String,
@@ -80,6 +110,6 @@ const notificationSchema = new mongoose.Schema({
 notificationSchema.index({ userId: 1, isRead: 1 });
 notificationSchema.index({ userId: 1, createdAt: -1 });
 notificationSchema.index({ type: 1, createdAt: -1 }); // Fast query for broadcast history
-notificationSchema.index({ status: 1, scheduledTime: 1 }); // Fast query for CRON scheduler
+notificationSchema.index({ status: 1, scheduledFor: 1 }); // Fast query for CRON scheduler
 
 module.exports = mongoose.model('Notification', notificationSchema);

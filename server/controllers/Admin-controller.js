@@ -10,6 +10,7 @@ const Transaction = require('../models/Transaction-model');
 const Coupon = require('../models/Coupon-model');
 const ProviderEarning = require('../models/ProviderEarning-model');
 const PaymentRecord = require('../models/PaymentRecord-model');
+const Feedback = require('../models/Feedback-model');
 const moment = require('moment');
 const path = require('path');
 const fs = require('fs');
@@ -18,6 +19,8 @@ const mongoose = require('mongoose');
 const { sendNotification } = require('../utils/notificationHelper');
 const generateProviderId = require('../utils/generateUniqueId');
 const { sendMail } = require('../utils/sendmail');
+const { getCachedData, setCachedData, invalidateCache } = require('../utils/cacheHelper');
+const { getPrecomputedAnalytics } = require('../services/AnalyticsService');
 
 /**
  * Register a new admin
@@ -276,6 +279,10 @@ const approveProvider = async (req, res) => {
                 console.error('Failed to send approval email:', mailError);
             }
 
+            // Invalidate dashboard caches
+            await invalidateCache('admin_dashboard_*');
+            await invalidateCache('dashboard_analytics_*');
+
             return res.status(200).json({
                 success: true,
                 message: 'Provider approved successfully',
@@ -324,6 +331,10 @@ const approveProvider = async (req, res) => {
             } catch (mailError) {
                 console.error('Failed to send rejection email:', mailError);
             }
+
+            // Invalidate dashboard caches
+            await invalidateCache('admin_dashboard_*');
+            await invalidateCache('dashboard_analytics_*');
 
             return res.status(200).json({
                 success: true,
@@ -722,9 +733,38 @@ const getCustomerById = async (req, res) => {
  */
 const getDashboardStats = async (req, res) => {
     try {
-        const today = moment().startOf('day');
-        const currentWeek = moment().startOf('week');
-        const currentMonth = moment().startOf('month');
+        const cacheKey = 'admin_dashboard_stats';
+        
+        // 1. Try In-Memory Precomputed Analytics (Fastest)
+        const precomputed = getPrecomputedAnalytics();
+        if (precomputed) {
+            return res.json({
+                success: true,
+                data: {
+                    overview: {
+                        totalUsers: precomputed.totalUsers,
+                        totalProviders: precomputed.totalProviders || 0, // Fallback if not in precomputed
+                        totalBookings: precomputed.totalBookings,
+                        todayBookings: precomputed.todayBookings,
+                        monthlyRevenue: precomputed.monthlyRevenue,
+                        complaintCounts: precomputed.complaintCounts,
+                        lastRefreshed: precomputed.lastRefreshed
+                    },
+                    isPrecomputed: true
+                }
+            });
+        }
+
+        // 2. Try Redis Cache
+        const cached = await getCachedData(cacheKey);
+        if (cached) {
+            return res.json({ success: true, data: cached, fromCache: true });
+        }
+
+        // 3. Fallback to DB (Optimized)
+        const today = moment().startOf('day').toDate();
+        const currentWeek = moment().startOf('week').toDate();
+        const currentMonth = moment().startOf('month').toDate();
 
         const [
             totalUsers,
@@ -736,76 +776,45 @@ const getDashboardStats = async (req, res) => {
             monthlyBookings,
             pendingProviders
         ] = await Promise.all([
-            User.countDocuments(),
-            Provider.countDocuments({ approved: true }),
-            Booking.countDocuments(),
-            Service.countDocuments({ isActive: true }),
-            Booking.countDocuments({ createdAt: { $gte: today.toDate() } }),
-            Booking.countDocuments({ createdAt: { $gte: currentWeek.toDate() } }),
-            Booking.countDocuments({ createdAt: { $gte: currentMonth.toDate() } }),
-            Provider.countDocuments({ approved: false })
+            User.countDocuments().lean(),
+            Provider.countDocuments({ approved: true }).lean(),
+            Booking.countDocuments().lean(),
+            Service.countDocuments({ isActive: true }).lean(),
+            Booking.countDocuments({ createdAt: { $gte: today } }).lean(),
+            Booking.countDocuments({ createdAt: { $gte: currentWeek } }).lean(),
+            Booking.countDocuments({ createdAt: { $gte: currentMonth } }).lean(),
+            Provider.countDocuments({ approved: false }).lean()
         ]);
 
-        // Calculate revenue from completed bookings
-        const revenueStats = await Booking.aggregate([
-            { $match: { status: 'completed' } },
-            { $group: { _id: null, totalRevenue: { $sum: '$totalAmount' } } }
+        const [revenueStats, paymentMethodStats, withdrawalStats, disputeStats, heldPayoutsStats] = await Promise.all([
+            Booking.aggregate([
+                { $match: { status: 'completed' } },
+                { $group: { _id: null, totalRevenue: { $sum: '$totalAmount' } } }
+            ]).lean(),
+            Transaction.aggregate([
+                { $match: { paymentStatus: 'completed' } },
+                { $group: { _id: '$paymentMethod', count: { $sum: 1 }, totalAmount: { $sum: '$amount' } } },
+                { $project: { paymentMethod: '$_id', count: 1, totalAmount: 1, _id: 0 } }
+            ]).lean(),
+            Transaction.aggregate([
+                { $match: { type: 'withdrawal', paymentStatus: 'completed' } },
+                { $group: { _id: null, totalWithdrawals: { $sum: '$amount' }, withdrawalCount: { $sum: 1 } } }
+            ]).lean(),
+            Booking.aggregate([
+                { $match: { disputeRaised: true } },
+                { $group: { _id: '$disputeStatus', count: { $sum: 1 } } }
+            ]).lean(),
+            ProviderEarning.aggregate([
+                { $match: { status: 'held' } },
+                { $group: { _id: null, totalHeld: { $sum: '$netAmount' }, count: { $sum: 1 } } }
+            ]).lean()
         ]);
 
         const totalRevenue = revenueStats[0]?.totalRevenue || 0;
-
-        // Get payment method statistics
-        const paymentMethodStats = await Transaction.aggregate([
-            { $match: { status: 'completed' } },
-            {
-                $group: {
-                    _id: '$paymentMethod',
-                    count: { $sum: 1 },
-                    totalAmount: { $sum: '$amount' }
-                }
-            },
-            {
-                $project: {
-                    paymentMethod: '$_id',
-                    count: 1,
-                    totalAmount: 1,
-                    _id: 0
-                }
-            }
-        ]);
-
-        // Get withdrawal statistics
-        const withdrawalStats = await Transaction.aggregate([
-            { $match: { type: 'withdrawal', status: 'completed' } },
-            {
-                $group: {
-                    _id: null,
-                    totalWithdrawals: { $sum: '$amount' },
-                    withdrawalCount: { $sum: 1 }
-                }
-            }
-        ]);
-
         const totalWithdrawals = withdrawalStats[0]?.totalWithdrawals || 0;
         const withdrawalCount = withdrawalStats[0]?.withdrawalCount || 0;
-
-        // Get dispute analytics
-        const disputeStats = await Booking.aggregate([
-            { $match: { disputeRaised: true } },
-            {
-                $group: {
-                    _id: '$disputeStatus',
-                    count: { $sum: 1 }
-                }
-            }
-        ]);
-
-        const totalDisputes = await Booking.countDocuments({ disputeRaised: true });
-        const totalRefundsCount = await Booking.countDocuments({ paymentStatus: 'refunded' });
-        const heldPayoutsStats = await ProviderEarning.aggregate([
-            { $match: { status: 'held' } },
-            { $group: { _id: null, totalHeld: { $sum: '$netAmount' }, count: { $sum: 1 } } }
-        ]);
+        const totalDisputes = await Booking.countDocuments({ disputeRaised: true }).lean();
+        const totalRefundsCount = await Booking.countDocuments({ paymentStatus: 'refunded' }).lean();
 
         const dashboardStats = {
             overview: {
@@ -828,6 +837,9 @@ const getDashboardStats = async (req, res) => {
             paymentMethods: paymentMethodStats,
             disputes: disputeStats
         };
+
+        // Store in Redis for 60 seconds
+        await setCachedData(cacheKey, dashboardStats, 60);
 
         res.json({
             success: true,
@@ -1698,6 +1710,14 @@ const getDashboardRecentActivity = async (req, res) => {
 const getDashboardAnalytics = async (req, res) => {
     try {
         const { period = '7d' } = req.query;
+        const cacheKey = `dashboard_analytics_${period}`;
+
+        // 1. Check Redis Cache
+        const cached = await getCachedData(cacheKey);
+        if (cached) {
+            return res.status(200).json({ success: true, ...cached, fromCache: true });
+        }
+
         let startDate;
         const now = new Date();
 
@@ -1731,118 +1751,122 @@ const getDashboardAnalytics = async (req, res) => {
             createdAt: { $gte: startDate }
         };
 
-        // 1. Booking & Revenue Analytics
-        const bookingStatsAgg = await Booking.aggregate([
-            { $match: matchStage },
-            {
-                $facet: {
-                    statusDistribution: [
-                        { $group: { _id: "$status", count: { $sum: 1 } } }
-                    ],
-                    revenueOverview: [
-                        { $match: { status: 'completed' } },
-                        {
-                            $group: {
-                                _id: null,
-                                totalRevenue: { $sum: "$totalAmount" },
-                                totalCommission: { $sum: "$commissionAmount" },
-                                totalPayout: { $sum: "$providerEarnings" },
-                                completedCount: { $sum: 1 }
+        // Optimized Aggregations with lean() and Promise.all
+        const [bookingStatsAgg, topProvidersAgg, customerStatsAgg, pendingCounts, activityData] = await Promise.all([
+            // 1. Booking & Revenue Analytics (Consolidated Facet)
+            Booking.aggregate([
+                { $match: matchStage },
+                {
+                    $facet: {
+                        statusDistribution: [{ $group: { _id: "$status", count: { $sum: 1 } } }],
+                        revenueOverview: [
+                            { $match: { status: 'completed' } },
+                            {
+                                $group: {
+                                    _id: null,
+                                    totalRevenue: { $sum: "$totalAmount" },
+                                    totalCommission: { $sum: "$commissionAmount" },
+                                    totalPayout: { $sum: "$providerEarnings" },
+                                    completedCount: { $sum: 1 }
+                                }
                             }
-                        }
-                    ],
-                    chartData: [
-                        { $match: { status: 'completed' } },
-                        {
-                            $group: {
-                                _id: {
-                                    $cond: {
-                                        if: { $in: [period, ['90d', '180d', '365d']] },
-                                        then: { $dateToString: { format: "%Y-%m", date: "$createdAt" } },
-                                        else: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }
-                                    }
-                                },
-                                revenue: { $sum: "$totalAmount" }
-                            }
-                        },
-                        { $sort: { _id: 1 } }
-                    ],
-                    cancellationReasons: [
-                        { $match: { status: 'cancelled' } },
-                        {
-                            $group: {
-                                _id: { $ifNull: ["$cancellationProgress.reason", "Unknown"] },
-                                count: { $sum: 1 }
-                            }
-                        },
-                        { $project: { reason: "$_id", count: 1, _id: 0 } }
-                    ]
+                        ],
+                        chartData: [
+                            { $match: { status: 'completed' } },
+                            {
+                                $group: {
+                                    _id: {
+                                        $cond: {
+                                            if: { $in: [period, ['90d', '180d', '365d']] },
+                                            then: { $dateToString: { format: "%Y-%m", date: "$createdAt" } },
+                                            else: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }
+                                        }
+                                    },
+                                    revenue: { $sum: "$totalAmount" }
+                                }
+                            },
+                            { $sort: { _id: 1 } }
+                        ],
+                        cancellationReasons: [
+                            { $match: { status: 'cancelled' } },
+                            {
+                                $group: {
+                                    _id: { $ifNull: ["$cancellationProgress.reason", "Unknown"] },
+                                    count: { $sum: 1 }
+                                }
+                            },
+                            { $project: { reason: "$_id", count: 1, _id: 0 } }
+                        ]
+                    }
                 }
-            }
+            ]),
+
+            // 2. Top Performing Providers
+            Booking.aggregate([
+                { $match: { ...matchStage, status: 'completed' } },
+                {
+                    $group: {
+                        _id: "$provider",
+                        jobs: { $sum: 1 },
+                        earnings: { $sum: "$providerEarnings" }
+                    }
+                },
+                { $sort: { jobs: -1, earnings: -1 } },
+                { $limit: 10 },
+                {
+                    $lookup: {
+                        from: 'providers',
+                        localField: '_id',
+                        foreignField: '_id',
+                        as: 'providerInfo'
+                    }
+                },
+                { $unwind: "$providerInfo" },
+                {
+                    $project: {
+                        name: "$providerInfo.name",
+                        jobs: 1,
+                        earnings: 1,
+                        id: "$providerInfo.providerId",
+                        profilePic: "$providerInfo.profilePicUrl"
+                    }
+                }
+            ]),
+
+            // 3. Customer Stats
+            User.aggregate([
+                {
+                    $facet: {
+                        new: [
+                            { $match: { role: 'customer', createdAt: { $gte: startDate } } },
+                            { $count: "count" }
+                        ],
+                        total: [
+                            { $match: { role: 'customer' } },
+                            { $count: "count" }
+                        ]
+                    }
+                }
+            ]),
+
+            // 4. Pending Counts
+            Promise.all([
+                Provider.countDocuments({ approved: false, kycStatus: 'pending' }),
+                PaymentRecord.countDocuments({ status: { $in: ['requested', 'processing'] } }),
+                Complaint.countDocuments({ status: { $in: ['Open', 'In-Progress'] } })
+            ]),
+
+            // 5. Recent Activity
+            Promise.all([
+                Booking.find().sort({ createdAt: -1 }).limit(10).populate('customer', 'name').populate('provider', 'name').select('customer provider createdAt totalAmount status').lean(),
+                Booking.find({ status: 'completed' }).sort({ serviceCompletedAt: -1 }).limit(5).populate('customer', 'name').populate('provider', 'name').select('customer provider serviceCompletedAt createdAt totalAmount').lean(),
+                User.find({ role: 'customer' }).sort({ createdAt: -1 }).limit(5).select('name createdAt').lean()
+            ])
         ]);
 
         const stats = bookingStatsAgg[0];
-
-        // 2. Top Performing Providers
-        const topProvidersAgg = await Booking.aggregate([
-            { $match: { ...matchStage, status: 'completed' } },
-            {
-                $group: {
-                    _id: "$provider",
-                    jobs: { $sum: 1 },
-                    earnings: { $sum: "$providerEarnings" }
-                }
-            },
-            { $sort: { jobs: -1, earnings: -1 } },
-            { $limit: 10 },
-            {
-                $lookup: {
-                    from: 'providers',
-                    localField: '_id',
-                    foreignField: '_id',
-                    as: 'providerInfo'
-                }
-            },
-            { $unwind: "$providerInfo" },
-            {
-                $project: {
-                    name: "$providerInfo.name",
-                    jobs: 1,
-                    earnings: 1,
-                    id: "$providerInfo.providerId",
-                    profilePic: "$providerInfo.profilePicUrl"
-                }
-            }
-        ]);
-
-        // 3. Customer Stats
-        const customerStatsAgg = await User.aggregate([
-            {
-                $facet: {
-                    new: [
-                        { $match: { role: 'customer', createdAt: { $gte: startDate } } },
-                        { $count: "count" }
-                    ],
-                    total: [
-                        { $match: { role: 'customer' } },
-                        { $count: "count" }
-                    ]
-                }
-            }
-        ]);
-
-        // 4. Pending Actions & Live Activity
-        const [pendingProviders, pendingWithdrawals, pendingDisputes] = await Promise.all([
-            Provider.countDocuments({ approved: false, kycStatus: 'pending' }),
-            PaymentRecord.countDocuments({ status: { $in: ['requested', 'processing'] } }),
-            Complaint.countDocuments({ status: { $in: ['Open', 'In-Progress'] } })
-        ]);
-
-        const [recentBookings, recentlyCompleted, latestUsers] = await Promise.all([
-            Booking.find().sort({ createdAt: -1 }).limit(10).populate('customer', 'name').populate('provider', 'name').lean(),
-            Booking.find({ status: 'completed' }).sort({ serviceCompletedAt: -1 }).limit(5).populate('customer', 'name').populate('provider', 'name').lean(),
-            User.find({ role: 'customer' }).sort({ createdAt: -1 }).limit(5).lean()
-        ]);
+        const [pendingProviders, pendingWithdrawals, pendingDisputes] = pendingCounts;
+        const [recentBookings, recentlyCompleted, latestUsers] = activityData;
 
         // Process Live Activity into flat list
         const liveActivity = [
@@ -1902,6 +1926,9 @@ const getDashboardAnalytics = async (req, res) => {
                 pendingDisputes: pendingDisputes
             }
         };
+
+        // Cache the result in Redis for 60 seconds
+        await setCachedData(cacheKey, result, 60);
 
         res.status(200).json({
             success: true,
@@ -2165,6 +2192,10 @@ const processAdminRefund = async (req, res) => {
             );
         } catch (err) { }
 
+        // Invalidate dashboard caches
+        await invalidateCache('admin_dashboard_*');
+        await invalidateCache('dashboard_analytics_*');
+
         res.json({
             success: true,
             message: `Refund of ₹${refundAmount} processed successfully. Booking and Complaint synchronized.`,
@@ -2300,6 +2331,211 @@ module.exports = {
     getDashboardAnalytics,
     processAdminRefund,
     rejectAdminRefund,
-    togglePayoutHold
+    togglePayoutHold,
+    getSameIPFraud,
+    getDeviceAbuse,
+    getCancellationAlerts,
+    getFakeReviews
 };
+
+/**
+ * 1️⃣ SAME IP DETECTION
+ */
+async function getSameIPFraud(req, res) {
+    try {
+        // Aggregate Users by IP
+        const userGroups = await User.aggregate([
+            { $match: { "metadata.ip": { $exists: true, $ne: null } } },
+            {
+                $group: {
+                    _id: "$metadata.ip",
+                    count: { $sum: 1 },
+                    users: { $push: { _id: "$_id", name: "$name", email: "$email", role: "$role" } }
+                }
+            },
+            { $match: { count: { $gt: 1 } } },
+            { $sort: { count: -1 } }
+        ]);
+
+        // Aggregate Bookings by IP
+        const bookingGroups = await Booking.aggregate([
+            { $match: { "metadata.ip": { $exists: true, $ne: null } } },
+            {
+                $group: {
+                    _id: "$metadata.ip",
+                    count: { $sum: 1 },
+                    bookings: { $push: { _id: "$_id", bookingId: "$bookingId", customer: "$customer" } }
+                }
+            },
+            { $match: { count: { $gt: 5 } } }, // Excessive activity threshold
+            { $sort: { count: -1 } }
+        ]);
+
+        // Combine results
+        const result = userGroups.map(group => {
+            const bGroup = bookingGroups.find(bg => bg._id === group._id);
+            return {
+                suspiciousIP: group._id,
+                totalAccounts: group.count,
+                totalBookings: bGroup ? bGroup.count : 0,
+                users: group.users,
+                providers: [] // Add logic if provider model also stores IP
+            };
+        });
+
+        res.status(200).json({ success: true, data: result });
+    } catch (error) {
+        console.error('Same IP Detection Error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+}
+
+/**
+ * 2️⃣ SAME DEVICE DETECTION
+ */
+async function getDeviceAbuse(req, res) {
+    try {
+        const deviceGroups = await User.aggregate([
+            { $match: { "metadata.userAgent": { $exists: true, $ne: null } } },
+            {
+                $group: {
+                    _id: "$metadata.userAgent",
+                    count: { $sum: 1 },
+                    users: { $push: { _id: "$_id", name: "$name", email: "$email" } }
+                }
+            },
+            { $match: { count: { $gt: 2 } } },
+            { $sort: { count: -1 } }
+        ]);
+
+        res.status(200).json({
+            success: true,
+            data: deviceGroups.map(g => ({
+                device: g._id,
+                accounts: g.count,
+                users: g.users
+            }))
+        });
+    } catch (error) {
+        console.error('Device Abuse Error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+}
+
+/**
+ * 3️⃣ HIGH CANCELLATION ALERT
+ */
+async function getCancellationAlerts(req, res) {
+    try {
+        const alerts = await Booking.aggregate([
+            {
+                $group: {
+                    _id: "$customer",
+                    totalBookings: { $sum: 1 },
+                    cancelledBookings: {
+                        $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0] }
+                    }
+                }
+            },
+            {
+                $addFields: {
+                    cancellationRate: {
+                        $cond: [
+                            { $gt: ["$totalBookings", 0] },
+                            { $multiply: [{ $divide: ["$cancelledBookings", "$totalBookings"] }, 100] },
+                            0
+                        ]
+                    }
+                }
+            },
+            { $match: { cancellationRate: { $gt: 30 }, totalBookings: { $gt: 2 } } },
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "_id",
+                    foreignField: "_id",
+                    as: "user"
+                }
+            },
+            { $unwind: "$user" },
+            {
+                $project: {
+                    user: { _id: 1, name: 1, email: 1, role: 1 },
+                    totalBookings: 1,
+                    cancelledBookings: 1,
+                    cancellationRate: 1,
+                    suspicious: { $gt: ["$cancellationRate", 50] }
+                }
+            },
+            { $sort: { cancellationRate: -1 } }
+        ]);
+
+        res.status(200).json({ success: true, data: alerts });
+    } catch (error) {
+        console.error('Cancellation Alert Error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+}
+
+/**
+ * 4️⃣ FAKE REVIEW DETECTION
+ */
+async function getFakeReviews(req, res) {
+    try {
+        // Only fetch reviews that have providerFeedback populated
+        const reviews = await Feedback.find({
+            'providerFeedback.rating': { $exists: true }
+        })
+            .populate('customer', 'name email')
+            .populate('providerFeedback.provider', 'name email')
+            .lean();
+
+        const suspicious = reviews
+            .filter(rev => rev.providerFeedback != null) // extra guard
+            .map(rev => {
+                const comment = rev.providerFeedback?.comment || '';
+                const rating  = rev.providerFeedback?.rating;
+
+                let suspiciousReason = [];
+                let riskScore = 0;
+
+                // Flag very short review text
+                if (comment.length < 10) {
+                    suspiciousReason.push('Very short review');
+                    riskScore += 20;
+                }
+                // Flag 5-star reviews with almost no comment
+                if (rating === 5 && comment.length < 5) {
+                    suspiciousReason.push('5-star spam potential');
+                    riskScore += 30;
+                }
+                // Flag reviews submitted from the same IP as the provider login
+                if (
+                    rev.metadata?.ip &&
+                    rev.providerFeedback?.provider?.metadata?.ip &&
+                    rev.metadata.ip === rev.providerFeedback.provider.metadata.ip
+                ) {
+                    suspiciousReason.push('Same IP as provider');
+                    riskScore += 50;
+                }
+
+                return {
+                    _id:             rev._id,
+                    reviewer:        rev.customer,
+                    provider:        rev.providerFeedback?.provider,
+                    rating,
+                    comment,
+                    submittedAt:     rev.createdAt,
+                    suspiciousReason: suspiciousReason.join(', '),
+                    risk: riskScore > 40 ? 'HIGH' : riskScore > 20 ? 'MEDIUM' : 'LOW'
+                };
+            })
+            .filter(r => r.suspiciousReason.length > 0);
+
+        res.status(200).json({ success: true, data: suspicious });
+    } catch (error) {
+        console.error('Fake Review Error:', error);
+        res.status(500).json({ success: false, message: 'Server error', detail: error.message });
+    }
+}
 

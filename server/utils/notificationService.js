@@ -158,15 +158,21 @@ const notifyAllAdmins = async (payload) => {
  * Send broadcast notification to all users of a specific audience
  * @param {string} audience - 'all' | 'customer' | 'provider'
  * @param {object} payload  - { title, body, url, data }
+ * @param {object} filters  - { city, category, minBookings }
  * @returns {{ success, sent, failed, total }}
  */
-const sendBroadcastNotification = async (audience, payload) => {
+const sendBroadcastNotification = async (audience, payload, filters = {}) => {
     try {
         let allTokens = [];
         let notificationsToSave = [];
+        const { city, category, minBookings = 0 } = filters;
 
         if (audience === 'all' || audience === 'customer') {
-            const users = await User.find({}, '_id fcmTokens');
+            const userQuery = { role: 'customer' };
+            if (city) userQuery['address.city'] = new RegExp(city, 'i');
+            if (minBookings > 0) userQuery.totalBookings = { $gte: minBookings };
+
+            const users = await User.find(userQuery, '_id fcmTokens');
             users.forEach(u => {
                 notificationsToSave.push({
                     userId: u._id,
@@ -176,7 +182,9 @@ const sendBroadcastNotification = async (audience, payload) => {
                     type: payload.data?.type || 'broadcast',
                     referenceId: payload.data?.referenceId || null,
                     url: payload.url || '/',
-                    isRead: false
+                    isRead: false,
+                    isScheduled: payload.isScheduled || false,
+                    sentAt: new Date()
                 });
                 if (u.fcmTokens && u.fcmTokens.length > 0) {
                     u.fcmTokens.forEach(t => allTokens.push(t.token));
@@ -185,7 +193,12 @@ const sendBroadcastNotification = async (audience, payload) => {
         }
 
         if (audience === 'all' || audience === 'provider') {
-            const providers = await Provider.find({ isDeleted: false }, '_id fcmTokens');
+            const providerQuery = { isDeleted: false };
+            if (city) providerQuery['address.city'] = new RegExp(city, 'i');
+            if (category) providerQuery.services = category; // category ID
+            if (minBookings > 0) providerQuery.completedBookings = { $gte: minBookings };
+
+            const providers = await Provider.find(providerQuery, '_id fcmTokens');
             providers.forEach(p => {
                 notificationsToSave.push({
                     userId: p._id,
@@ -195,7 +208,9 @@ const sendBroadcastNotification = async (audience, payload) => {
                     type: payload.data?.type || 'broadcast',
                     referenceId: payload.data?.referenceId || null,
                     url: payload.url || '/',
-                    isRead: false
+                    isRead: false,
+                    isScheduled: payload.isScheduled || false,
+                    sentAt: new Date()
                 });
                 if (p.fcmTokens && p.fcmTokens.length > 0) {
                     p.fcmTokens.forEach(t => allTokens.push(t.token));
@@ -256,15 +271,22 @@ const scheduleNotification = async (payload) => {
             message: body,
             url,
             type: audience ? 'broadcast' : type,
-            scheduledTime: new Date(scheduledTime),
+            scheduledFor: new Date(scheduledTime),
+            isScheduled: true,
+            targetCity: payload.targetCity || null,
+            targetProviderCategory: payload.targetProviderCategory || null,
+            minBookings: payload.minBookings || 0,
             status: 'pending',
             totalSent: 0,
             successCount: 0,
             failureCount: 0,
+            deliveredCount: 0,
+            readCount: 0,
+            clickedCount: 0,
             retries: 0
         });
 
-        console.log(`[NotificationService] Notification scheduled for ${newNotif.scheduledTime} (ID: ${newNotif._id})`);
+        console.log(`[NotificationService] Notification scheduled for ${newNotif.scheduledFor} (ID: ${newNotif._id})`);
         return { success: true, message: 'Notification scheduled successfully', notification: newNotif };
     } catch (error) {
         console.error('[NotificationService] Error scheduling notification:', error);
@@ -278,10 +300,10 @@ const scheduleNotification = async (payload) => {
 cron.schedule('* * * * *', async () => {
     try {
         const now = new Date();
-        // Find pending notifications where scheduledTime has passed, up to 3 retries max
+        // Find pending notifications where scheduledFor has passed, up to 3 retries max
         const pendingNotifications = await Notification.find({
             status: 'pending',
-            scheduledTime: { $lte: now },
+            scheduledFor: { $lte: now },
             retries: { $lt: 3 }
         });
 
@@ -298,7 +320,12 @@ cron.schedule('* * * * *', async () => {
                         title: notif.title,
                         body: notif.message,
                         url: notif.url,
-                        data: { type: notif.type, url: notif.url, route: notif.url, role: notif.audience === 'all' ? null : notif.audience }
+                        isScheduled: true,
+                        data: { type: notif.type, url: notif.url, route: notif.url, role: notif.audience === 'all' ? null : notif.audience, notificationId: notif._id }
+                    }, {
+                        city: notif.targetCity,
+                        category: notif.targetProviderCategory,
+                        minBookings: notif.minBookings
                     });
                 } else if (notif.userId && notif.role) {
                     // Collect tokens for a single user to trigger sendPushNotification manually,
@@ -316,7 +343,7 @@ cron.schedule('* * * * *', async () => {
                             title: notif.title,
                             body: notif.message,
                             url: notif.url,
-                            data: { type: notif.type, url: notif.url, route: notif.url, role: notif.role }
+                            data: { type: notif.type, url: notif.url, route: notif.url, role: notif.role, notificationId: notif._id }
                         });
                         if (result) {
                             result = { success: true, sent: result.successCount, failed: result.failureCount, total: tokens.length };
@@ -334,6 +361,7 @@ cron.schedule('* * * * *', async () => {
                 notif.sentAt = new Date();
                 notif.totalSent = result?.total || 0;
                 notif.successCount = result?.sent || 0;
+                notif.deliveredCount = result?.sent || 0;
                 notif.failureCount = result?.failed || 0;
                 await notif.save();
                 console.log(`[NotificationService] Scheduled notification (ID: ${notif._id}) SENT successfully.`);

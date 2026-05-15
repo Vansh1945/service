@@ -23,6 +23,7 @@ const SystemSetting = lazy(() => import("../pages/Admin/System-Setting"));
 const UserContacts = lazy(() => import("../pages/Admin/User-Contacts"));
 const AdminNotification = lazy(() => import("../pages/Admin/AdminNotification"));
 const AdminTransactions = lazy(() => import("../pages/Admin/Transactions"));
+const AdminFraud = lazy(() => import("../pages/Admin/fraud"));
 
 const AdminRoutes = () => {
     return (
@@ -50,6 +51,7 @@ const AdminRoutes = () => {
                     <Route path="user-contacts" element={<UserContacts />} />
                     <Route path="notifications" element={<AdminNotification />} />
                     <Route path="transactions" element={<AdminTransactions />} />
+                    <Route path="fraud" element={<AdminFraud />} />
                 </Route>
             </Route>
         </Routes>

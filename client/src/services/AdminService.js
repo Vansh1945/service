@@ -93,3 +93,20 @@ export const rejectRefund = (bookingId, data) => {
 export const togglePayoutHold = (bookingId, data) => {
     return axiosInstance.patch(`/admin/payout/${bookingId}/hold`, data);
 };
+
+// Fraud Detection
+export const getSameIPFraud = () => {
+    return axiosInstance.get("/admin/fraud/same-ip");
+};
+
+export const getDeviceAbuse = () => {
+    return axiosInstance.get("/admin/fraud/device-abuse");
+};
+
+export const getCancellationAlerts = () => {
+    return axiosInstance.get("/admin/fraud/cancellation-alerts");
+};
+
+export const getFakeReviews = () => {
+    return axiosInstance.get("/admin/fraud/fake-reviews");
+};

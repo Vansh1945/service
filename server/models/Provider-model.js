@@ -214,6 +214,11 @@ const providerSchema = new mongoose.Schema({
         pendingAmount: Number,
         pendingRequestTime: Date
     },
+    metadata: {
+        ip: String,
+        userAgent: String,
+        lastLogin: Date
+    }
 }, {
     timestamps: true,
     toJSON: {

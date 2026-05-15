@@ -65,7 +65,7 @@ const AdminDashboard = () => {
   // Handle chart rendering delay to avoid width(-1) error
   useEffect(() => {
     if (!initialLoading && analytics) {
-      const timer = setTimeout(() => setIsReady(true), 150);
+      const timer = setTimeout(() => setIsReady(true), 300);
       return () => clearTimeout(timer);
     }
   }, [initialLoading, analytics]);
@@ -243,35 +243,35 @@ const AdminDashboard = () => {
               </div>
             )}
             {isReady && (
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} debounce={100}>
+              <ResponsiveContainer width="100%" height={320} minWidth={0} debounce={100}>
                 <LineChart data={analytics?.revenueStats?.chartData || []}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                <XAxis
-                  dataKey="_id"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 12, fill: '#94a3b8' }}
-                />
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 12, fill: '#94a3b8' }}
-                  tickFormatter={(val) => `₹${val}`}
-                />
-                <Tooltip
-                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                  formatter={(value) => formatCurrency(value)}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="revenue"
-                  stroke="#0D9488"
-                  strokeWidth={3}
-                  dot={{ r: 4, fill: '#0D9488', strokeWidth: 2, stroke: '#fff' }}
-                  activeDot={{ r: 6, strokeWidth: 0 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                  <XAxis
+                    dataKey="_id"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 12, fill: '#94a3b8' }}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 12, fill: '#94a3b8' }}
+                    tickFormatter={(val) => `₹${val}`}
+                  />
+                  <Tooltip
+                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                    formatter={(value) => formatCurrency(value)}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="revenue"
+                    stroke="#0D9488"
+                    strokeWidth={3}
+                    dot={{ r: 4, fill: '#0D9488', strokeWidth: 2, stroke: '#fff' }}
+                    activeDot={{ r: 6, strokeWidth: 0 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
             )}
           </div>
         </div>
@@ -289,7 +289,7 @@ const AdminDashboard = () => {
           </div>
           <div className="h-64 w-full min-h-[256px] relative overflow-hidden">
             {(analytics?.cancelledStats?.reasons?.length > 0 && isReady) ? (
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} debounce={100}>
+              <ResponsiveContainer width="100%" height={256} minWidth={0} debounce={100}>
                 <PieChart>
                   <Pie
                     data={analytics?.cancelledStats?.reasons || []}

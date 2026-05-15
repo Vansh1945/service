@@ -128,6 +128,14 @@ exports.Login = async (req, res) => {
       })
     };
 
+    // Capture fraud detection data
+    user.metadata = {
+      ip: req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+      userAgent: req.headers['user-agent'],
+      lastLogin: new Date()
+    };
+    await user.save();
+
     res.status(200).json({
       success: true,
       message: 'Login successful',

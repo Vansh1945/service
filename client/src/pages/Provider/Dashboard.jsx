@@ -58,6 +58,7 @@ const Dashboard = () => {
     disputesCount: 0,
     pendingReviews: 0
   });
+  const [isReady, setIsReady] = useState(false);
   const [actionLoading, setActionLoading] = useState({});
   const [complaintsCount, setComplaintsCount] = useState(0);
 
@@ -155,6 +156,13 @@ const Dashboard = () => {
   useEffect(() => {
     fetchDashboardData();
   }, [fetchDashboardData]);
+
+  useEffect(() => {
+    if (!loading && dashboardData.summary) {
+      const timer = setTimeout(() => setIsReady(true), 300);
+      return () => clearTimeout(timer);
+    }
+  }, [loading, dashboardData.summary]);
 
   if (loading) return <Loader />;
 
@@ -363,7 +371,8 @@ const Dashboard = () => {
                 <option value={`${new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}_${new Date().toISOString().split('T')[0]}`}>90 days</option>
               </select>
             </div>
-            <ResponsiveContainer width="100%" height={240}>
+            {isReady && (
+              <ResponsiveContainer width="100%" height={240}>
               <LineChart data={earnings?.chartData || []}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
                 <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#6B7280' }} />
@@ -372,6 +381,7 @@ const Dashboard = () => {
                 <Line type="monotone" dataKey="earnings" stroke="#0D9488" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
+            )}
           </div>
 
           <div className="bg-white rounded-2xl shadow-sm p-5 border border-gray-100">
@@ -379,7 +389,8 @@ const Dashboard = () => {
               <FiPieChart className="text-primary" />
               Bookings Breakdown
             </h3>
-            <ResponsiveContainer width="100%" height={240}>
+            {isReady && (
+              <ResponsiveContainer width="100%" height={240}>
               <PieChart>
                 <Pie
                   data={bookings?.pieChartData || []}
@@ -397,6 +408,7 @@ const Dashboard = () => {
                 <Tooltip />
               </PieChart>
             </ResponsiveContainer>
+            )}
             <div className="flex flex-wrap justify-center gap-4 mt-2">
               {(bookings?.pieChartData || []).map((entry, index) => (
                 <div key={index} className="flex items-center gap-1.5">

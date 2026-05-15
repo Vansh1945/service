@@ -49,3 +49,11 @@ export const cancelNotification = (id) => {
 export const resendNotification = (id) => {
     return axiosInstance.post(`/notifications/admin/resend/${id}`);
 };
+
+export const getAnalytics = (id) => {
+    return axiosInstance.get(`/notifications/admin/analytics/${id}`);
+};
+
+export const markClicked = (id) => {
+    return axiosInstance.patch(`/notifications/clicked/${id}`);
+};

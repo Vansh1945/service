@@ -43,4 +43,10 @@ router.post('/refund/:bookingId/process', adminController.processAdminRefund);
 router.post('/refund/:bookingId/reject', adminController.rejectAdminRefund);
 router.patch('/payout/:bookingId/hold', adminController.togglePayoutHold);
 
+// Fraud Detection
+router.get('/fraud/same-ip', adminController.getSameIPFraud);
+router.get('/fraud/device-abuse', adminController.getDeviceAbuse);
+router.get('/fraud/cancellation-alerts', adminController.getCancellationAlerts);
+router.get('/fraud/fake-reviews', adminController.getFakeReviews);
+
 module.exports = router;

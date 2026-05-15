@@ -58,6 +58,31 @@ const markRead = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Notification not found' });
         }
 
+        // If this is a broadcast notification (indicated by notificationId in metadata or similar, 
+        // but here we just check if it has referenceId or type broadcast in the actual broadcast doc)
+        // Actually, broadcast notifications are saved per-user. 
+        // We should increment readCount in the PARENT broadcast record if possible, 
+        // but the current structure doesn't easily link per-user broadcast to parent.
+        // HOWEVER, the requirement is "Track when user opens notification".
+        // If we can't link, we'll just increment it on the user's copy if it was broadcast.
+        if (notification.type === 'broadcast') {
+            // Find the parent broadcast record by title and message? 
+            // Better: just increment readCount on the record itself.
+            // Wait, per-user records ARE the broadcast notifications. 
+            // The "history" shows the count.
+            // Let's increment readCount on the document with the same title/message/audience/type='broadcast' AND userId=null (the history record)
+            await Notification.updateOne(
+                { 
+                    title: notification.title, 
+                    message: notification.message, 
+                    type: 'broadcast', 
+                    userId: null,
+                    status: 'sent'
+                },
+                { $inc: { readCount: 1 } }
+            );
+        }
+
         return res.status(200).json({ success: true, data: notification });
     } catch (error) {
         console.error('markRead error:', error);
@@ -186,61 +211,105 @@ const removeToken = async (req, res) => {
  * POST /api/notifications/send-broadcast
  * Admin-only: Send FCM broadcast to selected audience
  */
-    const sendBroadcast = async (req, res) => {
-        try {
-            const { audience = 'all', title, body, url = '/', type = 'broadcast', scheduledTime } = req.body;
-    
-            if (!title || !body) {
-                return res.status(400).json({ success: false, message: 'Title and body are required' });
+const sendBroadcast = async (req, res) => {
+    try {
+        const {
+            audience = 'all',
+            targetRole,
+            title,
+            body,
+            message,
+            url = '/',
+            type = 'broadcast',
+            scheduledFor,
+            scheduledTime,
+            sendNow = true,
+            city,
+            targetCity,
+            providerCategory,
+            targetProviderCategory,
+            minBookings = 0
+        } = req.body;
+
+        const finalAudience = targetRole || audience;
+        const finalBody = message || body;
+        const finalScheduledTime = scheduledFor || scheduledTime;
+        const finalCity = city || targetCity;
+        const finalCategory = providerCategory || targetProviderCategory;
+
+        if (!title || !finalBody) {
+            return res.status(400).json({ success: false, message: 'Title and message are required' });
+        }
+
+        const validAudiences = ['all', 'customer', 'provider'];
+        if (!validAudiences.includes(finalAudience)) {
+            return res.status(400).json({ success: false, message: 'audience must be all, customer, or provider' });
+        }
+
+        // Handle Scheduling
+        if (sendNow === false || finalScheduledTime) {
+            if (finalScheduledTime && new Date(finalScheduledTime) < new Date()) {
+                return res.status(400).json({ success: false, message: 'Scheduled time must be in the future' });
             }
-    
-            const validAudiences = ['all', 'customer', 'provider'];
-            if (!validAudiences.includes(audience)) {
-                return res.status(400).json({ success: false, message: 'audience must be all, customer, or provider' });
-            }
-    
-            if (scheduledTime) {
-                const schedResult = await scheduleNotification({
-                    audience,
-                    title,
-                    body,
-                    url,
-                    type,
-                    scheduledTime
-                });
-                return res.status(schedResult.success ? 200 : 500).json({
-                    success: schedResult.success,
-                    message: schedResult.message,
-                    data: schedResult.notification
-                });
-            }
-    
-            const result = await sendBroadcastNotification(audience, {
+
+            const schedResult = await scheduleNotification({
+                audience: finalAudience,
                 title,
-                body,
+                body: finalBody,
                 url,
-                data: { type, url }
+                type,
+                scheduledTime: finalScheduledTime,
+                targetCity: finalCity,
+                targetProviderCategory: finalCategory,
+                minBookings
             });
+
+            return res.status(schedResult.success ? 200 : 500).json({
+                success: schedResult.success,
+                message: schedResult.message,
+                data: schedResult.notification
+            });
+        }
+
+        // Immediate Send
+        const filters = {
+            city: finalCity,
+            category: finalCategory,
+            minBookings
+        };
+
+        const result = await sendBroadcastNotification(finalAudience, {
+            title,
+            body: finalBody,
+            url,
+            data: { type, url }
+        }, filters);
 
         if (!result.success && result.sent === 0 && result.total === 0) {
             return res.status(200).json({
                 success: false,
-                message: result.message || 'No registered devices found',
+                message: result.message || 'No matching users/devices found',
                 data: result
             });
         }
 
-        // Save History before returning response to ensure frontend fetchHistory gets the latest data
+        // Save History
         try {
             await Notification.create({
                 title,
-                message: body,
+                message: finalBody,
                 type: 'broadcast',
-                audience,
+                audience: finalAudience,
                 url,
                 totalSent: result.total || 0,
                 successCount: result.sent || 0,
-                failureCount: result.failed || 0
+                deliveredCount: result.sent || 0,
+                failureCount: result.failed || 0,
+                targetCity: finalCity,
+                targetProviderCategory: finalCategory,
+                minBookings,
+                status: 'sent',
+                sentAt: new Date()
             });
         } catch (err) {
             console.error('[NotificationController] Error saving broadcast history:', err);
@@ -264,7 +333,7 @@ const removeToken = async (req, res) => {
 const getAdminNotifications = async (req, res) => {
     try {
         const { type, audience, status, startDate, endDate, page = 1, limit = 20 } = req.query;
-        const query = { isDeletedByAdmin: false };
+        const query = { isDeletedByAdmin: false, userId: null };
 
         if (type) query.type = type;
         if (audience) query.audience = audience;
@@ -328,8 +397,8 @@ const updateNotification = async (req, res) => {
             notification.title = title || notification.title;
             notification.message = message || notification.message;
             notification.url = url || notification.url;
-            if (scheduledTime) {
-                notification.scheduledTime = new Date(scheduledTime);
+            if (scheduledTime || scheduledFor) {
+                notification.scheduledFor = new Date(scheduledTime || scheduledFor);
             }
         } else {
             return res.status(400).json({ success: false, message: 'Cannot edit notification in current status' });
@@ -442,6 +511,78 @@ const resendNotification = async (req, res) => {
     }
 };
 
+/**
+ * PATCH /api/notifications/clicked/:id
+ * Track notification click
+ */
+const markClicked = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.userID || req.body.userId;
+
+        const notification = await Notification.findOne({ _id: id, userId });
+        if (!notification) {
+            return res.status(404).json({ success: false, message: 'Notification not found' });
+        }
+
+        if (notification.type === 'broadcast') {
+            await Notification.updateOne(
+                {
+                    title: notification.title,
+                    message: notification.message,
+                    type: 'broadcast',
+                    userId: null,
+                    status: 'sent'
+                },
+                { $inc: { clickedCount: 1 } }
+            );
+        }
+
+        return res.status(200).json({ success: true, message: 'Click tracked' });
+    } catch (error) {
+        console.error('markClicked error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to track click' });
+    }
+};
+
+/**
+ * GET /api/notifications/admin/analytics/:id
+ * Admin-only: Get analytics for a broadcast notification
+ */
+const getAdminAnalytics = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const notification = await Notification.findById(id);
+
+        if (!notification) {
+            return res.status(404).json({ success: false, message: 'Notification not found' });
+        }
+
+        const totalSent = notification.totalSent || 0;
+        const delivered = notification.deliveredCount || notification.successCount || 0;
+        const read = notification.readCount || 0;
+        const clicked = notification.clickedCount || 0;
+
+        const readRate = totalSent > 0 ? ((read / totalSent) * 100).toFixed(2) : 0;
+        const clickRate = totalSent > 0 ? ((clicked / totalSent) * 100).toFixed(2) : 0;
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                totalSent,
+                delivered,
+                read,
+                clicked,
+                readRate: parseFloat(readRate),
+                clickRate: parseFloat(clickRate)
+            }
+        });
+    } catch (error) {
+        console.error('getAdminAnalytics error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to fetch analytics' });
+    }
+};
+
 module.exports = {
     getNotifications,
     markRead,
@@ -450,9 +591,11 @@ module.exports = {
     saveToken,
     removeToken,
     sendBroadcast,
-    getBroadcastHistory: getAdminNotifications, // Maintain backward compatibility if needed, or rename
+    getBroadcastHistory: getAdminNotifications,
     updateNotification,
     deleteNotification,
     cancelNotification,
-    resendNotification
+    resendNotification,
+    markClicked,
+    getAdminAnalytics
 };

@@ -321,7 +321,11 @@ const bookingSchema = new Schema({
       message: String,
       createdAt: { type: Date, default: Date.now }
     }
-  ]
+  ],
+  metadata: {
+    ip: String,
+    userAgent: String
+  }
 }, {
   toJSON: {
     virtuals: true,
