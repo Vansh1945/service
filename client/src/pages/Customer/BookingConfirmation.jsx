@@ -10,6 +10,7 @@ import {
 import { getPublicServiceById } from '../../services/ServiceService';
 import { getBooking, updateBookingPayment } from '../../services/BookingService';
 import * as TransactionService from '../../services/TransactionService';
+import * as CustomerService from '../../services/CustomerService';
 import Loader from '../../components/Loader';
 import { formatDate, formatCurrency } from '../../utils/format';
 
@@ -23,6 +24,7 @@ const BookingConfirmation = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('online');
+  const [walletBalance, setWalletBalance] = useState(0);
   const [bookingDetails, setBookingDetails] = useState(null);
   const [serviceDetails, setServiceDetails] = useState(null);
   const [razorpayLoaded, setRazorpayLoaded] = useState(false);
@@ -113,6 +115,11 @@ const BookingConfirmation = () => {
       }
 
       try {
+        const profileRes = await CustomerService.getProfile().catch(() => null);
+        if (profileRes?.data?.user?.wallet) {
+          setWalletBalance(profileRes.data.user.wallet.availableBalance || 0);
+        }
+
         if (location.state?.booking) {
           setBookingDetails(location.state.booking);
           setServiceDetails(location.state.service);
@@ -209,7 +216,37 @@ const BookingConfirmation = () => {
     }
   };
 
-  const handleOnlinePayment = async () => {
+  const handleWalletPayment = async () => {
+    setIsProcessingPayment(true);
+    const toastId = toast.loading('Processing wallet payment...');
+    try {
+      const response = await API.post(`/booking/pay/${bookingDetails._id}`, {
+        paymentDetails: { paymentMethod: 'wallet' }
+      });
+
+      if (!response.data?.success) throw new Error(response.data?.message || 'Payment failed');
+
+      toast.update(toastId, {
+        render: 'Payment successful! Booking confirmed.',
+        type: 'success',
+        isLoading: false,
+        autoClose: 2000
+      });
+      setTimeout(() => navigate('/customer/bookings'), 2000);
+    } catch (error) {
+      console.error('Wallet payment error:', error);
+      toast.update(toastId, {
+        render: error.response?.data?.message || error.message || 'Wallet payment failed',
+        type: 'error',
+        isLoading: false,
+        autoClose: 5000
+      });
+    } finally {
+      setIsProcessingPayment(false);
+    }
+  };
+
+  const handleOnlineOrMixedPayment = async (selectedMethod) => {
     if (!razorpayLoaded) {
       showToast('Payment gateway is loading...', 'info');
       return;
@@ -224,11 +261,15 @@ const BookingConfirmation = () => {
     setIsProcessingPayment(true);
 
     try {
+      const isMixed = selectedMethod === 'mixed';
+      const walletDeduction = isMixed ? Math.min(walletBalance, bookingDetails.totalAmount) : 0;
+      const remainingAmount = bookingDetails.totalAmount - walletDeduction;
+
       const orderResponse = await TransactionService.createOrder({
         bookingId: bookingDetails._id,
-        amount: Math.round(bookingDetails.totalAmount * 100),
+        amount: Math.round(remainingAmount * 100),
         currency: 'INR',
-        paymentMethod: 'online'
+        paymentMethod: selectedMethod
       });
 
       if (!orderResponse.data?.success) throw new Error('Failed to create payment order');
@@ -240,7 +281,9 @@ const BookingConfirmation = () => {
         amount: order.amount,
         currency: order.currency || 'INR',
         name: 'SAFEVOLT SOLUTIONS',
-        description: `Payment for ${getServiceInfo().title}`,
+        description: isMixed
+          ? `Mixed Payment: Wallet (₹${walletDeduction}) + Razorpay`
+          : `Payment for ${getServiceInfo().title}`,
         order_id: order.id,
         handler: async function (response) {
           try {
@@ -277,7 +320,7 @@ const BookingConfirmation = () => {
       rzp.open();
     } catch (error) {
       setIsProcessingPayment(false);
-      showToast('Failed to initialize payment', 'error');
+      showToast(error.response?.data?.message || 'Failed to initialize payment', 'error');
     }
   };
 
@@ -512,11 +555,135 @@ const BookingConfirmation = () => {
                     <CreditCard className="w-3.5 h-3.5 text-primary" />
                     Complete Payment
                   </h3>
+
+                  {/* Wallet Balance Indicator */}
+                  <div className="mb-4 p-3 bg-teal-50/50 border border-teal-100 rounded-xl flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Wallet className="w-4 h-4 text-teal-600" />
+                      <div>
+                        <p className="text-[10px] text-teal-600 font-bold uppercase tracking-wider">Available Wallet Balance</p>
+                        <p className="text-sm font-black text-teal-900">{formatCurrency(walletBalance)}</p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-medium bg-teal-100 text-teal-800 px-2 py-0.5 rounded-full">Secure</span>
+                  </div>
+
+                  {/* Payment Selector */}
+                  <div className="grid grid-cols-1 gap-2 mb-4">
+                    {/* Pay Online */}
+                    <div
+                      className={`flex items-center gap-3 p-2.5 border rounded-xl cursor-pointer transition-all ${paymentMethod === 'online' ? 'border-primary bg-primary/5 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}
+                      onClick={() => setPaymentMethod('online')}
+                    >
+                      <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'online' ? 'border-primary' : 'border-gray-300'}`}>
+                        {paymentMethod === 'online' && <div className="w-1.5 h-1.5 bg-primary rounded-full" />}
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs font-bold text-secondary">Pay Online</p>
+                        <p className="text-[9px] text-gray-400">Card, UPI, Netbanking</p>
+                      </div>
+                      <CreditCard className="w-3.5 h-3.5 text-gray-300" />
+                    </div>
+
+                    {/* Wallet Payment */}
+                    <div
+                      className={`flex items-center gap-3 p-2.5 border rounded-xl cursor-pointer transition-all ${
+                        walletBalance >= totalAmount
+                          ? paymentMethod === 'wallet'
+                            ? 'border-primary bg-primary/5 shadow-sm'
+                            : 'border-gray-100 hover:border-gray-200'
+                          : 'opacity-50 cursor-not-allowed bg-gray-50 border-gray-100'
+                      }`}
+                      onClick={() => {
+                        if (walletBalance >= totalAmount) {
+                          setPaymentMethod('wallet');
+                        } else {
+                          toast.info('Insufficient wallet balance for full wallet payment.');
+                        }
+                      }}
+                    >
+                      <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'wallet' ? 'border-primary' : 'border-gray-300'}`}>
+                        {paymentMethod === 'wallet' && <div className="w-1.5 h-1.5 bg-primary rounded-full" />}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-xs font-bold text-secondary">Wallet Payment</p>
+                          {walletBalance < totalAmount && (
+                            <span className="text-[8px] text-red-500 bg-red-50 px-1.5 py-0.5 rounded">Insufficient</span>
+                          )}
+                        </div>
+                        <p className="text-[9px] text-gray-400">Pay 100% from your Wallet</p>
+                      </div>
+                      <Wallet className="w-3.5 h-3.5 text-gray-300" />
+                    </div>
+
+                    {/* Wallet + Online Mixed */}
+                    <div
+                      className={`flex items-center gap-3 p-2.5 border rounded-xl cursor-pointer transition-all ${
+                        walletBalance > 0
+                          ? paymentMethod === 'mixed'
+                            ? 'border-primary bg-primary/5 shadow-sm'
+                            : 'border-gray-100 hover:border-gray-200'
+                          : 'opacity-50 cursor-not-allowed bg-gray-50 border-gray-100'
+                      }`}
+                      onClick={() => {
+                        if (walletBalance > 0) {
+                          setPaymentMethod('mixed');
+                        } else {
+                          toast.info('No wallet balance available for mixed payment.');
+                        }
+                      }}
+                    >
+                      <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'mixed' ? 'border-primary' : 'border-gray-300'}`}>
+                        {paymentMethod === 'mixed' && <div className="w-1.5 h-1.5 bg-primary rounded-full" />}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-xs font-bold text-secondary">Wallet + Online Mixed</p>
+                          {walletBalance <= 0 && (
+                            <span className="text-[8px] text-red-500 bg-red-50 px-1.5 py-0.5 rounded">₹0 Balance</span>
+                          )}
+                        </div>
+                        <p className="text-[9px] text-gray-400">
+                          {walletBalance > 0 && walletBalance < totalAmount
+                            ? `Use ₹${walletBalance} from wallet + pay remaining online`
+                            : 'Combine wallet balance with online payment'}
+                        </p>
+                      </div>
+                      <div className="flex gap-0.5 text-gray-300">
+                        <Wallet className="w-3 h-3" />
+                        <span className="text-[8px] mt-0.5">+</span>
+                        <CreditCard className="w-3 h-3" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Mixed payment deduction details */}
+                  {paymentMethod === 'mixed' && walletBalance > 0 && (
+                    <div className="mb-4 p-3 bg-amber-50/60 border border-amber-100 rounded-xl space-y-1">
+                      <p className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Mixed Payment Breakdown</p>
+                      <div className="flex justify-between text-xs font-medium text-amber-900">
+                        <span>Deducted from Wallet:</span>
+                        <span>{formatCurrency(Math.min(walletBalance, totalAmount))}</span>
+                      </div>
+                      <div className="flex justify-between text-xs font-bold text-amber-950 pt-1 border-t border-amber-100/50">
+                        <span>Remaining Pay Online:</span>
+                        <span>{formatCurrency(Math.max(0, totalAmount - walletBalance))}</span>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="space-y-3">
                     <button
-                      onClick={handleOnlinePayment}
-                      disabled={!razorpayLoaded || isProcessingPayment}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                      onClick={() => {
+                        if (paymentMethod === 'wallet') {
+                          handleWalletPayment();
+                        } else {
+                          handleOnlineOrMixedPayment(paymentMethod);
+                        }
+                      }}
+                      disabled={isProcessingPayment}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 bg-primary text-white rounded-lg text-sm font-bold hover:bg-primary/90 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
                     >
                       {isProcessingPayment ? (
                         <>
@@ -526,18 +693,24 @@ const BookingConfirmation = () => {
                       ) : (
                         <>
                           <CreditCard className="w-4 h-4" />
-                          Pay Online {formatCurrency(totalAmount)}
+                          {paymentMethod === 'wallet'
+                            ? `Pay via Wallet • ${formatCurrency(totalAmount)}`
+                            : paymentMethod === 'mixed'
+                              ? `Pay Remaining • ${formatCurrency(Math.max(0, totalAmount - walletBalance))}`
+                              : `Pay Online • ${formatCurrency(totalAmount)}`}
                         </>
                       )}
                     </button>
-                    <button
-                      onClick={() => setShowCashModal(true)}
-                      disabled={isProcessingPayment}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Wallet className="w-4 h-4" />
-                      Pay Cash Later
-                    </button>
+                    {bookingDetails.paymentMethod === 'cash' && (
+                      <button
+                        onClick={() => setShowCashModal(true)}
+                        disabled={isProcessingPayment}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Wallet className="w-4 h-4" />
+                        Keep Cash / COD
+                      </button>
+                    )}
                   </div>
                   <div className="mt-3 flex justify-center gap-3 text-xs text-gray-400">
                     <div className="flex items-center gap-1"><Lock className="w-3 h-3" />Secure</div>

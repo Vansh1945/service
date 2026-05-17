@@ -31,11 +31,8 @@ const getStatusCfg = (status) => STATUS_CONFIG[status] || { color: 'bg-gray-100 
 
 
 const needsPayment = (b) => {
-  if (b.paymentStatus === 'paid' || b.status === 'cancelled') return false;
-  // If it's already an online pending payment, it needs payment
-  if (b.paymentMethod !== 'cash' && b.paymentType !== 'cash') return b.paymentStatus === 'pending';
-  // If it's a cash booking, allow online payment ONLY if still pending (not accepted)
-  return b.status === 'pending';
+  if (b.paymentStatus === 'paid' || b.status === 'cancelled' || b.status === 'in-progress' || b.status === 'in_progress' || b.status === 'completed') return false;
+  return b.paymentStatus !== 'paid';
 };
 const canCancel = (b) => ['pending', 'accepted'].includes(b.status);
 const canReschedule = (b) => b.status === 'pending';
@@ -57,7 +54,7 @@ const StatusBadge = ({ status }) => {
 
 const BookingTimeline = ({ booking }) => {
   const timeline = Array.isArray(booking.timeline) ? booking.timeline : [];
-  
+
   if (timeline.length === 0) return null;
 
   const getStepIcon = (title) => {
@@ -80,7 +77,7 @@ const BookingTimeline = ({ booking }) => {
       <div className="relative">
         {/* Vertical Line */}
         <div className="absolute left-[18px] top-6 bottom-6 w-0.5 bg-gray-100" />
-        
+
         <div className="space-y-8">
           {timeline.map((step, idx) => {
             const Icon = getStepIcon(step.title);
@@ -91,23 +88,21 @@ const BookingTimeline = ({ booking }) => {
             return (
               <div key={idx} className="relative flex items-start group">
                 {/* Icon Container */}
-                <div className={`relative z-20 w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-all duration-300 ${
-                  isCompleted 
-                    ? 'bg-emerald-500 text-white shadow-md shadow-emerald-100' 
-                    : isCurrent 
-                      ? 'bg-orange-500 text-white animate-pulse shadow-md shadow-orange-100' 
+                <div className={`relative z-20 w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-all duration-300 ${isCompleted
+                    ? 'bg-emerald-500 text-white shadow-md shadow-emerald-100'
+                    : isCurrent
+                      ? 'bg-orange-500 text-white animate-pulse shadow-md shadow-orange-100'
                       : isError
                         ? 'bg-red-500 text-white shadow-md shadow-red-100'
                         : 'bg-white border-2 border-gray-100 text-gray-300'
-                }`}>
+                  }`}>
                   <Icon className="w-4 h-4" />
                 </div>
-                
+
                 {/* Content */}
                 <div className="ml-4 pt-1 min-w-0">
-                  <h4 className={`text-sm font-bold leading-none mb-1.5 transition-colors ${
-                    isCompleted ? 'text-secondary font-black' : isCurrent ? 'text-orange-600 font-black' : isError ? 'text-red-600 font-black' : 'text-gray-400'
-                  }`}>
+                  <h4 className={`text-sm font-bold leading-none mb-1.5 transition-colors ${isCompleted ? 'text-secondary font-black' : isCurrent ? 'text-orange-600 font-black' : isError ? 'text-red-600 font-black' : 'text-gray-400'
+                    }`}>
                     {step.title}
                   </h4>
                   {step.time && (
@@ -215,7 +210,7 @@ const PaymentDetails = ({ booking }) => (
         ['Subtotal', formatCurrency(booking.subtotal || 0)],
         ...(booking.totalDiscount > 0 ? [['Discount', <span className="text-emerald-600">-{formatCurrency(booking.totalDiscount)}</span>]] : []),
         ...(booking.couponApplied?.isValid ? [['Coupon', <span className="text-blue-600">{booking.couponApplied.code}</span>]] : []),
-        ...(booking.paymentStatus === 'refunded' ? [['Refund Status', <span className="text-purple-600 font-black flex items-center gap-1"><Wallet className="w-3 h-3"/> Refunded</span>]] : []),
+        ...(booking.paymentStatus === 'refunded' ? [['Refund Status', <span className="text-purple-600 font-black flex items-center gap-1"><Wallet className="w-3 h-3" /> Refunded</span>]] : []),
         ...(booking.fullData?.walletAmountUsed > 0 ? [['Wallet Used', <span className="text-purple-600 font-bold">-{formatCurrency(booking.fullData.walletAmountUsed)}</span>]] : []),
         ...(booking.fullData?.onlineAmountPaid > 0 ? [['Paid Online', <span className="text-blue-600 font-bold">{formatCurrency(booking.fullData.onlineAmountPaid)}</span>]] : []),
       ].map(([label, val]) => (
@@ -229,7 +224,7 @@ const PaymentDetails = ({ booking }) => (
         <span>{formatCurrency(booking.totalAmount || 0)}</span>
       </div>
     </div>
-    
+
     {/* Payout Hold Info for Transparency */}
     {booking.timeline?.payoutHoldUntil && booking.status === 'completed' && (
       <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-xl">
@@ -240,12 +235,12 @@ const PaymentDetails = ({ booking }) => (
           </span>
         </div>
         <p className="text-xs text-blue-700 font-medium">
-          {new Date(booking.timeline.payoutHoldUntil) > new Date() 
-            ? "Service under 48-hour review protection" 
+          {new Date(booking.timeline.payoutHoldUntil) > new Date()
+            ? "Service under 48-hour review protection"
             : "Review period completed"}
         </p>
         <p className="text-[10px] text-blue-500 mt-1 italic">
-          {new Date(booking.timeline.payoutHoldUntil) > new Date() 
+          {new Date(booking.timeline.payoutHoldUntil) > new Date()
             ? `Protection valid until: ${formatDateTime(booking.timeline.payoutHoldUntil)}`
             : `Protection ended at: ${formatDateTime(booking.timeline.payoutHoldUntil)}`}
         </p>
@@ -366,7 +361,7 @@ const BookingModal = ({ booking, onClose, onPayNow, user }) => {
                 {booking.paymentStatus === 'refunded' && (
                   <div className="flex justify-between items-center">
                     <span className="text-red-700">Refund Status</span>
-                    <span className="font-medium text-purple-600 font-bold flex items-center gap-1"><Wallet className="w-4 h-4"/> Refunded to Wallet</span>
+                    <span className="font-medium text-purple-600 font-bold flex items-center gap-1"><Wallet className="w-4 h-4" /> Refunded to Wallet</span>
                   </div>
                 )}
               </div>
@@ -560,7 +555,7 @@ const RescheduleModal = ({ booking, onClose, onConfirm }) => {
 
 const CancelModal = ({ booking, onClose, onConfirm }) => {
   const isStarted = !!booking?.serviceStartedAt;
-  
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl animate-scale-up">
@@ -636,7 +631,7 @@ const BookingCard = ({ booking, onView, onPayNow, onReschedule, onCancel, onCall
                 <Clock className="w-3.5 h-3.5" /> {booking.time || 'Not set'}
               </div>
               <StatusBadge status={booking.status} />
-              
+
               {/* Badges for Refund/Dispute */}
               {booking.paymentStatus === 'refunded' && (
                 <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200">

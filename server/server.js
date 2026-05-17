@@ -180,7 +180,7 @@ app.use(async (req, res, next) => {
       try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         role = decoded.role;
-      } catch (err) {}
+      } catch (err) { }
     }
 
     // CUSTOMER MAINTENANCE

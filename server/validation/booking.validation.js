@@ -7,10 +7,14 @@ const addressSchema = z.object({
     .min(2, "City must be at least 2 characters long")
     .max(50, "City must not exceed 50 characters")
     .regex(/^[a-zA-Z\s]+$/, "City can only contain letters and spaces"),
+  state: z.string()
+    .min(2, "State must be at least 2 characters long")
+    .max(50, "State must not exceed 50 characters"),
   postalCode: z.string()
     .regex(/^\d{6}$/, "Postal code must be a valid 6-digit number")
     .optional()
-    .or(z.literal(''))
+    .or(z.literal('')),
+  country: z.string().optional().default('India')
 });
 
 const createBookingSchema = z.object({
@@ -18,17 +22,20 @@ const createBookingSchema = z.object({
   date: z.string().refine((val) => {
     const bookingDate = new Date(val);
     if (isNaN(bookingDate.getTime())) return false;
-    // Strip hours so we only compare date parts or verify it's not in past
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return bookingDate >= today;
+    
+    // Create Date objects represented in local timezone for comparison
+    const bookingDateLocal = new Date(bookingDate.getUTCFullYear(), bookingDate.getUTCMonth(), bookingDate.getUTCDate());
+    const todayLocal = new Date();
+    todayLocal.setHours(0, 0, 0, 0);
+    
+    return bookingDateLocal >= todayLocal;
   }, {
     message: "Booking date must be today or in the future"
   }),
-  time: z.string().optional(),
+  time: z.string().nullable().optional(),
   address: addressSchema,
-  notes: z.string().optional(),
-  couponCode: z.string().optional(),
+  notes: z.string().nullable().optional(),
+  couponCode: z.string().nullable().optional(),
   quantity: z.number().int().positive("Quantity must be greater than 0").optional(),
   paymentMethod: z.enum(['online', 'cash', 'wallet', 'mixed'], {
     errorMap: () => ({ message: "Payment method must be either 'online', 'cash', 'wallet' or 'mixed'" })

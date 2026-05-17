@@ -203,7 +203,7 @@ const createOrder = async (req, res) => {
     const transaction = new Transaction({
       amount: finalAmount,
       currency: 'INR',
-      paymentMethod: 'online', // Force online payment method
+      paymentMethod: paymentMethod || 'online',
       booking: bookingId,
       bookingId: booking.bookingId, // Human readable booking ID
       user: userId,
@@ -381,7 +381,9 @@ const verifyPayment = async (req, res) => {
     booking.paymentStatus = 'paid';
     booking.paymentMethod = transaction.paymentMethod; // Use method from transaction
     booking.confirmedBooking = true;
-    booking.status = 'pending'; // Keep as pending until provider accepts
+    if (booking.status !== 'accepted' && booking.status !== 'completed' && booking.status !== 'in-progress') {
+      booking.status = 'pending';
+    }
     booking.updatedAt = new Date();
     await booking.save({ session });
 
@@ -536,13 +538,14 @@ const handleSuccessfulPayment = async (payment, session) => {
     }
   }
 
-  // 3. Update booking payment status but keep booking status as "pending"
   booking.paymentStatus = 'paid';
   booking.paymentMethod = transaction.paymentMethod;
   booking.paidAmount = transaction.amount;
   booking.paymentDate = new Date();
   booking.confirmedBooking = true;
-  booking.status = 'pending';
+  if (booking.status !== 'accepted' && booking.status !== 'completed' && booking.status !== 'in-progress') {
+    booking.status = 'pending';
+  }
   await booking.save({ session });
 
   // 5. Post-service payment handling - invoice generation removed

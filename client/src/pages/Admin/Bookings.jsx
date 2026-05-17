@@ -1009,7 +1009,7 @@ const AdminBookingsView = () => {
                                                 <div className="flex justify-between items-center mb-3">
                                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Before Service</p>
                                                     {selectedBooking?.booking?.providerWorkProof?.startLocation && (
-                                                        <a 
+                                                        <a
                                                             href={`https://www.google.com/maps?q=${selectedBooking.booking.providerWorkProof.startLocation.latitude},${selectedBooking.booking.providerWorkProof.startLocation.longitude}`}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
@@ -1047,7 +1047,7 @@ const AdminBookingsView = () => {
                                                 <div className="flex justify-between items-center mb-3">
                                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">After Service</p>
                                                     {selectedBooking?.booking?.providerWorkProof?.completionLocation && (
-                                                        <a 
+                                                        <a
                                                             href={`https://www.google.com/maps?q=${selectedBooking.booking.providerWorkProof.completionLocation.latitude},${selectedBooking.booking.providerWorkProof.completionLocation.longitude}`}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
@@ -1089,8 +1089,8 @@ const AdminBookingsView = () => {
                                                             <div key={pIdx} className="bg-gray-50/50 p-2 rounded border border-gray-100">
                                                                 <div className="flex justify-between items-center mb-2">
                                                                     <span className={`text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded ${proof.uploadedBy === 'customer'
-                                                                            ? 'bg-blue-100 text-blue-700'
-                                                                            : 'bg-primary/10 text-primary'
+                                                                        ? 'bg-blue-100 text-blue-700'
+                                                                        : 'bg-primary/10 text-primary'
                                                                         }`}>
                                                                         {proof.uploadedBy}
                                                                     </span>
@@ -1144,7 +1144,7 @@ const AdminBookingsView = () => {
                                                 </div>
                                             ))}
                                             <div className="border-t border-gray-200 my-2"></div>
-                                            
+
                                             {/* Financial Splits */}
                                             <div className="flex justify-between">
                                                 <span className="text-sm text-gray-600">Subtotal</span>
@@ -1162,7 +1162,7 @@ const AdminBookingsView = () => {
                                                     <span className="text-sm font-medium text-orange-600">+ {formatCurrency(selectedBooking.booking.visitingCharge)}</span>
                                                 </div>
                                             )}
-                                            
+
                                             <div className="border-t border-gray-200 my-2 pt-2">
                                                 {selectedBooking.payment.walletAmountUsed > 0 && (
                                                     <div className="flex justify-between mb-1">
@@ -1200,19 +1200,17 @@ const AdminBookingsView = () => {
                                             <div className="pt-2 space-y-1.5 border-t border-gray-100 mt-2">
                                                 <div className="flex justify-between items-center">
                                                     <span className="text-xs text-gray-600">Payment Status:</span>
-                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                                                        selectedBooking.payment?.status === 'paid' ? 'bg-green-100 text-green-700' : 
-                                                        selectedBooking.payment?.status === 'refunded' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
-                                                    }`}>
+                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${selectedBooking.payment?.status === 'paid' ? 'bg-green-100 text-green-700' :
+                                                            selectedBooking.payment?.status === 'refunded' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                                                        }`}>
                                                         {selectedBooking.payment?.status || 'N/A'}
                                                     </span>
                                                 </div>
                                                 {selectedBooking.refundData?.decision && (
                                                     <div className="flex justify-between items-center">
                                                         <span className="text-xs text-gray-600">Admin Refund:</span>
-                                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                                                            selectedBooking.refundData.decision === 'approved' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                                                        }`}>
+                                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${selectedBooking.refundData.decision === 'approved' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                                            }`}>
                                                             {selectedBooking.refundData.decision}
                                                         </span>
                                                     </div>

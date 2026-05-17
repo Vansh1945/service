@@ -4,7 +4,7 @@ import { useAuth } from '../../context/auth';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { toast } from 'react-toastify';
-import { ArrowLeft, CheckCircle, Plus, Minus, Tag, Clock, Calendar, Shield, Lock, Star, IndianRupee, Truck, RotateCcw, Check, CalendarDays, CreditCard } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Plus, Minus, Tag, Clock, Calendar, Shield, Lock, Star, IndianRupee, Truck, RotateCcw, Check, CalendarDays, CreditCard, Wallet } from 'lucide-react';
 import AddressSelector from '../../components/AddressSelector';
 import Loader from '../../components/Loader';
 import { getPublicServiceById } from '../../services/ServiceService';
@@ -25,6 +25,7 @@ const BookService = () => {
   const [service, setService] = useState(null);
   const [addresses, setAddresses] = useState([]);
   const [coupons, setCoupons] = useState([]);
+  const [walletBalance, setWalletBalance] = useState(0);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -207,13 +208,17 @@ const BookService = () => {
           return;
         }
 
-        const [serviceData, addressesData] = await Promise.all([
+        const [serviceData, addressesData, profileData] = await Promise.all([
           fetchService(),
-          fetchUserAddresses()
+          fetchUserAddresses(),
+          CustomerService.getProfile().then(res => res.data?.user).catch(() => null)
         ]);
 
         setService(serviceData);
         setAddresses(addressesData);
+        if (profileData?.wallet) {
+          setWalletBalance(profileData.wallet.availableBalance || 0);
+        }
 
         setFormData(prev => ({
           ...prev,
@@ -660,7 +665,21 @@ const BookService = () => {
                   <CreditCard className="w-3.5 h-3.5 text-primary" />
                   Payment Method
                 </h3>
+                
+                {/* Wallet Balance Indicator */}
+                <div className="mb-4 p-3 bg-teal-50/50 border border-teal-100 rounded-xl flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Wallet className="w-4 h-4 text-teal-600" />
+                    <div>
+                      <p className="text-[10px] text-teal-600 font-bold uppercase tracking-wider">Available Wallet Balance</p>
+                      <p className="text-sm font-black text-teal-900">{formatCurrency(walletBalance)}</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-medium bg-teal-100 text-teal-800 px-2 py-0.5 rounded-full">Secure</span>
+                </div>
+
                 <div className="grid grid-cols-1 gap-2">
+                  {/* Pay Online */}
                   <div
                     className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-all ${formData.paymentMethod === 'online' ? 'border-primary bg-primary/5 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}
                     onClick={() => setFormData(prev => ({ ...prev, paymentMethod: 'online' }))}
@@ -674,6 +693,8 @@ const BookService = () => {
                     </div>
                     <CreditCard className="w-4 h-4 text-gray-300" />
                   </div>
+
+                  {/* Pay After Service */}
                   <div
                     className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-all ${formData.paymentMethod === 'cash' ? 'border-primary bg-primary/5 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}
                     onClick={() => setFormData(prev => ({ ...prev, paymentMethod: 'cash' }))}
@@ -687,7 +708,94 @@ const BookService = () => {
                     </div>
                     <Truck className="w-4 h-4 text-gray-300" />
                   </div>
+
+                  {/* Wallet Payment */}
+                  <div
+                    className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-all ${
+                      walletBalance >= totalAmount
+                        ? formData.paymentMethod === 'wallet'
+                          ? 'border-primary bg-primary/5 shadow-sm'
+                          : 'border-gray-100 hover:border-gray-200'
+                        : 'opacity-50 cursor-not-allowed bg-gray-50 border-gray-100'
+                    }`}
+                    onClick={() => {
+                      if (walletBalance >= totalAmount) {
+                        setFormData(prev => ({ ...prev, paymentMethod: 'wallet' }));
+                      } else {
+                        toast.info('Insufficient wallet balance for full wallet payment.');
+                      }
+                    }}
+                  >
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${formData.paymentMethod === 'wallet' ? 'border-primary' : 'border-gray-300'}`}>
+                      {formData.paymentMethod === 'wallet' && <div className="w-2 h-2 bg-primary rounded-full" />}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-xs font-bold text-secondary">Wallet Payment</p>
+                        {walletBalance < totalAmount && (
+                          <span className="text-[9px] text-red-500 bg-red-50 px-1.5 py-0.5 rounded">Insufficient</span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-gray-400">Pay 100% from your SafeVolt Wallet</p>
+                    </div>
+                    <Wallet className="w-4 h-4 text-gray-300" />
+                  </div>
+
+                  {/* Wallet + Online Mixed */}
+                  <div
+                    className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-all ${
+                      walletBalance > 0
+                        ? formData.paymentMethod === 'mixed'
+                          ? 'border-primary bg-primary/5 shadow-sm'
+                          : 'border-gray-100 hover:border-gray-200'
+                        : 'opacity-50 cursor-not-allowed bg-gray-50 border-gray-100'
+                    }`}
+                    onClick={() => {
+                      if (walletBalance > 0) {
+                        setFormData(prev => ({ ...prev, paymentMethod: 'mixed' }));
+                      } else {
+                        toast.info('No wallet balance available for mixed payment.');
+                      }
+                    }}
+                  >
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${formData.paymentMethod === 'mixed' ? 'border-primary' : 'border-gray-300'}`}>
+                      {formData.paymentMethod === 'mixed' && <div className="w-2 h-2 bg-primary rounded-full" />}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-xs font-bold text-secondary">Wallet + Online Payment</p>
+                        {walletBalance <= 0 && (
+                          <span className="text-[9px] text-red-500 bg-red-50 px-1.5 py-0.5 rounded">₹0 Balance</span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-gray-400">
+                        {walletBalance > 0 && walletBalance < totalAmount
+                          ? `Use ₹${walletBalance} from wallet + pay remaining online`
+                          : 'Combine wallet balance with online payment'}
+                      </p>
+                    </div>
+                    <div className="flex gap-0.5 text-gray-300">
+                      <Wallet className="w-3.5 h-3.5" />
+                      <Plus className="w-2 h-2 mt-1" />
+                      <CreditCard className="w-3.5 h-3.5" />
+                    </div>
+                  </div>
                 </div>
+
+                {/* Mixed payment deduction details */}
+                {formData.paymentMethod === 'mixed' && walletBalance > 0 && (
+                  <div className="mt-3 p-3 bg-amber-50/60 border border-amber-100 rounded-xl space-y-1">
+                    <p className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Mixed Payment Breakdown</p>
+                    <div className="flex justify-between text-xs font-medium text-amber-900">
+                      <span>Deducted from Wallet:</span>
+                      <span>{formatCurrency(Math.min(walletBalance, totalAmount))}</span>
+                    </div>
+                    <div className="flex justify-between text-xs font-bold text-amber-950 pt-1 border-t border-amber-100/50">
+                      <span>Remaining Pay Online:</span>
+                      <span>{formatCurrency(Math.max(0, totalAmount - walletBalance))}</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Coupon Card */}
@@ -749,7 +857,11 @@ const BookService = () => {
                 ) : (
                   <>
                     <CheckCircle className="w-4 h-4" />
-                    {formData.paymentMethod === 'cash' ? `Confirm Booking • ${formatCurrency(totalAmount)}` : `Pay ${formatCurrency(totalAmount)}`}
+                    {formData.paymentMethod === 'cash'
+                      ? `Confirm Booking • ${formatCurrency(totalAmount)}`
+                      : formData.paymentMethod === 'wallet'
+                        ? `Pay via Wallet • ${formatCurrency(totalAmount)}`
+                        : `Pay ${formatCurrency(totalAmount)}`}
                   </>
                 )}
               </button>

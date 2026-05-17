@@ -8,6 +8,8 @@ export const getCustomerComplaints = () => {
     return axiosInstance.get("/complaint/my-complaints");
 };
 
+export const getMyComplaints = getCustomerComplaints;
+
 export const getComplaint = (id) => {
     return axiosInstance.get(`/complaint/${id}`);
 };

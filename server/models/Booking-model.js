@@ -113,7 +113,7 @@ const bookingSchema = new Schema({
   // Payment method and status tracking
   paymentMethod: {
     type: String,
-    enum: ['online', 'cash'],
+    enum: ['online', 'cash', 'wallet', 'mixed'],
     required: [true, 'Payment method is required']
   },
 

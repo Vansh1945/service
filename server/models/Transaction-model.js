@@ -63,7 +63,7 @@ const transactionSchema = new Schema({
   },
   paymentMethod: {
     type: String,
-    enum: ['card', 'netbanking', 'wallet', 'upi', 'emi', 'cash', 'online', 'UPI', 'Card', 'Cash'],
+    enum: ['card', 'netbanking', 'wallet', 'upi', 'emi', 'cash', 'online', 'UPI', 'Card', 'Cash', 'mixed'],
     default: 'online'
   },
   type: {

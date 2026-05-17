@@ -18,7 +18,6 @@ const getStatusConfig = (status) => {
   const configs = {
     completed: { color: 'bg-emerald-50 text-emerald-700', icon: CheckCircle, label: 'Success' },
     paid: { color: 'bg-emerald-50 text-emerald-700', icon: CheckCircle, label: 'Paid' },
-    available: { color: 'bg-teal-50 text-teal-700', icon: Wallet, label: 'Available' },
     processing: { color: 'bg-amber-50 text-amber-700', icon: Clock, label: 'Processing' },
     under_review: { color: 'bg-purple-50 text-purple-700', icon: Clock, label: 'Review' },
     approved: { color: 'bg-teal-50 text-teal-700', icon: CheckCircle, label: 'Approved' },

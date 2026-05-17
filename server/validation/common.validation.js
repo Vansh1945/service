@@ -25,6 +25,7 @@ const validate = (location, schema) => {
           }
           formattedErrors[path].push(err.message || 'Validation error');
         });
+        console.log("❌ Zod Validation Failed:", JSON.stringify(formattedErrors, null, 2));
         return res.status(400).json({
           success: false,
           message: "Validation failed",

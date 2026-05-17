@@ -206,7 +206,7 @@ const createBooking = async (req, res) => {
       totalAmount,
       paymentMethod,
       status: paymentMethod === 'cash' ? 'scheduled' : 'pending',
-      paymentStatus: 'pending',
+      paymentStatus: paymentMethod === 'cash' ? 'pending' : 'processing',
       confirmedBooking: paymentMethod === 'cash',
       metadata: {
         ip: req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress,
@@ -347,7 +347,9 @@ const confirmBooking = async (req, res) => {
         const userWallet = await User.findById(userId).session(session);
         const bal = userWallet.wallet?.availableBalance || 0;
         if (bal < booking.totalAmount) {
-          return { success: false, message: 'Insufficient wallet balance' };
+          await session.abortTransaction();
+          session.endSession();
+          return res.status(400).json({ success: false, message: 'Insufficient wallet balance' });
         }
         userWallet.wallet.availableBalance -= booking.totalAmount;
         userWallet.wallet.walletTransactions.push({
@@ -837,10 +839,10 @@ const payBooking = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
-    if (booking.status === 'cancelled') {
+    if (['in-progress', 'in_progress', 'completed', 'cancelled'].includes(booking.status)) {
       await session.abortTransaction();
       session.endSession();
-      return res.status(400).json({ success: false, message: 'Cannot pay for cancelled booking' });
+      return res.status(400).json({ success: false, message: 'Cannot pay for a booking that is in progress, completed, or cancelled' });
     }
 
     if (booking.paymentStatus === 'paid') {
@@ -875,33 +877,31 @@ const payBooking = async (req, res) => {
       };
       booking.paymentMethod = 'wallet';
     } else if (paymentDetails?.paymentMethod === 'mixed') {
-      const userMixed = await User.findById(userId).session(session);
-      const walletBal = userMixed.wallet?.availableBalance || 0;
-      if (walletBal <= 0) {
+      const { razorpay_payment_id, razorpay_order_id, razorpay_signature } = paymentDetails;
+      if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
         await session.abortTransaction();
         session.endSession();
-        return res.status(400).json({ success: false, message: 'No wallet balance available for mixed payment' });
+        return res.status(400).json({ success: false, message: 'Razorpay payment details are required' });
       }
 
+      // Verify Razorpay signature
+      const crypto = require('crypto');
+      const generatedSignature = crypto
+        .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+        .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+        .digest('hex');
+
+      if (generatedSignature !== razorpay_signature) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({ success: false, message: 'Invalid payment signature' });
+      }
+
+      const userMixed = await User.findById(userId).session(session);
+      const walletBal = userMixed.wallet?.availableBalance || 0;
       const walletDeduction = Math.min(walletBal, booking.totalAmount);
-      const remainingAmount = booking.totalAmount - walletDeduction;
 
-      if (remainingAmount > 0) {
-        paymentResult = await processOnlinePayment({
-          amount: remainingAmount,
-          bookingId: booking._id,
-          paymentDetails,
-          userId
-        }, session);
-      } else {
-        paymentResult = {
-          success: true,
-          transactionId: `TXN-MIX-${Date.now()}`,
-          paymentStatus: 'paid'
-        };
-      }
-
-      if (paymentResult.success) {
+      if (walletDeduction > 0) {
         userMixed.wallet.availableBalance -= walletDeduction;
         userMixed.wallet.walletTransactions.push({
           type: 'debit',
@@ -912,16 +912,48 @@ const payBooking = async (req, res) => {
         userMixed.wallet.lastUpdated = new Date();
         await userMixed.save({ session });
       }
+
+      paymentResult = {
+        success: true,
+        transactionId: razorpay_payment_id,
+        razorpayOrderId: razorpay_order_id,
+        razorpayPaymentId: razorpay_payment_id,
+        paymentStatus: 'paid'
+      };
       booking.paymentMethod = 'mixed';
-    } else {
-      // Process online payment
-      paymentResult = await processOnlinePayment({
-        amount: booking.totalAmount,
-        bookingId: booking._id,
-        paymentDetails,
-        userId
-      }, session);
+    } else if (paymentDetails?.paymentMethod === 'online') {
+      const { razorpay_payment_id, razorpay_order_id, razorpay_signature } = paymentDetails;
+      if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({ success: false, message: 'Razorpay payment details are required' });
+      }
+
+      // Verify Razorpay signature
+      const crypto = require('crypto');
+      const generatedSignature = crypto
+        .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+        .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+        .digest('hex');
+
+      if (generatedSignature !== razorpay_signature) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({ success: false, message: 'Invalid payment signature' });
+      }
+
+      paymentResult = {
+        success: true,
+        transactionId: razorpay_payment_id,
+        razorpayOrderId: razorpay_order_id,
+        razorpayPaymentId: razorpay_payment_id,
+        paymentStatus: 'paid'
+      };
       booking.paymentMethod = 'online';
+    } else {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ success: false, message: 'Invalid payment method' });
     }
 
     if (!paymentResult.success) {
@@ -932,25 +964,34 @@ const payBooking = async (req, res) => {
 
     // Update booking
     booking.paymentStatus = 'paid';
+    booking.confirmedBooking = true;
+    if (booking.status !== 'accepted' && booking.status !== 'completed' && booking.status !== 'in-progress') {
+      booking.status = 'pending';
+    }
     await booking.save({ session });
 
-    // Record Transaction
-    await Transaction.create([{
-      user: userId,
-      customerId: userId.toString(),
-      booking: booking._id,
-      amount: booking.totalAmount,
-      paymentMethod: booking.paymentMethod,
-      paymentStatus: 'success',
-      bookingId: booking.bookingId,
-      provider: booking.provider,
-      providerId: booking.providerId,
-      commission: booking.commissionAmount || 0,
-      providerEarning: booking.providerEarnings || 0,
-      transactionId: paymentResult.transactionId,
-      razorpayOrderId: paymentResult.razorpayOrderId,
-      razorpayPaymentId: paymentResult.razorpayPaymentId
-    }], { session });
+    // Record/Update Transaction
+    await Transaction.findOneAndUpdate(
+      { booking: booking._id },
+      {
+        user: userId,
+        customerId: userId.toString(),
+        booking: booking._id,
+        amount: booking.totalAmount,
+        paymentMethod: booking.paymentMethod,
+        paymentStatus: 'success',
+        bookingId: booking.bookingId,
+        provider: booking.provider,
+        providerId: booking.provider ? booking.provider.toString() : undefined,
+        commission: booking.commissionAmount || 0,
+        providerEarning: booking.providerEarnings || 0,
+        transactionId: paymentResult.transactionId,
+        razorpayOrderId: paymentResult.razorpayOrderId,
+        razorpayPaymentId: paymentResult.razorpayPaymentId,
+        completedAt: new Date()
+      },
+      { upsert: true, new: true, session }
+    );
 
     await session.commitTransaction();
     session.endSession();
@@ -1583,7 +1624,7 @@ const getBookingsByStatus = async (req, res) => {
       status = statusMapping[status];
     }
 
-    const validStatuses = ['pending', 'accepted', 'completed', 'cancelled', 'in-progress'];
+    const validStatuses = ['pending', 'accepted', 'completed', 'cancelled', 'in-progress', 'scheduled'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
@@ -1611,18 +1652,29 @@ const getBookingsByStatus = async (req, res) => {
 
     const serviceIds = servicesInCategory.map(s => s._id);
 
-    const query = {
-      status,
-      'services.service': { $in: serviceIds }
-    };
-
+    let query;
     if (status === 'pending') {
-      query.$or = [
-        { provider: { $exists: false } },
-        { provider: providerId }
-      ];
+      query = {
+        'services.service': { $in: serviceIds },
+        $or: [
+          { status: 'pending' },
+          { status: 'scheduled', paymentMethod: 'cash' }
+        ],
+        $and: [
+          {
+            $or: [
+              { provider: { $exists: false } },
+              { provider: providerId }
+            ]
+          }
+        ]
+      };
     } else {
-      query.provider = providerId;
+      query = {
+        status,
+        provider: providerId,
+        'services.service': { $in: serviceIds }
+      };
     }
 
     const bookings = await Booking.find(query)
@@ -1706,7 +1758,7 @@ const acceptBooking = async (req, res) => {
     // Find the booking that matches
     const booking = await Booking.findOne({
       _id: id,
-      status: 'pending',
+      status: { $in: ['pending', 'scheduled'] },
       $or: [
         { provider: { $exists: false } },
         { provider: providerId }
@@ -1855,6 +1907,14 @@ const startBooking = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Booking not found or not available to start'
+      });
+    }
+
+    // STEP 4 — PAYMENT BEFORE SERVICE START
+    if (booking.paymentMethod === 'cash' && booking.paymentStatus !== 'paid') {
+      return res.status(400).json({
+        success: false,
+        message: "Customer payment pending. Service cannot start."
       });
     }
 

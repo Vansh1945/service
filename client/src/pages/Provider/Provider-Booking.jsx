@@ -129,12 +129,12 @@ const ProofModal = ({ isOpen, onClose, onConfirm, action, loading, progress }) =
               <label className="block text-sm font-bold text-secondary mb-3">
                 {isStart ? 'Before-Work Photos' : 'Completion Photos'} <span className="text-red-500">*</span>
               </label>
-              
+
               <div className="grid grid-cols-3 gap-3 mb-4">
                 {images.map((img, idx) => (
                   <div key={idx} className="relative group aspect-square rounded-xl overflow-hidden border border-gray-200 shadow-sm">
                     <img src={URL.createObjectURL(img)} className="w-full h-full object-cover" alt="Proof" />
-                    <button 
+                    <button
                       onClick={() => handleRemoveImage(idx)}
                       className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
                     >
@@ -142,7 +142,7 @@ const ProofModal = ({ isOpen, onClose, onConfirm, action, loading, progress }) =
                     </button>
                   </div>
                 ))}
-                
+
                 {images.length < 6 && (
                   <label className="aspect-square rounded-xl border-2 border-dashed border-gray-200 hover:border-primary hover:bg-primary/5 transition-all flex flex-col items-center justify-center cursor-pointer group">
                     <DownloadCloud className="w-6 h-6 text-gray-400 group-hover:text-primary transition-colors" />
@@ -181,8 +181,8 @@ const ProofModal = ({ isOpen, onClose, onConfirm, action, loading, progress }) =
 
             {/* Actions */}
             <div className="flex gap-3 pt-2">
-              <button 
-                onClick={onClose} 
+              <button
+                onClick={onClose}
                 disabled={loading}
                 className="flex-1 px-4 py-3 border border-gray-200 rounded-xl text-sm font-bold text-secondary hover:bg-gray-50 transition-colors disabled:opacity-50"
               >
@@ -215,7 +215,7 @@ const ProviderBooking = () => {
   const [expandedSections, setExpandedSections] = useState({ booking: true, customer: true, service: true, payment: true, address: true });
   const [activeTab, setActiveTab] = useState('all');
   const [filter, setFilter] = useState('all');
-   const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, type: '', data: null });
   const [proofModal, setProofModal] = useState({ isOpen: false, action: null, bookingId: null });
   const [loading, setLoading] = useState(true);
@@ -323,18 +323,18 @@ const ProviderBooking = () => {
     try {
       if (!dateFilter.startDate || !dateFilter.endDate) { showToast('Please select a date range first', 'error'); return; }
       setDownloading(true);
-      if (reportType !== 'providerBooking' && reportType !== 'booking') { 
-        showToast('Invalid report type', 'error'); 
-        setDownloading(false); 
-        return; 
+      if (reportType !== 'providerBooking' && reportType !== 'booking') {
+        showToast('Invalid report type', 'error');
+        setDownloading(false);
+        return;
       }
-      
+
       const filename = `provider_booking_report_${dateFilter.startDate}_to_${dateFilter.endDate}.xlsx`;
       const response = await BookingService.providerBookingReport(
         { startDate: dateFilter.startDate, endDate: dateFilter.endDate },
         { responseType: 'blob' }
       );
-      
+
       const blob = response.data;
       const a = document.createElement('a');
       a.href = window.URL.createObjectURL(blob);
@@ -342,20 +342,20 @@ const ProviderBooking = () => {
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       window.URL.revokeObjectURL(a.href);
       showToast('Report downloaded successfully', 'success');
-    } catch (err) { 
-      showToast(err.response?.data?.message || err.message || 'Failed to download report', 'error'); 
-    } finally { 
-      setDownloading(false); 
+    } catch (err) {
+      showToast(err.response?.data?.message || err.message || 'Failed to download report', 'error');
+    } finally {
+      setDownloading(false);
     }
   }, [dateFilter, showToast]);
 
   const executeBookingAction = useCallback(async (bookingId, action, additionalData = {}) => {
     try {
       if (!bookingId) { showToast('Booking ID is missing. Please refresh and try again.', 'error'); return; }
-      
+
       setActionLoading({ id: bookingId, type: action });
       setUploadProgress(0);
-      
+
       const config = {
         onUploadProgress: (progressEvent) => {
           const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
@@ -389,19 +389,19 @@ const ProviderBooking = () => {
       else throw new Error('Invalid action');
 
       const result = response.data;
-      
+
       // Clear any pending toasts to ensure only the latest one shows if needed
       // toast.dismiss(); // Optional: uncomment if you want to be extremely aggressive
 
       showToast(result.message || `Booking ${action}ed successfully`, 'success');
-      
-      await refreshData(); 
-      setShowModal(false); 
-      setSelectedBooking(null); 
+
+      await refreshData();
+      setShowModal(false);
+      setSelectedBooking(null);
       setSelectedImages([]);
       setUploadProgress(0);
       setConfirmDialog({ isOpen: false, type: '', data: null });
-    } catch (err) { 
+    } catch (err) {
       showToast(err.response?.data?.message || err.message, 'error');
     } finally {
       setActionLoading({ id: null, type: null });
@@ -450,9 +450,9 @@ const ProviderBooking = () => {
       const response = await BookingService.getProviderBookingById(bookingId);
       const data = response.data;
       setSelectedBooking(data.data || null); setShowModal(true);
-    } catch (err) { 
-      showToast(err.response?.data?.message || err.message, 'error'); 
-      setShowModal(false); 
+    } catch (err) {
+      showToast(err.response?.data?.message || err.message, 'error');
+      setShowModal(false);
     }
   }, [showToast]);
 
@@ -469,10 +469,10 @@ const ProviderBooking = () => {
 
       await ComplaintService.replyToComplaint(selectedBooking.complaint, formData);
       showToast('Response submitted successfully', 'success');
-      
+
       setDisputeResponseText('');
       setDisputeImages([]);
-      
+
       // Refresh details
       await getBookingDetails(selectedBooking._id);
     } catch (err) {
@@ -1164,15 +1164,15 @@ const ProviderBooking = () => {
                     <label className="cursor-pointer bg-primary/10 hover:bg-primary/20 text-primary px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors">
                       <DownloadCloud className="w-3.5 h-3.5" />
                       Add Photos
-                      <input 
-                        type="file" 
-                        multiple 
-                        accept="image/*" 
-                        className="hidden" 
+                      <input
+                        type="file"
+                        multiple
+                        accept="image/*"
+                        className="hidden"
                         onChange={(e) => {
                           const files = Array.from(e.target.files);
                           setSelectedImages(prev => [...prev, ...files]);
-                        }} 
+                        }}
                       />
                     </label>
                   )}
@@ -1196,7 +1196,7 @@ const ProviderBooking = () => {
                       {selectedImages.map((file, idx) => (
                         <div key={idx} className="relative group w-16 h-16 rounded-lg overflow-hidden border border-primary/30">
                           <img src={URL.createObjectURL(file)} alt="preview" className="w-full h-full object-cover" />
-                          <button 
+                          <button
                             onClick={() => setSelectedImages(prev => prev.filter((_, i) => i !== idx))}
                             className="absolute top-0 right-0 p-0.5 bg-red-500 text-white rounded-bl-lg opacity-0 group-hover:opacity-100 transition-opacity"
                             disabled={uploadProgress > 0}
@@ -1216,7 +1216,7 @@ const ProviderBooking = () => {
                     <div className="flex items-center justify-between mb-3">
                       <p className="text-[10px] font-black text-secondary/40 uppercase tracking-wider">Before Service</p>
                       {selectedBooking.providerWorkProof?.startLocation && (
-                        <a 
+                        <a
                           href={`https://www.google.com/maps?q=${selectedBooking.providerWorkProof.startLocation.latitude},${selectedBooking.providerWorkProof.startLocation.longitude}`}
                           target="_blank"
                           rel="noopener noreferrer"
@@ -1255,7 +1255,7 @@ const ProviderBooking = () => {
                     <div className="flex items-center justify-between mb-3">
                       <p className="text-[10px] font-black text-secondary/40 uppercase tracking-wider">After Service</p>
                       {selectedBooking.providerWorkProof?.completionLocation && (
-                        <a 
+                        <a
                           href={`https://www.google.com/maps?q=${selectedBooking.providerWorkProof.completionLocation.latitude},${selectedBooking.providerWorkProof.completionLocation.longitude}`}
                           target="_blank"
                           rel="noopener noreferrer"
@@ -1333,11 +1333,11 @@ const ProviderBooking = () => {
                         placeholder="Explain your side of the dispute clearly..."
                         className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:outline-none focus:border-red-300 focus:ring-1 focus:ring-red-300 mb-3 min-h-[100px]"
                       />
-                      
+
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <label className="cursor-pointer inline-flex items-center gap-2 text-xs font-bold text-primary bg-primary/5 hover:bg-primary/10 px-3 py-2 rounded-xl transition-colors">
                           <DownloadCloud className="w-4 h-4" /> Add Evidence Photos
-                          <input 
+                          <input
                             type="file" multiple accept="image/*" className="hidden"
                             onChange={(e) => setDisputeImages(Array.from(e.target.files))}
                           />
