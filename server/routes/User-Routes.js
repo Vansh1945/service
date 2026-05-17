@@ -9,7 +9,7 @@ const {
   getWalletHistory
 } = require('../controllers/User-controller');
 const { userAuthMiddleware } = require('../middlewares/User-middleware');
-const { roleMiddleware } = require('../middlewares/Role-Middleware');
+const { roleMiddleware } = require('../middlewares/Role-middleware');
 const { validateBody } = require('../validation/common.validation');
 const { registerSchema } = require('../validation/auth.validation');
 

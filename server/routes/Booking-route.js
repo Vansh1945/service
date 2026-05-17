@@ -9,7 +9,7 @@ const { createBookingSchema, confirmBookingSchema, updateBookingStatusSchema, up
 const { userAuthMiddleware } = require('../middlewares/User-middleware');
 const { providerAuthMiddleware, providerTestPassedMiddleware } = require('../middlewares/Provider-middleware');
 const adminAuthMiddleware = require('../middlewares/Admin-middleware');
-const { roleMiddleware } = require('../middlewares/Role-Middleware');
+const { roleMiddleware } = require('../middlewares/Role-middleware');
 
 // Specific role checkers
 const requireCustomer = roleMiddleware(['customer']);
