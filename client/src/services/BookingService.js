@@ -26,6 +26,10 @@ export const updateBookingPayment = (id, data) => {
     return axiosInstance.patch(`/booking/${id}/payment`, data);
 };
 
+export const payBooking = (id, data) => {
+    return axiosInstance.post(`/booking/pay/${id}`, data);
+};
+
 export const getProviderById = (id) => {
     return axiosInstance.get(`/booking/providers/${id}`);
 };

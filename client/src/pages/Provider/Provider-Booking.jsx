@@ -674,18 +674,29 @@ const ProviderBooking = () => {
 
             {/* Accepted: Start Service */}
             {booking.status === 'accepted' && (
-              <button
-                disabled={actionLoading.id === booking._id}
-                onClick={() => handleBookingAction(booking._id, 'start')}
-                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white bg-primary hover:bg-primary/90 transition-colors w-full disabled:bg-gray-300 disabled:cursor-not-allowed"
-              >
-                {actionLoading.id === booking._id && actionLoading.type === 'start' ? (
-                  <Loader className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Play className="w-3.5 h-3.5" />
+              <>
+                <button
+                  disabled={actionLoading.id === booking._id || ((booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service') && booking.paymentStatus !== 'paid')}
+                  onClick={() => handleBookingAction(booking._id, 'start')}
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white bg-primary hover:bg-primary/90 transition-colors w-full disabled:bg-gray-300 disabled:cursor-not-allowed"
+                >
+                  {actionLoading.id === booking._id && actionLoading.type === 'start' ? (
+                    <Loader className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Play className="w-3.5 h-3.5" />
+                  )}
+                  {actionLoading.id === booking._id && actionLoading.type === 'start' 
+                    ? 'Starting...' 
+                    : ((booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service') && booking.paymentStatus !== 'paid')
+                      ? 'Payment Pending'
+                      : 'Start Service'}
+                </button>
+                {((booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service') && booking.paymentStatus !== 'paid') && (
+                  <p className="text-[10px] text-accent font-bold mt-1 text-center leading-tight">
+                    Customer payment is pending. Please ask customer to pay online.
+                  </p>
                 )}
-                {actionLoading.id === booking._id && actionLoading.type === 'start' ? 'Starting...' : 'Start Service'}
-              </button>
+              </>
             )}
 
             {/* In-Progress: Complete */}
@@ -1383,9 +1394,23 @@ const ProviderBooking = () => {
                     </>
                   )}
                   {selectedBooking.status === 'accepted' && (
-                    <button onClick={() => handleBookingAction(selectedBooking._id, 'start')} className="flex-1 px-4 py-3 bg-primary hover:bg-primary/90 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors">
-                      <Play className="w-4 h-4" /> Start Service
-                    </button>
+                    <div className="flex-1 flex flex-col gap-1">
+                      <button
+                        disabled={(selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentType === 'pay_after_service') && selectedBooking.paymentStatus !== 'paid'}
+                        onClick={() => handleBookingAction(selectedBooking._id, 'start')}
+                        className="w-full px-4 py-3 bg-primary hover:bg-primary/90 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                      >
+                        <Play className="w-4 h-4" /> 
+                        {(selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentType === 'pay_after_service') && selectedBooking.paymentStatus !== 'paid'
+                          ? 'Payment Pending'
+                          : 'Start Service'}
+                      </button>
+                      {((selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentType === 'pay_after_service') && selectedBooking.paymentStatus !== 'paid') && (
+                        <p className="text-[10px] text-accent font-bold text-center leading-tight">
+                          Customer payment is pending. Ask customer to pay online.
+                        </p>
+                      )}
+                    </div>
                   )}
                   {selectedBooking.status === 'in-progress' && (
                     <button onClick={() => handleBookingAction(selectedBooking._id, 'complete')} className="flex-1 px-4 py-3 bg-primary hover:bg-primary/90 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors">
