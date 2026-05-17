@@ -24,48 +24,51 @@ const getSystemSetting = async (req, res) => {
 // 2. Update System Setting (Admin Only)
 const updateSystemSetting = async (req, res) => {
   try {
-    const { companyName, tagline, address, phone, email, socialLinks } = req.body;
-    let config = await SystemConfig.findOne();
-    if (!config) {
-      config = new SystemConfig();
-    }
-    if (companyName !== undefined) config.companyName = companyName;
-    if (tagline !== undefined) config.tagline = tagline;
-    if (address !== undefined) config.address = address;
-    if (phone !== undefined) config.phone = phone;
-    if (email !== undefined) config.email = email;
+    const updateData = { ...req.body };
 
-    // Handle socialLinks merge
-    let parsedSocialLinks = socialLinks;
-    if (typeof socialLinks === 'string') {
-      try {
-        parsedSocialLinks = JSON.parse(socialLinks);
-      } catch (error) {
-        console.error('Error parsing socialLinks:', error);
-        parsedSocialLinks = {};
+    // Parse nested objects if they are strings (Multipart/FormData sends them as strings)
+    const jsonFields = [
+      'socialLinks',
+      'bookingSettings',
+      'walletSettings',
+      'commissionSettings',
+      'notificationSettings',
+      'maintenanceMode',
+      'featureFlags',
+      'securitySettings',
+      'uploadSettings'
+    ];
+
+    jsonFields.forEach(field => {
+      if (typeof updateData[field] === 'string') {
+        try {
+          updateData[field] = JSON.parse(updateData[field]);
+        } catch (error) {
+          console.error(`Error parsing ${field}:`, error);
+        }
       }
-    }
-
-    if (parsedSocialLinks !== undefined) {
-      if (!config.socialLinks) config.socialLinks = {};
-      if (parsedSocialLinks.facebook !== undefined) config.socialLinks.facebook = parsedSocialLinks.facebook;
-      if (parsedSocialLinks.instagram !== undefined) config.socialLinks.instagram = parsedSocialLinks.instagram;
-      if (parsedSocialLinks.twitter !== undefined) config.socialLinks.twitter = parsedSocialLinks.twitter;
-      if (parsedSocialLinks.linkedin !== undefined) config.socialLinks.linkedin = parsedSocialLinks.linkedin;
-      if (parsedSocialLinks.youtube !== undefined) config.socialLinks.youtube = parsedSocialLinks.youtube;
-    }
+    });
 
     // Handle logo upload
     if (req.files && req.files.logo && req.files.logo[0]) {
-      config.logo = req.files.logo[0].path; // Cloudinary URL
+      updateData.logo = req.files.logo[0].path; // Cloudinary URL
     }
 
     // Handle favicon upload
     if (req.files && req.files.favicon && req.files.favicon[0]) {
-      config.favicon = req.files.favicon[0].path; // Cloudinary URL
+      updateData.favicon = req.files.favicon[0].path; // Cloudinary URL
     }
 
-    await config.save();
+    const config = await SystemConfig.findOneAndUpdate(
+      {},
+      { $set: updateData },
+      {
+        new: true,
+        upsert: true,
+        runValidators: true
+      }
+    );
+
     res.status(200).json({
       success: true,
       message: 'System setting updated successfully',

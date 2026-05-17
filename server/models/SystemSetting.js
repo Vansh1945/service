@@ -52,6 +52,14 @@ const systemConfigSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    defaultCurrency: {
+      type: String,
+      default: "INR"
+    },
+    timezone: {
+      type: String,
+      default: "Asia/Kolkata"
+    },
     socialLinks: {
       facebook: {
         type: String,
@@ -74,6 +82,141 @@ const systemConfigSchema = new mongoose.Schema(
         trim: true,
       },
     },
+    bookingSettings: {
+      autoAssignProvider: {
+        type: Boolean,
+        default: false
+      },
+      cancellationWindowMinutes: {
+        type: Number,
+        default: 60
+      },
+      refundReviewHours: {
+        type: Number,
+        default: 48
+      },
+      maxBookingsPerProvider: {
+        type: Number,
+        default: 10
+      },
+      allowCOD: {
+        type: Boolean,
+        default: true
+      },
+      bookingBufferTime: {
+        type: Number,
+        default: 30
+      }
+    },
+    walletSettings: {
+      minWithdrawal: {
+        type: Number,
+        default: 500
+      },
+      refundToWalletOnly: {
+        type: Boolean,
+        default: true
+      },
+      cashbackEnabled: {
+        type: Boolean,
+        default: false
+      },
+      referralBonus: {
+        type: Number,
+        default: 0
+      }
+    },
+    commissionSettings: {
+      defaultCommission: {
+        type: Number,
+        default: 10
+      },
+      payoutHoldHours: {
+        type: Number,
+        default: 48
+      }
+    },
+    notificationSettings: {
+      pushEnabled: {
+        type: Boolean,
+        default: true
+      },
+      emailEnabled: {
+        type: Boolean,
+        default: true
+      },
+      smsEnabled: {
+        type: Boolean,
+        default: false
+      },
+      providerAlerts: {
+        type: Boolean,
+        default: true
+      },
+      customerAlerts: {
+        type: Boolean,
+        default: true
+      }
+    },
+    maintenanceMode: {
+      customer: {
+        enabled: {
+          type: Boolean,
+          default: false
+        },
+        message: {
+          type: String,
+          default: "System is under maintenance. Please try again later."
+        }
+      },
+      provider: {
+        enabled: {
+          type: Boolean,
+          default: false
+        },
+        message: {
+          type: String,
+          default: "System is under maintenance. Please try again later."
+        }
+      },
+      globalMessage: {
+        type: String,
+        default: "System is under maintenance. Please try again later."
+      }
+    },
+    featureFlags: {
+      walletEnabled: {
+        type: Boolean,
+        default: true
+      },
+      referralEnabled: {
+        type: Boolean,
+        default: false
+      }
+    },
+    securitySettings: {
+      maxLoginAttempts: {
+        type: Number,
+        default: 5
+      },
+      otpExpiryMinutes: {
+        type: Number,
+        default: 10
+      },
+      sessionTimeoutHours: {
+        type: Number,
+        default: 24
+      }
+    },
+    uploadSettings: {
+      maxImageSizeMB: {
+        type: Number,
+        default: 5
+      },
+      allowedImageFormats: [{
+        type: String
+      }]
+    }
   },
   { timestamps: true }
 );

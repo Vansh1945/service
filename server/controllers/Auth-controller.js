@@ -77,6 +77,40 @@ exports.Login = async (req, res) => {
       });
     }
 
+    // Check Global Maintenance Mode Restrictions
+    try {
+      const { SystemConfig } = require('../models/SystemSetting');
+      const settings = await SystemConfig.findOne();
+
+      if (userType === 'customer') {
+        if (settings?.maintenanceMode?.customer?.enabled) {
+          return res.status(503).json({
+            success: false,
+            maintenance: true,
+            role: 'customer',
+            message:
+              settings.maintenanceMode.customer.message ||
+              'Customer services are under maintenance.'
+          });
+        }
+      }
+
+      if (userType === 'provider') {
+        if (settings?.maintenanceMode?.provider?.enabled) {
+          return res.status(503).json({
+            success: false,
+            maintenance: true,
+            role: 'provider',
+            message:
+              settings.maintenanceMode.provider.message ||
+              'Provider services are under maintenance.'
+          });
+        }
+      }
+    } catch (maintenanceErr) {
+      // Ignore database or check errors to avoid locking out login entirely
+    }
+
     // Provider Specific Login Restrictions
     if (userType === 'provider') {
       if (!user.profileComplete) {

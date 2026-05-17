@@ -229,7 +229,7 @@ const approveProvider = async (req, res) => {
 
         if (status === 'approved') {
             provider.approved = true;
-        if (global.logger) global.logger.info(`Provider approved: ${provider._id}`);
+            if (global.logger) global.logger.info(`Provider approved: ${provider._id}`);
 
             provider.kycStatus = 'approved';
             provider.rejectionReason = '';
@@ -295,7 +295,7 @@ const approveProvider = async (req, res) => {
         if (status === 'rejected') {
             provider.approved = false;
             provider.kycStatus = 'rejected';
-        if (global.logger) global.logger.warn(`Provider rejected: ${provider._id}`);
+            if (global.logger) global.logger.warn(`Provider rejected: ${provider._id}`);
 
             provider.rejectionReason = finalRemarks || 'No reason provided';
             provider.isActive = false;
@@ -738,7 +738,7 @@ const getCustomerById = async (req, res) => {
 const getDashboardStats = async (req, res) => {
     try {
         const cacheKey = 'admin_dashboard_stats';
-        
+
         // 1. Try In-Memory Precomputed Analytics (Fastest)
         const precomputed = getPrecomputedAnalytics();
         if (precomputed) {
@@ -2028,10 +2028,10 @@ const processAdminRefund = async (req, res) => {
         user.wallet.availableBalance += refundAmount;
         user.wallet.totalRefunded += refundAmount;
         user.wallet.walletTransactions.push({
-          type: 'credit',
-          amount: refundAmount,
-          reason: 'Booking Refund',
-          booking: booking._id
+            type: 'credit',
+            amount: refundAmount,
+            reason: 'Booking Refund',
+            booking: booking._id
         });
         user.wallet.lastUpdated = new Date();
         await user.save({ session });
@@ -2100,7 +2100,7 @@ const processAdminRefund = async (req, res) => {
 
         if (earning) {
             totalToRecover = earning.netAmount;
-            
+
             if (['held', 'available'].includes(earning.status)) {
                 // CASE 1: Earning not yet paid out
                 earning.status = 'cancelled';
@@ -2115,18 +2115,18 @@ const processAdminRefund = async (req, res) => {
                     const available = provider.wallet.availableBalance || 0;
                     // Deduct up to available balance (avoid negative as requested)
                     const canDeduct = Math.min(available, totalToRecover);
-                    
+
                     if (canDeduct > 0) {
                         provider.wallet.availableBalance -= canDeduct;
                         provider.wallet.lastUpdated = new Date();
                         await provider.save({ session });
-                        
+
                         recoveredAmount = canDeduct;
                         recoveryStatus = recoveredAmount >= totalToRecover ? 'fully_recovered' : 'partially_recovered';
                     } else {
                         recoveryStatus = 'pending_recovery';
                     }
-                    
+
                     // Mark earning as cancelled and record recovery details
                     earning.status = 'cancelled';
                     await earning.save({ session });
@@ -2135,9 +2135,9 @@ const processAdminRefund = async (req, res) => {
         }
 
         // Save financial recovery logs in booking
-        booking.adminRemark = (booking.adminRemark || '') + 
+        booking.adminRemark = (booking.adminRemark || '') +
             ` | Recovery: ${recoveryStatus} (₹${recoveredAmount}/₹${totalToRecover} recovered from provider)`;
-        
+
         await booking.save({ session });
 
         await session.commitTransaction();
@@ -2159,10 +2159,10 @@ const processAdminRefund = async (req, res) => {
         // Notify Provider
         if (booking.provider) {
             try {
-                const message = recoveryStatus === 'cancelled_held' 
+                const message = recoveryStatus === 'cancelled_held'
                     ? `A refund of ₹${refundAmount} was approved. Your held earning of ₹${totalToRecover} has been cancelled.`
                     : `A refund was approved. ₹${recoveredAmount} has been adjusted from your wallet balance.`;
-                
+
                 sendNotification(
                     booking.provider,
                     'provider',
@@ -2278,7 +2278,7 @@ const togglePayoutHold = async (req, res) => {
         const ProviderEarning = mongoose.model('ProviderEarning');
         const earning = await ProviderEarning.findOneAndUpdate(
             { booking: bookingId },
-            { 
+            {
                 status: status,
                 isHeldByAdmin: status === 'held',
                 holdReason: status === 'held' ? (reason || 'Held by administrator') : null
@@ -2476,31 +2476,32 @@ async function getCancellationAlerts(req, res) {
 
 // System Logs API
 const getSystemLogs = async (req, res) => {
-  try {
-    const fs = require('fs');
-    const path = require('path');
-    const logPath = path.join(__dirname, '../logs/combined.log');
-    if (!fs.existsSync(logPath)) return res.json({ success: true, logs: [], total: 0 });
-    
-    const { level, page = 1, limit = 50 } = req.query;
-    const logs = fs.readFileSync(logPath, 'utf8').split('\n').filter(Boolean).map(line => {
-      const match = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) \[(.+?)\]: (.*)$/);
-      if (match) return { timestamp: match[1], level: match[2], message: match[3] };
-      return { message: line };
-    }).reverse();
-    
-    let filteredLogs = logs;
-    if (level && level !== 'ALL') {
-      filteredLogs = logs.filter(l => l.level === level.toUpperCase());
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        const logPath = path.join(__dirname, '../logs/combined.log');
+        if (!fs.existsSync(logPath)) return res.json({ success: true, logs: [], total: 0 });
+
+        const { level, page = 1, limit = 50 } = req.query;
+        const logs = fs.readFileSync(logPath, 'utf8').split('\n').filter(Boolean).map(line => {
+            const trimmedLine = line.trim();
+            const match = trimmedLine.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) \[(.+?)\]: (.*)$/);
+            if (match) return { timestamp: match[1], level: match[2], message: match[3] };
+            return { message: trimmedLine };
+        }).reverse();
+
+        let filteredLogs = logs;
+        if (level && level !== 'ALL') {
+            filteredLogs = logs.filter(l => l.level === level.toUpperCase());
+        }
+
+        const startIndex = (page - 1) * limit;
+        const paginatedLogs = filteredLogs.slice(startIndex, startIndex + Number(limit));
+
+        res.json({ success: true, logs: paginatedLogs, total: filteredLogs.length, page: Number(page), pages: Math.ceil(filteredLogs.length / limit) });
+    } catch (error) {
+        console.error('Log API Error:', error);
+        res.status(500).json({ success: false, message: 'Failed to read logs' });
     }
-    
-    const startIndex = (page - 1) * limit;
-    const paginatedLogs = filteredLogs.slice(startIndex, startIndex + Number(limit));
-    
-    res.json({ success: true, logs: paginatedLogs, total: filteredLogs.length, page: Number(page), pages: Math.ceil(filteredLogs.length / limit) });
-  } catch (error) {
-    console.error('Log API Error:', error);
-    res.status(500).json({ success: false, message: 'Failed to read logs' });
-  }
 };
 module.exports.getSystemLogs = getSystemLogs;

@@ -24,13 +24,15 @@ const Pagination = ({
   return (
     <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 mt-auto w-full">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="text-sm text-gray-600">
-          Showing <span className="font-medium">{(currentPage - 1) * limit + 1}</span> to{' '}
-          <span className="font-medium">
-            {Math.min(currentPage * limit, totalItems)}
-          </span>{' '}
-          of <span className="font-medium">{totalItems}</span> results
-        </div>
+        {limit !== undefined && limit !== null && totalItems !== undefined && totalItems !== null && (
+          <div className="text-sm text-gray-600">
+            Showing <span className="font-medium">{(currentPage - 1) * limit + 1}</span> to{' '}
+            <span className="font-medium">
+              {Math.min(currentPage * limit, totalItems)}
+            </span>{' '}
+            of <span className="font-medium">{totalItems}</span> results
+          </div>
+        )}
         <div className="flex items-center space-x-2">
           <button
             onClick={prevPage}

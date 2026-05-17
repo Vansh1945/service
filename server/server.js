@@ -9,31 +9,31 @@ const fs = require('fs');
 // Ensure logs directory exists
 const logDir = path.join(__dirname, 'logs');
 if (!fs.existsSync(logDir)) {
-    fs.mkdirSync(logDir);
+  fs.mkdirSync(logDir);
 }
 
 const { combine, timestamp, printf, errors } = winston.format;
 const logFormat = printf(({ level, message, timestamp, stack }) => {
-    return `${timestamp} [${level.toUpperCase()}]: ${stack || message}`;
+  return `${timestamp} [${level.toUpperCase()}]: ${stack || message}`;
 });
 
 const logger = winston.createLogger({
-    level: 'info',
-    format: combine(
-        timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-        errors({ stack: true }),
-        logFormat
-    ),
-    transports: [
-        new winston.transports.File({ filename: path.join(logDir, 'error.log'), level: 'error' }),
-        new winston.transports.File({ filename: path.join(logDir, 'combined.log') })
-    ]
+  level: 'info',
+  format: combine(
+    timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    errors({ stack: true }),
+    logFormat
+  ),
+  transports: [
+    new winston.transports.File({ filename: path.join(logDir, 'error.log'), level: 'error' }),
+    new winston.transports.File({ filename: path.join(logDir, 'combined.log') })
+  ]
 });
 
 if (process.env.NODE_ENV !== 'production') {
-    logger.add(new winston.transports.Console({
-        format: combine(winston.format.colorize(), logFormat)
-    }));
+  logger.add(new winston.transports.Console({
+    format: combine(winston.format.colorize(), logFormat)
+  }));
 }
 
 global.logger = logger;
@@ -49,23 +49,23 @@ app.use(express.json());
 
 // Morgan API Request Logging
 app.use(morgan((tokens, req, res) => {
-    let url = tokens.url(req, res);
-    // Redact sensitive query params
-    if (url) {
-        url = url.replace(/(token|secret|password)=[^&]+/ig, '$1=***');
-    }
-    return [
-        tokens.method(req, res),
-        url,
-        tokens.status(req, res),
-        tokens['response-time'](req, res), 'ms'
-    ].join(' ');
-}, { 
-    stream: { write: message => logger.info(message.trim()) },
-    skip: (req, res) => {
-        const url = req.originalUrl || req.url || '';
-        return url.includes('/system-logs');
-    }
+  let url = tokens.url(req, res);
+  // Redact sensitive query params
+  if (url) {
+    url = url.replace(/(token|secret|password)=[^&]+/ig, '$1=***');
+  }
+  return [
+    tokens.method(req, res),
+    url,
+    tokens.status(req, res),
+    tokens['response-time'](req, res), 'ms'
+  ].join(' ');
+}, {
+  stream: { write: message => logger.info(message.trim()) },
+  skip: (req, res) => {
+    const url = req.originalUrl || req.url || '';
+    return url.includes('/system-logs');
+  }
 }));
 
 const corsOptions = {
@@ -140,6 +140,85 @@ const systemSettingRoutes = require('./routes/SystemSetting-routes');
 const contactRoutes = require('./routes/Contact-routes');
 const notificationRoutes = require('./routes/notification-routes');
 
+// Maintenance Mode Middleware
+app.use(async (req, res, next) => {
+  // Always allow health checks, test-routes, static assets, and uploads
+  if (
+    req.path === '/health' ||
+    req.path === '/api/test-route' ||
+    req.path.startsWith('/uploads') ||
+    req.path.startsWith('/assets')
+  ) {
+    return next();
+  }
+
+  try {
+    const { SystemConfig } = require('./models/SystemSetting');
+    const jwt = require('jsonwebtoken');
+
+    const settings = await SystemConfig.findOne();
+
+    if (!settings?.maintenanceMode) {
+      return next();
+    }
+
+    // Always allow admin routes
+    if (
+      req.originalUrl.includes('/api/admin') ||
+      req.originalUrl.includes('/admin/login') ||
+      req.originalUrl.includes('/api/system-setting')
+    ) {
+      return next();
+    }
+
+    let role = null;
+
+    // Extract role from token if exists
+    const token = req.headers.authorization?.replace('Bearer ', '');
+
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        role = decoded.role;
+      } catch (err) {}
+    }
+
+    // CUSTOMER MAINTENANCE
+    if (
+      settings.maintenanceMode.customer?.enabled &&
+      role === 'customer'
+    ) {
+      return res.status(503).json({
+        success: false,
+        maintenance: true,
+        role: 'customer',
+        message:
+          settings.maintenanceMode.customer.message ||
+          settings.maintenanceMode.globalMessage
+      });
+    }
+
+    // PROVIDER MAINTENANCE
+    if (
+      settings.maintenanceMode.provider?.enabled &&
+      role === 'provider'
+    ) {
+      return res.status(503).json({
+        success: false,
+        maintenance: true,
+        role: 'provider',
+        message:
+          settings.maintenanceMode.provider.message ||
+          settings.maintenanceMode.globalMessage
+      });
+    }
+
+    next();
+  } catch (err) {
+    next();
+  }
+});
+
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
@@ -202,7 +281,7 @@ initSocket(server);
 const startServer = async () => {
   try {
     await connectDB();
-    
+
     // Initialize background tasks
     const { releaseHeldEarnings } = require('./controllers/paymentController');
     // Run every hour
@@ -210,7 +289,7 @@ const startServer = async () => {
       console.log('Running background task: releaseHeldEarnings');
       await releaseHeldEarnings();
     }, 60 * 60 * 1000);
-    
+
     // Initial run on startup
     releaseHeldEarnings().catch(err => console.error('Initial releaseHeldEarnings failed:', err));
 

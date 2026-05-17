@@ -1,12 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const {
-    register,
-    getProfile,
-    updateProfile,
-    uploadProfilePicture,
-    getCustomerDashboardStats,
-    getWalletHistory
+  register,
+  getProfile,
+  updateProfile,
+  uploadProfilePicture,
+  getCustomerDashboardStats,
+  getWalletHistory
 } = require('../controllers/User-controller');
 const { userAuthMiddleware } = require('../middlewares/User-middleware');
 const { roleMiddleware } = require('../middlewares/Role-Middleware');
@@ -23,10 +23,10 @@ router.get('/profile', userAuthMiddleware, requireCustomer, getProfile);
 router.put('/profile-update', userAuthMiddleware, requireCustomer, updateProfile);
 
 router.post('/profile-picture',
-    userAuthMiddleware,
-    requireCustomer,
-    uploadProfilePic.single('profilePic'),
-    uploadProfilePicture
+  userAuthMiddleware,
+  requireCustomer,
+  uploadProfilePic.single('profilePic'),
+  uploadProfilePicture
 );
 
 router.get('/dashboard', userAuthMiddleware, requireCustomer, getCustomerDashboardStats);

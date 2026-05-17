@@ -92,6 +92,9 @@ const LoginPage = () => {
         throw new Error('Invalid response from server');
       }
     } catch (err) {
+      if (err.name === 'CanceledError' || err.message === 'canceled') {
+        return; // Ignore Axios aborted/canceled requests
+      }
       const errorData = err.response?.data;
       const errorMsg = errorData?.message || err.message;
       showToast(errorMsg, 'error');
