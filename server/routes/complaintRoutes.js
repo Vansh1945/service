@@ -16,7 +16,7 @@ const { uploadComplaintImage } = require("../middlewares/upload");
 const { userAuthMiddleware } = require("../middlewares/User-middleware");
 const { providerAuthMiddleware } = require("../middlewares/Provider-middleware");
 const adminAuthMiddleware = require("../middlewares/Admin-middleware");
-const { roleMiddleware } = require("../middlewares/Role-middleware");
+const { roleMiddleware } = require("../middlewares/role-middleware");
 const { validateBody } = require("../validation/common.validation");
 const {
   submitComplaintSchema,
