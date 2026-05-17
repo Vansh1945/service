@@ -9,7 +9,7 @@ const Transaction = require('../models/Transaction-model');
 const ExcelJS = require('exceljs');
 const { sendNotification, notifyAdmins } = require('../utils/notificationHelper');
 const { sendMail } = require('../utils/sendmail');
-const { invalidateCache } = require('../utils/cacheHelper');
+
 const bcrypt = require('bcryptjs');
 
 
@@ -168,8 +168,8 @@ const handlePaymentCaptured = async (payment) => {
 
       // Invalidate dashboard caches
       try {
-        await invalidateCache('admin_dashboard_*');
-        await invalidateCache('dashboard_analytics_*');
+
+
       } catch (e) { }
     });
   } catch (error) {

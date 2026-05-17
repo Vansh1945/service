@@ -62,10 +62,6 @@ const Badge = ({ status }) => {
   );
 };
 
-const Spinner = ({ className = "w-5 h-5", variant = "border-white" }) => (
-  <div className={`animate-spin rounded-full border-b-2 ${variant} ${className}`}></div>
-);
-
 // ── Main Dashboard Component ─────────────────────────────────────────────────
 
 const ProviderEarningsDashboard = () => {

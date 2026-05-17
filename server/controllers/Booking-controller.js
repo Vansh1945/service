@@ -11,7 +11,7 @@ const ExcelJS = require('exceljs');
 const { sendNotification, notifyAdmins } = require('../utils/notificationHelper');
 const { generateBookingId } = require('../utils/generateUniqueId');
 const { getBookingTimeline } = require('../utils/bookingHelper');
-const { invalidateCache } = require('../utils/cacheHelper');
+
 
 // Helper to get synchronized payout status
 const getPayoutStatus = (earning, booking) => {
@@ -1335,8 +1335,8 @@ const cancelBooking = async (req, res) => {
     }
     // Invalidate dashboard caches
     try {
-      await invalidateCache('admin_dashboard_*');
-      await invalidateCache('dashboard_analytics_*');
+
+
     } catch (e) { }
 
   } catch (error) {
@@ -1797,8 +1797,8 @@ const acceptBooking = async (req, res) => {
 
     // Invalidate dashboard caches
     try {
-      await invalidateCache('admin_dashboard_*');
-      await invalidateCache('dashboard_analytics_*');
+
+
     } catch (e) { }
 
     return res.status(200).json({
@@ -1908,8 +1908,8 @@ const startBooking = async (req, res) => {
 
     // Invalidate dashboard caches
     try {
-      await invalidateCache('admin_dashboard_*');
-      await invalidateCache('dashboard_analytics_*');
+
+
     } catch (e) { }
 
     return res.status(200).json({
@@ -1981,8 +1981,8 @@ const rejectBooking = async (req, res) => {
 
     // Invalidate dashboard caches
     try {
-      await invalidateCache('admin_dashboard_*');
-      await invalidateCache('dashboard_analytics_*');
+
+
     } catch (e) { }
 
     res.status(200).json({
@@ -2310,8 +2310,8 @@ const completeBooking = async (req, res) => {
 
     // Invalidate dashboard caches
     try {
-      await invalidateCache('admin_dashboard_*');
-      await invalidateCache('dashboard_analytics_*');
+
+
     } catch (e) { }
 
     return res.json({
@@ -2978,8 +2978,8 @@ const assignProvider = async (req, res) => {
 
     // Invalidate dashboard caches
     try {
-      await invalidateCache('admin_dashboard_*');
-      await invalidateCache('dashboard_analytics_*');
+
+
     } catch (e) { }
 
     res.json({
@@ -3022,8 +3022,8 @@ const deleteBooking = async (req, res) => {
 
     // Invalidate dashboard caches
     try {
-      await invalidateCache('admin_dashboard_*');
-      await invalidateCache('dashboard_analytics_*');
+
+
     } catch (e) { }
 
     res.json({

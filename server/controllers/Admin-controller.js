@@ -19,7 +19,7 @@ const mongoose = require('mongoose');
 const { sendNotification } = require('../utils/notificationHelper');
 const generateProviderId = require('../utils/generateUniqueId');
 const { sendMail } = require('../utils/sendmail');
-const { getCachedData, setCachedData, invalidateCache } = require('../utils/cacheHelper');
+
 const { getPrecomputedAnalytics } = require('../services/AnalyticsService');
 
 /**
@@ -280,8 +280,8 @@ const approveProvider = async (req, res) => {
             }
 
             // Invalidate dashboard caches
-            await invalidateCache('admin_dashboard_*');
-            await invalidateCache('dashboard_analytics_*');
+
+
 
             return res.status(200).json({
                 success: true,
@@ -333,8 +333,8 @@ const approveProvider = async (req, res) => {
             }
 
             // Invalidate dashboard caches
-            await invalidateCache('admin_dashboard_*');
-            await invalidateCache('dashboard_analytics_*');
+
+
 
             return res.status(200).json({
                 success: true,
@@ -755,11 +755,7 @@ const getDashboardStats = async (req, res) => {
             });
         }
 
-        // 2. Try Redis Cache
-        const cached = await getCachedData(cacheKey);
-        if (cached) {
-            return res.json({ success: true, data: cached, fromCache: true });
-        }
+
 
         // 3. Fallback to DB (Optimized)
         const today = moment().startOf('day').toDate();
@@ -838,8 +834,7 @@ const getDashboardStats = async (req, res) => {
             disputes: disputeStats
         };
 
-        // Store in Redis for 60 seconds
-        await setCachedData(cacheKey, dashboardStats, 60);
+
 
         res.json({
             success: true,
@@ -1712,11 +1707,7 @@ const getDashboardAnalytics = async (req, res) => {
         const { period = '7d' } = req.query;
         const cacheKey = `dashboard_analytics_${period}`;
 
-        // 1. Check Redis Cache
-        const cached = await getCachedData(cacheKey);
-        if (cached) {
-            return res.status(200).json({ success: true, ...cached, fromCache: true });
-        }
+
 
         let startDate;
         const now = new Date();
@@ -1927,8 +1918,7 @@ const getDashboardAnalytics = async (req, res) => {
             }
         };
 
-        // Cache the result in Redis for 60 seconds
-        await setCachedData(cacheKey, result, 60);
+
 
         res.status(200).json({
             success: true,
@@ -2193,8 +2183,8 @@ const processAdminRefund = async (req, res) => {
         } catch (err) { }
 
         // Invalidate dashboard caches
-        await invalidateCache('admin_dashboard_*');
-        await invalidateCache('dashboard_analytics_*');
+
+
 
         res.json({
             success: true,

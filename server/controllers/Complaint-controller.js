@@ -4,7 +4,7 @@ const User = require('../models/User-model');
 const mongoose = require('mongoose');
 const { notifyAdmins } = require('../utils/notificationHelper');
 const { generateComplaintId } = require('../utils/generateUniqueId');
-const { invalidateCache } = require('../utils/cacheHelper');
+
 
 // @desc    Submit a new complaint
 // @route   POST /api/complaints
@@ -80,8 +80,8 @@ const submitComplaint = async (req, res) => {
 
     // Invalidate dashboard caches
     try {
-      await invalidateCache('admin_dashboard_*');
-      await invalidateCache('dashboard_analytics_*');
+
+
     } catch (e) { }
 
     res.status(201).json({
@@ -599,8 +599,8 @@ const resolveComplaint = async (req, res) => {
 
     // Invalidate dashboard caches
     try {
-      await invalidateCache('admin_dashboard_*');
-      await invalidateCache('dashboard_analytics_*');
+
+
     } catch (e) { }
 
     res.json({ success: true, message: 'Complaint resolved successfully', data: complaint });
@@ -639,8 +639,8 @@ const updateComplaintStatus = async (req, res) => {
 
     // Invalidate dashboard caches
     try {
-      await invalidateCache('admin_dashboard_*');
-      await invalidateCache('dashboard_analytics_*');
+
+
     } catch (e) { }
 
     res.json({
@@ -799,8 +799,8 @@ const reopenComplaint = async (req, res) => {
 
     // Invalidate dashboard caches
     try {
-      await invalidateCache('admin_dashboard_*');
-      await invalidateCache('dashboard_analytics_*');
+
+
     } catch (e) { }
 
     res.json({
