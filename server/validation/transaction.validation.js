@@ -13,13 +13,24 @@ const createOrderSchema = z.object({
   })
 });
 
-const verifyPaymentSchema = z.object({
+const verifyPaymentSchema = z.preprocess((data) => {
+  if (data && typeof data === 'object') {
+    return {
+      razorpay_order_id: data.razorpay_order_id || data.orderId,
+      razorpay_payment_id: data.razorpay_payment_id || data.paymentId,
+      razorpay_signature: data.razorpay_signature || data.signature,
+      bookingId: data.bookingId,
+      transactionId: data.transactionId
+    };
+  }
+  return data;
+}, z.object({
   razorpay_order_id: z.string().min(1, "Razorpay Order ID is required"),
   razorpay_payment_id: z.string().min(1, "Razorpay Payment ID is required"),
   razorpay_signature: z.string().min(1, "Razorpay Signature is required"),
   bookingId: objectIdSchema,
   transactionId: objectIdSchema
-});
+}));
 
 module.exports = {
   createOrderSchema,

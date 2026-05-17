@@ -241,9 +241,6 @@ const BookingConfirmation = () => {
         currency: order.currency || 'INR',
         name: 'SAFEVOLT SOLUTIONS',
         description: `Payment for ${getServiceInfo().title}`,
-        image: (getServiceInfo().image && getServiceInfo().image.startsWith('https') && !getServiceInfo().image.includes('localhost')) 
-               ? getServiceInfo().image 
-               : 'https://placehold.co/200x200?text=S',
         order_id: order.id,
         handler: async function (response) {
           try {

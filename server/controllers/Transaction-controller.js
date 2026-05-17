@@ -122,7 +122,12 @@ const createOrder = async (req, res) => {
             orderId: existingTransaction.razorpayOrderId,
             amount: existingTransaction.amount,
             key: process.env.RAZORPAY_KEY_ID,
-            transactionId: existingTransaction._id
+            transactionId: existingTransaction._id,
+            order: {
+              id: existingTransaction.razorpayOrderId,
+              amount: existingTransaction.amount,
+              currency: 'INR'
+            }
           }
         });
       }
@@ -224,7 +229,12 @@ const createOrder = async (req, res) => {
         orderId: order.id,
         amount: order.amount,
         key: process.env.RAZORPAY_KEY_ID,
-        transactionId: transaction._id
+        transactionId: transaction._id,
+        order: {
+          id: order.id,
+          amount: order.amount,
+          currency: order.currency || 'INR'
+        }
       }
     });
 

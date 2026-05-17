@@ -17,12 +17,13 @@ const validate = (location, schema) => {
     } catch (error) {
       if (error instanceof z.ZodError) {
         const formattedErrors = {};
-        error.errors.forEach((err) => {
-          const path = err.path.join('.');
+        const errorsList = error.errors || error.issues || [];
+        errorsList.forEach((err) => {
+          const path = err.path ? err.path.join('.') : 'field';
           if (!formattedErrors[path]) {
             formattedErrors[path] = [];
           }
-          formattedErrors[path].push(err.message);
+          formattedErrors[path].push(err.message || 'Validation error');
         });
         return res.status(400).json({
           success: false,
