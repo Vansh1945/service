@@ -107,6 +107,8 @@ export const getCancellationAlerts = () => {
     return axiosInstance.get("/admin/fraud/cancellation-alerts");
 };
 
-export const getFakeReviews = () => {
-    return axiosInstance.get("/admin/fraud/fake-reviews");
+
+// System Logs
+export const getSystemLogs = (params) => {
+    return axiosInstance.get("/admin/system-logs", { params });
 };

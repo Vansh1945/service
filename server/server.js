@@ -1,16 +1,72 @@
 require('dotenv').config();
 const express = require("express");
 const cors = require("cors");
+const winston = require('winston');
+const morgan = require('morgan');
+const path = require('path');
+const fs = require('fs');
+
+// Ensure logs directory exists
+const logDir = path.join(__dirname, 'logs');
+if (!fs.existsSync(logDir)) {
+    fs.mkdirSync(logDir);
+}
+
+const { combine, timestamp, printf, errors } = winston.format;
+const logFormat = printf(({ level, message, timestamp, stack }) => {
+    return `${timestamp} [${level.toUpperCase()}]: ${stack || message}`;
+});
+
+const logger = winston.createLogger({
+    level: 'info',
+    format: combine(
+        timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+        errors({ stack: true }),
+        logFormat
+    ),
+    transports: [
+        new winston.transports.File({ filename: path.join(logDir, 'error.log'), level: 'error' }),
+        new winston.transports.File({ filename: path.join(logDir, 'combined.log') })
+    ]
+});
+
+if (process.env.NODE_ENV !== 'production') {
+    logger.add(new winston.transports.Console({
+        format: combine(winston.format.colorize(), logFormat)
+    }));
+}
+
+global.logger = logger;
 
 const connectDB = require("./config/db");
 const frontend = process.env.FRONTEND_URL;
 const PORT = process.env.PORT || 5000;
 
-
 // Initialize express app
 const app = express();
 
 app.use(express.json());
+
+// Morgan API Request Logging
+app.use(morgan((tokens, req, res) => {
+    let url = tokens.url(req, res);
+    // Redact sensitive query params
+    if (url) {
+        url = url.replace(/(token|secret|password)=[^&]+/ig, '$1=***');
+    }
+    return [
+        tokens.method(req, res),
+        url,
+        tokens.status(req, res),
+        tokens['response-time'](req, res), 'ms'
+    ].join(' ');
+}, { 
+    stream: { write: message => logger.info(message.trim()) },
+    skip: (req, res) => {
+        const url = req.originalUrl || req.url || '';
+        return url.includes('/system-logs');
+    }
+}));
 
 const corsOptions = {
   origin: function (origin, callback) {

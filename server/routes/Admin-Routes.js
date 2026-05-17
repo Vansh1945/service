@@ -4,13 +4,21 @@ const adminController = require('../controllers/Admin-controller');
 const adminAuthMiddleware = require('../middlewares/Admin-middleware');
 const { roleMiddleware } = require('../middlewares/Role-Middleware');
 const { uploadProfilePic } = require('../middlewares/upload');
+const { validateBody } = require('../validation/common.validation');
+const {
+  registerAdminSchema,
+  approveProviderSchema,
+  adminRefundSchema,
+  togglePayoutHoldSchema
+} = require('../validation/admin.validation');
 
 // Public routes
-router.post('/register', uploadProfilePic.single('profilePic'), adminController.registerAdmin);
+router.post('/register', uploadProfilePic.single('profilePic'), validateBody(registerAdminSchema), adminController.registerAdmin);
 
 // Protected routes
 const adminRoleCheck = roleMiddleware(['admin']);
 router.use(adminAuthMiddleware, adminRoleCheck);
+
 
 // Admin management
 router.get('/profile', adminController.getAdminProfile);
@@ -24,7 +32,7 @@ router.get('/customers/:id', adminController.getCustomerById);
 
 // Provider management
 router.get('/providers/pending', adminController.getPendingProviders);
-router.put('/providers/:id/status', adminController.approveProvider);
+router.put('/providers/:id/status', validateBody(approveProviderSchema), adminController.approveProvider);
 router.get('/providers', adminController.getAllProviders);
 router.get('/providers/:id', adminController.getProviderDetails);
 
@@ -39,14 +47,15 @@ router.get('/dashboard/live-stats', adminController.getDashboardLiveStats);
 router.get('/dashboard/recent-activity', adminController.getDashboardRecentActivity);
 router.get('/dashboard/analytics', adminController.getDashboardAnalytics);
 // Refund management
-router.post('/refund/:bookingId/process', adminController.processAdminRefund);
+router.post('/refund/:bookingId/process', validateBody(adminRefundSchema), adminController.processAdminRefund);
 router.post('/refund/:bookingId/reject', adminController.rejectAdminRefund);
-router.patch('/payout/:bookingId/hold', adminController.togglePayoutHold);
+router.patch('/payout/:bookingId/hold', validateBody(togglePayoutHoldSchema), adminController.togglePayoutHold);
 
 // Fraud Detection
 router.get('/fraud/same-ip', adminController.getSameIPFraud);
 router.get('/fraud/device-abuse', adminController.getDeviceAbuse);
 router.get('/fraud/cancellation-alerts', adminController.getCancellationAlerts);
-router.get('/fraud/fake-reviews', adminController.getFakeReviews);
+// System Logs
+router.get('/system-logs', adminController.getSystemLogs);
 
 module.exports = router;

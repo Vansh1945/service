@@ -53,6 +53,8 @@ exports.Login = async (req, res) => {
         success: false,
         message: 'Invalid email or password'
       });
+        if (global.logger) global.logger.warn(`Failed login attempt for email: ${email}`);
+
     }
 
 

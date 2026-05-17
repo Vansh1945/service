@@ -2,6 +2,8 @@
 const express = require('express');
 const router = express.Router();
 const bookingController = require('../controllers/Booking-controller');
+const { validateBody } = require('../validation/common.validation');
+const { createBookingSchema, confirmBookingSchema, updateBookingStatusSchema, updateBookingPaymentSchema } = require('../validation/booking.validation');
 
 // Middleware imports
 const { userAuthMiddleware } = require('../middlewares/User-middleware');
@@ -15,12 +17,13 @@ const requireProvider = roleMiddleware(['provider']);
 const requireAdmin = roleMiddleware(['admin']);
 
 // USER ROUTES
-router.post('/', userAuthMiddleware, requireCustomer, bookingController.createBooking);
-router.post('/confirm', userAuthMiddleware, requireCustomer, bookingController.confirmBooking);
-router.patch('/:id/status', userAuthMiddleware, requireCustomer, bookingController.updateBookingStatus);
+router.post('/', userAuthMiddleware, requireCustomer, validateBody(createBookingSchema), bookingController.createBooking);
+router.post('/confirm', userAuthMiddleware, requireCustomer, validateBody(confirmBookingSchema), bookingController.confirmBooking);
+router.patch('/:id/status', userAuthMiddleware, requireCustomer, validateBody(updateBookingStatusSchema), bookingController.updateBookingStatus);
 router.get('/user', userAuthMiddleware, requireCustomer, bookingController.getUserBookings);
 router.get('/customer', userAuthMiddleware, requireCustomer, bookingController.getCustomerBookings);
-router.patch('/:id/payment', userAuthMiddleware, requireCustomer, bookingController.updateBookingPayment);
+router.patch('/:id/payment', userAuthMiddleware, requireCustomer, validateBody(updateBookingPaymentSchema), bookingController.updateBookingPayment);
+
 router.post('/pay/:id', userAuthMiddleware, requireCustomer, bookingController.payBooking);
 router.get('/providers/:id', userAuthMiddleware, requireCustomer, bookingController.getProviderById);
 router.get('/services/:id', userAuthMiddleware, requireCustomer, bookingController.getServiceById);

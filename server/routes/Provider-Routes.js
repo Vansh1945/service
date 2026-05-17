@@ -5,14 +5,22 @@ const { providerAuthMiddleware } = require('../middlewares/Provider-middleware')
 const adminAuthMiddleware = require('../middlewares/Admin-middleware');
 const { roleMiddleware } = require('../middlewares/Role-Middleware');
 const { upload } = require('../middlewares/upload');
+const { validateBody } = require('../validation/common.validation');
+const {
+  initiateRegistrationSchema,
+  completeRegistrationSchema,
+  loginForCompletionSchema,
+  completeProfileSchema,
+  updateProviderProfileSchema
+} = require('../validation/provider.validation');
 
 const requireProvider = roleMiddleware(['provider']);
 const requireAdmin = roleMiddleware(['admin']);
 
 // Registration Routes (Public)
-router.post('/register/initiate', providerController.initiateRegistration);
-router.post('/register/complete', providerController.completeRegistration);
-router.post('/login-for-completion', providerController.loginForCompletion);
+router.post('/register/initiate', validateBody(initiateRegistrationSchema), providerController.initiateRegistration);
+router.post('/register/complete', validateBody(completeRegistrationSchema), providerController.completeRegistration);
+router.post('/login-for-completion', validateBody(loginForCompletionSchema), providerController.loginForCompletion);
 
 
 // Profile Completion Route (Private)
@@ -24,8 +32,10 @@ router.put('/profile/complete',
     { name: 'resume', maxCount: 1 },
     { name: 'passbookImage', maxCount: 1 }
   ]),
+  validateBody(completeProfileSchema),
   providerController.completeProfile
 );
+
 
 // Profile Routes (Protected)
 router.get('/profile', providerAuthMiddleware, requireProvider, providerController.getProfile);
@@ -39,8 +49,10 @@ router.put('/profile',
     { name: 'resume', maxCount: 1 },
     { name: 'passbookImage', maxCount: 1 }
   ]),
+  validateBody(updateProviderProfileSchema),
   providerController.updateProviderProfile
 );
+
 
 // Document Viewing Route (Protected)
 router.get('/document/:type', providerAuthMiddleware, requireProvider, providerController.viewDocument);

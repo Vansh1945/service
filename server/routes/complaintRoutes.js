@@ -17,8 +17,17 @@ const { userAuthMiddleware } = require("../middlewares/User-middleware");
 const { providerAuthMiddleware } = require("../middlewares/Provider-middleware");
 const adminAuthMiddleware = require("../middlewares/Admin-middleware");
 const { roleMiddleware } = require("../middlewares/Role-Middleware");
+const { validateBody } = require("../validation/common.validation");
+const {
+  submitComplaintSchema,
+  resolveComplaintSchema,
+  updateComplaintStatusSchema,
+  reopenComplaintSchema,
+  replyToComplaintSchema
+} = require("../validation/complaint.validation");
 
 // Unified Auth for Customer and Provider
+
 const sharedAuth = (req, res, next) => {
   const token = req.header('Authorization');
   if (!token) return res.status(401).json({ success: false, message: "Authorization required" });
@@ -45,26 +54,28 @@ router.post(
   "/",
   sharedAuth,
   uploadComplaintImage.array("images", 5),
+  validateBody(submitComplaintSchema),
   submitComplaint
 );
 
 // Shared routes ( Customer and Provider )
 router.get("/my-complaints", sharedAuth, getMyComplaints);
 router.get("/:id", sharedAuth, getComplaint);
-router.put("/:id/reopen", sharedAuth, reopenComplaint);
+router.put("/:id/reopen", sharedAuth, validateBody(reopenComplaintSchema), reopenComplaint);
 
 // Reply route (Admin and Provider)
 router.post(
   "/:id/reply",
   sharedAuth,
   uploadComplaintImage.array("images", 5),
+  validateBody(replyToComplaintSchema),
   replyToComplaint
 );
 
 // Admin routes
 router.get("/", adminAuthMiddleware, requireAdmin, getAllComplaints);
 router.get("/:id/details", adminAuthMiddleware, requireAdmin, getComplaintDetails);
-router.put("/:id/resolve", adminAuthMiddleware, requireAdmin, resolveComplaint);
-router.put("/:id/status", adminAuthMiddleware, requireAdmin, updateComplaintStatus);
+router.put("/:id/resolve", adminAuthMiddleware, requireAdmin, validateBody(resolveComplaintSchema), resolveComplaint);
+router.put("/:id/status", adminAuthMiddleware, requireAdmin, validateBody(updateComplaintStatusSchema), updateComplaintStatus);
 
 module.exports = router;

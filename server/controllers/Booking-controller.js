@@ -1168,7 +1168,11 @@ const cancelBooking = async (req, res) => {
     if (isStarted) {
       // CASE 2: After serviceStartedAt but before completed
       booking.status = 'cancelled';
+        if (global.logger) global.logger.warn(`Booking cancelled: ${booking._id}`);
+
       booking.disputeRaised = true;
+        if (global.logger) global.logger.warn(`Dispute raised for booking: ${booking._id}`);
+
       booking.disputeStatus = 'pending';
       booking.cancellationProgress.status = 'cancelled';
       booking.cancellationProgress.reason = reason || 'Customer requested cancellation after start';

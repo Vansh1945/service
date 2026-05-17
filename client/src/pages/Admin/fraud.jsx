@@ -63,8 +63,7 @@ const AdminFraud = () => {
   const [data, setData] = useState({
     ip: [],
     device: [],
-    cancellation: [],
-    reviews: []
+    cancellation: []
   });
   
   // Stats
@@ -98,12 +97,6 @@ const AdminFraud = () => {
             setData(prev => ({ ...prev, cancellation: res.data.data }));
           }
           break;
-        case 'reviews':
-          res = await AdminService.getFakeReviews();
-          if (res.data?.success) {
-            setData(prev => ({ ...prev, reviews: res.data.data }));
-          }
-          break;
       }
     } catch (err) {
       showToast('Failed to fetch fraud data', 'error');
@@ -114,29 +107,26 @@ const AdminFraud = () => {
 
   const fetchAllDataForStats = async () => {
     try {
-      const [ipRes, deviceRes, cancelRes, reviewRes] = await Promise.all([
+      const [ipRes, deviceRes, cancelRes] = await Promise.all([
         AdminService.getSameIPFraud().catch(() => ({ data: { data: [] } })),
         AdminService.getDeviceAbuse().catch(() => ({ data: { data: [] } })),
-        AdminService.getCancellationAlerts().catch(() => ({ data: { data: [] } })),
-        AdminService.getFakeReviews().catch(() => ({ data: { data: [] } }))
+        AdminService.getCancellationAlerts().catch(() => ({ data: { data: [] } }))
       ]);
 
       const ipData = ipRes.data?.data || [];
       const deviceData = deviceRes.data?.data || [];
       const cancelData = cancelRes.data?.data || [];
-      const reviewData = reviewRes.data?.data || [];
 
       // Calculate stats
       const suspiciousAccounts = ipData.reduce((acc, curr) => acc + curr.totalAccounts, 0) + 
                                 deviceData.reduce((acc, curr) => acc + curr.accounts, 0);
       
-      const totalAlerts = ipData.length + deviceData.length + cancelData.length + reviewData.length;
+      const totalAlerts = ipData.length + deviceData.length + cancelData.length;
       
-      const highRiskCustomers = cancelData.filter(c => c.suspicious).length + 
-                                reviewData.filter(r => r.risk === 'HIGH').length;
+      const highRiskCustomers = cancelData.filter(c => c.suspicious).length;
                                 
       // Simplified high risk providers calculation
-      const highRiskProviders = reviewData.filter(r => r.risk === 'HIGH').length;
+      const highRiskProviders = 0; // Fake reviews were driving this
 
       setStats({
         suspiciousAccounts,
@@ -149,8 +139,7 @@ const AdminFraud = () => {
       setData({
         ip: ipData,
         device: deviceData,
-        cancellation: cancelData,
-        reviews: reviewData
+        cancellation: cancelData
       });
       
     } catch (err) {
@@ -237,8 +226,7 @@ const AdminFraud = () => {
           {[
             { id: 'ip', label: 'Same IP Detection', icon: FiMapPin },
             { id: 'device', label: 'Device Abuse', icon: FiSmartphone },
-            { id: 'cancellation', label: 'Cancellation Alerts', icon: FiXCircle },
-            { id: 'reviews', label: 'Fake Reviews', icon: FiMessageSquare },
+            { id: 'cancellation', label: 'Cancellation Alerts', icon: FiXCircle }
           ].map(t => (
             <button
               key={t.id}
@@ -413,56 +401,7 @@ const AdminFraud = () => {
             </div>
           )}
 
-          {/* TAB 4: FAKE REVIEWS */}
-          {activeTab === 'reviews' && (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[800px]">
-                <thead className="bg-gray-50/50">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-[11px] font-black text-gray-400 uppercase tracking-widest">Reviewer</th>
-                    <th className="px-6 py-4 text-left text-[11px] font-black text-gray-400 uppercase tracking-widest">Provider</th>
-                    <th className="px-6 py-4 text-left text-[11px] font-black text-gray-400 uppercase tracking-widest">Rating</th>
-                    <th className="px-6 py-4 text-left text-[11px] font-black text-gray-400 uppercase tracking-widest">Reason Flagged</th>
-                    <th className="px-6 py-4 text-left text-[11px] font-black text-gray-400 uppercase tracking-widest">Risk Level</th>
-                  </tr>
-                </thead>
-                {loading ? <TableSkeleton columns={5} /> : (
-                  <tbody className="divide-y divide-gray-50">
-                    {data.reviews.length === 0 ? (
-                      <EmptyState icon={FiMessageSquare} message="No suspicious reviews detected" subMessage="Review patterns look authentic" />
-                    ) : (
-                      data.reviews.map((item, idx) => (
-                        <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
-                          <td className="px-6 py-5">
-                            <span className="text-sm font-bold text-secondary block">{item.reviewer?.name}</span>
-                            <span className="text-[10px] text-gray-400">{item.reviewer?.email}</span>
-                          </td>
-                          <td className="px-6 py-5">
-                            <span className="text-sm font-bold text-secondary block">{item.provider?.name || 'Unknown'}</span>
-                          </td>
-                          <td className="px-6 py-5">
-                            <div className="flex items-center gap-1 text-amber-400">
-                              <span className="text-sm font-black text-secondary">{item.rating}</span>
-                              ★
-                            </div>
-                            <p className="text-[10px] text-gray-400 mt-1 italic max-w-[150px] truncate">"{item.comment}"</p>
-                          </td>
-                          <td className="px-6 py-5">
-                            <span className="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-md">
-                              {item.suspiciousReason}
-                            </span>
-                          </td>
-                          <td className="px-6 py-5">
-                            <RiskBadge risk={item.risk} />
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                )}
-              </table>
-            </div>
-          )}
+
 
         </div>
       </div>

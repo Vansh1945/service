@@ -229,6 +229,8 @@ const approveProvider = async (req, res) => {
 
         if (status === 'approved') {
             provider.approved = true;
+        if (global.logger) global.logger.info(`Provider approved: ${provider._id}`);
+
             provider.kycStatus = 'approved';
             provider.rejectionReason = '';
             provider.isActive = true;
@@ -293,6 +295,8 @@ const approveProvider = async (req, res) => {
         if (status === 'rejected') {
             provider.approved = false;
             provider.kycStatus = 'rejected';
+        if (global.logger) global.logger.warn(`Provider rejected: ${provider._id}`);
+
             provider.rejectionReason = finalRemarks || 'No reason provided';
             provider.isActive = false;
 
@@ -2325,7 +2329,6 @@ module.exports = {
     getSameIPFraud,
     getDeviceAbuse,
     getCancellationAlerts,
-    getFakeReviews
 };
 
 /**
@@ -2467,65 +2470,37 @@ async function getCancellationAlerts(req, res) {
     }
 }
 
-/**
- * 4️⃣ FAKE REVIEW DETECTION
- */
-async function getFakeReviews(req, res) {
-    try {
-        // Only fetch reviews that have providerFeedback populated
-        const reviews = await Feedback.find({
-            'providerFeedback.rating': { $exists: true }
-        })
-            .populate('customer', 'name email')
-            .populate('providerFeedback.provider', 'name email')
-            .lean();
 
-        const suspicious = reviews
-            .filter(rev => rev.providerFeedback != null) // extra guard
-            .map(rev => {
-                const comment = rev.providerFeedback?.comment || '';
-                const rating  = rev.providerFeedback?.rating;
 
-                let suspiciousReason = [];
-                let riskScore = 0;
 
-                // Flag very short review text
-                if (comment.length < 10) {
-                    suspiciousReason.push('Very short review');
-                    riskScore += 20;
-                }
-                // Flag 5-star reviews with almost no comment
-                if (rating === 5 && comment.length < 5) {
-                    suspiciousReason.push('5-star spam potential');
-                    riskScore += 30;
-                }
-                // Flag reviews submitted from the same IP as the provider login
-                if (
-                    rev.metadata?.ip &&
-                    rev.providerFeedback?.provider?.metadata?.ip &&
-                    rev.metadata.ip === rev.providerFeedback.provider.metadata.ip
-                ) {
-                    suspiciousReason.push('Same IP as provider');
-                    riskScore += 50;
-                }
 
-                return {
-                    _id:             rev._id,
-                    reviewer:        rev.customer,
-                    provider:        rev.providerFeedback?.provider,
-                    rating,
-                    comment,
-                    submittedAt:     rev.createdAt,
-                    suspiciousReason: suspiciousReason.join(', '),
-                    risk: riskScore > 40 ? 'HIGH' : riskScore > 20 ? 'MEDIUM' : 'LOW'
-                };
-            })
-            .filter(r => r.suspiciousReason.length > 0);
-
-        res.status(200).json({ success: true, data: suspicious });
-    } catch (error) {
-        console.error('Fake Review Error:', error);
-        res.status(500).json({ success: false, message: 'Server error', detail: error.message });
+// System Logs API
+const getSystemLogs = async (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const logPath = path.join(__dirname, '../logs/combined.log');
+    if (!fs.existsSync(logPath)) return res.json({ success: true, logs: [], total: 0 });
+    
+    const { level, page = 1, limit = 50 } = req.query;
+    const logs = fs.readFileSync(logPath, 'utf8').split('\n').filter(Boolean).map(line => {
+      const match = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) \[(.+?)\]: (.*)$/);
+      if (match) return { timestamp: match[1], level: match[2], message: match[3] };
+      return { message: line };
+    }).reverse();
+    
+    let filteredLogs = logs;
+    if (level && level !== 'ALL') {
+      filteredLogs = logs.filter(l => l.level === level.toUpperCase());
     }
-}
-
+    
+    const startIndex = (page - 1) * limit;
+    const paginatedLogs = filteredLogs.slice(startIndex, startIndex + Number(limit));
+    
+    res.json({ success: true, logs: paginatedLogs, total: filteredLogs.length, page: Number(page), pages: Math.ceil(filteredLogs.length / limit) });
+  } catch (error) {
+    console.error('Log API Error:', error);
+    res.status(500).json({ success: false, message: 'Failed to read logs' });
+  }
+};
+module.exports.getSystemLogs = getSystemLogs;

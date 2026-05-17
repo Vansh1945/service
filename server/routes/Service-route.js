@@ -4,6 +4,12 @@ const serviceController = require('../controllers/Services-controller');
 const adminAuthMiddleware = require('../middlewares/Admin-middleware');
 const { providerAuthMiddleware, providerTestPassedMiddleware } = require('../middlewares/Provider-middleware');
 const { uploadServiceImage, uploadServicesFile, handleUploadErrors } = require('../middlewares/upload');
+const { validateBody } = require('../validation/common.validation');
+const {
+    createServiceSchema,
+    updateServiceSchema,
+    updateBasePriceSchema
+} = require('../validation/service.validation');
 
 /**
  * ADMIN ROUTES
@@ -12,6 +18,7 @@ router.post('/admin/services',
     adminAuthMiddleware,
     uploadServiceImage.array('image', 3),
     handleUploadErrors,
+    validateBody(createServiceSchema),
     serviceController.createService
 );
 
@@ -19,13 +26,16 @@ router.put('/admin/service/:id',
     adminAuthMiddleware,
     uploadServiceImage.array('image', 3),
     handleUploadErrors,
+    validateBody(updateServiceSchema),
     serviceController.updateService
 );
 
 router.patch('/admin/services/:id/price',
     adminAuthMiddleware,
+    validateBody(updateBasePriceSchema),
     serviceController.updateBasePrice
 );
+
 
 router.delete('/admin/services/:id',
     adminAuthMiddleware,
