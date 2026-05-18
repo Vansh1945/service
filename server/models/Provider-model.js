@@ -92,7 +92,7 @@ const providerSchema = new mongoose.Schema({
     lastLoginIp:     { type: String },
     lastLoginAt:     { type: Date },
     suspiciousScore: { type: Number, default: 0 },
-    biometricEnabled:{ type: Boolean, default: false },
+
     dateOfBirth: {
         type: Date,
         required: [true, 'Date of birth is required']
@@ -323,7 +323,7 @@ providerSchema.methods.generateJWT = function () {
     return jwt.sign(
         { id: this._id, email: this.email, role: this.role, kycStatus: this.kycStatus },
         process.env.JWT_SECRET,
-        { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m' }
+        { expiresIn: '30d' }
     );
 };
 

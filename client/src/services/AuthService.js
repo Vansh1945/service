@@ -35,15 +35,3 @@ export const refreshAccessToken = (data) => {
 export const logoutApi = (data) => {
     return axiosInstance.post("/auth/logout", data);
 };
-
-export const registerBiometric = (data) => {
-    return axiosInstance.post("/auth/biometric/register", data);
-};
-
-export const getBiometricChallenge = (email) => {
-    return axiosInstance.get("/auth/biometric/challenge", { params: { email } });
-};
-
-export const biometricLoginApi = (data) => {
-    return axiosInstance.post("/auth/biometric/login", data);
-};

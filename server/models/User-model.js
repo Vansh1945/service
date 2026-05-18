@@ -35,39 +35,39 @@ const userSchema = new mongoose.Schema({
   },
   // Refresh token sessions (max 5 per user)
   refreshTokens: [{
-    tokenHash: { type: String, required: true },
-    deviceId: { type: String },
-    fingerprint: { type: String },
-    ipHash: { type: String },
-    userAgent: { type: String },
-    createdAt: { type: Date, default: Date.now },
-    expiresAt: { type: Date, required: true },
-    isValid: { type: Boolean, default: true }
+    tokenHash:  { type: String, required: true },
+    deviceId:   { type: String },
+    fingerprint:{ type: String },
+    ipHash:     { type: String },
+    userAgent:  { type: String },
+    createdAt:  { type: Date, default: Date.now },
+    expiresAt:  { type: Date, required: true },
+    isValid:    { type: Boolean, default: true }
   }],
   // Known devices
   deviceIds: [{
-    deviceId: { type: String },
+    deviceId:    { type: String },
     fingerprint: { type: String },
-    platform: { type: String },
-    userAgent: { type: String },
-    firstSeen: { type: Date, default: Date.now },
-    lastSeen: { type: Date, default: Date.now },
-    isTrusted: { type: Boolean, default: true }
+    platform:    { type: String },
+    userAgent:   { type: String },
+    firstSeen:   { type: Date, default: Date.now },
+    lastSeen:    { type: Date, default: Date.now },
+    isTrusted:   { type: Boolean, default: true }
   }],
   // Login history (capped at 20)
   loginHistory: [{
-    timestamp: { type: Date, default: Date.now },
-    ip: { type: String },
-    userAgent: { type: String },
-    deviceId: { type: String },
-    method: { type: String, enum: ['email', 'google', 'refresh'] },
-    success: { type: Boolean, default: true },
-    suspiciousFlag: { type: Boolean, default: false }
+    timestamp:     { type: Date, default: Date.now },
+    ip:            { type: String },
+    userAgent:     { type: String },
+    deviceId:      { type: String },
+    method:        { type: String, enum: ['email', 'google', 'phone', 'refresh'] },
+    success:       { type: Boolean, default: true },
+    suspiciousFlag:{ type: Boolean, default: false }
   }],
-  lastLoginIp: { type: String },
-  lastLoginAt: { type: Date },
+  lastLoginIp:     { type: String },
+  lastLoginAt:     { type: Date },
   suspiciousScore: { type: Number, default: 0 },
-  biometricEnabled: { type: Boolean, default: false },
+
   providerAuthStatus: { type: String },
   role: {
     type: String,
@@ -179,7 +179,7 @@ userSchema.methods.generateJWT = function () {
   return jwt.sign(
     { id: this._id, email: this.email, role: this.role },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m' }
+    { expiresIn: '30d' }
   );
 };
 
@@ -199,10 +199,10 @@ userSchema.methods.generateRefreshToken = function (deviceInfo = {}) {
 
   this.refreshTokens.push({
     tokenHash,
-    deviceId: deviceInfo.deviceId || '',
+    deviceId:    deviceInfo.deviceId || '',
     fingerprint: deviceInfo.fingerprint || '',
-    ipHash: deviceInfo.ipHash || '',
-    userAgent: deviceInfo.userAgent || '',
+    ipHash:      deviceInfo.ipHash || '',
+    userAgent:   deviceInfo.userAgent || '',
     expiresAt,
     isValid: true
   });

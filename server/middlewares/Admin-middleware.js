@@ -32,6 +32,29 @@ const adminAuthMiddleware = async (req, res, next) => {
             });
         }
 
+        // Dynamic Token Invalidation/Revocation check
+        const currentFingerprint = req.deviceFingerprint;
+        let isSessionValid = false;
+
+        if (admin.refreshTokens && admin.refreshTokens.length > 0) {
+            const activeSessions = admin.refreshTokens.filter(t => t.isValid && t.expiresAt > new Date());
+            if (activeSessions.length > 0) {
+                if (currentFingerprint) {
+                    isSessionValid = activeSessions.some(t => t.deviceId === currentFingerprint);
+                } else {
+                    isSessionValid = true;
+                }
+            }
+        }
+
+        if (!isSessionValid) {
+            return res.status(401).json({
+                success: false,
+                tokenExpired: true,
+                message: 'Your session has been logged out or revoked.'
+            });
+        }
+
         // Verify admin status
         if (!admin.isAdmin) {
             return res.status(403).json({

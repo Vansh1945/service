@@ -15,11 +15,9 @@ import {
   HeadphonesIcon,
   CheckCircle,
   Activity,
-  ArrowLeft,
-  Smartphone,
-  Fingerprint
+  ArrowLeft
 } from 'lucide-react';
-import { login, firebaseLogin, biometricLoginApi, getBiometricChallenge } from '../services/AuthService';
+import { login, firebaseLogin } from '../services/AuthService';
 import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { auth } from "../../firebase";
 
@@ -56,6 +54,8 @@ const LoginPage = () => {
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -111,10 +111,10 @@ const LoginPage = () => {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
       const firebaseToken = await result.user.getIdToken();
-      
+
       const response = await firebaseLogin({ firebaseToken, role: 'customer' });
       const data = response.data;
-      
+
       if (data.token && data.user) {
         showToast(data.message || 'Login successful', 'success');
         loginUser(data.token, data.user.role, data.user, data.refreshToken);
@@ -127,106 +127,7 @@ const LoginPage = () => {
     }
   };
 
-  const handleBiometricLogin = async () => {
-    if (!window.PublicKeyCredential) {
-      return showToast('Biometric login is not supported on this device/browser', 'error');
-    }
 
-    // Step 1 — fetch challenge + registered credential IDs from server
-    // This tells the browser exactly which passkey to use, forcing the
-    // platform authenticator (Windows Hello / Touch ID / FaceID / PIN)
-    // instead of showing a USB hardware-key prompt.
-    let challengeHex, allowCredentials;
-    try {
-      setIsLoading(true);
-      const email = formData.email?.trim() || '';
-      const { data } = await getBiometricChallenge(email);
-
-      if (!data.success) {
-        return showToast('Could not start biometric authentication', 'error');
-      }
-
-      challengeHex      = data.challenge;         // hex string from server
-      allowCredentials  = data.allowCredentials;  // [{id, type, transports}]
-
-      // If the user has no email entered AND no registered credentials found,
-      // nudge them to type their email first for a smoother experience.
-      if (!email && allowCredentials.length === 0) {
-        return showToast('Enter your email first, then click Biometrics', 'info');
-      }
-    } catch (err) {
-      console.error('Challenge fetch error:', err);
-      return showToast('Could not contact server. Check your connection.', 'error');
-    } finally {
-      setIsLoading(false);
-    }
-
-    // Step 2 — trigger the platform biometric prompt
-    try {
-      setIsLoading(true);
-
-      // Convert hex challenge string → Uint8Array
-      const challengeBytes = new Uint8Array(
-        challengeHex.match(/.{1,2}/g).map(b => parseInt(b, 16))
-      );
-
-      // Convert base64url credential IDs → Uint8Array for each registered credential
-      const formattedCreds = allowCredentials.map(cred => ({
-        id:         Uint8Array.from(atob(cred.id.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)),
-        type:       'public-key',
-        transports: cred.transports || ['internal'] // 'internal' = built-in biometric
-      }));
-
-      const assertion = await navigator.credentials.get({
-        publicKey: {
-          challenge:        challengeBytes,
-          timeout:          60000,
-          userVerification: 'required',
-          rpId:             window.location.hostname,
-          // Passing allowCredentials with transports:['internal'] tells the
-          // browser to use ONLY the platform (built-in) authenticator,
-          // completely bypassing the USB hardware key prompt.
-          ...(formattedCreds.length > 0 && { allowCredentials: formattedCreds })
-        }
-      });
-
-      if (!assertion) {
-        return showToast('Biometric authentication cancelled', 'info');
-      }
-
-      const { id: credentialId, response: assertionResponse } = assertion;
-      const toBase64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
-
-      const payload = {
-        credentialId,
-        signature:         toBase64(assertionResponse.signature),
-        authenticatorData: toBase64(assertionResponse.authenticatorData),
-        clientDataJSON:    toBase64(assertionResponse.clientDataJSON),
-        userEmail:         formData.email?.trim() || undefined
-      };
-
-      const response = await biometricLoginApi(payload);
-      const respData = response.data;
-
-      if (respData.token && respData.user) {
-        showToast(respData.message || 'Biometric login successful', 'success');
-        loginUser(respData.token, respData.user.role, respData.user, respData.refreshToken);
-      }
-    } catch (err) {
-      console.error('Biometric login error:', err);
-      if (err.name === 'NotAllowedError') {
-        showToast('Biometric authentication was cancelled or timed out', 'error');
-      } else if (err.name === 'InvalidStateError') {
-        showToast('No passkey registered on this device. Login normally first, then register biometrics in Settings.', 'error');
-      } else if (err.name === 'SecurityError') {
-        showToast('Biometrics require HTTPS in production', 'error');
-      } else {
-        showToast(err.response?.data?.message || 'Biometric login failed', 'error');
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   // ── Benefits sidebar ──────────────────────────────────────────────────────
   const BenefitsSection = () => (
@@ -360,7 +261,7 @@ const LoginPage = () => {
                       </Field>
                     </div>
                   </Section>
-                  
+
                   <div className="flex items-center justify-between">
                     <label className="flex items-center gap-2 cursor-pointer group">
                       <input
@@ -393,43 +294,31 @@ const LoginPage = () => {
                     <span className="bg-background px-3 text-xs text-gray-400 relative font-medium uppercase">Or Continue With</span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={handleGoogleLogin}
-                      disabled={isLoading}
-                      className="flex items-center justify-center gap-2 py-2.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition-all text-sm font-bold text-secondary disabled:opacity-50"
-                    >
-                      <svg viewBox="0 0 24 24" className="w-5 h-5"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
-                      Google
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleBiometricLogin}
-                      disabled={isLoading}
-                      title="Login using your device fingerprint or Face ID"
-                      className="flex items-center justify-center gap-2 py-2.5 rounded-lg border border-primary/20 bg-primary/5 hover:bg-primary/10 transition-all text-sm font-bold text-primary disabled:opacity-50"
-                    >
-                      <Fingerprint className="w-5 h-5" />
-                      Biometrics
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={handleGoogleLogin}
+                    disabled={isLoading}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition-all text-sm font-bold text-secondary disabled:opacity-50"
+                  >
+                    <svg viewBox="0 0 24 24" className="w-5 h-5"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" /><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" /><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" /><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" /></svg>
+                    Continue with Google
+                  </button>
                 </form>
 
-                <div className="text-center pt-2">
-                  <p className="text-sm text-gray-500">
-                    Don't have an account?{' '}
-                    <Link to="/register" className="text-accent font-semibold hover:underline">
-                      Create an account
-                    </Link>
-                  </p>
-                </div>
+              <div className="text-center pt-2">
+                <p className="text-sm text-gray-500">
+                  Don't have an account?{' '}
+                  <Link to="/register" className="text-accent font-semibold hover:underline">
+                    Create an account
+                  </Link>
+                </p>
               </div>
             </div>
           </div>
         </div>
       </div>
     </div>
+    </div >
   );
 };
 

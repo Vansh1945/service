@@ -30,6 +30,29 @@ const userAuthMiddleware = async (req, res, next) => {
             return res.status(401).json({ success: false, message: 'Unauthorized. User not found.' });
         }
 
+        // Dynamic Token Invalidation/Revocation check
+        const currentFingerprint = req.deviceFingerprint;
+        let isSessionValid = false;
+
+        if (user.refreshTokens && user.refreshTokens.length > 0) {
+            const activeSessions = user.refreshTokens.filter(t => t.isValid && t.expiresAt > new Date());
+            if (activeSessions.length > 0) {
+                if (currentFingerprint) {
+                    isSessionValid = activeSessions.some(t => t.deviceId === currentFingerprint);
+                } else {
+                    isSessionValid = true;
+                }
+            }
+        }
+
+        if (!isSessionValid) {
+            return res.status(401).json({
+                success: false,
+                tokenExpired: true,
+                message: 'Your session has been logged out or revoked.'
+            });
+        }
+
         if (user.role !== 'customer') {
             return res.status(403).json({ success: false, message: 'Forbidden. Customers only.' });
         }

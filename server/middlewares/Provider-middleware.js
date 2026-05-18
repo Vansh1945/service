@@ -31,6 +31,29 @@ const providerAuthMiddleware = async (req, res, next) => {
             });
         }
 
+        // Dynamic Token Invalidation/Revocation check
+        const currentFingerprint = req.deviceFingerprint;
+        let isSessionValid = false;
+
+        if (provider.refreshTokens && provider.refreshTokens.length > 0) {
+            const activeSessions = provider.refreshTokens.filter(t => t.isValid && t.expiresAt > new Date());
+            if (activeSessions.length > 0) {
+                if (currentFingerprint) {
+                    isSessionValid = activeSessions.some(t => t.deviceId === currentFingerprint);
+                } else {
+                    isSessionValid = true;
+                }
+            }
+        }
+
+        if (!isSessionValid) {
+            return res.status(401).json({
+                success: false,
+                tokenExpired: true,
+                message: 'Your session has been logged out or revoked.'
+            });
+        }
+
 
 
         // Try to populate if models exist
