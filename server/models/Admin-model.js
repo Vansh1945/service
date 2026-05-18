@@ -42,6 +42,7 @@ const adminSchema = new mongoose.Schema({
   refreshTokens: [{
     tokenHash:  { type: String, required: true },
     deviceId:   { type: String },
+    fingerprint:{ type: String },
     ipHash:     { type: String },
     userAgent:  { type: String },
     createdAt:  { type: Date, default: Date.now },
@@ -102,9 +103,10 @@ adminSchema.methods.generateRefreshToken = function (deviceInfo = {}) {
 
   this.refreshTokens.push({
     tokenHash,
-    deviceId:  deviceInfo.deviceId || '',
-    ipHash:    deviceInfo.ipHash || '',
-    userAgent: deviceInfo.userAgent || '',
+    deviceId:    deviceInfo.deviceId || '',
+    fingerprint: deviceInfo.fingerprint || '',
+    ipHash:      deviceInfo.ipHash || '',
+    userAgent:   deviceInfo.userAgent || '',
     expiresAt,
     isValid: true
   });

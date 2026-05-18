@@ -85,6 +85,9 @@ export default defineConfig(({ mode }) => {
     ],
 
     server: {
+      headers: {
+        'Cross-Origin-Opener-Policy': 'same-origin-allow-popups'
+      },
       historyApiFallback: true
     },
 

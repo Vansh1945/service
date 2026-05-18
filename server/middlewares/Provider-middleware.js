@@ -39,7 +39,7 @@ const providerAuthMiddleware = async (req, res, next) => {
             const activeSessions = provider.refreshTokens.filter(t => t.isValid && t.expiresAt > new Date());
             if (activeSessions.length > 0) {
                 if (currentFingerprint) {
-                    isSessionValid = activeSessions.some(t => t.deviceId === currentFingerprint);
+                    isSessionValid = activeSessions.some(t => t.fingerprint === currentFingerprint || t.deviceId === currentFingerprint);
                 } else {
                     isSessionValid = true;
                 }
