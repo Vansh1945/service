@@ -29,3 +29,11 @@ export const getAllTransactions = (params) => {
 export const getTransactionById = (id) => {
     return axiosInstance.get(`/transaction/admin/details/${id}`);
 };
+
+export const adminRetryVerify = (id) => {
+    return axiosInstance.post(`/transaction/admin/retry-verify/${id}`);
+};
+
+export const adminMarkPaid = (id, reason) => {
+    return axiosInstance.post(`/transaction/admin/mark-paid/${id}`, { reason });
+};

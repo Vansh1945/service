@@ -34,5 +34,7 @@ router.get('/customer/all', userAuthMiddleware, roleMiddleware(['customer']), pa
 
 router.get('/admin/all', adminAuthMiddleware, adminRoleCheck, paymentController.getAllTransactions);
 router.get('/admin/details/:id', adminAuthMiddleware, adminRoleCheck, paymentController.getTransactionById);
+router.post('/admin/retry-verify/:id', adminAuthMiddleware, adminRoleCheck, paymentController.adminRetryVerify);
+router.post('/admin/mark-paid/:id', adminAuthMiddleware, adminRoleCheck, paymentController.adminMarkPaid);
 
 module.exports = router;

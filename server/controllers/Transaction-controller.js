@@ -10,6 +10,36 @@ const Razorpay = require('razorpay');
 
 const razorpay = require('../services/razorpay');
 
+const rollbackWalletDeduction = async (transaction, session) => {
+  if (transaction.paymentMethod === 'mixed' && ['pending', 'failed'].includes(transaction.paymentStatus)) {
+    const match = transaction.description && transaction.description.match(/Wallet \(₹([\d.]+)\)/);
+    if (match) {
+      const walletDeduction = parseFloat(match[1]);
+      if (walletDeduction > 0) {
+        const user = await User.findById(transaction.user).session(session);
+        if (user) {
+          if (!user.wallet) {
+            user.wallet = { availableBalance: 0, walletTransactions: [], totalRefunded: 0, lastUpdated: new Date() };
+          }
+          user.wallet.availableBalance += walletDeduction;
+          user.wallet.walletTransactions.push({
+            type: 'credit',
+            amount: walletDeduction,
+            reason: 'Booking Payment Rollback (Failed Payment)',
+            booking: transaction.booking
+          });
+          user.wallet.lastUpdated = new Date();
+          await user.save({ session });
+
+          transaction.description = transaction.description.replace('Pending:', 'Failed (Rolled Back):').replace('Mixed Payment Pending:', 'Mixed Payment Failed (Rolled Back):') + ' (Wallet Deduction Rolled Back)';
+          transaction.paymentStatus = 'failed';
+          await transaction.save({ session });
+        }
+      }
+    }
+  }
+};
+
 const createOrder = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -67,13 +97,27 @@ const createOrder = async (req, res) => {
       });
     }
 
+    // Rollback any existing pending transaction for this booking
+    const existingPending = await Transaction.findOne({
+      booking: bookingId,
+      paymentStatus: 'pending'
+    }).session(session);
+
+    if (existingPending) {
+      await rollbackWalletDeduction(existingPending, session);
+      existingPending.paymentStatus = 'failed';
+      existingPending.description = (existingPending.description || '') + ' (Cancelled by starting new checkout flow)';
+      await existingPending.save({ session });
+    }
+
     // SECURITY: Validate amount against booking total and wallet balance
     let expectedAmountPaise = Math.round(booking.totalAmount * 100);
+    let walletDeduction = 0;
 
     if (paymentMethod === 'mixed') {
       const user = await User.findById(userId).session(session);
       const walletBalance = user.wallet?.availableBalance || 0;
-      const walletDeduction = Math.min(walletBalance, booking.totalAmount);
+      walletDeduction = Math.min(walletBalance, booking.totalAmount);
       expectedAmountPaise = Math.round((booking.totalAmount - walletDeduction) * 100);
 
       if (expectedAmountPaise <= 0) {
@@ -83,6 +127,22 @@ const createOrder = async (req, res) => {
           message: 'Wallet balance covers full amount. Please use wallet payment instead.'
         });
       }
+
+      // Deduct wallet balance immediately
+      if (walletDeduction > 0) {
+        if (!user.wallet) {
+          user.wallet = { availableBalance: 0, walletTransactions: [], totalRefunded: 0, lastUpdated: new Date() };
+        }
+        user.wallet.availableBalance -= walletDeduction;
+        user.wallet.walletTransactions.push({
+          type: 'debit',
+          amount: walletDeduction,
+          reason: 'Booking Payment (Pending Mixed Verification)',
+          booking: booking._id
+        });
+        user.wallet.lastUpdated = new Date();
+        await user.save({ session });
+      }
     }
 
     if (Math.round(amount) !== expectedAmountPaise) {
@@ -91,46 +151,6 @@ const createOrder = async (req, res) => {
         success: false,
         message: `Amount mismatch. Expected ${expectedAmountPaise} paise, but got ${amount} paise.`
       });
-    }
-
-    // Check if a transaction already exists for this booking to prevent duplicates
-    const existingTransaction = await Transaction.findOne({
-      booking: bookingId,
-      paymentStatus: { $in: ['pending', 'completed', 'paid', 'success'] }
-    }).session(session);
-
-    if (existingTransaction) {
-      if (['completed', 'paid', 'success'].includes(existingTransaction.paymentStatus)) {
-        await session.abortTransaction();
-        return res.status(400).json({
-          success: false,
-          message: 'A completed transaction already exists for this booking',
-          data: {
-            existingTransactionId: existingTransaction._id,
-            status: existingTransaction.paymentStatus
-          }
-        });
-      }
-
-      if (existingTransaction.paymentStatus === 'pending' && existingTransaction.razorpayOrderId) {
-        // REUSE existing transaction
-        await session.commitTransaction();
-        return res.status(200).json({
-          success: true,
-          message: 'Retrying existing payment order',
-          data: {
-            orderId: existingTransaction.razorpayOrderId,
-            amount: existingTransaction.amount,
-            key: process.env.RAZORPAY_KEY_ID,
-            transactionId: existingTransaction._id,
-            order: {
-              id: existingTransaction.razorpayOrderId,
-              amount: existingTransaction.amount,
-              currency: 'INR'
-            }
-          }
-        });
-      }
     }
 
     // Validate Razorpay credentials
@@ -168,14 +188,13 @@ const createOrder = async (req, res) => {
       });
     }
 
-    // Calculate commission and provider earnings if missing (e.g. for new bookings)
+    // Calculate commission and provider earnings if missing
     let commission = booking.commissionAmount || 0;
     let providerEarning = booking.providerEarnings || 0;
     let commissionRuleId = booking.commissionRule || null;
 
     if (commission === 0 && providerEarning === 0) {
       try {
-        const CommissionRule = mongoose.model('CommissionRule');
         const rule = await CommissionRule.getCommissionForProvider(booking.provider || null);
 
         if (rule) {
@@ -192,20 +211,18 @@ const createOrder = async (req, res) => {
       }
     }
 
-    // IMPORTANT: Store online payment values in paise for consistency with existing data
-    // amount is already in paise from frontend
-    const isOnline = true; // Since this is createOrder (Razorpay)
+    // Store online payment values in paise for consistency with existing data
     const finalAmount = amount;
     const finalCommission = commission * 100;
     const finalProviderEarning = providerEarning * 100;
 
-    // Create transaction record ONLY for online payments
+    // Create transaction record
     const transaction = new Transaction({
       amount: finalAmount,
       currency: 'INR',
       paymentMethod: paymentMethod || 'online',
       booking: bookingId,
-      bookingId: booking.bookingId, // Human readable booking ID
+      bookingId: booking.bookingId,
       user: userId,
       customerId: req.user.customerId || userId.toString(),
       provider: booking.provider,
@@ -215,7 +232,10 @@ const createOrder = async (req, res) => {
       commissionRule: commissionRuleId,
       razorpayOrderId: order.id,
       type: 'payment',
-      paymentStatus: 'pending'
+      paymentStatus: 'pending',
+      description: paymentMethod === 'mixed'
+        ? `Mixed Payment Pending: Razorpay + Wallet (₹${walletDeduction})`
+        : `Online Payment Pending`
     });
 
     await transaction.save({ session });
@@ -264,6 +284,7 @@ const verifyPayment = async (req, res) => {
   session.startTransaction();
 
   try {
+    const userId = req.user._id;
     const {
       razorpay_order_id,
       razorpay_payment_id,
@@ -288,7 +309,14 @@ const verifyPayment = async (req, res) => {
       .digest('hex');
 
     if (generatedSignature !== razorpay_signature) {
-      await session.abortTransaction();
+      // Update transaction status to failed and rollback wallet balance
+      const transaction = await Transaction.findById(transactionId).session(session);
+      if (transaction) {
+        transaction.paymentStatus = 'failed';
+        await rollbackWalletDeduction(transaction, session);
+        await transaction.save({ session });
+      }
+      await session.commitTransaction();
       return res.status(400).json({
         success: false,
         message: 'Invalid payment signature'
@@ -329,13 +357,24 @@ const verifyPayment = async (req, res) => {
       });
     }
 
+    // Fetch payment details from Razorpay to capture full response state
+    let razorpayResponse = null;
+    try {
+      razorpayResponse = await razorpay.payments.fetch(razorpay_payment_id);
+    } catch (fetchError) {
+      console.warn('Failed to fetch captured payment details from Razorpay API:', fetchError);
+    }
+
     // Update Transaction
     transaction.razorpayPaymentId = razorpay_payment_id;
     transaction.razorpaySignature = razorpay_signature;
     transaction.razorpayOrderId = razorpay_order_id;
+    if (razorpayResponse) {
+      transaction.razorpayResponse = razorpayResponse;
+      transaction.paymentMethod = razorpayResponse.method || transaction.paymentMethod;
+    }
     transaction.paymentStatus = 'success';
     transaction.updatedAt = new Date();
-    await transaction.save({ session });
 
     // Update booking payment status
     const booking = await Booking.findById(bookingId).session(session);
@@ -348,7 +387,7 @@ const verifyPayment = async (req, res) => {
     }
 
     // SECURITY: Validate booking ownership
-    if (booking.customer.toString() !== req.user._id.toString()) {
+    if (booking.customer.toString() !== userId.toString()) {
       await session.abortTransaction();
       return res.status(403).json({
         success: false,
@@ -356,30 +395,17 @@ const verifyPayment = async (req, res) => {
       });
     }
 
-    // Handle Wallet Deduction for Mixed Payments
+    // Handle Wallet Deduction for Mixed Payments - ALREADY deducted in createOrder!
     if (transaction.paymentMethod === 'mixed') {
-      const user = await User.findById(userId).session(session);
-      const walletBalance = user.wallet?.availableBalance || 0;
-      const walletDeduction = Math.min(walletBalance, booking.totalAmount);
-      
-      if (walletDeduction > 0) {
-        user.wallet.availableBalance -= walletDeduction;
-        user.wallet.walletTransactions.push({
-          type: 'debit',
-          amount: walletDeduction,
-          reason: 'Booking Payment',
-          booking: booking._id
-        });
-        user.wallet.lastUpdated = new Date();
-        await user.save({ session });
-        
-        transaction.description = `Mixed Payment: Razorpay + Wallet (₹${walletDeduction})`;
-        await transaction.save({ session });
-      }
+      const match = transaction.description && transaction.description.match(/Wallet \(₹([\d.]+)\)/);
+      const walletDeduction = match ? parseFloat(match[1]) : 0;
+      transaction.description = `Mixed Payment: Razorpay + Wallet (₹${walletDeduction})`;
     }
 
+    await transaction.save({ session });
+
     booking.paymentStatus = 'paid';
-    booking.paymentMethod = transaction.paymentMethod; // Use method from transaction
+    booking.paymentMethod = transaction.paymentMethod;
     booking.confirmedBooking = true;
     if (booking.status !== 'accepted' && booking.status !== 'completed' && booking.status !== 'in-progress') {
       booking.status = 'pending';
@@ -852,11 +878,190 @@ const getCustomerTransactions = async (req, res) => {
   }
 };
 
+const adminRetryVerify = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { id } = req.params;
+
+    const transaction = await Transaction.findById(id).session(session);
+    if (!transaction) {
+      await session.abortTransaction();
+      return res.status(404).json({ success: false, message: 'Transaction not found' });
+    }
+
+    if (transaction.paymentStatus === 'success' || transaction.paymentStatus === 'completed') {
+      await session.abortTransaction();
+      return res.status(400).json({ success: false, message: 'Transaction is already successful' });
+    }
+
+    if (!transaction.razorpayOrderId) {
+      await session.abortTransaction();
+      return res.status(400).json({ success: false, message: 'No Razorpay Order ID associated with this transaction' });
+    }
+
+    // Fetch payments from Razorpay for this order
+    let paymentsResponse;
+    try {
+      paymentsResponse = await razorpay.orders.fetchPayments(transaction.razorpayOrderId);
+    } catch (razorpayError) {
+      console.error('Failed to fetch payments from Razorpay:', razorpayError);
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: `Razorpay API error: ${razorpayError.error?.description || razorpayError.message}`
+      });
+    }
+
+    const payments = paymentsResponse.items || [];
+    const successfulPayment = payments.find(p => p.status === 'captured');
+
+    if (!successfulPayment) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: 'No successful (captured) payment found in Razorpay for this order ID.'
+      });
+    }
+
+    // Find booking first to update and defensively restore missing fields on pre-existing transactions
+    const booking = await Booking.findById(transaction.booking).session(session);
+
+    if (booking) {
+      if (!transaction.bookingId) {
+        transaction.bookingId = booking.bookingId || booking._id.toString();
+      }
+      if (!transaction.user) {
+        transaction.user = booking.customer;
+      }
+      if (!transaction.customerId) {
+        transaction.customerId = booking.customer.toString();
+      }
+    }
+
+    // Process successful payment
+    transaction.paymentStatus = 'success';
+    transaction.razorpayPaymentId = successfulPayment.id;
+    transaction.razorpayResponse = successfulPayment;
+    transaction.paymentMethod = successfulPayment.method || transaction.paymentMethod;
+    transaction.updatedAt = new Date();
+    await transaction.save({ session });
+
+    if (booking) {
+      booking.paymentStatus = 'paid';
+      booking.paymentMethod = transaction.paymentMethod;
+      booking.paidAmount = transaction.amount;
+      booking.paymentDate = new Date();
+      booking.confirmedBooking = true;
+      if (booking.status !== 'accepted' && booking.status !== 'completed' && booking.status !== 'in-progress') {
+        booking.status = 'pending';
+      }
+      await booking.save({ session });
+    }
+
+    await session.commitTransaction();
+    res.status(200).json({
+      success: true,
+      message: 'Transaction successfully reconciled and verified from Razorpay status!',
+      data: {
+        paymentId: successfulPayment.id,
+        amount: successfulPayment.amount / 100
+      }
+    });
+
+  } catch (error) {
+    await session.abortTransaction();
+    console.error('Error in adminRetryVerify:', error);
+    res.status(500).json({ success: false, message: error.message || 'Failed to retry verification' });
+  } finally {
+    session.endSession();
+  }
+};
+
+const adminMarkPaid = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    // Strict accountability safeguard: Require detailed audit trail reason
+    if (!reason || reason.trim().length < 5) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: 'A detailed reconciliation reason (minimum 5 characters) is required for audit trail.'
+      });
+    }
+
+    const transaction = await Transaction.findById(id).session(session);
+    if (!transaction) {
+      await session.abortTransaction();
+      return res.status(404).json({ success: false, message: 'Transaction not found' });
+    }
+
+    if (transaction.paymentStatus === 'success' || transaction.paymentStatus === 'completed') {
+      await session.abortTransaction();
+      return res.status(400).json({ success: false, message: 'Transaction is already marked paid' });
+    }
+
+    // Find and update booking
+    const booking = await Booking.findById(transaction.booking).session(session);
+    if (!booking) {
+      await session.abortTransaction();
+      return res.status(404).json({ success: false, message: 'Associated Booking not found' });
+    }
+
+    // Populate required schema fields if missing to pass Mongoose validation (Defensive legacy entry recovery)
+    if (!transaction.bookingId) {
+      transaction.bookingId = booking.bookingId || booking._id.toString();
+    }
+    if (!transaction.user) {
+      transaction.user = booking.customer;
+    }
+    if (!transaction.customerId) {
+      transaction.customerId = booking.customer.toString();
+    }
+
+    // Mark transaction successful
+    transaction.paymentStatus = 'success';
+    transaction.updatedAt = new Date();
+    transaction.description = `${transaction.description || ''} (Manually marked paid by Admin. Audit Reason: ${reason.trim()})`;
+    await transaction.save({ session });
+
+    // Update booking
+    booking.paymentStatus = 'paid';
+    booking.confirmedBooking = true;
+    if (booking.status !== 'accepted' && booking.status !== 'completed' && booking.status !== 'in-progress') {
+      booking.status = 'pending';
+    }
+    await booking.save({ session });
+
+    await session.commitTransaction();
+    res.status(200).json({
+      success: true,
+      message: 'Transaction and Booking successfully marked as paid manually!'
+    });
+
+  } catch (error) {
+    await session.abortTransaction();
+    console.error('Error in adminMarkPaid:', error);
+    res.status(500).json({ success: false, message: error.message || 'Failed to mark paid manually' });
+  } finally {
+    session.endSession();
+  }
+};
+
 module.exports = {
   createOrder,
   verifyPayment,
   handleWebhook,
   getAllTransactions,
   getTransactionById,
-  getCustomerTransactions
+  getCustomerTransactions,
+  adminRetryVerify,
+  adminMarkPaid,
+  rollbackWalletDeduction
 };

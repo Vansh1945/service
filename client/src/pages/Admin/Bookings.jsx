@@ -1201,7 +1201,7 @@ const AdminBookingsView = () => {
                                                 <div className="flex justify-between items-center">
                                                     <span className="text-xs text-gray-600">Payment Status:</span>
                                                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${selectedBooking.payment?.status === 'paid' ? 'bg-green-100 text-green-700' :
-                                                            selectedBooking.payment?.status === 'refunded' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                                                        selectedBooking.payment?.status === 'refunded' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
                                                         }`}>
                                                         {selectedBooking.payment?.status || 'N/A'}
                                                     </span>

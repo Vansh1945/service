@@ -76,6 +76,9 @@ const AdminTransactions = () => {
     const [loading, setLoading] = useState(true);
     const [selectedTransaction, setSelectedTransaction] = useState(null);
     const [showModal, setShowModal] = useState(false);
+    const [showReasonModal, setShowReasonModal] = useState(false);
+    const [reasonText, setReasonText] = useState('');
+    const [targetTxnId, setTargetTxnId] = useState(null);
 
     // Filters - initialize from URL to prevent race conditions
     const [filters, setFilters] = useState(() => {
@@ -91,7 +94,7 @@ const AdminTransactions = () => {
         const params = new URLSearchParams(window.location.search);
         return {
             page: parseInt(params.get('page')) || 1,
-            limit: 10,
+            limit: 20,
             total: 0,
             pages: 0
         };
@@ -164,6 +167,45 @@ const AdminTransactions = () => {
         }
         // Navigating to bookings page with search filter
         navigate(`/admin/bookings?search=${bookingId}`);
+    };
+
+    const handleRetryVerify = async (id) => {
+        try {
+            const response = await TransactionService.adminRetryVerify(id);
+            if (response.data.success) {
+                showToast(response.data.message || 'Payment successfully verified!', 'success');
+                setShowModal(false);
+                fetchTransactions();
+            }
+        } catch (error) {
+            showToast(error.response?.data?.message || 'Failed to retry verification', 'error');
+        }
+    };
+
+    const handleMarkPaid = (id) => {
+        setTargetTxnId(id);
+        setReasonText('');
+        setShowReasonModal(true);
+    };
+
+    const submitMarkPaid = async () => {
+        const trimmedReason = reasonText.trim();
+        if (trimmedReason.length < 5) {
+            showToast('A detailed reconciliation reason (minimum 5 characters) is required to proceed.', 'error');
+            return;
+        }
+
+        try {
+            const response = await TransactionService.adminMarkPaid(targetTxnId, trimmedReason);
+            if (response.data.success) {
+                showToast(response.data.message || 'Transaction marked as paid successfully!', 'success');
+                setShowReasonModal(false);
+                setShowModal(false);
+                fetchTransactions();
+            }
+        } catch (error) {
+            showToast(error.response?.data?.message || 'Failed to mark transaction paid', 'error');
+        }
     };
 
     return (
@@ -260,13 +302,23 @@ const AdminTransactions = () => {
                                 transactions.map((txn) => (
                                     <tr key={txn._id} className="hover:bg-gray-50/50 transition-colors group">
                                         <td className="px-6 py-4">
-                                            <div className="flex flex-col">
+                                            <div className="flex flex-col gap-1">
                                                 <span className="text-sm font-semibold text-secondary font-mono">
                                                     {txn.transactionId || '---'}
                                                 </span>
-                                                <span className="text-[10px] text-gray-400 flex items-center mt-0.5">
+                                                <span className="text-[10px] text-gray-400 flex items-center">
                                                     {txn.paymentMethod?.toUpperCase()} • {txn.currency}
                                                 </span>
+                                                {txn.razorpayPaymentId && (
+                                                    <span className="text-[9px] text-orange-600 bg-orange-50/60 font-semibold font-mono px-2 py-0.5 rounded-lg border border-orange-100/60 w-fit" title={`Razorpay Payment ID: ${txn.razorpayPaymentId}`}>
+                                                        RPID: {txn.razorpayPaymentId}
+                                                    </span>
+                                                )}
+                                                {txn.razorpayOrderId && !txn.razorpayPaymentId && (
+                                                    <span className="text-[9px] text-gray-600 bg-gray-50 font-semibold font-mono px-2 py-0.5 rounded-lg border border-gray-100 w-fit" title={`Razorpay Order ID: ${txn.razorpayOrderId}`}>
+                                                        RPOID: {txn.razorpayOrderId}
+                                                    </span>
+                                                )}
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
@@ -460,7 +512,7 @@ const AdminTransactions = () => {
                                             {formatCurrency(selectedTransaction.booking?.subtotal || (selectedTransaction.paymentMethod?.toLowerCase() === 'online' || selectedTransaction.paymentMethod?.toLowerCase() === 'upi' ? selectedTransaction.amount / 100 : selectedTransaction.amount))}
                                         </span>
                                     </div>
-                                    
+
                                     {selectedTransaction.booking?.totalDiscount > 0 && (
                                         <div className="flex justify-between items-center text-sm">
                                             <span className="text-gray-500">Discount {selectedTransaction.booking?.couponApplied?.code && `(${selectedTransaction.booking.couponApplied.code})`}</span>
@@ -492,6 +544,45 @@ const AdminTransactions = () => {
                                 </div>
                             </div>
 
+                            {/* Razorpay Verification Metadata */}
+                            {['online', 'mixed', 'upi', 'card'].includes(selectedTransaction.paymentMethod?.toLowerCase()) && (
+                                <div className="bg-orange-50/50 p-6 rounded-3xl border border-orange-100/60">
+                                    <h4 className="text-xs font-bold text-orange-800 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                        <CreditCard className="w-4 h-4" /> Razorpay Gatekeeper Verification
+                                    </h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                                        <div>
+                                            <span className="text-gray-400 block mb-0.5">Razorpay Order ID</span>
+                                            <span className="font-mono text-secondary font-semibold bg-white px-2.5 py-1.5 rounded-xl border border-orange-100 block break-all">
+                                                {selectedTransaction.razorpayOrderId || 'N/A'}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span className="text-gray-400 block mb-0.5">Razorpay Payment ID</span>
+                                            <span className="font-mono text-secondary font-semibold bg-white px-2.5 py-1.5 rounded-xl border border-orange-100 block break-all">
+                                                {selectedTransaction.razorpayPaymentId || 'N/A'}
+                                            </span>
+                                        </div>
+                                        {selectedTransaction.razorpaySignature && (
+                                            <div className="md:col-span-2">
+                                                <span className="text-gray-400 block mb-0.5">Cryptographic Signature</span>
+                                                <span className="font-mono text-secondary font-semibold bg-white px-2.5 py-1.5 rounded-xl border border-orange-100 block truncate" title={selectedTransaction.razorpaySignature}>
+                                                    {selectedTransaction.razorpaySignature}
+                                                </span>
+                                            </div>
+                                        )}
+                                        {selectedTransaction.razorpayResponse && (
+                                            <div className="md:col-span-2">
+                                                <span className="text-gray-400 block mb-1">Razorpay Captured Response State</span>
+                                                <div className="bg-white p-3 rounded-2xl border border-orange-100 max-h-40 overflow-y-auto font-mono text-[10px] text-gray-600">
+                                                    <pre className="whitespace-pre-wrap">{JSON.stringify(selectedTransaction.razorpayResponse, null, 2)}</pre>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Additional Info */}
                             <div className="grid grid-cols-2 gap-8">
                                 <div>
@@ -516,18 +607,103 @@ const AdminTransactions = () => {
                         </div>
 
                         {/* Modal Footer */}
-                        <div className="px-8 py-6 bg-gray-50/50 border-t border-gray-100 flex justify-end gap-3">
+                        <div className="px-8 py-6 bg-gray-50/50 border-t border-gray-100 flex flex-wrap justify-end gap-3">
                             <button
                                 onClick={() => setShowModal(false)}
                                 className="px-6 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-bold text-gray-500 hover:bg-gray-50 transition-colors"
                             >
                                 Close
                             </button>
+                            {['pending', 'failed', 'processing'].includes(selectedTransaction.paymentStatus?.toLowerCase()) && (
+                                <>
+                                    {selectedTransaction.razorpayOrderId && (
+                                        <button
+                                            onClick={() => handleRetryVerify(selectedTransaction._id)}
+                                            className="px-6 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-orange-500/20 transition-all flex items-center gap-2"
+                                        >
+                                            Retry Verification
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={() => handleMarkPaid(selectedTransaction._id)}
+                                        className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-green-600/20 transition-all flex items-center gap-2"
+                                    >
+                                        Mark Paid Manually
+                                    </button>
+                                </>
+                            )}
                             <button
                                 onClick={() => navigateToBooking(selectedTransaction.bookingId || selectedTransaction.booking?.bookingId || selectedTransaction.booking?._id)}
                                 className="px-6 py-2.5 bg-primary text-white rounded-xl text-sm font-bold hover:bg-primary-dark shadow-lg shadow-primary/20 transition-all flex items-center gap-2"
                             >
                                 View Booking Details <ArrowUpRight className="w-4 h-4" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Custom Audit Reason Modal */}
+            {showReasonModal && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-secondary/60 backdrop-blur-sm animate-fade-in" onClick={() => setShowReasonModal(false)}></div>
+                    <div className="relative bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200 border border-red-100">
+                        {/* Header */}
+                        <div className="px-6 py-5 border-b border-red-50 flex justify-between items-center bg-red-50/30">
+                            <div className="flex items-center gap-2">
+                                <span className="text-xl">⚠️</span>
+                                <h3 className="text-base font-bold text-red-800 uppercase tracking-wider">Manual Payment Reconcile</h3>
+                            </div>
+                            <button
+                                onClick={() => setShowReasonModal(false)}
+                                className="p-1.5 hover:bg-red-100 rounded-full text-red-400 hover:text-red-600 transition-colors"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        {/* Body */}
+                        <div className="p-6 space-y-4">
+                            <p className="text-xs text-red-700 leading-relaxed font-medium bg-red-50 p-4 rounded-2xl border border-red-100/50">
+                                WARNING: You are manually marking this booking as PAID. This bypasses automated gateway verification and will immediately qualify the provider for payouts. A valid audit reason is strictly required.
+                            </p>
+
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Reconciliation Audit Reason</label>
+                                <textarea
+                                    value={reasonText}
+                                    onChange={(e) => setReasonText(e.target.value)}
+                                    placeholder="Enter physical payment proof reason (e.g., GPAY direct transaction matching statement ID: 987654)"
+                                    className="w-full h-24 px-4 py-3 rounded-2xl border border-gray-200 focus:border-red-400 focus:ring-1 focus:ring-red-400 outline-none text-xs font-semibold text-secondary placeholder:text-gray-300 resize-none transition-all"
+                                    required
+                                />
+                                <span className="text-[9px] text-gray-400 flex justify-between">
+                                    <span>Minimum 5 characters required</span>
+                                    <span className={reasonText.trim().length >= 5 ? "text-green-500 font-bold" : "text-red-500 font-bold"}>
+                                        {reasonText.trim().length} chars
+                                    </span>
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-2.5">
+                            <button
+                                onClick={() => setShowReasonModal(false)}
+                                className="px-5 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-500 hover:bg-gray-50 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={submitMarkPaid}
+                                disabled={reasonText.trim().length < 5}
+                                className={`px-5 py-2 rounded-xl text-xs font-bold text-white shadow-lg transition-all ${
+                                    reasonText.trim().length >= 5 
+                                        ? "bg-red-600 hover:bg-red-700 shadow-red-600/20 active:scale-95 cursor-pointer" 
+                                        : "bg-red-300 shadow-none cursor-not-allowed opacity-75"
+                                }`}
+                            >
+                                Confirm Payment Manually
                             </button>
                         </div>
                     </div>

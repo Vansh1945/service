@@ -217,6 +217,23 @@ const createBooking = async (req, res) => {
     // Save booking
     await booking.save({ session });
 
+    // If paymentMethod is cash, create a transaction record
+    if (paymentMethod === 'cash') {
+      const Transaction = mongoose.model('Transaction');
+      const transaction = new Transaction({
+        booking: booking._id,
+        bookingId: booking.bookingId || booking._id.toString(),
+        user: req.user._id,
+        customerId: req.user._id.toString(),
+        amount: booking.totalAmount,
+        paymentMethod: 'cash',
+        paymentStatus: 'pending',
+        type: 'payment',
+        description: 'Pay After Service (Cash/COD) Payment pending'
+      });
+      await transaction.save({ session });
+    }
+
     // If coupon was applied, save the updated coupon
     if (couponCode && couponDetails) {
       await Coupon.findOneAndUpdate(
@@ -1270,6 +1287,18 @@ const cancelBooking = async (req, res) => {
       booking.cancellationProgress.reason = reason || 'Customer requested cancellation';
       booking.cancellationProgress.cancelledAt = new Date();
 
+      // Rollback any pending payment transaction wallet deduction
+      const pendingTxn = await Transaction.findOne({ booking: booking._id, paymentStatus: 'pending' }).session(session);
+      if (pendingTxn) {
+        const { rollbackWalletDeduction } = require('./Transaction-controller');
+        if (rollbackWalletDeduction) {
+          await rollbackWalletDeduction(pendingTxn, session);
+        }
+        pendingTxn.paymentStatus = 'failed';
+        pendingTxn.description = (pendingTxn.description || '') + ' (Cancelled due to booking cancellation)';
+        await pendingTxn.save({ session });
+      }
+
       if (booking.paymentStatus === 'paid' && ['online', 'wallet', 'mixed'].includes(booking.paymentMethod)) {
         const previouslyRefunded = booking.cancellationProgress?.refundAmount || 0;
         const refundAmount = booking.totalAmount - previouslyRefunded;
@@ -1308,6 +1337,20 @@ const cancelBooking = async (req, res) => {
           });
           user.wallet.lastUpdated = new Date();
           await user.save({ session });
+
+          // Create transaction record for audit
+          const refundTransaction = new Transaction({
+            booking: booking._id,
+            bookingId: booking.bookingId || booking._id.toString(),
+            user: userId,
+            amount: refundAmount,
+            paymentStatus: 'completed',
+            paymentMethod: 'wallet',
+            type: 'refund',
+            description: `Customer cancelled booking - Automatic refund to wallet: ${reason || 'Customer requested cancellation'}`,
+            refundReason: reason || 'Customer cancelled booking'
+          });
+          await refundTransaction.save({ session });
 
           booking.paymentStatus = 'refunded';
           booking.cancellationProgress.status = 'refund_completed';
@@ -1911,7 +1954,7 @@ const startBooking = async (req, res) => {
     }
 
     // STEP 4 — PAYMENT BEFORE SERVICE START
-    if (booking.paymentMethod === 'cash' && booking.paymentStatus !== 'paid') {
+    if (booking.paymentStatus !== 'paid') {
       return res.status(400).json({
         success: false,
         message: "Customer payment pending. Service cannot start."
@@ -2001,14 +2044,18 @@ const startBooking = async (req, res) => {
  * @access  Private/Provider
  */
 const rejectBooking = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const { id } = req.params;
     const providerId = req.provider._id;
-    // Fix: Add null check for req.body before destructuring
     const { reason } = req.body || {};
 
     // Validate booking ID format
     if (!mongoose.Types.ObjectId.isValid(id)) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({
         success: false,
         message: 'Invalid booking ID format'
@@ -2019,20 +2066,24 @@ const rejectBooking = async (req, res) => {
     const booking = await Booking.findOne({
       _id: id,
       status: 'pending',
-      paymentStatus: { $ne: 'paid' },
       $or: [
         { provider: { $exists: false } },
         { provider: providerId }
       ]
-    }).populate('customer', 'name email phone')
+    }).session(session)
+      .populate('customer')
       .populate('services.service', 'title description');
 
     if (!booking) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(404).json({
         success: false,
         message: 'Booking not found or not available for rejection'
       });
     }
+
+    const previousStatus = booking.status;
 
     // Update booking status to cancelled
     booking.status = 'cancelled';
@@ -2041,26 +2092,105 @@ const rejectBooking = async (req, res) => {
     booking.rejectedAt = new Date();
     booking.updatedAt = new Date();
 
-    await booking.save();
+    let refundAmount = 0;
+    let refundDetails = null;
 
-    // Invalidate dashboard caches
-    try {
+    // Rollback any pending payment transaction wallet deduction
+    const Transaction = mongoose.model('Transaction');
+    const pendingTxn = await Transaction.findOne({ booking: booking._id, paymentStatus: 'pending' }).session(session);
+    if (pendingTxn) {
+      const { rollbackWalletDeduction } = require('./Transaction-controller');
+      if (rollbackWalletDeduction) {
+        await rollbackWalletDeduction(pendingTxn, session);
+      }
+      pendingTxn.paymentStatus = 'failed';
+      pendingTxn.description = (pendingTxn.description || '') + ' (Cancelled due to provider booking rejection)';
+      await pendingTxn.save({ session });
+    }
 
+    // Handle refund if paid
+    if (booking.paymentStatus === 'paid') {
+      refundAmount = booking.totalAmount;
 
-    } catch (e) { }
+      if (refundAmount > 0) {
+        // Find existing successful transaction
+        const existingTxn = await Transaction.findOneAndUpdate(
+          { booking: booking._id, paymentStatus: { $in: ['completed', 'paid', 'success'] }, refundStatus: { $ne: 'completed' } },
+          {
+            refundStatus: 'completed',
+            refundReason: reason || 'Provider rejected booking',
+            refundedAt: new Date(),
+            paymentStatus: 'refunded',
+            refundedAmount: refundAmount
+          },
+          { session, new: true }
+        );
+
+        // Update customer wallet
+        const customer = await User.findById(booking.customer._id).session(session);
+        if (customer) {
+          if (!customer.wallet) {
+            customer.wallet = { availableBalance: 0, totalRefunded: 0, lastUpdated: new Date() };
+          }
+          customer.wallet.availableBalance += refundAmount;
+          customer.wallet.totalRefunded += refundAmount;
+          customer.wallet.walletTransactions.push({
+            type: 'credit',
+            amount: refundAmount,
+            reason: `Booking Rejected by Provider: ${reason || 'Provider declined'}`,
+            booking: booking._id
+          });
+          customer.wallet.lastUpdated = new Date();
+          await customer.save({ session });
+        }
+
+        // Create transaction record for audit
+        const refundTransaction = new Transaction({
+          booking: booking._id,
+          bookingId: booking.bookingId || booking._id.toString(),
+          user: booking.customer._id,
+          amount: refundAmount,
+          paymentStatus: 'completed',
+          paymentMethod: 'wallet',
+          type: 'refund',
+          description: `Provider rejected booking - Automatic refund to wallet: ${reason || 'Provider declined'}`,
+          refundReason: reason || 'Provider rejected booking'
+        });
+        await refundTransaction.save({ session });
+
+        booking.paymentStatus = 'refunded';
+        
+        refundDetails = {
+          amount: refundAmount,
+          method: 'wallet',
+          status: 'completed'
+        };
+      }
+    }
+
+    await booking.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
 
     res.status(200).json({
       success: true,
-      message: 'Booking rejected successfully',
+      message: booking.paymentStatus === 'refunded'
+        ? 'Booking rejected successfully and customer was fully refunded to wallet.'
+        : 'Booking rejected successfully',
       data: {
         bookingId: booking._id,
         status: booking.status,
+        paymentStatus: booking.paymentStatus,
         rejectionReason: booking.rejectionReason,
-        rejectedAt: booking.rejectedAt
+        rejectedAt: booking.rejectedAt,
+        refundDetails
       }
     });
 
   } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
     console.error('Error rejecting booking:', error);
     res.status(500).json({
       success: false,

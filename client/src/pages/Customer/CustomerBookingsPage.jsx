@@ -89,12 +89,12 @@ const BookingTimeline = ({ booking }) => {
               <div key={idx} className="relative flex items-start group">
                 {/* Icon Container */}
                 <div className={`relative z-20 w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-all duration-300 ${isCompleted
-                    ? 'bg-emerald-500 text-white shadow-md shadow-emerald-100'
-                    : isCurrent
-                      ? 'bg-orange-500 text-white animate-pulse shadow-md shadow-orange-100'
-                      : isError
-                        ? 'bg-red-500 text-white shadow-md shadow-red-100'
-                        : 'bg-white border-2 border-gray-100 text-gray-300'
+                  ? 'bg-emerald-500 text-white shadow-md shadow-emerald-100'
+                  : isCurrent
+                    ? 'bg-orange-500 text-white animate-pulse shadow-md shadow-orange-100'
+                    : isError
+                      ? 'bg-red-500 text-white shadow-md shadow-red-100'
+                      : 'bg-white border-2 border-gray-100 text-gray-300'
                   }`}>
                   <Icon className="w-4 h-4" />
                 </div>
