@@ -161,18 +161,19 @@ const notifyAllAdmins = async (payload) => {
  * @param {object} filters  - { city, category, minBookings }
  * @returns {{ success, sent, failed, total }}
  */
-const sendBroadcastNotification = async (audience, payload, filters = {}) => {
+const sendBroadcastNotification = async (audience, payload, filters = {}, broadcastId = null) => {
     try {
         let allTokens = [];
         let notificationsToSave = [];
         const { city, category, minBookings = 0 } = filters;
 
+        let users = [];
         if (audience === 'all' || audience === 'customer') {
             const userQuery = { role: 'customer' };
             if (city) userQuery['address.city'] = new RegExp(city, 'i');
             if (minBookings > 0) userQuery.totalBookings = { $gte: minBookings };
 
-            const users = await User.find(userQuery, '_id fcmTokens');
+            users = await User.find(userQuery, '_id fcmTokens');
             users.forEach(u => {
                 notificationsToSave.push({
                     userId: u._id,
@@ -184,6 +185,7 @@ const sendBroadcastNotification = async (audience, payload, filters = {}) => {
                     url: payload.url || '/',
                     isRead: false,
                     isScheduled: payload.isScheduled || false,
+                    broadcast_id: broadcastId,
                     sentAt: new Date()
                 });
                 if (u.fcmTokens && u.fcmTokens.length > 0) {
@@ -192,13 +194,14 @@ const sendBroadcastNotification = async (audience, payload, filters = {}) => {
             });
         }
 
+        let providers = [];
         if (audience === 'all' || audience === 'provider') {
             const providerQuery = { isDeleted: false };
             if (city) providerQuery['address.city'] = new RegExp(city, 'i');
             if (category) providerQuery.services = category; // category ID
             if (minBookings > 0) providerQuery.completedBookings = { $gte: minBookings };
 
-            const providers = await Provider.find(providerQuery, '_id fcmTokens');
+            providers = await Provider.find(providerQuery, '_id fcmTokens');
             providers.forEach(p => {
                 notificationsToSave.push({
                     userId: p._id,
@@ -210,6 +213,7 @@ const sendBroadcastNotification = async (audience, payload, filters = {}) => {
                     url: payload.url || '/',
                     isRead: false,
                     isScheduled: payload.isScheduled || false,
+                    broadcast_id: broadcastId,
                     sentAt: new Date()
                 });
                 if (p.fcmTokens && p.fcmTokens.length > 0) {
@@ -218,32 +222,90 @@ const sendBroadcastNotification = async (audience, payload, filters = {}) => {
             });
         }
 
+        let savedNotifs = [];
         if (notificationsToSave.length > 0) {
-            await Notification.insertMany(notificationsToSave);
+            savedNotifs = await Notification.insertMany(notificationsToSave);
         }
+
+        // Map userId to savedNotif
+        const userNotifMap = new Map();
+        savedNotifs.forEach(n => {
+            if (n.userId) {
+                userNotifMap.set(n.userId.toString(), n);
+            }
+        });
+
+        // Map token to savedNotif
+        const tokenToNotifMap = new Map();
+        users.forEach(u => {
+            const notif = userNotifMap.get(u._id.toString());
+            if (notif && u.fcmTokens) {
+                u.fcmTokens.forEach(t => {
+                    if (t.token) tokenToNotifMap.set(t.token, notif);
+                });
+            }
+        });
+        providers.forEach(p => {
+            const notif = userNotifMap.get(p._id.toString());
+            if (notif && p.fcmTokens) {
+                p.fcmTokens.forEach(t => {
+                    if (t.token) tokenToNotifMap.set(t.token, notif);
+                });
+            }
+        });
 
         const uniqueTokens = [...new Set(allTokens.filter(t => t && t.trim()))];
         console.log(`[NotificationService] Broadcasting to ${uniqueTokens.length} tokens (audience: ${audience})`);
 
         if (uniqueTokens.length === 0) {
-            return { success: false, message: 'No FCM tokens found for audience', sent: 0, failed: 0, total: 0 };
+            return { success: false, message: 'No FCM tokens found for audience', sent: 0, failed: 0, total: notificationsToSave.length };
         }
 
         // FCM has a limit of 500 tokens per multicast — batch if needed
         const BATCH_SIZE = 500;
         let successCount = 0;
         let failureCount = 0;
+        const deliveredNotifIds = new Set();
+        const failedNotifIds = new Set();
 
         for (let i = 0; i < uniqueTokens.length; i += BATCH_SIZE) {
             const batch = uniqueTokens.slice(i, i + BATCH_SIZE);
             const response = await sendPushNotification(batch, payload);
-            if (response) {
+            if (response && response.responses) {
                 successCount += response.successCount || 0;
                 failureCount += response.failureCount || 0;
+
+                response.responses.forEach((resp, idx) => {
+                    const token = batch[idx];
+                    const notif = tokenToNotifMap.get(token);
+                    if (notif) {
+                        if (resp.success) {
+                            deliveredNotifIds.add(notif._id.toString());
+                        } else {
+                            failedNotifIds.add(notif._id.toString());
+                        }
+                    }
+                });
             }
         }
 
-        return { success: true, sent: successCount, failed: failureCount, total: uniqueTokens.length };
+        // Update database with delivery results
+        if (deliveredNotifIds.size > 0) {
+            await Notification.updateMany(
+                { _id: { $in: Array.from(deliveredNotifIds) } },
+                { $set: { status: 'delivered', delivered_at: new Date() } }
+            );
+        }
+
+        const onlyFailedNotifIds = Array.from(failedNotifIds).filter(id => !deliveredNotifIds.has(id));
+        if (onlyFailedNotifIds.length > 0) {
+            await Notification.updateMany(
+                { _id: { $in: onlyFailedNotifIds } },
+                { $set: { status: 'failed' } }
+            );
+        }
+
+        return { success: true, sent: deliveredNotifIds.size, failed: notificationsToSave.length - deliveredNotifIds.size, total: notificationsToSave.length };
     } catch (error) {
         console.error('[NotificationService] Broadcast error:', error);
         throw error;
@@ -326,7 +388,7 @@ cron.schedule('* * * * *', async () => {
                         city: notif.targetCity,
                         category: notif.targetProviderCategory,
                         minBookings: notif.minBookings
-                    });
+                    }, notif._id);
                 } else if (notif.userId && notif.role) {
                     // Collect tokens for a single user to trigger sendPushNotification manually,
                     // but we can simply rely on the existing notifyUser if we don't need accurate result counting.
@@ -365,6 +427,18 @@ cron.schedule('* * * * *', async () => {
                 notif.failureCount = result?.failed || 0;
                 await notif.save();
                 console.log(`[NotificationService] Scheduled notification (ID: ${notif._id}) SENT successfully.`);
+
+                // Emit stats update if it was a broadcast
+                if (notif.audience && ['all', 'customer', 'provider'].includes(notif.audience)) {
+                    try {
+                        const { emitStatsUpdate } = require('../controllers/notificationController');
+                        if (emitStatsUpdate) {
+                            emitStatsUpdate(notif._id);
+                        }
+                    } catch (e) {
+                        console.error('Failed to emit stats update from cron:', e);
+                    }
+                }
 
             } catch (err) {
                 console.error(`[NotificationService] Failed matching scheduled notification (ID: ${notif._id}):`, err);

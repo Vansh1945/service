@@ -1,10 +1,57 @@
+const mongoose = require('mongoose');
 const Notification = require('../models/Notification');
 const User = require('../models/User-model');
 const Provider = require('../models/Provider-model');
 const Admin = require('../models/Admin-model');
 const { sendBroadcastNotification, scheduleNotification } = require('../utils/notificationService');
 
+/**
+ * Emit real-time broadcast stats update to all admins via Socket.io
+ */
+const emitStatsUpdate = async (broadcastId) => {
+    try {
+        const { getIO } = require('../socket/socketServer');
+        let io;
+        try {
+            io = getIO();
+        } catch {
+            return;
+        }
 
+        if (!io) return;
+
+        const stats = await Notification.aggregate([
+            { $match: { broadcast_id: new mongoose.Types.ObjectId(broadcastId) } },
+            {
+                $group: {
+                    _id: null,
+                    totalSent: { $sum: 1 },
+                    deliveredCount: {
+                        $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0] }
+                    },
+                    readCount: {
+                        $sum: { $cond: [{ $eq: ['$isRead', true] }, 1, 0] }
+                    },
+                    clickedCount: {
+                        $sum: { $cond: [{ $ne: [{ $ifNull: ['$clicked_at', null] }, null] }, 1, 0] }
+                    }
+                }
+            }
+        ]);
+
+        const result = stats[0] || { totalSent: 0, deliveredCount: 0, readCount: 0, clickedCount: 0 };
+
+        io.to('role_admin').emit('broadcast_stats_updated', {
+            broadcastId: broadcastId.toString(),
+            totalSent: result.totalSent,
+            deliveredCount: result.deliveredCount,
+            readCount: result.readCount,
+            clickedCount: result.clickedCount
+        });
+    } catch (err) {
+        console.error('Error emitting stats update:', err);
+    }
+};
 
 /**
  * GET /api/notifications
@@ -48,42 +95,28 @@ const markRead = async (req, res) => {
         const { id } = req.params;
         const userId = req.userID || req.body.userId;
 
-        const notification = await Notification.findOneAndUpdate(
-            { _id: id, userId },
-            { $set: { isRead: true } },
-            { new: true }
-        );
-
-        if (!notification) {
+        const existing = await Notification.findOne({ _id: id, userId });
+        if (!existing) {
             return res.status(404).json({ success: false, message: 'Notification not found' });
         }
 
-        // If this is a broadcast notification (indicated by notificationId in metadata or similar, 
-        // but here we just check if it has referenceId or type broadcast in the actual broadcast doc)
-        // Actually, broadcast notifications are saved per-user. 
-        // We should increment readCount in the PARENT broadcast record if possible, 
-        // but the current structure doesn't easily link per-user broadcast to parent.
-        // HOWEVER, the requirement is "Track when user opens notification".
-        // If we can't link, we'll just increment it on the user's copy if it was broadcast.
-        if (notification.type === 'broadcast') {
-            // Find the parent broadcast record by title and message? 
-            // Better: just increment readCount on the record itself.
-            // Wait, per-user records ARE the broadcast notifications. 
-            // The "history" shows the count.
-            // Let's increment readCount on the document with the same title/message/audience/type='broadcast' AND userId=null (the history record)
-            await Notification.updateOne(
-                { 
-                    title: notification.title, 
-                    message: notification.message, 
-                    type: 'broadcast', 
-                    userId: null,
-                    status: 'sent'
-                },
-                { $inc: { readCount: 1 } }
-            );
+        let updated = false;
+        if (!existing.isRead) {
+            existing.isRead = true;
+            existing.read_at = new Date();
+            await existing.save();
+            updated = true;
         }
 
-        return res.status(200).json({ success: true, data: notification });
+        if (updated && existing.type === 'broadcast' && existing.broadcast_id) {
+            await Notification.updateOne(
+                { _id: existing.broadcast_id },
+                { $inc: { readCount: 1 } }
+            );
+            emitStatsUpdate(existing.broadcast_id);
+        }
+
+        return res.status(200).json({ success: true, data: existing });
     } catch (error) {
         console.error('markRead error:', error);
         return res.status(500).json({ success: false, message: 'Failed to mark notification as read' });
@@ -98,10 +131,31 @@ const markAllRead = async (req, res) => {
     try {
         const userId = req.userID || req.body.userId;
 
-        await Notification.updateMany(
-            { userId, isRead: false },
-            { $set: { isRead: true } }
-        );
+        const unreadNotifications = await Notification.find({ userId, isRead: false });
+        if (unreadNotifications.length > 0) {
+            const ids = unreadNotifications.map(n => n._id);
+            await Notification.updateMany(
+                { _id: { $in: ids } },
+                { $set: { isRead: true, read_at: new Date() } }
+            );
+
+            // Group by broadcast_id to update counts and emit updates
+            const broadcastIdsToUpdate = new Set();
+            for (const notif of unreadNotifications) {
+                if (notif.type === 'broadcast' && notif.broadcast_id) {
+                    broadcastIdsToUpdate.add(notif.broadcast_id.toString());
+                }
+            }
+
+            for (const bId of broadcastIdsToUpdate) {
+                const countReadForThisBroadcast = unreadNotifications.filter(n => n.broadcast_id && n.broadcast_id.toString() === bId).length;
+                await Notification.updateOne(
+                    { _id: bId },
+                    { $inc: { readCount: countReadForThisBroadcast } }
+                );
+                emitStatsUpdate(bId);
+            }
+        }
 
         return res.status(200).json({ success: true, message: 'All notifications marked as read' });
     } catch (error) {
@@ -149,25 +203,19 @@ const saveToken = async (req, res) => {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
 
-        // 1. Check if this exact token already exists for this user
         const existingTokenIndex = user.fcmTokens.findIndex(t => t.token === token);
 
         if (existingTokenIndex !== -1) {
-            // Already exists -> Update lastActive and deviceId (just in case)
             user.fcmTokens[existingTokenIndex].lastActive = new Date();
             user.fcmTokens[existingTokenIndex].deviceId = deviceId;
         } else {
-            // New token -> 1. Remove any old token for this same deviceId
             user.fcmTokens = user.fcmTokens.filter(t => t.deviceId !== deviceId);
-
-            // 2. Add new token
             user.fcmTokens.push({
                 token,
                 deviceId,
                 lastActive: new Date()
             });
 
-            // 3. Keep only most recent 3 devices (Optional Best Practice)
             if (user.fcmTokens.length > 3) {
                 user.fcmTokens.sort((a, b) => b.lastActive - a.lastActive);
                 user.fcmTokens = user.fcmTokens.slice(0, 3);
@@ -271,6 +319,24 @@ const sendBroadcast = async (req, res) => {
             });
         }
 
+        // Create parent broadcast record
+        const parentBroadcast = await Notification.create({
+            title,
+            message: finalBody,
+            type: 'broadcast',
+            audience: finalAudience,
+            url,
+            totalSent: 0,
+            successCount: 0,
+            deliveredCount: 0,
+            failureCount: 0,
+            targetCity: finalCity,
+            targetProviderCategory: finalCategory,
+            minBookings,
+            status: 'sent',
+            sentAt: new Date()
+        });
+
         // Immediate Send
         const filters = {
             city: finalCity,
@@ -283,9 +349,10 @@ const sendBroadcast = async (req, res) => {
             body: finalBody,
             url,
             data: { type, url }
-        }, filters);
+        }, filters, parentBroadcast._id);
 
         if (!result.success && result.sent === 0 && result.total === 0) {
+            await Notification.findByIdAndDelete(parentBroadcast._id);
             return res.status(200).json({
                 success: false,
                 message: result.message || 'No matching users/devices found',
@@ -293,27 +360,15 @@ const sendBroadcast = async (req, res) => {
             });
         }
 
-        // Save History
-        try {
-            await Notification.create({
-                title,
-                message: finalBody,
-                type: 'broadcast',
-                audience: finalAudience,
-                url,
-                totalSent: result.total || 0,
-                successCount: result.sent || 0,
-                deliveredCount: result.sent || 0,
-                failureCount: result.failed || 0,
-                targetCity: finalCity,
-                targetProviderCategory: finalCategory,
-                minBookings,
-                status: 'sent',
-                sentAt: new Date()
-            });
-        } catch (err) {
-            console.error('[NotificationController] Error saving broadcast history:', err);
-        }
+        // Update parent with the actual result counts
+        parentBroadcast.totalSent = result.total || 0;
+        parentBroadcast.successCount = result.sent || 0;
+        parentBroadcast.deliveredCount = result.sent || 0;
+        parentBroadcast.failureCount = result.failed || 0;
+        await parentBroadcast.save();
+
+        // Emit real-time stats update via socket
+        emitStatsUpdate(parentBroadcast._id);
 
         return res.status(200).json({
             success: true,
@@ -347,13 +402,69 @@ const getAdminNotifications = async (req, res) => {
 
         const skip = (parseInt(page) - 1) * parseInt(limit);
 
-        const [notifications, total] = await Promise.all([
-            Notification.find(query)
-                .sort({ createdAt: -1 })
-                .skip(skip)
-                .limit(parseInt(limit))
-                .lean(),
-            Notification.countDocuments(query)
+        const total = await Notification.countDocuments(query);
+
+        const notifications = await Notification.aggregate([
+            { $match: query },
+            { $sort: { createdAt: -1 } },
+            { $skip: skip },
+            { $limit: parseInt(limit) },
+            {
+                $lookup: {
+                    from: 'notifications',
+                    localField: '_id',
+                    foreignField: 'broadcast_id',
+                    as: 'children'
+                }
+            },
+            {
+                $project: {
+                    _id: 1,
+                    title: 1,
+                    message: 1,
+                    type: 1,
+                    audience: 1,
+                    url: 1,
+                    status: 1,
+                    sentAt: 1,
+                    scheduledFor: 1,
+                    isScheduled: 1,
+                    targetCity: 1,
+                    targetProviderCategory: 1,
+                    minBookings: 1,
+                    isDeletedByAdmin: 1,
+                    createdAt: 1,
+                    updatedAt: 1,
+                    totalSent: { $size: '$children' },
+                    deliveredCount: {
+                        $size: {
+                            $filter: {
+                                input: '$children',
+                                as: 'c',
+                                cond: { $eq: ['$$c.status', 'delivered'] }
+                            }
+                        }
+                    },
+                    readCount: {
+                        $size: {
+                            $filter: {
+                                input: '$children',
+                                as: 'c',
+                                cond: { $eq: ['$$c.isRead', true] }
+                            }
+                        }
+                    },
+                    clickedCount: {
+                        $size: {
+                            $filter: {
+                                input: '$children',
+                                as: 'c',
+                                cond: { $ne: [{ $ifNull: ['$$c.clicked_at', null] }, null] }
+                            }
+                        }
+                    }
+                }
+            }
         ]);
 
         return res.status(200).json({
@@ -386,10 +497,6 @@ const updateNotification = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Notification not found' });
         }
 
-        // Rules:
-        // If notification is already sent -> only allow minor edits (title/message for history)
-        // If scheduled -> allow full edit
-
         if (notification.status === 'sent') {
             notification.title = title || notification.title;
             notification.message = message || notification.message;
@@ -397,8 +504,8 @@ const updateNotification = async (req, res) => {
             notification.title = title || notification.title;
             notification.message = message || notification.message;
             notification.url = url || notification.url;
-            if (scheduledTime || scheduledFor) {
-                notification.scheduledFor = new Date(scheduledTime || scheduledFor);
+            if (scheduledTime) {
+                notification.scheduledFor = new Date(scheduledTime);
             }
         } else {
             return res.status(400).json({ success: false, message: 'Cannot edit notification in current status' });
@@ -476,29 +583,34 @@ const resendNotification = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Notification not found' });
         }
 
-        // Use existing sendBroadcastNotification function
-        const result = await sendBroadcastNotification(notification.audience || 'all', {
-            title: notification.title,
-            body: notification.message,
-            url: notification.url,
-            data: { type: notification.type, url: notification.url }
-        });
-
-        // Update existing record or create new history? 
-        // Typically resending should probably create a new record for tracking success/failure of the new attempt.
-        // But for simplicity and to match the "extension" request, let's create a new one.
-        
-        await Notification.create({
+        const newParent = await Notification.create({
             title: notification.title,
             message: notification.message,
             type: 'broadcast',
             audience: notification.audience,
             url: notification.url,
-            totalSent: result.total || 0,
-            successCount: result.sent || 0,
-            failureCount: result.failed || 0,
-            status: 'sent'
+            totalSent: 0,
+            successCount: 0,
+            deliveredCount: 0,
+            failureCount: 0,
+            status: 'sent',
+            sentAt: new Date()
         });
+
+        const result = await sendBroadcastNotification(notification.audience || 'all', {
+            title: notification.title,
+            body: notification.message,
+            url: notification.url,
+            data: { type: notification.type, url: notification.url }
+        }, {}, newParent._id);
+
+        newParent.totalSent = result.total || 0;
+        newParent.successCount = result.sent || 0;
+        newParent.deliveredCount = result.sent || 0;
+        newParent.failureCount = result.failed || 0;
+        await newParent.save();
+
+        emitStatsUpdate(newParent._id);
 
         return res.status(200).json({
             success: true,
@@ -525,17 +637,19 @@ const markClicked = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Notification not found' });
         }
 
-        if (notification.type === 'broadcast') {
+        let updated = false;
+        if (!notification.clicked_at) {
+            notification.clicked_at = new Date();
+            await notification.save();
+            updated = true;
+        }
+
+        if (updated && notification.type === 'broadcast' && notification.broadcast_id) {
             await Notification.updateOne(
-                {
-                    title: notification.title,
-                    message: notification.message,
-                    type: 'broadcast',
-                    userId: null,
-                    status: 'sent'
-                },
+                { _id: notification.broadcast_id },
                 { $inc: { clickedCount: 1 } }
             );
+            emitStatsUpdate(notification.broadcast_id);
         }
 
         return res.status(200).json({ success: true, message: 'Click tracked' });
@@ -552,19 +666,40 @@ const markClicked = async (req, res) => {
 const getAdminAnalytics = async (req, res) => {
     try {
         const { id } = req.params;
-        const notification = await Notification.findById(id);
+        const parent = await Notification.findById(id);
 
-        if (!notification) {
+        if (!parent) {
             return res.status(404).json({ success: false, message: 'Notification not found' });
         }
 
-        const totalSent = notification.totalSent || 0;
-        const delivered = notification.deliveredCount || notification.successCount || 0;
-        const read = notification.readCount || 0;
-        const clicked = notification.clickedCount || 0;
+        const stats = await Notification.aggregate([
+            { $match: { broadcast_id: new mongoose.Types.ObjectId(id) } },
+            {
+                $group: {
+                    _id: null,
+                    totalSent: { $sum: 1 },
+                    deliveredCount: {
+                        $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0] }
+                    },
+                    readCount: {
+                        $sum: { $cond: [{ $eq: ['$isRead', true] }, 1, 0] }
+                    },
+                    clickedCount: {
+                        $sum: { $cond: [{ $ne: [{ $ifNull: ['$clicked_at', null] }, null] }, 1, 0] }
+                    }
+                }
+            }
+        ]);
 
-        const readRate = totalSent > 0 ? ((read / totalSent) * 100).toFixed(2) : 0;
-        const clickRate = totalSent > 0 ? ((clicked / totalSent) * 100).toFixed(2) : 0;
+        const result = stats[0] || { totalSent: 0, deliveredCount: 0, readCount: 0, clickedCount: 0 };
+
+        const totalSent = result.totalSent;
+        const delivered = result.deliveredCount;
+        const read = result.readCount;
+        const clicked = result.clickedCount;
+
+        const readRate = delivered > 0 ? ((read / delivered) * 100).toFixed(2) : 0;
+        const clickRate = delivered > 0 ? ((clicked / delivered) * 100).toFixed(2) : 0;
 
         return res.status(200).json({
             success: true,
@@ -597,5 +732,6 @@ module.exports = {
     cancelNotification,
     resendNotification,
     markClicked,
-    getAdminAnalytics
+    getAdminAnalytics,
+    emitStatsUpdate
 };

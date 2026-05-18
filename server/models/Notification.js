@@ -34,6 +34,23 @@ const notificationSchema = new mongoose.Schema({
         default: false
     },
     // Tracking fields for broadcast notifications
+    broadcast_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Notification',
+        default: null
+    },
+    delivered_at: {
+        type: Date,
+        default: null
+    },
+    read_at: {
+        type: Date,
+        default: null
+    },
+    clicked_at: {
+        type: Date,
+        default: null
+    },
     audience: {
         type: String,
         enum: ['all', 'customer', 'provider']

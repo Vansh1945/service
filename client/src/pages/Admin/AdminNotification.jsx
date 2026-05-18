@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/auth';
+import { useSocket } from '../../socket/SocketContext';
 import * as NotificationService from '../../services/NotificationService';
 import {
     FiBell, FiSend, FiUsers, FiLink, FiCheckCircle, FiAlertCircle,
@@ -87,7 +88,34 @@ const Modal = ({ isOpen, onClose, title, children }) => (
 
 // ─── Component ────────────────────────────────────────────────────────────────
 const AdminNotification = () => {
-    const { token, API } = useAuth();
+    useAuth();
+    const { socket } = useSocket();
+
+    useEffect(() => {
+        if (socket) {
+            socket.on('broadcast__updated', (data) => {
+                console.log('Received broadcast stats update:', data);
+                setHistory(prevHistory => {
+                    return prevHistory.map(item => {
+                        if (item._id === data.broadcastId) {
+                            return {
+                                ...item,
+                                totalSent: data.totalSent,
+                                deliveredCount: data.deliveredCount,
+                                readCount: data.readCount,
+                                clickedCount: data.clickedCount
+                            };
+                        }
+                        return item;
+                    });
+                });
+            });
+
+            return () => {
+                socket.off('broadcast_stats_updated');
+            };
+        }
+    }, [socket]);
 
     const [form, setForm] = useState({
         audience: 'all',
@@ -277,11 +305,11 @@ const AdminNotification = () => {
     };
 
     const resetForm = () => {
-        setForm({ 
-            audience: 'all', 
-            title: '', 
-            body: '', 
-            url: '/', 
+        setForm({
+            audience: 'all',
+            title: '',
+            body: '',
+            url: '/',
             scheduledTime: '',
             city: '',
             providerCategory: '',
@@ -336,8 +364,8 @@ const AdminNotification = () => {
                                     <label
                                         key={opt.value}
                                         className={`relative flex flex-col p-4 cursor-pointer rounded-lg border-2 transition-all duration-200 ${form.audience === opt.value
-                                                ? 'border-primary bg-primary/5'
-                                                : 'border-gray-200 hover:border-primary/30 bg-gray-50'
+                                            ? 'border-primary bg-primary/5'
+                                            : 'border-gray-200 hover:border-primary/30 bg-gray-50'
                                             }`}
                                     >
                                         <input
@@ -504,8 +532,8 @@ const AdminNotification = () => {
                                             type="button"
                                             onClick={() => setForm(prev => ({ ...prev, url: ql.url }))}
                                             className={`px-3 py-1 text-xs rounded-full border transition-colors ${form.url === ql.url
-                                                    ? 'bg-primary/10 border-primary text-primary font-medium'
-                                                    : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                                                ? 'bg-primary/10 border-primary text-primary font-medium'
+                                                : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
                                                 }`}
                                         >
                                             {ql.label}
@@ -612,7 +640,7 @@ const AdminNotification = () => {
                         <div className="relative mx-auto w-[240px] h-[420px] border-[6px] border-gray-900 rounded-[2.5rem] shadow-xl overflow-hidden bg-gray-50 scale-95 origin-top">
                             {/* Phone Notch */}
                             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-5 bg-gray-900 rounded-b-xl z-20"></div>
-                            
+
                             {/* Wallpaper/Bg */}
                             <div className="absolute inset-0 bg-gradient-to-br from-teal-500/10 via-white to-blue-500/10"></div>
 
@@ -627,7 +655,7 @@ const AdminNotification = () => {
 
                             {/* Notification Bubble */}
                             <div className="mt-4 px-2 relative z-10">
-                                <motion.div 
+                                <motion.div
                                     initial={{ opacity: 0, y: -20 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     key={form.title + form.body}
@@ -657,7 +685,7 @@ const AdminNotification = () => {
                                     </div>
                                 </motion.div>
                             </div>
-                            
+
                             {/* Bottom Home Indicator */}
                             <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-16 h-1 bg-gray-300 rounded-full"></div>
                         </div>
@@ -708,8 +736,8 @@ const AdminNotification = () => {
                                 key={f}
                                 onClick={() => setFilter(f)}
                                 className={`px-4 py-1.5 text-xs font-medium rounded-md capitalize transition-all ${filter === f
-                                        ? 'bg-white text-primary shadow-sm'
-                                        : 'text-gray-600 hover:text-gray-900'
+                                    ? 'bg-white text-primary shadow-sm'
+                                    : 'text-gray-600 hover:text-gray-900'
                                     }`}
                             >
                                 {f}
@@ -746,7 +774,7 @@ const AdminNotification = () => {
                                         </div>
                                         <h4 className="font-bold text-gray-900 text-sm">{item.title}</h4>
                                         <p className="text-xs text-gray-600 mt-1 line-clamp-2 leading-relaxed">{item.message}</p>
-                                        
+
                                         {/* Filters Preview */}
                                         {(item.targetCity || item.minBookings > 0 || item.targetProviderCategory) && (
                                             <div className="mt-2 flex flex-wrap gap-2">
@@ -768,27 +796,6 @@ const AdminNotification = () => {
                                             className="text-gray-600 bg-gray-100 hover:bg-gray-200 px-2 py-1.5 rounded text-[10px] font-bold flex items-center gap-1 transition-colors"
                                         >
                                             <FiEdit2 size={12} /> Edit
-                                        </button>
-                                        <button
-                                            onClick={async () => {
-                                                try {
-                                                    const res = await NotificationService.getAnalytics(item._id);
-                                                    if (res.data.success) {
-                                                        const { totalSent, delivered, read, clicked, readRate, clickRate } = res.data.data;
-                                                        toast((t) => (
-                                                            <div className="text-xs">
-                                                                <div className="font-bold border-b mb-1 pb-1">Live Analytics</div>
-                                                                <div>Sent: {totalSent} | Delivered: {delivered}</div>
-                                                                <div>Read: {read} ({readRate}%)</div>
-                                                                <div>Clicked: {clicked} ({clickRate}%)</div>
-                                                            </div>
-                                                        ), { duration: 4000 });
-                                                    }
-                                                } catch (e) { toast.error("Failed to fetch live analytics"); }
-                                            }}
-                                            className="text-teal-600 bg-teal-50 hover:bg-teal-100 px-2 py-1.5 rounded text-[10px] font-bold flex items-center gap-1 transition-colors"
-                                        >
-                                            <FiTarget size={12} /> Stats
                                         </button>
                                     </div>
                                 </div>
@@ -814,7 +821,7 @@ const AdminNotification = () => {
                                             Sent: {item.totalSent || 0}
                                         </span>
                                         <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-[10px] font-bold" title="Delivered/Success">
-                                            Del: {item.deliveredCount || item.successCount || 0}
+                                            Del: {item.deliveredCount || 0}
                                         </span>
                                         <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-[10px] font-bold" title="Read Count">
                                             Read: {item.readCount || 0}
@@ -822,11 +829,9 @@ const AdminNotification = () => {
                                         <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded text-[10px] font-bold" title="Clicked Count">
                                             Click: {item.clickedCount || 0}
                                         </span>
-                                        {item.totalSent > 0 && (
-                                            <span className="px-2 py-1 bg-primary/10 text-primary rounded text-[10px] font-bold">
-                                                Read: {((item.readCount || 0) / item.totalSent * 100).toFixed(1)}%
-                                            </span>
-                                        )}
+                                        <span className="px-2 py-1 bg-primary/10 text-primary rounded text-[10px] font-bold">
+                                            Read: {item.deliveredCount > 0 ? ((item.readCount || 0) / item.deliveredCount * 100).toFixed(1) : '0.0'}%
+                                        </span>
                                     </div>
                                     <div className="flex gap-2">
                                         {item.status === 'pending' && (
