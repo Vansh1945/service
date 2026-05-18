@@ -8,7 +8,7 @@ import {
   Truck, Phone, Mail, ChevronRight, MessageCircle, AlertCircle
 } from 'lucide-react';
 import { getPublicServiceById } from '../../services/ServiceService';
-import { getBooking, updateBookingPayment } from '../../services/BookingService';
+import { getBooking, updateBookingPayment, payBooking } from '../../services/BookingService';
 import * as TransactionService from '../../services/TransactionService';
 import * as CustomerService from '../../services/CustomerService';
 import Loader from '../../components/Loader';
@@ -31,22 +31,26 @@ const BookingConfirmation = () => {
   const [error, setError] = useState(null);
   const [showCashModal, setShowCashModal] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [paymentProgressMessage, setPaymentProgressMessage] = useState('');
 
   // Load Razorpay script
   useEffect(() => {
-    const loadRazorpay = () => {
-      if (window.Razorpay) {
-        setRazorpayLoaded(true);
-        return;
-      }
-      const script = document.createElement('script');
-      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-      script.async = true;
-      script.onload = () => setRazorpayLoaded(true);
-      script.onerror = () => setRazorpayLoaded(false);
-      document.body.appendChild(script);
-    };
-    loadRazorpay();
+    if (window.Razorpay) {
+      setRazorpayLoaded(true);
+    } else {
+      // Fallback: check every 100ms for up to 3 seconds if script is loaded from index.html
+      let attempts = 0;
+      const interval = setInterval(() => {
+        attempts++;
+        if (window.Razorpay) {
+          setRazorpayLoaded(true);
+          clearInterval(interval);
+        } else if (attempts >= 30) {
+          clearInterval(interval);
+        }
+      }, 100);
+      return () => clearInterval(interval);
+    }
   }, []);
 
   const fetchServiceDetails = async (serviceId) => {
@@ -69,7 +73,12 @@ const BookingConfirmation = () => {
       }
 
       const booking = response.data.data;
-      if (booking.paymentMethod) setPaymentMethod(booking.paymentMethod);
+      // If cash booking not yet paid (Pay Now flow), default to online
+      if (booking.paymentMethod === 'cash' && booking.paymentStatus !== 'paid') {
+        setPaymentMethod('online');
+      } else if (booking.paymentMethod) {
+        setPaymentMethod(booking.paymentMethod);
+      }
       setBookingDetails(booking);
 
       if (!location.state?.service) {
@@ -121,9 +130,16 @@ const BookingConfirmation = () => {
         }
 
         if (location.state?.booking) {
-          setBookingDetails(location.state.booking);
+          const b = location.state.booking;
+          setBookingDetails(b);
           setServiceDetails(location.state.service);
-          if (location.state.booking.paymentMethod) setPaymentMethod(location.state.booking.paymentMethod);
+          // If it's a cash booking not yet paid (Pay Now flow), default to online so
+          // the customer can choose how to pay — 'cash' is not a valid createOrder method
+          if (b.paymentMethod === 'cash' && b.paymentStatus !== 'paid') {
+            setPaymentMethod('online');
+          } else if (b.paymentMethod) {
+            setPaymentMethod(b.paymentMethod);
+          }
         } else {
           await fetchBookingDetails();
         }
@@ -209,18 +225,32 @@ const BookingConfirmation = () => {
           canPay: false,
           description: 'Service completed successfully!'
         };
+      case 'scheduled':
+        return {
+          message: 'Booking Scheduled (Cash on Delivery)',
+          color: 'text-yellow-600',
+          canPay: bookingDetails.paymentStatus !== 'paid',
+          description: 'You can pay now online, or pay cash when the provider arrives.'
+        };
       case 'cancelled':
         return { message: 'Booking Cancelled', color: 'text-red-500', canPay: false, description: 'This booking has been cancelled.' };
       default:
-        return { message: bookingDetails.status || 'Unknown', color: 'text-gray-500', canPay: false, description: '' };
+        return {
+          message: bookingDetails.status || 'Unknown',
+          color: 'text-gray-500',
+          canPay: bookingDetails.paymentStatus !== 'paid' && !['cancelled', 'completed', 'in-progress'].includes(bookingDetails.status),
+          description: ''
+        };
     }
   };
 
   const handleWalletPayment = async () => {
+    if (isProcessingPayment) return;
     setIsProcessingPayment(true);
+    setPaymentProgressMessage('Processing Wallet Payment...');
     const toastId = toast.loading('Processing wallet payment...');
     try {
-      const response = await API.post(`/booking/pay/${bookingDetails._id}`, {
+      const response = await payBooking(bookingDetails._id, {
         paymentDetails: { paymentMethod: 'wallet' }
       });
 
@@ -243,10 +273,19 @@ const BookingConfirmation = () => {
       });
     } finally {
       setIsProcessingPayment(false);
+      setPaymentProgressMessage('');
     }
   };
 
   const handleOnlineOrMixedPayment = async (selectedMethod) => {
+    if (isProcessingPayment) return;
+
+    // Safety guard: only 'online' and 'mixed' are valid for Razorpay createOrder
+    if (!['online', 'mixed'].includes(selectedMethod)) {
+      showToast('Please select a payment method.', 'error');
+      return;
+    }
+
     if (!razorpayLoaded) {
       showToast('Payment gateway is loading...', 'info');
       return;
@@ -259,11 +298,24 @@ const BookingConfirmation = () => {
     }
 
     setIsProcessingPayment(true);
+    setPaymentProgressMessage('Creating Secure Order...');
 
     try {
       const isMixed = selectedMethod === 'mixed';
       const walletDeduction = isMixed ? Math.min(walletBalance, bookingDetails.totalAmount) : 0;
       const remainingAmount = bookingDetails.totalAmount - walletDeduction;
+
+      // EDGE CASE: If remaining amount is 0 (wallet balance covers full amount)
+      if (remainingAmount <= 0) {
+        setPaymentProgressMessage('Processing Wallet Payment...');
+        const response = await payBooking(bookingDetails._id, {
+          paymentDetails: { paymentMethod: 'wallet' }
+        });
+        if (!response.data?.success) throw new Error(response.data?.message || 'Payment failed');
+        showToast('Payment successful! Booking confirmed.', 'success');
+        setTimeout(() => navigate('/customer/bookings'), 2000);
+        return;
+      }
 
       const orderResponse = await TransactionService.createOrder({
         bookingId: bookingDetails._id,
@@ -274,10 +326,12 @@ const BookingConfirmation = () => {
 
       if (!orderResponse.data?.success) throw new Error('Failed to create payment order');
 
+      setPaymentProgressMessage('Opening Razorpay...');
+
       const { order, key, transactionId } = orderResponse.data.data;
 
       const options = {
-        key: key,
+        key: import.meta.env.VITE_RAZORPAY_KEY || key,
         amount: order.amount,
         currency: order.currency || 'INR',
         name: 'SAFEVOLT SOLUTIONS',
@@ -286,6 +340,8 @@ const BookingConfirmation = () => {
           : `Payment for ${getServiceInfo().title}`,
         order_id: order.id,
         handler: async function (response) {
+          setPaymentProgressMessage('Processing Payment...');
+          showToast('Verifying payment, please wait...', 'info');
           try {
             const verifyResponse = await TransactionService.verifyPayment({
               orderId: response.razorpay_order_id,
@@ -300,32 +356,50 @@ const BookingConfirmation = () => {
             showToast('Payment successful! Booking confirmed.', 'success');
             setTimeout(() => navigate('/customer/bookings'), 2000);
           } catch (verificationError) {
+            setIsProcessingPayment(false);
+            setPaymentProgressMessage('');
             showToast('Payment verification failed. Please contact support.', 'error');
           }
         },
         prefill: { name: user?.name, email: user?.email, contact: user?.phone },
         theme: { color: '#0D9488' },
-        modal: { 
+        modal: {
           ondismiss: () => {
             setIsProcessingPayment(false);
+            setPaymentProgressMessage('');
             showToast('Payment cancelled', 'info');
           }
         }
       };
 
+      // DESTROY OLD INSTANCE to prevent repeated popup crash/error
+      if (window.currentRazorpay) {
+        try {
+          window.currentRazorpay.close();
+        } catch (e) {
+          console.warn('Error closing previous Razorpay popup:', e);
+        }
+      }
+
       const rzp = new window.Razorpay(options);
+      window.currentRazorpay = rzp;
+
       rzp.on('payment.failed', function (response) {
         setIsProcessingPayment(false);
+        setPaymentProgressMessage('');
       });
       rzp.open();
     } catch (error) {
       setIsProcessingPayment(false);
+      setPaymentProgressMessage('');
       showToast(error.response?.data?.message || 'Failed to initialize payment', 'error');
     }
   };
 
   const handleCashPayment = async () => {
+    if (isProcessingPayment) return;
     setIsProcessingPayment(true);
+    setPaymentProgressMessage('Confirming Cash Payment...');
     try {
       setShowCashModal(false);
       showToast('Confirming booking...', 'info');
@@ -340,6 +414,7 @@ const BookingConfirmation = () => {
       showToast(error.response?.data?.message || 'Failed to confirm booking', 'error');
     } finally {
       setIsProcessingPayment(false);
+      setPaymentProgressMessage('');
     }
   };
 
@@ -587,13 +662,12 @@ const BookingConfirmation = () => {
 
                     {/* Wallet Payment */}
                     <div
-                      className={`flex items-center gap-3 p-2.5 border rounded-xl cursor-pointer transition-all ${
-                        walletBalance >= totalAmount
-                          ? paymentMethod === 'wallet'
-                            ? 'border-primary bg-primary/5 shadow-sm'
-                            : 'border-gray-100 hover:border-gray-200'
-                          : 'opacity-50 cursor-not-allowed bg-gray-50 border-gray-100'
-                      }`}
+                      className={`flex items-center gap-3 p-2.5 border rounded-xl cursor-pointer transition-all ${walletBalance >= totalAmount
+                        ? paymentMethod === 'wallet'
+                          ? 'border-primary bg-primary/5 shadow-sm'
+                          : 'border-gray-100 hover:border-gray-200'
+                        : 'opacity-50 cursor-not-allowed bg-gray-50 border-gray-100'
+                        }`}
                       onClick={() => {
                         if (walletBalance >= totalAmount) {
                           setPaymentMethod('wallet');
@@ -619,13 +693,12 @@ const BookingConfirmation = () => {
 
                     {/* Wallet + Online Mixed */}
                     <div
-                      className={`flex items-center gap-3 p-2.5 border rounded-xl cursor-pointer transition-all ${
-                        walletBalance > 0
-                          ? paymentMethod === 'mixed'
-                            ? 'border-primary bg-primary/5 shadow-sm'
-                            : 'border-gray-100 hover:border-gray-200'
-                          : 'opacity-50 cursor-not-allowed bg-gray-50 border-gray-100'
-                      }`}
+                      className={`flex items-center gap-3 p-2.5 border rounded-xl cursor-pointer transition-all ${walletBalance > 0
+                        ? paymentMethod === 'mixed'
+                          ? 'border-primary bg-primary/5 shadow-sm'
+                          : 'border-gray-100 hover:border-gray-200'
+                        : 'opacity-50 cursor-not-allowed bg-gray-50 border-gray-100'
+                        }`}
                       onClick={() => {
                         if (walletBalance > 0) {
                           setPaymentMethod('mixed');
@@ -688,7 +761,7 @@ const BookingConfirmation = () => {
                       {isProcessingPayment ? (
                         <>
                           <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          Processing...
+                          {paymentProgressMessage || 'Processing...'}
                         </>
                       ) : (
                         <>

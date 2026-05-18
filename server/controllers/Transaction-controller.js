@@ -292,6 +292,7 @@ const verifyPayment = async (req, res) => {
       bookingId,
       transactionId
     } = req.body;
+    const userId = req.user._id;
 
     // Validate input
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !bookingId || !transactionId) {
