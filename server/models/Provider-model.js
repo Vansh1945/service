@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 
 const walletSchema = new mongoose.Schema({
     availableBalance: {
@@ -46,10 +47,52 @@ const providerSchema = new mongoose.Schema({
     },
     password: {
         type: String,
-        required: [true, 'Password is required'],
+        required: function () { return !this.authProvider || this.authProvider === 'email'; },
         minlength: [8, 'Password must be at least 8 characters long'],
         select: false
     },
+    // Firebase / OAuth fields
+    firebaseUid: { type: String, sparse: true, index: true },
+    authProvider: {
+        type: String,
+        enum: ['email', 'google', 'phone'],
+        default: 'email'
+    },
+    // Refresh token sessions (max 5)
+    refreshTokens: [{
+        tokenHash:  { type: String, required: true },
+        deviceId:   { type: String },
+        fingerprint:{ type: String },
+        ipHash:     { type: String },
+        userAgent:  { type: String },
+        createdAt:  { type: Date, default: Date.now },
+        expiresAt:  { type: Date, required: true },
+        isValid:    { type: Boolean, default: true }
+    }],
+    // Known devices
+    deviceIds: [{
+        deviceId:    { type: String },
+        fingerprint: { type: String },
+        platform:    { type: String },
+        userAgent:   { type: String },
+        firstSeen:   { type: Date, default: Date.now },
+        lastSeen:    { type: Date, default: Date.now },
+        isTrusted:   { type: Boolean, default: true }
+    }],
+    // Login history (last 20)
+    loginHistory: [{
+        timestamp:     { type: Date, default: Date.now },
+        ip:            { type: String },
+        userAgent:     { type: String },
+        deviceId:      { type: String },
+        method:        { type: String, enum: ['email', 'google', 'phone', 'refresh'] },
+        success:       { type: Boolean, default: true },
+        suspiciousFlag:{ type: Boolean, default: false }
+    }],
+    lastLoginIp:     { type: String },
+    lastLoginAt:     { type: Date },
+    suspiciousScore: { type: Number, default: 0 },
+    biometricEnabled:{ type: Boolean, default: false },
     dateOfBirth: {
         type: Date,
         required: [true, 'Date of birth is required']
@@ -259,9 +302,9 @@ providerSchema.pre('save', async function (next) {
     next();
 });
 
-// Password hashing middleware
+// Password hashing middleware (skip Firebase users)
 providerSchema.pre('save', async function (next) {
-    if (!this.isModified('password')) return next();
+    if (!this.isModified('password') || !this.password) return next();
     try {
         const salt = await bcrypt.genSalt(10);
         this.password = await bcrypt.hash(this.password, salt);
@@ -278,15 +321,34 @@ providerSchema.methods.comparePassword = async function (enteredPassword) {
 
 providerSchema.methods.generateJWT = function () {
     return jwt.sign(
-        {
-            id: this._id,
-            email: this.email,
-            role: this.role,
-            kycStatus: this.kycStatus
-        },
+        { id: this._id, email: this.email, role: this.role, kycStatus: this.kycStatus },
         process.env.JWT_SECRET,
-        { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+        { expiresIn: '30d' }
     );
+};
+
+providerSchema.methods.generateAccessToken = providerSchema.methods.generateJWT;
+
+providerSchema.methods.generateRefreshToken = function (deviceInfo = {}) {
+    const raw = crypto.randomBytes(64).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(raw).digest('hex');
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+    this.refreshTokens = (this.refreshTokens || [])
+        .filter(t => t.isValid && t.expiresAt > new Date())
+        .slice(-4);
+
+    this.refreshTokens.push({
+        tokenHash,
+        deviceId:    deviceInfo.deviceId || '',
+        fingerprint: deviceInfo.fingerprint || '',
+        ipHash:      deviceInfo.ipHash || '',
+        userAgent:   deviceInfo.userAgent || '',
+        expiresAt,
+        isValid: true
+    });
+
+    return { raw, expiresAt };
 };
 
 // KYC methods

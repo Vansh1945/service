@@ -60,7 +60,7 @@ const providerAuthMiddleware = async (req, res, next) => {
 
         // Attach provider to request
         req.provider = provider;
-        req.user = provider; 
+        req.user = provider;
         req.token = jwtToken;
         req.providerId = provider._id;
         req.role = 'provider';
@@ -73,7 +73,11 @@ const providerAuthMiddleware = async (req, res, next) => {
         let status = 401;
 
         if (error.name === 'TokenExpiredError') {
-            message = "Session expired. Please login again";
+            return res.status(401).json({
+                success: false,
+                tokenExpired: true,
+                message: "Session expired. Please login again"
+            });
         } else if (error.name === 'JsonWebTokenError') {
             message = "Invalid token format";
         } else {

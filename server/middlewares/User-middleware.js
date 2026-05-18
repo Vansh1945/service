@@ -3,104 +3,72 @@ const User = require('../models/User-model');
 
 /**
  * User Authentication Middleware
- * Verifies JWT token and attaches user to request
+ * Verifies JWT access token. On expiry, returns 401 with tokenExpired:true
+ * so the client can automatically call /auth/refresh-token.
  */
 const userAuthMiddleware = async (req, res, next) => {
-    // Extract token from header
     const token = req.header('Authorization');
 
-    if (!token || !token.startsWith("Bearer ")) {
-        return res.status(401).json({
-            success: false,
-            message: "Unauthorized. User token not provided or invalid format."
-        });
+    if (!token || !token.startsWith('Bearer ')) {
+        return res.status(401).json({ success: false, message: 'Unauthorized. Token not provided.' });
     }
 
-    const jwtToken = token.replace("Bearer ", "").trim();
+    const jwtToken = token.replace('Bearer ', '').trim();
 
     if (!jwtToken || jwtToken === 'null' || jwtToken === 'undefined') {
-        return res.status(401).json({
-            success: false,
-            message: "Unauthorized. Token is missing or invalid."
-        });
+        return res.status(401).json({ success: false, message: 'Unauthorized. Invalid token.' });
     }
 
     try {
-        // Verify token
         const decoded = jwt.verify(jwtToken, process.env.JWT_SECRET);
 
-        // Find user in database with basic profile data
         const user = await User.findById(decoded.id)
             .select('-password')
-            .select('+couponsUsed +customDiscount'); // Include sensitive fields if needed
+            .select('+couponsUsed +customDiscount');
 
         if (!user) {
+            return res.status(401).json({ success: false, message: 'Unauthorized. User not found.' });
+        }
+
+        if (user.role !== 'customer') {
+            return res.status(403).json({ success: false, message: 'Forbidden. Customers only.' });
+        }
+
+        if (user.isSuspended) {
+            return res.status(403).json({ success: false, message: `Account suspended: ${user.suspensionReason || 'Suspicious activity'}` });
+        }
+
+        req.user   = user;
+        req.token  = jwtToken;
+        req.userID = user._id;
+        req.role   = user.role;
+        next();
+
+    } catch (error) {
+        if (error.name === 'TokenExpiredError') {
+            // Signal client to use refresh token
             return res.status(401).json({
                 success: false,
-                message: "Unauthorized. User not found."
+                tokenExpired: true,
+                message: 'Access token expired. Please refresh your session.'
             });
         }
-
-        // Verify user role is customer
-        if (user.role !== 'customer') {
-            return res.status(403).json({
-                success: false,
-                message: "Forbidden. This route is for customers only."
-            });
-        }
-
-        // Attach user data to request object
-        req.user = user;
-        req.token = jwtToken;
-        req.userID = user._id;
-        req.role = user.role;
-
-        next();
-    } catch (error) {
-        console.error("User auth middleware error:", error);
-
-        let message = "Unauthorized. Invalid user token.";
-        if (error.name === 'TokenExpiredError') {
-            message = "User session expired. Please login again.";
-        } else if (error.name === 'JsonWebTokenError') {
-            message = "Invalid user token. Please login again.";
-        }
-
-        res.status(401).json({
-            success: false,
-            message
-        });
+        return res.status(401).json({ success: false, message: 'Unauthorized. Invalid token.' });
     }
 };
 
-/**
- * Middleware to check if first booking was used
- */
 const firstBookingCheckMiddleware = (req, res, next) => {
     if (req.user.firstBookingUsed) {
-        return res.status(403).json({
-            success: false,
-            message: "First booking discount already used."
-        });
+        return res.status(403).json({ success: false, message: 'First booking discount already used.' });
     }
     next();
 };
 
-/**
- * Middleware to validate custom discount access
- */
 const discountAccessMiddleware = (req, res, next) => {
     if (req.user.customDiscount <= 0) {
-        return res.status(403).json({
-            success: false,
-            message: "No active discount available."
-        });
+        return res.status(403).json({ success: false, message: 'No active discount available.' });
     }
     next();
 };
 
-module.exports = {
-    userAuthMiddleware,
-    firstBookingCheckMiddleware,
-    discountAccessMiddleware
-};
+module.exports = { userAuthMiddleware, firstBookingCheckMiddleware, discountAccessMiddleware };

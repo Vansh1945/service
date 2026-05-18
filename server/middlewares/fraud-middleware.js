@@ -7,22 +7,22 @@ const Provider = require('../models/Provider-model');
  * Extract the real public client IP behind proxies, Render, Vercel, Cloudflare, etc.
  */
 function getClientIp(req) {
-  let ip = req.headers['cf-connecting-ip'] || 
-           req.headers['x-real-ip'] || 
-           req.headers['x-forwarded-for'] || 
-           req.ip || 
-           (req.socket ? req.socket.remoteAddress : '');
-  
+  let ip = req.headers['cf-connecting-ip'] ||
+    req.headers['x-real-ip'] ||
+    req.headers['x-forwarded-for'] ||
+    req.ip ||
+    (req.socket ? req.socket.remoteAddress : '');
+
   // x-forwarded-for can be a list of IPs: "client, proxy1, proxy2"
   if (ip && ip.includes(',')) {
     ip = ip.split(',')[0].trim();
   }
-  
+
   // Clean IPv6-mapped IPv4 addresses
   if (ip && ip.startsWith('::ffff:')) {
     ip = ip.substring(7);
   }
-  
+
   return ip || '0.0.0.0';
 }
 
@@ -32,7 +32,7 @@ function getClientIp(req) {
 function isPrivateIp(ip) {
   if (!ip) return true;
   if (ip === '127.0.0.1' || ip === '::1' || ip === 'localhost') return true;
-  
+
   const ipv4Parts = ip.split('.');
   if (ipv4Parts.length === 4) {
     const p1 = parseInt(ipv4Parts[0], 10);
@@ -41,9 +41,9 @@ function isPrivateIp(ip) {
     if (p1 === 192 && p2 === 168) return true; // 192.168.x.x
     if (p1 === 172 && p2 >= 16 && p2 <= 31) return true; // 172.16.x.x - 172.31.x.x
   }
-  
+
   if (ip.startsWith('fe80:') || ip.startsWith('fc00:') || ip.startsWith('fd00:')) return true;
-  
+
   return false;
 }
 

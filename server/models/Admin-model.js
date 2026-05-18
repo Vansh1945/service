@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 
 const adminSchema = new mongoose.Schema({
   name: {
@@ -37,7 +38,26 @@ const adminSchema = new mongoose.Schema({
     token: { type: String, required: true },
     deviceId: { type: String, required: true },
     lastActive: { type: Date, default: Date.now }
-  }]
+  }],
+  refreshTokens: [{
+    tokenHash:  { type: String, required: true },
+    deviceId:   { type: String },
+    ipHash:     { type: String },
+    userAgent:  { type: String },
+    createdAt:  { type: Date, default: Date.now },
+    expiresAt:  { type: Date, required: true },
+    isValid:    { type: Boolean, default: true }
+  }],
+  loginHistory: [{
+    timestamp:     { type: Date, default: Date.now },
+    ip:            { type: String },
+    userAgent:     { type: String },
+    deviceId:      { type: String },
+    method:        { type: String, enum: ['email', 'refresh'] },
+    success:       { type: Boolean, default: true }
+  }],
+  lastLoginIp:  { type: String },
+  lastLoginAt:  { type: Date }
 }, {
   timestamps: true
 });
@@ -60,17 +80,36 @@ adminSchema.methods.comparePassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
-// Generate JWT
+// Generate short-lived access token
 adminSchema.methods.generateJWT = function () {
   return jwt.sign(
-    { 
-      id: this._id, 
-      email: this.email, 
-      isAdmin: this.isAdmin
-    },
+    { id: this._id, email: this.email, isAdmin: this.isAdmin, role: 'admin' },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    { expiresIn: '30d' }
   );
+};
+
+adminSchema.methods.generateAccessToken = adminSchema.methods.generateJWT;
+
+adminSchema.methods.generateRefreshToken = function (deviceInfo = {}) {
+  const raw = crypto.randomBytes(64).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(raw).digest('hex');
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+  this.refreshTokens = (this.refreshTokens || [])
+    .filter(t => t.isValid && t.expiresAt > new Date())
+    .slice(-4);
+
+  this.refreshTokens.push({
+    tokenHash,
+    deviceId:  deviceInfo.deviceId || '',
+    ipHash:    deviceInfo.ipHash || '',
+    userAgent: deviceInfo.userAgent || '',
+    expiresAt,
+    isValid: true
+  });
+
+  return { raw, expiresAt };
 };
 
 // Remove password from JSON output

@@ -7,6 +7,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import * as AdminService from "../services/AdminService";
 import * as ProviderService from "../services/ProviderService";
 import * as CustomerService from "../services/CustomerService";
+import * as AuthService from "../services/AuthService";
 
 const AuthContext = createContext(null);
 
@@ -17,6 +18,7 @@ export const AuthProvider = ({ children }) => {
 
     // State management
     const [token, setToken] = useState(() => localStorage.getItem("token") || null);
+    const [refreshToken, setRefreshToken] = useState(() => localStorage.getItem("refreshToken") || null);
     const [role, setRole] = useState(() => localStorage.getItem("role") || null);
     const [user, setUser] = useState(() => {
         try {
@@ -66,8 +68,7 @@ export const AuthProvider = ({ children }) => {
         });
     };
 
-    // Login function
-    const loginUser = async (newToken, newRole, userData) => {
+    const loginUser = async (newToken, newRole, userData, newRefreshToken = null) => {
         try {
             if (isTokenExpired(newToken)) {
                 throw new Error("Token is invalid or expired");
@@ -84,11 +85,13 @@ export const AuthProvider = ({ children }) => {
 
             // Save to localStorage
             localStorage.setItem("token", newToken);
+            if (newRefreshToken) localStorage.setItem("refreshToken", newRefreshToken);
             localStorage.setItem("role", finalRole);
             localStorage.setItem("user", JSON.stringify(userObj));
 
             // Update state
             setToken(newToken);
+            if (newRefreshToken) setRefreshToken(newRefreshToken);
             setRole(finalRole);
             setUser(userObj);
 
@@ -125,9 +128,18 @@ export const AuthProvider = ({ children }) => {
     };
 
     // Logout function
-    const logoutUser = () => {
+    const logoutUser = async () => {
+        try {
+            const currentRefreshToken = localStorage.getItem("refreshToken");
+            if (currentRefreshToken) {
+                await AuthService.logoutApi({ refreshToken: currentRefreshToken });
+            }
+        } catch (e) {
+            console.warn("Backend logout failed:", e);
+        }
         localStorage.clear();
         setToken(null);
+        setRefreshToken(null);
         setRole(null);
         setUser(null);
         showToast('Logged out successfully');
@@ -177,6 +189,7 @@ export const AuthProvider = ({ children }) => {
     // Context value
     const contextValue = useMemo(() => ({
         token,
+        refreshToken,
         role,
         user,
         isAuthenticated: !!token,
@@ -192,7 +205,7 @@ export const AuthProvider = ({ children }) => {
         API_URL_IMAGE,
         showToast,
         isTokenExpired
-    }), [token, role, user, isAdmin, isDeepLink, intendedRoute, API]);
+    }), [token, refreshToken, role, user, isAdmin, isDeepLink, intendedRoute, API]);
 
     return (
         <AuthContext.Provider value={contextValue}>

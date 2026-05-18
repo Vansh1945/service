@@ -1,5 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getMessaging } from "firebase/messaging";
+import { getAuth } from "firebase/auth";
 
 const firebaseConfig = {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -17,4 +18,7 @@ const app = initializeApp(firebaseConfig);
 // Single messaging instance (reused everywhere)
 const messaging = getMessaging(app);
 
-export { app, messaging };
+// Auth instance
+const auth = getAuth(app);
+
+export { app, messaging, auth };

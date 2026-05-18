@@ -61,4 +61,8 @@ router.patch('/fraud/user/:userId/suspend', adminController.suspendUserAccount);
 // System Logs
 router.get('/system-logs', adminController.getSystemLogs);
 
+// ── Security Monitoring ───────────────────────────────────────────────────
+router.get('/security/sessions', adminAuthMiddleware, adminController.getActiveSessions);
+router.post('/security/force-logout', adminAuthMiddleware, adminController.forceLogoutUser);
+
 module.exports = router;

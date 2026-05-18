@@ -67,7 +67,8 @@ const AdminFraud = () => {
   const [data, setData] = useState({
     ip: [],
     device: [],
-    cancellation: []
+    cancellation: [],
+    sessions: []
   });
   
   // Stats
@@ -123,6 +124,13 @@ const AdminFraud = () => {
           res = await AdminService.getCancellationAlerts(params);
           if (res.data?.success) {
             setData(prev => ({ ...prev, cancellation: res.data.data }));
+            setTotalPages(res.data.pagination?.pages || 1);
+          }
+          break;
+        case 'sessions':
+          res = await AdminService.getActiveSessions({ ...params, role: filterRisk === 'PROVIDER' ? 'provider' : 'customer' });
+          if (res.data?.success) {
+            setData(prev => ({ ...prev, sessions: res.data.data }));
             setTotalPages(res.data.pagination?.pages || 1);
           }
           break;
@@ -244,6 +252,18 @@ const AdminFraud = () => {
     }
   };
 
+  const handleForceLogout = async (userId, role) => {
+    try {
+      const res = await AdminService.forceLogoutUser({ userId, role });
+      if (res.data?.success) {
+        showToast(res.data.message, 'success');
+        fetchFraudData(activeTab);
+      }
+    } catch (err) {
+      showToast('Failed to force logout user', 'error');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-inter text-slate-800">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -317,7 +337,8 @@ const AdminFraud = () => {
             {[
               { id: 'ip', label: 'Same IP Detection', icon: FiMapPin },
               { id: 'device', label: 'Device Abuse', icon: FiSmartphone },
-              { id: 'cancellation', label: 'Cancellation Alerts', icon: FiXCircle }
+              { id: 'cancellation', label: 'Cancellation Alerts', icon: FiXCircle },
+              { id: 'sessions', label: 'Active Sessions', icon: FiShield }
             ].map(t => (
               <button
                 key={t.id}
@@ -356,6 +377,7 @@ const AdminFraud = () => {
               <option value="HIGH">High</option>
               <option value="MEDIUM">Medium</option>
               <option value="LOW">Low</option>
+              {activeTab === 'sessions' && <option value="PROVIDER">Filter: Providers</option>}
             </select>
 
             <select
@@ -483,7 +505,15 @@ const AdminFraud = () => {
                       <EmptyState icon={FiSmartphone} message="No device abuse detected" subMessage="Device usage patterns look normal" />
                     ) : (
                       data.device
-                        .filter(item => !searchQuery || item._id.includes(searchQuery) || (item.deviceDetails && item.deviceDetails.toLowerCase().includes(searchQuery.toLowerCase())))
+                        .filter(item => {
+                          if (!searchQuery) return true;
+                          const query = searchQuery.toLowerCase();
+                          if (item._id.includes(searchQuery)) return true;
+                          const detailsStr = typeof item.deviceDetails === 'string' 
+                            ? item.deviceDetails.toLowerCase() 
+                            : JSON.stringify(item.deviceDetails || {}).toLowerCase();
+                          return detailsStr.includes(query);
+                        })
                         .map((item, idx) => (
                           <tr key={idx} className={`hover:bg-slate-50/30 transition-colors ${item.isSafe ? 'opacity-60' : ''}`}>
                             <td className="px-6 py-5">
@@ -492,8 +522,13 @@ const AdminFraud = () => {
                                   <FiSmartphone className="text-slate-400" size={14} />
                                   {item._id.substring(0, 16)}...
                                 </span>
-                                <span className="text-[10px] text-slate-500 block truncate mt-0.5" title={item.deviceDetails || 'Unknown device specifications'}>
-                                  {item.deviceDetails || 'Standard browser specifications'}
+                                <span 
+                                  className="text-[10px] text-slate-500 block truncate mt-0.5" 
+                                  title={typeof item.deviceDetails === 'string' ? item.deviceDetails : JSON.stringify(item.deviceDetails)}
+                                >
+                                  {typeof item.deviceDetails === 'string' 
+                                    ? item.deviceDetails 
+                                    : (item.deviceDetails ? `${item.deviceDetails.platform || 'Unknown OS'} - ${item.deviceDetails.userAgent?.substring(0, 30) || 'Unknown Browser'}` : 'Standard browser specifications')}
                                 </span>
                               </div>
                             </td>
@@ -629,6 +664,67 @@ const AdminFraud = () => {
                                 className="text-indigo-600 hover:text-indigo-800 font-bold text-sm flex items-center gap-1 transition-colors"
                               >
                                 View Log <FiChevronRight size={16} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                    )}
+                  </tbody>
+                )}
+              </table>
+            </div>
+          )}
+
+          {/* TAB 4: ACTIVE SESSIONS */}
+          {activeTab === 'sessions' && (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[800px]">
+                <thead className="bg-slate-50/50 border-b border-slate-100">
+                  <tr>
+                    <th className="px-6 py-4 text-left text-[11px] font-black text-slate-400 uppercase tracking-widest">User Details</th>
+                    <th className="px-6 py-4 text-left text-[11px] font-black text-slate-400 uppercase tracking-widest">Active Sessions</th>
+                    <th className="px-6 py-4 text-left text-[11px] font-black text-slate-400 uppercase tracking-widest">Last Known IP</th>
+                    <th className="px-6 py-4 text-left text-[11px] font-black text-slate-400 uppercase tracking-widest">Trust Score</th>
+                    <th className="px-6 py-4 text-left text-[11px] font-black text-slate-400 uppercase tracking-widest">Action</th>
+                  </tr>
+                </thead>
+                {loading ? <TableSkeleton columns={5} /> : (
+                  <tbody className="divide-y divide-slate-100">
+                    {data.sessions.length === 0 ? (
+                      <EmptyState icon={FiShield} message="No active sessions found" />
+                    ) : (
+                      data.sessions
+                        .filter(item => !searchQuery || item.name.toLowerCase().includes(searchQuery.toLowerCase()) || item.email.toLowerCase().includes(searchQuery.toLowerCase()))
+                        .map((item, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50/30 transition-colors">
+                            <td className="px-6 py-5">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-white shadow-sm ${item.role === 'provider' ? 'bg-indigo-500' : 'bg-emerald-500'}`}>
+                                  {item.name?.charAt(0).toUpperCase()}
+                                </div>
+                                <div>
+                                  <span className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                                    {item.name}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 font-mono">{item.email}</span>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-5 text-sm font-bold text-slate-800 font-mono">
+                              {item.activeSessions} Device(s)
+                            </td>
+                            <td className="px-6 py-5 text-sm font-bold text-slate-800 font-mono">
+                              {item.lastLoginIp || 'Unknown'}
+                            </td>
+                            <td className="px-6 py-5">
+                              <RiskBadge risk={item.suspiciousScore > 50 ? 'HIGH' : item.suspiciousScore > 20 ? 'MEDIUM' : 'LOW'} />
+                            </td>
+                            <td className="px-6 py-5">
+                              <button 
+                                onClick={() => handleForceLogout(item.userId, item.role)}
+                                className="px-3 py-1.5 rounded-xl text-xs font-bold transition-all border bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100"
+                              >
+                                Revoke Sessions
                               </button>
                             </td>
                           </tr>

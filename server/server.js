@@ -98,7 +98,8 @@ const corsOptions = {
     'x-device-language',
     'x-device-platform',
     'x-device-hardwareconcurrency',
-    'x-device-devicememory'
+    'x-device-devicememory',
+    'x-device-id'
   ]
 };
 

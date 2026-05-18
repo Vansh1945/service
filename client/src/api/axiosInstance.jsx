@@ -3,6 +3,21 @@ import axios from "axios";
 // Track pending requests to prevent duplicates
 const pendingRequests = new Map();
 
+// Variables for refresh token logic
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+    failedQueue.forEach(prom => {
+        if (error) {
+            prom.reject(error);
+        } else {
+            prom.resolve(token);
+        }
+    });
+    failedQueue = [];
+};
+
 const getRequestKey = (config) => {
     const { method, url, data, params } = config;
     return `${method}:${url}:${JSON.stringify(data)}:${JSON.stringify(params)}`;
@@ -60,10 +75,63 @@ api.interceptors.response.use(
         }
         return response;
     },
-    (error) => {
+    async (error) => {
+        const originalRequest = error.config;
+
         if (error.config && ['post', 'put', 'patch', 'delete'].includes(error.config.method)) {
             pendingRequests.delete(getRequestKey(error.config));
         }
+
+        // Check if error is due to token expiration and we haven't retried yet
+        if (error.response?.status === 401 && error.response?.data?.tokenExpired && !originalRequest._retry) {
+            if (isRefreshing) {
+                try {
+                    const token = await new Promise((resolve, reject) => {
+                        failedQueue.push({ resolve, reject });
+                    });
+                    originalRequest.headers.Authorization = `Bearer ${token}`;
+                    return api(originalRequest);
+                } catch (err) {
+                    return Promise.reject(err);
+                }
+            }
+
+            originalRequest._retry = true;
+            isRefreshing = true;
+
+            const refreshToken = localStorage.getItem("refreshToken");
+            if (!refreshToken) {
+                isRefreshing = false;
+                // No refresh token -> logout
+                localStorage.clear();
+                window.location.href = '/login';
+                return Promise.reject(error);
+            }
+
+            try {
+                // Use standard axios to avoid interceptor loop
+                const { data } = await axios.post(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api'}/auth/refresh-token`, { refreshToken });
+                if (data.success && data.token) {
+                    localStorage.setItem("token", data.token);
+                    if (data.refreshToken) localStorage.setItem("refreshToken", data.refreshToken);
+                    
+                    api.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
+                    originalRequest.headers.Authorization = `Bearer ${data.token}`;
+                    
+                    processQueue(null, data.token);
+                    isRefreshing = false;
+                    return api(originalRequest);
+                }
+            } catch (err) {
+                processQueue(err, null);
+                isRefreshing = false;
+                // If refresh fails, they must login again
+                localStorage.clear();
+                window.location.href = '/login';
+                return Promise.reject(err);
+            }
+        }
+
         return Promise.reject(error);
     }
 );

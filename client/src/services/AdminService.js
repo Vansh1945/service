@@ -119,6 +119,14 @@ export const suspendUserAccount = (userId, data) => {
     return axiosInstance.patch(`/admin/fraud/user/${userId}/suspend`, data);
 };
 
+export const getActiveSessions = (params) => {
+    return axiosInstance.get('/admin/security/sessions', { params });
+};
+
+export const forceLogoutUser = (data) => {
+    return axiosInstance.post('/admin/security/force-logout', data);
+};
+
 
 // System Logs
 export const getSystemLogs = (params) => {

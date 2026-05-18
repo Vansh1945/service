@@ -23,3 +23,15 @@ export const resetpassword = (data) => {
 export const resendotp = (data) => {
     return axiosInstance.post("/auth/resend-otp", data);
 };
+
+export const firebaseLogin = (data) => {
+    return axiosInstance.post("/auth/firebase-login", data);
+};
+
+export const refreshAccessToken = (data) => {
+    return axiosInstance.post("/auth/refresh-token", data);
+};
+
+export const logoutApi = (data) => {
+    return axiosInstance.post("/auth/logout", data);
+};

@@ -2664,15 +2664,105 @@ async function suspendUserAccount(req, res) {
             message: `Account has been successfully ${suspend ? 'suspended' : 'reactivated'}.`,
             data: { userId, isSuspended: suspend, role }
         });
-    } catch (error) {
-        console.error('suspendUserAccount Error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
+    } catch (err) {
+      console.error('Error suspending user account:', err);
+      res.status(500).json({ success: false, message: 'Server error' });
     }
-}
+  }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Security Monitoring: Active Sessions & Device Analytics
+// GET /api/admin/security/sessions
+// ─────────────────────────────────────────────────────────────────────────────
+const getActiveSessions = async (req, res) => {
+  try {
+    const { role = 'customer', page = 1, limit = 20 } = req.query;
+    const Model = role === 'provider' ? require('../models/Provider-model') : require('../models/User-model');
+    
+    const users = await Model.find({ 'refreshTokens.isValid': true })
+      .select('name email phone role refreshTokens deviceIds loginHistory lastLoginIp suspiciousScore')
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit))
+      .lean();
 
+    const total = await Model.countDocuments({ 'refreshTokens.isValid': true });
 
+    // Format the response for the admin panel
+    const sessions = users.map(user => {
+      const activeTokens = user.refreshTokens?.filter(t => t.isValid && new Date(t.expiresAt) > new Date()) || [];
+      return {
+        userId: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role || role,
+        suspiciousScore: user.suspiciousScore || 0,
+        lastLoginIp: user.lastLoginIp,
+        activeSessions: activeTokens.length,
+        devices: user.deviceIds || [],
+        tokens: activeTokens.map(t => ({
+          deviceId: t.deviceId,
+          ipHash: t.ipHash,
+          userAgent: t.userAgent,
+          createdAt: t.createdAt,
+          expiresAt: t.expiresAt
+        })),
+        recentLogins: (user.loginHistory || []).slice(-5)
+      };
+    }).filter(u => u.activeSessions > 0);
 
+    res.status(200).json({
+      success: true,
+      data: sessions,
+      pagination: {
+        total,
+        page: parseInt(page),
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching active sessions:', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch sessions' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Security Monitoring: Force Logout
+// POST /api/admin/security/force-logout
+// Body: { userId, role, deviceId (optional, if omitted logs out from all) }
+// ─────────────────────────────────────────────────────────────────────────────
+const forceLogoutUser = async (req, res) => {
+  try {
+    const { userId, role, deviceId } = req.body;
+    if (!userId || !role) {
+      return res.status(400).json({ success: false, message: 'User ID and role are required' });
+    }
+
+    const Model = role === 'provider' ? require('../models/Provider-model') : require('../models/User-model');
+    const user = await Model.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    let revokedCount = 0;
+    if (user.refreshTokens && user.refreshTokens.length > 0) {
+      user.refreshTokens.forEach(t => {
+        if (t.isValid && (!deviceId || t.deviceId === deviceId)) {
+          t.isValid = false;
+          revokedCount++;
+        }
+      });
+      await user.save();
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Successfully revoked ${revokedCount} session(s) for user ${user.name}`
+    });
+  } catch (err) {
+    console.error('Error forcing logout:', err);
+    res.status(500).json({ success: false, message: 'Failed to force logout' });
+  }
+};
 
 // System Logs API
 const getSystemLogs = async (req, res) => {
@@ -2704,4 +2794,7 @@ const getSystemLogs = async (req, res) => {
         res.status(500).json({ success: false, message: 'Failed to read logs' });
     }
 };
+
 module.exports.getSystemLogs = getSystemLogs;
+module.exports.getActiveSessions = getActiveSessions;
+module.exports.forceLogoutUser = forceLogoutUser;
