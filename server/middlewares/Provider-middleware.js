@@ -33,7 +33,7 @@ const providerAuthMiddleware = async (req, res, next) => {
 
         // Dynamic Token Invalidation/Revocation check
         const currentFingerprint = req.deviceFingerprint;
-        let isSessionValid = false;
+        let isSessionValid = true; // Default to true if JWT is valid
 
         if (provider.refreshTokens && provider.refreshTokens.length > 0) {
             const activeSessions = provider.refreshTokens.filter(t => t.isValid && t.expiresAt > new Date());
@@ -43,6 +43,8 @@ const providerAuthMiddleware = async (req, res, next) => {
                 } else {
                     isSessionValid = true;
                 }
+            } else {
+                isSessionValid = false; // Revoked if all sessions are invalid/expired
             }
         }
 

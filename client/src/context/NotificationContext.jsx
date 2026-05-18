@@ -20,6 +20,9 @@ export const NotificationProvider = ({ children }) => {
         if (!newToken || !authToken) return;
         
         if (localStorage.getItem("fcmToken") === newToken) return;
+        if (savedTokenRef.current === newToken) return;
+
+        savedTokenRef.current = newToken;
 
         try {
             const res = await NotificationService.saveToken({ token: newToken });
@@ -28,7 +31,12 @@ export const NotificationProvider = ({ children }) => {
                 console.log('[FCM] Token saved to backend successfully.');
             }
         } catch (err) {
+            // Ignore cancellation errors silently
+            if (err.name === 'CanceledError' || err.message === 'canceled' || err.code === 'ERR_CANCELED') {
+                return;
+            }
             console.error('[FCM] Failed to save token to backend:', err);
+            savedTokenRef.current = null; // Reset on error to allow retrying
         }
     };
 

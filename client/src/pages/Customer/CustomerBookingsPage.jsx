@@ -9,7 +9,7 @@ import {
   Calendar, Clock, MapPin, User, Phone, DollarSign, CheckCircle,
   XCircle, AlertCircle, Eye, Search, CreditCard, Star, Package,
   ShoppingCart, Timer, Wrench, Activity, Edit3, ChevronLeft,
-  ChevronRight, X, ChevronDown, ChevronUp, Wallet, ShieldAlert, Home
+  ChevronRight, X, ChevronDown, ChevronUp, Wallet, ShieldAlert, Home, CheckSquare
 } from 'lucide-react';
 import { cancelBooking, userUpdateBookingDateTime, getCustomerBookings } from '../../services/BookingService';
 import Pagination from '../../components/Pagination';
