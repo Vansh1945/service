@@ -734,6 +734,47 @@ exports.logout = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Biometric (WebAuthn) — Get credential IDs for a user (pre-login challenge)
+// GET /api/auth/biometric/challenge?email=user@example.com
+// Returns the credential IDs registered for this user so the client can pass
+// them as allowCredentials — forcing the platform (fingerprint/FaceID/PIN)
+// authenticator instead of prompting for a USB hardware key.
+// ─────────────────────────────────────────────────────────────────────────────
+exports.getBiometricChallenge = async (req, res) => {
+  try {
+    const { email } = req.query;
+
+    // Generate challenge regardless of whether user exists (prevents user enumeration)
+    const challenge = Array.from(crypto.randomBytes(32))
+      .map(b => b.toString(16).padStart(2, '0')).join('');
+
+    if (!email) {
+      // Return challenge with no credentials — browser will show discoverable creds
+      return res.status(200).json({ success: true, challenge, allowCredentials: [] });
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
+
+    if (!user || !user.biometricEnabled || !(user.biometricCredentials?.length)) {
+      // Don't reveal user existence — return empty credentials
+      return res.status(200).json({ success: true, challenge, allowCredentials: [] });
+    }
+
+    // Return only the credential IDs + transport hint (internal = platform biometric)
+    const allowCredentials = user.biometricCredentials.map(c => ({
+      id:         c.credentialId,
+      type:       'public-key',
+      transports: ['internal'] // 'internal' = built-in fingerprint/face/PIN
+    }));
+
+    return res.status(200).json({ success: true, challenge, allowCredentials });
+  } catch (err) {
+    console.error('Biometric challenge error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Biometric (WebAuthn) — Register a passkey credential for logged-in user
 // POST /api/auth/biometric/register
 // Body: { credentialId, publicKey, deviceName }

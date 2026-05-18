@@ -19,7 +19,7 @@ import {
   Smartphone,
   Fingerprint
 } from 'lucide-react';
-import { login, firebaseLogin, biometricLoginApi } from '../services/AuthService';
+import { login, firebaseLogin, biometricLoginApi, getBiometricChallenge } from '../services/AuthService';
 import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { auth } from "../../firebase";
 
@@ -131,19 +131,62 @@ const LoginPage = () => {
     if (!window.PublicKeyCredential) {
       return showToast('Biometric login is not supported on this device/browser', 'error');
     }
+
+    // Step 1 — fetch challenge + registered credential IDs from server
+    // This tells the browser exactly which passkey to use, forcing the
+    // platform authenticator (Windows Hello / Touch ID / FaceID / PIN)
+    // instead of showing a USB hardware-key prompt.
+    let challengeHex, allowCredentials;
+    try {
+      setIsLoading(true);
+      const email = formData.email?.trim() || '';
+      const { data } = await getBiometricChallenge(email);
+
+      if (!data.success) {
+        return showToast('Could not start biometric authentication', 'error');
+      }
+
+      challengeHex      = data.challenge;         // hex string from server
+      allowCredentials  = data.allowCredentials;  // [{id, type, transports}]
+
+      // If the user has no email entered AND no registered credentials found,
+      // nudge them to type their email first for a smoother experience.
+      if (!email && allowCredentials.length === 0) {
+        return showToast('Enter your email first, then click Biometrics', 'info');
+      }
+    } catch (err) {
+      console.error('Challenge fetch error:', err);
+      return showToast('Could not contact server. Check your connection.', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+
+    // Step 2 — trigger the platform biometric prompt
     try {
       setIsLoading(true);
 
-      // Generate a random challenge for this session
-      const challenge = crypto.getRandomValues(new Uint8Array(32));
+      // Convert hex challenge string → Uint8Array
+      const challengeBytes = new Uint8Array(
+        challengeHex.match(/.{1,2}/g).map(b => parseInt(b, 16))
+      );
 
-      // Request authentication assertion from the authenticator (fingerprint/FaceID)
+      // Convert base64url credential IDs → Uint8Array for each registered credential
+      const formattedCreds = allowCredentials.map(cred => ({
+        id:         Uint8Array.from(atob(cred.id.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)),
+        type:       'public-key',
+        transports: cred.transports || ['internal'] // 'internal' = built-in biometric
+      }));
+
       const assertion = await navigator.credentials.get({
         publicKey: {
-          challenge,
-          timeout: 60000,
+          challenge:        challengeBytes,
+          timeout:          60000,
           userVerification: 'required',
-          rpId: window.location.hostname
+          rpId:             window.location.hostname,
+          // Passing allowCredentials with transports:['internal'] tells the
+          // browser to use ONLY the platform (built-in) authenticator,
+          // completely bypassing the USB hardware key prompt.
+          ...(formattedCreds.length > 0 && { allowCredentials: formattedCreds })
         }
       });
 
@@ -152,8 +195,6 @@ const LoginPage = () => {
       }
 
       const { id: credentialId, response: assertionResponse } = assertion;
-
-      // Encode all binary data as base64 for transport
       const toBase64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
 
       const payload = {
@@ -161,22 +202,24 @@ const LoginPage = () => {
         signature:         toBase64(assertionResponse.signature),
         authenticatorData: toBase64(assertionResponse.authenticatorData),
         clientDataJSON:    toBase64(assertionResponse.clientDataJSON),
-        userEmail:         formData.email || undefined
+        userEmail:         formData.email?.trim() || undefined
       };
 
       const response = await biometricLoginApi(payload);
-      const data = response.data;
+      const respData = response.data;
 
-      if (data.token && data.user) {
-        showToast(data.message || 'Biometric login successful', 'success');
-        loginUser(data.token, data.user.role, data.user, data.refreshToken);
+      if (respData.token && respData.user) {
+        showToast(respData.message || 'Biometric login successful', 'success');
+        loginUser(respData.token, respData.user.role, respData.user, respData.refreshToken);
       }
     } catch (err) {
       console.error('Biometric login error:', err);
       if (err.name === 'NotAllowedError') {
-        showToast('Biometric authentication was denied or timed out', 'error');
+        showToast('Biometric authentication was cancelled or timed out', 'error');
       } else if (err.name === 'InvalidStateError') {
-        showToast('No passkey registered on this device. Please register first.', 'error');
+        showToast('No passkey registered on this device. Login normally first, then register biometrics in Settings.', 'error');
+      } else if (err.name === 'SecurityError') {
+        showToast('Biometrics require HTTPS in production', 'error');
       } else {
         showToast(err.response?.data?.message || 'Biometric login failed', 'error');
       }
