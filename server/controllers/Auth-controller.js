@@ -14,11 +14,11 @@ const extractDeviceInfo = (req) => {
   const ip = req.clientIp || req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '';
   return {
     ip,
-    deviceId:    req.headers['x-device-id'] || req.body?.deviceId || '',
+    deviceId: req.headers['x-device-id'] || req.body?.deviceId || '',
     fingerprint: req.deviceFingerprint || req.body?.fingerprint || '',
-    ipHash:      ip ? crypto.createHash('sha256').update(ip).digest('hex') : '',
-    userAgent:   req.headers['user-agent'] || '',
-    platform:    req.headers['x-device-platform'] || ''
+    ipHash: ip ? crypto.createHash('sha256').update(ip).digest('hex') : '',
+    userAgent: req.headers['user-agent'] || '',
+    platform: req.headers['x-device-platform'] || ''
   };
 };
 
@@ -197,7 +197,7 @@ exports.Login = async (req, res) => {
     const token = jwt.sign(
       { id: user._id, email: user.email, role: userType === 'admin' ? 'admin' : user.role || userType },
       process.env.JWT_SECRET,
-      { expiresIn: '30d' }
+      { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m' }
     );
 
     // Prepare response data
@@ -532,8 +532,8 @@ exports.firebaseLogin = async (req, res) => {
 
     const { uid, email, phone_number, name, picture, firebase: fbData } = decoded;
     const signInProvider = fbData?.sign_in_provider || 'google.com';
-    const authProvider   = signInProvider === 'phone' ? 'phone' : 'google';
-    const deviceInfo     = extractDeviceInfo(req);
+    const authProvider = signInProvider === 'phone' ? 'phone' : 'google';
+    const deviceInfo = extractDeviceInfo(req);
 
     // 2. Find or create user
     let user, userType;
@@ -579,7 +579,7 @@ exports.firebaseLogin = async (req, res) => {
         return res.status(503).json({ success: false, maintenance: true, message: s.maintenanceMode.customer.message });
       if (userType === 'provider' && s?.maintenanceMode?.provider?.enabled)
         return res.status(503).json({ success: false, maintenance: true, message: s.maintenanceMode.provider.message });
-    } catch (e) {}
+    } catch (e) { }
 
     if (userType === 'provider') {
       if (!user.profileComplete)
@@ -600,7 +600,7 @@ exports.firebaseLogin = async (req, res) => {
     const accessToken = jwt.sign(
       { id: user._id, email: user.email, role: userType === 'provider' ? 'provider' : 'customer' },
       process.env.JWT_SECRET,
-      { expiresIn: '30d' }
+      { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m' }
     );
     const { raw: refreshTokenRaw } = user.generateRefreshToken(deviceInfo);
 
@@ -612,9 +612,11 @@ exports.firebaseLogin = async (req, res) => {
 
     // 7. Fraud track
     const { trackEvent } = require('../middlewares/fraud-middleware');
-    await trackEvent({ req, actionType: 'login', userId: user._id,
+    await trackEvent({
+      req, actionType: 'login', userId: user._id,
       userModel: userType === 'provider' ? 'Provider' : 'User',
-      role: userType, flagReason: `Firebase ${authProvider} login` });
+      role: userType, flagReason: `Firebase ${authProvider} login`
+    });
 
     const userData = {
       _id: user._id, name: user.name, email: user.email,
@@ -648,9 +650,9 @@ exports.refreshAccessToken = async (req, res) => {
     // Search all collections for matching valid token
     let user, userType, Model;
     const collections = [
-      { model: User,     type: 'customer' },
+      { model: User, type: 'customer' },
       { model: Provider, type: 'provider' },
-      { model: Admin,    type: 'admin'    }
+      { model: Admin, type: 'admin' }
     ];
 
     for (const { model, type } of collections) {
@@ -674,7 +676,7 @@ exports.refreshAccessToken = async (req, res) => {
     const accessToken = jwt.sign(
       { id: user._id, email: user.email, role: userType === 'admin' ? 'admin' : user.role || userType },
       process.env.JWT_SECRET,
-      { expiresIn: '30d' }
+      { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m' }
     );
     const deviceInfo = extractDeviceInfo(req);
     const { raw: newRefreshRaw } = user.generateRefreshToken(deviceInfo);
@@ -727,6 +729,165 @@ exports.logout = async (req, res) => {
     return res.status(200).json({ success: true, message: allDevices ? 'Logged out from all devices' : 'Logged out successfully' });
   } catch (err) {
     console.error('Logout error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Biometric (WebAuthn) — Register a passkey credential for logged-in user
+// POST /api/auth/biometric/register
+// Body: { credentialId, publicKey, deviceName }
+// Requires: valid JWT (user already logged in)
+// ─────────────────────────────────────────────────────────────────────────────
+exports.registerBiometric = async (req, res) => {
+  try {
+    const { credentialId, publicKey, deviceName } = req.body;
+    if (!credentialId || !publicKey) {
+      return res.status(400).json({ success: false, message: 'credentialId and publicKey are required' });
+    }
+
+    // req.user is set by auth middleware
+    const userId = req.user?._id || req.userId;
+    if (!userId) return res.status(401).json({ success: false, message: 'Authentication required' });
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    // Prevent duplicate credential ID
+    const alreadyRegistered = user.biometricCredentials?.some(c => c.credentialId === credentialId);
+    if (alreadyRegistered) {
+      return res.status(409).json({ success: false, message: 'Credential already registered on this device' });
+    }
+
+    // Cap at 5 registered devices
+    if ((user.biometricCredentials || []).length >= 5) {
+      user.biometricCredentials.shift(); // remove oldest
+    }
+
+    if (!user.biometricCredentials) user.biometricCredentials = [];
+    user.biometricCredentials.push({
+      credentialId,
+      publicKey,
+      counter: 0,
+      deviceId: req.headers['x-device-id'] || '',
+      deviceName: deviceName || req.headers['user-agent']?.substring(0, 50) || 'Unknown Device'
+    });
+    user.biometricEnabled = true;
+    await user.save();
+
+    return res.status(200).json({ success: true, message: 'Biometric credential registered successfully' });
+  } catch (err) {
+    console.error('Biometric register error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Biometric (WebAuthn) — Authenticate with a passkey
+// POST /api/auth/biometric/login
+// Body: { credentialId, signature, authenticatorData, clientDataJSON, userEmail }
+// ─────────────────────────────────────────────────────────────────────────────
+exports.biometricLogin = async (req, res) => {
+  try {
+    const { credentialId, signature, authenticatorData, clientDataJSON, userEmail } = req.body;
+    if (!credentialId || !signature || !authenticatorData || !clientDataJSON) {
+      return res.status(400).json({ success: false, message: 'Missing biometric assertion data' });
+    }
+
+    // Find user by credentialId (search across all users with this credential)
+    let user = await User.findOne({ 'biometricCredentials.credentialId': credentialId });
+
+    // If not found by credential alone, try by email (for multi-account devices)
+    if (!user && userEmail) {
+      user = await User.findOne({
+        email: userEmail.toLowerCase().trim(),
+        'biometricCredentials.credentialId': credentialId
+      });
+    }
+
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Biometric credential not found. Please register this device first.' });
+    }
+
+    const cred = user.biometricCredentials.find(c => c.credentialId === credentialId);
+    if (!cred) return res.status(401).json({ success: false, message: 'Credential mismatch' });
+
+    // ── WebAuthn signature verification ─────────────────────────────────────
+    // Parse client data to check origin and challenge
+    let clientData;
+    try {
+      const clientDataBuf = Buffer.from(clientDataJSON, 'base64');
+      clientData = JSON.parse(clientDataBuf.toString('utf8'));
+    } catch {
+      return res.status(400).json({ success: false, message: 'Invalid clientDataJSON' });
+    }
+
+    const expectedOrigins = [
+      process.env.FRONTEND_URL
+    ].filter(Boolean);
+
+    if (!expectedOrigins.some(o => clientData.origin?.startsWith(o))) {
+      return res.status(401).json({ success: false, message: 'Origin mismatch — possible replay attack' });
+    }
+
+    // Verify the EC signature using the stored public key
+    try {
+      const authDataBuf = Buffer.from(authenticatorData, 'base64');
+      const clientDataHash = crypto.createHash('sha256').update(Buffer.from(clientDataJSON, 'base64')).digest();
+      const signedData = Buffer.concat([authDataBuf, clientDataHash]);
+      const sigBuf = Buffer.from(signature, 'base64');
+
+      // The public key is stored as a base64-encoded SubjectPublicKeyInfo (SPKI) DER
+      const publicKeyObj = crypto.createPublicKey({
+        key: Buffer.from(cred.publicKey, 'base64'),
+        format: 'der',
+        type: 'spki'
+      });
+
+      const isValid = crypto.verify('SHA256', signedData, publicKeyObj, sigBuf);
+      if (!isValid) {
+        return res.status(401).json({ success: false, message: 'Biometric signature verification failed' });
+      }
+    } catch (verifyErr) {
+      console.error('Biometric verify error:', verifyErr.message);
+      return res.status(401).json({ success: false, message: 'Biometric verification error' });
+    }
+
+    // Update counter & lastUsed
+    cred.counter += 1;
+    cred.lastUsed = new Date();
+
+    // Check for suspended account
+    if (user.isSuspended) {
+      return res.status(403).json({ success: false, message: 'Account suspended. Contact support.' });
+    }
+
+    // Issue tokens
+    const deviceInfo = extractDeviceInfo(req);
+    const token = jwt.sign(
+      { id: user._id, email: user.email, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m' }
+    );
+    const { raw: refreshTokenRaw } = user.generateRefreshToken(deviceInfo);
+    recordLoginHistory(user, deviceInfo, 'biometric', true);
+    registerDevice(user, deviceInfo);
+    await user.save();
+
+    const userData = {
+      _id: user._id, name: user.name, email: user.email,
+      role: user.role, phone: user.phone, profilePicUrl: user.profilePicUrl
+    };
+
+    return res.status(200).json({
+      success: true,
+      message: 'Biometric login successful',
+      token,
+      refreshToken: refreshTokenRaw,
+      user: userData
+    });
+  } catch (err) {
+    console.error('Biometric login error:', err);
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 };

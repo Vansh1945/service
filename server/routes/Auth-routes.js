@@ -56,4 +56,11 @@ router.post('/refresh-token', refreshLimiter, authController.refreshAccessToken)
 // Body: { refreshToken: string, allDevices?: boolean }
 router.post('/logout', authController.logout);
 
+// ── Biometric / WebAuthn ──────────────────────────────────────────────────
+// Register: user must be logged-in (sends standard JWT). Stores passkey credential.
+const { userAuthMiddleware } = require('../middlewares/User-middleware');
+router.post('/biometric/register', userAuthMiddleware, authController.registerBiometric);
+// Login: verifies WebAuthn assertion, issues JWT + refresh token
+router.post('/biometric/login', authController.biometricLogin);
+
 module.exports = router;
