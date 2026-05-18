@@ -216,7 +216,13 @@ const register = async (req, res) => {
       password: password,
       phone: phone.trim().replace(/\s+/g, ''),
       profilePicUrl,
-      role: 'customer'
+      role: 'customer',
+      metadata: {
+        ip: req.clientIp || req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+        device: req.deviceFingerprint || '',
+        userAgent: req.headers['user-agent'],
+        lastLogin: new Date()
+      }
     };
 
     // Add address if provided
@@ -229,6 +235,29 @@ const register = async (req, res) => {
     }
 
     const user = await User.create(userData);
+
+    // Track registration event with threshold check (>3 accounts in 24h)
+    const FraudLog = require('../models/FraudLog-model');
+    const recentRegistrations = await FraudLog.countDocuments({
+      ip: req.clientIp,
+      actionType: 'registration',
+      createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+    });
+
+    const isSuspicious = recentRegistrations >= 3;
+    const flagReason = isSuspicious ? 'More than 3 accounts registered from same IP in 24 hours' : 'Normal registration';
+
+    const { trackEvent } = require('../middlewares/fraud-middleware');
+    await trackEvent({
+      req,
+      actionType: 'registration',
+      userId: user._id,
+      userModel: 'User',
+      role: 'customer',
+      fraudScore: isSuspicious ? 60 : 0,
+      riskLevel: isSuspicious ? 'HIGH' : 'LOW',
+      flagReason
+    });
 
     // Generate JWT token
     const token = user.generateJWT();

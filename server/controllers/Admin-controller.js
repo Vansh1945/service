@@ -2329,6 +2329,9 @@ module.exports = {
     getSameIPFraud,
     getDeviceAbuse,
     getCancellationAlerts,
+    markFraudLogSafe,
+    addFraudLogNote,
+    suspendUserAccount,
 };
 
 /**
@@ -2336,47 +2339,71 @@ module.exports = {
  */
 async function getSameIPFraud(req, res) {
     try {
-        // Aggregate Users by IP
-        const userGroups = await User.aggregate([
-            { $match: { "metadata.ip": { $exists: true, $ne: null } } },
+        const FraudLog = require('../models/FraudLog-model');
+        const { page = 1, limit = 20, risk, date } = req.query;
+        const skip = (page - 1) * limit;
+
+        let match = { ip: { $exists: true, $ne: '0.0.0.0' } };
+        if (risk) match.riskLevel = risk;
+        if (date) {
+            const now = new Date();
+            if (date === '24h') match.createdAt = { $gte: new Date(now - 24 * 60 * 60 * 1000) };
+            if (date === '7d') match.createdAt = { $gte: new Date(now - 7 * 24 * 60 * 60 * 1000) };
+            if (date === '30d') match.createdAt = { $gte: new Date(now - 30 * 24 * 60 * 60 * 1000) };
+        }
+
+        const pipeline = [
+            { $match: match },
             {
                 $group: {
-                    _id: "$metadata.ip",
-                    count: { $sum: 1 },
-                    users: { $push: { _id: "$_id", name: "$name", email: "$email", role: "$role" } }
+                    _id: "$ip",
+                    logsCount: { $sum: 1 },
+                    maxFraudScore: { $max: "$fraudScore" },
+                    riskLevel: { $first: "$riskLevel" },
+                    userIds: { $addToSet: "$userId" },
+                    failedLogins: { $sum: { $cond: [{ $eq: ["$actionType", "failed_login"] }, 1, 0] } },
+                    registrations: { $sum: { $cond: [{ $eq: ["$actionType", "registration"] }, 1, 0] } },
+                    logins: { $sum: { $cond: [{ $eq: ["$actionType", "login"] }, 1, 0] } },
+                    lastActive: { $max: "$createdAt" },
+                    isFlagged: { $first: "$isFlagged" },
+                    isSafe: { $first: "$isSafe" }
                 }
             },
-            { $match: { count: { $gt: 1 } } },
-            { $sort: { count: -1 } }
-        ]);
-
-        // Aggregate Bookings by IP
-        const bookingGroups = await Booking.aggregate([
-            { $match: { "metadata.ip": { $exists: true, $ne: null } } },
+            // Filter out IPs with only 1 log and low activity
+            { $match: { $or: [{ "userIds.1": { $exists: true } }, { logsCount: { $gt: 2 } }] } },
+            { $sort: { maxFraudScore: -1, lastActive: -1 } },
             {
-                $group: {
-                    _id: "$metadata.ip",
-                    count: { $sum: 1 },
-                    bookings: { $push: { _id: "$_id", bookingId: "$bookingId", customer: "$customer" } }
+                $facet: {
+                    metadata: [{ $count: "total" }],
+                    data: [{ $skip: Number(skip) }, { $limit: Number(limit) }]
                 }
-            },
-            { $match: { count: { $gt: 5 } } }, // Excessive activity threshold
-            { $sort: { count: -1 } }
-        ]);
+            }
+        ];
 
-        // Combine results
-        const result = userGroups.map(group => {
-            const bGroup = bookingGroups.find(bg => bg._id === group._id);
-            return {
-                suspiciousIP: group._id,
-                totalAccounts: group.count,
-                totalBookings: bGroup ? bGroup.count : 0,
-                users: group.users,
-                providers: [] // Add logic if provider model also stores IP
-            };
+        const result = await FraudLog.aggregate(pipeline);
+        const total = result[0]?.metadata[0]?.total || 0;
+        let items = result[0]?.data || [];
+
+        // Manually populate users and providers
+        for (let item of items) {
+            const validUserIds = item.userIds.filter(Boolean);
+            const [users, providers] = await Promise.all([
+                User.find({ _id: { $in: validUserIds } }).select('name email phone role metadata.device isSuspended'),
+                Provider.find({ _id: { $in: validUserIds } }).select('name email phone role metadata.device isSuspended')
+            ]);
+            item.users = [...users, ...providers];
+        }
+
+        res.status(200).json({
+            success: true,
+            data: items,
+            pagination: {
+                total,
+                page: Number(page),
+                limit: Number(limit),
+                pages: Math.ceil(total / limit)
+            }
         });
-
-        res.status(200).json({ success: true, data: result });
     } catch (error) {
         console.error('Same IP Detection Error:', error);
         res.status(500).json({ success: false, message: 'Server error' });
@@ -2388,26 +2415,70 @@ async function getSameIPFraud(req, res) {
  */
 async function getDeviceAbuse(req, res) {
     try {
-        const deviceGroups = await User.aggregate([
-            { $match: { "metadata.userAgent": { $exists: true, $ne: null } } },
+        const FraudLog = require('../models/FraudLog-model');
+        const { page = 1, limit = 20, risk, date } = req.query;
+        const skip = (page - 1) * limit;
+
+        let match = { device: { $exists: true, $ne: 'N/A' } };
+        if (risk) match.riskLevel = risk;
+        if (date) {
+            const now = new Date();
+            if (date === '24h') match.createdAt = { $gte: new Date(now - 24 * 60 * 60 * 1000) };
+            if (date === '7d') match.createdAt = { $gte: new Date(now - 7 * 24 * 60 * 60 * 1000) };
+            if (date === '30d') match.createdAt = { $gte: new Date(now - 30 * 24 * 60 * 60 * 1000) };
+        }
+
+        const pipeline = [
+            { $match: match },
             {
                 $group: {
-                    _id: "$metadata.userAgent",
-                    count: { $sum: 1 },
-                    users: { $push: { _id: "$_id", name: "$name", email: "$email" } }
+                    _id: "$device",
+                    deviceDetails: { $first: "$deviceDetails" },
+                    logsCount: { $sum: 1 },
+                    maxFraudScore: { $max: "$fraudScore" },
+                    riskLevel: { $first: "$riskLevel" },
+                    userIds: { $addToSet: "$userId" },
+                    otpRequests: { $sum: { $cond: [{ $eq: ["$actionType", "otp_request"] }, 1, 0] } },
+                    cancellations: { $sum: { $cond: [{ $eq: ["$actionType", "cancellation"] }, 1, 0] } },
+                    lastActive: { $max: "$createdAt" },
+                    isFlagged: { $first: "$isFlagged" },
+                    isSafe: { $first: "$isSafe" }
                 }
             },
-            { $match: { count: { $gt: 2 } } },
-            { $sort: { count: -1 } }
-        ]);
+            // Filter suspicious device: multiple accounts, otp request spam, or cancellation abuse
+            { $match: { $or: [{ "userIds.1": { $exists: true } }, { logsCount: { $gt: 2 } }] } },
+            { $sort: { maxFraudScore: -1, lastActive: -1 } },
+            {
+                $facet: {
+                    metadata: [{ $count: "total" }],
+                    data: [{ $skip: Number(skip) }, { $limit: Number(limit) }]
+                }
+            }
+        ];
+
+        const result = await FraudLog.aggregate(pipeline);
+        const total = result[0]?.metadata[0]?.total || 0;
+        let items = result[0]?.data || [];
+
+        // Manually populate users and providers
+        for (let item of items) {
+            const validUserIds = item.userIds.filter(Boolean);
+            const [users, providers] = await Promise.all([
+                User.find({ _id: { $in: validUserIds } }).select('name email phone role metadata.ip isSuspended'),
+                Provider.find({ _id: { $in: validUserIds } }).select('name email phone role metadata.ip isSuspended')
+            ]);
+            item.users = [...users, ...providers];
+        }
 
         res.status(200).json({
             success: true,
-            data: deviceGroups.map(g => ({
-                device: g._id,
-                accounts: g.count,
-                users: g.users
-            }))
+            data: items,
+            pagination: {
+                total,
+                page: Number(page),
+                limit: Number(limit),
+                pages: Math.ceil(total / limit)
+            }
         });
     } catch (error) {
         console.error('Device Abuse Error:', error);
@@ -2420,52 +2491,181 @@ async function getDeviceAbuse(req, res) {
  */
 async function getCancellationAlerts(req, res) {
     try {
-        const alerts = await Booking.aggregate([
-            {
-                $group: {
-                    _id: "$customer",
-                    totalBookings: { $sum: 1 },
-                    cancelledBookings: {
-                        $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0] }
-                    }
-                }
-            },
-            {
-                $addFields: {
-                    cancellationRate: {
-                        $cond: [
-                            { $gt: ["$totalBookings", 0] },
-                            { $multiply: [{ $divide: ["$cancelledBookings", "$totalBookings"] }, 100] },
-                            0
-                        ]
-                    }
-                }
-            },
-            { $match: { cancellationRate: { $gt: 30 }, totalBookings: { $gt: 2 } } },
-            {
-                $lookup: {
-                    from: "users",
-                    localField: "_id",
-                    foreignField: "_id",
-                    as: "user"
-                }
-            },
-            { $unwind: "$user" },
-            {
-                $project: {
-                    user: { _id: 1, name: 1, email: 1, role: 1 },
-                    totalBookings: 1,
-                    cancelledBookings: 1,
-                    cancellationRate: 1,
-                    suspicious: { $gt: ["$cancellationRate", 50] }
-                }
-            },
-            { $sort: { cancellationRate: -1 } }
-        ]);
+        const FraudLog = require('../models/FraudLog-model');
+        const { page = 1, limit = 20, risk, date } = req.query;
+        const skip = (page - 1) * limit;
 
-        res.status(200).json({ success: true, data: alerts });
+        let match = { actionType: 'cancellation' };
+        if (risk) match.riskLevel = risk;
+        if (date) {
+            const now = new Date();
+            if (date === '24h') match.createdAt = { $gte: new Date(now - 24 * 60 * 60 * 1000) };
+            if (date === '7d') match.createdAt = { $gte: new Date(now - 7 * 24 * 60 * 60 * 1000) };
+            if (date === '30d') match.createdAt = { $gte: new Date(now - 30 * 24 * 60 * 60 * 1000) };
+        }
+
+        const pipeline = [
+            { $match: match },
+            { $sort: { createdAt: -1 } },
+            {
+                $facet: {
+                    metadata: [{ $count: "total" }],
+                    data: [{ $skip: Number(skip) }, { $limit: Number(limit) }]
+                }
+            }
+        ];
+
+        const result = await FraudLog.aggregate(pipeline);
+        const total = result[0]?.metadata[0]?.total || 0;
+        let items = result[0]?.data || [];
+
+        // Manually populate customer, provider, and booking details
+        for (let item of items) {
+            if (item.userId) {
+                const model = item.userModel === 'Provider' ? Provider : User;
+                item.user = await model.findById(item.userId).select('name email phone role isSuspended');
+            }
+            if (item.bookingId) {
+                item.booking = await Booking.findById(item.bookingId)
+                    .select('bookingId services status totalAmount createdAt')
+                    .populate('provider', 'name email phone');
+            }
+        }
+
+        res.status(200).json({
+            success: true,
+            data: items,
+            pagination: {
+                total,
+                page: Number(page),
+                limit: Number(limit),
+                pages: Math.ceil(total / limit)
+            }
+        });
     } catch (error) {
         console.error('Cancellation Alert Error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+}
+
+/**
+ * 4️⃣ MANUAL FRAUD RISK OVERRIDE
+ */
+async function markFraudLogSafe(req, res) {
+    try {
+        const FraudLog = require('../models/FraudLog-model');
+        const { id } = req.params;
+        const { isSafe } = req.body;
+
+        const log = await FraudLog.findById(id);
+        if (!log) {
+            return res.status(404).json({ success: false, message: 'Fraud log not found' });
+        }
+
+        log.isSafe = isSafe;
+        log.status = isSafe ? 'safe' : 'pending_review';
+        if (isSafe) {
+            log.riskLevel = 'LOW';
+            log.fraudScore = 0;
+        }
+        await log.save();
+
+        // Propagate override status to all other matching IP/Device logs for systemic consistency
+        if (log.ip && log.ip !== '0.0.0.0') {
+            await FraudLog.updateMany(
+                { ip: log.ip },
+                { isSafe, status: log.status, riskLevel: log.riskLevel, fraudScore: log.fraudScore }
+            );
+        }
+        if (log.device && log.device !== 'N/A') {
+            await FraudLog.updateMany(
+                { device: log.device },
+                { isSafe, status: log.status, riskLevel: log.riskLevel, fraudScore: log.fraudScore }
+            );
+        }
+
+        res.status(200).json({
+            success: true,
+            message: `Identified threat successfully marked as ${isSafe ? 'safe' : 'under investigation'}.`,
+            data: log
+        });
+    } catch (error) {
+        console.error('markFraudLogSafe Error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+}
+
+/**
+ * 5️⃣ ADD INVESTIGATION NOTES
+ */
+async function addFraudLogNote(req, res) {
+    try {
+        const FraudLog = require('../models/FraudLog-model');
+        const { id } = req.params;
+        const { note } = req.body;
+
+        const log = await FraudLog.findById(id);
+        if (!log) {
+            return res.status(404).json({ success: false, message: 'Fraud log not found' });
+        }
+
+        log.notes.push({
+            note,
+            admin: req.admin?._id || null, // from adminAuthMiddleware
+            createdAt: new Date()
+        });
+        log.status = 'investigated';
+        await log.save();
+
+        res.status(200).json({
+            success: true,
+            message: 'Investigation note added successfully',
+            data: log
+        });
+    } catch (error) {
+        console.error('addFraudLogNote Error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+}
+
+/**
+ * 6️⃣ TEMPORARY/PERMANENT SUSPENSION
+ */
+async function suspendUserAccount(req, res) {
+    try {
+        const FraudLog = require('../models/FraudLog-model');
+        const { userId } = req.params;
+        const { suspend, reason } = req.body;
+
+        let user = await User.findById(userId);
+        let role = 'customer';
+
+        if (!user) {
+            user = await Provider.findById(userId);
+            role = 'provider';
+        }
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User or Provider not found' });
+        }
+
+        user.isSuspended = suspend;
+        user.suspensionReason = suspend ? reason : undefined;
+        await user.save();
+
+        // Update status of all logs associated with this user
+        await FraudLog.updateMany(
+            { userId },
+            { status: suspend ? 'suspended' : 'investigated' }
+        );
+
+        res.status(200).json({
+            success: true,
+            message: `Account has been successfully ${suspend ? 'suspended' : 'reactivated'}.`,
+            data: { userId, isSuspended: suspend, role }
+        });
+    } catch (error) {
+        console.error('suspendUserAccount Error:', error);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 }

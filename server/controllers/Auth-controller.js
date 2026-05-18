@@ -49,12 +49,19 @@ exports.Login = async (req, res) => {
 
     // If no user found
     if (!user) {
+      const { trackEvent } = require('../middlewares/fraud-middleware');
+      await trackEvent({
+        req,
+        actionType: 'failed_login',
+        flagReason: `Failed login attempt: Email ${trimmedEmail} not found`,
+        role: 'customer'
+      });
+      if (global.logger) global.logger.warn(`Failed login attempt: Email ${trimmedEmail} not found`);
+
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password'
       });
-        if (global.logger) global.logger.warn(`Failed login attempt for email: ${email}`);
-
     }
 
 
@@ -71,9 +78,28 @@ exports.Login = async (req, res) => {
     }
 
     if (!isMatch) {
+      const { trackEvent } = require('../middlewares/fraud-middleware');
+      await trackEvent({
+        req,
+        actionType: 'failed_login',
+        userId: user._id,
+        userModel: userType === 'admin' ? 'Admin' : (userType === 'provider' ? 'Provider' : 'User'),
+        role: userType === 'admin' ? 'admin' : (userType === 'provider' ? 'provider' : 'customer'),
+        flagReason: `Failed login attempt: Incorrect password for ${trimmedEmail}`
+      });
+      if (global.logger) global.logger.warn(`Failed login attempt: Incorrect password for ${trimmedEmail}`);
+
       return res.status(401).json({
         success: false,
         message: 'Invalid credentials'
+      });
+    }
+
+    // Check if user is suspended
+    if (user.isSuspended) {
+      return res.status(403).json({
+        success: false,
+        message: `Your account has been suspended. Reason: ${user.suspensionReason || 'Suspicious/fraudulent activity detected.'}`
       });
     }
 
@@ -165,12 +191,25 @@ exports.Login = async (req, res) => {
     };
 
     // Capture fraud detection data
-    user.metadata = {
-      ip: req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress,
-      userAgent: req.headers['user-agent'],
-      lastLogin: new Date()
-    };
-    await user.save();
+    if (userType !== 'admin') {
+      user.metadata = {
+        ip: req.clientIp || req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+        device: req.deviceFingerprint || '',
+        userAgent: req.headers['user-agent'],
+        lastLogin: new Date()
+      };
+      await user.save();
+    }
+
+    const { trackEvent } = require('../middlewares/fraud-middleware');
+    await trackEvent({
+      req,
+      actionType: 'login',
+      userId: user._id,
+      userModel: userType === 'admin' ? 'Admin' : (userType === 'provider' ? 'Provider' : 'User'),
+      role: userType === 'admin' ? 'admin' : (userType === 'provider' ? 'provider' : 'customer'),
+      flagReason: 'Successful login'
+    });
 
     res.status(200).json({
       success: true,
@@ -222,6 +261,27 @@ exports.forgotPassword = async (req, res) => {
     }
 
     const otpResponse = await sendOTP(normalizedEmail, fcmToken);
+
+    // Track OTP request event
+    let userModel = 'User';
+    let role = 'customer';
+    if (user.providerId) {
+      userModel = 'Provider';
+      role = 'provider';
+    } else if (user.role === 'admin') {
+      userModel = 'Admin';
+      role = 'admin';
+    }
+
+    const { trackEvent } = require('../middlewares/fraud-middleware');
+    await trackEvent({
+      req,
+      actionType: 'otp_request',
+      userId: user._id,
+      userModel,
+      role,
+      flagReason: 'Forgot password OTP request'
+    });
 
     res.status(200).json({
       success: true,
@@ -392,6 +452,29 @@ exports.resendOTP = async (req, res) => {
 
     // Send new OTP
     const otpResponse = await sendOTP(normalizedEmail, fcmToken);
+
+    // Track OTP request event
+    if (user) {
+      let userModel = 'User';
+      let role = 'customer';
+      if (user.providerId) {
+        userModel = 'Provider';
+        role = 'provider';
+      } else if (user.role === 'admin') {
+        userModel = 'Admin';
+        role = 'admin';
+      }
+
+      const { trackEvent } = require('../middlewares/fraud-middleware');
+      await trackEvent({
+        req,
+        actionType: 'otp_request',
+        userId: user._id,
+        userModel,
+        role,
+        flagReason: 'Resend OTP request'
+      });
+    }
 
     res.status(200).json({
       success: true,

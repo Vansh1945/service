@@ -99,9 +99,15 @@ const userSchema = new mongoose.Schema({
   },
   metadata: {
     ip: String,
+    device: String,
     userAgent: String,
     lastLogin: Date
-  }
+  },
+  isSuspended: {
+    type: Boolean,
+    default: false
+  },
+  suspensionReason: String
 }, {
   timestamps: true
 });

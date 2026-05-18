@@ -55,6 +55,9 @@ router.patch('/payout/:bookingId/hold', validateBody(togglePayoutHoldSchema), ad
 router.get('/fraud/same-ip', adminController.getSameIPFraud);
 router.get('/fraud/device-abuse', adminController.getDeviceAbuse);
 router.get('/fraud/cancellation-alerts', adminController.getCancellationAlerts);
+router.patch('/fraud/:id/safe', adminController.markFraudLogSafe);
+router.post('/fraud/:id/notes', adminController.addFraudLogNote);
+router.patch('/fraud/user/:userId/suspend', adminController.suspendUserAccount);
 // System Logs
 router.get('/system-logs', adminController.getSystemLogs);
 

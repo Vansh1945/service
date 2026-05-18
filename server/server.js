@@ -47,6 +47,9 @@ const app = express();
 
 app.use(express.json());
 
+const { parseFraudHeaders } = require('./middlewares/fraud-middleware');
+app.use(parseFraudHeaders);
+
 // Morgan API Request Logging
 app.use(morgan((tokens, req, res) => {
   let url = tokens.url(req, res);
@@ -87,7 +90,16 @@ const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'x-device-screenresolution',
+    'x-device-timezone',
+    'x-device-language',
+    'x-device-platform',
+    'x-device-hardwareconcurrency',
+    'x-device-devicememory'
+  ]
 };
 
 app.use(cors(corsOptions));

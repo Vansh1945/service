@@ -1169,6 +1169,108 @@ const getBooking = async (req, res) => {
   }
 };
 
+// Fraud helper for booking cancellations
+const logCancellationFraud = async (req, booking, userId, role) => {
+  try {
+    const now = new Date();
+    const oneDayAgo = new Date(now - 24 * 60 * 60 * 1000);
+    
+    // Calculate dynamic risk parameters
+    const userCancellations = await mongoose.model('Booking').countDocuments({
+      customer: booking.customer,
+      status: 'cancelled',
+      'cancellationProgress.cancelledAt': { $gte: oneDayAgo }
+    });
+
+    let providerCancellations = 0;
+    if (booking.provider) {
+      providerCancellations = await mongoose.model('Booking').countDocuments({
+        provider: booking.provider,
+        status: 'cancelled',
+        'cancellationProgress.cancelledAt': { $gte: oneDayAgo }
+      });
+    }
+
+    const FraudLog = require('../models/FraudLog-model');
+    const networkCancellations = await FraudLog.countDocuments({
+      $or: [
+        { ip: req.clientIp },
+        { device: req.deviceFingerprint }
+      ],
+      actionType: 'cancellation',
+      createdAt: { $gte: oneDayAgo }
+    });
+
+    const isImmediate = (now - new Date(booking.createdAt)) <= 5 * 60 * 1000;
+    let immediateCount = 0;
+    if (isImmediate) {
+      const pastBookings = await mongoose.model('Booking').find({
+        customer: booking.customer,
+        status: 'cancelled'
+      }).lean();
+      
+      for (const pb of pastBookings) {
+        const pbCreated = new Date(pb.createdAt);
+        const pbCancelled = pb.cancellationProgress?.cancelledAt ? new Date(pb.cancellationProgress.cancelledAt) : null;
+        if (pbCancelled && (pbCancelled - pbCreated) <= 5 * 60 * 1000) {
+          immediateCount++;
+        }
+      }
+    }
+
+    let fraudScore = 0;
+    let reasons = [];
+
+    if (userCancellations >= 3) {
+      fraudScore += 30;
+      reasons.push(`${userCancellations} user cancellations in 24h`);
+    }
+    if (providerCancellations >= 3) {
+      fraudScore += 35;
+      reasons.push(`${providerCancellations} provider cancellations in 24h`);
+    }
+    if (networkCancellations >= 5) {
+      fraudScore += 25;
+      reasons.push(`${networkCancellations} network cancellations in 24h`);
+    }
+    if (isImmediate && immediateCount >= 2) {
+      fraudScore += 40;
+      reasons.push('Repeated immediate post-booking cancellations');
+    }
+
+    let riskLevel = 'LOW';
+    if (fraudScore >= 70) {
+      riskLevel = 'HIGH';
+    } else if (fraudScore >= 40) {
+      riskLevel = 'MEDIUM';
+    }
+
+    // Cooldown check
+    const recentLog = await FraudLog.findOne({
+      userId,
+      actionType: 'cancellation',
+      createdAt: { $gte: new Date(Date.now() - 5 * 1000) }
+    });
+
+    if (!recentLog) {
+      const { trackEvent } = require('../middlewares/fraud-middleware');
+      await trackEvent({
+        req,
+        actionType: 'cancellation',
+        userId,
+        userModel: role === 'customer' ? 'User' : 'Provider',
+        role,
+        bookingId: booking._id,
+        fraudScore,
+        riskLevel,
+        flagReason: reasons.join(', ') || 'Normal booking cancellation'
+      });
+    }
+  } catch (err) {
+    console.error('logCancellationFraud error:', err);
+  }
+};
+
 // Cancel booking with e-commerce style progress tracking
 const cancelBooking = async (req, res) => {
   const session = await mongoose.startSession();
@@ -1247,6 +1349,9 @@ const cancelBooking = async (req, res) => {
 
       await session.commitTransaction();
       session.endSession();
+
+      // Track cancellation fraud in background (non-blocking)
+      logCancellationFraud(req, booking, userId, 'customer');
 
       // Notify customer that it's under review
       try {
@@ -1393,6 +1498,9 @@ const cancelBooking = async (req, res) => {
 
       await session.commitTransaction();
       session.endSession();
+
+      // Track cancellation fraud in background (non-blocking)
+      logCancellationFraud(req, booking, userId, 'customer');
 
       return res.json({
         success: true,
@@ -2172,6 +2280,9 @@ const rejectBooking = async (req, res) => {
 
     await session.commitTransaction();
     session.endSession();
+
+    // Track cancellation fraud in background (non-blocking)
+    logCancellationFraud(req, booking, providerId, 'provider');
 
     res.status(200).json({
       success: true,

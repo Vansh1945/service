@@ -107,6 +107,18 @@ export const getCancellationAlerts = () => {
     return axiosInstance.get("/admin/fraud/cancellation-alerts");
 };
 
+export const markFraudLogSafe = (id, data) => {
+    return axiosInstance.patch(`/admin/fraud/${id}/safe`, data);
+};
+
+export const addFraudLogNote = (id, data) => {
+    return axiosInstance.post(`/admin/fraud/${id}/notes`, data);
+};
+
+export const suspendUserAccount = (userId, data) => {
+    return axiosInstance.patch(`/admin/fraud/user/${userId}/suspend`, data);
+};
+
 
 // System Logs
 export const getSystemLogs = (params) => {

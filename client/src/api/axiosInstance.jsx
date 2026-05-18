@@ -32,6 +32,19 @@ api.interceptors.request.use(
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
+
+        // Attach secure, non-personally-identifiable device characteristics for SHA-256 fingerprinting
+        try {
+            config.headers['x-device-screenresolution'] = `${window.screen.width || 0}x${window.screen.height || 0}`;
+            config.headers['x-device-timezone'] = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+            config.headers['x-device-language'] = window.navigator.language || '';
+            config.headers['x-device-platform'] = window.navigator.platform || '';
+            config.headers['x-device-hardwareconcurrency'] = String(window.navigator.hardwareConcurrency || 0);
+            config.headers['x-device-devicememory'] = String(window.navigator.deviceMemory || 0);
+        } catch (e) {
+            console.warn("Failed to capture browser telemetry headers:", e);
+        }
+
         return config;
     },
     (error) => {
