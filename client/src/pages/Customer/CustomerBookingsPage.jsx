@@ -9,13 +9,13 @@ import {
   Calendar, Clock, MapPin, User, Phone, DollarSign, CheckCircle,
   XCircle, AlertCircle, Eye, Search, CreditCard, Star, Package,
   ShoppingCart, Timer, Wrench, Activity, Edit3, ChevronLeft,
-  ChevronRight, X, ChevronDown, ChevronUp, Wallet, ShieldAlert, Home, CheckSquare
+  ChevronRight, X, ChevronDown, ChevronUp, Wallet, ShieldAlert, ShieldCheck, Home, CheckSquare
 } from 'lucide-react';
 import { cancelBooking, userUpdateBookingDateTime, getCustomerBookings } from '../../services/BookingService';
 import Pagination from '../../components/Pagination';
 import { formatDate, formatDateTime, formatCurrency } from '../../utils/format';
 
-// ─── Pure helpers ─────────────────────────────────────────────────────────────
+// ─── Pure helpers ─────────────────
 
 const STATUS_CONFIG = {
   pending: { color: 'bg-amber-50 text-amber-700 border-amber-200', bar: 'bg-amber-400', icon: Timer, label: 'Finding Provider' },
@@ -36,6 +36,28 @@ const needsPayment = (b) => {
 };
 const canCancel = (b) => ['pending', 'accepted'].includes(b.status);
 const canReschedule = (b) => b.status === 'pending';
+
+const getStartPin = (booking) => {
+  if (!booking.statusHistory) return null;
+  for (const h of booking.statusHistory) {
+    if (h.note) {
+      const match = h.note.match(/START_PIN:(\d{4})/);
+      if (match) return match[1];
+    }
+  }
+  return null;
+};
+
+const getCompletionPin = (booking) => {
+  if (!booking.statusHistory) return null;
+  for (const h of booking.statusHistory) {
+    if (h.note) {
+      const match = h.note.match(/COMPLETION_PIN:(\d{4})/);
+      if (match) return match[1];
+    }
+  }
+  return null;
+};
 
 // ─── Status Badge ─────────────────────────────────────────────────────────────
 
@@ -364,6 +386,37 @@ const BookingModal = ({ booking, onClose, onPayNow, user }) => {
                     <span className="font-medium text-purple-600 font-bold flex items-center gap-1"><Wallet className="w-4 h-4" /> Refunded to Wallet</span>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Secure Verification PIN Card */}
+          {['scheduled', 'accepted', 'in-progress', 'in_progress'].includes(booking.status) && (
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl p-5 shadow-sm">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center border border-blue-200 text-blue-600 shadow-sm shrink-0">
+                  <ShieldCheck className="w-5 h-5 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-secondary text-sm">Secure Service Verification</h3>
+                  <p className="text-xs text-gray-500">Provide this PIN to your service professional when they arrive</p>
+                </div>
+              </div>
+              <div className="bg-white rounded-xl p-4 border border-blue-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <span className="text-[10px] font-black text-blue-600/60 uppercase tracking-widest block mb-0.5">
+                    {['in-progress', 'in_progress'].includes(booking.status) ? 'Completion Verification PIN' : 'Start Verification PIN'}
+                  </span>
+                  <span className="text-2xl font-black tracking-wider text-secondary font-mono">
+                    {['in-progress', 'in_progress'].includes(booking.status) ? (getCompletionPin(booking) || '••••') : (getStartPin(booking) || '••••')}
+                  </span>
+                </div>
+                <div className="text-xs text-gray-500 font-medium leading-relaxed max-w-[280px]">
+                  {['in-progress', 'in_progress'].includes(booking.status)
+                    ? 'Only share this completion PIN after the provider successfully finishes the work.'
+                    : 'Share this start PIN when the provider arrives at your location to begin the service.'
+                  }
+                </div>
               </div>
             </div>
           )}

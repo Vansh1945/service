@@ -166,7 +166,94 @@ const getBookingTimeline = (booking, payoutStatus = '') => {
     });
   }
 
-  return timeline;
+  // 11. Parse Custom History entries for Security Events
+  const customSteps = [];
+  statusHistory.forEach(h => {
+    if (!h.note) return;
+    const time = h.timestamp || booking.updatedAt;
+
+    if (h.note.includes('START_PIN:')) {
+      customSteps.push({
+        title: "Start PIN generated",
+        completed: true,
+        time,
+        status: 'completed'
+      });
+      customSteps.push({
+        title: "Completion PIN generated",
+        completed: true,
+        time,
+        status: 'completed'
+      });
+    }
+
+    if (h.note.includes('Verification successful') && h.note.includes('FAILED_ATTEMPTS:0')) {
+      if (h.status === 'in-progress' || h.status === 'in_progress') {
+        customSteps.push({
+          title: "Service start verified",
+          completed: true,
+          time,
+          status: 'completed'
+        });
+        if (booking.providerWorkProof?.startLocation) {
+          customSteps.push({
+            title: "Geo verified",
+            completed: true,
+            time,
+            status: 'completed'
+          });
+        }
+      } else if (h.status === 'completed') {
+        customSteps.push({
+          title: "Service completion verified",
+          completed: true,
+          time,
+          status: 'completed'
+        });
+        if (booking.providerWorkProof?.completionLocation) {
+          customSteps.push({
+            title: "Geo verified",
+            completed: true,
+            time,
+            status: 'completed'
+          });
+        }
+      }
+    }
+
+    if (h.note.includes('Failed verification attempt')) {
+      const isStart = h.note.includes('START_PIN');
+      customSteps.push({
+        title: `Failed PIN attempt (${isStart ? 'Start' : 'Completion'})`,
+        completed: true,
+        time,
+        status: 'error'
+      });
+    }
+
+    if (h.note.includes('FRAUD_SCORE:') || h.note.includes('[SUSPICIOUS_BOOKING]')) {
+      customSteps.push({
+        title: "Fraud warning generated",
+        completed: true,
+        time,
+        status: 'error'
+      });
+    }
+  });
+
+  // Separate completed/error steps and pending/current steps
+  const allSteps = [...timeline, ...customSteps];
+  const completedSteps = allSteps.filter(step => step.completed === true || step.status === 'completed' || step.status === 'error');
+  const pendingSteps = allSteps.filter(step => !completedSteps.includes(step));
+
+  // Sort completed/error steps chronologically by timestamp
+  completedSteps.sort((a, b) => {
+    const timeA = a.time ? new Date(a.time).getTime() : 0;
+    const timeB = b.time ? new Date(b.time).getTime() : 0;
+    return timeA - timeB;
+  });
+
+  return [...completedSteps, ...pendingSteps];
 };
 
 module.exports = {

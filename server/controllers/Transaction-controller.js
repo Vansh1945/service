@@ -405,7 +405,7 @@ const verifyPayment = async (req, res) => {
     await transaction.save({ session });
 
     booking.paymentStatus = 'paid';
-    booking.paymentMethod = transaction.paymentMethod;
+    booking.paymentMethod = ['online', 'cash', 'wallet', 'mixed'].includes(transaction.paymentMethod) ? transaction.paymentMethod : 'online';
     booking.confirmedBooking = true;
     if (booking.status !== 'accepted' && booking.status !== 'completed' && booking.status !== 'in-progress') {
       booking.status = 'pending';
@@ -565,7 +565,7 @@ const handleSuccessfulPayment = async (payment, session) => {
   }
 
   booking.paymentStatus = 'paid';
-  booking.paymentMethod = transaction.paymentMethod;
+  booking.paymentMethod = ['online', 'cash', 'wallet', 'mixed'].includes(transaction.paymentMethod) ? transaction.paymentMethod : 'online';
   booking.paidAmount = transaction.amount;
   booking.paymentDate = new Date();
   booking.confirmedBooking = true;
@@ -950,7 +950,7 @@ const adminRetryVerify = async (req, res) => {
 
     if (booking) {
       booking.paymentStatus = 'paid';
-      booking.paymentMethod = transaction.paymentMethod;
+      booking.paymentMethod = ['online', 'cash', 'wallet', 'mixed'].includes(transaction.paymentMethod) ? transaction.paymentMethod : 'online';
       booking.paidAmount = transaction.amount;
       booking.paymentDate = new Date();
       booking.confirmedBooking = true;

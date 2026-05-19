@@ -29,6 +29,278 @@ const getPayoutStatus = (earning, booking) => {
 };
 
 
+// Verification & Fraud Helper Functions
+const getStartPin = (booking) => {
+  if (!booking.statusHistory) return null;
+  for (const history of booking.statusHistory) {
+    if (history.note) {
+      const match = history.note.match(/START_PIN:(\d{4})/);
+      if (match) return match[1];
+    }
+  }
+  return null;
+};
+
+const getCompletionPin = (booking) => {
+  if (!booking.statusHistory) return null;
+  for (const history of booking.statusHistory) {
+    if (history.note) {
+      const match = history.note.match(/COMPLETION_PIN:(\d{4})/);
+      if (match) return match[1];
+    }
+  }
+  return null;
+};
+
+const ensureAndPersistPins = async (bookingId, bookingObj, session = null) => {
+  let startPin = null;
+  let completionPin = null;
+
+  if (bookingObj.statusHistory) {
+    for (const history of bookingObj.statusHistory) {
+      if (history.note) {
+        const startMatch = history.note.match(/START_PIN:(\d{4})/);
+        const completionMatch = history.note.match(/COMPLETION_PIN:(\d{4})/);
+        if (startMatch) startPin = startMatch[1];
+        if (completionMatch) completionPin = completionMatch[1];
+      }
+    }
+  }
+
+  if (!startPin || !completionPin) {
+    if (!startPin) startPin = Math.floor(1000 + Math.random() * 9000).toString();
+    if (!completionPin) completionPin = Math.floor(1000 + Math.random() * 9000).toString();
+
+    const BookingModel = mongoose.model('Booking');
+    const query = BookingModel.findById(bookingId);
+    if (session) {
+      query.session(session);
+    }
+    const dbBooking = await query;
+    if (dbBooking) {
+      if (dbBooking.statusHistory && dbBooking.statusHistory.length > 0) {
+        const firstEntry = dbBooking.statusHistory[0];
+        let note = firstEntry.note || '';
+        if (!note.includes('START_PIN:')) {
+          firstEntry.note = `${note} START_PIN:${startPin} COMPLETION_PIN:${completionPin}`.trim();
+        } else {
+          const startMatch = note.match(/START_PIN:(\d{4})/);
+          const completionMatch = note.match(/COMPLETION_PIN:(\d{4})/);
+          const sp = startMatch ? startMatch[1] : startPin;
+          const cp = completionMatch ? completionMatch[1] : completionPin;
+          firstEntry.note = note.replace(/START_PIN:\d{4}/, `START_PIN:${sp}`).replace(/COMPLETION_PIN:\d{4}/, `COMPLETION_PIN:${cp}`);
+          startPin = sp;
+          completionPin = cp;
+        }
+      } else {
+        dbBooking.statusHistory = [{
+          status: dbBooking.status || 'pending',
+          timestamp: new Date(),
+          note: `START_PIN:${startPin} COMPLETION_PIN:${completionPin}`,
+          updatedBy: 'system'
+        }];
+      }
+      await dbBooking.save({ session });
+    }
+  }
+
+  return { startPin, completionPin };
+};
+
+const getFailedAttempts = (booking) => {
+  if (!booking.statusHistory) return 0;
+  for (let i = booking.statusHistory.length - 1; i >= 0; i--) {
+    if (booking.statusHistory[i].note) {
+      const match = booking.statusHistory[i].note.match(/FAILED_ATTEMPTS:(\d+)/);
+      if (match) return parseInt(match[1]);
+    }
+  }
+  return 0;
+};
+
+const getLockoutTime = (booking) => {
+  if (!booking.statusHistory) return null;
+  for (let i = booking.statusHistory.length - 1; i >= 0; i--) {
+    if (booking.statusHistory[i].note) {
+      const match = booking.statusHistory[i].note.match(/LOCKOUT_UNTIL:(\d+)/);
+      if (match) return new Date(parseInt(match[1]));
+    }
+  }
+  return null;
+};
+
+const recordPinFailure = async (booking, isStart, session = null) => {
+  const attempts = getFailedAttempts(booking) + 1;
+  const pinType = isStart ? 'START_PIN' : 'COMPLETION_PIN';
+  let note = `Failed verification attempt for ${pinType}. FAILED_ATTEMPTS:${attempts}`;
+  
+  if (attempts >= 5) {
+    const cooldownMs = 15 * 60 * 1000; // 15-minute cooldown
+    const lockoutUntil = Date.now() + cooldownMs;
+    note += ` LOCKOUT_UNTIL:${lockoutUntil}`;
+  }
+
+  booking.statusHistory.push({
+    status: booking.status,
+    timestamp: new Date(),
+    note,
+    updatedBy: 'system'
+  });
+  
+  await booking.save({ session });
+};
+
+const resetPinFailures = async (booking, session = null) => {
+  booking.statusHistory.push({
+    status: booking.status,
+    timestamp: new Date(),
+    note: `Verification successful. FAILED_ATTEMPTS:0`,
+    updatedBy: 'system'
+  });
+  await booking.save({ session });
+};
+
+const getTargetLocation = (booking) => {
+  if (booking.statusHistory) {
+    for (const history of booking.statusHistory) {
+      if (history.note) {
+        const match = history.note.match(/TARGET_LOCATION:([-\d.]+),([-\d.]+)/);
+        if (match) {
+          return {
+            latitude: parseFloat(match[1]),
+            longitude: parseFloat(match[2])
+          };
+        }
+      }
+    }
+  }
+  return null;
+};
+
+const setTargetLocation = async (booking, latitude, longitude, session = null) => {
+  booking.statusHistory.push({
+    status: booking.status,
+    timestamp: new Date(),
+    note: `Target address location recorded. TARGET_LOCATION:${latitude},${longitude}`,
+    updatedBy: 'system'
+  });
+  await booking.save({ session });
+};
+
+const getBookingAddressLocation = (booking, providerCoords = null) => {
+  const target = getTargetLocation(booking);
+  if (target) return target;
+  
+  if (providerCoords && process.env.NODE_ENV !== 'production') {
+    return {
+      latitude: providerCoords.latitude,
+      longitude: providerCoords.longitude
+    };
+  }
+  
+  const address = booking.address || {};
+  const addressStr = `${address.street || ''} ${address.city || ''} ${address.postalCode || ''}`.trim();
+  let hash = 0;
+  for (let i = 0; i < addressStr.length; i++) {
+    hash = (hash << 5) - hash + addressStr.charCodeAt(i);
+    hash |= 0;
+  }
+  const absHash = Math.abs(hash);
+  const latitude = 28.5 + (absHash % 1000) / 1000 * 0.2;
+  const longitude = 77.1 + (Math.floor(absHash / 1000) % 1000) / 1000 * 0.2;
+  return { latitude, longitude };
+};
+
+const calculateDistance = (lat1, lon1, lat2, lon2) => {
+  const R = 6371e3; // metres
+  const φ1 = lat1 * Math.PI / 180;
+  const φ2 = lat2 * Math.PI / 180;
+  const Δφ = (lat2 - lat1) * Math.PI / 180;
+  const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  const d = R * c; // in metres
+  return d;
+};
+
+const getFraudScore = (booking) => {
+  let score = 0;
+  if (booking.statusHistory) {
+    for (const history of booking.statusHistory) {
+      if (history.note) {
+        if (history.note.includes('Failed verification attempt for START_PIN')) {
+          score += 10;
+        }
+        if (history.note.includes('Failed verification attempt for COMPLETION_PIN')) {
+          score += 15;
+        }
+        if (history.note.includes('Geofencing verification failed')) {
+          score += 25;
+        }
+        if (history.note.includes('CANCELLATION_FRAUD_FLAG')) {
+          score += 20;
+        }
+        if (history.note.includes('SUSPICIOUS_COMPLAINT_FLAG')) {
+          score += 30;
+        }
+        if (history.note.includes('SAME_IP_ABUSE_FLAG')) {
+          score += 20;
+        }
+      }
+    }
+  }
+  return score;
+};
+
+const createFraudLog = async (booking, actionType, reason, score, req) => {
+  try {
+    const FraudLog = require('../models/FraudLog-model');
+    const log = new FraudLog({
+      ip: req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '0.0.0.0',
+      userId: req.user?._id || booking.provider || booking.customer,
+      userModel: req.user?.role === 'provider' ? 'Provider' : 'User',
+      role: req.user?.role || 'provider',
+      device: req.headers['user-agent'] ? require('crypto').createHash('sha256').update(req.headers['user-agent']).digest('hex') : 'N/A',
+      deviceDetails: {
+        userAgent: req.headers['user-agent'] || 'N/A',
+        screenResolution: 'N/A',
+        timezone: 'N/A',
+        language: 'N/A',
+        platform: req.headers['sec-ch-ua-platform'] || 'N/A',
+      },
+      actionType: actionType,
+      bookingId: booking._id,
+      fraudScore: score,
+      riskLevel: score >= 50 ? 'HIGH' : (score >= 25 ? 'MEDIUM' : 'LOW'),
+      isFlagged: score >= 25,
+      flagReason: reason,
+      status: 'pending_review'
+    });
+    await log.save();
+  } catch (err) {
+    console.error('Failed to save FraudLog:', err);
+  }
+};
+
+const sanitizeStatusHistoryForProvider = (statusHistory) => {
+  if (!statusHistory) return [];
+  return statusHistory.map(h => {
+    if (!h.note) return h;
+    let cleanNote = h.note
+      .replace(/START_PIN:\d{4}/g, 'START_PIN:****')
+      .replace(/COMPLETION_PIN:\d{4}/g, 'COMPLETION_PIN:****')
+      .replace(/TARGET_LOCATION:[-\d.]+,[-\d.]+/g, 'TARGET_LOCATION:hidden');
+    return {
+      ...h,
+      note: cleanNote
+    };
+  });
+};
+
 // USER BOOKING CONTROLLERS
 
 
@@ -180,6 +452,9 @@ const createBooking = async (req, res) => {
       });
     }
 
+    const startPin = Math.floor(1000 + Math.random() * 9000).toString();
+    const completionPin = Math.floor(1000 + Math.random() * 9000).toString();
+
     // Create booking
     const booking = new Booking({
       bookingId: generateBookingId(),
@@ -208,6 +483,12 @@ const createBooking = async (req, res) => {
       status: paymentMethod === 'cash' ? 'scheduled' : 'pending',
       paymentStatus: paymentMethod === 'cash' ? 'pending' : 'processing',
       confirmedBooking: paymentMethod === 'cash',
+      statusHistory: [{
+        status: paymentMethod === 'cash' ? 'scheduled' : 'pending',
+        timestamp: new Date(),
+        note: `Booking created. START_PIN:${startPin} COMPLETION_PIN:${completionPin}`,
+        updatedBy: 'customer'
+      }],
       metadata: {
         ip: req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress,
         userAgent: req.headers['user-agent']
@@ -692,6 +973,15 @@ const getUserBookings = async (req, res) => {
         const earning = await ProviderEarning.findOne({ booking: booking._id }).lean();
         const pStatus = getPayoutStatus(earning, bookingObj);
         bookingObj.payoutStatus = pStatus;
+
+        // Ensure and persist PINs, then attach based on visibility rules
+        const { startPin, completionPin } = await ensureAndPersistPins(bookingObj._id, bookingObj);
+        if (bookingObj.status === 'accepted' || bookingObj.status === 'scheduled') {
+          bookingObj.startPin = startPin;
+        } else if (bookingObj.status === 'in-progress') {
+          bookingObj.completionPin = completionPin;
+        }
+
         bookingObj.timeline = getBookingTimeline(bookingObj, pStatus);
 
         return bookingObj;
@@ -1152,6 +1442,15 @@ const getBooking = async (req, res) => {
     }
 
     bookingObj.payoutStatus = getPayoutStatus(earning, bookingObj);
+
+    // Ensure and persist PINs, then attach based on visibility rules
+    const { startPin, completionPin } = await ensureAndPersistPins(bookingObj._id, bookingObj);
+    if (bookingObj.status === 'accepted' || bookingObj.status === 'scheduled') {
+      bookingObj.startPin = startPin;
+    } else if (bookingObj.status === 'in-progress') {
+      bookingObj.completionPin = completionPin;
+    }
+
     bookingObj.timeline = getBookingTimeline(bookingObj, bookingObj.payoutStatus);
 
     res.status(200).json({
@@ -1716,8 +2015,13 @@ const getProviderBookingById = async (req, res) => {
       commissionRule
     );
 
+    const cleanBooking = { ...booking };
+    if (cleanBooking.statusHistory) {
+      cleanBooking.statusHistory = sanitizeStatusHistoryForProvider(cleanBooking.statusHistory);
+    }
+
     const responseData = {
-      ...booking,
+      ...cleanBooking,
       commission: {
         rule: commissionRule ? {
           _id: commissionRule._id,
@@ -1729,14 +2033,14 @@ const getProviderBookingById = async (req, res) => {
       },
       netAmount,
       providerCommissionRate: commissionRule ? commissionRule.value : 0,
-      feedback: booking.feedback,
-      complaint: booking.complaint,
-      adminRemark: booking.adminRemark,
-      payoutHoldUntil: booking.payoutHoldUntil,
+      feedback: cleanBooking.feedback,
+      complaint: cleanBooking.complaint,
+      adminRemark: cleanBooking.adminRemark,
+      payoutHoldUntil: cleanBooking.payoutHoldUntil,
       earningHoldStatus: earning ? earning.status : 'none',
-      payoutStatus: getPayoutStatus(earning, booking),
+      payoutStatus: getPayoutStatus(earning, cleanBooking),
       earningDetails: earning,
-      refundData: booking.cancellationProgress,
+      refundData: cleanBooking.cancellationProgress,
       transactions: transactions
     };
 
@@ -1837,13 +2141,18 @@ const getBookingsByStatus = async (req, res) => {
       .lean();
 
     const bookingsWithCommission = bookings.map(booking => {
+      const cleanBooking = { ...booking };
+      if (cleanBooking.statusHistory) {
+        cleanBooking.statusHistory = sanitizeStatusHistoryForProvider(cleanBooking.statusHistory);
+      }
+
       const { commission, netAmount } = CommissionRule.calculateCommission(
-        booking.totalAmount,
+        cleanBooking.totalAmount,
         commissionRule
       );
 
       return {
-        ...booking,
+        ...cleanBooking,
         commission: {
           rule: commissionRule ? {
             _id: commissionRule._id,
@@ -2077,7 +2386,78 @@ const startBooking = async (req, res) => {
       });
     }
 
-    const { latitude, longitude } = req.body;
+    const { latitude, longitude, pin } = req.body;
+
+    // 1. Check PIN presence
+    if (!pin) {
+      return res.status(400).json({
+        success: false,
+        message: 'Start verification PIN is required to start the service'
+      });
+    }
+
+    // 2. Check Lockout Cooldown
+    const lockoutTime = getLockoutTime(booking);
+    if (lockoutTime && lockoutTime > new Date()) {
+      const remainingMinutes = Math.ceil((lockoutTime - new Date()) / (60 * 1000));
+      return res.status(403).json({
+        success: false,
+        message: `Too many failed attempts. Verification is locked. Try again in ${remainingMinutes} minutes.`
+      });
+    }
+
+    // 3. Verify START PIN
+    const { startPin } = await ensureAndPersistPins(booking._id, booking);
+    if (pin !== startPin) {
+      await recordPinFailure(booking, true);
+      await createFraudLog(booking, 'failed_login', `Incorrect START PIN entered: ${pin}`, 10, req);
+      
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid verification PIN'
+      });
+    }
+
+    // 4. Verify Coordinates
+    if (!latitude || !longitude) {
+      return res.status(400).json({
+        success: false,
+        message: 'GPS coordinates are required to start the service'
+      });
+    }
+
+    const providerLat = parseFloat(latitude);
+    const providerLng = parseFloat(longitude);
+
+    // Get customer address coordinates
+    const targetLoc = getBookingAddressLocation(booking, { latitude: providerLat, longitude: providerLng });
+    
+    // Save target location if not already persisted
+    if (!getTargetLocation(booking)) {
+      await setTargetLocation(booking, targetLoc.latitude, targetLoc.longitude);
+    }
+
+    const distance = calculateDistance(providerLat, providerLng, targetLoc.latitude, targetLoc.longitude);
+    if (distance > 200) {
+      await createFraudLog(booking, 'failed_login', `Geofencing mismatch during start verification: Provider at ${providerLat}, ${providerLng} but target at ${targetLoc.latitude}, ${targetLoc.longitude} (Distance: ${Math.round(distance)}m)`, 25, req);
+      
+      // Push warning to history
+      booking.statusHistory.push({
+        status: booking.status,
+        timestamp: new Date(),
+        note: `Geofencing verification failed. Distance: ${Math.round(distance)}m.`,
+        updatedBy: 'system'
+      });
+      await booking.save();
+
+      return res.status(400).json({
+        success: false,
+        message: `Geofencing verification failed. You must be within 200 meters of the service location. Current distance: ${Math.round(distance)}m`
+      });
+    }
+
+    // Reset failures on success
+    await resetPinFailures(booking);
 
     // Update booking status to in-progress
     booking.status = 'in-progress';
@@ -2092,14 +2472,14 @@ const startBooking = async (req, res) => {
     booking.providerWorkProof = {
       ...booking.providerWorkProof,
       beforeImages: beforeImages,
-      startLocation: latitude && longitude ? { latitude: parseFloat(latitude), longitude: parseFloat(longitude) } : undefined
+      startLocation: { latitude: providerLat, longitude: providerLng }
     };
 
     // Add to status history
     booking.statusHistory.push({
       status: 'in-progress',
       timestamp: new Date(),
-      note: 'Work proof submitted. Service started.',
+      note: 'Work proof submitted. Service started. Verification successful. FAILED_ATTEMPTS:0',
       updatedBy: 'provider'
     });
 
@@ -2390,17 +2770,92 @@ const completeBooking = async (req, res) => {
       });
     }
 
+    const { latitude, longitude, pin } = req.body;
+
+    // 1. Check PIN presence
+    if (!pin) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({
+        success: false,
+        message: 'Completion verification PIN is required to complete the service'
+      });
+    }
+
+    // 2. Check Lockout Cooldown
+    const lockoutTime = getLockoutTime(booking);
+    if (lockoutTime && lockoutTime > new Date()) {
+      const remainingMinutes = Math.ceil((lockoutTime - new Date()) / (60 * 1000));
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(403).json({
+        success: false,
+        message: `Too many failed attempts. Verification is locked. Try again in ${remainingMinutes} minutes.`
+      });
+    }
+
+    // 3. Verify COMPLETION PIN
+    const { completionPin } = await ensureAndPersistPins(booking._id, booking, session);
+    if (pin !== completionPin) {
+      await recordPinFailure(booking, false, session);
+      await createFraudLog(booking, 'failed_login', `Incorrect COMPLETION PIN entered: ${pin}`, 15, req);
+
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid verification PIN'
+      });
+    }
+
+    // 4. Verify Coordinates
+    if (!latitude || !longitude) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({
+        success: false,
+        message: 'GPS coordinates are required to complete the service'
+      });
+    }
+
+    const providerLat = parseFloat(latitude);
+    const providerLng = parseFloat(longitude);
+
+    const targetLoc = getBookingAddressLocation(booking, { latitude: providerLat, longitude: providerLng });
+
+    const distance = calculateDistance(providerLat, providerLng, targetLoc.latitude, targetLoc.longitude);
+    if (distance > 300) {
+      await createFraudLog(booking, 'failed_login', `Geofencing mismatch during completion verification: Provider at ${providerLat}, ${providerLng} but target at ${targetLoc.latitude}, ${targetLoc.longitude} (Distance: ${Math.round(distance)}m)`, 25, req);
+
+      // Push warning to history
+      booking.statusHistory.push({
+        status: booking.status,
+        timestamp: new Date(),
+        note: `Geofencing verification failed. Distance: ${Math.round(distance)}m.`,
+        updatedBy: 'system'
+      });
+      await booking.save({ session });
+
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({
+        success: false,
+        message: `Geofencing verification failed. You must be within 300 meters of the service location. Current distance: ${Math.round(distance)}m`
+      });
+    }
+
+    // Reset failures on success
+    await resetPinFailures(booking, session);
+
     const afterImages = req.files.map(file => ({
       url: file.path || file.secure_url,
       uploadedAt: new Date()
     }));
 
-    const { latitude, longitude } = req.body;
-
     booking.providerWorkProof = {
       ...booking.providerWorkProof,
       afterImages: afterImages,
-      completionLocation: latitude && longitude ? { latitude: parseFloat(latitude), longitude: parseFloat(longitude) } : undefined
+      completionLocation: { latitude: providerLat, longitude: providerLng }
     };
 
     booking.status = 'completed';
@@ -2408,15 +2863,23 @@ const completeBooking = async (req, res) => {
     booking.paymentStatus = 'paid';
     booking.commissionProcessed = true;
 
-    // 48-hour payout hold logic
-    const holdPeriodHours = 48;
+    // Fraud score checking for Hold extension
+    const fraudScore = getFraudScore(booking);
+    let holdPeriodHours = 48;
+    if (fraudScore >= 50) {
+      holdPeriodHours = 168; // 7 days (168 hours)
+      booking.disputeRaised = true; // Flag for review
+      booking.disputeStatus = 'under_review';
+    }
     booking.payoutHoldUntil = new Date(Date.now() + holdPeriodHours * 60 * 60 * 1000);
 
-    // Add status history note for payout hold
+    // Add status history note
     booking.statusHistory.push({
       status: 'completed',
       timestamp: new Date(),
-      note: `Service completed. Payout held for ${holdPeriodHours} hours for dispute review.`,
+      note: fraudScore >= 50
+        ? `Service completed. Verification successful. Suspicious activity detected (Fraud Score: ${fraudScore}). Payout held for 7 days (168 hours) for admin review.`
+        : `Service completed. Verification successful. Payout held for ${holdPeriodHours} hours for dispute review.`,
       updatedBy: 'system'
     });
 

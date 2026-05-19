@@ -9,7 +9,7 @@ import {
   ClipboardList, Timer, CheckCheck, HelpCircle, Copy, Zap, Wrench, Play,
   CreditCard, CheckSquare, AlertTriangle, Star, Package, Search, Activity,
   Banknote, Download, FileText, Loader, BarChart2, DownloadCloud, Navigation,
-  Home, Info, Shield, FileDigit, PhoneCall
+  Home, Info, Shield, FileDigit, PhoneCall, Camera
 } from 'lucide-react';
 import LoadingSpinner from '../../components/Loader';
 import * as BookingService from '../../services/BookingService';
@@ -67,28 +67,34 @@ const ConfirmationDialog = ({ isOpen, onClose, onConfirm, title, message, type =
 const ProofModal = ({ isOpen, onClose, onConfirm, action, loading, progress }) => {
   const [images, setImages] = useState([]);
   const [location, setLocation] = useState(null);
+  const [pin, setPin] = useState('');
   const [gettingLocation, setGettingLocation] = useState(false);
+
+  const captureLocation = () => {
+    setGettingLocation(true);
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
+          setGettingLocation(false);
+        },
+        (err) => {
+          console.error('Location error:', err);
+          setGettingLocation(false);
+        },
+        { timeout: 10000 }
+      );
+    } else {
+      setGettingLocation(false);
+    }
+  };
 
   useEffect(() => {
     if (isOpen) {
       setImages([]);
-      // Auto-capture location
-      setGettingLocation(true);
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            setLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
-            setGettingLocation(false);
-          },
-          (err) => {
-            console.error('Location error:', err);
-            setGettingLocation(false);
-          },
-          { timeout: 10000 }
-        );
-      } else {
-        setGettingLocation(false);
-      }
+      setPin('');
+      setLocation(null);
+      captureLocation();
     }
   }, [isOpen]);
 
@@ -115,15 +121,36 @@ const ProofModal = ({ isOpen, onClose, onConfirm, action, loading, progress }) =
             </div>
             <div>
               <h3 className="text-xl font-bold text-secondary">
-                {isStart ? 'Start Service Proof' : 'Complete Service Proof'}
+                {isStart ? 'Start Service Verification' : 'Complete Service Verification'}
               </h3>
               <p className="text-xs text-gray-500 mt-0.5">
-                {isStart ? 'Upload before-work images to begin' : 'Upload after-work images to finish'}
+                {isStart ? 'Verify code and upload before-work proof' : 'Verify code and upload completion proof'}
               </p>
             </div>
           </div>
 
           <div className="space-y-6">
+            {/* Verification PIN Input */}
+            <div>
+              <label className="block text-sm font-bold text-secondary mb-2">
+                {isStart ? 'Start Verification PIN' : 'Completion Verification PIN'} <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  maxLength={4}
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+                  placeholder="Enter 4-digit PIN"
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold tracking-widest text-secondary focus:outline-none focus:border-primary focus:bg-white transition-all text-center text-lg"
+                />
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                  <FileDigit className="w-5 h-5" />
+                </div>
+              </div>
+              <p className="text-[10px] text-gray-400 mt-1">Ask the customer for the code displayed in their app dashboard.</p>
+            </div>
+
             {/* Image Upload Area */}
             <div>
               <label className="block text-sm font-bold text-secondary mb-3">
@@ -144,26 +171,44 @@ const ProofModal = ({ isOpen, onClose, onConfirm, action, loading, progress }) =
                 ))}
 
                 {images.length < 6 && (
-                  <label className="aspect-square rounded-xl border-2 border-dashed border-gray-200 hover:border-primary hover:bg-primary/5 transition-all flex flex-col items-center justify-center cursor-pointer group">
-                    <DownloadCloud className="w-6 h-6 text-gray-400 group-hover:text-primary transition-colors" />
-                    <span className="text-[10px] font-bold text-gray-400 group-hover:text-primary mt-1">Add Photo</span>
-                    <input type="file" multiple accept="image/*" className="hidden" onChange={handleFileChange} />
-                  </label>
+                  <>
+                    <label className="aspect-square rounded-xl border-2 border-dashed border-gray-200 hover:border-primary hover:bg-primary/5 transition-all flex flex-col items-center justify-center cursor-pointer group px-1">
+                      <Camera className="w-6 h-6 text-gray-400 group-hover:text-primary transition-colors" />
+                      <span className="text-[10px] font-bold text-gray-400 group-hover:text-primary mt-1 text-center leading-tight">Take Photo<br/>(Camera)</span>
+                      <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileChange} />
+                    </label>
+                    <label className="aspect-square rounded-xl border-2 border-dashed border-gray-200 hover:border-primary hover:bg-primary/5 transition-all flex flex-col items-center justify-center cursor-pointer group px-1">
+                      <DownloadCloud className="w-6 h-6 text-gray-400 group-hover:text-primary transition-colors" />
+                      <span className="text-[10px] font-bold text-gray-400 group-hover:text-primary mt-1 text-center leading-tight">Gallery<br/>(Optional)</span>
+                      <input type="file" multiple accept="image/*" className="hidden" onChange={handleFileChange} />
+                    </label>
+                  </>
                 )}
               </div>
               <p className="text-[10px] text-gray-400 italic">Minimum 1 image required. Maximum 6.</p>
             </div>
 
             {/* Location Status */}
-            <div className={`p-4 rounded-xl border flex items-center justify-between ${location ? 'bg-green-50 border-green-100 text-green-700' : 'bg-gray-50 border-gray-100 text-gray-500'}`}>
+            <div className={`p-4 rounded-xl border flex items-center justify-between ${location ? 'bg-green-50 border-green-150 text-green-700' : 'bg-red-50 border-red-150 text-red-700'}`}>
               <div className="flex items-center gap-2">
-                <MapPin className={`w-4 h-4 ${location ? 'text-green-500' : 'text-gray-400'}`} />
+                <MapPin className={`w-4 h-4 ${location ? 'text-green-500' : 'text-red-400'}`} />
                 <span className="text-xs font-bold uppercase tracking-wider">
-                  {gettingLocation ? 'Capturing Location...' : location ? 'Location Captured' : 'Location Optional'}
+                  {gettingLocation ? 'Capturing GPS...' : location ? 'Location Captured' : 'GPS Location Required'}
                 </span>
               </div>
-              {gettingLocation && <Loader className="w-3.5 h-3.5 animate-spin" />}
-              {location && <Check className="w-4 h-4" />}
+              {gettingLocation ? (
+                <Loader className="w-3.5 h-3.5 animate-spin" />
+              ) : location ? (
+                <Check className="w-4 h-4" />
+              ) : (
+                <button
+                  type="button"
+                  onClick={captureLocation}
+                  className="text-xs font-bold text-red-600 hover:text-red-800 underline uppercase"
+                >
+                  Retry
+                </button>
+              )}
             </div>
 
             {/* Progress Bar */}
@@ -189,8 +234,8 @@ const ProofModal = ({ isOpen, onClose, onConfirm, action, loading, progress }) =
                 Cancel
               </button>
               <button
-                disabled={loading || images.length === 0}
-                onClick={() => onConfirm(images, location)}
+                disabled={loading || images.length === 0 || pin.length !== 4 || !location}
+                onClick={() => onConfirm(images, location, pin)}
                 className={`flex-1 px-4 py-3 rounded-xl text-sm font-bold text-white shadow-lg shadow-primary/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50 disabled:bg-gray-300 disabled:shadow-none ${isStart ? 'bg-primary' : 'bg-emerald-600'}`}
               >
                 {loading ? <Loader className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
@@ -374,6 +419,9 @@ const ProviderBooking = () => {
           formData.append('latitude', additionalData.location.latitude);
           formData.append('longitude', additionalData.location.longitude);
         }
+        if (additionalData.pin) {
+          formData.append('pin', additionalData.pin);
+        }
         response = await BookingService.startBooking(bookingId, formData, config);
       }
       else if (action === 'complete') {
@@ -383,6 +431,9 @@ const ProviderBooking = () => {
         if (additionalData.location) {
           formData.append('latitude', additionalData.location.latitude);
           formData.append('longitude', additionalData.location.longitude);
+        }
+        if (additionalData.pin) {
+          formData.append('pin', additionalData.pin);
         }
         response = await BookingService.completeBooking(bookingId, formData, config);
       }
@@ -1434,8 +1485,8 @@ const ProviderBooking = () => {
         action={proofModal.action}
         loading={actionLoading.id === proofModal.bookingId}
         progress={uploadProgress}
-        onConfirm={(images, location) => {
-          executeBookingAction(proofModal.bookingId, proofModal.action, { images, location });
+        onConfirm={(images, location, pin) => {
+          executeBookingAction(proofModal.bookingId, proofModal.action, { images, location, pin });
           setProofModal({ isOpen: false, action: null, bookingId: null });
         }}
       />

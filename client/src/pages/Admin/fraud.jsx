@@ -885,6 +885,42 @@ const AdminFraud = () => {
                 </div>
               </div>
 
+              {/* Security & Verification Log Audits */}
+              {selectedItem.recentLogs && selectedItem.recentLogs.length > 0 && (
+                <div>
+                  <h4 className="font-bold text-slate-900 mb-3 flex items-center gap-1.5 text-xs uppercase tracking-wider">
+                    <FiShield className="text-rose-500 animate-pulse" size={14} />
+                    Security & Verification Log Audits ({selectedItem.recentLogs.length})
+                  </h4>
+                  <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                    {selectedItem.recentLogs.map((log, idx) => (
+                      <div key={idx} className="bg-slate-50 border border-slate-100 p-3 rounded-2xl flex flex-col gap-1.5 hover:bg-slate-100/50 transition-colors">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-800 uppercase tracking-wide bg-slate-200/60 px-2 py-0.5 rounded">
+                            {log.actionType}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            {new Date(log.createdAt).toLocaleString()}
+                          </span>
+                        </div>
+                        {log.flagReason && (
+                          <p className="text-xs font-medium text-rose-700 bg-rose-50/50 border border-rose-100 px-2.5 py-1 rounded-xl">
+                            {log.flagReason}
+                          </p>
+                        )}
+                        <div className="flex items-center justify-between text-[10px] text-slate-500 font-semibold">
+                          <span>Risk: <span className={log.riskLevel === 'CRITICAL' || log.riskLevel === 'HIGH' ? 'text-red-600 font-bold' : 'text-slate-600'}>{log.riskLevel}</span></span>
+                          <span>Score: <span className="font-mono text-slate-800">{log.fraudScore}</span></span>
+                          {log.bookingId && (
+                            <span className="font-mono text-indigo-600">Booking: {log.bookingId}</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Investigation Notes Timeline */}
               <div>
                 <h4 className="font-bold text-slate-900 mb-3 flex items-center gap-1.5 text-xs uppercase tracking-wider">

@@ -2366,7 +2366,18 @@ async function getSameIPFraud(req, res) {
                     logins: { $sum: { $cond: [{ $eq: ["$actionType", "login"] }, 1, 0] } },
                     lastActive: { $max: "$createdAt" },
                     isFlagged: { $first: "$isFlagged" },
-                    isSafe: { $first: "$isSafe" }
+                    isSafe: { $first: "$isSafe" },
+                    recentLogs: {
+                        $push: {
+                            _id: "$_id",
+                            actionType: "$actionType",
+                            flagReason: "$flagReason",
+                            fraudScore: "$fraudScore",
+                            riskLevel: "$riskLevel",
+                            createdAt: "$createdAt",
+                            bookingId: "$bookingId"
+                        }
+                    }
                 }
             },
             // Filter out IPs with only 1 log and low activity
@@ -2442,7 +2453,18 @@ async function getDeviceAbuse(req, res) {
                     cancellations: { $sum: { $cond: [{ $eq: ["$actionType", "cancellation"] }, 1, 0] } },
                     lastActive: { $max: "$createdAt" },
                     isFlagged: { $first: "$isFlagged" },
-                    isSafe: { $first: "$isSafe" }
+                    isSafe: { $first: "$isSafe" },
+                    recentLogs: {
+                        $push: {
+                            _id: "$_id",
+                            actionType: "$actionType",
+                            flagReason: "$flagReason",
+                            fraudScore: "$fraudScore",
+                            riskLevel: "$riskLevel",
+                            createdAt: "$createdAt",
+                            bookingId: "$bookingId"
+                        }
+                    }
                 }
             },
             // Filter suspicious device: multiple accounts, otp request spam, or cancellation abuse
