@@ -95,16 +95,16 @@ export const togglePayoutHold = (bookingId, data) => {
 };
 
 // Fraud Detection
-export const getSameIPFraud = () => {
-    return axiosInstance.get("/admin/fraud/same-ip");
+export const getSameIPFraud = (params) => {
+    return axiosInstance.get("/admin/fraud/same-ip", { params });
 };
 
-export const getDeviceAbuse = () => {
-    return axiosInstance.get("/admin/fraud/device-abuse");
+export const getDeviceAbuse = (params) => {
+    return axiosInstance.get("/admin/fraud/device-abuse", { params });
 };
 
-export const getCancellationAlerts = () => {
-    return axiosInstance.get("/admin/fraud/cancellation-alerts");
+export const getCancellationAlerts = (params) => {
+    return axiosInstance.get("/admin/fraud/cancellation-alerts", { params });
 };
 
 export const markFraudLogSafe = (id, data) => {

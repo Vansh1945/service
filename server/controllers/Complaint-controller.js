@@ -48,6 +48,19 @@ const submitComplaint = async (req, res) => {
         return res.status(400).json({ message: 'Cannot submit complaint for booking without assigned provider.' });
       }
       provider = booking.provider;
+
+      // Prevent duplicate complaint submissions for same booking by same user
+      const existingComplaint = await Complaint.findOne({
+        booking: bookingId,
+        role: userRole,
+        status: { $in: ['Open', 'In-Progress', 'Reopened'] }
+      });
+      if (existingComplaint) {
+        return res.status(400).json({
+          success: false,
+          message: 'There is already an active dispute or complaint open for this booking. Please wait for resolution.'
+        });
+      }
     }
 
     // 2. Handle Image Uploads
@@ -396,6 +409,7 @@ const enrichComplaintData = async (complaint) => {
 
   // ─── 3. Customer Fraud Score (0–100, higher = more suspicious) ─
   let customerFraudScore = 0;
+  const warnings = [];
   let customerHistory = { totalBookings: 0, refundRequests: 0, complaintCount: 0, accountAgeMonths: 0 };
   const customerUserId = complaint.userId?._id || complaint.userId || complaint.customer?._id || complaint.customer;
   if (customerUserId) {
@@ -423,6 +437,28 @@ const enrichComplaintData = async (complaint) => {
     customerFraudScore += Math.min(cancelRate * 30, 25);              // cancellation rate (max 25)
     customerFraudScore += Math.min(customerComplaints * 5, 20);       // repeated complaints (max 20)
     if (ageMonths < 3) customerFraudScore += 15;                      // new account penalty (max 15)
+
+    // Copy-paste and complaint frequency check
+    const identicalComplaints = await ComplaintModel.countDocuments({
+      customer: customerUserId,
+      description: complaint.description,
+      _id: { $ne: complaint._id }
+    });
+    if (identicalComplaints > 0) {
+      customerFraudScore += 30; // Highly suspicious of copy-paste spam
+      warnings.push('Duplicate or copy-paste complaint text detected');
+    }
+
+    // Suspicious frequency check (more than 2 complaints in the last 24 hours)
+    const recentComplaintsCount = await ComplaintModel.countDocuments({
+      customer: customerUserId,
+      createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+    });
+    if (recentComplaintsCount > 2) {
+      customerFraudScore += 25; // Repeated complaint spam
+      warnings.push('Suspiciously high complaint frequency in 24 hours');
+    }
+
     customerFraudScore = Math.max(0, Math.min(Math.round(customerFraudScore), 100));
   }
 
@@ -452,10 +488,9 @@ const enrichComplaintData = async (complaint) => {
   }
 
   // ─── Warnings ───────────────────────────────────────────────
-  const warnings = [];
-  if (customerFraudScore >= 60) warnings.push('High refund abuse risk detected');
-  if (providerTrustScore <= 30)  warnings.push('Provider has repeated complaints');
-  if (!hasBefore && !hasAfter)   warnings.push('Provider uploaded no work proof');
+  if (customerFraudScore >= 60 && !warnings.includes('High refund abuse risk detected')) warnings.push('High refund abuse risk detected');
+  if (providerTrustScore <= 30 && !warnings.includes('Provider has repeated complaints')) warnings.push('Provider has repeated complaints');
+  if (!hasBefore && !hasAfter && !warnings.includes('Provider uploaded no work proof')) warnings.push('Provider uploaded no work proof');
 
   return {
     ...complaint,
@@ -541,21 +576,27 @@ const getComplaint = async (req, res) => {
 // @route   PUT /api/complaints/:id/resolve
 // @access  Private (Admin)
 const resolveComplaint = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
   try {
     const { resolutionNotes, decision } = req.body; // decision: 'approve_refund' | 'reject_refund' | 'manual_review'
     if (!resolutionNotes) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({ success: false, message: 'Resolution notes are required.' });
     }
 
-    const complaint = await Complaint.findById(req.params.id).populate('booking');
+    const complaint = await Complaint.findById(req.params.id).populate('booking').session(session);
     if (!complaint) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(404).json({ success: false, message: 'Complaint not found' });
     }
 
     complaint.status = 'Solved';
     complaint.resolvedBy = req.admin?._id || req.user?._id;
     complaint.resolutionNotes = resolutionNotes;
-    await complaint.save();
+    await complaint.save({ session });
 
     // ── Auto payout control based on decision ──────────────────
     if (complaint.booking) {
@@ -566,17 +607,17 @@ const resolveComplaint = async (req, res) => {
         // Complaint rejected → provider is innocent → release payout
         await ProviderEarning.findOneAndUpdate(
           { booking: bookingId },
-          { status: 'available' }
+          { status: 'available' },
+          { session }
         );
         // Also clear dispute flags on booking
         await Booking.findByIdAndUpdate(bookingId, {
           disputeStatus: 'resolved',
           adminRefundDecision: 'rejected'
-        });
+        }, { session });
       } else if (decision === 'approve_refund') {
         // ── Refund Safety Checks ──
         if (complaint.booking.paymentStatus !== 'paid' && complaint.booking.paymentStatus !== 'completed') {
-           // You could throw an error here, but for now we'll just not approve it and fallback to manual review
            console.log('Cannot refund: Booking payment status is not paid');
         } else if (!['online', 'wallet'].includes(complaint.booking.paymentMethod)) {
            console.log('Cannot refund: Booking payment method is not online or wallet');
@@ -586,16 +627,20 @@ const resolveComplaint = async (req, res) => {
           // Refund approved → keep earning held/cancelled
           await ProviderEarning.findOneAndUpdate(
             { booking: bookingId },
-            { status: 'cancelled' }
+            { status: 'cancelled' },
+            { session }
           );
           await Booking.findByIdAndUpdate(bookingId, {
             disputeStatus: 'resolved',
             adminRefundDecision: 'approved'
-          });
+          }, { session });
         }
       }
       // manual_review → no payout change, admin will act separately
     }
+
+    await session.commitTransaction();
+    session.endSession();
 
     // Invalidate dashboard caches
     try {
@@ -605,6 +650,8 @@ const resolveComplaint = async (req, res) => {
 
     res.json({ success: true, message: 'Complaint resolved successfully', data: complaint });
   } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
     console.error('Error resolving complaint:', error);
     res.status(500).json({ success: false, message: 'Server Error' });
   }

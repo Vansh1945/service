@@ -1971,11 +1971,9 @@ const processAdminRefund = async (req, res) => {
         // --- NEW STRICT EARNING STATUS CHECKS ---
         let earning = await ProviderEarning.findOne({ booking: booking._id }).session(session);
         if (earning) {
-            if (earning.status === 'available' || earning.status === 'withdrawn' || earning.status === 'paid') {
-                throw new Error(`Refund cannot be processed automatically because the payout is already ${earning.status}. Please handle this manually.`);
-            }
-            if (earning.status !== 'held' && earning.status !== 'under_review' && earning.status !== 'pending_release') {
-                throw new Error(`Refund is only allowed when earning status is "held". Current status: ${earning.status}`);
+            const allowedStatuses = ['held', 'under_review', 'pending_release', 'available', 'paid', 'withdrawn', 'cancelled'];
+            if (!allowedStatuses.includes(earning.status)) {
+                throw new Error(`Refund is not allowed for current earning status: ${earning.status}`);
             }
         }
 
@@ -2101,7 +2099,7 @@ const processAdminRefund = async (req, res) => {
         if (earning) {
             totalToRecover = earning.netAmount;
 
-            if (['held', 'available'].includes(earning.status)) {
+            if (['held', 'available', 'under_review', 'pending_release'].includes(earning.status)) {
                 // CASE 1: Earning not yet paid out
                 earning.status = 'cancelled';
                 recoveryStatus = 'cancelled_held';
@@ -2395,7 +2393,7 @@ async function getSameIPFraud(req, res) {
         const total = result[0]?.metadata[0]?.total || 0;
         let items = result[0]?.data || [];
 
-        // Manually populate users and providers
+        // Manually populate users and providers & calculate real-time dynamic scores
         for (let item of items) {
             const validUserIds = item.userIds.filter(Boolean);
             const [users, providers] = await Promise.all([
@@ -2403,6 +2401,43 @@ async function getSameIPFraud(req, res) {
                 Provider.find({ _id: { $in: validUserIds } }).select('name email phone role metadata.device isSuspended')
             ]);
             item.users = [...users, ...providers];
+
+            // DYNAMIC RISK ENGINE FOR IP GROUPS
+            if (item.isSafe) {
+                item.maxFraudScore = 0;
+                item.riskLevel = 'LOW';
+            } else {
+                let dynamicScore = 0;
+                const uniqueAccounts = item.users.length;
+                const hasCustomer = item.users.some(u => u.role === 'customer');
+                const hasProvider = item.users.some(u => u.role === 'provider');
+                
+                // Account links
+                if (uniqueAccounts > 1) {
+                    dynamicScore += uniqueAccounts * 15; // 15 points per linked account
+                }
+                // Role overlap (customer + provider)
+                if (hasCustomer && hasProvider) {
+                    dynamicScore += 35;
+                }
+                // Failed logins
+                dynamicScore += (item.failedLogins || 0) * 10;
+                // Registration spam
+                if ((item.registrations || 0) > 2) {
+                    dynamicScore += (item.registrations || 0) * 15;
+                }
+                
+                item.maxFraudScore = Math.min(Math.round(dynamicScore), 100);
+                if (item.maxFraudScore >= 75) {
+                    item.riskLevel = 'CRITICAL';
+                } else if (item.maxFraudScore >= 50) {
+                    item.riskLevel = 'HIGH';
+                } else if (item.maxFraudScore >= 25) {
+                    item.riskLevel = 'MEDIUM';
+                } else {
+                    item.riskLevel = 'LOW';
+                }
+            }
         }
 
         res.status(200).json({
@@ -2482,7 +2517,7 @@ async function getDeviceAbuse(req, res) {
         const total = result[0]?.metadata[0]?.total || 0;
         let items = result[0]?.data || [];
 
-        // Manually populate users and providers
+        // Manually populate users and providers & calculate real-time dynamic scores
         for (let item of items) {
             const validUserIds = item.userIds.filter(Boolean);
             const [users, providers] = await Promise.all([
@@ -2490,6 +2525,41 @@ async function getDeviceAbuse(req, res) {
                 Provider.find({ _id: { $in: validUserIds } }).select('name email phone role metadata.ip isSuspended')
             ]);
             item.users = [...users, ...providers];
+
+            // DYNAMIC RISK ENGINE FOR DEVICE GROUPS
+            if (item.isSafe) {
+                item.maxFraudScore = 0;
+                item.riskLevel = 'LOW';
+            } else {
+                let dynamicScore = 0;
+                const uniqueAccounts = item.users.length;
+                const otpSpam = item.otpRequests || 0;
+                const cancellations = item.cancellations || 0;
+                
+                // Account links
+                if (uniqueAccounts > 1) {
+                    dynamicScore += uniqueAccounts * 20; // 20 points per linked account on same device
+                }
+                // OTP requests
+                if (otpSpam > 3) {
+                    dynamicScore += otpSpam * 8;
+                }
+                // Cancellations
+                if (cancellations > 0) {
+                    dynamicScore += cancellations * 25;
+                }
+                
+                item.maxFraudScore = Math.min(Math.round(dynamicScore), 100);
+                if (item.maxFraudScore >= 75) {
+                    item.riskLevel = 'CRITICAL';
+                } else if (item.maxFraudScore >= 50) {
+                    item.riskLevel = 'HIGH';
+                } else if (item.maxFraudScore >= 25) {
+                    item.riskLevel = 'MEDIUM';
+                } else {
+                    item.riskLevel = 'LOW';
+                }
+            }
         }
 
         res.status(200).json({
