@@ -128,19 +128,11 @@ export const AuthProvider = ({ children }) => {
     };
 
     // Logout function
-    const logoutUser = async () => {
-        try {
-            const currentRefreshToken = localStorage.getItem("refreshToken");
-            const currentFcmToken = localStorage.getItem("fcmToken");
-            if (currentRefreshToken || currentFcmToken) {
-                await AuthService.logoutApi({ 
-                    refreshToken: currentRefreshToken,
-                    fcmToken: currentFcmToken 
-                });
-            }
-        } catch (e) {
-            console.warn("Backend logout failed:", e);
-        }
+    const logoutUser = () => {
+        const currentRefreshToken = localStorage.getItem("refreshToken");
+        const currentFcmToken = localStorage.getItem("fcmToken");
+
+        // Immediately clear storage and states for an instantaneous UI update
         localStorage.clear();
         setToken(null);
         setRefreshToken(null);
@@ -148,6 +140,16 @@ export const AuthProvider = ({ children }) => {
         setUser(null);
         showToast('Logged out successfully');
         navigate('/login');
+
+        // Execute backend logout API in the background without blocking the UI
+        if (currentRefreshToken || currentFcmToken) {
+            AuthService.logoutApi({ 
+                refreshToken: currentRefreshToken,
+                fcmToken: currentFcmToken 
+            }).catch(e => {
+                console.warn("Backend background logout failed:", e);
+            });
+        }
     };
 
     // Removed force auto-logout on token expiration to maintain persistence
