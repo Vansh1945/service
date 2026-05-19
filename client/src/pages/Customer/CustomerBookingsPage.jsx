@@ -86,6 +86,9 @@ const BookingTimeline = ({ booking }) => {
     if (t.includes('assigned')) return User;
     if (t.includes('accepted')) return CheckCircle;
     if (t.includes('way')) return Home;
+    if (t.includes('pin generated')) return ShieldCheck;
+    if (t.includes('verified')) return ShieldCheck;
+    if (t.includes('geo')) return MapPin;
     if (t.includes('started')) return Wrench;
     if (t.includes('completed')) return CheckCircle;
     if (t.includes('protection') || t.includes('review')) return ShieldAlert;

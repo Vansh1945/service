@@ -93,7 +93,7 @@ const getBookingTimeline = (booking, payoutStatus = '') => {
   timeline.push({
     title: isAssigned ? `Provider Assigned: ${booking.provider?.name || 'Assigned'}` : "Provider Assigned",
     completed: isAssigned,
-    time: isAssigned ? (getStatusTime('scheduled') || getStatusTime('assigned')) : null,
+    time: isAssigned ? (getStatusTime('scheduled') || getStatusTime('assigned') || getStatusTime('accepted') || booking.createdAt) : null,
     status: isAssigned ? 'completed' : 'pending'
   });
 
@@ -112,7 +112,7 @@ const getBookingTimeline = (booking, payoutStatus = '') => {
   timeline.push({
     title: "Provider is on the way",
     completed: isOnTheWay || hasPassedOnTheWay,
-    time: isOnTheWay ? getStatusTime('accepted') : null,
+    time: (isOnTheWay || hasPassedOnTheWay) ? getStatusTime('accepted') : null,
     status: isOnTheWay ? 'current' : (hasPassedOnTheWay ? 'completed' : 'pending')
   });
 
@@ -168,6 +168,9 @@ const getBookingTimeline = (booking, payoutStatus = '') => {
 
   // 11. Parse Custom History entries for Security Events
   const customSteps = [];
+  let hasAddedStartVerification = false;
+  let hasAddedCompletionVerification = false;
+
   statusHistory.forEach(h => {
     if (!h.note) return;
     const time = h.timestamp || booking.updatedAt;
@@ -187,36 +190,43 @@ const getBookingTimeline = (booking, payoutStatus = '') => {
       });
     }
 
-    if (h.note.includes('Verification successful') && h.note.includes('FAILED_ATTEMPTS:0')) {
-      if (h.status === 'in-progress' || h.status === 'in_progress') {
-        customSteps.push({
-          title: "Service start verified",
-          completed: true,
-          time,
-          status: 'completed'
-        });
-        if (booking.providerWorkProof?.startLocation) {
+    if (h.note.includes('Verification successful')) {
+      const isStart = h.status === 'accepted' || h.note.includes('Service started') || h.note.includes('Work proof submitted') || h.note.includes('start');
+      if (isStart) {
+        if (!hasAddedStartVerification) {
           customSteps.push({
-            title: "Geo verified",
+            title: "Service start verified",
             completed: true,
             time,
             status: 'completed'
           });
+          if (booking.providerWorkProof?.startLocation) {
+            customSteps.push({
+              title: "Geo verified",
+              completed: true,
+              time,
+              status: 'completed'
+            });
+          }
+          hasAddedStartVerification = true;
         }
-      } else if (h.status === 'completed') {
-        customSteps.push({
-          title: "Service completion verified",
-          completed: true,
-          time,
-          status: 'completed'
-        });
-        if (booking.providerWorkProof?.completionLocation) {
+      } else {
+        if (!hasAddedCompletionVerification) {
           customSteps.push({
-            title: "Geo verified",
+            title: "Service completion verified",
             completed: true,
             time,
             status: 'completed'
           });
+          if (booking.providerWorkProof?.completionLocation) {
+            customSteps.push({
+              title: "Geo verified",
+              completed: true,
+              time,
+              status: 'completed'
+            });
+          }
+          hasAddedCompletionVerification = true;
         }
       }
     }
