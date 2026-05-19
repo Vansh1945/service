@@ -93,6 +93,32 @@ export default defineConfig(({ mode }) => {
 
     css: {
       postcss: './postcss.config.js'
+    },
+    build: {
+      chunkSizeWarningLimit: 1000,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('firebase')) {
+                return 'vendor-firebase';
+              }
+              if (id.includes('framer-motion')) {
+                return 'vendor-framer-motion';
+              }
+              if (id.includes('lucide-react') || id.includes('react-icons') || id.includes('@heroicons')) {
+                return 'vendor-icons';
+              }
+              if (id.includes('@mui') || id.includes('@emotion')) {
+                return 'vendor-mui';
+              }
+              if (id.includes('react-datepicker') || id.includes('react-time-picker')) {
+                return 'vendor-pickers';
+              }
+            }
+          }
+        }
+      }
     }
   }
 })

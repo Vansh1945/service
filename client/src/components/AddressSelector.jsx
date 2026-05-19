@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { State, City } from 'country-state-city';
 import { MapPin, Building, Flag, CheckCircle, ChevronDown } from 'lucide-react';
 
 const AddressSelector = ({
@@ -14,8 +13,10 @@ const AddressSelector = ({
   const [cities, setCities] = useState([]);
 
   useEffect(() => {
-    const countryStates = State.getStatesOfCountry(selectedCountry);
-    setStates(countryStates);
+    import('country-state-city').then(({ State }) => {
+      const countryStates = State.getStatesOfCountry(selectedCountry);
+      setStates(countryStates);
+    });
   }, [selectedCountry]);
 
   // Find state code from state name
@@ -23,8 +24,10 @@ const AddressSelector = ({
 
   useEffect(() => {
     if (currentStateCode) {
-      const stateCities = City.getCitiesOfState(selectedCountry, currentStateCode);
-      setCities(stateCities);
+      import('country-state-city').then(({ City }) => {
+        const stateCities = City.getCitiesOfState(selectedCountry, currentStateCode);
+        setCities(stateCities);
+      });
     } else {
       setCities([]);
     }

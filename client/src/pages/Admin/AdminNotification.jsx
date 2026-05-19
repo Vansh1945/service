@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { useAuth } from '../../context/auth';
 import { useSocket } from '../../socket/SocketContext';
 import * as NotificationService from '../../services/NotificationService';
@@ -8,7 +8,7 @@ import {
     FiEdit2, FiTrash2, FiXCircle, FiFilter, FiCalendar
 } from 'react-icons/fi';
 import { formatDate, formatDateTime } from '../../utils/format';
-import EmojiPicker from 'emoji-picker-react';
+const EmojiPicker = lazy(() => import('emoji-picker-react'));
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import * as SystemService from '../../services/SystemService';
@@ -471,7 +471,9 @@ const AdminNotification = () => {
 
                                 {showPicker === 'title' && (
                                     <div className="absolute z-50 mt-1 right-0 w-[300px] max-w-[calc(100vw-3rem)] sm:max-w-none shadow-2xl rounded-xl border border-gray-100">
-                                        <EmojiPicker onEmojiClick={handleEmojiClick} skinTonesDisabled width="100%" height={380} />
+                                        <Suspense fallback={<div className="p-4 bg-white rounded-xl shadow-lg border border-gray-100 text-xs text-gray-500">Loading emoji picker...</div>}>
+                                            <EmojiPicker onEmojiClick={handleEmojiClick} skinTonesDisabled width="100%" height={380} />
+                                        </Suspense>
                                     </div>
                                 )}
                             </div>
@@ -506,7 +508,9 @@ const AdminNotification = () => {
 
                                 {showPicker === 'body' && (
                                     <div className="absolute z-50 mt-1 right-0 w-[300px] max-w-[calc(100vw-3rem)] sm:max-w-none shadow-2xl rounded-xl border border-gray-100">
-                                        <EmojiPicker onEmojiClick={handleEmojiClick} skinTonesDisabled width="100%" height={380} />
+                                        <Suspense fallback={<div className="p-4 bg-white rounded-xl shadow-lg border border-gray-100 text-xs text-gray-500">Loading emoji picker...</div>}>
+                                            <EmojiPicker onEmojiClick={handleEmojiClick} skinTonesDisabled width="100%" height={380} />
+                                        </Suspense>
                                     </div>
                                 )}
                             </div>

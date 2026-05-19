@@ -5,10 +5,6 @@ import {
   FiTrendingUp, FiClock, FiAlertCircle, FiCreditCard,
   FiPieChart, FiBriefcase, FiChevronRight, FiLock, FiUnlock, FiAlertTriangle
 } from 'react-icons/fi';
-import {
-  LineChart, Line, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
-} from 'recharts';
 import Loader from '../../components/Loader';
 import { useAuth } from '../../context/auth';
 import * as ProviderService from '../../services/ProviderService';
@@ -38,6 +34,21 @@ const Dashboard = () => {
   const { token, API, showToast } = useAuth();
 
   const [loading, setLoading] = useState(true);
+  const [Recharts, setRecharts] = useState(null);
+
+  useEffect(() => {
+    import('recharts').then(module => {
+      setRecharts(module);
+    }).catch(err => {
+      console.error("Failed to load charts library:", err);
+    });
+  }, []);
+
+  const {
+    LineChart, Line, PieChart, Pie, Cell,
+    XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+  } = Recharts || {};
+
   const [dateRange, setDateRange] = useState({
     startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0]
@@ -406,7 +417,7 @@ const Dashboard = () => {
                 <option value={`${new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}_${new Date().toISOString().split('T')[0]}`}>90 days</option>
               </select>
             </div>
-            {isReady && (
+            {isReady && Recharts && (
               <ResponsiveContainer width="100%" height={240}>
               <LineChart data={earnings?.chartData || []}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
@@ -424,7 +435,7 @@ const Dashboard = () => {
               <FiPieChart className="text-primary" />
               Bookings Breakdown
             </h3>
-            {isReady && (
+            {isReady && Recharts && (
               <ResponsiveContainer width="100%" height={240}>
               <PieChart>
                 <Pie

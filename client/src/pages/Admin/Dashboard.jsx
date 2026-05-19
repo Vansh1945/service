@@ -10,10 +10,6 @@ import {
   FiFilter, FiRefreshCw
 } from 'react-icons/fi';
 import * as AdminService from '../../services/AdminService';
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  BarChart, Bar, PieChart, Pie, Cell, ResponsiveContainer
-} from 'recharts';
 import { formatDate, formatCurrency } from '../../utils/format';
 
 // Pure helpers at module scope — created once, never re-allocated
@@ -32,6 +28,20 @@ const AdminDashboard = () => {
   const [analytics, setAnalytics] = useState(null);
   const [filters, setFilters] = useState({ period: '30d' });
   const [isReady, setIsReady] = useState(false);
+  const [Recharts, setRecharts] = useState(null);
+
+  useEffect(() => {
+    import('recharts').then(module => {
+      setRecharts(module);
+    }).catch(err => {
+      console.error("Failed to load charts library:", err);
+    });
+  }, []);
+
+  const {
+    LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+    PieChart, Pie, Cell, ResponsiveContainer
+  } = Recharts || {};
 
   const fetchDashboardData = useCallback(async (isInitialLoad = false) => {
     try {
@@ -242,7 +252,7 @@ const AdminDashboard = () => {
                 <p className="text-sm text-gray-400">Synchronizing chart layout...</p>
               </div>
             )}
-            {isReady && (
+            {isReady && Recharts && (
               <ResponsiveContainer width="100%" height={320} minWidth={0} debounce={100}>
                 <LineChart data={analytics?.revenueStats?.chartData || []}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
@@ -288,7 +298,7 @@ const AdminDashboard = () => {
             <span className="text-xs font-bold text-red-600 bg-red-50 px-2 py-1 rounded">{analytics?.cancelledStats?.rate}% Rate</span>
           </div>
           <div className="h-64 w-full min-h-[256px] relative overflow-hidden">
-            {(analytics?.cancelledStats?.reasons?.length > 0 && isReady) ? (
+            {(analytics?.cancelledStats?.reasons?.length > 0 && isReady && Recharts) ? (
               <ResponsiveContainer width="100%" height={256} minWidth={0} debounce={100}>
                 <PieChart>
                   <Pie
