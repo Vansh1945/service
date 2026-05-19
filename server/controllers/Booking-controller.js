@@ -1152,7 +1152,7 @@ const payBooking = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Cannot pay for a booking that is in progress, completed, or cancelled' });
     }
 
-    if (booking.paymentStatus === 'paid') {
+    if (booking.paymentStatus === 'paid' || booking.paymentStatus === 'escrow_hold') {
       await session.abortTransaction();
       session.endSession();
       return res.status(400).json({ success: false, message: 'Booking already paid' });
@@ -1161,8 +1161,11 @@ const payBooking = async (req, res) => {
     let paymentResult;
     if (paymentDetails?.paymentMethod === 'wallet') {
       const userWallet = await User.findById(userId).session(session);
-      const bal = userWallet.wallet?.availableBalance || 0;
-      if (bal < booking.totalAmount) {
+      if (!userWallet.wallet) {
+        userWallet.wallet = { availableBalance: 0, walletTransactions: [], totalRefunded: 0, lastUpdated: new Date() };
+      }
+      const bal = userWallet.wallet.availableBalance || 0;
+      if (bal < booking.totalAmount || booking.totalAmount <= 0) {
         await session.abortTransaction();
         session.endSession();
         return res.status(400).json({ success: false, message: 'Insufficient wallet balance' });
@@ -1270,7 +1273,7 @@ const payBooking = async (req, res) => {
     }
 
     // Update booking
-    booking.paymentStatus = 'paid';
+    booking.paymentStatus = 'escrow_hold';
     booking.confirmedBooking = true;
     if (booking.status !== 'accepted' && booking.status !== 'completed' && booking.status !== 'in-progress') {
       booking.status = 'pending';
@@ -1703,14 +1706,14 @@ const cancelBooking = async (req, res) => {
         await pendingTxn.save({ session });
       }
 
-      if (booking.paymentStatus === 'paid' && ['online', 'wallet', 'mixed'].includes(booking.paymentMethod)) {
+      if ((booking.paymentStatus === 'paid' || booking.paymentStatus === 'escrow_hold') && ['online', 'wallet', 'mixed'].includes(booking.paymentMethod)) {
         const previouslyRefunded = booking.cancellationProgress?.refundAmount || 0;
         const refundAmount = booking.totalAmount - previouslyRefunded;
 
         if (refundAmount > 0) {
           // Lock transaction to prevent double refund
           const transaction = await Transaction.findOneAndUpdate(
-            { booking: booking._id, paymentStatus: { $in: ['completed', 'paid', 'success'] }, refundStatus: { $ne: 'completed' } },
+            { booking: booking._id, paymentStatus: { $in: ['completed', 'paid', 'success', 'escrow_hold'] }, refundStatus: { $ne: 'completed' } },
             {
               refundStatus: 'completed',
               refundReason: reason || 'Customer cancelled before service start',
@@ -2280,7 +2283,7 @@ const acceptBooking = async (req, res) => {
           providerEarning: isOnline ? (booking.providerEarnings * 100) : (booking.providerEarnings || 0),
           commissionRule: booking.commissionRule,
           // Sync payment status if booking is already paid
-          ...(booking.paymentStatus === 'paid' && {
+          ...((booking.paymentStatus === 'paid' || booking.paymentStatus === 'escrow_hold') && {
             paymentStatus: isOnline ? 'success' : 'completed'
           })
         }
@@ -2370,8 +2373,8 @@ const startBooking = async (req, res) => {
       });
     }
 
-    // STEP 4 — PAYMENT BEFORE SERVICE START
-    if (booking.paymentStatus !== 'paid') {
+    // STEP 4 — PAYMENT BEFORE SERVICE START (Accepts either paid or escrow_hold)
+    if (booking.paymentStatus !== 'paid' && booking.paymentStatus !== 'escrow_hold') {
       return res.status(400).json({
         success: false,
         message: "Customer payment pending. Service cannot start."
@@ -2597,13 +2600,13 @@ const rejectBooking = async (req, res) => {
     }
 
     // Handle refund if paid
-    if (booking.paymentStatus === 'paid') {
+    if (booking.paymentStatus === 'paid' || booking.paymentStatus === 'escrow_hold') {
       refundAmount = booking.totalAmount;
 
       if (refundAmount > 0) {
         // Find existing successful transaction
         const existingTxn = await Transaction.findOneAndUpdate(
-          { booking: booking._id, paymentStatus: { $in: ['completed', 'paid', 'success'] }, refundStatus: { $ne: 'completed' } },
+          { booking: booking._id, paymentStatus: { $in: ['completed', 'paid', 'success', 'escrow_hold'] }, refundStatus: { $ne: 'completed' } },
           {
             refundStatus: 'completed',
             refundReason: reason || 'Provider rejected booking',
@@ -2613,6 +2616,11 @@ const rejectBooking = async (req, res) => {
           },
           { session, new: true }
         );
+
+        if (!existingTxn) {
+          console.warn(`[Refund Engine] Duplicate or invalid provider rejection refund attempt for booking ${booking._id}`);
+          throw new Error('Transaction already refunded or not found.');
+        }
 
         // Update customer wallet
         const customer = await User.findById(booking.customer._id).session(session);
@@ -2950,7 +2958,7 @@ const completeBooking = async (req, res) => {
     );
 
     if (providerEarningResult.lastErrorObject && providerEarningResult.lastErrorObject.updatedExisting) {
-      await session.commitTransaction();
+      await session.abortTransaction();
       session.endSession();
       return res.status(409).json({
         success: false,
@@ -3735,7 +3743,7 @@ const assignProvider = async (req, res) => {
           providerEarning: isOnline ? (booking.providerEarnings * 100) : (booking.providerEarnings || 0),
           commissionRule: booking.commissionRule,
           // Sync payment status if booking is already paid
-          ...(booking.paymentStatus === 'paid' && {
+          ...((booking.paymentStatus === 'paid' || booking.paymentStatus === 'escrow_hold') && {
             paymentStatus: isOnline ? 'success' : 'completed'
           })
         }

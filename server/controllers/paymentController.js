@@ -59,7 +59,7 @@ const syncEarningsStatus = async (providerId) => {
 const handleWebhook = async (req, res) => {
   try {
     const signature = req.headers['x-razorpay-signature'];
-    const body = req.body;
+    const bodyData = req.rawBody || (Buffer.isBuffer(req.body) ? req.body : Buffer.from(typeof req.body === 'string' ? req.body : JSON.stringify(req.body)));
 
     if (!signature) {
       console.error('Webhook Error: Missing signature header');
@@ -69,15 +69,15 @@ const handleWebhook = async (req, res) => {
     // Verify signature
     const expectedSignature = crypto
       .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET)
-      .update(body)
+      .update(bodyData)
       .digest('hex');
 
     if (signature !== expectedSignature) {
-      console.error('Webhook Error: Invalid signature');
+      console.error(`[Payment Security Alert] Webhook Error: Invalid signature ${signature}. Expected: ${expectedSignature}`);
       return res.status(400).json({ error: 'Invalid signature' });
     }
 
-    const payload = JSON.parse(body);
+    const payload = JSON.parse(bodyData.toString());
     const event = payload.event;
     const payment = payload.payload?.payment?.entity;
 
@@ -140,15 +140,15 @@ const handlePaymentCaptured = async (payment) => {
       await existingTxn.save({ session });
 
       // Update Booking status to confirmed
-      const booking = await Booking.findByIdAndUpdate(
-        existingTxn.booking,
-        {
-          paymentStatus: 'paid',
-          status: 'confirmed',
-          updatedAt: new Date()
-        },
-        { session, new: true }
-      );
+      const booking = await Booking.findById(existingTxn.booking).session(session);
+      if (booking) {
+        booking.paymentStatus = 'escrow_hold';
+        if (booking.status !== 'accepted' && booking.status !== 'completed' && booking.status !== 'in-progress') {
+          booking.status = 'pending';
+        }
+        booking.updatedAt = new Date();
+        await booking.save({ session });
+      }
 
       console.log(`Payment captured: ${payment.id}, Transaction: ${existingTxn._id}`);
 
@@ -182,26 +182,43 @@ const handlePaymentCaptured = async (payment) => {
 
 // Handle failed payment
 const handlePaymentFailed = async (payment) => {
+  const session = await mongoose.startSession();
   try {
-    // Update Transaction status to failed
-    const transaction = await Transaction.findOneAndUpdate(
-      { razorpayOrderId: payment.order_id },
-      {
-        paymentStatus: 'failed',
-        updatedAt: new Date()
-      },
-      { new: true }
-    );
+    await session.withTransaction(async () => {
+      // Update Transaction status to failed
+      const transaction = await Transaction.findOneAndUpdate(
+        { razorpayOrderId: payment.order_id },
+        {
+          paymentStatus: 'failed',
+          updatedAt: new Date()
+        },
+        { session, new: true }
+      );
 
-    if (!transaction) {
-      console.error(`Transaction not found for order: ${payment.order_id}`);
-      return;
-    }
+      if (!transaction) {
+        console.error(`Transaction not found for order: ${payment.order_id}`);
+        return;
+      }
 
-    console.log(`Payment failed: ${payment.id}, Transaction: ${transaction._id}`);
+      // Rollback wallet deduction if mixed payment failed
+      const { rollbackWalletDeduction } = require('./Transaction-controller');
+      if (rollbackWalletDeduction) {
+        await rollbackWalletDeduction(transaction, session);
+      }
+
+      await Booking.findOneAndUpdate(
+        { _id: transaction.booking },
+        { paymentStatus: 'failed', updatedAt: new Date() },
+        { session }
+      );
+
+      console.log(`Payment failed: ${payment.id}, Transaction: ${transaction._id}`);
+    });
   } catch (error) {
     console.error('Error handling payment.failed:', error);
     throw error;
+  } finally {
+    await session.endSession();
   }
 };
 
@@ -2185,36 +2202,46 @@ const releaseHeldEarnings = async () => {
   const session = await mongoose.startSession();
   try {
     const now = new Date();
+    await session.withTransaction(async () => {
+      // Find earnings that are held and ready to be released
+      const heldEarnings = await ProviderEarning.find({
+        status: 'held',
+        availableAfter: { $lte: now }
+      }).populate('booking').session(session);
 
-    // Find earnings that are held and ready to be released
-    const heldEarnings = await ProviderEarning.find({
-      status: 'held',
-      availableAfter: { $lte: now }
-    }).populate('booking');
+      if (heldEarnings.length === 0) return;
 
-    if (heldEarnings.length === 0) return;
+      console.log(`Processing ${heldEarnings.length} held earnings for release...`);
 
-    console.log(`Processing ${heldEarnings.length} held earnings for release...`);
+      for (const earning of heldEarnings) {
+        // Check if dispute is raised on the booking
+        if (earning.booking) {
+          if (earning.booking.disputeRaised || earning.booking.disputeStatus === 'pending' || earning.booking.disputeStatus === 'under_review') {
+            console.log(`Skipping release for earning ${earning._id} - Dispute Active on booking ${earning.booking._id}`);
+            continue;
+          }
+          if (earning.booking.paymentStatus === 'refunded' || earning.booking.adminRefundDecision === 'approved') {
+            console.log(`Cancelling earning ${earning._id} - Booking refunded/approved for refund`);
+            await ProviderEarning.findOneAndUpdate(
+              { _id: earning._id, status: 'held' },
+              { $set: { status: 'cancelled' } },
+              { session }
+            );
+            continue;
+          }
+        }
 
-    for (const earning of heldEarnings) {
-      // Check if dispute is raised on the booking
-      if (earning.booking) {
-        if (earning.booking.disputeRaised || earning.booking.disputeStatus === 'pending' || earning.booking.disputeStatus === 'under_review') {
-          console.log(`Skipping release for earning ${earning._id} - Dispute Active on booking ${earning.booking._id}`);
+        // Atomically lock and update status from 'held' to 'available' to prevent race conditions
+        const updatedEarning = await ProviderEarning.findOneAndUpdate(
+          { _id: earning._id, status: 'held' },
+          { $set: { status: 'available' } },
+          { session, new: true }
+        );
+
+        if (!updatedEarning) {
+          console.log(`Skipping release for earning ${earning._id} - Already processed by another concurrent task.`);
           continue;
         }
-        if (earning.booking.paymentStatus === 'refunded' || earning.booking.adminRefundDecision === 'approved') {
-          console.log(`Cancelling earning ${earning._id} - Booking refunded/approved for refund`);
-          earning.status = 'cancelled';
-          await earning.save();
-          continue;
-        }
-      }
-
-      await session.withTransaction(async () => {
-        // Update earning status
-        earning.status = 'available';
-        await earning.save({ session });
 
         // Update provider wallet
         const provider = await Provider.findById(earning.provider).session(session);
@@ -2238,9 +2265,9 @@ const releaseHeldEarnings = async () => {
             );
           } catch (err) { /* ignore */ }
         }
-      });
-      console.log(`Released earning ${earning._id} to provider ${earning.provider}`);
-    }
+        console.log(`Released earning ${earning._id} to provider ${earning.provider}`);
+      }
+    });
   } catch (error) {
     console.error('Error in releaseHeldEarnings:', error);
   } finally {

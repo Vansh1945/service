@@ -11,7 +11,7 @@ const Razorpay = require('razorpay');
 const razorpay = require('../services/razorpay');
 
 const rollbackWalletDeduction = async (transaction, session) => {
-  if (transaction.paymentMethod === 'mixed' && ['pending', 'failed'].includes(transaction.paymentStatus)) {
+  if (transaction.paymentMethod === 'mixed' && transaction.paymentStatus === 'pending' && !transaction.description?.includes('Rolled Back')) {
     const match = transaction.description && transaction.description.match(/Wallet \(₹([\d.]+)\)/);
     if (match) {
       const walletDeduction = parseFloat(match[1]);
@@ -80,7 +80,7 @@ const createOrder = async (req, res) => {
     }
 
     // CHECK: booking.paymentStatus !== 'paid'
-    if (booking.paymentStatus === 'paid' || booking.paymentStatus === 'success' || booking.paymentStatus === 'completed') {
+    if (booking.paymentStatus === 'paid' || booking.paymentStatus === 'escrow_hold' || booking.paymentStatus === 'success' || booking.paymentStatus === 'completed') {
       await session.abortTransaction();
       return res.status(400).json({
         success: false,
@@ -309,6 +309,7 @@ const verifyPayment = async (req, res) => {
       .digest('hex');
 
     if (generatedSignature !== razorpay_signature) {
+      console.warn(`[Payment Security Alert] Invalid signature for order: ${razorpay_order_id}, payment: ${razorpay_payment_id}. Generated: ${generatedSignature}, Received: ${razorpay_signature}`);
       // Update transaction status to failed and rollback wallet balance
       const transaction = await Transaction.findById(transactionId).session(session);
       if (transaction) {
@@ -404,7 +405,7 @@ const verifyPayment = async (req, res) => {
 
     await transaction.save({ session });
 
-    booking.paymentStatus = 'paid';
+    booking.paymentStatus = 'escrow_hold';
     booking.paymentMethod = ['online', 'cash', 'wallet', 'mixed'].includes(transaction.paymentMethod) ? transaction.paymentMethod : 'online';
     booking.confirmedBooking = true;
     if (booking.status !== 'accepted' && booking.status !== 'completed' && booking.status !== 'in-progress') {
@@ -452,20 +453,25 @@ const handleWebhook = async (req, res) => {
     return res.status(500).send('Server error');
   }
 
-  // Verify webhook signature using raw body for security
+  // Verify webhook signature using raw body buffer for security
   const shasum = crypto.createHmac('sha256', webhookSecret);
-  // req.body should be the raw buffer if express.raw() is used in route
-  const bodyData = Buffer.isBuffer(req.body) ? req.body : JSON.stringify(req.body);
+  const bodyData = req.rawBody || (Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body)));
   shasum.update(bodyData);
   const generatedSignature = shasum.digest('hex');
 
   if (generatedSignature !== razorpaySignature) {
-    console.warn('Webhook signature verification failed');
+    console.warn(`[Payment Security Alert] Webhook signature verification failed for signature ${razorpaySignature}. Generated: ${generatedSignature}`);
     return res.status(400).send('Invalid signature');
   }
 
-  // Parse payload if it's a buffer
-  const payload = Buffer.isBuffer(req.body) ? JSON.parse(req.body.toString()) : req.body;
+  // Parse payload from rawBody buffer if available, fallback to req.body
+  let payload;
+  try {
+    payload = req.rawBody ? JSON.parse(req.rawBody.toString()) : (Buffer.isBuffer(req.body) ? JSON.parse(req.body.toString()) : req.body);
+  } catch (parseErr) {
+    console.error('Failed to parse webhook payload:', parseErr);
+    return res.status(400).send('Invalid JSON payload');
+  }
   const event = payload.event;
   const payment = payload.payload.payment?.entity;
 
@@ -564,7 +570,7 @@ const handleSuccessfulPayment = async (payment, session) => {
     }
   }
 
-  booking.paymentStatus = 'paid';
+  booking.paymentStatus = 'escrow_hold';
   booking.paymentMethod = ['online', 'cash', 'wallet', 'mixed'].includes(transaction.paymentMethod) ? transaction.paymentMethod : 'online';
   booking.paidAmount = transaction.amount;
   booking.paymentDate = new Date();
@@ -596,6 +602,7 @@ const handleFailedPayment = async (payment, session) => {
   }).session(session);
 
   if (transaction) {
+    await rollbackWalletDeduction(transaction, session);
     await Booking.findByIdAndUpdate(
       transaction.booking,
       { paymentStatus: 'failed' },
@@ -608,17 +615,25 @@ const handleFailedPayment = async (payment, session) => {
 const handleRefundProcessed = async (refund, session) => {
   if (!refund || !refund.payment_id) return;
 
-  const transaction = await Transaction.findOne({
-    razorpayPaymentId: refund.payment_id
-  }).session(session);
+  // Use findOneAndUpdate atomically to prevent duplicate processing
+  const transaction = await Transaction.findOneAndUpdate(
+    {
+      razorpayPaymentId: refund.payment_id,
+      refundStatus: { $ne: 'completed' }
+    },
+    {
+      $set: {
+        paymentStatus: 'refunded',
+        refundStatus: 'completed',
+        refundedAt: new Date(),
+        updatedAt: new Date(),
+        razorpayResponse: refund // update response field
+      }
+    },
+    { session, new: true }
+  );
 
   if (transaction) {
-    transaction.paymentStatus = 'refunded';
-    transaction.refundStatus = 'completed';
-    transaction.refundedAt = new Date();
-    transaction.razorpayResponse = { ...transaction.razorpayResponse, refund };
-    await transaction.save({ session });
-
     await Booking.findByIdAndUpdate(
       transaction.booking,
       {

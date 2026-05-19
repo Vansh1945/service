@@ -16,7 +16,7 @@ const getBookingProgress = (booking) => {
   // 2. Map based on current internal status
   switch (status) {
     case 'pending':
-      if (paymentStatus !== 'paid') {
+      if (paymentStatus !== 'paid' && paymentStatus !== 'escrow_hold') {
         return 'pending_payment';
       }
       return 'confirmed';
@@ -59,7 +59,7 @@ const getBookingProgress = (booking) => {
  * @param {Object} booking - The booking document
  * @param {String} payoutStatus - The payout status string from getPayoutStatus
  * @returns {Array} - Array of timeline steps
- */
+ * */
 const getBookingTimeline = (booking, payoutStatus = '') => {
   if (!booking) return [];
 
@@ -80,7 +80,7 @@ const getBookingTimeline = (booking, payoutStatus = '') => {
   });
 
   // 2. Payment Confirmed
-  const isPaid = booking.paymentStatus === "paid" || booking.confirmedBooking === true;
+  const isPaid = booking.paymentStatus === "paid" || booking.paymentStatus === "escrow_hold" || booking.confirmedBooking === true;
   timeline.push({
     title: "Payment Confirmed",
     completed: isPaid,

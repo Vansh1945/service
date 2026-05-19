@@ -40,7 +40,8 @@ import {
     ChevronRight,
     ExternalLink,
     Lock,
-    Unlock
+    Unlock,
+    CheckSquare
 } from 'lucide-react';
 
 // Static option arrays outside component — never change between renders

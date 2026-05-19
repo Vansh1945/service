@@ -45,7 +45,11 @@ const PORT = process.env.PORT || 5000;
 // Initialize express app
 const app = express();
 
-app.use(express.json());
+app.use(express.json({
+  verify: (req, res, buf) => {
+    req.rawBody = buf;
+  }
+}));
 
 const { parseFraudHeaders } = require('./middlewares/fraud-middleware');
 app.use(parseFraudHeaders);
@@ -116,23 +120,37 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/uploads", express.static("uploads"));
 app.use("/assets", express.static("assets"));
 
-// const rateLimit = require('express-rate-limit');
+const rateLimit = require('express-rate-limit');
 
-// Global API Rate Limiter
-// const globalLimiter = rateLimit({
-//   windowMs: 15 * 60 * 1000, // 15 minutes
-//   max: 100, // Limit each IP to 100 requests per window
-//   message: {
-//     success: false,
-//     message: "Too many requests from this IP, Please try again after 15 minutes",
-//     error: "RATE_LIMIT_EXCEEDED"
-//   },
+// Specific Rate Limiters for Authentication
+// const firebaseLimiter = rateLimit({
+//   windowMs: 15 * 60 * 1000,
+//   max: 10,
 //   standardHeaders: true,
 //   legacyHeaders: false,
+//   message: { success: false, message: 'Too many login attempts. Try again in 15 minutes.' }
 // });
 
-// Apply rate limiting to all API routes
-// app.use('/api', globalLimiter);
+// const refreshLimiter = rateLimit({
+//   windowMs: 15 * 60 * 1000,
+//   max: 30,
+//   standardHeaders: true,
+//   legacyHeaders: false,
+//   message: { success: false, message: 'Too many refresh requests. Slow down.' }
+// });
+
+// const loginLimiter = rateLimit({
+//   windowMs: 15 * 60 * 1000,
+//   max: 5,
+//   standardHeaders: true,
+//   legacyHeaders: false,
+//   message: { success: false, message: 'Too many login attempts. Try again in 15 minutes.' }
+// });
+
+// Apply rate limiters directly to auth endpoints
+// app.post("/api/auth/login", loginLimiter);
+// app.post("/api/auth/firebase-login", firebaseLimiter);
+// app.post("/api/auth/refresh-token", refreshLimiter);
 
 // Route imports
 const adminRoutes = require("./routes/Admin-Routes");

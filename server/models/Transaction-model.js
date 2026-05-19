@@ -122,7 +122,7 @@ transactionSchema.statics.createRazorpayOrder = async function (amount, currency
 
 // Verify Razorpay signature
 transactionSchema.statics.verifySignature = function (orderId, paymentId, signature) {
-  const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+  const secret = process.env.RAZORPAY_KEY_SECRET;
   const generatedSignature = crypto
     .createHmac('sha256', secret)
     .update(`${orderId}|${paymentId}`)
@@ -146,6 +146,8 @@ transactionSchema.index({ booking: 1 });
 transactionSchema.index({ user: 1 });
 transactionSchema.index({ paymentStatus: 1 });
 transactionSchema.index({ createdAt: -1 });
+transactionSchema.index({ razorpayPaymentId: 1 }, { unique: true, sparse: true });
+transactionSchema.index({ razorpayOrderId: 1 }, { unique: true, sparse: true });
 
 const Transaction = mongoose.model('Transaction', transactionSchema);
 
