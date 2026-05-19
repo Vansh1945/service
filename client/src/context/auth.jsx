@@ -131,8 +131,12 @@ export const AuthProvider = ({ children }) => {
     const logoutUser = async () => {
         try {
             const currentRefreshToken = localStorage.getItem("refreshToken");
-            if (currentRefreshToken) {
-                await AuthService.logoutApi({ refreshToken: currentRefreshToken });
+            const currentFcmToken = localStorage.getItem("fcmToken");
+            if (currentRefreshToken || currentFcmToken) {
+                await AuthService.logoutApi({ 
+                    refreshToken: currentRefreshToken,
+                    fcmToken: currentFcmToken 
+                });
             }
         } catch (e) {
             console.warn("Backend logout failed:", e);

@@ -161,6 +161,29 @@ const notifyAllAdmins = async (payload) => {
  * @param {object} filters  - { city, category, minBookings }
  * @returns {{ success, sent, failed, total }}
  */
+const isInQuietHours = (pref) => {
+    if (!pref || !pref.quietHours || !pref.quietHours.enabled) return false;
+    try {
+        const now = new Date();
+        const currentHours = now.getHours();
+        const currentMins = now.getMinutes();
+        const currentTime = currentHours * 60 + currentMins;
+
+        const [startH, startM] = pref.quietHours.start.split(':').map(Number);
+        const [endH, endM] = pref.quietHours.end.split(':').map(Number);
+        const startTime = startH * 60 + startM;
+        const endTime = endH * 60 + endM;
+
+        if (startTime < endTime) {
+            return currentTime >= startTime && currentTime <= endTime;
+        } else {
+            return currentTime >= startTime || currentTime <= endTime;
+        }
+    } catch (e) {
+        return false;
+    }
+};
+
 const sendBroadcastNotification = async (audience, payload, filters = {}, broadcastId = null) => {
     try {
         let allTokens = [];
@@ -173,8 +196,13 @@ const sendBroadcastNotification = async (audience, payload, filters = {}, broadc
             if (city) userQuery['address.city'] = new RegExp(city, 'i');
             if (minBookings > 0) userQuery.totalBookings = { $gte: minBookings };
 
-            users = await User.find(userQuery, '_id fcmTokens');
+            users = await User.find(userQuery, '_id fcmTokens notificationPreferences');
             users.forEach(u => {
+                // Filter out users who disabled promotional/broadcast notifications
+                if (u.notificationPreferences && u.notificationPreferences.promotional === false) {
+                    return;
+                }
+
                 notificationsToSave.push({
                     userId: u._id,
                     role: 'customer',
@@ -188,7 +216,18 @@ const sendBroadcastNotification = async (audience, payload, filters = {}, broadc
                     broadcast_id: broadcastId,
                     sentAt: new Date()
                 });
-                if (u.fcmTokens && u.fcmTokens.length > 0) {
+
+                // Send push only if enabled and not during quiet hours
+                let pushAllowed = true;
+                if (u.notificationPreferences) {
+                    if (u.notificationPreferences.pushEnabled === false) {
+                        pushAllowed = false;
+                    } else if (isInQuietHours(u.notificationPreferences)) {
+                        pushAllowed = false;
+                    }
+                }
+
+                if (pushAllowed && u.fcmTokens && u.fcmTokens.length > 0) {
                     u.fcmTokens.forEach(t => allTokens.push(t.token));
                 }
             });
@@ -201,8 +240,13 @@ const sendBroadcastNotification = async (audience, payload, filters = {}, broadc
             if (category) providerQuery.services = category; // category ID
             if (minBookings > 0) providerQuery.completedBookings = { $gte: minBookings };
 
-            providers = await Provider.find(providerQuery, '_id fcmTokens');
+            providers = await Provider.find(providerQuery, '_id fcmTokens notificationPreferences');
             providers.forEach(p => {
+                // Filter out providers who disabled promotional/broadcast notifications
+                if (p.notificationPreferences && p.notificationPreferences.promotional === false) {
+                    return;
+                }
+
                 notificationsToSave.push({
                     userId: p._id,
                     role: 'provider',
@@ -216,7 +260,18 @@ const sendBroadcastNotification = async (audience, payload, filters = {}, broadc
                     broadcast_id: broadcastId,
                     sentAt: new Date()
                 });
-                if (p.fcmTokens && p.fcmTokens.length > 0) {
+
+                // Send push only if enabled and not during quiet hours
+                let pushAllowed = true;
+                if (p.notificationPreferences) {
+                    if (p.notificationPreferences.pushEnabled === false) {
+                        pushAllowed = false;
+                    } else if (isInQuietHours(p.notificationPreferences)) {
+                        pushAllowed = false;
+                    }
+                }
+
+                if (pushAllowed && p.fcmTokens && p.fcmTokens.length > 0) {
                     p.fcmTokens.forEach(t => allTokens.push(t.token));
                 }
             });

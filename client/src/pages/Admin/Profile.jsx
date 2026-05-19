@@ -5,9 +5,10 @@ import 'react-toastify/dist/ReactToastify.css';
 import {
   FiUser, FiMail, FiLock, FiX, FiPlus, FiShield, FiUsers,
   FiSearch, FiChevronLeft, FiChevronRight, FiCalendar,
-  FiEdit, FiEye, FiEyeOff, FiUpload, FiTrash2, FiLoader
+  FiEdit, FiEye, FiEyeOff, FiUpload, FiTrash2, FiLoader, FiBell, FiAlertCircle
 } from 'react-icons/fi';
 import * as AdminService from '../../services/AdminService';
+import * as NotificationService from '../../services/NotificationService';
 import Pagination from '../../components/Pagination';
 import { formatDate } from '../../utils/format';
 
@@ -63,6 +64,65 @@ const AdminProfile = () => {
   const [showAdminList, setShowAdminList] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [preferences, setPreferences] = useState({
+    booking: true,
+    payment: true,
+    complaint: true,
+    promotional: true,
+    providerUpdates: true,
+    adminAlerts: true,
+    wallet: true,
+    reminder: true,
+    pushEnabled: true,
+    quietHours: { enabled: false, start: '22:00', end: '08:00' }
+  });
+  const [prefLoading, setPrefLoading] = useState(false);
+
+  const fetchPreferences = useCallback(async () => {
+    try {
+      setPrefLoading(true);
+      const res = await NotificationService.getPreferences();
+      if (res.data?.success) {
+        setPreferences(res.data.data);
+      }
+    } catch (err) {
+      toast.error('Failed to load notification settings');
+    } finally {
+      setPrefLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPreferences();
+  }, [fetchPreferences]);
+
+  const handleTogglePreference = async (key) => {
+    try {
+      const updatedVal = !preferences[key];
+      const res = await NotificationService.updatePreferences({ [key]: updatedVal });
+      if (res.data?.success) {
+        setPreferences(res.data.data);
+        toast.success('Notification preference updated!');
+      }
+    } catch (err) {
+      toast.error('Failed to update preference');
+    }
+  };
+
+  const handleQuietHoursChange = async (fields) => {
+    try {
+      const res = await NotificationService.updatePreferences({
+        quietHours: { ...preferences.quietHours, ...fields }
+      });
+      if (res.data?.success) {
+        setPreferences(res.data.data);
+        toast.success('Quiet hours updated!');
+      }
+    } catch (err) {
+      toast.error('Failed to update quiet hours');
+    }
+  };
 
   // Fetch admin profile
   const fetchProfile = useCallback(async () => {
@@ -467,6 +527,110 @@ const AdminProfile = () => {
                     <p className="text-base sm:text-lg font-medium">
                       {formatDate(profile?.updatedAt)}
                     </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Notification Settings */}
+            <div className="mt-6 sm:mt-8 border-t border-gray-200 pt-6">
+              <h2 className="text-xl font-semibold text-secondary mb-4">
+                <FiBell className="inline mr-2 text-primary" />
+                Notification Settings
+              </h2>
+              <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-5">
+                <p className="text-xs text-gray-500">Configure how and when you receive system administrative alerts.</p>
+                
+                <div className="space-y-4">
+                  {/* Master Push Toggle */}
+                  <div className="flex items-center justify-between p-4 rounded-xl bg-gray-50/50 border border-gray-100 hover:border-gray-200 transition-all">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-primary/10 rounded-lg text-primary">
+                        <FiBell className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-secondary">Enable Push Notifications</p>
+                        <p className="text-xs text-gray-500">Receive real-time alerts on your device</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleTogglePreference('pushEnabled')}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${preferences.pushEnabled ? 'bg-primary' : 'bg-gray-200'}`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${preferences.pushEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
+                  </div>
+
+                  {/* Quiet Hours Block */}
+                  <div className="p-4 rounded-xl bg-gray-50/50 border border-gray-100 hover:border-gray-200 transition-all space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-indigo-50 rounded-lg text-indigo-500">
+                          <FiShield className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-secondary">Quiet Hours</p>
+                          <p className="text-xs text-gray-500">Silence push notifications during set hours</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleQuietHoursChange({ enabled: !preferences.quietHours?.enabled })}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${preferences.quietHours?.enabled ? 'bg-indigo-500' : 'bg-gray-200'}`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${preferences.quietHours?.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </button>
+                    </div>
+
+                    {preferences.quietHours?.enabled && (
+                      <div className="flex items-center gap-4 pl-12 pt-2 transition-all">
+                        <div>
+                          <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Start Time</label>
+                          <input
+                            type="time"
+                            value={preferences.quietHours?.start || '22:00'}
+                            onChange={(e) => handleQuietHoursChange({ start: e.target.value })}
+                            className="px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary bg-white font-medium text-gray-700 shadow-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">End Time</label>
+                          <input
+                            type="time"
+                            value={preferences.quietHours?.end || '08:00'}
+                            onChange={(e) => handleQuietHoursChange({ end: e.target.value })}
+                            className="px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary bg-white font-medium text-gray-700 shadow-sm"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Granular Preferences Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                    {[
+                      { key: 'booking', label: 'Bookings & Orders', desc: 'Alerts for system-wide bookings and service lifecycle', icon: <FiCalendar className="w-4 h-4 text-blue-500" /> },
+                      { key: 'payment', label: 'Financials & Payouts', desc: 'Updates on commission payouts, wallet credits, and transactions', icon: <FiShield className="w-4 h-4 text-emerald-500" /> },
+                      { key: 'complaint', label: 'Complaints & Support', desc: 'Disputes, refunds, and support request filings', icon: <FiAlertCircle className="w-4 h-4 text-rose-500" /> },
+                      { key: 'adminAlerts', label: 'Critical Admin Updates', desc: 'System log warnings, host security, and credential updates', icon: <FiShield className="w-4 h-4 text-orange-500" /> }
+                    ].map(item => (
+                      <div key={item.key} className="flex items-start justify-between p-4 rounded-xl border border-gray-100 hover:border-gray-200 transition-all bg-white shadow-sm font-poppins">
+                        <div className="flex gap-3 min-w-0">
+                          <div className="p-2 bg-gray-50 rounded-lg shrink-0">
+                            {item.icon}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-secondary truncate">{item.label}</p>
+                            <p className="text-xs text-gray-500 mt-0.5 leading-snug">{item.desc}</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleTogglePreference(item.key)}
+                          className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus:outline-none ${preferences[item.key] ? 'bg-primary' : 'bg-gray-200'}`}
+                        >
+                          <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${preferences[item.key] ? 'translate-x-4.5' : 'translate-x-1'}`} />
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>

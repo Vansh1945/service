@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/auth';
 import { getSocket } from '../socket/socket';
+import { useNavigate } from 'react-router-dom';
 import { Bell, X, Check, CheckCheck, BookOpen, CreditCard, AlertCircle, ShieldCheck, Wallet } from 'lucide-react';
 
 import * as NotificationService from '../services/NotificationService';
 
 const NotificationBell = () => {
     const { token, API, user } = useAuth();
+    const navigate = useNavigate();
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const [isOpen, setIsOpen] = useState(false);
@@ -42,11 +44,19 @@ const NotificationBell = () => {
 
         const handleNew = (notification) => {
             setNotifications(prev => [notification, ...prev].slice(0, 15));
-            setUnreadCount(c => c + 1);
+        };
+
+        const handleCount = ({ unreadCount }) => {
+            setUnreadCount(unreadCount);
         };
 
         socket.on('new_notification', handleNew);
-        return () => socket.off('new_notification', handleNew);
+        socket.on('unread_count_updated', handleCount);
+
+        return () => {
+            socket.off('new_notification', handleNew);
+            socket.off('unread_count_updated', handleCount);
+        };
     }, [token]);
 
     // Request browser notification permission
@@ -175,7 +185,8 @@ const NotificationBell = () => {
                                         } catch (err) { /* silent fail for analytics */ }
                                         
                                         if (n.url && n.url !== '/') {
-                                            window.location.href = n.url;
+                                            navigate(n.url);
+                                            setIsOpen(false);
                                         }
                                     }}
                                     className={`px-4 py-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50 transition-colors ${!n.isRead ? 'bg-blue-50/40' : ''}`}

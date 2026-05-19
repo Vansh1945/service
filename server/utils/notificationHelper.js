@@ -1,7 +1,48 @@
 const Notification = require('../models/Notification');
 const notificationService = require('./notificationService');
+const User = require('../models/User-model');
+const Provider = require('../models/Provider-model');
+const Admin = require('../models/Admin-model');
 
 let _io = null;
+
+const typeToPreferenceMap = {
+    'booking': 'booking',
+    'payment': 'payment',
+    'complaint': 'complaint',
+    'broadcast': 'promotional',
+    'approved': 'providerUpdates',
+    'rejected': 'providerUpdates',
+    'payout': 'wallet',
+    'withdrawal': 'wallet',
+    'system': 'adminAlerts',
+    'reminder': 'reminder'
+};
+
+const isInQuietHours = (pref) => {
+    if (!pref || !pref.quietHours || !pref.quietHours.enabled) return false;
+    try {
+        const now = new Date();
+        const currentHours = now.getHours();
+        const currentMins = now.getMinutes();
+        const currentTime = currentHours * 60 + currentMins;
+
+        const [startH, startM] = pref.quietHours.start.split(':').map(Number);
+        const [endH, endM] = pref.quietHours.end.split(':').map(Number);
+        const startTime = startH * 60 + startM;
+        const endTime = endH * 60 + endM;
+
+        if (startTime < endTime) {
+            return currentTime >= startTime && currentTime <= endTime;
+        } else {
+            // Quiet hours cross midnight (e.g. 22:00 to 08:00)
+            return currentTime >= startTime || currentTime <= endTime;
+        }
+    } catch (e) {
+        console.error('Error calculating quiet hours:', e);
+        return false;
+    }
+};
 
 /**
  * Set the Socket.io instance (called from socketServer after init)
@@ -49,6 +90,27 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
 
         // If userId is provided, save to DB and emit to that specific user
         if (userId) {
+            // 1. Role Verification to prevent cross-role notification leaks
+            let Model;
+            if (role === 'admin') Model = Admin;
+            else if (role === 'provider') Model = Provider;
+            else Model = User;
+
+            const recipient = await Model.findById(userId).select('notificationPreferences fcmTokens');
+            if (!recipient) {
+                console.warn(`[Security Alert] Suppressed notification dispatch: User ${userId} is not a valid ${role}`);
+                return null;
+            }
+
+            // 2. Granular Preference Check
+            const prefKey = typeToPreferenceMap[type];
+            if (recipient.notificationPreferences && prefKey) {
+                if (recipient.notificationPreferences[prefKey] === false) {
+                    console.log(`[NotificationHelper] Suppressing notification: User ${userId} has disabled ${prefKey} notifications`);
+                    return null;
+                }
+            }
+
             notification = await Notification.create({
                 userId,
                 role,
@@ -59,7 +121,7 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
                 url: generatedUrl
             });
 
-            // 1. Emit real-time event via Socket.io
+            // 3. Emit real-time event via Socket.io
             if (_io) {
                 const room = userId.toString();
                 const socketsInRoom = await _io.in(room).fetchSockets();
@@ -74,27 +136,46 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
                     isRead: false,
                     createdAt: notification.createdAt
                 });
+
+                // Send real-time unread count update to guarantee client stays fully in-sync
+                const unreadCount = await Notification.countDocuments({ userId, isRead: false });
+                _io.to(room).emit('unread_count_updated', { unreadCount });
             } else {
                 console.warn('[Socket] _io not set — socket notification skipped');
             }
 
-            try {
-                console.log(`[NotificationHelper] Calling notifyUser for: ${userId}, role: ${role}`);
-                await notificationService.notifyUser(userId, role, {
-                    title,
-                    body: message,
-                    url: generatedUrl,
-                    role: role,
-                    data: {
-                        bookingId: referenceId ? referenceId.toString() : '',
-                        userId: userId.toString(),
-                        type: type,
+            // 4. Send FCM Push Notification with granular Silencing (pushEnabled & quiet hours)
+            let isPushAllowed = true;
+            if (recipient.notificationPreferences) {
+                if (recipient.notificationPreferences.pushEnabled === false) {
+                    isPushAllowed = false;
+                } else if (isInQuietHours(recipient.notificationPreferences)) {
+                    isPushAllowed = false;
+                    console.log(`[NotificationHelper] Silence push due to Quiet Hours for User ${userId}`);
+                }
+            }
+
+            if (isPushAllowed) {
+                try {
+                    console.log(`[NotificationHelper] Calling notifyUser for: ${userId}, role: ${role}`);
+                    await notificationService.notifyUser(userId, role, {
+                        title,
+                        body: message,
                         url: generatedUrl,
-                        role: role
-                    }
-                });
-            } catch (fcmError) {
-                console.error(`[NotificationHelper] FCM Error:`, fcmError);
+                        role: role,
+                        data: {
+                            bookingId: referenceId ? referenceId.toString() : '',
+                            userId: userId.toString(),
+                            type: type,
+                            url: generatedUrl,
+                            role: role
+                        }
+                    });
+                } catch (fcmError) {
+                    console.error(`[NotificationHelper] FCM Error:`, fcmError);
+                }
+            } else {
+                console.log(`[NotificationHelper] FCM Push skipped/silenced for user ${userId}`);
             }
         } else if (role && _io) {
             // If no userId but role is provided, broadcast to the role room (real-time only)

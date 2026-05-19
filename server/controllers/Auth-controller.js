@@ -696,7 +696,19 @@ exports.refreshAccessToken = async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 exports.logout = async (req, res) => {
   try {
-    const { refreshToken, allDevices = false } = req.body;
+    const { refreshToken, fcmToken, allDevices = false } = req.body;
+
+    // 1. Revoke FCM Token if provided to prevent stale notifications on logout
+    if (fcmToken) {
+      try {
+        await User.updateMany({}, { $pull: { fcmTokens: { token: fcmToken } } });
+        await Provider.updateMany({}, { $pull: { fcmTokens: { token: fcmToken } } });
+        await Admin.updateMany({}, { $pull: { fcmTokens: { token: fcmToken } } });
+      } catch (fcmPullErr) {
+        console.error('Error pulling FCM token on logout:', fcmPullErr);
+      }
+    }
+
     if (!refreshToken) {
       // Still clear client – just return success
       return res.status(200).json({ success: true, message: 'Logged out' });

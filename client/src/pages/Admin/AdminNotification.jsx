@@ -93,7 +93,7 @@ const AdminNotification = () => {
 
     useEffect(() => {
         if (socket) {
-            socket.on('broadcast__updated', (data) => {
+            socket.on('broadcast_stats_updated', (data) => {
                 console.log('Received broadcast stats update:', data);
                 setHistory(prevHistory => {
                     return prevHistory.map(item => {

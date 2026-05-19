@@ -25,6 +25,14 @@ export const removeToken = (data) => {
     return axiosInstance.post("/notifications/remove-token", data);
 };
 
+export const getPreferences = () => {
+    return axiosInstance.get("/notifications/preferences");
+};
+
+export const updatePreferences = (data) => {
+    return axiosInstance.patch("/notifications/preferences", data);
+};
+
 // Admin only
 export const sendBroadcast = (data) => {
     return axiosInstance.post("/notifications/send-broadcast", data);

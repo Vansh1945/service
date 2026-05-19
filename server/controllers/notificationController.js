@@ -198,35 +198,44 @@ const saveToken = async (req, res) => {
         else if (role === 'provider') Model = Provider;
         else Model = User;
 
-        const user = await Model.findById(userId);
-        if (!user) {
-            return res.status(404).json({ success: false, message: 'User not found' });
-        }
+        // 1. Pull this token from all other users in all collections to avoid duplicate registration
+        await Promise.all([
+            User.updateMany({ _id: { $ne: userId } }, { $pull: { fcmTokens: { token } } }),
+            Provider.updateMany({ _id: { $ne: userId } }, { $pull: { fcmTokens: { token } } }),
+            Admin.updateMany({ _id: { $ne: userId } }, { $pull: { fcmTokens: { token } } })
+        ]);
 
-        const existingTokenIndex = user.fcmTokens.findIndex(t => t.token === token);
+        // 2. Remove any existing entry for this token or this device on the current user to prevent duplicates
+        await Model.updateOne(
+            { _id: userId },
+            { $pull: { fcmTokens: { $or: [{ token }, { deviceId }] } } }
+        );
 
-        if (existingTokenIndex !== -1) {
-            user.fcmTokens[existingTokenIndex].lastActive = new Date();
-            user.fcmTokens[existingTokenIndex].deviceId = deviceId;
-        } else {
-            user.fcmTokens = user.fcmTokens.filter(t => t.deviceId !== deviceId);
-            user.fcmTokens.push({
-                token,
-                deviceId,
-                lastActive: new Date()
-            });
-
-            if (user.fcmTokens.length > 3) {
-                user.fcmTokens.sort((a, b) => b.lastActive - a.lastActive);
-                user.fcmTokens = user.fcmTokens.slice(0, 3);
+        // 3. Atomically append the new token and cap array to last 3 entries
+        await Model.updateOne(
+            { _id: userId },
+            {
+                $push: {
+                    fcmTokens: {
+                        $each: [{ token, deviceId, lastActive: new Date() }],
+                        $slice: -3
+                    }
+                }
             }
-        }
+        );
 
-        await user.save();
         return res.status(200).json({ success: true, message: 'Token saved' });
     } catch (error) {
-        console.error('saveToken error:', error);
-        return res.status(500).json({ success: false, message: 'Failed to save token' });
+        if (global.logger) {
+            global.logger.error('saveToken error:', error);
+        } else {
+            console.error('saveToken error:', error);
+        }
+        return res.status(500).json({ 
+            success: false, 
+            message: 'Failed to save token', 
+            error: error.message
+        });
     }
 };
 
@@ -244,14 +253,120 @@ const removeToken = async (req, res) => {
         else if (role === 'provider') Model = Provider;
         else Model = User;
 
-        await Model.findByIdAndUpdate(userId, {
-            $pull: { fcmTokens: { token: token } }
-        });
+        await Model.updateOne(
+            { _id: userId },
+            { $pull: { fcmTokens: { token } } }
+        );
 
         return res.status(200).json({ success: true, message: 'Token removed' });
     } catch (error) {
-        console.error('removeToken error:', error);
-        return res.status(500).json({ success: false, message: 'Failed to remove token' });
+        if (global.logger) {
+            global.logger.error('removeToken error:', error);
+        } else {
+            console.error('removeToken error:', error);
+        }
+        return res.status(500).json({ success: false, message: 'Failed to remove token', error: error.message });
+    }
+};
+
+/**
+ * GET /api/notifications/preferences
+ */
+const getPreferences = async (req, res) => {
+    try {
+        const userId = req.userID;
+        const role = req.role;
+
+        let Model;
+        if (role === 'admin') Model = Admin;
+        else if (role === 'provider') Model = Provider;
+        else Model = User;
+
+        const user = await Model.findById(userId).select('notificationPreferences');
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        const prefs = user.notificationPreferences || {
+            booking: true,
+            payment: true,
+            complaint: true,
+            promotional: true,
+            providerUpdates: true,
+            adminAlerts: true,
+            wallet: true,
+            reminder: true,
+            pushEnabled: true,
+            quietHours: { enabled: false, start: '22:00', end: '08:00' }
+        };
+
+        return res.status(200).json({ success: true, data: prefs });
+    } catch (error) {
+        console.error('getPreferences error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to fetch preferences' });
+    }
+};
+
+/**
+ * PATCH /api/notifications/preferences
+ */
+const updatePreferences = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        const userId = req.userID;
+        const role = req.role;
+        const updates = req.body;
+
+        let Model;
+        if (role === 'admin') Model = Admin;
+        else if (role === 'provider') Model = Provider;
+        else Model = User;
+
+        const user = await Model.findById(userId).session(session);
+        if (!user) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        if (!user.notificationPreferences) {
+            user.notificationPreferences = {
+                booking: true,
+                payment: true,
+                complaint: true,
+                promotional: true,
+                providerUpdates: true,
+                adminAlerts: true,
+                wallet: true,
+                reminder: true,
+                pushEnabled: true,
+                quietHours: { enabled: false, start: '22:00', end: '08:00' }
+            };
+        }
+
+        // Apply granular preference updates safely
+        Object.keys(updates).forEach(key => {
+            if (key === 'quietHours') {
+                user.notificationPreferences.quietHours = {
+                    ...user.notificationPreferences.quietHours,
+                    ...updates.quietHours
+                };
+            } else {
+                user.notificationPreferences[key] = updates[key];
+            }
+        });
+
+        await user.save({ session });
+        await session.commitTransaction();
+        session.endSession();
+
+        return res.status(200).json({ success: true, message: 'Preferences updated successfully', data: user.notificationPreferences });
+    } catch (error) {
+        await session.abortTransaction();
+        session.endSession();
+        console.error('updatePreferences error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to update preferences' });
     }
 };
 
@@ -725,6 +840,8 @@ module.exports = {
     getUnreadCount,
     saveToken,
     removeToken,
+    getPreferences,
+    updatePreferences,
     sendBroadcast,
     getBroadcastHistory: getAdminNotifications,
     updateNotification,
