@@ -1792,14 +1792,24 @@ exports.getPerformanceRatings = async (req, res) => {
             performanceBadge = 'Silver';
         }
 
+        const provider = await Provider.findById(providerId).select('performanceScore').lean();
+        const performance = provider?.performanceScore || {};
+
         res.status(200).json({
             success: true,
             data: {
                 averageRating,
                 totalReviews: ratingData.totalReviews || 0,
-                completionRate,
-                onTimeRate,
-                performanceBadge
+                completionRate: performance.completionPercentage !== undefined ? performance.completionPercentage : completionRate,
+                onTimeRate: performance.onTimePercentage !== undefined ? performance.onTimePercentage : onTimeRate,
+                performanceBadge,
+                trustScore: performance.trustScore !== undefined ? performance.trustScore : 100,
+                cancellationRatio: performance.cancellationRatio || 0,
+                complaintRatio: performance.complaintRatio || 0,
+                codAbuseRisk: performance.codAbuseRisk || 'LOW',
+                restrictionsActive: performance.restrictionsActive || false,
+                restrictedUntil: performance.restrictedUntil || null,
+                restrictionReason: performance.restrictionReason || null
             }
         });
 

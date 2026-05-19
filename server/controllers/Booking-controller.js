@@ -1647,6 +1647,7 @@ const cancelBooking = async (req, res) => {
         await Provider.findByIdAndUpdate(booking.provider, {
           $inc: { canceledBookings: 1 }
         }, { session });
+        await recalculateProviderPerformance(booking.provider, session);
       }
 
       await session.commitTransaction();
@@ -1796,6 +1797,7 @@ const cancelBooking = async (req, res) => {
         await Provider.findByIdAndUpdate(booking.provider, {
           $inc: { canceledBookings: 1 }
         }, { session });
+        await recalculateProviderPerformance(booking.provider, session);
       }
 
       await session.commitTransaction();
@@ -2666,6 +2668,9 @@ const rejectBooking = async (req, res) => {
 
     await booking.save({ session });
 
+    // Recalculate provider stats and trust score dynamically inside the same transaction session
+    await recalculateProviderPerformance(providerId, session);
+
     await session.commitTransaction();
     session.endSession();
 
@@ -3010,52 +3015,10 @@ const completeBooking = async (req, res) => {
 
     provider.wallet.lastUpdated = new Date();
     provider.completedBookings = (provider.completedBookings || 0) + 1;
-
-    // ------------------------------
-    //  PERFORMANCE SCORE CALCULATION
-    // ------------------------------
-    const providerBookings = await Booking.find({
-      provider: providerId,
-      status: { $in: ['accepted', 'in-progress', 'completed', 'cancelled'] }
-    }).session(session);
-
-    let totalAccepted = 0;
-    let totalCompleted = 0;
-    let onTimeCompleted = 0;
-
-    providerBookings.forEach(b => {
-      totalAccepted++;
-
-      if (b.status === 'completed') {
-        totalCompleted++;
-
-        if (b.completedAt && b.date && b.time) {
-          const scheduledDate = new Date(b.date);
-          const [hours, minutes] = b.time.split(':').map(Number);
-          // Set exact time to scheduled date
-          scheduledDate.setHours(hours, minutes, 0, 0);
-
-          // 6-hour buffer
-          const maxCompletionTime = new Date(scheduledDate.getTime() + 6 * 60 * 60 * 1000);
-
-          if (b.completedAt <= maxCompletionTime) {
-            onTimeCompleted++;
-          }
-        }
-      }
-    });
-
-    const completionPercent = totalAccepted > 0 ? (totalCompleted / totalAccepted) * 100 : 0;
-    const onTimePercent = totalCompleted > 0 ? (onTimeCompleted / totalCompleted) * 100 : 0;
-
-    provider.performanceScore = {
-      ...provider.performanceScore,
-      rating: provider.performanceScore?.rating || 0,
-      completionPercentage: parseFloat(completionPercent.toFixed(1)),
-      onTimePercentage: parseFloat(onTimePercent.toFixed(1))
-    };
-
     await provider.save({ session });
+
+    // Recalculate performance score and trust score
+    await recalculateProviderPerformance(providerId, session);
 
 
     await session.commitTransaction();
@@ -4057,7 +4020,147 @@ const downloadBookingReport = async (req, res) => {
   }
 };
 
+const recalculateProviderPerformance = async (providerId, session = null) => {
+  try {
+    const provider = await Provider.findById(providerId).session(session);
+    if (!provider) return;
+
+    // 1. Get all bookings related to provider
+    const bookings = await Booking.find({ provider: providerId }).session(session).lean();
+
+    const totalAccepted = bookings.filter(b => ['accepted', 'in-progress', 'completed', 'cancelled'].includes(b.status)).length;
+    const completedCount = bookings.filter(b => b.status === 'completed').length;
+    const providerCancelledCount = bookings.filter(b => b.status === 'cancelled' && b.rejectedBy?.toString() === providerId.toString()).length;
+
+    // 2. Completion rate & Cancellation ratio
+    const completionPercentage = totalAccepted > 0 ? (completedCount / totalAccepted) * 100 : 100;
+    const cancellationRatio = totalAccepted > 0 ? (providerCancelledCount / totalAccepted) * 100 : 0;
+
+    // 3. On-time rate
+    let onTimeCompleted = 0;
+    const completedJobs = bookings.filter(b => b.status === 'completed');
+    completedJobs.forEach(job => {
+      if (job.completedAt && job.date && job.time) {
+        const scheduledDate = new Date(job.date);
+        const [hours, minutes] = job.time.split(':').map(Number);
+        scheduledDate.setHours(hours, minutes, 0, 0);
+
+        // 6-hour buffer
+        const maxCompletionTime = new Date(scheduledDate.getTime() + 6 * 60 * 60 * 1000);
+        if (new Date(job.completedAt) <= maxCompletionTime) {
+          onTimeCompleted++;
+        }
+      }
+    });
+    const onTimePercentage = completedCount > 0 ? (onTimeCompleted / completedCount) * 100 : 100;
+
+    // 4. Rating
+    const Feedback = mongoose.model('Feedback');
+    const feedbacks = await Feedback.find({ 'providerFeedback.provider': providerId }).session(session).lean();
+    const averageRating = feedbacks.length > 0
+      ? feedbacks.reduce((sum, f) => sum + (f.providerFeedback.rating || 0), 0) / feedbacks.length
+      : 5; // Default to 5 star rating if none exists
+
+    // 5. Trust score calculation
+    let trustScore = 100;
+
+    // For every completed booking: +2 (capped at 100)
+    trustScore += completedCount * 2;
+    if (trustScore > 100) trustScore = 100;
+
+    // For every cancelled booking by provider: -10
+    trustScore -= providerCancelledCount * 10;
+
+    // For complaints / COD abuse: query Complaint model
+    const Complaint = mongoose.model('Complaint');
+    const complaints = await Complaint.find({ provider: providerId }).session(session).lean();
+    const complaintCount = complaints.length;
+    const complaintRatio = totalAccepted > 0 ? (complaintCount / totalAccepted) * 100 : 0;
+    
+    // Deduct for complaints
+    trustScore -= complaintCount * 15;
+
+    // Deduct for COD balance threshold if wallet balance is extremely negative
+    const codAbuseRisk = provider.wallet?.availableBalance < -500 ? 'HIGH' : provider.wallet?.availableBalance < -200 ? 'MEDIUM' : 'LOW';
+    if (codAbuseRisk === 'HIGH') {
+      trustScore -= 20;
+    } else if (codAbuseRisk === 'MEDIUM') {
+      trustScore -= 10;
+    }
+
+    if (trustScore < 0) trustScore = 0;
+    if (trustScore > 100) trustScore = 100;
+
+    // 6. Penalty Restrictions & Cooldowns
+    let restrictionsActive = provider.performanceScore?.restrictionsActive || false;
+    let restrictedUntil = provider.performanceScore?.restrictedUntil || null;
+    let restrictionReason = provider.performanceScore?.restrictionReason || null;
+
+    if (trustScore < 60) {
+      if (!restrictionsActive) {
+        restrictionsActive = true;
+        restrictedUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+        restrictionReason = `Trust score (${trustScore.toFixed(0)}) dropped below 60 due to high cancellations/complaints.`;
+        
+        // Notify provider
+        try {
+          await sendNotification(
+            providerId,
+            'provider',
+            'Account Restricted',
+            restrictionReason,
+            'restriction',
+            null
+          );
+        } catch (e) { console.error('Error notifying provider of restriction:', e); }
+      }
+    } else if (restrictionsActive && trustScore >= 80) {
+      // Automatic liftoff of restriction if score recovered and restricted time passed
+      if (restrictedUntil && new Date() >= new Date(restrictedUntil)) {
+        restrictionsActive = false;
+        restrictedUntil = null;
+        restrictionReason = null;
+
+        // Notify provider
+        try {
+          await sendNotification(
+            providerId,
+            'provider',
+            'Account Restriction Lifted',
+            'Your account restriction has been lifted as your trust score recovered.',
+            'restriction',
+            null
+          );
+        } catch (e) { console.error('Error notifying provider of restriction lift:', e); }
+      }
+    }
+
+    // Save back to provider doc
+    provider.performanceScore = {
+      rating: averageRating,
+      onTimePercentage,
+      completionPercentage,
+      trustScore,
+      cancellationRatio,
+      complaintRatio,
+      codAbuseRisk,
+      restrictionsActive,
+      restrictedUntil,
+      restrictionReason
+    };
+
+    provider.completedBookings = completedCount;
+    provider.canceledBookings = providerCancelledCount;
+
+    await provider.save({ session });
+
+  } catch (error) {
+    console.error('recalculateProviderPerformance error:', error);
+  }
+};
+
 module.exports = {
+  recalculateProviderPerformance,
   createBooking,
   confirmBooking,
   updateBookingStatus,

@@ -452,6 +452,7 @@ const ProviderBooking = () => {
       setSelectedImages([]);
       setUploadProgress(0);
       setConfirmDialog({ isOpen: false, type: '', data: null });
+      setProofModal({ isOpen: false, action: null, bookingId: null });
     } catch (err) {
       showToast(err.response?.data?.message || err.message, 'error');
     } finally {
@@ -700,7 +701,7 @@ const ProviderBooking = () => {
             {booking.status === 'pending' && (!booking.provider || booking.provider === user?._id) && (
               <>
                 <button
-                  disabled={actionLoading.id === booking._id}
+                  disabled={actionLoading.id !== null}
                   onClick={() => handleBookingAction(booking._id, 'accept')}
                   className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white bg-primary hover:bg-primary/90 transition-colors w-full disabled:bg-gray-300 disabled:cursor-not-allowed"
                 >
@@ -713,7 +714,7 @@ const ProviderBooking = () => {
                 </button>
                 {booking.paymentStatus !== 'paid' && (
                   <button
-                    disabled={actionLoading.id === booking._id}
+                    disabled={actionLoading.id !== null}
                     onClick={() => handleBookingAction(booking._id, 'reject', { reason: 'Provider declined' })}
                     className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white bg-accent hover:bg-accent/90 transition-colors w-full disabled:bg-gray-300 disabled:cursor-not-allowed"
                   >
@@ -727,7 +728,7 @@ const ProviderBooking = () => {
             {booking.status === 'accepted' && (
               <>
                 <button
-                  disabled={actionLoading.id === booking._id || ((booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service') && booking.paymentStatus !== 'paid')}
+                  disabled={actionLoading.id !== null || ((booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service') && booking.paymentStatus !== 'paid')}
                   onClick={() => handleBookingAction(booking._id, 'start')}
                   className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white bg-primary hover:bg-primary/90 transition-colors w-full disabled:bg-gray-300 disabled:cursor-not-allowed"
                 >
@@ -753,7 +754,7 @@ const ProviderBooking = () => {
             {/* In-Progress: Complete */}
             {booking.status === 'in-progress' && (
               <button
-                disabled={actionLoading.id === booking._id}
+                disabled={actionLoading.id !== null}
                 onClick={() => handleBookingAction(booking._id, 'complete')}
                 className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white bg-primary hover:bg-primary/90 transition-colors w-full disabled:bg-gray-300 disabled:cursor-not-allowed"
               >
@@ -1487,7 +1488,6 @@ const ProviderBooking = () => {
         progress={uploadProgress}
         onConfirm={(images, location, pin) => {
           executeBookingAction(proofModal.bookingId, proofModal.action, { images, location, pin });
-          setProofModal({ isOpen: false, action: null, bookingId: null });
         }}
       />
 

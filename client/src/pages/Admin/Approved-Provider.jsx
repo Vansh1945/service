@@ -50,6 +50,13 @@ const getServiceBadges = (services) => {
 };
 
 const getStatusBadge = (provider) => {
+  if (provider.performanceScore?.restrictionsActive) {
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-800 border border-red-200">
+        <Shield className="w-3 h-3 mr-1 text-red-600 animate-pulse" />Restricted
+      </span>
+    );
+  }
   if (provider.kycStatus === 'rejected') {
     return (
       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
@@ -430,6 +437,9 @@ const AdminProviders = () => {
                               <div className="text-xs text-gray-500 flex items-center">
                                 <CheckCircle className="w-3 h-3 mr-1" /> Completion: {provider.performanceScore?.completionPercentage?.toFixed(1) || '0.0'}%
                               </div>
+                              <div className="text-xs font-semibold flex items-center mt-0.5">
+                                <TrendingUp className="w-3 h-3 mr-1 text-primary" /> Trust Score: <span className={`ml-1 font-bold ${provider.performanceScore?.trustScore < 60 ? 'text-red-600' : provider.performanceScore?.trustScore < 80 ? 'text-amber-600' : 'text-green-600'}`}>{provider.performanceScore?.trustScore !== undefined ? provider.performanceScore.trustScore.toFixed(0) : '100'}%</span>
+                              </div>
                             </div>
                           </td>
                           <td className="px-4 md:px-6 py-4 whitespace-nowrap">
@@ -476,6 +486,21 @@ const AdminProviders = () => {
             size="xlarge"
           >
             <div className="space-y-6">
+              {/* Active restriction alert banner */}
+              {selectedProvider.performanceScore?.restrictionsActive && (
+                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-xl flex items-start gap-3 shadow-sm">
+                  <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold text-red-800 text-sm">Provider Account Restricted</p>
+                    <p className="text-red-700 text-xs mt-1 leading-relaxed">
+                      This provider's account is restricted from accepting new bookings due to poor performance or excessive complaints.
+                      {selectedProvider.performanceScore.restrictionReason && <span className="block mt-1 font-semibold">Reason: {selectedProvider.performanceScore.restrictionReason}</span>}
+                      {selectedProvider.performanceScore.restrictedUntil && <span className="block mt-0.5">Restricted Until: {new Date(selectedProvider.performanceScore.restrictedUntil).toLocaleDateString()} at {new Date(selectedProvider.performanceScore.restrictedUntil).toLocaleTimeString()}</span>}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Header Section */}
               <div className="bg-gradient-to-br from-teal-50 to-teal-100 p-6 rounded-xl border border-teal-200">
                 <div className="flex flex-col md:flex-row items-start gap-6">
@@ -547,14 +572,22 @@ const AdminProviders = () => {
                 <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                   <div className="flex items-center mb-2">
                     <Star className="w-5 h-5 text-gray-600 mr-2" />
-                    <span className="text-sm font-medium text-gray-700">Performance</span>
+                    <span className="text-sm font-medium text-gray-700">Performance & Trust</span>
                   </div>
                   <div className="flex flex-col gap-1">
                     <p className="text-md font-semibold text-gray-900">
                       ⭐ {selectedProvider.performanceScore?.rating > 0 ? selectedProvider.performanceScore.rating.toFixed(1) : 'No ratings yet'}
                     </p>
-                    <p className="text-sm text-gray-600">⏱ On-Time: {selectedProvider.performanceScore?.onTimePercentage?.toFixed(1) || '0.0'}%</p>
-                    <p className="text-sm text-gray-600">✔ Completion: {selectedProvider.performanceScore?.completionPercentage?.toFixed(1) || '0.0'}%</p>
+                    <p className="text-xs text-gray-600">⏱ On-Time: {selectedProvider.performanceScore?.onTimePercentage?.toFixed(1) || '0.0'}%</p>
+                    <p className="text-xs text-gray-600">✔ Completion: {selectedProvider.performanceScore?.completionPercentage?.toFixed(1) || '0.0'}%</p>
+                    <div className="h-px bg-gray-100 my-1" />
+                    <p className="text-xs font-bold text-secondary flex items-center">
+                      <TrendingUp className="w-3.5 h-3.5 mr-1 text-primary animate-pulse" />
+                      Trust Score: <span className={`ml-1 font-extrabold ${selectedProvider.performanceScore?.trustScore < 60 ? 'text-red-600 font-black animate-pulse' : selectedProvider.performanceScore?.trustScore < 80 ? 'text-amber-600' : 'text-green-600'}`}>{selectedProvider.performanceScore?.trustScore !== undefined ? selectedProvider.performanceScore.trustScore.toFixed(0) : '100'}%</span>
+                    </p>
+                    <p className="text-[10px] text-gray-500">❌ Cancel Ratio: {selectedProvider.performanceScore?.cancellationRatio?.toFixed(1) || '0.0'}%</p>
+                    <p className="text-[10px] text-gray-500">⚠️ Complaint Ratio: {selectedProvider.performanceScore?.complaintRatio?.toFixed(1) || '0.0'}%</p>
+                    <p className="text-[10px] text-gray-500">💳 COD Risk: <span className={`font-bold ${selectedProvider.performanceScore?.codAbuseRisk === 'HIGH' ? 'text-red-600 font-extrabold' : selectedProvider.performanceScore?.codAbuseRisk === 'MEDIUM' ? 'text-amber-600' : 'text-green-600'}`}>{selectedProvider.performanceScore?.codAbuseRisk || 'LOW'}</span></p>
                   </div>
                 </div>
               </div>

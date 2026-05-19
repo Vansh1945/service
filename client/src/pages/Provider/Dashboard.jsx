@@ -188,6 +188,34 @@ const Dashboard = () => {
           </div>
         </div>
 
+        {/* Account Restriction or Low Performance Alert Banner */}
+        {ratings?.restrictionsActive && (
+          <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-xl mb-6 flex items-start gap-3 shadow-sm">
+            <FiAlertTriangle className="w-6 h-6 text-red-500 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-red-800 text-sm">Account Restricted</p>
+              <p className="text-red-700 text-xs mt-1 leading-relaxed">
+                Your account is restricted from accepting new bookings.
+                {ratings.restrictionReason && ` Reason: ${ratings.restrictionReason}`}
+                {ratings.restrictedUntil && ` Restricting until: ${new Date(ratings.restrictedUntil).toLocaleDateString()}`}
+              </p>
+            </div>
+          </div>
+        )}
+        {!ratings?.restrictionsActive && Number(ratings?.trustScore !== undefined ? ratings.trustScore : 100) < 80 && (
+          <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-xl mb-6 flex items-start gap-3 shadow-sm">
+            <FiAlertCircle className="w-6 h-6 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-amber-800 text-sm">Action Required: Low Performance Score</p>
+              <p className="text-amber-700 text-xs mt-1 leading-relaxed">
+                Your Trust Score is currently at {Number(ratings?.trustScore !== undefined ? ratings.trustScore : 100).toFixed(0)}%. 
+                If it drops below 60%, your account will be automatically restricted. 
+                Please ensure on-time service delivery and avoid cancellation rejections to improve your score.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
           <Link to="/provider/earnings" className="bg-white rounded-2xl shadow-sm p-4 border-l-4 border-primary hover:shadow-md transition-shadow">
@@ -270,7 +298,7 @@ const Dashboard = () => {
               <div>
                 <p className="text-xs text-secondary/50 uppercase tracking-wide">Rating</p>
                 <p className="text-xl font-bold text-secondary">
-                  {ratings?.averageRating ? ratings.averageRating.toFixed(1) : '—'}
+                  {ratings?.averageRating ? Number(ratings.averageRating).toFixed(1) : '—'}
                 </p>
               </div>
             </div>
@@ -334,18 +362,25 @@ const Dashboard = () => {
           </div>
           <div className="flex justify-around items-center bg-gray-50 rounded-xl p-4">
             <div className="text-center">
-              <p className="text-2xl font-bold text-secondary">{ratings?.averageRating?.toFixed(1) || '0.0'}</p>
+              <p className="text-2xl font-bold text-secondary">{Number(ratings?.averageRating || 0).toFixed(1)}</p>
               <p className="text-xs text-secondary/50 mt-1">Rating</p>
             </div>
             <div className="w-px h-8 bg-gray-200" />
             <div className="text-center">
-              <p className="text-2xl font-bold text-secondary">{ratings?.onTimeRate?.toFixed(1) || '0.0'}%</p>
+              <p className="text-2xl font-bold text-secondary">{Number(ratings?.onTimeRate || 0).toFixed(1)}%</p>
               <p className="text-xs text-secondary/50 mt-1">On-Time</p>
             </div>
             <div className="w-px h-8 bg-gray-200" />
             <div className="text-center">
-              <p className="text-2xl font-bold text-secondary">{ratings?.completionRate?.toFixed(1) || '0.0'}%</p>
+              <p className="text-2xl font-bold text-secondary">{Number(ratings?.completionRate || 0).toFixed(1)}%</p>
               <p className="text-xs text-secondary/50 mt-1">Completion</p>
+            </div>
+            <div className="w-px h-8 bg-gray-200" />
+            <div className="text-center">
+              <p className={`text-2xl font-bold ${Number(ratings?.trustScore !== undefined ? ratings.trustScore : 100) < 60 ? 'text-red-600 animate-pulse font-black' : Number(ratings?.trustScore !== undefined ? ratings.trustScore : 100) < 80 ? 'text-amber-600 font-bold' : 'text-secondary'}`}>
+                {Number(ratings?.trustScore !== undefined ? ratings.trustScore : 100).toFixed(0)}%
+              </p>
+              <p className="text-xs text-secondary/50 mt-1">Trust Score</p>
             </div>
           </div>
         </div>
@@ -521,14 +556,14 @@ const Dashboard = () => {
                           <div className="flex gap-1">
                             <button
                               onClick={() => handleBookingAction(booking._id, 'accept')}
-                              disabled={actionLoading[booking._id]}
+                              disabled={Object.values(actionLoading).some(Boolean)}
                               className="px-3 py-1.5 bg-primary text-white text-xs rounded-lg hover:bg-primary/90 disabled:opacity-50"
                             >
                               Accept
                             </button>
                             <button
                               onClick={() => handleBookingAction(booking._id, 'reject')}
-                              disabled={actionLoading[booking._id]}
+                              disabled={Object.values(actionLoading).some(Boolean)}
                               className="px-3 py-1.5 bg-red-500 text-white text-xs rounded-lg hover:bg-red-600 disabled:opacity-50"
                             >
                               Reject

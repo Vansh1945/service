@@ -580,6 +580,10 @@ const verifyWithdrawalOTP = async (req, res) => {
         throw new Error("Insufficient balance");
       }
 
+      // Lock the pending amount immediately upon OTP verification to prevent double-spending/withdrawals
+      provider.wallet.availableBalance -= amount;
+      provider.wallet.lastUpdated = new Date();
+
       const paymentRecord = new PaymentRecord({
         provider: providerId,
         amount,
@@ -1245,21 +1249,12 @@ const approveWithdrawalRequest = async (req, res) => {
     paymentRecord.completedAt = new Date();
     await paymentRecord.save({ session });
 
-    // 2.5️⃣ Deduct from provider's wallet balance
+    // 2.5️⃣ Increment provider's totalWithdrawn (balance was already locked/deducted at OTP verification time)
     const providerDoc = paymentRecord.provider;
     if (!providerDoc.wallet) {
       providerDoc.wallet = { availableBalance: 0, totalWithdrawn: 0, lastUpdated: new Date() };
     }
 
-    // Safety check before deduction
-    if (providerDoc.wallet.availableBalance < paymentRecord.amount) {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(400).json({ success: false, message: "Provider does not have enough balance to approve this withdrawal." });
-    }
-
-    // Ledger-like tracking inline
-    providerDoc.wallet.availableBalance -= paymentRecord.amount;
     providerDoc.wallet.totalWithdrawn += paymentRecord.amount;
     providerDoc.wallet.lastUpdated = new Date();
     await providerDoc.save({ session });
@@ -1328,6 +1323,14 @@ const rejectWithdrawalRequest = async (req, res) => {
     if (!provider) {
       throw new Error('Provider not found for this payment record.');
     }
+
+    // Refund the locked withdrawal amount back to the provider's wallet available balance
+    if (!provider.wallet) {
+      provider.wallet = { availableBalance: 0, totalWithdrawn: 0, lastUpdated: new Date() };
+    }
+    provider.wallet.availableBalance += paymentRecord.amount;
+    provider.wallet.lastUpdated = new Date();
+    await provider.save({ session });
 
     // Update payment record
     paymentRecord.status = "rejected";

@@ -203,7 +203,14 @@ const providerSchema = new mongoose.Schema({
     performanceScore: {
         rating: { type: Number, default: 0 },
         onTimePercentage: { type: Number, default: 0 },
-        completionPercentage: { type: Number, default: 0 }
+        completionPercentage: { type: Number, default: 0 },
+        trustScore: { type: Number, default: 100 },
+        cancellationRatio: { type: Number, default: 0 },
+        complaintRatio: { type: Number, default: 0 },
+        codAbuseRisk: { type: String, default: 'LOW' },
+        restrictionsActive: { type: Boolean, default: false },
+        restrictedUntil: { type: Date, default: null },
+        restrictionReason: { type: String, default: null }
     },
 
     completedBookings: {
