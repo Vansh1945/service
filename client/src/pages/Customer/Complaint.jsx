@@ -12,6 +12,7 @@ import {
 import { getCustomerBookings } from '../../services/BookingService';
 import { getComplaint, getCustomerComplaints, submitComplaint as submitComplaintAPI, reopenComplaint as reopenComplaintAPI } from '../../services/ComplaintService';
 import { formatDate, formatDateTime, compressImage } from '../../utils/format';
+import CDNImage from '../../components/CDNImage';
 
 const COMPLAINT_CATEGORIES = ["Service issue", "Payment issue", "Refund request", "Suggestion", "Other"];
 
@@ -609,7 +610,7 @@ const ComplaintsPage = () => {
                   </p>
                   <div className="flex gap-2 overflow-x-auto pb-1">
                     {selectedComplaint.images.map((img, idx) => (
-                      <img key={idx} src={img} className="w-20 h-20 flex-shrink-0 object-cover rounded-xl border-2 border-gray-100 cursor-pointer hover:border-primary transition-all" alt="attachment" onClick={() => setPreviewImage(img)} />
+                      <CDNImage key={idx} src={img} width={200} className="w-20 h-20 flex-shrink-0 object-cover rounded-xl border-2 border-gray-100 cursor-pointer hover:border-primary transition-all" alt="attachment" onClick={() => setPreviewImage(img)} />
                     ))}
                   </div>
                 </div>
@@ -628,7 +629,7 @@ const ComplaintsPage = () => {
                       <div className="flex gap-1 overflow-x-auto w-full justify-center">
                         {selectedComplaint.evidenceComparison.beforeWorkImages?.length > 0 ? (
                           selectedComplaint.evidenceComparison.beforeWorkImages.map((img, i) => (
-                            <img key={i} src={img} className="w-8 h-8 object-cover rounded border" alt="Before" onClick={() => setPreviewImage(img)} />
+                            <CDNImage key={i} src={img} width={100} className="w-8 h-8 object-cover rounded border cursor-pointer hover:border-primary transition-all" alt="Before" onClick={() => setPreviewImage(img)} />
                           ))
                         ) : <span className="text-[8px] text-gray-300 italic">None</span>}
                       </div>
@@ -638,7 +639,7 @@ const ComplaintsPage = () => {
                       <div className="flex gap-1 overflow-x-auto w-full justify-center">
                         {selectedComplaint.evidenceComparison.afterWorkImages?.length > 0 ? (
                           selectedComplaint.evidenceComparison.afterWorkImages.map((img, i) => (
-                            <img key={i} src={img} className="w-8 h-8 object-cover rounded border" alt="After" onClick={() => setPreviewImage(img)} />
+                            <CDNImage key={i} src={img} width={100} className="w-8 h-8 object-cover rounded border cursor-pointer hover:border-primary transition-all" alt="After" onClick={() => setPreviewImage(img)} />
                           ))
                         ) : <span className="text-[8px] text-gray-300 italic">None</span>}
                       </div>
@@ -648,7 +649,7 @@ const ComplaintsPage = () => {
                       <div className="flex gap-1 overflow-x-auto w-full justify-center">
                         {selectedComplaint.evidenceComparison.complaintImages?.length > 0 ? (
                           selectedComplaint.evidenceComparison.complaintImages.map((img, i) => (
-                            <img key={i} src={img} className="w-8 h-8 object-cover rounded border border-red-100" alt="Proof" onClick={() => setPreviewImage(img)} />
+                            <CDNImage key={i} src={img} width={100} className="w-8 h-8 object-cover rounded border border-red-100 cursor-pointer hover:border-primary transition-all" alt="Proof" onClick={() => setPreviewImage(img)} />
                           ))
                         ) : <span className="text-[8px] text-gray-300 italic">None</span>}
                       </div>
@@ -680,7 +681,7 @@ const ComplaintsPage = () => {
                           {step.images?.length > 0 && (
                             <div className="flex gap-1 mt-1.5">
                               {step.images.map((img, j) => (
-                                <img key={j} src={img} className="w-6 h-6 object-cover rounded border" alt="Proof" onClick={() => setPreviewImage(img)} />
+                                <CDNImage key={j} src={img} width={100} className="w-6 h-6 object-cover rounded border cursor-pointer hover:border-primary transition-all" alt="Proof" onClick={() => setPreviewImage(img)} />
                               ))}
                             </div>
                           )}
@@ -805,7 +806,7 @@ const ComplaintsPage = () => {
           <button className="absolute top-4 right-4 p-2 text-white/70 hover:text-white bg-black/50 hover:bg-black/80 rounded-full transition-all">
             <X className="w-6 h-6" />
           </button>
-          <img src={previewImage} className="max-w-[95vw] max-h-[90vh] object-contain rounded-lg shadow-2xl" alt="Preview" onClick={e => e.stopPropagation()} />
+          <CDNImage src={previewImage} width={1600} lazy={false} className="max-w-[95vw] max-h-[90vh] object-contain rounded-lg shadow-2xl" alt="Preview" onClick={e => e.stopPropagation()} />
         </div>
       )}
     </div>

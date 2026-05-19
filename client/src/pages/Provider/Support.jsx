@@ -11,6 +11,7 @@ import {
 import { getBookingsByStatus } from '../../services/BookingService';
 import { getComplaint, getCustomerComplaints, submitComplaint as submitComplaintAPI, replyToComplaint } from '../../services/ComplaintService';
 import { formatDate, formatDateTime, compressImage } from '../../utils/format';
+import CDNImage from '../../components/CDNImage';
 
 const SUPPORT_CATEGORIES = ["Payment", "Booking", "Account", "Other"];
 
@@ -552,7 +553,7 @@ const ProviderSupportPage = () => {
                       <div className="flex gap-1 overflow-x-auto w-full justify-center">
                         {selectedComplaint.evidenceComparison.beforeWorkImages?.length > 0 ? (
                           selectedComplaint.evidenceComparison.beforeWorkImages.map((img, i) => (
-                            <img key={i} src={img} className="w-8 h-8 object-cover rounded border" alt="" />
+                            <CDNImage key={i} src={img} width={100} className="w-8 h-8 object-cover rounded border" alt="Before" />
                           ))
                         ) : <span className="text-[8px] text-gray-300">None</span>}
                       </div>
@@ -562,7 +563,7 @@ const ProviderSupportPage = () => {
                       <div className="flex gap-1 overflow-x-auto w-full justify-center">
                         {selectedComplaint.evidenceComparison.afterWorkImages?.length > 0 ? (
                           selectedComplaint.evidenceComparison.afterWorkImages.map((img, i) => (
-                            <img key={i} src={img} className="w-8 h-8 object-cover rounded border" alt="" />
+                            <CDNImage key={i} src={img} width={100} className="w-8 h-8 object-cover rounded border" alt="After" />
                           ))
                         ) : <span className="text-[8px] text-gray-300">None</span>}
                       </div>
@@ -572,7 +573,7 @@ const ProviderSupportPage = () => {
                       <div className="flex gap-1 overflow-x-auto w-full justify-center">
                         {selectedComplaint.evidenceComparison.complaintImages?.length > 0 ? (
                           selectedComplaint.evidenceComparison.complaintImages.map((img, i) => (
-                            <img key={i} src={img} className="w-8 h-8 object-cover rounded border border-red-100" alt="" />
+                            <CDNImage key={i} src={img} width={100} className="w-8 h-8 object-cover rounded border border-red-100" alt="Customer proof" />
                           ))
                         ) : <span className="text-[8px] text-gray-300">None</span>}
                       </div>

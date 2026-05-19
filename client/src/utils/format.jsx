@@ -142,22 +142,33 @@ export const formatPercentage = (value) => {
 /**
  * Format Cloudinary URLs to include delivery optimization parameters.
  * @param {string} url - The Cloudinary image URL
+ * @param {number} width - Desired width parameter for dynamic CDN optimization
  * @returns {string} Optimized Cloudinary URL
  */
-export const getOptimizedCloudinaryUrl = (url) => {
+export const getOptimizedCloudinaryUrl = (url, width = 800) => {
   if (!url || typeof url !== 'string') return url;
   if (!url.startsWith('http') || !url.includes('res.cloudinary.com')) return url;
   
-  if (url.includes('/image/upload/')) {
-    if (!url.includes('/image/upload/f_auto,q_auto,w_800/')) {
-      return url.replace('/image/upload/', '/image/upload/f_auto,q_auto,w_800/');
-    }
-  } else if (url.includes('/upload/') && !url.includes('/raw/upload/') && !url.includes('/video/upload/')) {
-    if (!url.includes('/upload/f_auto,q_auto,w_800/')) {
-      return url.replace('/upload/', '/upload/f_auto,q_auto,w_800/');
+  // Clean existing auto/quality/width transformations to avoid duplicate paths
+  let cleanUrl = url;
+  const uploadRegex = /\/(image\/upload|upload)\/([^\/]+)\//;
+  const match = cleanUrl.match(uploadRegex);
+  if (match) {
+    const transformStr = match[2];
+    // If it looks like standard auto/quality/width transformation path rather than folder/id
+    if (transformStr.includes('f_auto') || transformStr.includes('q_auto') || transformStr.includes('w_') || transformStr.includes('c_')) {
+      cleanUrl = cleanUrl.replace(`/${match[1]}/${transformStr}/`, `/${match[1]}/`);
     }
   }
-  return url;
+
+  const transform = `f_auto,q_auto,w_${width}`;
+
+  if (cleanUrl.includes('/image/upload/')) {
+    return cleanUrl.replace('/image/upload/', `/image/upload/${transform}/`);
+  } else if (cleanUrl.includes('/upload/') && !cleanUrl.includes('/raw/upload/') && !cleanUrl.includes('/video/upload/')) {
+    return cleanUrl.replace('/upload/', `/upload/${transform}/`);
+  }
+  return cleanUrl;
 };
 
 /**

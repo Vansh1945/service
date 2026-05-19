@@ -11,6 +11,7 @@ import {
 } from 'react-icons/fi';
 import Pagination from '../../components/Pagination';
 import { formatDate, formatDateTime } from '../../utils/format';
+import CDNImage from '../../components/CDNImage';
 
 // ── Helpers ───────────────────────────────────────────────────
 
@@ -510,8 +511,9 @@ const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => 
                     <div className="grid grid-cols-2 gap-2">
                       {booking?.complaintProofs?.length > 0 ? (
                         booking.complaintProofs.filter(p => p.uploadedBy === 'customer').flatMap(p => p.images || []).map((img, i) => (
-                          <img 
+                          <CDNImage 
                             key={i} src={img.url || img.secure_url} 
+                            width={200}
                             className="w-full h-20 object-cover rounded-lg border border-red-200 cursor-zoom-in hover:scale-105 transition-all" 
                             alt="Customer Proof" 
                             onClick={() => window.open(img.url || img.secure_url, '_blank')} 
@@ -519,8 +521,9 @@ const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => 
                         ))
                       ) : complaint.images?.length > 0 ? (
                         complaint.images.map((img, i) => (
-                          <img 
+                          <CDNImage 
                             key={i} src={img.secure_url || img.url} 
+                            width={200}
                             className="w-full h-20 object-cover rounded-lg border border-red-200 cursor-zoom-in hover:scale-105 transition-all" 
                             alt="Customer Proof" 
                             onClick={() => window.open(img.secure_url || img.url, '_blank')} 
@@ -540,8 +543,9 @@ const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => 
                     <div className="grid grid-cols-2 gap-2">
                       {booking?.workProof?.beforeImages?.length > 0 ? (
                         booking.workProof.beforeImages.map((img, i) => (
-                          <img 
+                          <CDNImage 
                             key={i} src={img.url} 
+                            width={200}
                             className="w-full h-20 object-cover rounded-lg border border-amber-200 cursor-zoom-in hover:scale-105 transition-all" 
                             alt="Before Work" 
                             onClick={() => window.open(img.url, '_blank')} 
@@ -561,8 +565,9 @@ const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => 
                     <div className="grid grid-cols-2 gap-2">
                       {booking?.workProof?.afterImages?.length > 0 ? (
                         booking.workProof.afterImages.map((img, i) => (
-                          <img 
+                          <CDNImage 
                             key={i} src={img.url} 
+                            width={200}
                             className="w-full h-20 object-cover rounded-lg border border-green-200 cursor-zoom-in hover:scale-105 transition-all" 
                             alt="After Work" 
                             onClick={() => window.open(img.url, '_blank')} 
@@ -604,7 +609,7 @@ const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => 
                         {reply.images?.length > 0 && (
                           <div className="flex gap-2 mt-3">
                             {reply.images.map((img, i) => (
-                              <img key={i} src={img.url} className="w-10 h-10 object-cover rounded border border-white shadow-sm" alt="Reply Proof" onClick={() => window.open(img.url, '_blank')} />
+                              <CDNImage key={i} src={img.url} width={100} className="w-10 h-10 object-cover rounded border border-white shadow-sm cursor-zoom-in hover:scale-105 transition-all" alt="Reply Proof" onClick={() => window.open(img.url, '_blank')} />
                             ))}
                           </div>
                         )}
@@ -680,7 +685,7 @@ const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => 
                             {h.images?.length > 0 && (
                               <div className="flex gap-2 mt-2">
                                 {h.images.map((img, j) => (
-                                  <img key={j} src={img} className="w-10 h-10 object-cover rounded border shadow-sm" alt="Proof" onClick={() => window.open(img, '_blank')} />
+                                  <CDNImage key={j} src={img} width={100} className="w-10 h-10 object-cover rounded border shadow-sm cursor-zoom-in hover:scale-105 transition-all" alt="Proof" onClick={() => window.open(img, '_blank')} />
                                 ))}
                               </div>
                             )}
