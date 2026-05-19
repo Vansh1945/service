@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { getBookingsByStatus } from '../../services/BookingService';
 import { getComplaint, getCustomerComplaints, submitComplaint as submitComplaintAPI, replyToComplaint } from '../../services/ComplaintService';
-import { formatDate, formatDateTime } from '../../utils/format';
+import { formatDate, formatDateTime, compressImage } from '../../utils/format';
 
 const SUPPORT_CATEGORIES = ["Payment", "Booking", "Account", "Other"];
 
@@ -130,12 +130,17 @@ const ProviderSupportPage = () => {
     if (submittingTicket) return;
     setSubmittingTicket(true);
     try {
+      // Compress support ticket attachment images
+      const compressedImages = await Promise.all(
+        formData.images.map(img => compressImage(img, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 }))
+      );
+
       const fd = new FormData();
       fd.append('bookingId', formData.bookingId);
       fd.append('title', formData.title);
       fd.append('description', formData.description);
       fd.append('category', formData.category);
-      formData.images.forEach(img => fd.append('images', img));
+      compressedImages.forEach(img => fd.append('images', img));
 
       await submitComplaintAPI(fd);
       toast.success('Support ticket submitted successfully!');
@@ -165,9 +170,14 @@ const ProviderSupportPage = () => {
     if (!replyText.trim()) { toast.error('Please enter a reply message'); return; }
     setSubmittingReply(true);
     try {
+      // Compress reply attachment images
+      const compressedImages = await Promise.all(
+        replyImages.map(img => compressImage(img, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 }))
+      );
+
       const fd = new FormData();
       fd.append('message', replyText);
-      replyImages.forEach(img => fd.append('images', img));
+      compressedImages.forEach(img => fd.append('images', img));
 
       await replyToComplaint(selectedComplaint._id, fd);
       toast.success('Reply submitted successfully!');

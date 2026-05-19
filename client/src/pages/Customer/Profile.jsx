@@ -10,7 +10,7 @@ import {
     ChevronRight, ArrowLeft, CreditCard, Package, Edit2, CheckCircle, Gift, Wallet, ArrowDownLeft, RotateCcw
 } from 'lucide-react';
 import { getWalletHistory } from '../../services/CustomerService';
-import { formatCurrency, formatDate, formatDateTime } from '../../utils/format';
+import { formatCurrency, formatDate, formatDateTime, compressImage } from '../../utils/format';
 
 const UserProfile = () => {
     const { user, logoutUser } = useAuth();
@@ -168,10 +168,12 @@ const UserProfile = () => {
             return;
         }
 
-        const formData = new FormData();
-        formData.append('profilePic', selectedFile);
-
         try {
+            const compressedFile = await compressImage(selectedFile, { maxWidth: 1200, maxHeight: 1200, quality: 0.8 });
+
+            const formData = new FormData();
+            formData.append('profilePic', compressedFile);
+
             const response = await updateprofilepic(formData);
             setProfile(prev => ({ ...prev, profilePicUrl: response.data.profilePicUrl }));
             setSelectedFile(null);

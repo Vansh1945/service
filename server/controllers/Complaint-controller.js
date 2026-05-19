@@ -327,7 +327,7 @@ const getAllComplaints = async (req, res) => {
     const overdueComplaints = await Complaint.find({
       status: { $in: ['submitted', 'under_review', 'Open', 'In-Progress'] },
       responseDeadline: { $ne: null, $lt: new Date() }
-    });
+    }).select('_id').lean();
     for (const c of overdueComplaints) {
       await checkAndAutoEscalate(c._id);
     }
@@ -380,14 +380,25 @@ const getAllComplaints = async (req, res) => {
     // Get total count for pagination
     const total = await Complaint.countDocuments(query);
 
-    // Add total complaints count for the provider involved in each complaint
-    const complaintsWithStats = await Promise.all(complaints.map(async (c) => {
-      let providerComplaintsCount = 0;
-      if (c.provider) {
-        providerComplaintsCount = await Complaint.countDocuments({ provider: c.provider._id || c.provider });
+    // Extract all provider IDs to batch-count complaints in a single aggregate query
+    const providerIds = complaints.map(c => c.provider?._id || c.provider).filter(Boolean);
+    const countResults = await Complaint.aggregate([
+      { $match: { provider: { $in: providerIds } } },
+      { $group: { _id: '$provider', count: { $sum: 1 } } }
+    ]).lean();
+
+    const countMap = {};
+    countResults.forEach(res => {
+      if (res._id) {
+        countMap[res._id.toString()] = res.count;
       }
+    });
+
+    const complaintsWithStats = complaints.map(c => {
+      const pId = c.provider?._id || c.provider;
+      const providerComplaintsCount = pId ? (countMap[pId.toString()] || 0) : 0;
       return { ...c, providerComplaintsCount };
-    }));
+    });
 
     res.json({
       success: true,
@@ -1119,6 +1130,19 @@ const replyToComplaint = async (req, res) => {
     const complaint = await Complaint.findById(complaintId);
     if (!complaint) {
       return res.status(404).json({ success: false, message: 'Complaint not found' });
+    }
+
+    // Security Validation: Authorize ownership of the complaint before allowing reply
+    if (userRole === 'provider') {
+      const providerId = complaint.providerId?._id || complaint.providerId || complaint.provider?._id || complaint.provider;
+      if (!providerId || providerId.toString() !== userId.toString()) {
+        return res.status(403).json({ success: false, message: 'Security Alert: Not authorized to reply to this complaint.' });
+      }
+    } else if (userRole === 'customer') {
+      const customerId = complaint.userId?._id || complaint.userId || complaint.customer?._id || complaint.customer;
+      if (!customerId || customerId.toString() !== userId.toString()) {
+        return res.status(403).json({ success: false, message: 'Security Alert: Not authorized to reply to this complaint.' });
+      }
     }
 
     // Auto status transition: if provider replies, transition to provider_responded

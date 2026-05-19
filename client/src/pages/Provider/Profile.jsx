@@ -9,7 +9,7 @@ import * as ProviderService from '../../services/ProviderService';
 import * as SystemService from '../../services/SystemService';
 import * as NotificationService from '../../services/NotificationService';
 import useCategory from '../../hooks/useCategory';
-import { formatDate, formatCurrency } from '../../utils/format';
+import { formatDate, formatCurrency, compressImage } from '../../utils/format';
 
 const ProviderProfile = () => {
   const { token, API, showToast, logoutUser } = useAuth();
@@ -195,18 +195,34 @@ const ProviderProfile = () => {
       const formData = new FormData();
       formData.append('updateType', updateType);
 
+      // Compress upload files if present before packaging into FormData
+      let profilePicFile = fileUploads.profilePic;
+      if (profilePicFile) {
+        profilePicFile = await compressImage(profilePicFile, { maxWidth: 1200, maxHeight: 1200, quality: 0.8 });
+      }
+
+      let resumeFile = fileUploads.resume;
+      if (resumeFile && resumeFile.type.startsWith('image/')) {
+        resumeFile = await compressImage(resumeFile, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
+      }
+
+      let passbookImageFile = fileUploads.passbookImage;
+      if (passbookImageFile) {
+        passbookImageFile = await compressImage(passbookImageFile, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
+      }
+
       switch (updateType) {
         case 'basic':
           formData.append('name', profileData.name);
           formData.append('phone', profileData.phone);
           formData.append('dateOfBirth', profileData.dateOfBirth);
-          if (fileUploads.profilePic) formData.append('profilePic', fileUploads.profilePic);
+          if (profilePicFile) formData.append('profilePic', profilePicFile);
           break;
         case 'professional':
           formData.append('services', JSON.stringify(profileData.services));
           formData.append('experience', profileData.experience);
           formData.append('serviceArea', profileData.serviceArea);
-          if (fileUploads.resume) formData.append('resume', fileUploads.resume);
+          if (resumeFile) formData.append('resume', resumeFile);
           break;
         case 'address':
           formData.append('street', profileData.address.street);
@@ -220,15 +236,15 @@ const ProviderProfile = () => {
           formData.append('ifsc', profileData.bankDetails.ifsc);
           formData.append('bankName', profileData.bankDetails.bankName);
           formData.append('accountName', profileData.bankDetails.accountName);
-          if (fileUploads.passbookImage) formData.append('passbookImage', fileUploads.passbookImage);
+          if (passbookImageFile) formData.append('passbookImage', passbookImageFile);
           break;
         case 'profilePic':
-          if (!fileUploads.profilePic) throw new Error('Please select a profile picture');
-          formData.append('profilePic', fileUploads.profilePic);
+          if (!profilePicFile) throw new Error('Please select a profile picture');
+          formData.append('profilePic', profilePicFile);
           break;
         case 'resume':
-          if (!fileUploads.resume) throw new Error('Please select a resume file');
-          formData.append('resume', fileUploads.resume);
+          if (!resumeFile) throw new Error('Please select a resume file');
+          formData.append('resume', resumeFile);
           break;
       }
 

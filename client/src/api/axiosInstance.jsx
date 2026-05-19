@@ -67,11 +67,48 @@ api.interceptors.request.use(
     }
 );
 
+const optimizeCloudinaryUrls = (data) => {
+    if (!data) return data;
+    if (typeof data === 'string') {
+        if (data.startsWith('http') && data.includes('res.cloudinary.com')) {
+            if (data.includes('/image/upload/')) {
+                if (!data.includes('/image/upload/f_auto,q_auto,w_800/')) {
+                    return data.replace('/image/upload/', '/image/upload/f_auto,q_auto,w_800/');
+                }
+            } else if (data.includes('/upload/') && !data.includes('/raw/upload/') && !data.includes('/video/upload/')) {
+                if (!data.includes('/upload/f_auto,q_auto,w_800/')) {
+                    return data.replace('/upload/', '/upload/f_auto,q_auto,w_800/');
+                }
+            }
+        }
+        return data;
+    }
+    if (Array.isArray(data)) {
+        return data.map(item => optimizeCloudinaryUrls(item));
+    }
+    if (typeof data === 'object') {
+        if (data instanceof Date || data instanceof RegExp || data instanceof ArrayBuffer || (typeof Blob !== 'undefined' && data instanceof Blob)) {
+            return data;
+        }
+        const optimized = {};
+        for (const key in data) {
+            if (Object.prototype.hasOwnProperty.call(data, key)) {
+                optimized[key] = optimizeCloudinaryUrls(data[key]);
+            }
+        }
+        return optimized;
+    }
+    return data;
+};
+
 // Cleanup pending requests on response
 api.interceptors.response.use(
     (response) => {
         if (['post', 'put', 'patch', 'delete'].includes(response.config.method)) {
             pendingRequests.delete(getRequestKey(response.config));
+        }
+        if (response.data) {
+            response.data = optimizeCloudinaryUrls(response.data);
         }
         return response;
     },

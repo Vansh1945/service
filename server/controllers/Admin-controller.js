@@ -204,13 +204,13 @@ const getAllCustomers = async (req, res) => {
 const approveProvider = async (req, res) => {
     try {
         const queryId = req.params.id;
-        const { status, remarks, rejectionReason } = req.body;
+        const { status, remarks, rejectionReason, durationDays } = req.body;
         const finalRemarks = remarks || rejectionReason || '';
 
-        if (!['approved', 'rejected'].includes(status)) {
+        if (!['approved', 'rejected', 'active', 'restricted', 'suspended', 'blocked', 'pending_review'].includes(status)) {
             return res.status(400).json({
                 success: false,
-                message: 'Invalid status. Must be "approved" or "rejected"'
+                message: 'Invalid status. Must be one of: approved, rejected, active, restricted, suspended, blocked, pending_review'
             });
         }
 
@@ -227,13 +227,21 @@ const approveProvider = async (req, res) => {
             });
         }
 
-        if (status === 'approved') {
-            provider.approved = true;
-            if (global.logger) global.logger.info(`Provider approved: ${provider._id}`);
+        const oldStatus = provider.approved ? 'approved' : 'pending';
 
+        // 1. Apply manual admin state changes
+        if (status === 'approved' || status === 'active') {
+            provider.approved = true;
             provider.kycStatus = 'approved';
-            provider.rejectionReason = '';
             provider.isActive = true;
+            provider.isSuspended = false;
+            provider.suspensionReason = '';
+            provider.blockedTill = null;
+            if (provider.performanceScore) {
+                provider.performanceScore.restrictionsActive = false;
+                provider.performanceScore.restrictedUntil = null;
+                provider.performanceScore.restrictionReason = '';
+            }
             if (provider.bankDetails) {
                 provider.bankDetails.verified = true;
             }
@@ -241,53 +249,46 @@ const approveProvider = async (req, res) => {
                 provider.providerId = generateProviderId();
             }
 
+            if (global.logger) global.logger.info(`Provider manual activation/approval by Admin: ${provider._id}`);
+
             await provider.save();
 
-            // Send approval push notification
+            // Send notification
             try {
                 sendNotification(
                     provider._id,
                     'provider',
-                    'Account Approved 🎓',
-                    `Congratulations! Your provider account has been approved. ${finalRemarks ? '\nRemarks: ' + finalRemarks : ''}`,
+                    'Account Approved & Active 🎓',
+                    `Congratulations! Your provider account is now fully active. ${finalRemarks ? '\nRemarks: ' + finalRemarks : ''}`,
                     'approved',
                     provider._id
                 );
             } catch (fcmError) {
-                console.error('Failed to send approval notification:', fcmError);
+                console.error('Failed to send activation notification:', fcmError);
             }
 
-            // Send approval email
             try {
                 await sendMail({
                     to: provider.email,
-                    subject: 'Congratulations! Your Provider Account is Approved',
+                    subject: 'Congratulations! Your Provider Account is Active',
                     html: `
                         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-                            <h2 style="color: #2c3e50; text-align: center;">Account Approved!</h2>
+                            <h2 style="color: #2c3e50; text-align: center;">Account Active!</h2>
                             <p>Dear ${provider.name},</p>
-                            <p>We are excited to inform you that your provider account on our platform has been <strong>Approved</strong>.</p>
+                            <p>Your provider account has been manually activated and approved by the administrator.</p>
                             <p>Your Provider ID is: <strong>${provider.providerId}</strong></p>
                             ${finalRemarks ? `<p><strong>Admin Remarks:</strong> ${finalRemarks}</p>` : ''}
-                            <p>You can now log in to your dashboard and start accepting bookings.</p>
                             <div style="text-align: center; margin-top: 30px;">
                                 <a href="${process.env.FRONTEND_URL}/login" style="background-color: #0D9488; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">Login to Dashboard</a>
                             </div>
-                            <p style="margin-top: 30px; font-size: 12px; color: #7f8c8d;">If you have any questions, please contact our support team.</p>
                         </div>
                     `
                 });
-            } catch (mailError) {
-                console.error('Failed to send approval email:', mailError);
-            }
-
-            // Invalidate dashboard caches
-
-
+            } catch (mailError) {}
 
             return res.status(200).json({
                 success: true,
-                message: 'Provider approved successfully',
+                message: 'Provider manual activation/approval successful',
                 provider: provider.toJSON()
             });
         }
@@ -295,14 +296,13 @@ const approveProvider = async (req, res) => {
         if (status === 'rejected') {
             provider.approved = false;
             provider.kycStatus = 'rejected';
-            if (global.logger) global.logger.warn(`Provider rejected: ${provider._id}`);
-
-            provider.rejectionReason = finalRemarks || 'No reason provided';
             provider.isActive = false;
+            provider.rejectionReason = finalRemarks || 'No reason provided';
+
+            if (global.logger) global.logger.warn(`Provider manually rejected by Admin: ${provider._id}`);
 
             await provider.save();
 
-            // Send rejection push notification
             try {
                 sendNotification(
                     provider._id,
@@ -312,11 +312,8 @@ const approveProvider = async (req, res) => {
                     'rejected',
                     provider._id
                 );
-            } catch (fcmError) {
-                console.error('Failed to send rejection notification:', fcmError);
-            }
+            } catch (fcmError) {}
 
-            // Send rejection email
             try {
                 await sendMail({
                     to: provider.email,
@@ -325,24 +322,114 @@ const approveProvider = async (req, res) => {
                         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
                             <h2 style="color: #c0392b; text-align: center;">Account Update</h2>
                             <p>Dear ${provider.name},</p>
-                            <p>We regret to inform you that your provider account application has been <strong>Rejected</strong> at this time.</p>
+                            <p>We regret to inform you that your provider account application has been <strong>Rejected</strong>.</p>
                             <p><strong>Reason for Rejection:</strong> ${provider.rejectionReason}</p>
-                            <p>If you believe this was an error or you have updated your documents, you can update your profile and resubmit for verification.</p>
-                            <p style="margin-top: 30px; font-size: 12px; color: #7f8c8d;">For further assistance, please reach out to our support team.</p>
                         </div>
                     `
                 });
-            } catch (mailError) {
-                console.error('Failed to send rejection email:', mailError);
-            }
-
-            // Invalidate dashboard caches
-
-
+            } catch (mailError) {}
 
             return res.status(200).json({
                 success: true,
                 message: 'Provider rejected successfully',
+                provider: provider.toJSON()
+            });
+        }
+
+        if (status === 'restricted') {
+            if (!provider.performanceScore) {
+                provider.performanceScore = {};
+            }
+            provider.performanceScore.restrictionsActive = true;
+            provider.performanceScore.restrictionReason = finalRemarks || 'Manual restriction by administrator';
+            provider.performanceScore.restrictedUntil = durationDays ? new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000) : null;
+
+            if (global.logger) global.logger.warn(`Provider manually restricted by Admin: ${provider._id}. Duration: ${durationDays || 'Indefinite'} days.`);
+
+            await provider.save();
+
+            try {
+                sendNotification(
+                    provider._id,
+                    'provider',
+                    'Account Restricted ⚠️',
+                    `Your provider account has been restricted. Reason: ${provider.performanceScore.restrictionReason}`,
+                    'restriction',
+                    provider._id
+                );
+            } catch (fcmError) {}
+
+            return res.status(200).json({
+                success: true,
+                message: 'Provider restricted successfully',
+                provider: provider.toJSON()
+            });
+        }
+
+        if (status === 'suspended') {
+            provider.isSuspended = true;
+            provider.suspensionReason = finalRemarks || 'Manual suspension by administrator';
+
+            if (global.logger) global.logger.warn(`Provider manually suspended by Admin: ${provider._id}`);
+
+            await provider.save();
+
+            try {
+                sendNotification(
+                    provider._id,
+                    'provider',
+                    'Account Suspended 🚫',
+                    `Your account has been suspended. Reason: ${provider.suspensionReason}`,
+                    'suspension',
+                    provider._id
+                );
+            } catch (fcmError) {}
+
+            return res.status(200).json({
+                success: true,
+                message: 'Provider suspended successfully',
+                provider: provider.toJSON()
+            });
+        }
+
+        if (status === 'blocked') {
+            provider.blockedTill = durationDays ? new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000) : new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000);
+            provider.isActive = false;
+
+            if (global.logger) global.logger.warn(`Provider manually blocked by Admin: ${provider._id}. Duration: ${durationDays || 'Permanent'}`);
+
+            await provider.save();
+
+            try {
+                sendNotification(
+                    provider._id,
+                    'provider',
+                    'Account Blocked ❌',
+                    `Your account has been blocked by the administrator.`,
+                    'blocked',
+                    provider._id
+                );
+            } catch (fcmError) {}
+
+            return res.status(200).json({
+                success: true,
+                message: 'Provider blocked successfully',
+                provider: provider.toJSON()
+            });
+        }
+
+        if (status === 'pending_review') {
+            provider.approved = false;
+            provider.kycStatus = 'pending';
+            provider.isActive = false;
+
+            if (global.logger) global.logger.info(`Provider placed in pending review by Admin: ${provider._id}`);
+
+            await provider.save();
+
+            return res.status(200).json({
+                success: true,
+                message: 'Provider placed in pending review successfully',
                 provider: provider.toJSON()
             });
         }
@@ -1015,31 +1102,20 @@ const getDashboardSummary = async (req, res) => {
             bookingMatchConditions['address.city'] = { $regex: city, $options: 'i' };
         }
         if (serviceCategory) {
-            // Find service IDs that match the category name
-            const serviceIds = await Service.aggregate([
-                {
-                    $lookup: {
-                        from: 'categories',
-                        localField: 'category',
-                        foreignField: '_id',
-                        as: 'cat'
-                    }
-                },
-                {
-                    $unwind: '$cat'
-                },
-                {
-                    $match: {
-                        'cat.name': { $regex: serviceCategory, $options: 'i' }
-                    }
-                },
-                {
-                    $project: {
-                        _id: 1
-                    }
-                }
-            ]);
-            const ids = serviceIds.map(s => s._id);
+            // Find category IDs that match the category name
+            const Category = mongoose.model('Category');
+            const categories = await Category.find({
+                name: { $regex: serviceCategory, $options: 'i' }
+            }).select('_id').lean();
+
+            const categoryIds = categories.map(c => c._id);
+
+            // Find service IDs that match the category IDs
+            const services = await Service.find({
+                category: { $in: categoryIds }
+            }).select('_id').lean();
+
+            const ids = services.map(s => s._id);
             if (ids.length > 0) {
                 bookingMatchConditions['services.service'] = { $in: ids };
             } else {
@@ -1061,28 +1137,61 @@ const getDashboardSummary = async (req, res) => {
             }
         }
 
-        // Total bookings
-        const totalBookings = await Booking.countDocuments(bookingMatchConditions);
+        // Combined Booking stats query
+        const bookingStatsResult = await Booking.aggregate([
+            { $match: bookingMatchConditions },
+            {
+                $group: {
+                    _id: null,
+                    totalBookings: { $sum: 1 },
+                    todayBookings: {
+                        $sum: {
+                            $cond: [{ $gte: ["$createdAt", today.toDate()] }, 1, 0]
+                        }
+                    },
+                    ongoingBookings: {
+                        $sum: {
+                            $cond: [{ $in: ["$status", ["in-progress", "accepted", "scheduled"]] }, 1, 0]
+                        }
+                    },
+                    cancelledBookings: {
+                        $sum: {
+                            $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0]
+                        }
+                    },
+                    totalRefunded: {
+                        $sum: {
+                            $cond: [{ $eq: ["$paymentStatus", "refunded"] }, 1, 0]
+                        }
+                    },
+                    totalDisputes: {
+                        $sum: {
+                            $cond: [{ $eq: ["$disputeRaised", true] }, 1, 0]
+                        }
+                    }
+                }
+            }
+        ]).lean();
 
-        // Today's bookings
-        const todayBookings = await Booking.countDocuments({
-            ...bookingMatchConditions,
-            createdAt: { $gte: today.toDate() }
-        });
+        const bookingStats = bookingStatsResult[0] || {
+            totalBookings: 0,
+            todayBookings: 0,
+            ongoingBookings: 0,
+            cancelledBookings: 0,
+            totalRefunded: 0,
+            totalDisputes: 0
+        };
 
-        // Ongoing bookings (in-progress or accepted)
-        const ongoingBookings = await Booking.countDocuments({
-            ...bookingMatchConditions,
-            status: { $in: ['in-progress', 'accepted', 'scheduled'] }
-        });
+        const {
+            totalBookings,
+            todayBookings,
+            ongoingBookings,
+            cancelledBookings,
+            totalRefunded,
+            totalDisputes
+        } = bookingStats;
 
-        // Cancelled bookings
-        const cancelledBookings = await Booking.countDocuments({
-            ...bookingMatchConditions,
-            status: 'cancelled'
-        });
-
-        // Total customers - filter by city if provided (assuming customers have address)
+        // Total customers - filter by city if provided
         let customerMatch = { role: 'customer' };
         if (city) {
             customerMatch['address.city'] = { $regex: city, $options: 'i' };
@@ -1096,26 +1205,8 @@ const getDashboardSummary = async (req, res) => {
         }
         const totalProviders = await Provider.countDocuments(providerMatch);
 
-        // Today's revenue
-        const todayRevenueResult = await Booking.aggregate([
-            {
-                $match: {
-                    ...bookingMatchConditions,
-                    status: 'completed',
-                    createdAt: { $gte: today.toDate() }
-                }
-            },
-            {
-                $group: {
-                    _id: null,
-                    total: { $sum: '$totalAmount' }
-                }
-            }
-        ]);
-        const todayRevenue = todayRevenueResult[0]?.total || 0;
-
-        // Monthly revenue
-        const monthlyRevenueResult = await Booking.aggregate([
+        // Combined Revenue stats query
+        const revenueStats = await Booking.aggregate([
             {
                 $match: {
                     ...bookingMatchConditions,
@@ -1126,39 +1217,48 @@ const getDashboardSummary = async (req, res) => {
             {
                 $group: {
                     _id: null,
-                    total: { $sum: '$totalAmount' }
+                    monthlyRevenue: { $sum: '$totalAmount' },
+                    todayRevenue: {
+                        $sum: {
+                            $cond: [{ $gte: ["$createdAt", today.toDate()] }, '$totalAmount', 0]
+                        }
+                    }
                 }
             }
-        ]);
-        const monthlyRevenue = monthlyRevenueResult[0]?.total || 0;
+        ]).lean();
 
-        // Pending payout amount (from provider earnings) - filter by city if provided
+        const todayRevenue = revenueStats[0]?.todayRevenue || 0;
+        const monthlyRevenue = revenueStats[0]?.monthlyRevenue || 0;
+
+        // Pending payout amount (from provider earnings) & held payouts count - filter by city if provided
         let payoutMatch = {
-            status: { $in: ['pending', 'processing'] }
+            status: { $in: ['pending', 'processing', 'held'] }
         };
         if (city) {
-            // Assuming provider earnings can be linked to provider's city
             const providerIds = await Provider.find({ 'address.city': { $regex: city, $options: 'i' } }).select('_id');
             payoutMatch.provider = { $in: providerIds.map(p => p._id) };
         }
-        const pendingPayoutResult = await ProviderEarning.aggregate([
-            {
-                $match: payoutMatch
-            },
+        const payoutStatsResult = await ProviderEarning.aggregate([
+            { $match: payoutMatch },
             {
                 $group: {
                     _id: null,
-                    total: { $sum: '$netAmount' }
+                    pendingPayoutAmount: {
+                        $sum: {
+                            $cond: [{ $in: ["$status", ["pending", "processing"]] }, '$netAmount', 0]
+                        }
+                    },
+                    totalHeldPayouts: {
+                        $sum: {
+                            $cond: [{ $eq: ["$status", "held"] }, 1, 0]
+                        }
+                    }
                 }
             }
-        ]);
-        const pendingPayoutAmount = pendingPayoutResult[0]?.total || 0;
+        ]).lean();
 
-        // Total refunded bookings
-        const totalRefunded = await Booking.countDocuments({ ...bookingMatchConditions, paymentStatus: 'refunded' });
-
-        // Total held payouts count
-        const totalHeldPayouts = await ProviderEarning.countDocuments({ status: 'held' });
+        const pendingPayoutAmount = payoutStatsResult[0]?.pendingPayoutAmount || 0;
+        const totalHeldPayouts = payoutStatsResult[0]?.totalHeldPayouts || 0;
 
         // Duplicate payment attempts (if any failed transaction with same booking exists)
         const duplicateAttempts = await Transaction.countDocuments({ paymentStatus: 'failed', description: /duplicate/i });
@@ -1227,32 +1327,20 @@ const getDashboardRevenue = async (req, res) => {
         }
 
         if (serviceCategory) {
-            // Find service IDs that match the category name
-            const serviceIds = await Service.aggregate([
-                {
-                    $lookup: {
-                        from: 'categories',
-                        localField: 'category',
-                        foreignField: '_id',
-                        as: 'cat'
-                    }
-                },
-                {
-                    $unwind: '$cat'
-                },
-                {
-                    $match: {
-                        'cat.name': { $regex: serviceCategory, $options: 'i' }
-                    }
-                },
-                {
-                    $project: {
-                        _id: 1
-                    }
-                }
-            ]);
+            // Find category IDs that match the category name
+            const Category = mongoose.model('Category');
+            const categories = await Category.find({
+                name: { $regex: serviceCategory, $options: 'i' }
+            }).select('_id').lean();
 
-            const ids = serviceIds.map(s => s._id);
+            const categoryIds = categories.map(c => c._id);
+
+            // Find service IDs that match the category IDs
+            const services = await Service.find({
+                category: { $in: categoryIds }
+            }).select('_id').lean();
+
+            const ids = services.map(s => s._id);
             if (ids.length > 0) {
                 matchConditions['services.service'] = { $in: ids };
             } else {
@@ -1320,31 +1408,20 @@ const getDashboardBookingsStatus = async (req, res) => {
             matchConditions['address.city'] = { $regex: city, $options: 'i' };
         }
         if (serviceCategory) {
-            // Find service IDs that match the category name
-            const serviceIds = await Service.aggregate([
-                {
-                    $lookup: {
-                        from: 'categories',
-                        localField: 'category',
-                        foreignField: '_id',
-                        as: 'cat'
-                    }
-                },
-                {
-                    $unwind: '$cat'
-                },
-                {
-                    $match: {
-                        'cat.name': { $regex: serviceCategory, $options: 'i' }
-                    }
-                },
-                {
-                    $project: {
-                        _id: 1
-                    }
-                }
-            ]);
-            const ids = serviceIds.map(s => s._id);
+            // Find category IDs that match the category name
+            const Category = mongoose.model('Category');
+            const categories = await Category.find({
+                name: { $regex: serviceCategory, $options: 'i' }
+            }).select('_id').lean();
+
+            const categoryIds = categories.map(c => c._id);
+
+            // Find service IDs that match the category IDs
+            const services = await Service.find({
+                category: { $in: categoryIds }
+            }).select('_id').lean();
+
+            const ids = services.map(s => s._id);
             if (ids.length > 0) {
                 matchConditions['services.service'] = { $in: ids };
             } else {
@@ -1408,31 +1485,20 @@ const getDashboardTopProviders = async (req, res) => {
             bookingMatchConditions['address.city'] = { $regex: city, $options: 'i' };
         }
         if (serviceCategory) {
-            // Find service IDs that match the category name
-            const serviceIds = await Service.aggregate([
-                {
-                    $lookup: {
-                        from: 'categories',
-                        localField: 'category',
-                        foreignField: '_id',
-                        as: 'cat'
-                    }
-                },
-                {
-                    $unwind: '$cat'
-                },
-                {
-                    $match: {
-                        'cat.name': { $regex: serviceCategory, $options: 'i' }
-                    }
-                },
-                {
-                    $project: {
-                        _id: 1
-                    }
-                }
-            ]);
-            const ids = serviceIds.map(s => s._id);
+            // Find category IDs that match the category name
+            const Category = mongoose.model('Category');
+            const categories = await Category.find({
+                name: { $regex: serviceCategory, $options: 'i' }
+            }).select('_id').lean();
+
+            const categoryIds = categories.map(c => c._id);
+
+            // Find service IDs that match the category IDs
+            const services = await Service.find({
+                category: { $in: categoryIds }
+            }).select('_id').lean();
+
+            const ids = services.map(s => s._id);
             if (ids.length > 0) {
                 bookingMatchConditions['services.service'] = { $in: ids };
             } else {

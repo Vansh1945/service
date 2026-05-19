@@ -136,6 +136,14 @@ exports.Login = async (req, res) => {
       });
     }
 
+    // Check if provider is blocked
+    if (userType === 'provider' && user.blockedTill && new Date(user.blockedTill) > new Date()) {
+      return res.status(403).json({
+        success: false,
+        message: `Your provider account has been blocked by the administrator until ${new Date(user.blockedTill).toLocaleDateString()}.`
+      });
+    }
+
     // Check Global Maintenance Mode Restrictions
     try {
       const { SystemConfig } = require('../models/SystemSetting');
@@ -176,19 +184,6 @@ exports.Login = async (req, res) => {
         return res.status(403).json({
           success: false,
           message: 'Your profile is incomplete. Please complete registration.'
-        });
-      }
-
-      if (!user.approved || user.kycStatus !== 'approved') {
-        if (user.kycStatus === 'rejected') {
-          return res.status(403).json({
-            success: false,
-            message: 'Your KYC was rejected. Please re-submit your details.'
-          });
-        }
-        return res.status(403).json({
-          success: false,
-          message: 'Your account is pending admin approval. You cannot login yet.'
         });
       }
     }
@@ -572,6 +567,9 @@ exports.firebaseLogin = async (req, res) => {
     if (user.isSuspended) {
       return res.status(403).json({ success: false, message: `Account suspended: ${user.suspensionReason || 'Suspicious activity'}` });
     }
+    if (userType === 'provider' && user.blockedTill && new Date(user.blockedTill) > new Date()) {
+      return res.status(403).json({ success: false, message: `Your provider account has been blocked by the administrator until ${new Date(user.blockedTill).toLocaleDateString()}.` });
+    }
     try {
       const { SystemConfig } = require('../models/SystemSetting');
       const s = await SystemConfig.findOne();
@@ -584,10 +582,6 @@ exports.firebaseLogin = async (req, res) => {
     if (userType === 'provider') {
       if (!user.profileComplete)
         return res.status(403).json({ success: false, message: 'Profile incomplete. Complete registration first.' });
-      if (!user.approved || user.kycStatus !== 'approved') {
-        const msg = user.kycStatus === 'rejected' ? 'KYC rejected. Re-submit details.' : 'Account pending admin approval.';
-        return res.status(403).json({ success: false, message: msg });
-      }
       if (user.isDeleted)
         return res.status(403).json({ success: false, message: 'Account deactivated' });
     }

@@ -174,25 +174,34 @@ const AdminProviders = () => {
     setApprovalRemarks('');
   }, []);
 
-  const handleStatusUpdate = async (action) => {
+  const handleStatusUpdate = async (action, durationDays = null) => {
     if (!selectedProvider) return;
 
-    if (action === 'rejected' && !approvalRemarks.trim()) {
-      showToast('Please provide a reason for rejection', 'error');
+    if ((action === 'rejected' || action === 'restricted' || action === 'suspended') && !approvalRemarks.trim()) {
+      showToast('Please provide a reason or remarks for this action', 'error');
       return;
     }
 
     try {
       setProcessingAction(action);
-      const res = await AdminService.updateProviderStatus(selectedProvider._id, {
-        status: action === 'approved' ? 'approved' : 'rejected',
+      const payload = {
+        status: action,
+        remarks: approvalRemarks,
         rejectionReason: approvalRemarks
-      });
+      };
+      if (durationDays !== null) {
+        payload.durationDays = Number(durationDays);
+      }
 
+      const res = await AdminService.updateProviderStatus(selectedProvider._id, payload);
       const data = res.data;
 
       if (data.success) {
-        showToast(`Bank details ${action === 'approved' ? 'verified' : 'rejected'} successfully`, 'success');
+        let msg = `Provider status updated to "${action}" successfully`;
+        if (action === 'approved') msg = 'Bank details verified successfully';
+        if (action === 'rejected') msg = 'Bank details rejected successfully';
+
+        showToast(msg, 'success');
         fetchProviders();
         setShowViewModal(false);
         setShowConfirmModal({ show: false, action: null });
@@ -201,7 +210,7 @@ const AdminProviders = () => {
       }
     } catch (error) {
       console.error('Error updating status:', error);
-      showToast('Failed to update status', 'error');
+      showToast(error.response?.data?.message || 'Failed to update status', 'error');
     } finally {
       setProcessingAction(null);
     }
@@ -742,6 +751,76 @@ const AdminProviders = () => {
                   </div>
                 </div>
               )}
+
+              {/* Manual Provider Account Controls */}
+              <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 mt-6 space-y-4">
+                <h4 className="text-lg font-bold text-secondary flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-teal-600" />
+                  Manual Provider Account Controls
+                </h4>
+                <p className="text-xs text-slate-500">
+                  Manually control this provider's access, restrictions, and suspension status.
+                </p>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Action Remarks / Reason (Required for Restrict, Suspend, Reject)
+                    </label>
+                    <textarea
+                      value={approvalRemarks}
+                      onChange={(e) => setApprovalRemarks(e.target.value)}
+                      className="w-full p-2.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white"
+                      placeholder="Enter remarks or justification reason..."
+                      rows="2"
+                    ></textarea>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <button
+                      onClick={() => handleStatusUpdate('active')}
+                      disabled={processingAction}
+                      className="px-3 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-all disabled:opacity-50"
+                    >
+                      {processingAction === 'active' ? 'Activating...' : '✓ Reactivate / Approve'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        const days = prompt("Enter restriction duration in days (leave empty for indefinite):");
+                        handleStatusUpdate('restricted', days ? Number(days) : null);
+                      }}
+                      disabled={processingAction}
+                      className="px-3 py-2 bg-amber-500 text-white text-xs font-bold rounded-lg hover:bg-amber-600 transition-all disabled:opacity-50"
+                    >
+                      {processingAction === 'restricted' ? 'Restricting...' : '⚠️ Restrict Account'}
+                    </button>
+                    <button
+                      onClick={() => handleStatusUpdate('suspended')}
+                      disabled={processingAction}
+                      className="px-3 py-2 bg-rose-500 text-white text-xs font-bold rounded-lg hover:bg-rose-600 transition-all disabled:opacity-50"
+                    >
+                      {processingAction === 'suspended' ? 'Suspending...' : '🚫 Suspend Account'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        const days = prompt("Enter block duration in days (leave empty for permanent):");
+                        handleStatusUpdate('blocked', days ? Number(days) : null);
+                      }}
+                      disabled={processingAction}
+                      className="px-3 py-2 bg-red-700 text-white text-xs font-bold rounded-lg hover:bg-red-800 transition-all disabled:opacity-50 col-span-2 sm:col-span-1"
+                    >
+                      {processingAction === 'blocked' ? 'Blocking...' : '❌ Block Account'}
+                    </button>
+                    <button
+                      onClick={() => handleStatusUpdate('pending_review')}
+                      disabled={processingAction}
+                      className="px-3 py-2 bg-slate-500 text-white text-xs font-bold rounded-lg hover:bg-slate-600 transition-all disabled:opacity-50"
+                    >
+                      {processingAction === 'pending_review' ? 'Updating...' : '⏳ Set Pending Review'}
+                    </button>
+                  </div>
+                </div>
+              </div>
 
               {/* Action Buttons */}
               <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">

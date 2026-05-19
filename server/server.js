@@ -5,6 +5,7 @@ const winston = require('winston');
 const morgan = require('morgan');
 const path = require('path');
 const fs = require('fs');
+const compression = require("compression");
 
 // Ensure logs directory exists
 const logDir = path.join(__dirname, 'logs');
@@ -45,7 +46,10 @@ const PORT = process.env.PORT || 5000;
 // Initialize express app
 const app = express();
 
+app.use(compression());
+
 app.use(express.json({
+  limit: '50mb',
   verify: (req, res, buf) => {
     req.rawBody = buf;
   }
@@ -116,7 +120,7 @@ app.get('/api/test-route', (req, res) => {
   res.send('Raj Electrical Service API is running!');
 });
 
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use("/uploads", express.static("uploads"));
 app.use("/assets", express.static("assets"));
 

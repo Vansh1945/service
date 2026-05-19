@@ -16,7 +16,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import useCategory from '../../hooks/useCategory';
 import * as SystemService from '../../services/SystemService';
 import * as ProviderService from '../../services/ProviderService';
-import { formatTime } from '../../utils/format';
+import { formatTime, compressImage } from '../../utils/format';
 
 // ─── Static sub-components (defined OUTSIDE the main component to avoid remount) ─
 
@@ -78,7 +78,7 @@ const STEP_ICONS = [Mail, User, Lock, Briefcase];
 
 const ProviderRegistration = () => {
   const navigate = useNavigate();
-  const { API } = useAuth();
+  const { API, loginUser } = useAuth();
 
   const [formData, setFormData] = useState({
     email: '',
@@ -255,9 +255,32 @@ const ProviderRegistration = () => {
 const handleCompleteProfile = async (e) => {
   e.preventDefault();
   setIsSubmitting(true);
-  const formDataWithServices = { ...formData, services: selectedServices };
   const promise = new Promise(async (resolve, reject) => {
     try {
+      // Compress registration files on the client side before packaging
+      let profilePicFile = formData.profilePic;
+      if (profilePicFile) {
+        profilePicFile = await compressImage(profilePicFile, { maxWidth: 1200, maxHeight: 1200, quality: 0.8 });
+      }
+
+      let resumeFile = formData.resume;
+      if (resumeFile && resumeFile.type.startsWith('image/')) {
+        resumeFile = await compressImage(resumeFile, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
+      }
+
+      let passbookImageFile = formData.passbookImage;
+      if (passbookImageFile) {
+        passbookImageFile = await compressImage(passbookImageFile, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
+      }
+
+      const formDataWithServices = { 
+        ...formData, 
+        services: selectedServices,
+        profilePic: profilePicFile,
+        resume: resumeFile,
+        passbookImage: passbookImageFile
+      };
+
       const fd = new FormData();
       Object.entries(formDataWithServices).forEach(([key, value]) => {
         if (value !== null && value !== undefined && value !== '') {
@@ -270,9 +293,13 @@ const handleCompleteProfile = async (e) => {
           }
         }
       });
-      await ProviderService.completeProfile(fd);
+      const response = await ProviderService.completeProfile(fd);
+      const data = response.data;
       resolve('Profile completed successfully! Your account is pending approval.');
-      navigate('/');
+      
+      // Grab stored token and log in the user properly
+      const storedToken = localStorage.getItem('token');
+      loginUser(storedToken, 'provider', data.provider);
     } catch (err) {
       reject(err.response?.data?.message || err.message);
     } finally {

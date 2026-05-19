@@ -626,7 +626,8 @@ exports.getProfile = async (req, res) => {
                 path: 'feedbacks',
                 select: 'providerFeedback',
                 options: { limit: 10, sort: { createdAt: -1 } }
-            });
+            })
+            .lean();
 
         if (!provider) {
             return res.status(404).json({
@@ -653,10 +654,22 @@ exports.getProfile = async (req, res) => {
         }
 
 
+        // Calculate age manually if dateOfBirth exists (since lean() disables virtuals)
+        let age = undefined;
+        if (provider.dateOfBirth) {
+            const today = new Date();
+            const birthDate = new Date(provider.dateOfBirth);
+            age = today.getFullYear() - birthDate.getFullYear();
+            const monthDiff = today.getMonth() - birthDate.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                age--;
+            }
+        }
+
         // Add computed fields (without earnings)
         const responseData = {
-            ...provider.toJSON(),
-            age: provider.age, // Virtual field
+            ...provider,
+            age: age,
             averageRating: averageRating,
             ratingCount: ratingCount,
             hasResume: !!provider.resume,
@@ -1205,8 +1218,7 @@ exports.getDashboardSummary = async (req, res) => {
         // Parallel aggregation queries for better performance
         const [
             bookingStats,
-            todayEarnings,
-            totalEarningsRaw,
+            combinedEarnings,
             ratingStats,
             totalComplaintsCount
         ] = await Promise.all([
@@ -1221,30 +1233,27 @@ exports.getDashboardSummary = async (req, res) => {
                 }
             ]),
 
-            // Today's earnings
-            ProviderEarning.aggregate([
-                {
-                    $match: {
-                        provider: new mongoose.Types.ObjectId(providerId),
-                        createdAt: { $gte: today, $lt: tomorrow },
-                        status: { $ne: 'cancelled' }
-                    }
-                },
-                {
-                    $group: {
-                        _id: null,
-                        totalEarnings: { $sum: '$netAmount' }
-                    }
-                }
-            ]),
-
-            // Total lifetime earnings
+            // Combined Earnings (today and lifetime)
             ProviderEarning.aggregate([
                 { $match: { provider: new mongoose.Types.ObjectId(providerId), status: { $ne: 'cancelled' } } },
                 {
                     $group: {
                         _id: null,
-                        totalEarnings: { $sum: '$netAmount' }
+                        totalEarnings: { $sum: '$netAmount' },
+                        todaysEarnings: {
+                            $sum: {
+                                $cond: [
+                                    {
+                                        $and: [
+                                            { $gte: ['$createdAt', today] },
+                                            { $lt: ['$createdAt', tomorrow] }
+                                        ]
+                                    },
+                                    '$netAmount',
+                                    0
+                                ]
+                            }
+                        }
                     }
                 }
             ]),
@@ -1288,9 +1297,10 @@ exports.getDashboardSummary = async (req, res) => {
             }
         });
 
-        // Process today's earnings
-        const todaysEarnings = todayEarnings.length > 0 ? todayEarnings[0].totalEarnings : 0;
-        const totalEarnings = totalEarningsRaw.length > 0 ? totalEarningsRaw[0].totalEarnings : 0;
+        // Process combined earnings
+        const earnings = combinedEarnings[0] || { totalEarnings: 0, todaysEarnings: 0 };
+        const todaysEarnings = earnings.todaysEarnings;
+        const totalEarnings = earnings.totalEarnings;
         const totalComplaints = totalComplaintsCount || 0;
 
         // Process rating stats
@@ -1598,29 +1608,44 @@ exports.getWalletInfo = async (req, res) => {
         const availableBalance = provider.wallet?.availableBalance || 0;
 
         // Get held earnings balance
-        const ProviderEarning = mongoose.model('ProviderEarning');
-        const heldEarnings = await ProviderEarning.aggregate([
+        const earningsStats = await ProviderEarning.aggregate([
             {
                 $match: {
-                    provider: new mongoose.Types.ObjectId(providerId),
-                    status: 'held'
+                    provider: new mongoose.Types.ObjectId(providerId.toString())
                 }
             },
             {
                 $group: {
                     _id: null,
-                    totalHeld: { $sum: '$netAmount' }
+                    totalHeld: {
+                        $sum: {
+                            $cond: [{ $eq: ["$status", "held"] }, "$netAmount", 0]
+                        }
+                    },
+                    totalRefunded: {
+                        $sum: {
+                            $cond: [{ $eq: ["$status", "cancelled"] }, "$netAmount", 0]
+                        }
+                    },
+                    totalReleased: {
+                        $sum: {
+                            $cond: [{ $in: ["$status", ["available", "paid", "withdrawn"]] }, "$netAmount", 0]
+                        }
+                    }
                 }
             }
         ]);
-        const heldBalance = heldEarnings.length > 0 ? heldEarnings[0].totalHeld : 0;
+
+        const stats = earningsStats[0] || { totalHeld: 0, totalRefunded: 0, totalReleased: 0 };
+        const heldBalance = stats.totalHeld;
+        const refundedDeductions = stats.totalRefunded;
+        const releasedPayouts = stats.totalReleased;
 
         // Get pending payouts (if any payment records exist)
-        const PaymentRecord = mongoose.model('PaymentRecord');
         const pendingPayouts = await PaymentRecord.aggregate([
             {
                 $match: {
-                    provider: new mongoose.Types.ObjectId(providerId),
+                    provider: new mongoose.Types.ObjectId(providerId.toString()),
                     status: { $in: ['pending', 'processing', 'requested'] }
                 }
             },
@@ -1631,40 +1656,6 @@ exports.getWalletInfo = async (req, res) => {
                 }
             }
         ]);
-
-        // Get refunded deductions (cancelled earnings)
-        const refundedEarnings = await ProviderEarning.aggregate([
-            {
-                $match: {
-                    provider: new mongoose.Types.ObjectId(providerId),
-                    status: 'cancelled'
-                }
-            },
-            {
-                $group: {
-                    _id: null,
-                    totalRefunded: { $sum: '$netAmount' } // Note: If netAmount was reduced to 0, you might want to track originalAmount or just consider the 0. Let's just track totalWithdrawn or cancelled. Wait, if cancelled, we can sum grossAmount or commission. We will just sum grossAmount or whatever. Let's sum netAmount. Wait, if it was reduced to 0, sum is 0. If we just want a count or estimate, let's sum grossAmount.
-                }
-            }
-        ]);
-        const refundedDeductions = refundedEarnings.length > 0 ? refundedEarnings[0].totalRefunded : 0;
-
-        // Get total released payouts (earnings that are available or paid or withdrawn)
-        const releasedEarnings = await ProviderEarning.aggregate([
-            {
-                $match: {
-                    provider: new mongoose.Types.ObjectId(providerId),
-                    status: { $in: ['available', 'paid', 'withdrawn'] }
-                }
-            },
-            {
-                $group: {
-                    _id: null,
-                    totalReleased: { $sum: '$netAmount' }
-                }
-            }
-        ]);
-        const releasedPayouts = releasedEarnings.length > 0 ? releasedEarnings[0].totalReleased : 0;
 
         // Get last payout date
         const lastPayout = await PaymentRecord.findOne({

@@ -440,6 +440,7 @@ bookingSchema.virtual('progressStatus').get(function () {
 
 // Indexes for query optimization
 bookingSchema.index({ customer: 1 });
+bookingSchema.index({ provider: 1 });
 bookingSchema.index({ provider: 1, status: 1 });
 bookingSchema.index({ status: 1 });
 bookingSchema.index({ date: 1 });

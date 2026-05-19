@@ -138,3 +138,103 @@ export const formatPercentage = (value) => {
   if (value === null || value === undefined || value === "" || isNaN(value)) return FALLBACK;
   return `${parseFloat(value).toFixed(1)}%`;
 };
+
+/**
+ * Format Cloudinary URLs to include delivery optimization parameters.
+ * @param {string} url - The Cloudinary image URL
+ * @returns {string} Optimized Cloudinary URL
+ */
+export const getOptimizedCloudinaryUrl = (url) => {
+  if (!url || typeof url !== 'string') return url;
+  if (!url.startsWith('http') || !url.includes('res.cloudinary.com')) return url;
+  
+  if (url.includes('/image/upload/')) {
+    if (!url.includes('/image/upload/f_auto,q_auto,w_800/')) {
+      return url.replace('/image/upload/', '/image/upload/f_auto,q_auto,w_800/');
+    }
+  } else if (url.includes('/upload/') && !url.includes('/raw/upload/') && !url.includes('/video/upload/')) {
+    if (!url.includes('/upload/f_auto,q_auto,w_800/')) {
+      return url.replace('/upload/', '/upload/f_auto,q_auto,w_800/');
+    }
+  }
+  return url;
+};
+
+/**
+ * Helper for client-side image compression and resizing using HTML5 Canvas
+ * @param {File} file - The file object to compress
+ * @param {Object} options - Compression options (maxWidth, maxHeight, quality)
+ * @returns {Promise<File>} Promise resolving to the compressed File object
+ */
+export const compressImage = (file, options = {}) => {
+  return new Promise((resolve) => {
+    const {
+      maxWidth = 1600,
+      maxHeight = 1600,
+      quality = 0.82
+    } = options;
+
+    if (!file || !file.type.startsWith('image/')) {
+      return resolve(file); // Return original if not an image
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        // Resize dimensions if they exceed max limits while preserving aspect ratio
+        if (width > maxWidth || height > maxHeight) {
+          if (width > height) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            return resolve(file); // Fallback to original
+          }
+          
+          // Re-create the file object with jpeg extension and mime type
+          const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpeg", {
+            type: "image/jpeg",
+            lastModified: Date.now()
+          });
+
+          // Only return compressed if it actually reduced file size, otherwise return original
+          if (compressedFile.size < file.size) {
+            resolve(compressedFile);
+          } else {
+            resolve(file);
+          }
+        }, "image/jpeg", quality);
+      };
+
+      img.onerror = (err) => {
+        console.error("Image loading error:", err);
+        resolve(file); // Fallback to original
+      };
+      
+      img.src = event.target.result;
+    };
+
+    reader.onerror = (err) => {
+      console.error("FileReader error:", err);
+      resolve(file); // Fallback to original
+    };
+
+    reader.readAsDataURL(file);
+  });
+};

@@ -1089,7 +1089,7 @@ const ProviderEarningsDashboard = () => {
                   disabled={processingWithdrawal || otpCode.length !== 6 || otpTimer === 0}
                   className="flex-1 py-4 bg-primary text-white rounded-xl font-bold text-sm hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 disabled:shadow-none"
                 >
-                  {processingWithdrawal ? <Spinner className="w-5 h-5 mx-auto" variant="border-white" /> : "Verify & Withdraw"}
+                  {processingWithdrawal ? <Loader2 className="w-5 h-5 mx-auto animate-spin" /> : "Verify & Withdraw"}
                 </button>
               </div>
             </div>

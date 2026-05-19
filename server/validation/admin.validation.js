@@ -8,11 +8,12 @@ const registerAdminSchema = z.object({
 });
 
 const approveProviderSchema = z.object({
-  status: z.enum(['approved', 'rejected'], {
-    errorMap: () => ({ message: "Status must be either 'approved' or 'rejected'" })
+  status: z.enum(['approved', 'rejected', 'active', 'restricted', 'suspended', 'blocked', 'pending_review'], {
+    errorMap: () => ({ message: "Status must be one of: approved, rejected, active, restricted, suspended, blocked, pending_review" })
   }),
   remarks: z.string().optional(),
-  rejectionReason: z.string().optional()
+  rejectionReason: z.string().optional(),
+  durationDays: z.number().optional()
 });
 
 const adminRefundSchema = z.object({

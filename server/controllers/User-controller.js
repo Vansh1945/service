@@ -463,11 +463,6 @@ const getCustomerDashboardStats = async (req, res) => {
 
     // Parallelize all database queries for better performance
     const [
-      totalBookings,
-      todayBookings,
-      weeklyBookings,
-      monthlyBookings,
-      yearlyBookings,
       bookingStatusStats,
       spendingStats,
       complaintStats,
@@ -476,30 +471,36 @@ const getCustomerDashboardStats = async (req, res) => {
       favoriteServices,
       recentTransactions
     ] = await Promise.all([
-      // Booking counts
-      Booking.countDocuments({ customer: customerId }),
-      Booking.countDocuments({
-        customer: customerId,
-        createdAt: { $gte: today.toDate() }
-      }),
-      Booking.countDocuments({
-        customer: customerId,
-        createdAt: { $gte: currentWeek.toDate() }
-      }),
-      Booking.countDocuments({
-        customer: customerId,
-        createdAt: { $gte: currentMonth.toDate() }
-      }),
-      Booking.countDocuments({
-        customer: customerId,
-        createdAt: { $gte: currentYear.toDate() }
-      }),
-
-      // Booking status distribution
+      // Booking status and counts aggregation (combined)
       Booking.aggregate([
         { $match: { customer: new mongoose.Types.ObjectId(customerId) } },
-        { $group: { _id: '$status', count: { $sum: 1 } } }
-      ]),
+        {
+          $group: {
+            _id: '$status',
+            count: { $sum: 1 },
+            todayBookings: {
+              $sum: {
+                $cond: [{ $gte: ['$createdAt', today.toDate()] }, 1, 0]
+              }
+            },
+            weeklyBookings: {
+              $sum: {
+                $cond: [{ $gte: ['$createdAt', currentWeek.toDate()] }, 1, 0]
+              }
+            },
+            monthlyBookings: {
+              $sum: {
+                $cond: [{ $gte: ['$createdAt', currentMonth.toDate()] }, 1, 0]
+              }
+            },
+            yearlyBookings: {
+              $sum: {
+                $cond: [{ $gte: ['$createdAt', currentYear.toDate()] }, 1, 0]
+              }
+            }
+          }
+        }
+      ]).lean(),
 
       // Spending calculations
       Transaction.aggregate([
@@ -551,13 +552,13 @@ const getCustomerDashboardStats = async (req, res) => {
             }
           }
         }
-      ]),
+      ]).lean(),
 
       // Complaint statistics
       Complaint.aggregate([
         { $match: { customer: new mongoose.Types.ObjectId(customerId) } },
         { $group: { _id: '$status', count: { $sum: 1 } } }
-      ]),
+      ]).lean(),
 
       // Coupon statistics
       Promise.all([
@@ -577,7 +578,8 @@ const getCustomerDashboardStats = async (req, res) => {
         .sort({ createdAt: -1 })
         .limit(5)
         .populate('provider', 'name')
-        .populate('services.service', 'title'),
+        .populate('services.service', 'title')
+        .lean(),
 
       // Favorite services (most booked)
       Booking.aggregate([
@@ -609,16 +611,37 @@ const getCustomerDashboardStats = async (req, res) => {
             count: 1
           }
         }
-      ]),
+      ]).lean(),
 
       // Recent transactions (last 5)
       Transaction.find({ user: customerId })
         .sort({ createdAt: -1 })
         .limit(5)
         .populate('booking', 'services')
+        .lean()
     ]);
 
-    // Process the results
+    // Process the booking results
+    let totalBookings = 0;
+    let todayBookings = 0;
+    let weeklyBookings = 0;
+    let monthlyBookings = 0;
+    let yearlyBookings = 0;
+    const bookingStatusCounts = { pending: 0, accepted: 0, completed: 0, cancelled: 0 };
+
+    bookingStatusStats.forEach(item => {
+      const count = item.count || 0;
+      totalBookings += count;
+      todayBookings += (item.todayBookings || 0);
+      weeklyBookings += (item.weeklyBookings || 0);
+      monthlyBookings += (item.monthlyBookings || 0);
+      yearlyBookings += (item.yearlyBookings || 0);
+      if (item._id) {
+        bookingStatusCounts[item._id] = count;
+      }
+    });
+
+    // Process the spending results
     const spending = spendingStats[0] || {
       totalSpent: 0,
       todaySpent: 0,
@@ -626,11 +649,6 @@ const getCustomerDashboardStats = async (req, res) => {
       monthlySpent: 0,
       yearlySpent: 0
     };
-
-    const bookingStatusCounts = bookingStatusStats.reduce((acc, curr) => {
-      acc[curr._id] = curr.count;
-      return acc;
-    }, { pending: 0, accepted: 0, completed: 0, cancelled: 0 });
 
     const complaintStatusCounts = complaintStats.reduce((acc, curr) => {
       acc[curr._id] = curr.count;
@@ -687,7 +705,8 @@ const getWalletHistory = async (req, res) => {
       .populate({
         path: 'wallet.walletTransactions.booking',
         select: 'bookingId status totalAmount'
-      });
+      })
+      .lean();
 
     if (!user) {
       return res.status(404).json({

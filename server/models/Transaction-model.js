@@ -144,6 +144,8 @@ transactionSchema.statics.fetchPaymentDetails = async function (paymentId) {
 // Indexes for query optimization
 transactionSchema.index({ booking: 1 });
 transactionSchema.index({ user: 1 });
+transactionSchema.index({ provider: 1 });
+transactionSchema.index({ provider: 1, createdAt: -1 });
 transactionSchema.index({ paymentStatus: 1 });
 transactionSchema.index({ createdAt: -1 });
 transactionSchema.index({ razorpayPaymentId: 1 }, { unique: true, sparse: true });

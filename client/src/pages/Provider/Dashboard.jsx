@@ -220,7 +220,7 @@ const Dashboard = () => {
               <p className="font-bold text-amber-800 text-sm">Action Required: Low Performance Score</p>
               <p className="text-amber-700 text-xs mt-1 leading-relaxed">
                 Your Trust Score is currently at {Number(ratings?.trustScore !== undefined ? ratings.trustScore : 100).toFixed(0)}%. 
-                If it drops below 60%, your account will be automatically restricted. 
+                If it drops below 60%, your account will be flagged for administrator review. 
                 Please ensure on-time service delivery and avoid cancellation rejections to improve your score.
               </p>
             </div>

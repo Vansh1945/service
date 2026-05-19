@@ -403,11 +403,23 @@ const requestBulkWithdrawal = async (req, res) => {
     }
 
     const provider = await Provider.findById(providerId)
-      .select("bankDetails name email wallet approved kycStatus withdrawalSecurity fcmTokens");
+      .select("bankDetails name email wallet approved kycStatus withdrawalSecurity fcmTokens isSuspended blockedTill performanceScore");
 
     if (!provider) return res.status(404).json({ success: false, error: "Provider not found." });
 
     // SECURITY IMPROVEMENTS: Validate provider status
+    if (provider.isSuspended) {
+      return res.status(403).json({ success: false, error: "Your account is suspended. You cannot withdraw payments." });
+    }
+
+    if (provider.blockedTill && new Date(provider.blockedTill) > new Date()) {
+      return res.status(403).json({ success: false, error: "Your account is blocked. You cannot withdraw payments." });
+    }
+
+    if (provider.performanceScore?.restrictionsActive) {
+      return res.status(403).json({ success: false, error: "Your account is restricted. You cannot withdraw payments." });
+    }
+
     if (!provider.approved || provider.kycStatus !== 'approved') {
       return res.status(403).json({ success: false, error: "Your account/KYC must be approved before withdrawal." });
     }
@@ -1542,52 +1554,74 @@ const generateProviderEarningsReport = async (req, res) => {
       { header: "Balance", key: "pendingBalance", width: 20 },
     ];
 
+    const providerIds = providers.map(p => p._id);
+
+    // 1. Batch Get Earnings Stats from ProviderEarning for all matching providers
+    const allEarningStats = await ProviderEarning.aggregate([
+      {
+        $match: {
+          provider: { $in: providerIds },
+          createdAt: { $gte: start, $lte: end }
+        }
+      },
+      {
+        $group: {
+          _id: '$provider',
+          totalBookings: { $sum: 1 },
+          totalGross: { $sum: '$grossAmount' },
+          totalCommission: { $sum: '$commissionAmount' },
+          totalNet: { $sum: '$netAmount' }
+        }
+      }
+    ]).lean();
+
+    const earningStatsMap = {};
+    allEarningStats.forEach(stat => {
+      if (stat._id) {
+        earningStatsMap[stat._id.toString()] = stat;
+      }
+    });
+
+    // 2. Batch Get Withdrawal Stats for all matching providers
+    const allWithdrawalStats = await PaymentRecord.aggregate([
+      {
+        $match: {
+          provider: { $in: providerIds },
+          status: { $in: ['requested', 'processing', 'under_review', 'approved', 'transferred', 'completed'] },
+          type: 'withdrawal',
+          createdAt: { $gte: start, $lte: end }
+        }
+      },
+      {
+        $group: {
+          _id: { provider: '$provider', status: '$status' },
+          totalAmount: { $sum: '$amount' }
+        }
+      }
+    ]).lean();
+
+    const withdrawalStatsMap = {};
+    allWithdrawalStats.forEach(stat => {
+      const pId = stat._id.provider?.toString();
+      const status = stat._id.status;
+      if (pId) {
+        if (!withdrawalStatsMap[pId]) {
+          withdrawalStatsMap[pId] = [];
+        }
+        withdrawalStatsMap[pId].push({ status, totalAmount: stat.totalAmount });
+      }
+    });
+
     for (const provider of providers) {
-      // 1. Get Earnings Stats from ProviderEarning
-      const earningStats = await ProviderEarning.aggregate([
-        {
-          $match: {
-            provider: provider._id,
-            createdAt: { $gte: start, $lte: end }
-          }
-        },
-        {
-          $group: {
-            _id: null,
-            totalBookings: { $sum: 1 },
-            totalGross: { $sum: '$grossAmount' },
-            totalCommission: { $sum: '$commissionAmount' },
-            totalNet: { $sum: '$netAmount' }
-          }
-        }
-      ]);
+      const stats = earningStatsMap[provider._id.toString()] || { totalBookings: 0, totalGross: 0, totalCommission: 0, totalNet: 0 };
+      const wStats = withdrawalStatsMap[provider._id.toString()] || [];
 
-      const stats = earningStats[0] || { totalBookings: 0, totalGross: 0, totalCommission: 0, totalNet: 0 };
-
-      // 2. Get Withdrawal Stats (Completed AND Pending)
-      const withdrawalStats = await PaymentRecord.aggregate([
-        {
-          $match: {
-            provider: provider._id,
-            status: { $in: ['requested', 'processing', 'under_review', 'approved', 'transferred', 'completed'] },
-            type: 'withdrawal',
-            createdAt: { $gte: start, $lte: end }
-          }
-        },
-        {
-          $group: {
-            _id: '$status',
-            totalAmount: { $sum: '$amount' }
-          }
-        }
-      ]);
-
-      const completedWithdrawal = withdrawalStats
-        .filter(s => ['completed', 'transferred', 'approved'].includes(s._id))
+      const completedWithdrawal = wStats
+        .filter(s => ['completed', 'transferred', 'approved'].includes(s.status))
         .reduce((sum, s) => sum + s.totalAmount, 0);
 
-      const pendingWithdrawal = withdrawalStats
-        .filter(s => ['requested', 'processing', 'under_review'].includes(s._id))
+      const pendingWithdrawal = wStats
+        .filter(s => ['requested', 'processing', 'under_review'].includes(s.status))
         .reduce((sum, s) => sum + s.totalAmount, 0);
 
       // Pending Balance (Withdrawable) = Total Net in period - (All Withdrawals in period)

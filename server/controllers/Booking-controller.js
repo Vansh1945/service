@@ -929,11 +929,7 @@ const getUserBookings = async (req, res) => {
       })
       .populate({
         path: 'provider',
-        select: 'name email phone completedBookings performanceScore feedbacks providerId',
-        populate: {
-          path: 'feedbacks',
-          select: 'providerFeedback.rating'
-        }
+        select: 'name email phone completedBookings performanceScore providerId'
       })
       .populate('customer', 'name email phone')
       .sort({ createdAt: -1 })
@@ -949,19 +945,40 @@ const getUserBookings = async (req, res) => {
       return serviceMatch || bookingIdMatch;
     });
 
+    const bookingIds = filteredBookings.map(b => b._id);
 
-    // Fetch transaction details for each booking
+    // Batch fetch transactions and provider earnings to prevent N+1 database queries
     const Transaction = require('../models/Transaction-model');
+    const [transactions, earnings] = await Promise.all([
+      Transaction.find({
+        booking: { $in: bookingIds },
+        paymentStatus: { $in: ['completed', 'paid'] }
+      }).sort({ createdAt: -1 }).lean(),
+      ProviderEarning.find({
+        booking: { $in: bookingIds }
+      }).lean()
+    ]);
+
+    const transactionMap = {};
+    transactions.forEach(t => {
+      if (t.booking && !transactionMap[t.booking.toString()]) {
+        transactionMap[t.booking.toString()] = t;
+      }
+    });
+
+    const earningMap = {};
+    earnings.forEach(e => {
+      if (e.booking) {
+        earningMap[e.booking.toString()] = e;
+      }
+    });
+
+    // Process bookings
     const bookingsWithTransactions = await Promise.all(
       filteredBookings.map(async (booking) => {
         const bookingObj = booking;
 
-        // Find transaction for this booking
-        const transaction = await Transaction.findOne({
-          booking: booking._id,
-          paymentStatus: { $in: ['completed', 'paid'] }
-        }).sort({ createdAt: -1 });
-
+        const transaction = transactionMap[booking._id.toString()];
         if (transaction) {
           bookingObj.transactionId = transaction.transactionId;
           bookingObj.razorpayPaymentId = transaction.razorpayPaymentId;
@@ -969,8 +986,7 @@ const getUserBookings = async (req, res) => {
           bookingObj.paymentDate = transaction.updatedAt;
         }
 
-        // Add payout status and timeline
-        const earning = await ProviderEarning.findOne({ booking: booking._id }).lean();
+        const earning = earningMap[booking._id.toString()];
         const pStatus = getPayoutStatus(earning, bookingObj);
         bookingObj.payoutStatus = pStatus;
 
@@ -2093,7 +2109,8 @@ const getBookingsByStatus = async (req, res) => {
     }
 
     const provider = await Provider.findById(providerId)
-      .select('services performanceScore');
+      .select('services performanceScore')
+      .lean();
 
     if (!provider) {
       return res.status(404).json({
@@ -2108,7 +2125,7 @@ const getBookingsByStatus = async (req, res) => {
 
     const servicesInCategory = await Service.find({
       category: { $in: provider.services }
-    }).select('_id');
+    }).select('_id').lean();
 
     const serviceIds = servicesInCategory.map(s => s._id);
 
@@ -2211,12 +2228,34 @@ const acceptBooking = async (req, res) => {
       });
     }
 
-    // Check if provider exists and get their services
-    const provider = await Provider.findById(providerId).select('services name');
+    // Check if provider exists and get their services and status
+    const provider = await Provider.findById(providerId).select('services name isSuspended blockedTill performanceScore');
     if (!provider) {
       return res.status(404).json({
         success: false,
         message: 'Provider not found'
+      });
+    }
+
+    // Check if provider is suspended, blocked or restricted
+    if (provider.isSuspended) {
+      return res.status(403).json({
+        success: false,
+        message: 'Your account is suspended. You cannot accept bookings.'
+      });
+    }
+
+    if (provider.blockedTill && new Date(provider.blockedTill) > new Date()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Your account is blocked. You cannot accept bookings.'
+      });
+    }
+
+    if (provider.performanceScore?.restrictionsActive) {
+      return res.status(403).json({
+        success: false,
+        message: 'Your account is restricted from accepting new bookings.'
       });
     }
 
@@ -4091,47 +4130,41 @@ const recalculateProviderPerformance = async (providerId, session = null) => {
     if (trustScore < 0) trustScore = 0;
     if (trustScore > 100) trustScore = 100;
 
-    // 6. Penalty Restrictions & Cooldowns
+    // 6. Penalty Warnings & Risk Indicators (No Auto-Restrictions)
     let restrictionsActive = provider.performanceScore?.restrictionsActive || false;
     let restrictedUntil = provider.performanceScore?.restrictedUntil || null;
     let restrictionReason = provider.performanceScore?.restrictionReason || null;
 
     if (trustScore < 60) {
-      if (!restrictionsActive) {
-        restrictionsActive = true;
-        restrictedUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-        restrictionReason = `Trust score (${trustScore.toFixed(0)}) dropped below 60 due to high cancellations/complaints.`;
-        
-        // Notify provider
-        try {
-          await sendNotification(
-            providerId,
-            'provider',
-            'Account Restricted',
-            restrictionReason,
-            'restriction',
-            null
-          );
-        } catch (e) { console.error('Error notifying provider of restriction:', e); }
-      }
-    } else if (restrictionsActive && trustScore >= 80) {
-      // Automatic liftoff of restriction if score recovered and restricted time passed
-      if (restrictedUntil && new Date() >= new Date(restrictedUntil)) {
-        restrictionsActive = false;
-        restrictedUntil = null;
-        restrictionReason = null;
+      // Log an Admin Warning in FraudLog if one doesn't exist recently
+      try {
+        const FraudLog = mongoose.model('FraudLog');
+        const alreadyFlagged = await FraudLog.findOne({
+          userId: providerId,
+          actionType: 'warning',
+          flagReason: { $regex: 'Trust score dropped below 60' },
+          createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } // within last 24h
+        }).session(session);
 
-        // Notify provider
-        try {
-          await sendNotification(
-            providerId,
-            'provider',
-            'Account Restriction Lifted',
-            'Your account restriction has been lifted as your trust score recovered.',
-            'restriction',
-            null
-          );
-        } catch (e) { console.error('Error notifying provider of restriction lift:', e); }
+        if (!alreadyFlagged) {
+          await FraudLog.create([{
+            userId: providerId,
+            userModel: 'Provider',
+            role: 'provider',
+            actionType: 'warning',
+            fraudScore: Math.round(100 - trustScore),
+            riskLevel: 'HIGH',
+            isFlagged: true,
+            flagReason: `Trust score (${trustScore.toFixed(0)}) dropped below 60 due to high cancellations/complaints. Needs Admin manual review.`,
+            status: 'pending_review'
+          }], { session });
+
+          if (global.logger) {
+            global.logger.warn(`[Admin Warning] Provider ${providerId} trust score dropped below 60. Logged for manual admin review.`);
+          }
+        }
+      } catch (err) {
+        console.error('Error creating Admin warning log:', err);
       }
     }
 

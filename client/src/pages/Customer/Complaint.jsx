@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { getCustomerBookings } from '../../services/BookingService';
 import { getComplaint, getCustomerComplaints, submitComplaint as submitComplaintAPI, reopenComplaint as reopenComplaintAPI } from '../../services/ComplaintService';
-import { formatDate, formatDateTime } from '../../utils/format';
+import { formatDate, formatDateTime, compressImage } from '../../utils/format';
 
 const COMPLAINT_CATEGORIES = ["Service issue", "Payment issue", "Refund request", "Suggestion", "Other"];
 
@@ -139,13 +139,18 @@ const ComplaintsPage = () => {
     if (submittingComplaint) return;
     setSubmittingComplaint(true);
     try {
+      // Compress complaint attachment images
+      const compressedImages = await Promise.all(
+        formData.images.map(img => compressImage(img, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 }))
+      );
+
       const fd = new FormData();
       fd.append('bookingId', formData.bookingId);
       fd.append('title', formData.title);
       fd.append('description', formData.description);
       fd.append('category', formData.category);
       if (formData.complaintType) fd.append('complaintType', formData.complaintType);
-      formData.images.forEach(img => fd.append('images', img));
+      compressedImages.forEach(img => fd.append('images', img));
       await submitComplaintAPI(fd);
       toast.success('Complaint submitted successfully!');
       setOpenNewComplaint(false);

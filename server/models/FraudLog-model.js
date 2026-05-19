@@ -33,7 +33,7 @@ const fraudLogSchema = new mongoose.Schema({
   },
   actionType: {
     type: String,
-    enum: ['registration', 'login', 'failed_login', 'otp_request', 'cancellation'],
+    enum: ['registration', 'login', 'failed_login', 'otp_request', 'cancellation', 'warning'],
     required: true,
     index: true
   },

@@ -14,7 +14,7 @@ import {
 import LoadingSpinner from '../../components/Loader';
 import * as BookingService from '../../services/BookingService';
 import Pagination from '../../components/Pagination';
-import { formatDate, formatTime, formatCurrency, formatDuration } from '../../utils/format';
+import { formatDate, formatTime, formatCurrency, formatDuration, compressImage } from '../../utils/format';
 import * as ComplaintService from '../../services/ComplaintService';
 
 // ── Confirmation Dialog ──────────────────────────────────────────────────────
@@ -69,6 +69,7 @@ const ProofModal = ({ isOpen, onClose, onConfirm, action, loading, progress }) =
   const [location, setLocation] = useState(null);
   const [pin, setPin] = useState('');
   const [gettingLocation, setGettingLocation] = useState(false);
+  const [compressing, setCompressing] = useState(false);
 
   const captureLocation = () => {
     setGettingLocation(true);
@@ -107,6 +108,21 @@ const ProofModal = ({ isOpen, onClose, onConfirm, action, loading, progress }) =
 
   const handleRemoveImage = (idx) => {
     setImages(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleSubmit = async () => {
+    setCompressing(true);
+    try {
+      const compressedImages = await Promise.all(
+        images.map(img => compressImage(img, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 }))
+      );
+      onConfirm(compressedImages, location, pin);
+    } catch (err) {
+      console.error("Compression error, using originals:", err);
+      onConfirm(images, location, pin);
+    } finally {
+      setCompressing(false);
+    }
   };
 
   const isStart = action === 'start';
@@ -212,14 +228,17 @@ const ProofModal = ({ isOpen, onClose, onConfirm, action, loading, progress }) =
             </div>
 
             {/* Progress Bar */}
-            {loading && progress > 0 && (
+            {(loading || compressing) && (
               <div className="space-y-1.5">
                 <div className="flex justify-between text-[10px] font-bold text-primary uppercase">
-                  <span>Uploading Proofs...</span>
-                  <span>{progress}%</span>
+                  <span>{compressing ? 'Optimizing & Compressing Photos...' : 'Uploading Proofs...'}</span>
+                  <span>{compressing ? 'Please wait' : `${progress}%`}</span>
                 </div>
                 <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                  <div className="bg-primary h-1.5 transition-all duration-300" style={{ width: `${progress}%` }}></div>
+                  <div 
+                    className="bg-primary h-1.5 transition-all duration-300" 
+                    style={{ width: compressing ? '50%' : `${progress}%` }}
+                  ></div>
                 </div>
               </div>
             )}
@@ -228,18 +247,32 @@ const ProofModal = ({ isOpen, onClose, onConfirm, action, loading, progress }) =
             <div className="flex gap-3 pt-2">
               <button
                 onClick={onClose}
-                disabled={loading}
+                disabled={loading || compressing}
                 className="flex-1 px-4 py-3 border border-gray-200 rounded-xl text-sm font-bold text-secondary hover:bg-gray-50 transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
-                disabled={loading || images.length === 0 || pin.length !== 4 || !location}
-                onClick={() => onConfirm(images, location, pin)}
+                disabled={loading || compressing || images.length === 0 || pin.length !== 4 || !location}
+                onClick={handleSubmit}
                 className={`flex-1 px-4 py-3 rounded-xl text-sm font-bold text-white shadow-lg shadow-primary/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50 disabled:bg-gray-300 disabled:shadow-none ${isStart ? 'bg-primary' : 'bg-emerald-600'}`}
               >
-                {loading ? <Loader className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-                {isStart ? 'Start Work' : 'Complete Work'}
+                {loading ? (
+                  <>
+                    <Loader className="w-4 h-4 animate-spin" />
+                    Uploading...
+                  </>
+                ) : compressing ? (
+                  <>
+                    <Loader className="w-4 h-4 animate-spin" />
+                    Compressing...
+                  </>
+                ) : (
+                  <>
+                    {isStart ? <Play className="w-4 h-4" /> : <CheckSquare className="w-4 h-4" />}
+                    {isStart ? 'Start Work' : 'Complete Work'}
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -402,6 +435,7 @@ const ProviderBooking = () => {
       setUploadProgress(0);
 
       const config = {
+        timeout: 120000, // 2 minutes timeout for large camera uploads
         onUploadProgress: (progressEvent) => {
           const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
           setUploadProgress(percentCompleted);
@@ -515,9 +549,14 @@ const ProviderBooking = () => {
     }
     try {
       setIsSubmittingResponse(true);
+
+      const compressedImages = await Promise.all(
+        disputeImages.map(img => compressImage(img, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 }))
+      );
+
       const formData = new FormData();
       formData.append('message', disputeResponseText);
-      disputeImages.forEach(img => formData.append('images', img));
+      compressedImages.forEach(img => formData.append('images', img));
 
       await ComplaintService.replyToComplaint(selectedBooking.complaint, formData);
       showToast('Response submitted successfully', 'success');
