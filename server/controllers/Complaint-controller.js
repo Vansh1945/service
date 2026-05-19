@@ -5,11 +5,34 @@ const mongoose = require('mongoose');
 const { notifyAdmins } = require('../utils/notificationHelper');
 const { generateComplaintId } = require('../utils/generateUniqueId');
 
+const checkAndAutoEscalate = async (complaintId) => {
+  try {
+    const complaint = await Complaint.findById(complaintId);
+    if (!complaint) return null;
+    
+    const isPending = ['submitted', 'under_review', 'Open', 'In-Progress'].includes(complaint.status);
+    if (isPending && complaint.responseDeadline && new Date() > new Date(complaint.responseDeadline)) {
+      complaint.status = 'admin_review';
+      await complaint.save();
+      
+      if (complaint.booking) {
+        await Booking.findByIdAndUpdate(complaint.booking, {
+          disputeStatus: 'admin_review'
+        });
+      }
+    }
+  } catch (err) {
+    console.error('Error auto-escalating complaint:', err);
+  }
+};
+
 
 // @desc    Submit a new complaint
 // @route   POST /api/complaints
 // @access  Private (Customer)
 const submitComplaint = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
   try {
     const { title, description, category, bookingId, complaintType } = req.body;
     const userId = req.user._id;
@@ -17,13 +40,59 @@ const submitComplaint = async (req, res) => {
 
     // 1. Validation
     if (!title || !description || !category) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({ message: 'Please provide title, description, and category.' });
     }
 
     // Validate Complaint Type if provided
-    const validTypes = ['bad_work', 'late_arrival', 'rude_behavior', 'incomplete_work', 'overcharge'];
+    const validTypes = ['bad_work', 'late_arrival', 'rude_behavior', 'incomplete_work', 'overcharge', 'wrong_service', 'fraud'];
     if (complaintType && !validTypes.includes(complaintType)) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({ message: 'Invalid complaint type.' });
+    }
+
+    // --- RATE LIMITING / COMPLAINT SPAM PROTECTION ---
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const recentCount = await Complaint.countDocuments({
+      userType: userRole,
+      $or: [
+        { customer: userId },
+        { provider: userId },
+        { userId: userId },
+        { providerId: userId }
+      ],
+      createdAt: { $gte: oneDayAgo }
+    }).session(session);
+
+    if (recentCount >= 3) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(429).json({
+        success: false,
+        message: 'Rate limit exceeded: You can only submit a maximum of 3 complaints in a 24-hour period.'
+      });
+    }
+
+    const activeCount = await Complaint.countDocuments({
+      userType: userRole,
+      $or: [
+        { customer: userId },
+        { provider: userId },
+        { userId: userId },
+        { providerId: userId }
+      ],
+      status: { $in: ['Open', 'In-Progress', 'Reopened', 'submitted', 'under_review', 'provider_responded', 'admin_review'] }
+    }).session(session);
+
+    if (activeCount >= 3) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({
+        success: false,
+        message: 'Active complaint limit reached: You have 3 or more unresolved complaints. Please wait until they are resolved.'
+      });
     }
 
     let booking = null;
@@ -38,24 +107,68 @@ const submitComplaint = async (req, res) => {
 
     if (category === 'Service issue' && userRole === 'customer') {
       if (!bookingId) {
+        await session.abortTransaction();
+        session.endSession();
         return res.status(400).json({ message: 'Booking ID is required for service-related complaints.' });
       }
-      booking = await Booking.findById(bookingId);
+
+      booking = await Booking.findById(bookingId).session(session);
       if (!booking || booking.customer.toString() !== userId.toString()) {
+        await session.abortTransaction();
+        session.endSession();
         return res.status(404).json({ message: 'Booking not found or you are not authorized.' });
       }
       if (!booking.provider) {
+        await session.abortTransaction();
+        session.endSession();
         return res.status(400).json({ message: 'Cannot submit complaint for booking without assigned provider.' });
       }
       provider = booking.provider;
 
+      // Block filing complaints on cancelled bookings
+      if (booking.status === 'cancelled') {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({ message: 'Cannot submit a complaint for a cancelled booking.' });
+      }
+
+      // Check valid time window: within 7 days of completion/creation
+      const bookingDate = booking.createdAt || booking.date || new Date();
+      const bookingAgeMs = Date.now() - new Date(bookingDate).getTime();
+      const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+      if (bookingAgeMs > sevenDaysMs) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({
+          success: false,
+          message: 'Dispute window closed: Complaints must be submitted within 7 days of booking creation or completion.'
+        });
+      }
+
+      // Instant fake refund requests check: block service issues on unstarted bookings
+      const qualityIssues = ['bad_work', 'incomplete_work', 'wrong_service', 'fraud'];
+      if (complaintType && qualityIssues.includes(complaintType)) {
+        const notStarted = !booking.status || ['pending', 'unassigned', 'accepted'].includes(booking.status.toLowerCase());
+        if (notStarted) {
+          await session.abortTransaction();
+          session.endSession();
+          return res.status(400).json({
+            success: false,
+            message: `Instant refund prevention: Quality or service issues (${complaintType.replace('_', ' ')}) cannot be filed for a booking that has not started.`
+          });
+        }
+      }
+
       // Prevent duplicate complaint submissions for same booking by same user
       const existingComplaint = await Complaint.findOne({
         booking: bookingId,
-        role: userRole,
-        status: { $in: ['Open', 'In-Progress', 'Reopened'] }
-      });
+        userType: userRole,
+        status: { $in: ['Open', 'In-Progress', 'Reopened', 'submitted', 'under_review', 'provider_responded', 'admin_review'] }
+      }).session(session);
+
       if (existingComplaint) {
+        await session.abortTransaction();
+        session.endSession();
         return res.status(400).json({
           success: false,
           message: 'There is already an active dispute or complaint open for this booking. Please wait for resolution.'
@@ -63,20 +176,52 @@ const submitComplaint = async (req, res) => {
       }
     }
 
-    // 2. Handle Image Uploads
+    // 2. Handle Image Uploads & Deduplication
     let images = [];
     if (req.files && req.files.length > 0) {
-      images = req.files.map(file => ({
+      const seenSizes = new Set();
+      const seenNames = new Set();
+      const uniqueFiles = [];
+      
+      for (const file of req.files) {
+        const sizeKey = file.size;
+        const nameKey = file.originalname;
+        if (!seenSizes.has(sizeKey) && !seenNames.has(nameKey)) {
+          seenSizes.add(sizeKey);
+          seenNames.add(nameKey);
+          uniqueFiles.push(file);
+        }
+      }
+      
+      images = uniqueFiles.map(file => ({
         secure_url: file.path,
         public_id: file.filename,
       }));
     }
 
+    // Proof image requirements check
+    const proofRequiredTypes = ['bad_work', 'incomplete_work', 'wrong_service', 'fraud'];
+    if (category === 'Service issue' && userRole === 'customer' && complaintType && proofRequiredTypes.includes(complaintType)) {
+      if (images.length === 0) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({
+          success: false,
+          message: `At least 1 proof image is strictly required for complaint type: ${complaintType.replace('_', ' ')}.`
+        });
+      }
+    }
+
     // 3. Prepare Description with Complaint Type
     const formattedDescription = complaintType ? `[${complaintType}]\n${description}` : description;
 
-    // 4. Create Complaint
-    const complaint = await Complaint.create({
+    // Set provider response deadline
+    const responseDeadline = (category === 'Service issue' && userRole === 'customer')
+      ? new Date(Date.now() + 24 * 60 * 60 * 1000)
+      : null;
+
+    // 4. Create Complaint within transaction
+    const complaintResult = await Complaint.create([{
       complaintId: generateComplaintId(),
       customer: customer || undefined,
       provider: provider || undefined,
@@ -88,68 +233,66 @@ const submitComplaint = async (req, res) => {
       userType: userRole,
       userId: userRole === 'customer' ? userId : undefined,
       providerId: userRole === 'provider' ? userId : undefined,
-      role: userRole
-    });
+      role: userRole,
+      status: 'submitted',
+      responseDeadline
+    }], { session });
 
-    // Invalidate dashboard caches
-    try {
+    const complaint = complaintResult[0];
 
+    // Update Booking with complaint proof and dispute status within transaction
+    if (bookingId) {
+      const updateData = {
+        $push: {
+          complaintProofs: {
+            uploadedBy: userRole,
+            images: images.map(img => ({ url: img.secure_url })),
+            message: description,
+            createdAt: new Date()
+          }
+        }
+      };
 
-    } catch (e) { }
+      // If customer raises service issue, mark as dispute
+      if (category === 'Service issue' && userRole === 'customer') {
+        updateData.disputeRaised = true;
+        updateData.disputeStatus = 'under_review';
+
+        // Hold provider earnings if they exist
+        const ProviderEarning = mongoose.model('ProviderEarning');
+        await ProviderEarning.findOneAndUpdate(
+          { booking: bookingId },
+          { status: 'held' },
+          { session }
+        );
+
+        // Notify Provider
+        if (provider) {
+          try {
+            const { sendNotification } = require('../utils/notificationHelper');
+            sendNotification(
+              provider,
+              'provider',
+              'Dispute Raised ⚠️',
+              `A dispute has been raised for booking #${bookingId.toString().slice(-6)}. Your payout is held.`,
+              'dispute_raised',
+              bookingId
+            );
+          } catch (e) { }
+        }
+      }
+
+      await Booking.findByIdAndUpdate(bookingId, updateData, { session });
+    }
+
+    await session.commitTransaction();
+    session.endSession();
 
     res.status(201).json({
       success: true,
       message: 'Support ticket submitted successfully',
       complaint
     });
-
-    // Update Booking with complaint proof and set dispute status
-    if (bookingId) {
-      try {
-        const updateData = {
-          $push: {
-            complaintProofs: {
-              uploadedBy: userRole,
-              images: images.map(img => ({ url: img.secure_url })),
-              message: description,
-              createdAt: new Date()
-            }
-          }
-        };
-
-        // If customer raises service issue, mark as dispute
-        if (category === 'Service issue' && userRole === 'customer') {
-          updateData.disputeRaised = true;
-          updateData.disputeStatus = 'under_review'; // Consistent with existing enum in model if possible, or lowercase
-
-          // Hold provider earnings if they exist
-          const ProviderEarning = mongoose.model('ProviderEarning');
-          await ProviderEarning.findOneAndUpdate(
-            { booking: bookingId },
-            { status: 'held' }
-          );
-
-          // Notify Provider
-          if (provider) {
-            try {
-              const { sendNotification } = require('../utils/notificationHelper');
-              sendNotification(
-                provider,
-                'provider',
-                'Dispute Raised ⚠️',
-                `A dispute has been raised for booking #${bookingId.toString().slice(-6)}. Your payout is held.`,
-                'dispute_raised',
-                bookingId
-              );
-            } catch (e) { }
-          }
-        }
-
-        await Booking.findByIdAndUpdate(bookingId, updateData);
-      } catch (err) {
-        console.error('Error updating booking with complaint proof:', err);
-      }
-    }
 
     // Notify Admins
     try {
@@ -161,6 +304,10 @@ const submitComplaint = async (req, res) => {
       );
     } catch (e) { }
   } catch (error) {
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
+    session.endSession();
     console.error('Error submitting complaint:', error);
     res.status(500).json({
       success: false,
@@ -176,6 +323,15 @@ const submitComplaint = async (req, res) => {
 // @access  Private (Admin)
 const getAllComplaints = async (req, res) => {
   try {
+    // Auto-escalate any overdue complaints before fetching
+    const overdueComplaints = await Complaint.find({
+      status: { $in: ['submitted', 'under_review', 'Open', 'In-Progress'] },
+      responseDeadline: { $ne: null, $lt: new Date() }
+    });
+    for (const c of overdueComplaints) {
+      await checkAndAutoEscalate(c._id);
+    }
+
     const {
       page = 1,
       limit = 10,
@@ -459,7 +615,30 @@ const enrichComplaintData = async (complaint) => {
       warnings.push('Suspiciously high complaint frequency in 24 hours');
     }
 
+    // Same-image reuse checks: scan other complaints for identical Cloudinary secure_url paths
+    if (complaint.images && complaint.images.length > 0) {
+      const secureUrls = complaint.images.map(img => img.secure_url).filter(Boolean);
+      if (secureUrls.length > 0) {
+        const duplicateImageComplaint = await ComplaintModel.findOne({
+          _id: { $ne: complaint._id },
+          'images.secure_url': { $in: secureUrls }
+        });
+        if (duplicateImageComplaint) {
+          customerFraudScore += 35;
+          warnings.push('Same proof image reuse across different complaints detected!');
+        }
+      }
+    }
+
     customerFraudScore = Math.max(0, Math.min(Math.round(customerFraudScore), 100));
+
+    // Dynamic riskScore calculation based on fraud score
+    let riskScore = 'low';
+    if (customerFraudScore >= 65) {
+      riskScore = 'high';
+    } else if (customerFraudScore >= 35) {
+      riskScore = 'medium';
+    }
   }
 
   // ─── 4. Evidence Strength (0–100) ──────────────────────────
@@ -492,6 +671,9 @@ const enrichComplaintData = async (complaint) => {
   if (providerTrustScore <= 30 && !warnings.includes('Provider has repeated complaints')) warnings.push('Provider has repeated complaints');
   if (!hasBefore && !hasAfter && !warnings.includes('Provider uploaded no work proof')) warnings.push('Provider uploaded no work proof');
 
+  // Dynamic riskScore calculation for non-customers
+  const finalRiskScore = customerUserId ? (customerFraudScore >= 65 ? 'high' : customerFraudScore >= 35 ? 'medium' : 'low') : 'low';
+
   return {
     ...complaint,
     complaintType,
@@ -505,6 +687,7 @@ const enrichComplaintData = async (complaint) => {
     complaintScore,
     providerTrustScore,
     customerFraudScore,
+    riskScore: finalRiskScore,
     evidenceStrength,
     suggestedDecision,
     warnings,
@@ -519,6 +702,8 @@ const enrichComplaintData = async (complaint) => {
 // @access  Private
 const getComplaint = async (req, res) => {
   try {
+    await checkAndAutoEscalate(req.params.id);
+
     const complaint = await Complaint.findById(req.params.id)
       .populate('customer', 'name email phone')
       .populate('provider', 'name email phone')
@@ -593,7 +778,37 @@ const resolveComplaint = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Complaint not found' });
     }
 
-    complaint.status = 'Solved';
+    const resolvedStatus = decision === 'approve_refund' ? 'refunded' : decision === 'reject_refund' ? 'rejected' : 'resolved';
+    
+    // --- STATE MACHINE VALIDATION ---
+    const VALID_TRANSITIONS = {
+      'submitted': ['under_review', 'Closed'],
+      'under_review': ['provider_responded', 'admin_review', 'Closed'],
+      'provider_responded': ['admin_review', 'Closed'],
+      'admin_review': ['resolved', 'rejected', 'refunded', 'Closed'],
+      'resolved': ['Reopened'],
+      'rejected': ['Reopened'],
+      'refunded': [],
+      'Closed': ['Reopened'],
+      'Reopened': ['under_review', 'Closed'],
+      
+      'Open': ['In-Progress', 'Solved', 'Closed', 'submitted', 'under_review', 'provider_responded', 'admin_review', 'resolved', 'rejected', 'refunded'],
+      'In-Progress': ['Solved', 'Closed', 'submitted', 'under_review', 'provider_responded', 'admin_review', 'resolved', 'rejected', 'refunded'],
+      'Solved': ['Reopened'],
+    };
+
+    const currentStatus = complaint.status || 'submitted';
+    const allowed = VALID_TRANSITIONS[currentStatus] || [];
+    if (!allowed.includes(resolvedStatus) && currentStatus !== resolvedStatus) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({
+        success: false,
+        message: `Invalid status transition: cannot change status from '${currentStatus}' to '${resolvedStatus}' by resolving.`
+      });
+    }
+
+    complaint.status = resolvedStatus;
     complaint.resolvedBy = req.admin?._id || req.user?._id;
     complaint.resolutionNotes = resolutionNotes;
     await complaint.save({ session });
@@ -663,7 +878,7 @@ const resolveComplaint = async (req, res) => {
 const updateComplaintStatus = async (req, res) => {
   try {
     const { status } = req.body;
-    const validStatuses = ["Open", "In-Progress", "Solved", "Reopened", "Closed"];
+    const validStatuses = ["Open", "In-Progress", "Solved", "Reopened", "Closed", "submitted", "under_review", "provider_responded", "admin_review", "resolved", "rejected", "refunded"];
 
     if (!status || !validStatuses.includes(status)) {
       return res.status(400).json({
@@ -677,6 +892,32 @@ const updateComplaintStatus = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Complaint not found'
+      });
+    }
+
+    // --- STATE MACHINE VALIDATION ---
+    const VALID_TRANSITIONS = {
+      'submitted': ['under_review', 'Closed'],
+      'under_review': ['provider_responded', 'admin_review', 'Closed'],
+      'provider_responded': ['admin_review', 'Closed'],
+      'admin_review': ['resolved', 'rejected', 'refunded', 'Closed'],
+      'resolved': ['Reopened'],
+      'rejected': ['Reopened'],
+      'refunded': [],
+      'Closed': ['Reopened'],
+      'Reopened': ['under_review', 'Closed'],
+      
+      'Open': ['In-Progress', 'Solved', 'Closed', 'submitted', 'under_review', 'provider_responded', 'admin_review', 'resolved', 'rejected', 'refunded'],
+      'In-Progress': ['Solved', 'Closed', 'submitted', 'under_review', 'provider_responded', 'admin_review', 'resolved', 'rejected', 'refunded'],
+      'Solved': ['Reopened'],
+    };
+
+    const currentStatus = complaint.status || 'submitted';
+    const allowed = VALID_TRANSITIONS[currentStatus] || [];
+    if (!allowed.includes(status) && currentStatus !== status) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid status transition: cannot change status from '${currentStatus}' to '${status}'.`
       });
     }
 
@@ -708,6 +949,7 @@ const updateComplaintStatus = async (req, res) => {
 const getComplaintDetails = async (req, res) => {
   try {
     const { id } = req.params;
+    await checkAndAutoEscalate(id);
 
     // Find complaint by ID and populate all references deeply
     const complaint = await Complaint.findById(id)
@@ -877,6 +1119,12 @@ const replyToComplaint = async (req, res) => {
     const complaint = await Complaint.findById(complaintId);
     if (!complaint) {
       return res.status(404).json({ success: false, message: 'Complaint not found' });
+    }
+
+    // Auto status transition: if provider replies, transition to provider_responded
+    if (userRole === 'provider' && ['submitted', 'under_review', 'Open', 'In-Progress'].includes(complaint.status)) {
+      complaint.status = 'provider_responded';
+      await complaint.save();
     }
 
     // Handle Image Uploads

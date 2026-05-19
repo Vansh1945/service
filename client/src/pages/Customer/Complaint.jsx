@@ -31,6 +31,7 @@ const ComplaintsPage = () => {
   const [formErrors, setFormErrors] = useState({ bookingId: '', title: '', description: '', category: '', complaintType: '' });
   const [reopenReason, setReopenReason] = useState('');
   const [previewImage, setPreviewImage] = useState(null);
+  const [submittingComplaint, setSubmittingComplaint] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) navigate('/login');
@@ -89,6 +90,12 @@ const ComplaintsPage = () => {
   const handleImageUpload = (e) => {
     const files = Array.from(e.target.files);
     const validFiles = [], validPreviews = [];
+    
+    if (formData.images.length + files.length > 5) {
+      toast.error('You can upload a maximum of 5 screenshot proofs.');
+      return;
+    }
+    
     files.forEach(file => {
       if (!file.type.match('image.*')) { toast.error('Images only'); return; }
       if (file.size > 5 * 1024 * 1024) { toast.error('Max 5MB per image'); return; }
@@ -129,6 +136,8 @@ const ComplaintsPage = () => {
 
   const handleSubmitComplaint = async () => {
     if (!validateForm()) return;
+    if (submittingComplaint) return;
+    setSubmittingComplaint(true);
     try {
       const fd = new FormData();
       fd.append('bookingId', formData.bookingId);
@@ -145,6 +154,8 @@ const ComplaintsPage = () => {
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to submit');
       if (err.response?.status === 401) logoutUser();
+    } finally {
+      setSubmittingComplaint(false);
     }
   };
 
@@ -187,13 +198,20 @@ const ComplaintsPage = () => {
     'Solved': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200', dot: 'bg-green-500' },
     'Reopened': { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', dot: 'bg-orange-500' },
     'Closed': { bg: 'bg-gray-100', text: 'text-gray-500', border: 'border-gray-200', dot: 'bg-gray-400' },
+    submitted: { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200', dot: 'bg-yellow-400' },
+    under_review: { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200', dot: 'bg-indigo-500' },
+    provider_responded: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200', dot: 'bg-purple-500' },
+    admin_review: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', dot: 'bg-red-500' },
+    resolved: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', dot: 'bg-emerald-500' },
+    rejected: { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200', dot: 'bg-rose-500' },
+    refunded: { bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-200', dot: 'bg-teal-500' },
   };
 
   const getStatusStyle = (status) => STATUS_CONFIG[status] || STATUS_CONFIG['Open'];
 
   const isFormDisabled =
     ((formData.category === 'Service issue' || formData.category === 'Refund request') && !formData.bookingId.trim()) ||
-    !formData.title.trim() || !formData.description.trim() || !formData.category;
+    !formData.title.trim() || !formData.description.trim() || !formData.category || submittingComplaint;
 
   return (
     <div className="min-h-screen bg-gray-50 font-inter">
@@ -274,7 +292,15 @@ const ComplaintsPage = () => {
                           <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-tighter ${s.bg} ${s.text}`}>
                             {complaint.status === 'Solved' ? 'Resolved' :
                              complaint.status === 'In-Progress' ? 'In Review' :
-                             complaint.status}
+                             complaint.status === 'Reopened' ? 'Reopened' :
+                             complaint.status === 'Closed' ? 'Closed' :
+                             complaint.status === 'submitted' ? 'Submitted' :
+                             complaint.status === 'under_review' ? 'Under Review' :
+                             complaint.status === 'provider_responded' ? 'Provider Responded' :
+                             complaint.status === 'admin_review' ? 'Admin Review' :
+                             complaint.status === 'resolved' ? 'Resolved' :
+                             complaint.status === 'rejected' ? 'Rejected' :
+                             complaint.status === 'refunded' ? 'Refunded' : complaint.status}
                           </span>
                         </div>
                         <p className="text-[10px] text-gray-400 flex items-center gap-1">
@@ -503,7 +529,13 @@ const ComplaintsPage = () => {
 
             <div className="px-5 py-4 border-t border-gray-100 flex gap-3">
               <button onClick={() => { setOpenNewComplaint(false); resetForm(); }} className="flex-1 py-2 border rounded-lg text-sm font-medium hover:bg-gray-50">Cancel</button>
-              <button onClick={handleSubmitComplaint} disabled={isFormDisabled} className={`flex-1 py-2 rounded-lg text-sm font-medium text-white ${isFormDisabled ? 'bg-primary/50 cursor-not-allowed' : 'bg-primary hover:bg-primary/90'}`}>Submit</button>
+              <button onClick={handleSubmitComplaint} disabled={isFormDisabled} className={`flex-1 py-2 rounded-lg text-sm font-medium text-white flex items-center justify-center gap-1.5 ${isFormDisabled ? 'bg-primary/50 cursor-not-allowed' : 'bg-primary hover:bg-primary/90'}`}>
+                {submittingComplaint ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> Submitting...
+                  </>
+                ) : 'Submit'}
+              </button>
             </div>
           </div>
         </div>
@@ -535,7 +567,14 @@ const ComplaintsPage = () => {
                     {selectedComplaint.status === 'Solved' ? '✓ Issue Resolved' :
                      selectedComplaint.status === 'In-Progress' ? '⏳ Being Reviewed' :
                      selectedComplaint.status === 'Reopened' ? '↩ Reopened' :
-                     selectedComplaint.status === 'Closed' ? 'Closed' : '○ Open'}
+                     selectedComplaint.status === 'Closed' ? 'Closed' :
+                     selectedComplaint.status === 'submitted' ? 'Submitted' :
+                     selectedComplaint.status === 'under_review' ? 'Under Review' :
+                     selectedComplaint.status === 'provider_responded' ? 'Provider Responded' :
+                     selectedComplaint.status === 'admin_review' ? 'Admin Review' :
+                     selectedComplaint.status === 'resolved' ? 'Resolved' :
+                     selectedComplaint.status === 'rejected' ? 'Rejected' :
+                     selectedComplaint.status === 'refunded' ? 'Refunded' : '○ Open'}
                   </span>
                 </div>
               </div>

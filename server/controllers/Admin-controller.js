@@ -1955,6 +1955,22 @@ const processAdminRefund = async (req, res) => {
             throw new Error('Booking not found');
         }
 
+        // --- STRICT BLOCK FOR COD REFUNDS ---
+        if (booking.paymentMethod === 'cod') {
+            throw new Error('Cash on Delivery (COD) bookings are strictly ineligible for wallet refunds to prevent refund fraud.');
+        }
+
+        // --- DOUBLE-REFUND PROTECTION SCAN ---
+        const existingRefundTx = await Transaction.findOne({
+            booking: booking._id,
+            type: 'refund',
+            paymentStatus: 'completed'
+        }).session(session);
+
+        if (existingRefundTx) {
+            throw new Error('Double-refund protection: A completed refund transaction already exists for this booking.');
+        }
+
         // --- CRITICAL CHECKS ---
         if (booking.paymentStatus === 'refunded') {
             throw new Error('Booking already fully refunded');

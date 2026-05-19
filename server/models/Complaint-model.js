@@ -79,8 +79,14 @@ const complaintSchema = new mongoose.Schema(
     // Complaint Status
     status: {
       type: String,
-      enum: ["Open", "In-Progress", "Solved", "Reopened", "Closed"],
-      default: "Open",
+      enum: ["Open", "In-Progress", "Solved", "Reopened", "Closed", "submitted", "under_review", "provider_responded", "admin_review", "resolved", "rejected", "refunded"],
+      default: "submitted",
+    },
+
+    // Response deadline for provider replies
+    responseDeadline: {
+      type: Date,
+      default: null
     },
 
     // 4. Timeline & History
@@ -119,9 +125,9 @@ complaintSchema.pre("save", function (next) {
   if (this.isModified("status")) {
     this.statusHistory.push({ status: this.status });
 
-    if (this.status === "Solved") {
+    if (["Solved", "resolved"].includes(this.status)) {
       this.resolvedAt = new Date();
-    } else if (this.status !== "Solved") {
+    } else if (!["Solved", "resolved"].includes(this.status)) {
       this.resolvedAt = null;
       this.resolvedBy = null;
     }
@@ -132,7 +138,7 @@ complaintSchema.pre("save", function (next) {
 // Initialize status history on creation
 complaintSchema.pre("save", function (next) {
   if (this.isNew) {
-    this.statusHistory.push({ status: 'Open' });
+    this.statusHistory.push({ status: this.status || 'submitted' });
   }
   next();
 });

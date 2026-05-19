@@ -22,8 +22,24 @@ const StatusBadge = ({ status }) => {
     Solved: 'bg-green-100 text-green-700 border-green-200',
     Reopened: 'bg-orange-100 text-orange-700 border-orange-200',
     Closed: 'bg-gray-100 text-gray-500 border-gray-200',
+    submitted: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+    under_review: 'bg-indigo-100 text-indigo-700 border-indigo-200',
+    provider_responded: 'bg-purple-100 text-purple-700 border-purple-200',
+    admin_review: 'bg-red-100 text-red-700 border-red-200',
+    resolved: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+    rejected: 'bg-rose-100 text-rose-700 border-rose-200',
+    refunded: 'bg-teal-100 text-teal-700 border-teal-200',
   };
-  const label = { 'In-Progress': 'In Progress' }[status] || status;
+  const label = {
+    'In-Progress': 'In Progress',
+    under_review: 'Under Review',
+    provider_responded: 'Provider Responded',
+    admin_review: 'Admin Review',
+    resolved: 'Resolved',
+    rejected: 'Rejected',
+    refunded: 'Refunded',
+    submitted: 'Submitted',
+  }[status] || status;
   return (
     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${cfg[status] || cfg.Closed}`}>
       <span className="w-1.5 h-1.5 rounded-full mr-1.5 bg-current opacity-70" />
@@ -77,6 +93,7 @@ const StatCard = ({ label, value, icon: Icon, gradient, iconBg, delay = 0 }) => 
 );
 
 // ── Complaint Details Modal ────────────────────────────────────
+// ── Complaint Details Modal ────────────────────────────────────
 const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => {
   const { showToast } = useAuth();
   const [activeTab, setActiveTab] = useState('details');
@@ -85,6 +102,7 @@ const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => 
   const [resolutionNotes, setResolutionNotes] = useState('');
   const [refundAmount, setRefundAmount] = useState(booking?.totalAmount || complaint?.booking?.totalAmount || 0);
   const [confirmAction, setConfirmAction] = useState(null); // 'approve_refund', 'reject_refund', 'manual_review'
+  const [submitting, setSubmitting] = useState(false);
 
   const previouslyRefunded = complaint?.booking?.cancellationProgress?.refundAmount || 0;
   const isFullyRefunded = complaint?.booking?.paymentStatus === 'refunded' || complaint?.booking?.adminRefundDecision === 'approved' || (complaint?.booking?.totalAmount && previouslyRefunded >= complaint.booking.totalAmount);
@@ -92,13 +110,21 @@ const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => 
 
   const handleStatusUpdate = async () => {
     if (!statusUpdate) { showToast('Please select a status', 'error'); return; }
-    try { await onUpdateStatus(complaint._id, statusUpdate); showToast('Status updated', 'success'); }
+    if (submitting) return;
+    setSubmitting(true);
+    try { 
+      await onUpdateStatus(complaint._id, statusUpdate); 
+      showToast('Status updated', 'success'); 
+    }
     catch { showToast('Failed to update status', 'error'); }
+    finally { setSubmitting(false); }
   };
 
   const handleResolve = async () => {
     if (!confirmAction) return;
     if (!resolutionNotes.trim()) { showToast('Resolution notes required', 'error'); return; }
+    if (submitting) return;
+    setSubmitting(true);
     try { 
       await onResolve(complaint._id, resolutionNotes, confirmAction); 
       setResolutionNotes(''); 
@@ -106,11 +132,14 @@ const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => 
       showToast('Complaint resolved!', 'success'); 
     }
     catch { showToast('Failed to resolve', 'error'); }
+    finally { setSubmitting(false); }
   };
 
   const handleProcessRefund = async (type) => {
     if (!complaint.booking) return;
     const bookingId = complaint.booking._id || complaint.booking;
+    if (submitting) return;
+    setSubmitting(true);
     try {
       const res = await AdminService.processRefund(bookingId, { 
         type, 
@@ -123,12 +152,16 @@ const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => 
       }
     } catch (err) {
       showToast(err.response?.data?.message || 'Refund failed', 'error');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleRejectDispute = async () => {
     if (!complaint.booking) return;
     const bookingId = complaint.booking._id || complaint.booking;
+    if (submitting) return;
+    setSubmitting(true);
     try {
       const res = await AdminService.rejectRefund(bookingId, { reason: resolutionNotes });
       if (res.data.success) {
@@ -137,6 +170,8 @@ const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => 
       }
     } catch (err) {
       showToast(err.response?.data?.message || 'Rejection failed', 'error');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -269,7 +304,16 @@ const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => 
                     </div>
                     <div className="bg-white rounded-lg p-3 shadow-sm border border-blue-50">
                       <p className="text-[10px] font-bold text-gray-400 uppercase">Customer Risk</p>
-                      <p className={`text-xl font-black ${complaint.customerFraudScore > 60 ? 'text-red-600' : 'text-green-600'}`}>{complaint.customerFraudScore}/100</p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <p className={`text-xl font-black ${complaint.customerFraudScore > 60 ? 'text-red-600' : 'text-green-600'}`}>{complaint.customerFraudScore}/100</p>
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
+                          complaint.riskScore === 'high' ? 'bg-red-100 text-red-700' :
+                          complaint.riskScore === 'medium' ? 'bg-amber-100 text-amber-700' :
+                          'bg-green-100 text-green-700'
+                        }`}>
+                          {complaint.riskScore || 'low'}
+                        </span>
+                      </div>
                     </div>
                     <div className="bg-white rounded-lg p-3 shadow-sm border border-blue-50">
                       <p className="text-[10px] font-bold text-gray-400 uppercase">Evidence Strength</p>

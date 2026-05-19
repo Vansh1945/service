@@ -6,7 +6,7 @@ const submitComplaintSchema = z.object({
   description: z.string().min(1, "Description is required"),
   category: z.string().min(1, "Category is required"),
   bookingId: objectIdSchema.optional().or(z.literal('')),
-  complaintType: z.enum(['bad_work', 'late_arrival', 'rude_behavior', 'incomplete_work', 'overcharge']).optional()
+  complaintType: z.enum(['bad_work', 'late_arrival', 'rude_behavior', 'incomplete_work', 'overcharge', 'wrong_service', 'fraud']).optional()
 });
 
 const resolveComplaintSchema = z.object({
@@ -15,7 +15,7 @@ const resolveComplaintSchema = z.object({
 });
 
 const updateComplaintStatusSchema = z.object({
-  status: z.enum(['Open', 'In-Progress', 'Solved', 'Reopened', 'Closed'], {
+  status: z.enum(['Open', 'In-Progress', 'Solved', 'Reopened', 'Closed', 'submitted', 'under_review', 'provider_responded', 'admin_review', 'resolved', 'rejected', 'refunded'], {
     errorMap: () => ({ message: "Invalid status" })
   })
 });
