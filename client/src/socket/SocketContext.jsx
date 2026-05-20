@@ -6,38 +6,47 @@ const SocketContext = createContext(null);
 
 export const SocketProvider = ({ children }) => {
     const { token, user } = useAuth();
+    const [socket, setSocket] = useState(null);
     const [isConnected, setIsConnected] = useState(false);
     const [onlineUsers, setOnlineUsers] = useState([]);
-    const socketRef = useRef(null);
 
     // Connect when user logs in
     useEffect(() => {
         if (token && user) {
             const s = connectSocket();
-            socketRef.current = s;
+            setSocket(s);
 
-            s.on('connect', () => {
+            const handleConnect = () => {
                 setIsConnected(true);
                 console.log('Socket connected:', s.id);
-            });
+            };
 
-            s.on('disconnect', () => {
+            const handleDisconnect = () => {
                 setIsConnected(false);
                 console.log('Socket disconnected');
-            });
+            };
 
-            s.on('connect_error', (err) => {
+            const handleConnectError = (err) => {
                 console.warn('Socket connection error:', err.message);
-            });
+            };
+
+            s.on('connect', handleConnect);
+            s.on('disconnect', handleDisconnect);
+            s.on('connect_error', handleConnectError);
+
+            if (s.connected) {
+                setIsConnected(true);
+            }
 
             return () => {
-                s.off('connect');
-                s.off('disconnect');
-                s.off('connect_error');
+                s.off('connect', handleConnect);
+                s.off('disconnect', handleDisconnect);
+                s.off('connect_error', handleConnectError);
             };
         } else {
             // Disconnect when user logs out
             disconnectSocket();
+            setSocket(null);
             setIsConnected(false);
         }
     }, [token, user]);
@@ -50,7 +59,7 @@ export const SocketProvider = ({ children }) => {
     }, []);
 
     const value = {
-        socket: socketRef.current,
+        socket,
         isConnected,
         onlineUsers
     };

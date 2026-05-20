@@ -385,7 +385,7 @@ const getAllComplaints = async (req, res) => {
     const countResults = await Complaint.aggregate([
       { $match: { provider: { $in: providerIds } } },
       { $group: { _id: '$provider', count: { $sum: 1 } } }
-    ]).lean();
+    ]);
 
     const countMap = {};
     countResults.forEach(res => {

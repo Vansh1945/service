@@ -9,6 +9,7 @@ import { toast } from 'react-toastify';
 import Loader from '../../components/Loader';
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
+import * as BookingService from '../../services/BookingService';
 
 const customerIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
 const providerIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
@@ -47,6 +48,109 @@ const LiveTrackingPage = () => {
     liveDuration: '',
     routeCoordinates: []
   });
+  const [routeCoords, setRouteCoords] = useState([]);
+
+  useEffect(() => {
+    const fetchBookingDetails = async () => {
+      try {
+        setLoading(true);
+        const res = await BookingService.getBooking(bookingId);
+        if (res.data?.success || res.status === 200) {
+          const b = res.data.data;
+          setBooking(b);
+          setTrackingState({
+            trackingEnabled: b.trackingEnabled || false,
+            providerLiveLocation: b.providerLiveLocation || null,
+            providerReached: b.providerReached || false,
+            liveDistance: b.liveDistance || '',
+            liveDuration: b.liveDuration || '',
+            routeCoordinates: b.routeCoordinates || []
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching booking details:", err);
+        toast.error("Failed to load tracking page details");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (bookingId) {
+      fetchBookingDetails();
+    }
+  }, [bookingId]);
+
+  useEffect(() => {
+    if (!socket || !bookingId) return;
+
+    socket.emit('join-booking-tracking', { bookingId });
+
+    socket.on('tracking-started', (data) => {
+      console.log('📡 Customer Tracking sync:', data);
+      setTrackingState(data);
+    });
+
+    socket.on('provider-live-location', (data) => {
+      console.log('📡 Customer location update:', data);
+      setTrackingState(prev => ({
+        ...prev,
+        providerLiveLocation: { lat: data.latitude, lng: data.longitude },
+        liveDistance: data.liveDistance,
+        liveDuration: data.liveDuration,
+        routeCoordinates: data.routeCoordinates,
+        providerReached: data.providerReached
+      }));
+    });
+
+    socket.on('provider-arrived', () => {
+      setTrackingState(prev => ({ ...prev, providerReached: true }));
+    });
+
+    return () => {
+      socket.emit('leave-booking-tracking', { bookingId });
+      socket.off('tracking-started');
+      socket.off('provider-live-location');
+      socket.off('provider-arrived');
+    };
+  }, [socket, bookingId]);
+
+  const provider = booking?.provider || booking?.providerDetails || null;
+
+  const providerLoc = trackingState.providerLiveLocation || (
+    provider?.currentLocation?.coordinates?.length === 2 && provider.currentLocation.coordinates[0] !== 0
+      ? { lat: provider.currentLocation.coordinates[1], lng: provider.currentLocation.coordinates[0] }
+      : null
+  );
+
+  useEffect(() => {
+    if (!booking || !providerLoc) return;
+
+    let targetLat = 28.5;
+    let targetLng = 77.1;
+    if (booking.address && typeof booking.address.lat === 'number' && typeof booking.address.lng === 'number') {
+      targetLat = booking.address.lat;
+      targetLng = booking.address.lng;
+    }
+
+    const fetchOSRMRoute = async () => {
+      try {
+        const pLat = providerLoc.lat;
+        const pLng = providerLoc.lng;
+        const url = `https://router.project-osrm.org/route/v1/driving/${pLng},${pLat};${targetLng},${targetLat}?overview=full&geometries=geojson`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.routes && data.routes[0]) {
+          const route = data.routes[0];
+          const coords = route.geometry.coordinates.map(c => [c[1], c[0]]);
+          setRouteCoords(coords);
+        }
+      } catch (err) {
+        console.error("Customer OSRM Route fetch failed:", err);
+      }
+    };
+
+    fetchOSRMRoute();
+  }, [booking, providerLoc]);
 
   const getStartPin = (b) => {
     if (!b) return '';
@@ -61,8 +165,6 @@ const LiveTrackingPage = () => {
   if (loading) {
     return <Loader />;
   }
-
-  const provider = booking.provider || booking.providerDetails || null;
 
   return (
     <div className="relative w-full h-screen overflow-hidden bg-secondary flex flex-col md:flex-row">
@@ -109,13 +211,15 @@ const LiveTrackingPage = () => {
             return (
               <>
                 <Marker position={[targetLat, targetLng]} icon={customerIcon} />
-                {trackingState.providerLiveLocation && (
-                  <Marker position={[trackingState.providerLiveLocation.lat, trackingState.providerLiveLocation.lng]} icon={providerIcon} />
+                {providerLoc && (
+                  <Marker position={[providerLoc.lat, providerLoc.lng]} icon={providerIcon} />
                 )}
-                {trackingState.routeCoordinates?.length > 0 && (
+                {routeCoords.length > 0 ? (
+                  <Polyline positions={routeCoords} color="#00F0FF" weight={5} opacity={0.8} />
+                ) : trackingState.routeCoordinates?.length > 0 && (
                   <Polyline positions={trackingState.routeCoordinates.map(c => [c.lat, c.lng])} color="#00F0FF" weight={4} opacity={0.8} />
                 )}
-                <MapBoundsHelper providerLoc={trackingState.providerLiveLocation} targetLat={targetLat} targetLng={targetLng} />
+                <MapBoundsHelper providerLoc={providerLoc} targetLat={targetLat} targetLng={targetLng} />
               </>
             );
           })()}

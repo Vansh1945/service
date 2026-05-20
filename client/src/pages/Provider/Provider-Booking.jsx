@@ -3,13 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { useAuth } from '../../context/auth';
+import { useSocket } from '../../socket/SocketContext';
 import {
   Calendar, Clock, MapPin, User, Phone, Mail, DollarSign, Eye, Check, X,
   AlertCircle, Percent, Wallet, Tag, ChevronDown, ChevronUp, Filter,
   ClipboardList, Timer, CheckCheck, HelpCircle, Copy, Zap, Wrench, Play,
   CreditCard, CheckSquare, AlertTriangle, Star, Package, Search, Activity,
   Banknote, Download, FileText, Loader, BarChart2, DownloadCloud, Navigation,
-  Home, Info, Shield, FileDigit, PhoneCall, Camera
+  Home, Info, Shield, FileDigit, PhoneCall, Camera, ArrowLeft, ShieldCheck
 } from 'lucide-react';
 import LoadingSpinner from '../../components/Loader';
 import * as BookingService from '../../services/BookingService';
@@ -41,14 +42,37 @@ const MapBoundsHelper = ({ providerLoc, targetLat, targetLng }) => {
 };
 
 const NavigationModal = ({ isOpen, onClose, booking }) => {
+  const { socket } = useSocket();
   const [providerLoc, setProviderLoc] = useState(null);
   const [routeCoords, setRouteCoords] = useState([]);
   const [eta, setEta] = useState('');
   const [distance, setDistance] = useState('');
   const [loadingRoute, setLoadingRoute] = useState(true);
 
+  // Fallback hashing for lat/lng if not present
+  const getCoordinates = useCallback((address) => {
+    if (address && typeof address.lat === 'number' && typeof address.lng === 'number' && address.lat !== 0) {
+      return { lat: address.lat, lng: address.lng };
+    }
+    const addrStr = `${address?.street || ''} ${address?.city || ''} ${address?.postalCode || ''}`.trim();
+    let hash = 0;
+    for (let i = 0; i < addrStr.length; i++) {
+      hash = (hash << 5) - hash + addrStr.charCodeAt(i);
+      hash |= 0;
+    }
+    const absHash = Math.abs(hash);
+    const lat = 28.5 + (absHash % 1000) / 1000 * 0.2;
+    const lng = 77.1 + (Math.floor(absHash / 1000) % 1000) / 1000 * 0.2;
+    return { lat, lng };
+  }, []);
+
+  const { lat: targetLat, lng: targetLng } = useMemo(() => {
+    if (!booking) return { lat: 28.5, lng: 77.1 };
+    return getCoordinates(booking.address);
+  }, [booking, getCoordinates]);
+
   useEffect(() => {
-    if (!isOpen || !booking?.address?.lat || !booking?.address?.lng) return;
+    if (!isOpen || !booking) return;
 
     setLoadingRoute(true);
     let watchId = null;
@@ -66,20 +90,20 @@ const NavigationModal = ({ isOpen, onClose, booking }) => {
     };
 
     // 1. Initialize with an instant nearby fallback position to bypass the "Detecting GPS location..." screen entirely
-    const initialLat = booking.address.lat - 0.004;
-    const initialLng = booking.address.lng - 0.004;
+    const initialLat = targetLat - 0.004;
+    const initialLng = targetLng - 0.004;
     setProviderLoc({ lat: initialLat, lng: initialLng });
 
     // 2. Pre-calculate instant fast Haversine estimates
-    const initialDist = calculateHaversine(initialLat, initialLng, booking.address.lat, booking.address.lng);
+    const initialDist = calculateHaversine(initialLat, initialLng, targetLat, targetLng);
     const estDetourDist = initialDist * 1.25;
     const estTimeMin = Math.max(2, Math.round((estDetourDist / 25) * 60));
     setDistance(`${estDetourDist.toFixed(1)} km`);
     setEta(`${estTimeMin} mins`);
-    setRouteCoords([[initialLat, initialLng], [booking.address.lat, booking.address.lng]]);
+    setRouteCoords([[initialLat, initialLng], [targetLat, targetLng]]);
     const fetchRoute = async (pLat, pLng) => {
       try {
-        const url = `https://router.project-osrm.org/route/v1/driving/${pLng},${pLat};${booking.address.lng},${booking.address.lat}?overview=full&geometries=geojson`;
+        const url = `https://router.project-osrm.org/route/v1/driving/${pLng},${pLat};${targetLng},${targetLat}?overview=full&geometries=geojson`;
         const res = await fetch(url);
         const data = await res.json();
         if (data.routes && data.routes[0]) {
@@ -102,7 +126,7 @@ const NavigationModal = ({ isOpen, onClose, booking }) => {
       const { latitude, longitude } = pos.coords;
       
       // Calculate fast instant fallback estimate
-      const dist = calculateHaversine(latitude, longitude, booking.address.lat, booking.address.lng);
+      const dist = calculateHaversine(latitude, longitude, targetLat, targetLng);
       const estDetourDist = dist * 1.25; // Detour factor for typical city streets
       const estTimeMin = Math.max(2, Math.round((estDetourDist / 25) * 60)); // Assumes 25 km/h average speed in city traffic
 
@@ -111,8 +135,17 @@ const NavigationModal = ({ isOpen, onClose, booking }) => {
       // Update with fast estimates instantly
       setDistance(`${estDetourDist.toFixed(1)} km`);
       setEta(`${estTimeMin} mins`);
-      setRouteCoords(prev => prev.length === 0 ? [[latitude, longitude], [booking.address.lat, booking.address.lng]] : prev);
+      setRouteCoords(prev => prev.length === 0 ? [[latitude, longitude], [targetLat, targetLng]] : prev);
       
+      // Emit location update via socket so other users (Admin and Customer) receive updates live
+      if (socket && booking?._id) {
+        socket.emit('provider-location-update', {
+          bookingId: booking._id,
+          latitude,
+          longitude
+        });
+      }
+
       // Trigger background driving route request
       fetchRoute(latitude, longitude);
     };
@@ -129,8 +162,8 @@ const NavigationModal = ({ isOpen, onClose, booking }) => {
             (err2) => {
               console.error("GPS Low Accuracy also failed:", err2);
               // 3. Ultimate Fallback: Place provider nearby the customer's coordinate to load the map instantly
-              const fallbackLat = (booking.address?.lat || 28.5) - 0.005;
-              const fallbackLng = (booking.address?.lng || 77.1) - 0.005;
+              const fallbackLat = targetLat - 0.005;
+              const fallbackLng = targetLng - 0.005;
               handleLocationUpdate({
                 coords: {
                   latitude: fallbackLat,
@@ -151,8 +184,8 @@ const NavigationModal = ({ isOpen, onClose, booking }) => {
       );
     } else {
       // Direct ultimate fallback if navigator.geolocation is not supported
-      const fallbackLat = (booking.address?.lat || 28.5) - 0.005;
-      const fallbackLng = (booking.address?.lng || 77.1) - 0.005;
+      const fallbackLat = targetLat - 0.005;
+      const fallbackLng = targetLng - 0.005;
       handleLocationUpdate({
         coords: {
           latitude: fallbackLat,
@@ -164,83 +197,153 @@ const NavigationModal = ({ isOpen, onClose, booking }) => {
     return () => {
       if (watchId !== null) navigator.geolocation.clearWatch(watchId);
     };
-  }, [isOpen, booking]);
+  }, [isOpen, booking, targetLat, targetLng, socket]);
 
   if (!isOpen || !booking) return null;
 
-  const targetLat = booking.address?.lat;
-  const targetLng = booking.address?.lng;
-
   return (
-    <div className="fixed inset-0 bg-black/60 z-[70] flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full h-[80vh] overflow-hidden border border-gray-100 flex flex-col animate-in fade-in zoom-in duration-200">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-white shrink-0">
-          <div>
-            <span className="text-[10px] font-black text-primary uppercase tracking-wider">Live Navigation</span>
-            <h3 className="text-lg font-bold text-secondary">Navigating to Customer</h3>
-          </div>
-          <button 
-            onClick={onClose} 
-            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="flex-1 relative bg-gray-100 min-h-0">
-          {loadingRoute && !providerLoc && (
-            <div className="absolute inset-0 z-[1000] bg-white/75 flex flex-col items-center justify-center backdrop-blur-sm">
-              <Loader className="w-8 h-8 animate-spin text-primary" />
-              <p className="text-xs font-bold text-secondary mt-2 animate-pulse">Detecting GPS location...</p>
-            </div>
-          )}
-
-          <MapContainer 
-            center={[targetLat || 28.5, targetLng || 77.1]} 
-            zoom={14} 
-            style={{ height: '100%', width: '100%', zIndex: 10 }}
-          >
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-            {targetLat && targetLng && (
-              <Marker position={[targetLat, targetLng]} icon={customerIcon} />
-            )}
-            {providerLoc && (
-              <Marker position={[providerLoc.lat, providerLoc.lng]} icon={providerIcon} />
-            )}
-            {routeCoords.length > 0 && (
-              <Polyline positions={routeCoords} color="#2563EB" weight={5} opacity={0.8} />
-            )}
-            <MapBoundsHelper providerLoc={providerLoc} targetLat={targetLat} targetLng={targetLng} />
-          </MapContainer>
-
-          <div className="absolute bottom-4 left-4 right-4 z-[20] pointer-events-none flex justify-center">
-            <div className="bg-white/95 backdrop-blur shadow-2xl border border-gray-150 rounded-2xl p-4 flex gap-6 pointer-events-auto max-w-sm w-full">
-              <div className="flex items-center gap-3 flex-1">
-                <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary shrink-0">
-                  <Clock className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-none mb-0.5">ETA</p>
-                  <p className="text-sm font-black text-secondary">{eta || 'Calculating...'}</p>
-                </div>
-              </div>
-              <div className="w-[1px] bg-gray-250 shrink-0" />
-              <div className="flex items-center gap-3 flex-1">
-                <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 shrink-0">
-                  <Navigation className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-none mb-0.5">Distance</p>
-                  <p className="text-sm font-black text-secondary">{distance || 'Calculating...'}</p>
-                </div>
-              </div>
-            </div>
-          </div>
+    <div className="fixed inset-0 z-[70] bg-secondary flex flex-col md:flex-row h-screen w-screen overflow-hidden">
+      
+      {/* Top Header */}
+      <div className="absolute top-4 left-4 z-30 flex items-center gap-3">
+        <button 
+          onClick={onClose}
+          className="flex items-center justify-center w-10 h-10 bg-white/95 backdrop-blur shadow-lg border border-gray-100 rounded-full hover:bg-gray-100 transition-colors pointer-events-auto"
+        >
+          <ArrowLeft className="w-5 h-5 text-secondary" />
+        </button>
+        <div className="bg-white/95 backdrop-blur shadow-lg border border-gray-100 px-4 py-2 rounded-2xl flex flex-col">
+          <span className="text-[10px] font-black text-primary uppercase tracking-wider">Live Navigation</span>
+          <span className="text-xs font-bold text-secondary">En Route to Customer</span>
         </div>
       </div>
+
+      {/* Leaflet Map Fullscreen Container */}
+      <div className="w-full h-[60vh] md:h-full flex-grow relative z-10">
+        {loadingRoute && !providerLoc && (
+          <div className="absolute inset-0 z-[1000] bg-white/75 flex flex-col items-center justify-center backdrop-blur-sm">
+            <Loader className="w-8 h-8 animate-spin text-primary" />
+            <p className="text-xs font-bold text-secondary mt-2 animate-pulse">Detecting GPS location...</p>
+          </div>
+        )}
+        <MapContainer 
+          center={[targetLat || 28.5, targetLng || 77.1]} 
+          zoom={14} 
+          style={{ height: '100%', width: '100%', zIndex: 10 }}
+          zoomControl={false}
+        >
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+          {targetLat && targetLng && (
+            <Marker position={[targetLat, targetLng]} icon={customerIcon} />
+          )}
+          {providerLoc && (
+            <Marker position={[providerLoc.lat, providerLoc.lng]} icon={providerIcon} />
+          )}
+          {routeCoords.length > 0 && (
+            <Polyline positions={routeCoords} color="#00F0FF" weight={5} opacity={0.8} />
+          )}
+          <MapBoundsHelper providerLoc={providerLoc} targetLat={targetLat} targetLng={targetLng} />
+        </MapContainer>
+      </div>
+
+      {/* Split/Bottom Info Card */}
+      <div className="w-full md:w-[420px] md:absolute md:right-6 md:top-6 md:bottom-6 z-20 flex flex-col justify-end p-4 pointer-events-none">
+        <div className="w-full bg-white/95 backdrop-blur-md border border-gray-100 shadow-2xl rounded-3xl p-5 pointer-events-auto flex flex-col space-y-4 max-h-[85vh] overflow-y-auto">
+          
+          {/* Status Alert Overlay */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse" />
+              <span className="text-xs font-black text-secondary uppercase tracking-widest">
+                Professional En Route
+              </span>
+            </div>
+            <span className="text-[10px] font-bold text-gray-400">ID: #{booking.bookingId || booking._id?.slice(-8).toUpperCase()}</span>
+          </div>
+
+          {/* Time & Distance Glass Card */}
+          <div className="grid grid-cols-2 gap-3 bg-gradient-to-r from-primary/5 to-blue-500/5 border border-primary/10 rounded-2xl p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-primary/10 border border-primary/20 rounded-xl flex items-center justify-center text-primary shrink-0">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-gray-400 uppercase">Estimated ETA</p>
+                <p className="text-sm font-black text-secondary">{eta || 'Calculating...'}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 border-l border-gray-100 pl-3">
+              <div className="w-10 h-10 bg-teal-50 border border-teal-100 rounded-xl flex items-center justify-center text-teal-600 shrink-0">
+                <Navigation className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-gray-400 uppercase">Distance</p>
+                <p className="text-sm font-black text-secondary">{distance || 'Calculating...'}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Secure PIN Info Box */}
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <ShieldCheck className="w-4.5 h-4.5 text-blue-600" />
+              <span className="text-xs font-bold text-secondary">
+                {['in-progress', 'in_progress'].includes(booking.status) 
+                  ? 'Ask for Completion PIN' 
+                  : 'Ask for Start PIN'}
+              </span>
+            </div>
+            <div className="bg-white rounded-xl p-3 border border-blue-50/50">
+              <p className="text-[11px] text-gray-500 leading-relaxed font-semibold">
+                {['in-progress', 'in_progress'].includes(booking.status)
+                  ? 'Ask the customer for the completion PIN code once you have fully completed the requested services.'
+                  : 'Ask the customer for their arrival START PIN code to securely initiate the service delivery.'}
+              </p>
+            </div>
+          </div>
+
+          {/* Customer Profile Details */}
+          <div className="border-t border-gray-100 pt-4 flex gap-4 items-center">
+            <div className="relative shrink-0">
+              <div className="w-14 h-14 bg-gradient-to-tr from-primary to-blue-600 rounded-full flex items-center justify-center text-white font-black text-lg shadow-md border-2 border-primary/20">
+                {booking.customer?.name?.[0]?.toUpperCase() || 'C'}
+              </div>
+              <div className="absolute -bottom-1 -right-1 bg-green-500 w-4 h-4 rounded-full border-2 border-white" />
+            </div>
+            <div className="flex-grow min-w-0">
+              <h4 className="font-black text-secondary text-sm truncate">{booking.customer?.name || 'Valued Customer'}</h4>
+              <p className="text-[10px] text-gray-400 font-bold mb-1">Customer Address</p>
+              <p className="text-xs text-gray-500 font-medium truncate flex items-center gap-1">
+                <MapPin className="w-3 h-3 text-primary shrink-0" />
+                {`${booking.address?.street || ''}, ${booking.address?.city || ''}`}
+              </p>
+            </div>
+            
+            {/* Call Customer Button */}
+            {booking.customer?.phone && (
+              <a 
+                href={`tel:${booking.customer.phone}`}
+                className="w-11 h-11 bg-primary text-white border border-primary/10 rounded-full flex items-center justify-center hover:bg-primary/95 transition-all shadow-md active:scale-95 shrink-0"
+              >
+                <PhoneCall className="w-5 h-5" />
+              </a>
+            )}
+          </div>
+
+          {/* Exit navigation button */}
+          <button 
+            onClick={onClose}
+            className="w-full py-2.5 text-xs font-bold text-white bg-red-600 hover:bg-red-700 border border-red-600 rounded-xl transition-colors flex items-center justify-center gap-2"
+          >
+            Exit Navigation
+          </button>
+
+        </div>
+      </div>
+
     </div>
   );
 };

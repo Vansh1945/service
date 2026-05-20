@@ -3555,7 +3555,7 @@ const getBookingDetails = async (req, res) => {
       .populate('customer', 'name email phone')
       .populate({
         path: 'provider',
-        select: 'providerId name email phone experience serviceArea rating services profilePicUrl bankDetails',
+        select: 'providerId name email phone experience serviceArea rating services profilePicUrl bankDetails currentLocation isOnline',
         populate: {
           path: 'services',
           select: 'name'
