@@ -140,6 +140,33 @@ const providerSchema = new mongoose.Schema({
         }
     },
 
+    currentLocation: {
+        type: {
+            type: String,
+            enum: ["Point"],
+            default: "Point"
+        },
+        coordinates: {
+            type: [Number],
+            default: [0,0]
+        },
+        lastUpdated: {
+            type: Date,
+            default: Date.now
+        }
+    },
+
+    isOnline: {
+        type: Boolean,
+        default: false
+    },
+
+    activeBooking: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Booking",
+        default: null
+    },
+
     // Bank Details
     bankDetails: {
         accountNo: {
@@ -309,6 +336,7 @@ providerSchema.index({ services: 1 });
 providerSchema.index({ isActive: 1, approved: 1 });
 providerSchema.index({ 'performanceScore.rating': -1 });
 providerSchema.index({ location: '2dsphere' });
+providerSchema.index({ currentLocation: '2dsphere' });
 providerSchema.index({ createdAt: -1 });
 
 providerSchema.pre('save', async function (next) {

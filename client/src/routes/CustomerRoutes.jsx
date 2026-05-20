@@ -11,6 +11,7 @@ const CustomerBookingsPage = lazy(() => import("../pages/Customer/CustomerBookin
 const BookingConfirmation = lazy(() => import("../pages/Customer/BookingConfirmation"));
 const FeedbackManagement = lazy(() => import("../pages/Customer/Feedback"));
 const ComplaintsPage = lazy(() => import("../pages/Customer/Complaint"));
+const LiveTrackingPage = lazy(() => import("../pages/Customer/LiveTrackingPage"));
 
 const CustomerRoutes = () => {
     return (
@@ -23,6 +24,7 @@ const CustomerRoutes = () => {
                     <Route path="services/:id" element={<ServiceDetailPage />} />
                     <Route path="book-service/:serviceId" element={<BookService />} />
                     <Route path="bookings" element={<CustomerBookingsPage />} />
+                    <Route path="track/:bookingId" element={<LiveTrackingPage />} />
                     <Route path="booking-confirm/:bookingId" element={<BookingConfirmation />} />
                     <Route path="feedback" element={<FeedbackManagement />} />
                     <Route path="complaints" element={<ComplaintsPage />} />

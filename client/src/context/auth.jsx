@@ -183,7 +183,7 @@ export const AuthProvider = ({ children }) => {
                 }
             } catch (error) {
                 console.error("Failed to restore session data:", error);
-                if (error.response?.status === 401) {
+                if (error.response?.status === 401 && isTokenExpired(token)) {
                     logoutUser();
                 }
             }

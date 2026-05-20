@@ -643,6 +643,7 @@ const CancelModal = ({ booking, onClose, onConfirm }) => {
 // ─── Booking Card ─────────────────────────────────────────────────────────────
 
 const BookingCard = ({ booking, onView, onPayNow, onReschedule, onCancel, onCall }) => {
+  const navigate = useNavigate();
   const cfg = getStatusCfg(booking.status);
   const provider = booking.provider || booking.providerDetails;
   const svcImage = booking.services?.[0]?.service?.images?.[0];
@@ -728,6 +729,15 @@ const BookingCard = ({ booking, onView, onPayNow, onReschedule, onCancel, onCall
           <button onClick={() => onView(booking._id)} className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 px-3 py-1.5 rounded-lg hover:bg-blue-50 border border-blue-200 transition-colors">
             <Eye className="w-3.5 h-3.5" /> View Details
           </button>
+
+          {provider && ['accepted', 'in_progress', 'in-progress', 'arriving'].includes(booking.status) && (
+            <button 
+              onClick={() => navigate(`/customer/track/${booking._id}`)} 
+              className="flex items-center gap-1.5 text-xs font-bold text-white bg-gradient-to-r from-primary to-blue-600 hover:from-primary/95 hover:to-blue-600/95 px-3 py-1.5 rounded-lg transition-all shadow-md active:scale-95 animate-pulse"
+            >
+              <MapPin className="w-3.5 h-3.5" /> Track En Route
+            </button>
+          )}
 
           {needsPayment(booking) && (
             <button onClick={() => onPayNow(booking)} className="flex items-center gap-1.5 text-xs font-bold text-white bg-accent hover:bg-accent/90 px-3 py-1.5 rounded-lg transition-all shadow-sm active:scale-95">

@@ -4,7 +4,8 @@ import {
   FiMenu, FiX, FiHome, FiCheckCircle, FiUsers, FiCalendar,
   FiDollarSign, FiTag, FiPlus, FiTool, FiAlertCircle, FiChevronDown,
   FiLogOut, FiUser, FiBell, FiSettings, FiCreditCard, FiActivity, FiFileText,
-  FiMessageSquare, FiHelpCircle, FiLayers, FiLayout, FiPhoneCall, FiShield, FiTerminal
+  FiMessageSquare, FiHelpCircle, FiLayers, FiLayout, FiPhoneCall, FiShield, FiTerminal,
+  FiMapPin
 } from 'react-icons/fi';
 import { useAuth } from '../context/auth';
 import NotificationBell from '../components/NotificationBell';
@@ -64,6 +65,7 @@ const AdminLayout = () => {
     { name: 'Refunds', path: '/admin/refunds', icon: <FiDollarSign className="w-5 h-5" /> },
     { name: 'Fraud Detection', path: '/admin/fraud', icon: <FiShield className="w-5 h-5" /> },
     { name: 'System Logs', path: '/admin/system-logs', icon: <FiTerminal className="w-5 h-5" /> },
+    { name: 'Live Map Dashboard', path: '/admin/live-map', icon: <FiMapPin className="w-5 h-5" /> },
   ];
 
   const isDashboardActive = location.pathname === '/admin' || location.pathname === '/admin/dashboard';

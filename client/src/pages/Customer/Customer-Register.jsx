@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
 import { register } from '../../services/AuthService';
 import {
   User, Mail, Phone, Lock, MapPin, Home,
   ArrowLeft, ArrowRight, CheckCircle, Shield, Zap,
-  Sparkles, Award, HeadphonesIcon, Info
+  Sparkles, Award, HeadphonesIcon, Info, Navigation
 } from 'lucide-react';
 import AddressSelector from '../../components/AddressSelector';
+import LocationPickerModal from '../../components/LocationPickerModal';
 
 // ─── Static sub-components (defined OUTSIDE to avoid remount) ──────────────
 
@@ -47,6 +48,63 @@ const STEP_ICONS = [User, MapPin, Lock];
 const CustomerRegistration = () => {
   const navigate = useNavigate();
   const { showToast } = useAuth();
+  const autocompleteInputRef = useRef(null);
+  const [detecting, setDetecting] = useState(false);
+  const [isMapModalOpen, setIsMapModalOpen] = useState(false);
+
+
+
+  useEffect(() => {
+    // Autocomplete disabled for Nominatim. Can type directly.
+  }, [currentStep]);
+
+  const handleDetectAddress = () => {
+    if (!navigator.geolocation) {
+      showToast('Geolocation is not supported by your browser', 'error');
+      return;
+    }
+
+    setDetecting(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        try {
+            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1`);
+            const data = await response.json();
+            
+            if (data && data.address) {
+                const { address } = data;
+                const houseInfo = address.house_number ? `House No. ${address.house_number}` : '';
+                const landmarkInfo = address.building || address.amenity || address.shop || address.office || address.commercial || address.tourism || address.leisure || address.historic ? `Near ${address.building || address.amenity || address.shop || address.office || address.commercial || address.tourism || address.leisure || address.historic}` : '';
+                const streetAddress = [houseInfo, address.road, address.neighbourhood, address.suburb, landmarkInfo].filter(Boolean).join(', ') || data.display_name.split(',').slice(0, 3).join(', ');
+                
+                setFormData(prev => ({
+                    ...prev,
+                    address: {
+                        street: streetAddress,
+                        city: address.city || address.town || address.village || prev.address.city,
+                        state: address.state || prev.address.state,
+                        postalCode: address.postcode || prev.address.postalCode
+                    }
+                }));
+                showToast('Address auto-detected successfully!');
+            } else {
+                showToast('Failed to resolve current address details', 'error');
+            }
+        } catch (error) {
+            showToast('Error connecting to map service', 'error');
+        } finally {
+            setDetecting(false);
+        }
+      },
+      (error) => {
+        setDetecting(false);
+        console.error(error);
+        showToast('Failed to retrieve location coordinates', 'error');
+      },
+      { enableHighAccuracy: true }
+    );
+  };
 
   const [formData, setFormData] = useState({
     name: '',
@@ -313,8 +371,31 @@ const CustomerRegistration = () => {
             </div>
             <Section title="Location Details" icon={MapPin}>
               <div className="space-y-4">
-                <Field label="Street Address *" error={errors['address.street']}>
+                <div className="flex flex-col gap-1 w-full">
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs font-semibold text-secondary uppercase tracking-wide">Street Address *</label>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setIsMapModalOpen(true)}
+                        className="inline-flex items-center gap-1 text-[10px] font-bold text-primary hover:text-teal-700 transition-colors uppercase tracking-wider"
+                      >
+                        <MapPin className="w-3 h-3" />
+                        Pick on Map
+                      </button>
+                      <button
+                        type="button"
+                        disabled={detecting}
+                        onClick={handleDetectAddress}
+                        className="inline-flex items-center gap-1 text-[10px] font-bold text-primary hover:text-teal-700 disabled:opacity-50 transition-colors uppercase tracking-wider"
+                      >
+                        <Navigation className={`w-3 h-3 ${detecting ? 'animate-ping' : ''}`} />
+                        {detecting ? 'Detecting...' : 'Auto Detect'}
+                      </button>
+                    </div>
+                  </div>
                   <input
+                    ref={autocompleteInputRef}
                     type="text"
                     id="street"
                     name="address.street"
@@ -323,7 +404,7 @@ const CustomerRegistration = () => {
                     placeholder="123 Main Street, Apt 4"
                     className={inputCls}
                   />
-                </Field>
+                </div>
                 <AddressSelector
                   selectedState={formData.address.state}
                   selectedCity={formData.address.city}
@@ -468,6 +549,25 @@ const CustomerRegistration = () => {
           </div>
         </div>
       </div>
+      {isMapModalOpen && (
+        <LocationPickerModal
+          isOpen={isMapModalOpen}
+          onClose={() => setIsMapModalOpen(false)}
+          onLocationSelect={(loc) => {
+            setFormData(prev => ({
+              ...prev,
+              address: {
+                ...prev.address,
+                street: loc.street,
+                city: loc.city || prev.address.city,
+                state: loc.state || prev.address.state,
+                postalCode: loc.postalCode || prev.address.postalCode
+              }
+            }));
+            showToast('Address picked from map!');
+          }}
+        />
+      )}
     </div>
   );
 };

@@ -25,6 +25,7 @@ const AdminNotification = lazy(() => import("../pages/Admin/AdminNotification"))
 const AdminTransactions = lazy(() => import("../pages/Admin/Transactions"));
 const AdminFraud = lazy(() => import("../pages/Admin/fraud"));
 const SystemLogs = lazy(() => import("../pages/Admin/SystemLogs"));
+const LiveMapDashboard = lazy(() => import("../pages/Admin/LiveMapDashboard"));
 
 const AdminRoutes = () => {
     return (
@@ -54,6 +55,7 @@ const AdminRoutes = () => {
                     <Route path="transactions" element={<AdminTransactions />} />
                     <Route path="fraud" element={<AdminFraud />} />
                     <Route path="system-logs" element={<SystemLogs />} />
+                    <Route path="live-map" element={<LiveMapDashboard />} />
                 </Route>
             </Route>
         </Routes>

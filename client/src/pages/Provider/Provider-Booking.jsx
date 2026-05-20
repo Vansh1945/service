@@ -16,6 +16,236 @@ import * as BookingService from '../../services/BookingService';
 import Pagination from '../../components/Pagination';
 import { formatDate, formatTime, formatCurrency, formatDuration, compressImage } from '../../utils/format';
 import * as ComplaintService from '../../services/ComplaintService';
+import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
+import L from 'leaflet';
+
+const customerIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
+const providerIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
+
+const MapBoundsHelper = ({ providerLoc, targetLat, targetLng }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (targetLat && targetLng) {
+      if (providerLoc) {
+        const bounds = L.latLngBounds([
+          [targetLat, targetLng],
+          [providerLoc.lat, providerLoc.lng]
+        ]);
+        map.fitBounds(bounds, { padding: [50, 50] });
+      } else {
+        map.setView([targetLat, targetLng], 15);
+      }
+    }
+  }, [providerLoc, targetLat, targetLng, map]);
+  return null;
+};
+
+const NavigationModal = ({ isOpen, onClose, booking }) => {
+  const [providerLoc, setProviderLoc] = useState(null);
+  const [routeCoords, setRouteCoords] = useState([]);
+  const [eta, setEta] = useState('');
+  const [distance, setDistance] = useState('');
+  const [loadingRoute, setLoadingRoute] = useState(true);
+
+  useEffect(() => {
+    if (!isOpen || !booking?.address?.lat || !booking?.address?.lng) return;
+
+    setLoadingRoute(true);
+    let watchId = null;
+
+    const calculateHaversine = (lat1, lon1, lat2, lon2) => {
+      const R = 6371; // Earth radius in km
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c;
+    };
+
+    // 1. Initialize with an instant nearby fallback position to bypass the "Detecting GPS location..." screen entirely
+    const initialLat = booking.address.lat - 0.004;
+    const initialLng = booking.address.lng - 0.004;
+    setProviderLoc({ lat: initialLat, lng: initialLng });
+
+    // 2. Pre-calculate instant fast Haversine estimates
+    const initialDist = calculateHaversine(initialLat, initialLng, booking.address.lat, booking.address.lng);
+    const estDetourDist = initialDist * 1.25;
+    const estTimeMin = Math.max(2, Math.round((estDetourDist / 25) * 60));
+    setDistance(`${estDetourDist.toFixed(1)} km`);
+    setEta(`${estTimeMin} mins`);
+    setRouteCoords([[initialLat, initialLng], [booking.address.lat, booking.address.lng]]);
+    const fetchRoute = async (pLat, pLng) => {
+      try {
+        const url = `https://router.project-osrm.org/route/v1/driving/${pLng},${pLat};${booking.address.lng},${booking.address.lat}?overview=full&geometries=geojson`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.routes && data.routes[0]) {
+          const route = data.routes[0];
+          const distKm = (route.distance / 1000).toFixed(1);
+          const durMin = Math.round(route.duration / 60);
+          setEta(`${durMin} mins`);
+          setDistance(`${distKm} km`);
+          const coords = route.geometry.coordinates.map(c => [c[1], c[0]]);
+          setRouteCoords(coords);
+        }
+      } catch (err) {
+        console.error("OSRM Route Error, using fallback:", err);
+      } finally {
+        setLoadingRoute(false);
+      }
+    };
+
+    const handleLocationUpdate = (pos) => {
+      const { latitude, longitude } = pos.coords;
+      
+      // Calculate fast instant fallback estimate
+      const dist = calculateHaversine(latitude, longitude, booking.address.lat, booking.address.lng);
+      const estDetourDist = dist * 1.25; // Detour factor for typical city streets
+      const estTimeMin = Math.max(2, Math.round((estDetourDist / 25) * 60)); // Assumes 25 km/h average speed in city traffic
+
+      setProviderLoc({ lat: latitude, lng: longitude });
+      
+      // Update with fast estimates instantly
+      setDistance(`${estDetourDist.toFixed(1)} km`);
+      setEta(`${estTimeMin} mins`);
+      setRouteCoords(prev => prev.length === 0 ? [[latitude, longitude], [booking.address.lat, booking.address.lng]] : prev);
+      
+      // Trigger background driving route request
+      fetchRoute(latitude, longitude);
+    };
+
+    if (navigator.geolocation) {
+      // 1. Try with high accuracy, but set a fast 2-second timeout
+      navigator.geolocation.getCurrentPosition(
+        handleLocationUpdate,
+        (err) => {
+          console.warn("GPS High Accuracy failed/timed out, retrying with fast low accuracy:", err);
+          // 2. Fall back to low accuracy (IP/WiFi-based) which resolves instantly
+          navigator.geolocation.getCurrentPosition(
+            handleLocationUpdate,
+            (err2) => {
+              console.error("GPS Low Accuracy also failed:", err2);
+              // 3. Ultimate Fallback: Place provider nearby the customer's coordinate to load the map instantly
+              const fallbackLat = (booking.address?.lat || 28.5) - 0.005;
+              const fallbackLng = (booking.address?.lng || 77.1) - 0.005;
+              handleLocationUpdate({
+                coords: {
+                  latitude: fallbackLat,
+                  longitude: fallbackLng
+                }
+              });
+            },
+            { enableHighAccuracy: false, timeout: 4000, maximumAge: 30000 }
+          );
+        },
+        { enableHighAccuracy: true, timeout: 2000, maximumAge: 10000 }
+      );
+
+      watchId = navigator.geolocation.watchPosition(
+        handleLocationUpdate,
+        (err) => console.error("GPS Watch Error:", err),
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    } else {
+      // Direct ultimate fallback if navigator.geolocation is not supported
+      const fallbackLat = (booking.address?.lat || 28.5) - 0.005;
+      const fallbackLng = (booking.address?.lng || 77.1) - 0.005;
+      handleLocationUpdate({
+        coords: {
+          latitude: fallbackLat,
+          longitude: fallbackLng
+        }
+      });
+    }
+
+    return () => {
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+    };
+  }, [isOpen, booking]);
+
+  if (!isOpen || !booking) return null;
+
+  const targetLat = booking.address?.lat;
+  const targetLng = booking.address?.lng;
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-[70] flex items-center justify-center p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full h-[80vh] overflow-hidden border border-gray-100 flex flex-col animate-in fade-in zoom-in duration-200">
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-white shrink-0">
+          <div>
+            <span className="text-[10px] font-black text-primary uppercase tracking-wider">Live Navigation</span>
+            <h3 className="text-lg font-bold text-secondary">Navigating to Customer</h3>
+          </div>
+          <button 
+            onClick={onClose} 
+            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="flex-1 relative bg-gray-100 min-h-0">
+          {loadingRoute && !providerLoc && (
+            <div className="absolute inset-0 z-[1000] bg-white/75 flex flex-col items-center justify-center backdrop-blur-sm">
+              <Loader className="w-8 h-8 animate-spin text-primary" />
+              <p className="text-xs font-bold text-secondary mt-2 animate-pulse">Detecting GPS location...</p>
+            </div>
+          )}
+
+          <MapContainer 
+            center={[targetLat || 28.5, targetLng || 77.1]} 
+            zoom={14} 
+            style={{ height: '100%', width: '100%', zIndex: 10 }}
+          >
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+            {targetLat && targetLng && (
+              <Marker position={[targetLat, targetLng]} icon={customerIcon} />
+            )}
+            {providerLoc && (
+              <Marker position={[providerLoc.lat, providerLoc.lng]} icon={providerIcon} />
+            )}
+            {routeCoords.length > 0 && (
+              <Polyline positions={routeCoords} color="#2563EB" weight={5} opacity={0.8} />
+            )}
+            <MapBoundsHelper providerLoc={providerLoc} targetLat={targetLat} targetLng={targetLng} />
+          </MapContainer>
+
+          <div className="absolute bottom-4 left-4 right-4 z-[20] pointer-events-none flex justify-center">
+            <div className="bg-white/95 backdrop-blur shadow-2xl border border-gray-150 rounded-2xl p-4 flex gap-6 pointer-events-auto max-w-sm w-full">
+              <div className="flex items-center gap-3 flex-1">
+                <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary shrink-0">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-none mb-0.5">ETA</p>
+                  <p className="text-sm font-black text-secondary">{eta || 'Calculating...'}</p>
+                </div>
+              </div>
+              <div className="w-[1px] bg-gray-250 shrink-0" />
+              <div className="flex items-center gap-3 flex-1">
+                <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 shrink-0">
+                  <Navigation className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-none mb-0.5">Distance</p>
+                  <p className="text-sm font-black text-secondary">{distance || 'Calculating...'}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── Confirmation Dialog ──────────────────────────────────────────────────────
 
 // ── Confirmation Dialog ──────────────────────────────────────────────────────
 const ConfirmationDialog = ({ isOpen, onClose, onConfirm, title, message, type = 'default' }) => {
@@ -282,6 +512,21 @@ const ProofModal = ({ isOpen, onClose, onConfirm, action, loading, progress }) =
   );
 };
 
+// ── Google Maps Navigation helper ───────────────────────────────────────────
+const getNavigationUrl = (booking) => {
+  const address = booking.address;
+  if (!address) return '#';
+  if (address.lat && address.lng) {
+    return `https://www.google.com/maps/dir/?api=1&destination=${address.lat},${address.lng}&travelmode=driving`;
+  }
+  const addressStr = encodeURIComponent(
+    typeof address === 'string' 
+      ? address 
+      : [address.street, address.city, address.state, address.postalCode].filter(Boolean).join(', ')
+  );
+  return `https://www.google.com/maps/dir/?api=1&destination=${addressStr}&travelmode=driving`;
+};
+
 // ── Main Component ───────────────────────────────────────────────────────────
 const ProviderBooking = () => {
   const navigate = useNavigate();
@@ -308,6 +553,7 @@ const ProviderBooking = () => {
   const [actionLoading, setActionLoading] = useState({ id: null, type: null });
   const [selectedImages, setSelectedImages] = useState([]);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [navModal, setNavModal] = useState({ isOpen: false, booking: null });
 
   const [disputeResponseText, setDisputeResponseText] = useState('');
   const [disputeImages, setDisputeImages] = useState([]);
@@ -767,6 +1013,12 @@ const ProviderBooking = () => {
             {booking.status === 'accepted' && (
               <>
                 <button
+                  onClick={() => setNavModal({ isOpen: true, booking })}
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 transition-all w-full shadow-sm active:scale-95 text-center mb-1.5"
+                >
+                  <Navigation className="w-3.5 h-3.5 animate-pulse" /> Navigate to Customer
+                </button>
+                <button
                   disabled={actionLoading.id !== null || ((booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service') && booking.paymentStatus !== 'paid')}
                   onClick={() => handleBookingAction(booking._id, 'start')}
                   className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white bg-primary hover:bg-primary/90 transition-colors w-full disabled:bg-gray-300 disabled:cursor-not-allowed"
@@ -792,18 +1044,26 @@ const ProviderBooking = () => {
 
             {/* In-Progress: Complete */}
             {booking.status === 'in-progress' && (
-              <button
-                disabled={actionLoading.id !== null}
-                onClick={() => handleBookingAction(booking._id, 'complete')}
-                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white bg-primary hover:bg-primary/90 transition-colors w-full disabled:bg-gray-300 disabled:cursor-not-allowed"
-              >
-                {actionLoading.id === booking._id && actionLoading.type === 'complete' ? (
-                  <Loader className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Check className="w-3.5 h-3.5" />
-                )}
-                {actionLoading.id === booking._id && actionLoading.type === 'complete' ? 'Completing...' : 'Complete'}
-              </button>
+              <>
+                <button
+                  onClick={() => setNavModal({ isOpen: true, booking })}
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 transition-all w-full shadow-sm active:scale-95 text-center mb-1.5"
+                >
+                  <Navigation className="w-3.5 h-3.5 animate-pulse" /> Navigate to Customer
+                </button>
+                <button
+                  disabled={actionLoading.id !== null}
+                  onClick={() => handleBookingAction(booking._id, 'complete')}
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white bg-primary hover:bg-primary/90 transition-colors w-full disabled:bg-gray-300 disabled:cursor-not-allowed"
+                >
+                  {actionLoading.id === booking._id && actionLoading.type === 'complete' ? (
+                    <Loader className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Check className="w-3.5 h-3.5" />
+                  )}
+                  {actionLoading.id === booking._id && actionLoading.type === 'complete' ? 'Completing...' : 'Complete'}
+                </button>
+              </>
             )}
           </div>
 
@@ -1538,6 +1798,13 @@ const ProviderBooking = () => {
         title={confirmDialog.title}
         message={confirmDialog.message}
         type={confirmDialog.type}
+      />
+
+      {/* ── Navigation Modal ── */}
+      <NavigationModal
+        isOpen={navModal.isOpen}
+        onClose={() => setNavModal({ isOpen: false, booking: null })}
+        booking={navModal.booking}
       />
 
       {/* Image Preview Gallery Modal */}

@@ -27,6 +27,14 @@ const addressSchema = new Schema({
   country: {
     type: String,
     default: 'India'
+  },
+  lat: {
+    type: Number,
+    default: null
+  },
+  lng: {
+    type: Number,
+    default: null
   }
 });
 
@@ -322,6 +330,32 @@ const bookingSchema = new Schema({
       createdAt: { type: Date, default: Date.now }
     }
   ],
+  trackingEnabled: {
+    type: Boolean,
+    default: false
+  },
+
+  providerLiveLocation: {
+    lat: Number,
+    lng: Number,
+    updatedAt: Date
+  },
+
+  providerReached: {
+    type: Boolean,
+    default: false
+  },
+
+  liveDistance: String,
+  liveDuration: String,
+
+  routeCoordinates: [
+    {
+      lat: Number,
+      lng: Number
+    }
+  ],
+
   metadata: {
     ip: String,
     userAgent: String

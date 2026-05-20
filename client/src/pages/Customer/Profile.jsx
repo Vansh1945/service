@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/auth';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
@@ -7,14 +7,19 @@ import AddressSelector from '../../components/AddressSelector';
 import * as NotificationService from '../../services/NotificationService';
 import {
     User, MapPin, Mail, Phone, Camera, LogOut, Shield, Bell,
-    ChevronRight, ArrowLeft, CreditCard, Package, Edit2, CheckCircle, Gift, Wallet, ArrowDownLeft, RotateCcw
+    ChevronRight, ArrowLeft, CreditCard, Package, Edit2, CheckCircle, Gift, Wallet, ArrowDownLeft, RotateCcw, Navigation
 } from 'lucide-react';
 import { getWalletHistory } from '../../services/CustomerService';
 import { formatCurrency, formatDate, formatDateTime, compressImage } from '../../utils/format';
+import LocationPickerModal from '../../components/LocationPickerModal';
 
 const UserProfile = () => {
     const { user, logoutUser } = useAuth();
     const navigate = useNavigate();
+    const autocompleteInputRef = useRef(null);
+    const [detecting, setDetecting] = useState(false);
+    const [isMapModalOpen, setIsMapModalOpen] = useState(false);
+
     const [profile, setProfile] = useState({
         name: '',
         email: '',
@@ -45,6 +50,60 @@ const UserProfile = () => {
         quietHours: { enabled: false, start: '22:00', end: '08:00' }
     });
     const [prefLoading, setPrefLoading] = useState(false);
+
+
+
+    useEffect(() => {
+        // Autocomplete disabled for Nominatim. Can type directly.
+    }, [isEditing]);
+
+    const handleDetectAddress = () => {
+        if (!navigator.geolocation) {
+            toast.error('Geolocation is not supported by your browser');
+            return;
+        }
+
+        setDetecting(true);
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
+                const { latitude, longitude } = position.coords;
+                try {
+                    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1`);
+                    const data = await response.json();
+                    
+                    if (data && data.address) {
+                        const { address } = data;
+                        const houseInfo = address.house_number ? `House No. ${address.house_number}` : '';
+                        const landmarkInfo = address.building || address.amenity || address.shop || address.office || address.commercial || address.tourism || address.leisure || address.historic ? `Near ${address.building || address.amenity || address.shop || address.office || address.commercial || address.tourism || address.leisure || address.historic}` : '';
+                        const streetAddress = [houseInfo, address.road, address.neighbourhood, address.suburb, landmarkInfo].filter(Boolean).join(', ') || data.display_name.split(',').slice(0, 3).join(', ');
+                        
+                        setProfile(prev => ({
+                            ...prev,
+                            address: {
+                                street: streetAddress,
+                                city: address.city || address.town || address.village || prev.address.city,
+                                state: address.state || prev.address.state,
+                                postalCode: address.postcode || prev.address.postalCode
+                            }
+                        }));
+                        toast.success('Address auto-detected successfully!');
+                    } else {
+                        toast.error('Failed to resolve current address details');
+                    }
+                } catch (error) {
+                    toast.error('Error connecting to map service');
+                } finally {
+                    setDetecting(false);
+                }
+            },
+            (error) => {
+                setDetecting(false);
+                console.error(error);
+                toast.error('Failed to retrieve location coordinates');
+            },
+            { enableHighAccuracy: true }
+        );
+    };
 
     const fetchPreferences = async () => {
         try {
@@ -361,7 +420,30 @@ const UserProfile = () => {
                                     <div className="pt-2 border-t border-gray-100">
                                         <h3 className="text-sm font-semibold text-secondary mb-3">Address</h3>
                                         <div className="space-y-3">
+                                            <div className="flex justify-between items-center mb-1">
+                                                <label className="block text-xs font-semibold text-gray-500">Street Address</label>
+                                                <div className="flex items-center gap-3">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setIsMapModalOpen(true)}
+                                                        className="inline-flex items-center gap-1 text-[10px] font-bold text-primary hover:text-teal-700 transition-colors uppercase tracking-wider"
+                                                    >
+                                                        <MapPin className="w-3 h-3" />
+                                                        Pick on Map
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        disabled={detecting}
+                                                        onClick={handleDetectAddress}
+                                                        className="inline-flex items-center gap-1 text-[10px] font-bold text-primary hover:text-teal-700 disabled:opacity-50 transition-colors uppercase tracking-wider"
+                                                    >
+                                                        <Navigation className={`w-3 h-3 ${detecting ? 'animate-ping' : ''}`} />
+                                                        {detecting ? 'Detecting...' : 'Auto Detect'}
+                                                    </button>
+                                                </div>
+                                            </div>
                                             <input
+                                                ref={autocompleteInputRef}
                                                 type="text"
                                                 name="street"
                                                 value={profile.address.street}
@@ -663,6 +745,26 @@ const UserProfile = () => {
                     </div>
                 </div>
             </div>
+
+            {isMapModalOpen && (
+                <LocationPickerModal
+                    isOpen={isMapModalOpen}
+                    onClose={() => setIsMapModalOpen(false)}
+                    onLocationSelect={(loc) => {
+                        setProfile(prev => ({
+                            ...prev,
+                            address: {
+                                ...prev.address,
+                                street: loc.street,
+                                city: loc.city || prev.address.city,
+                                state: loc.state || prev.address.state,
+                                postalCode: loc.postalCode || prev.address.postalCode
+                            }
+                        }));
+                        toast.success('Address picked from map!');
+                    }}
+                />
+            )}
         </div>
     );
 };

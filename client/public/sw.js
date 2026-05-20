@@ -8,11 +8,15 @@ self.addEventListener('activate', (e) => {
   self.clients.claim();
 });
 self.addEventListener('fetch', (e) => {
+  // Do not intercept API requests
+  if (e.request.url.includes('/api/')) {
+    return;
+  }
+
   if (e.request.mode === 'navigate') {
     e.respondWith(fetch(e.request).catch(() => caches.match('/index.html')));
     return;
   }
-  e.respondWith(caches.match(e.request).then(res => res || fetch(e.request).catch(err => {
-    console.warn('SW Fetch failed:', err);
-  })));
+
+  e.respondWith(caches.match(e.request).then(res => res || fetch(e.request)));
 });

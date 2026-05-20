@@ -8,9 +8,11 @@ import {
 } from 'react-icons/fi';
 import { useAuth } from '../context/auth';
 import NotificationBell from '../components/NotificationBell';
-
+import { useSocket } from '../socket/SocketContext';
+import { toast } from 'react-toastify';
 
 import * as SystemService from '../services/SystemService';
+import axiosInstance from '../api/axiosInstance';
 
 const ProviderLayout = () => {
     const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -24,6 +26,92 @@ const ProviderLayout = () => {
     const navigate = useNavigate();
     const { user, logoutUser, API, token } = useAuth();
     const testPassed = user?.testPassed || false;
+
+    const { socket, isConnected } = useSocket();
+    const [isOnline, setIsOnline] = useState(true);
+    const [activeBookingId, setActiveBookingId] = useState(null);
+
+    // Fetch active bookings to see if we need tracking
+    useEffect(() => {
+        if (!isOnline || !token) return;
+
+        const checkActiveBookings = async () => {
+            try {
+                const [acceptedRes, progressRes] = await Promise.all([
+                    axiosInstance.get('/booking/provider/status/accepted').catch(() => ({ data: { data: [] } })),
+                    axiosInstance.get('/booking/provider/status/in-progress').catch(() => ({ data: { data: [] } }))
+                ]);
+                const accepted = acceptedRes.data?.data || [];
+                const inProgress = progressRes.data?.data || [];
+                const active = [...accepted, ...inProgress][0];
+                if (active) {
+                    setActiveBookingId(active._id);
+                } else {
+                    setActiveBookingId(null);
+                }
+            } catch (err) {
+                console.error("Error checking active bookings for tracking:", err);
+            }
+        };
+
+        checkActiveBookings();
+        const interval = setInterval(checkActiveBookings, 15000); // Check every 15s
+        return () => clearInterval(interval);
+    }, [isOnline, token]);
+
+    // Geolocation Watcher Loop
+    useEffect(() => {
+        if (!isOnline || !activeBookingId || !socket || !isConnected) return;
+
+        let watchId = null;
+        let lastUpdatedTime = 0;
+
+        const startWatching = () => {
+            if (navigator.geolocation) {
+                watchId = navigator.geolocation.watchPosition(
+                    (position) => {
+                        const now = Date.now();
+                        // Battery/network optimization: emit at most once every 4.8 seconds
+                        if (now - lastUpdatedTime >= 4800) {
+                            const { latitude, longitude } = position.coords;
+                            console.log("Sending provider live GPS update:", { latitude, longitude });
+                            socket.emit('provider-location-update', {
+                                bookingId: activeBookingId,
+                                latitude,
+                                longitude
+                            });
+                            lastUpdatedTime = now;
+                        }
+                    },
+                    (error) => {
+                        console.error("GPS Watcher error:", error);
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0
+                    }
+                );
+            }
+        };
+
+        startWatching();
+
+        return () => {
+            if (watchId !== null) {
+                navigator.geolocation.clearWatch(watchId);
+            }
+        };
+    }, [isOnline, activeBookingId, socket, isConnected]);
+
+    const toggleOnlineStatus = () => {
+        const nextState = !isOnline;
+        setIsOnline(nextState);
+        if (socket) {
+            socket.emit('provider-toggle-online', { isOnline: nextState });
+        }
+        toast.info(`You are now ${nextState ? 'ONLINE' : 'OFFLINE'}`);
+    };
 
     useEffect(() => {
         const fetchSystemSettings = async () => {
@@ -203,6 +291,17 @@ const ProviderLayout = () => {
 
                         {/* Right side - Actions and profile */}
                         <div className="flex items-center space-x-3">
+                            {/* GPS Online Toggle */}
+                            <button
+                                onClick={toggleOnlineStatus}
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-black tracking-wider transition-all duration-300 border shadow-sm ${isOnline 
+                                    ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100' 
+                                    : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'}`}
+                            >
+                                <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500 animate-ping' : 'bg-red-500'}`} />
+                                <span className="hidden sm:inline">{isOnline ? 'ONLINE' : 'OFFLINE'}</span>
+                            </button>
+
                             {/* Notifications */}
                             <NotificationBell />
 

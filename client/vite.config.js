@@ -115,6 +115,18 @@ export default defineConfig(({ mode }) => {
               if (id.includes('react-datepicker') || id.includes('react-time-picker')) {
                 return 'vendor-pickers';
               }
+              if (id.includes('country-state-city')) {
+                return 'vendor-csc';
+              }
+              if (id.includes('leaflet')) {
+                return 'vendor-leaflet';
+              }
+              if (id.includes('recharts')) {
+                return 'vendor-recharts';
+              }
+              if (id.includes('swiper')) {
+                return 'vendor-swiper';
+              }
             }
           }
         }

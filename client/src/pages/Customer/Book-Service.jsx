@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { toast } from 'react-toastify';
-import { ArrowLeft, CheckCircle, Plus, Minus, Tag, Clock, Calendar, Shield, Lock, Star, IndianRupee, Truck, RotateCcw, Check, CalendarDays, CreditCard, Wallet } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Plus, Minus, Tag, Clock, Calendar, Shield, Lock, Star, IndianRupee, Truck, RotateCcw, Check, CalendarDays, CreditCard, Wallet, Navigation, MapPin } from 'lucide-react';
 import AddressSelector from '../../components/AddressSelector';
 import Loader from '../../components/Loader';
 import { getPublicServiceById } from '../../services/ServiceService';
@@ -12,6 +12,7 @@ import { getAvailableCoupons, applyCoupon as applyCouponAPI } from '../../servic
 import { createBooking } from '../../services/BookingService';
 import * as CustomerService from '../../services/CustomerService';
 import { formatDate, formatCurrency } from '../../utils/format';
+import LocationPickerModal from '../../components/LocationPickerModal';
 
 const BookService = () => {
   const { serviceId } = useParams();
@@ -26,6 +27,59 @@ const BookService = () => {
   const [addresses, setAddresses] = useState([]);
   const [coupons, setCoupons] = useState([]);
   const [walletBalance, setWalletBalance] = useState(0);
+  const [detecting, setDetecting] = useState(false);
+  const [isMapModalOpen, setIsMapModalOpen] = useState(false);
+
+  const handleDetectAddress = () => {
+    if (!navigator.geolocation) {
+      toast.error('Geolocation is not supported by your browser');
+      return;
+    }
+
+    setDetecting(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        try {
+            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1`);
+            const data = await response.json();
+            
+            if (data && data.address) {
+                const { address } = data;
+                const houseInfo = address.house_number ? `House No. ${address.house_number}` : '';
+                const landmarkInfo = address.building || address.amenity || address.shop || address.office || address.commercial || address.tourism || address.leisure || address.historic ? `Near ${address.building || address.amenity || address.shop || address.office || address.commercial || address.tourism || address.leisure || address.historic}` : '';
+                const streetAddress = [houseInfo, address.road, address.neighbourhood, address.suburb, landmarkInfo].filter(Boolean).join(', ') || data.display_name.split(',').slice(0, 3).join(', ');
+                
+                setFormData(prev => ({
+                    ...prev,
+                    customAddress: {
+                        street: streetAddress,
+                        city: address.city || address.town || address.village || prev.customAddress.city,
+                        state: address.state || prev.customAddress.state,
+                        postalCode: address.postcode || prev.customAddress.postalCode,
+                        country: 'India',
+                        lat: latitude,
+                        lng: longitude
+                    }
+                }));
+                toast.success('Address auto-detected successfully!');
+            } else {
+                toast.error('Failed to resolve current address details');
+            }
+        } catch (error) {
+            toast.error('Error connecting to map service');
+        } finally {
+            setDetecting(false);
+        }
+      },
+      (error) => {
+        setDetecting(false);
+        console.error(error);
+        toast.error('Failed to retrieve location coordinates');
+      },
+      { enableHighAccuracy: true }
+    );
+  };
 
   // Form state
   const [formData, setFormData] = useState({
@@ -46,6 +100,14 @@ const BookService = () => {
     appliedCoupon: null,
     paymentMethod: 'online'
   });
+
+  const autocompleteInputRef = useRef(null);
+
+
+
+  useEffect(() => {
+    // Autocomplete disabled for Nominatim. Can type directly.
+  }, [formData.useCustomAddress]);
 
   // Get next 3 days
   const getNext3Days = () => {
@@ -340,7 +402,9 @@ const BookService = () => {
           city: addressData.city.trim(),
           state: addressData.state.trim(),
           postalCode: addressData.postalCode.trim(),
-          country: addressData.country || 'India'
+          country: addressData.country || 'India',
+          lat: addressData.lat || null,
+          lng: addressData.lng || null
         },
         notes: formData.notes.trim(),
         quantity: formData.quantity,
@@ -559,10 +623,32 @@ const BookService = () => {
                         {formData.useCustomAddress && (
                           <div className="mt-4 space-y-4">
                             <div>
-                              <label className="block text-sm font-semibold text-secondary mb-1.5">
-                                Street Address *
-                              </label>
+                              <div className="flex justify-between items-center mb-1.5">
+                                <label className="block text-sm font-semibold text-secondary">
+                                  Street Address *
+                                </label>
+                                <div className="flex items-center gap-3">
+                                  <button
+                                    type="button"
+                                    onClick={() => setIsMapModalOpen(true)}
+                                    className="inline-flex items-center gap-1 text-[11px] font-bold text-primary hover:text-teal-700 transition-colors uppercase tracking-wider"
+                                  >
+                                    <MapPin className="w-3 h-3" />
+                                    Pick on Map
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={detecting}
+                                    onClick={handleDetectAddress}
+                                    className="inline-flex items-center gap-1 text-[11px] font-bold text-primary hover:text-teal-700 disabled:opacity-50 transition-colors uppercase tracking-wider"
+                                  >
+                                    <Navigation className={`w-3 h-3 ${detecting ? 'animate-ping' : ''}`} />
+                                    {detecting ? 'Detecting...' : 'Auto Detect'}
+                                  </button>
+                                </div>
+                              </div>
                               <input
+                                ref={autocompleteInputRef}
                                 type="text"
                                 name="street"
                                 placeholder="E.g. House No. 123, Sector 45"
@@ -876,6 +962,25 @@ const BookService = () => {
           </div>
         </div>
       </div>
+      {isMapModalOpen && (
+        <LocationPickerModal
+          isOpen={isMapModalOpen}
+          onClose={() => setIsMapModalOpen(false)}
+          onLocationSelect={(loc) => {
+            setFormData(prev => ({
+              ...prev,
+              customAddress: {
+                ...prev.customAddress,
+                street: loc.street,
+                city: loc.city || prev.customAddress.city,
+                state: loc.state || prev.customAddress.state,
+                postalCode: loc.postalCode || prev.customAddress.postalCode
+              }
+            }));
+            toast.success('Address picked from map!');
+          }}
+        />
+      )}
     </div>
   );
 };

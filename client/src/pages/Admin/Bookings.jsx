@@ -1,7 +1,31 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
+import { useSocket } from '../../socket/SocketContext';
 import Loader from '../../components/Loader';
+import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
+import L from 'leaflet';
+
+const customerIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
+const providerIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
+
+const MapBoundsHelper = ({ providerLoc, targetLat, targetLng }) => {
+  const map = useMap();
+  React.useEffect(() => {
+    if (targetLat && targetLng) {
+      if (providerLoc) {
+        const bounds = L.latLngBounds([
+          [targetLat, targetLng],
+          [providerLoc.lat, providerLoc.lng]
+        ]);
+        map.fitBounds(bounds, { padding: [50, 50] });
+      } else {
+        map.setView([targetLat, targetLng], 15);
+      }
+    }
+  }, [providerLoc, targetLat, targetLng, map]);
+  return null;
+};
 import * as BookingService from '../../services/BookingService';
 import * as AdminService from '../../services/AdminService';
 import Pagination from '../../components/Pagination';
@@ -209,6 +233,131 @@ const PayoutStatusBadge = ({ status }) => {
             {status === 'Payout On Hold' || status === 'Dispute Hold' ? <Lock size={10} /> : <Unlock size={10} />}
             {status || 'Unknown'}
         </span>
+    );
+};
+
+// Dynamic Google script loader
+const loadGoogleMapsScript = (callback) => {
+    if (window.google && window.google.maps) {
+        if (callback) callback();
+        return;
+    }
+    const existingScript = document.getElementById('google-maps-script');
+    if (!existingScript) {
+        const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || import.meta.env.VITE_FIREBASE_API_KEY;
+        const script = document.createElement('script');
+        script.id = 'google-maps-script';
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,geometry&loading=async`;
+        script.async = true;
+        script.defer = true;
+        script.onload = () => {
+            if (callback) callback();
+        };
+        document.head.appendChild(script);
+    } else {
+        existingScript.addEventListener('load', () => {
+            if (callback) callback();
+        });
+    }
+};
+
+const AdminLiveTrackingMap = ({ bookingId, address, status, provider, booking }) => {
+    const { socket } = useSocket();
+    const [trackingState, setTrackingState] = useState({
+        trackingEnabled: booking?.trackingEnabled || false,
+        providerLiveLocation: booking?.providerLiveLocation || null,
+        providerReached: booking?.providerReached || false,
+        liveDistance: booking?.liveDistance || '',
+        liveDuration: booking?.liveDuration || '',
+        routeCoordinates: booking?.routeCoordinates || []
+    });
+
+    // Socket Setup
+    useEffect(() => {
+        if (!socket || !bookingId) return;
+
+        socket.emit('join-booking-tracking', { bookingId });
+
+        socket.on('tracking-started', (data) => {
+            console.log('📡 Admin Tracking sync:', data);
+            setTrackingState(data);
+        });
+
+        socket.on('provider-live-location', (data) => {
+            console.log('📡 Admin location update:', data);
+            setTrackingState(prev => ({
+                ...prev,
+                providerLiveLocation: { lat: data.latitude, lng: data.longitude },
+                liveDistance: data.liveDistance,
+                liveDuration: data.liveDuration,
+                routeCoordinates: data.routeCoordinates,
+                providerReached: data.providerReached
+            }));
+        });
+
+        socket.on('provider-arrived', () => {
+            setTrackingState(prev => ({ ...prev, providerReached: true }));
+        });
+
+        return () => {
+            socket.emit('leave-booking-tracking', { bookingId });
+            socket.off('tracking-started');
+            socket.off('provider-live-location');
+            socket.off('provider-arrived');
+        };
+    }, [socket, bookingId]);
+
+    let targetLat = 28.5;
+    let targetLng = 77.1;
+
+    if (address && typeof address.lat === 'number' && typeof address.lng === 'number') {
+        targetLat = address.lat;
+        targetLng = address.lng;
+    }
+
+    // Resolve provider coordinate fallback
+    const providerCoords = trackingState.providerLiveLocation || (
+        provider?.currentLocation?.coordinates?.length === 2 && provider.currentLocation.coordinates[0] !== 0
+            ? { lat: provider.currentLocation.coordinates[1], lng: provider.currentLocation.coordinates[0] }
+            : null
+    );
+
+    return (
+        <div className="w-full bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+            <div className="bg-slate-50 px-4 py-3 border-b border-gray-200 flex justify-between items-center">
+                <div className="flex items-center space-x-2">
+                    <span className="w-2 h-2 rounded-full bg-green-500 animate-ping" />
+                    <span className="text-xs font-bold text-secondary uppercase tracking-wider">Live Provider Geolocation</span>
+                </div>
+                <div className="flex items-center gap-3 text-[10px] text-gray-500 font-semibold">
+                    {trackingState.liveDuration && <span>ETA: {trackingState.liveDuration}</span>}
+                    {trackingState.liveDistance && <span>• Distance: {trackingState.liveDistance}</span>}
+                </div>
+            </div>
+            
+            <div className="relative w-full h-[250px] bg-slate-100 flex items-center justify-center">
+                <MapContainer center={[targetLat, targetLng]} zoom={14} style={{ height: '100%', width: '100%', zIndex: 10 }}>
+                    <TileLayer
+                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    />
+                    <Marker position={[targetLat, targetLng]} icon={customerIcon} />
+                    {providerCoords && (
+                        <Marker position={[providerCoords.lat, providerCoords.lng]} icon={providerIcon} />
+                    )}
+                    {trackingState.routeCoordinates?.length > 0 && (
+                        <Polyline positions={trackingState.routeCoordinates.map(c => [c.lat, c.lng])} color="#0D9488" weight={4} opacity={0.8} />
+                    )}
+                    <MapBoundsHelper providerLoc={providerCoords} targetLat={targetLat} targetLng={targetLng} />
+                </MapContainer>
+            </div>
+            
+            {trackingState.providerReached && (
+                <div className="bg-green-50 p-2 text-center text-xs font-bold text-green-700 border-t border-green-100 flex items-center justify-center gap-1.5 animate-pulse">
+                    <span>✓ Technician has arrived at the client destination!</span>
+                </div>
+            )}
+        </div>
     );
 };
 
@@ -1118,6 +1267,110 @@ const AdminBookingsView = () => {
                                                 )}
                                             </div>
                                         </div>
+                                    </div>
+
+                                    {/* Secure PIN Verification & Geolocation Live Tracking Audit */}
+                                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 shadow-sm space-y-4">
+                                        <h3 className="font-bold text-secondary flex items-center text-sm uppercase tracking-wide border-b border-gray-200 pb-2">
+                                            <Lock className="w-4 h-4 mr-2 text-primary" />
+                                            Secure PIN Verification Audit
+                                        </h3>
+                                        
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            {/* Start PIN Details */}
+                                            <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
+                                                <div className="flex justify-between items-center mb-1">
+                                                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Arrival PIN</span>
+                                                    {selectedBooking.booking?.serviceStartedAt ? (
+                                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-green-100 text-green-800 border border-green-200">
+                                                            Verified
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                                            Pending
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-xl font-black text-secondary tracking-widest font-mono">
+                                                    {selectedBooking.booking?.startPin || selectedBooking.booking?.startOtp || 'N/A'}
+                                                </p>
+                                                {selectedBooking.booking?.serviceStartedAt && (
+                                                    <p className="text-[9px] text-gray-500 mt-2 font-medium">
+                                                        Verified: {new Date(selectedBooking.booking.serviceStartedAt).toLocaleString()}
+                                                    </p>
+                                                )}
+                                            </div>
+
+                                            {/* Completion PIN Details */}
+                                            <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
+                                                <div className="flex justify-between items-center mb-1">
+                                                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Completion PIN</span>
+                                                    {selectedBooking.booking?.serviceCompletedAt ? (
+                                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-green-100 text-green-800 border border-green-200">
+                                                            Verified
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                                            Pending
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-xl font-black text-secondary tracking-widest font-mono">
+                                                    {selectedBooking.booking?.completionPin || selectedBooking.booking?.completionOtp || 'N/A'}
+                                                </p>
+                                                {selectedBooking.booking?.serviceCompletedAt && (
+                                                    <p className="text-[9px] text-gray-500 mt-2 font-medium">
+                                                        Verified: {new Date(selectedBooking.booking.serviceCompletedAt).toLocaleString()}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Geolocation verification logs */}
+                                        {(selectedBooking.booking?.startVerificationLocation || selectedBooking.booking?.completionVerificationLocation) && (
+                                            <div className="border-t border-gray-100 pt-3 space-y-2 text-xs">
+                                                <p className="font-bold text-gray-500 uppercase tracking-wider text-[10px]">Verification Locations</p>
+                                                {selectedBooking.booking.startVerificationLocation && (
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-gray-400">Start Location:</span>
+                                                        <a
+                                                            href={`https://www.google.com/maps?q=${selectedBooking.booking.startVerificationLocation.latitude},${selectedBooking.booking.startVerificationLocation.longitude}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="text-primary font-medium hover:underline flex items-center gap-1"
+                                                        >
+                                                            <MapPin className="w-3.5 h-3.5" /> View Map Location
+                                                        </a>
+                                                    </div>
+                                                )}
+                                                {selectedBooking.booking.completionVerificationLocation && (
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-gray-400">Completion Location:</span>
+                                                        <a
+                                                            href={`https://www.google.com/maps?q=${selectedBooking.booking.completionVerificationLocation.latitude},${selectedBooking.booking.completionVerificationLocation.longitude}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="text-emerald-600 font-medium hover:underline flex items-center gap-1"
+                                                        >
+                                                            <MapPin className="w-3.5 h-3.5" /> View Map Location
+                                                        </a>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* Live Google Map Tracking when booking is active */}
+                                        {selectedBooking.booking && ['accepted', 'in-progress', 'in_progress', 'scheduled', 'arriving', 'assigned'].includes(selectedBooking.booking.status) && (
+                                            <div className="mt-4 pt-2">
+                                                <AdminLiveTrackingMap 
+                                                    bookingId={selectedBooking.booking._id} 
+                                                    address={selectedBooking.booking.address}
+                                                    status={selectedBooking.booking.status}
+                                                    provider={selectedBooking.provider}
+                                                    booking={selectedBooking.booking}
+                                                />
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Address Information */}

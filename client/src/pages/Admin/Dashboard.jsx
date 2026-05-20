@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../../context/auth';
+import { useNavigate } from 'react-router-dom';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import LoadingSpinner from '../../components/Loader';
@@ -23,6 +24,7 @@ const STATUS_COLORS = {
 
 const AdminDashboard = () => {
   const { user, API } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [analytics, setAnalytics] = useState(null);
@@ -136,6 +138,133 @@ const AdminDashboard = () => {
               className="px-6 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-50 transition-colors shadow-sm"
             >
               {loading ? 'Updating...' : 'Apply Filter'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* LIVE COMMAND CENTER */}
+      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-zinc-900 text-white p-6 rounded-2xl border border-slate-700 shadow-xl mb-6 relative overflow-hidden">
+        {/* Glow effect */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full -mr-20 -mt-20 blur-3xl pointer-events-none"></div>
+        <div className="absolute -left-10 -bottom-10 w-48 h-48 bg-teal-500/5 rounded-full blur-2xl pointer-events-none"></div>
+
+        <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-700/60 relative z-10">
+          <div className="flex items-center space-x-3">
+            <span className="flex h-3 w-3 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600"></span>
+            </span>
+            <div>
+              <h2 className="text-sm font-black uppercase tracking-widest text-slate-100">Live Command Center</h2>
+              <p className="text-[10px] text-slate-400">Real-time platform dispatch & infrastructure monitor</p>
+            </div>
+          </div>
+          <span className="text-[10px] bg-slate-850 text-slate-300 font-bold px-3 py-1.5 rounded-full border border-slate-700 flex items-center gap-1.5 uppercase tracking-wider">
+            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+            Live Sync Status
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 relative z-10">
+          {/* Live Bookings */}
+          <div className="bg-slate-800/60 backdrop-blur border border-slate-700/50 p-4 rounded-xl flex flex-col justify-between hover:border-teal-500/50 transition-all duration-300 group">
+            <div>
+              <div className="flex justify-between items-start">
+                <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Live Bookings</p>
+                <span className="p-1.5 bg-blue-500/10 text-blue-400 rounded-lg group-hover:scale-110 transition-transform">
+                  <FiClock size={14} className="animate-spin-slow" />
+                </span>
+              </div>
+              <h3 className="text-2xl font-black mt-2 text-white">{analytics?.bookingStats?.inProgress || 0}</h3>
+              <p className="text-[10px] text-slate-400 mt-1">Technicians en-route or working</p>
+            </div>
+            <button 
+              onClick={() => navigate('/admin/bookings')}
+              className="mt-4 w-full py-1.5 bg-slate-700 text-slate-200 text-[10px] font-bold rounded-lg hover:bg-slate-600 transition-colors uppercase tracking-wider"
+            >
+              Monitor Dispatch
+            </button>
+          </div>
+
+          {/* Active Providers */}
+          <div className="bg-slate-800/60 backdrop-blur border border-slate-700/50 p-4 rounded-xl flex flex-col justify-between hover:border-teal-500/50 transition-all duration-300 group">
+            <div>
+              <div className="flex justify-between items-start">
+                <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Active Providers</p>
+                <span className="p-1.5 bg-emerald-500/10 text-emerald-400 rounded-lg group-hover:scale-110 transition-transform">
+                  <FiUsers size={14} />
+                </span>
+              </div>
+              <h3 className="text-2xl font-black mt-2 text-white">{analytics?.providerStats?.active || 0}</h3>
+              <p className="text-[10px] text-slate-400 mt-1">Online & approved specialists</p>
+            </div>
+            <button 
+              onClick={() => navigate('/admin/providers')}
+              className="mt-4 w-full py-1.5 bg-slate-700 text-slate-200 text-[10px] font-bold rounded-lg hover:bg-slate-600 transition-colors uppercase tracking-wider"
+            >
+              Manage Fleet
+            </button>
+          </div>
+
+          {/* Open Complaints */}
+          <div className="bg-slate-800/60 backdrop-blur border border-slate-700/50 p-4 rounded-xl flex flex-col justify-between hover:border-teal-500/50 transition-all duration-300 group">
+            <div>
+              <div className="flex justify-between items-start">
+                <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Open Disputes</p>
+                <span className="p-1.5 bg-rose-500/10 text-rose-400 rounded-lg group-hover:scale-110 transition-transform">
+                  <FiAlertTriangle size={14} className="animate-bounce" />
+                </span>
+              </div>
+              <h3 className="text-2xl font-black mt-2 text-white">{analytics?.pendingActions?.pendingDisputes || 0}</h3>
+              <p className="text-[10px] text-slate-400 mt-1">Disputes requiring arbitration</p>
+            </div>
+            <button 
+              onClick={() => navigate('/admin/complaints')}
+              className="mt-4 w-full py-1.5 bg-slate-700 text-slate-200 text-[10px] font-bold rounded-lg hover:bg-slate-600 transition-colors uppercase tracking-wider"
+            >
+              Audit Dispute
+            </button>
+          </div>
+
+          {/* Financial Transactions */}
+          <div className="bg-slate-800/60 backdrop-blur border border-slate-700/50 p-4 rounded-xl flex flex-col justify-between hover:border-teal-500/50 transition-all duration-300 group">
+            <div>
+              <div className="flex justify-between items-start">
+                <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Total Volume</p>
+                <span className="p-1.5 bg-amber-500/10 text-amber-400 rounded-lg group-hover:scale-110 transition-transform">
+                  <FiDollarSign size={14} />
+                </span>
+              </div>
+              <h3 className="text-2xl font-black mt-2 text-white">₹{analytics?.revenueStats?.totalRevenue || 0}</h3>
+              <p className="text-[10px] text-slate-400 mt-1">Aggregate gross sales volume</p>
+            </div>
+            <button 
+              onClick={() => navigate('/admin/transactions')}
+              className="mt-4 w-full py-1.5 bg-slate-700 text-slate-200 text-[10px] font-bold rounded-lg hover:bg-slate-600 transition-colors uppercase tracking-wider"
+            >
+              View Ledgers
+            </button>
+          </div>
+
+          {/* Live Geolocation Maps Launcher */}
+          <div className="bg-gradient-to-br from-primary/20 via-teal-900/40 to-emerald-950/20 border border-primary/40 p-4 rounded-xl flex flex-col justify-between hover:border-primary/80 transition-all duration-300 group relative">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-primary/20 rounded-full filter blur-xl pointer-events-none"></div>
+            <div className="relative z-10">
+              <div className="flex justify-between items-start">
+                <p className="text-[10px] font-black uppercase text-teal-300 tracking-wider">Live Maps</p>
+                <span className="p-1.5 bg-primary/20 text-teal-300 rounded-lg group-hover:scale-125 transition-transform shadow-lg shadow-primary/20 animate-pulse">
+                  <FiPieChart size={14} />
+                </span>
+              </div>
+              <h3 className="text-[11px] font-extrabold mt-3 text-white uppercase tracking-wider">Geo-Monitor</h3>
+              <p className="text-[9px] text-slate-300 mt-1 leading-relaxed">Density mapping & live tracking visualizer</p>
+            </div>
+            <button 
+              onClick={() => navigate('/admin/live-map')}
+              className="mt-4 w-full py-2 bg-primary hover:bg-teal-700 text-white text-[10px] font-black rounded-lg transition-all duration-300 shadow-md shadow-primary/30 uppercase tracking-widest relative z-10"
+            >
+              Launch Live Map
             </button>
           </div>
         </div>
