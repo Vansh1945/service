@@ -249,3 +249,363 @@ export const compressImage = (file, options = {}) => {
     reader.readAsDataURL(file);
   });
 };
+
+/**
+ * Parses and builds a highly accurate, clean, human-readable address from Nominatim geocoding data.
+ * Deduplicates tokens, removes tahsil/tehsil sub-structures, strips non-Latin scripts (e.g. Hindi/Punjabi names),
+ * and structures address components into a premium, professional format.
+ * 
+ * @param {Object} addressObj - The address object returned by reverse-geocoding (Nominatim)
+ * @param {string} displayName - The raw display_name string returned by reverse-geocoding
+ * @returns {string} Formatted, human-readable address
+ */
+export const smartAddressBuilder = (addressObj, displayName = "") => {
+  const addr = addressObj || {};
+  
+  // 1. Extract key address tokens
+  let houseNo = addr.house_number || addr.building || addr.flat || addr.apartment || addr.house || addr.unit || addr.office || addr.amenity || "";
+  let road = addr.road || addr.street || addr.footway || addr.path || "";
+  let neighbourhood = addr.neighbourhood || addr.quarter || addr.residential || addr.development || "";
+  let suburb = addr.suburb || addr.village || addr.townland || "";
+  let landmark = addr.landmark || addr.place || addr.commercial || addr.industrial || "";
+  let city = addr.city || addr.town || addr.municipality || addr.city_district || "";
+  let state = addr.state || "";
+  let pincode = addr.postcode || addr.postal_code || "";
+  
+  // Helper for cleaning up text tokens
+  const cleanPart = (val) => {
+    if (!val) return "";
+    let s = val.toString().trim();
+    // Remove non-Latin characters (Devanagari, Gurmukhi, etc.)
+    s = s.replace(/[\u0900-\u097F\u0A00-\u0A7F]/g, "");
+    // Clean any dangling punctuation or extra spaces
+    s = s.replace(/^[,.\s-]+|[,.\s-]+$/g, "").trim();
+    return s;
+  };
+
+  // Filter unwanted words
+  const isUnwanted = (val) => {
+    const s = val.toLowerCase();
+    return (
+      s.includes("tahsil") || 
+      s.includes("tehsil") || 
+      s.includes("तहसील") || 
+      s.includes("ਤਹਿਸੀਲ") || 
+      s.includes("taluk") || 
+      s.includes("taluka") || 
+      s === "india"
+    );
+  };
+  
+  const candidates = [];
+  const addCandidate = (val) => {
+    const clean = cleanPart(val);
+    if (clean && !isUnwanted(clean)) {
+      candidates.push(clean);
+    }
+  };
+
+  // Add extracted components in preferred logical order
+  addCandidate(houseNo);
+  addCandidate(road);
+  addCandidate(landmark);
+  addCandidate(neighbourhood);
+  addCandidate(suburb);
+  addCandidate(city);
+  addCandidate(state);
+  
+  // If we have a display_name, parse it to recover specific missing details (e.g. "Phase 1")
+  if (displayName) {
+    const displayParts = displayName.split(",")
+      .map(cleanPart)
+      .filter(p => p && !isUnwanted(p));
+      
+    for (const dp of displayParts) {
+      const dpLower = dp.toLowerCase();
+      // Only insert if not already represented in the structured candidates list
+      const alreadyMatched = candidates.some(c => {
+        const cLower = c.toLowerCase();
+        return cLower.includes(dpLower) || dpLower.includes(cLower);
+      });
+      if (!alreadyMatched) {
+        // Insert before city/state if found, otherwise append
+        const cityLower = city ? city.toLowerCase() : "";
+        const stateLower = state ? state.toLowerCase() : "";
+        let insertIdx = candidates.length;
+        for (let i = 0; i < candidates.length; i++) {
+          const cLower = candidates[i].toLowerCase();
+          if (cLower === cityLower || cLower === stateLower) {
+            insertIdx = i;
+            break;
+          }
+        }
+        candidates.splice(insertIdx, 0, dp);
+      }
+    }
+  }
+  
+  const cleanPincode = cleanPart(pincode);
+  
+  // Deduplicate candidate strings token-wise
+  const uniqueCandidates = [];
+  for (const cand of candidates) {
+    const candLower = cand.toLowerCase();
+    let isDup = false;
+    for (let i = 0; i < uniqueCandidates.length; i++) {
+      const existingLower = uniqueCandidates[i].toLowerCase();
+      if (existingLower === candLower) {
+        isDup = true;
+        break;
+      }
+      // If one candidate is a sub-phrase of another, keep the longer/more specific one
+      if (existingLower.includes(candLower)) {
+        isDup = true;
+        break;
+      }
+      if (candLower.includes(existingLower)) {
+        uniqueCandidates[i] = cand;
+        isDup = true;
+        break;
+      }
+    }
+    if (!isDup) {
+      uniqueCandidates.push(cand);
+    }
+  }
+  
+  // Separate out state for special formatting at the end with the pincode
+  const cleanState = cleanPart(state);
+  let stateIdx = -1;
+  if (cleanState) {
+    stateIdx = uniqueCandidates.findIndex(c => c.toLowerCase() === cleanState.toLowerCase());
+  }
+  
+  let mainParts = [...uniqueCandidates];
+  let statePart = "";
+  
+  if (stateIdx !== -1) {
+    statePart = mainParts[stateIdx];
+    mainParts.splice(stateIdx, 1);
+  } else if (cleanState) {
+    statePart = cleanState;
+  }
+  
+  if (statePart && cleanPincode) {
+    if (!statePart.includes(cleanPincode)) {
+      statePart = `${statePart} ${cleanPincode}`;
+    }
+  } else if (cleanPincode) {
+    statePart = cleanPincode;
+  }
+  
+  if (statePart) {
+    mainParts.push(statePart);
+  }
+  
+  let formattedAddress = mainParts.join(", ");
+  
+  // Fallback to parsed displayName if the extracted structures were too sparse
+  if (!formattedAddress || mainParts.length < 2) {
+    if (displayName) {
+      const dp = displayName.split(",")
+        .map(cleanPart)
+        .filter(p => p && !isUnwanted(p));
+      
+      const uniqueDp = [];
+      for (const item of dp) {
+        if (!uniqueDp.some(x => x.toLowerCase() === item.toLowerCase() || x.toLowerCase().includes(item.toLowerCase()))) {
+          uniqueDp.push(item);
+        }
+      }
+      
+      if (cleanPincode) {
+        const lastIdx = uniqueDp.length - 1;
+        if (lastIdx >= 0) {
+          if (!uniqueDp[lastIdx].includes(cleanPincode)) {
+            uniqueDp[lastIdx] = `${uniqueDp[lastIdx]} ${cleanPincode}`;
+          }
+        } else {
+          uniqueDp.push(cleanPincode);
+        }
+      }
+      formattedAddress = uniqueDp.join(", ");
+    }
+  }
+  
+  return formattedAddress || displayName || "Unknown Location";
+};
+
+/**
+ * Parses and returns clean, structured address fields (street, city, state, postalCode) 
+ * from Nominatim geocoding data, stripping non-Latin script, redundant sub-districts/tahsils, 
+ * and deduplicating tokens.
+ * 
+ * @param {Object} addressObj - The address object returned by reverse-geocoding (Nominatim)
+ * @param {string} displayName - The raw display_name string returned by reverse-geocoding
+ * @returns {Object} { street, city, state, postalCode }
+ */
+export const cleanAddressFields = (addressObj, displayName = "") => {
+  const addr = addressObj || {};
+  
+  // Clean string helper
+  const cleanPart = (val) => {
+    if (!val) return "";
+    let s = val.toString().trim();
+    s = s.replace(/[\u0900-\u097F\u0A00-\u0A7F]/g, ""); // strip Devanagari/Gurmukhi
+    s = s.replace(/^[,.\s-]+|[,.\s-]+$/g, "").trim();
+    return s;
+  };
+
+  const isUnwanted = (val) => {
+    const s = val.toLowerCase();
+    return (
+      s.includes("tahsil") || 
+      s.includes("tehsil") || 
+      s.includes("तहसील") || 
+      s.includes("ਤਹਿਸੀਲ") || 
+      s.includes("taluk") || 
+      s.includes("taluka") || 
+      s === "india"
+    );
+  };
+
+  // 1. Extract base fields
+  let houseNo = addr.house_number || addr.building || addr.flat || addr.apartment || addr.house || addr.unit || addr.office || addr.amenity || "";
+  let road = addr.road || addr.street || addr.footway || addr.path || "";
+  let neighbourhood = addr.neighbourhood || addr.quarter || addr.residential || addr.development || "";
+  let suburb = addr.suburb || addr.village || addr.townland || "";
+  let landmark = addr.landmark || addr.place || addr.commercial || addr.industrial || "";
+  
+  let city = addr.city || addr.town || addr.municipality || addr.city_district || "";
+  let state = addr.state || "";
+  let pincode = addr.postcode || addr.postal_code || "";
+
+  // Clean them
+  houseNo = cleanPart(houseNo);
+  road = cleanPart(road);
+  neighbourhood = cleanPart(neighbourhood);
+  suburb = cleanPart(suburb);
+  landmark = cleanPart(landmark);
+  city = cleanPart(city);
+  state = cleanPart(state);
+  pincode = cleanPart(pincode);
+
+  // 2. Build candidates list for street
+  const candidates = [];
+  const addCandidate = (val) => {
+    if (val && !isUnwanted(val)) {
+      candidates.push(val);
+    }
+  };
+
+  addCandidate(houseNo);
+  addCandidate(road);
+  addCandidate(landmark);
+  addCandidate(neighbourhood);
+  addCandidate(suburb);
+
+  // If we have displayName, let's extract extra tokens (like "Phase 1") that are NOT city, state, or pincode
+  if (displayName) {
+    const displayParts = displayName.split(",")
+      .map(cleanPart)
+      .filter(p => p && !isUnwanted(p));
+
+    const cityLower = city.toLowerCase();
+    const stateLower = state.toLowerCase();
+    const pincodeLower = pincode.toLowerCase();
+
+    for (const dp of displayParts) {
+      const dpLower = dp.toLowerCase();
+      
+      // Skip if it represents city, state, or pincode
+      if (
+        dpLower === cityLower || 
+        dpLower === stateLower || 
+        dpLower === pincodeLower || 
+        cityLower.includes(dpLower) ||
+        stateLower.includes(dpLower)
+      ) {
+        continue;
+      }
+
+      // Check if it's already in candidates
+      const alreadyMatched = candidates.some(c => {
+        const cLower = c.toLowerCase();
+        return cLower.includes(dpLower) || dpLower.includes(cLower);
+      });
+
+      if (!alreadyMatched) {
+        candidates.push(dp);
+      }
+    }
+  }
+
+  // Deduplicate candidates
+  const uniqueCandidates = [];
+  for (const cand of candidates) {
+    const candLower = cand.toLowerCase();
+    let isDup = false;
+    for (let i = 0; i < uniqueCandidates.length; i++) {
+      const existingLower = uniqueCandidates[i].toLowerCase();
+      if (existingLower === candLower) {
+        isDup = true;
+        break;
+      }
+      if (existingLower.includes(candLower)) {
+        isDup = true;
+        break;
+      }
+      if (candLower.includes(existingLower)) {
+        uniqueCandidates[i] = cand;
+        isDup = true;
+        break;
+      }
+    }
+    if (!isDup) {
+      uniqueCandidates.push(cand);
+    }
+  }
+
+  let streetAddress = uniqueCandidates.join(", ");
+
+  // Fallback to parsing display_name if streetAddress is too sparse
+  if ((!streetAddress || uniqueCandidates.length < 1) && displayName) {
+    const displayParts = displayName.split(",")
+      .map(cleanPart)
+      .filter(p => p && !isUnwanted(p));
+
+    const cityLower = city.toLowerCase();
+    const stateLower = state.toLowerCase();
+    const pincodeLower = pincode.toLowerCase();
+
+    const filtered = displayParts.filter(p => {
+      const pLower = p.toLowerCase();
+      return (
+        pLower !== cityLower && 
+        pLower !== stateLower && 
+        pLower !== pincodeLower &&
+        !cityLower.includes(pLower) &&
+        !stateLower.includes(pLower)
+      );
+    });
+
+    const uniqueFiltered = [];
+    for (const item of filtered) {
+      if (!uniqueFiltered.some(x => x.toLowerCase() === item.toLowerCase() || x.toLowerCase().includes(item.toLowerCase()))) {
+        uniqueFiltered.push(item);
+      }
+    }
+    streetAddress = uniqueFiltered.join(", ");
+  }
+
+  // Make sure city, state, postalCode are cleaned of tahsils or non-Latin scripts
+  if (isUnwanted(city)) city = "";
+  if (isUnwanted(state)) state = "";
+
+  return {
+    street: streetAddress || "Unknown Street Address",
+    city: city || "Jalandhar",
+    state: state || "Punjab",
+    postalCode: pincode || "144001"
+  };
+};

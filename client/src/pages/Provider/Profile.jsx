@@ -9,7 +9,7 @@ import * as ProviderService from '../../services/ProviderService';
 import * as SystemService from '../../services/SystemService';
 import * as NotificationService from '../../services/NotificationService';
 import useCategory from '../../hooks/useCategory';
-import { formatDate, formatCurrency, compressImage } from '../../utils/format';
+import { formatDate, formatCurrency, compressImage, cleanAddressFields } from '../../utils/format';
 import LocationPickerModal from '../../components/LocationPickerModal';
 
 const ProviderProfile = () => {
@@ -149,24 +149,21 @@ const ProviderProfile = () => {
           const data = await response.json();
           
           if (data && data.address) {
-            const { address } = data;
-            const houseInfo = address.house_number ? `House No. ${address.house_number}` : '';
-            const landmarkInfo = address.building || address.amenity || address.shop || address.office || address.commercial || address.tourism || address.leisure || address.historic ? `Near ${address.building || address.amenity || address.shop || address.office || address.commercial || address.tourism || address.leisure || address.historic}` : '';
-            const streetAddress = [houseInfo, address.road, address.neighbourhood, address.suburb, landmarkInfo].filter(Boolean).join(', ') || data.display_name.split(',').slice(0, 3).join(', ');
+            const cleanFields = cleanAddressFields(data.address, data.display_name);
             
             setProfileData(prev => ({
               ...prev,
               address: {
                 ...prev.address,
-                street: streetAddress,
-                city: address.city || address.town || address.village || prev.address.city,
-                state: address.state || prev.address.state,
-                postalCode: address.postcode || prev.address.postalCode,
+                street: cleanFields.street,
+                city: cleanFields.city,
+                state: cleanFields.state,
+                postalCode: cleanFields.postalCode,
                 country: 'India',
                 lat: latitude,
                 lng: longitude
               },
-              serviceArea: address.city || address.town || address.village || prev.address.city
+              serviceArea: cleanFields.city
             }));
             toast.success('Address auto-detected successfully!');
           } else {

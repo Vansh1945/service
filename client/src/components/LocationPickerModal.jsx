@@ -4,6 +4,7 @@ import L from 'leaflet';
 import { X, MapPin, Navigation } from 'lucide-react';
 import { toast } from 'react-toastify';
 import 'leaflet/dist/leaflet.css';
+import { cleanAddressFields } from '../utils/format';
 
 // Fix for default marker icons in Leaflet with Webpack
 delete L.Icon.Default.prototype._getIconUrl;
@@ -121,16 +122,20 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
             return;
         }
 
-        const { address } = addressDetails;
-        const houseInfo = houseNo ? `House No. ${houseNo}` : '';
-        const landmarkInfo = address.building || address.amenity || address.shop || address.office || address.commercial || address.tourism || address.leisure || address.historic ? `Near ${address.building || address.amenity || address.shop || address.office || address.commercial || address.tourism || address.leisure || address.historic}` : '';
-        const streetAddress = [houseInfo, address.road, address.neighbourhood, address.suburb, landmarkInfo].filter(Boolean).join(', ') || addressDetails.display_name.split(',').slice(0, 3).join(', ');
+        const { address, display_name } = addressDetails;
+        
+        // Ensure manual house number takes precedence or is merged
+        if (houseNo && !address.house_number) {
+            address.house_number = houseNo;
+        }
+
+        const cleanFields = cleanAddressFields(address, display_name);
 
         onLocationSelect({
-            street: streetAddress,
-            city: address.city || address.town || address.village || '',
-            state: address.state || '',
-            postalCode: address.postcode || '',
+            street: cleanFields.street,
+            city: cleanFields.city,
+            state: cleanFields.state,
+            postalCode: cleanFields.postalCode,
             lat: position[0],
             lng: position[1]
         });

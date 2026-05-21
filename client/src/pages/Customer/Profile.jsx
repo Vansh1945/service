@@ -10,7 +10,7 @@ import {
     ChevronRight, ArrowLeft, CreditCard, Package, Edit2, CheckCircle, Gift, Wallet, ArrowDownLeft, RotateCcw, Navigation
 } from 'lucide-react';
 import { getWalletHistory } from '../../services/CustomerService';
-import { formatCurrency, formatDate, formatDateTime, compressImage } from '../../utils/format';
+import { formatCurrency, formatDate, formatDateTime, compressImage, cleanAddressFields } from '../../utils/format';
 import LocationPickerModal from '../../components/LocationPickerModal';
 
 const UserProfile = () => {
@@ -72,18 +72,15 @@ const UserProfile = () => {
                     const data = await response.json();
                     
                     if (data && data.address) {
-                        const { address } = data;
-                        const houseInfo = address.house_number ? `House No. ${address.house_number}` : '';
-                        const landmarkInfo = address.building || address.amenity || address.shop || address.office || address.commercial || address.tourism || address.leisure || address.historic ? `Near ${address.building || address.amenity || address.shop || address.office || address.commercial || address.tourism || address.leisure || address.historic}` : '';
-                        const streetAddress = [houseInfo, address.road, address.neighbourhood, address.suburb, landmarkInfo].filter(Boolean).join(', ') || data.display_name.split(',').slice(0, 3).join(', ');
+                        const cleanFields = cleanAddressFields(data.address, data.display_name);
                         
                         setProfile(prev => ({
                             ...prev,
                             address: {
-                                street: streetAddress,
-                                city: address.city || address.town || address.village || prev.address.city,
-                                state: address.state || prev.address.state,
-                                postalCode: address.postcode || prev.address.postalCode
+                                street: cleanFields.street,
+                                city: cleanFields.city,
+                                state: cleanFields.state,
+                                postalCode: cleanFields.postalCode
                             }
                         }));
                         toast.success('Address auto-detected successfully!');

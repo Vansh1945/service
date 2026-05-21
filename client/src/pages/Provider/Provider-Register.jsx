@@ -17,7 +17,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import useCategory from '../../hooks/useCategory';
 import * as SystemService from '../../services/SystemService';
 import * as ProviderService from '../../services/ProviderService';
-import { formatTime, compressImage } from '../../utils/format';
+import { formatTime, compressImage, cleanAddressFields } from '../../utils/format';
 
 // ─── Static sub-components (defined OUTSIDE the main component to avoid remount) ─
 
@@ -126,18 +126,15 @@ const ProviderRegistration = () => {
           const data = await response.json();
 
           if (data && data.address) {
-            const { address } = data;
-            const houseInfo = address.house_number ? `House No. ${address.house_number}` : '';
-            const landmarkInfo = address.building || address.amenity || address.shop || address.office || address.commercial || address.tourism || address.leisure || address.historic ? `Near ${address.building || address.amenity || address.shop || address.office || address.commercial || address.tourism || address.leisure || address.historic}` : '';
-            const streetAddress = [houseInfo, address.road, address.neighbourhood, address.suburb, landmarkInfo].filter(Boolean).join(', ') || data.display_name.split(',').slice(0, 3).join(', ');
+            const cleanFields = cleanAddressFields(data.address, data.display_name);
 
             setFormData(prev => ({
               ...prev,
-              street: streetAddress,
-              city: address.city || address.town || address.village || prev.city,
-              state: address.state || prev.state,
-              postalCode: address.postcode || prev.postalCode,
-              serviceArea: address.city || address.town || address.village || prev.city,
+              street: cleanFields.street,
+              city: cleanFields.city,
+              state: cleanFields.state,
+              postalCode: cleanFields.postalCode,
+              serviceArea: cleanFields.city,
               lat: latitude,
               lng: longitude
             }));

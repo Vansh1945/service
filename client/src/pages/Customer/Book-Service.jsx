@@ -11,7 +11,7 @@ import { getPublicServiceById } from '../../services/ServiceService';
 import { getAvailableCoupons, applyCoupon as applyCouponAPI } from '../../services/CouponService';
 import { createBooking } from '../../services/BookingService';
 import * as CustomerService from '../../services/CustomerService';
-import { formatDate, formatCurrency } from '../../utils/format';
+import { formatDate, formatCurrency, cleanAddressFields } from '../../utils/format';
 import LocationPickerModal from '../../components/LocationPickerModal';
 
 const BookService = () => {
@@ -45,18 +45,15 @@ const BookService = () => {
             const data = await response.json();
             
             if (data && data.address) {
-                const { address } = data;
-                const houseInfo = address.house_number ? `House No. ${address.house_number}` : '';
-                const landmarkInfo = address.building || address.amenity || address.shop || address.office || address.commercial || address.tourism || address.leisure || address.historic ? `Near ${address.building || address.amenity || address.shop || address.office || address.commercial || address.tourism || address.leisure || address.historic}` : '';
-                const streetAddress = [houseInfo, address.road, address.neighbourhood, address.suburb, landmarkInfo].filter(Boolean).join(', ') || data.display_name.split(',').slice(0, 3).join(', ');
+                const cleanFields = cleanAddressFields(data.address, data.display_name);
                 
                 setFormData(prev => ({
                     ...prev,
                     customAddress: {
-                        street: streetAddress,
-                        city: address.city || address.town || address.village || prev.customAddress.city,
-                        state: address.state || prev.customAddress.state,
-                        postalCode: address.postcode || prev.customAddress.postalCode,
+                        street: cleanFields.street,
+                        city: cleanFields.city,
+                        state: cleanFields.state,
+                        postalCode: cleanFields.postalCode,
                         country: 'India',
                         lat: latitude,
                         lng: longitude

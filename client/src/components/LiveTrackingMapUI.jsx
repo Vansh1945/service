@@ -17,11 +17,41 @@ L.Marker.prototype.options.icon = DefaultIcon;
 // Custom stylized pins
 const customerIcon = L.divIcon({ html: `<div style="background-color: #EF4444; width: 24px; height: 24px; border-radius: 50% 50% 50% 0; border: 3px solid white; transform: rotate(-45deg); box-shadow: 0 0 5px rgba(0,0,0,0.5);"></div>`, className: '', iconSize: [24, 24], iconAnchor: [12, 24], popupAnchor: [1, -34] });
 
-const providerIcon = L.divIcon({ html: `<div style="background-color: #10B981; width: 24px; height: 24px; border-radius: 50% 50% 50% 0; border: 3px solid white; transform: rotate(-45deg); box-shadow: 0 0 5px rgba(0,0,0,0.5);"></div>`, className: '', iconSize: [24, 24], iconAnchor: [12, 24], popupAnchor: [1, -34] });
+// Calculate bearing between two GPS coordinates using spherical trigonometry
+const calculateBearing = (lat1, lon1, lat2, lon2) => {
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const lat1Rad = (lat1 * Math.PI) / 180;
+  const lat2Rad = (lat2 * Math.PI) / 180;
 
-// Custom Smooth Moving Marker Component for realistic Uber style movement
-const SmoothMarker = ({ position, icon, children }) => {
+  const y = Math.sin(dLon) * Math.cos(lat2Rad);
+  const x =
+    Math.cos(lat1Rad) * Math.sin(lat2Rad) -
+    Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
+
+  const brng = (Math.atan2(y, x) * 180) / Math.PI;
+  return (brng + 360) % 360;
+};
+
+// Custom dynamic provider arrow SVG icon matching bearing direction
+const createProviderIcon = (bearing) => {
+  return L.divIcon({
+    html: `
+      <div style="transform: rotate(${bearing}deg); width: 36px; height: 36px; display: flex; items-center: center; justify-content: center; transition: transform 0.4s ease-out; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36" fill="#10B981" stroke="white" stroke-width="2.5" stroke-linejoin="round">
+          <polygon points="12,2 22,22 12,17 2,22" />
+        </svg>
+      </div>
+    `,
+    className: '',
+    iconSize: [36, 36],
+    iconAnchor: [18, 18], // Perfectly centered anchor for seamless rotation
+  });
+};
+
+// Custom Smooth Moving Marker Component for realistic Uber style movement and rotation
+const SmoothMarker = ({ position, children }) => {
   const [currentPos, setCurrentPos] = useState(position);
+  const [bearing, setBearing] = useState(0);
   const animationRef = useRef(null);
 
   useEffect(() => {
@@ -34,8 +64,14 @@ const SmoothMarker = ({ position, icon, children }) => {
 
     if (startLat === endLat && startLng === endLng) return;
 
-    // Check if initial load or large jump (> 5km), set instantly to avoid sliding across cities
+    // Calculate bearing if movement is non-trivial
     const diff = Math.sqrt(Math.pow(endLat - startLat, 2) + Math.pow(endLng - startLng, 2));
+    if (diff > 0.00001) {
+      const newBearing = calculateBearing(startLat, startLng, endLat, endLng);
+      setBearing(newBearing);
+    }
+
+    // Check if initial load or large jump (> 5km), set instantly to avoid sliding across cities
     if (diff > 0.05) {
       setCurrentPos(position);
       return;
@@ -70,8 +106,10 @@ const SmoothMarker = ({ position, icon, children }) => {
     };
   }, [position]);
 
+  const rotatedIcon = createProviderIcon(bearing);
+
   return (
-    <Marker position={currentPos} icon={icon}>
+    <Marker position={currentPos} icon={rotatedIcon}>
       {children}
     </Marker>
   );
@@ -192,7 +230,7 @@ const LiveTrackingMapUI = ({ targetLat, targetLng, providerLoc, routeCoords = []
 
         {/* Smooth Moving Provider Marker */}
         {providerPos && (
-          <SmoothMarker position={providerPos} icon={providerIcon} />
+          <SmoothMarker position={providerPos} />
         )}
         
         {/* Route Polyline path */}

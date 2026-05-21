@@ -11,6 +11,7 @@ import NotificationBell from '../components/NotificationBell';
 
 import * as SystemService from '../services/SystemService';
 import * as CustomerService from '../services/CustomerService';
+import { cleanAddressFields } from '../utils/format';
 
 const CustomerLayout = () => {
     const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
@@ -41,7 +42,7 @@ const CustomerLayout = () => {
                         let country = '';
                         try {
                             const response = await fetch(
-                                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`,
+                                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1`,
                                 {
                                     headers: {
                                         'User-Agent': 'SafeVoltSolutionsApp/1.0 (contact: support@safevoltsolutions.com)'
@@ -49,12 +50,14 @@ const CustomerLayout = () => {
                                 }
                             );
                             const geoData = await response.json();
-                            const addr = geoData.address || {};
-                            street = addr.road || addr.suburb || addr.neighbourhood || '';
-                            city = addr.city || addr.town || addr.village || addr.county || '';
-                            state = addr.state || '';
-                            postalCode = addr.postcode || '';
-                            country = addr.country || '';
+                            if (geoData && geoData.address) {
+                                const cleanFields = cleanAddressFields(geoData.address, geoData.display_name);
+                                street = cleanFields.street;
+                                city = cleanFields.city;
+                                state = cleanFields.state;
+                                postalCode = cleanFields.postalCode;
+                                country = 'India';
+                            }
                         } catch (geoErr) {
                             console.error("Failed to reverse-geocode coordinates:", geoErr);
                         }
