@@ -398,9 +398,22 @@ const LiveTrackingPage = () => {
               <Shield className="w-4 h-4" /> Need Help? Contact Support
             </button>
           ) : (
-            <button onClick={() => navigate('/provider/booking-requests')} className="w-full py-3 bg-secondary text-white font-bold rounded-2xl text-xs hover:bg-secondary/90 shadow-lg transition-all">
-              Return to Dashboard
-            </button>
+            <div className="flex flex-col gap-2 w-full">
+              <a
+                href={`https://www.google.com/maps/dir/?api=1&destination=${targetLat},${targetLng}&travelmode=driving`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-3 bg-primary text-white font-bold rounded-2xl text-xs hover:bg-primary/95 shadow-md transition-all flex items-center justify-center gap-2"
+              >
+                <Navigation className="w-4 h-4 animate-bounce" /> Open Google Maps Navigation
+              </a>
+              <button 
+                onClick={() => navigate('/provider/booking-requests')} 
+                className="w-full py-3 bg-secondary text-white font-bold rounded-2xl text-xs hover:bg-secondary/90 shadow-lg transition-all"
+              >
+                Return to Dashboard
+              </button>
+            </div>
           )}
 
         </div>

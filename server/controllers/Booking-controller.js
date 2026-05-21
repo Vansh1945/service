@@ -300,9 +300,177 @@ const sanitizeStatusHistoryForProvider = (statusHistory) => {
     };
   });
 };
-
 // USER BOOKING CONTROLLERS
 
+const autoAssignProviderIfEnabled = async (bookingId) => {
+  try {
+    const { SystemConfig } = require('../models/SystemSetting');
+    const settings = await SystemConfig.findOne();
+    
+    // Check if auto assign is enabled
+    if (!settings || !settings.bookingSettings || !settings.bookingSettings.autoAssignProvider) {
+      return null;
+    }
+
+    const booking = await Booking.findById(bookingId).populate('services.service');
+    // Ensure booking exists and is not already assigned
+    if (!booking || booking.provider) {
+      return null;
+    }
+
+    const maxDistanceKm = settings.bookingSettings.autoAssignRadius || 15;
+    const maxDistanceMeters = maxDistanceKm * 1000;
+
+    let lat = booking.address?.lat;
+    let lng = booking.address?.lng;
+    
+    if (lat === null || lat === undefined || lng === null || lng === undefined) {
+      const coords = getBookingAddressLocation(booking);
+      lat = coords?.latitude;
+      lng = coords?.longitude;
+    }
+    
+    if (lat === null || lat === undefined || lng === null || lng === undefined) {
+      console.warn(`[AutoAssign] Skipped auto-assign for booking ${booking._id}: Coordinates missing`);
+      return null;
+    }
+
+    const bookingServicesCategories = booking.services.map(item => {
+      const cat = item.service?.category;
+      return cat?._id ? cat._id.toString() : cat?.toString();
+    }).filter(Boolean);
+
+    const query = {
+      role: 'provider',
+      isActive: true,
+      approved: true,
+      isOnline: true,
+      isSuspended: { $ne: true },
+      kycStatus: 'approved',
+      $or: [
+        { blockedTill: { $exists: false } },
+        { blockedTill: null },
+        { blockedTill: { $lte: new Date() } }
+      ],
+      'performanceScore.restrictionsActive': { $ne: true },
+      services: { $all: bookingServicesCategories },
+      currentLocation: {
+        $near: {
+          $geometry: {
+            type: 'Point',
+            coordinates: [lng, lat]
+          },
+          $maxDistance: maxDistanceMeters
+        }
+      }
+    };
+
+    const nearbyProviders = await Provider.find(query);
+
+    if (!nearbyProviders || nearbyProviders.length === 0) {
+      console.log(`[AutoAssign] No nearby providers found for booking ${booking._id} within ${maxDistanceKm}km`);
+      return null;
+    }
+
+    const nearestProvider = nearbyProviders[0];
+
+    // Auto-assign to nearest provider
+    booking.provider = nearestProvider._id;
+    booking.status = 'accepted';
+    booking.updatedAt = new Date();
+    
+    booking.statusHistory.push({
+      status: 'accepted',
+      timestamp: new Date(),
+      note: `Booking auto-assigned to nearest provider: ${nearestProvider.name} (Auto-Assign Mode)`,
+      updatedBy: 'system'
+    });
+
+    await booking.save();
+    
+    try {
+      await Provider.findByIdAndUpdate(nearestProvider._id, {
+        activeBooking: booking._id,
+        lastUpdated: new Date()
+      });
+    } catch (e) {
+      console.error('Error updating provider activeBooking:', e);
+    }
+
+    // Sync transaction record
+    try {
+      const isOnline = booking.paymentMethod?.toLowerCase() === 'online' || booking.paymentMethod?.toLowerCase() === 'upi';
+      await Transaction.updateMany(
+        { booking: booking._id },
+        {
+          provider: booking.provider,
+          providerId: booking.provider.toString(),
+          commission: isOnline ? (booking.commissionAmount * 100) : (booking.commissionAmount || 0),
+          providerEarning: isOnline ? (booking.providerEarnings * 100) : (booking.providerEarnings || 0),
+          commissionRule: booking.commissionRule,
+          ...((booking.paymentStatus === 'paid' || booking.paymentStatus === 'escrow_hold') && {
+            paymentStatus: isOnline ? 'success' : 'completed'
+          })
+        }
+      );
+    } catch (transError) {
+      console.error('Error syncing transaction on auto-assign:', transError);
+    }
+
+    // Emit live booking socket and notifications
+    try {
+      await sendNotification(
+        booking.customer,
+        'customer',
+        'Provider Auto-Assigned',
+        `Your booking has been auto-assigned to ${nearestProvider.name}. Live tracking started!`,
+        'booking',
+        booking._id
+      );
+
+      await sendNotification(
+        nearestProvider._id,
+        'provider',
+        'New Auto-Assigned Booking',
+        `You have been auto-assigned a new booking at ${booking.address?.street || 'your area'}.`,
+        'booking',
+        booking._id
+      );
+
+      const { getIO } = require('../socket/socketServer');
+      const io = getIO();
+      if (io) {
+        io.to(`booking_${booking._id}`).emit('tracking-started', {
+          bookingId: booking._id,
+          trackingEnabled: true,
+          providerLiveLocation: nearestProvider.currentLocation ? {
+            lat: nearestProvider.currentLocation.coordinates[1],
+            lng: nearestProvider.currentLocation.coordinates[0],
+            updatedAt: new Date()
+          } : null,
+          provider: nearestProvider,
+          status: 'accepted'
+        });
+
+        io.to('admin_live_room').emit('admin-booking-update', {
+          bookingId: booking._id,
+          event: 'auto-assigned',
+          providerId: nearestProvider._id,
+          status: 'accepted'
+        });
+      }
+    } catch (socketErr) {
+      console.error('Error sending auto-assign sockets/notifications:', socketErr);
+    }
+
+    console.log(`[AutoAssign] Booking ${booking._id} successfully assigned to provider ${nearestProvider.name}`);
+    return nearestProvider;
+
+  } catch (error) {
+    console.error('Error in autoAssignProviderIfEnabled:', error);
+    return null;
+  }
+};
 
 // Create single service booking
 const createBooking = async (req, res) => {
@@ -542,6 +710,11 @@ const createBooking = async (req, res) => {
       bookingId: booking.bookingId,
       _id: booking._id
     });
+
+    // Trigger auto-assignment if booking is confirmed immediately (cash payment method)
+    if (paymentMethod === 'cash') {
+      autoAssignProviderIfEnabled(booking._id);
+    }
 
     // Real-time notification (non-blocking)
     try {
@@ -784,6 +957,9 @@ const confirmBooking = async (req, res) => {
         transaction
       }
     });
+
+    // Trigger auto-assignment upon successful online or wallet payment confirmation
+    autoAssignProviderIfEnabled(booking._id);
 
   } catch (error) {
     await session.abortTransaction();
@@ -4191,6 +4367,8 @@ const recalculateProviderPerformance = async (providerId, session = null) => {
     console.error('recalculateProviderPerformance error:', error);
   }
 };
+
+
 
 module.exports = {
   recalculateProviderPerformance,

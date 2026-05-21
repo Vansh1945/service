@@ -25,7 +25,6 @@ const getRequestKey = (config) => {
 
 const api = axios.create({
     baseURL: import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api',
-    timeout: 30000 // Increased timeout for heavy requests
 });
 
 // Add a request interceptor to include the auth token and prevent duplicates

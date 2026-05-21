@@ -62,8 +62,14 @@ const getPrecomputedAnalytics = () => {
     return analyticsCache.get('dashboard_analytics');
 };
 
-// Initial refresh
-refreshAnalytics();
+// Initial refresh delayed to wait for DB connection
+const mongoose = require('mongoose');
+
+if (mongoose.connection.readyState === 1) {
+    refreshAnalytics();
+} else {
+    mongoose.connection.once('open', refreshAnalytics);
+}
 
 // Set interval for periodic refresh
 setInterval(refreshAnalytics, 300000);

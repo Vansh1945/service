@@ -106,6 +106,18 @@ const systemConfigSchema = new mongoose.Schema(
       bookingBufferTime: {
         type: Number,
         default: 30
+      },
+      trackingEnabled: {
+        type: Boolean,
+        default: true
+      },
+      trackingInterval: {
+        type: Number,
+        default: 5
+      },
+      autoAssignRadius: {
+        type: Number,
+        default: 15
       }
     },
     walletSettings: {

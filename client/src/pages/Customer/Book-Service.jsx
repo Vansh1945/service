@@ -282,10 +282,15 @@ const BookService = () => {
           setWalletBalance(profileData.wallet.availableBalance || 0);
         }
 
+        const hasSavedAddresses = addressesData.length > 0;
         setFormData(prev => ({
           ...prev,
-          useCustomAddress: addressesData.length === 0
+          useCustomAddress: !hasSavedAddresses
         }));
+
+        if (!hasSavedAddresses) {
+          setIsMapModalOpen(true);
+        }
       } catch (err) {
         navigate('/services');
       } finally {
@@ -974,7 +979,9 @@ const BookService = () => {
                 street: loc.street,
                 city: loc.city || prev.customAddress.city,
                 state: loc.state || prev.customAddress.state,
-                postalCode: loc.postalCode || prev.customAddress.postalCode
+                postalCode: loc.postalCode || prev.customAddress.postalCode,
+                lat: loc.lat,
+                lng: loc.lng
               }
             }));
             toast.success('Address picked from map!');

@@ -32,7 +32,10 @@ const SystemSetting = () => {
       refundReviewHours: 48,
       maxBookingsPerProvider: 10,
       allowCOD: true,
-      bookingBufferTime: 30
+      bookingBufferTime: 30,
+      trackingEnabled: true,
+      trackingInterval: 5,
+      autoAssignRadius: 15
     },
     walletSettings: {
       minWithdrawal: 500,
@@ -137,6 +140,9 @@ const SystemSetting = () => {
             maxBookingsPerProvider: settingsData.data.bookingSettings?.maxBookingsPerProvider ?? 10,
             allowCOD: settingsData.data.bookingSettings?.allowCOD ?? true,
             bookingBufferTime: settingsData.data.bookingSettings?.bookingBufferTime ?? 30,
+            trackingEnabled: settingsData.data.bookingSettings?.trackingEnabled ?? true,
+            trackingInterval: settingsData.data.bookingSettings?.trackingInterval ?? 5,
+            autoAssignRadius: settingsData.data.bookingSettings?.autoAssignRadius ?? 15,
           },
           walletSettings: {
             minWithdrawal: settingsData.data.walletSettings?.minWithdrawal ?? 500,
@@ -724,7 +730,11 @@ const SystemSetting = () => {
 
                 <ToggleSwitch
                   label="Auto Assign Provider"
-                  description="Automatically assign the closest eligible and free service provider to new customer bookings."
+                  description={
+                    systemSettings.bookingSettings.autoAssignProvider
+                      ? "Nearest provider auto assignment enabled"
+                      : "Providers can manually accept bookings"
+                  }
                   checked={systemSettings.bookingSettings.autoAssignProvider}
                   onChange={(val) => handleNestedChange('bookingSettings', 'autoAssignProvider', val)}
                 />
@@ -735,6 +745,37 @@ const SystemSetting = () => {
                   checked={systemSettings.bookingSettings.allowCOD}
                   onChange={(val) => handleNestedChange('bookingSettings', 'allowCOD', val)}
                 />
+
+                <ToggleSwitch
+                  label="Live GPS Tracking"
+                  description="Enable dynamic real-time provider location tracking on Leaflet map for customers."
+                  checked={systemSettings.bookingSettings.trackingEnabled}
+                  onChange={(val) => handleNestedChange('bookingSettings', 'trackingEnabled', val)}
+                />
+
+                <div>
+                  <label className="block text-sm font-semibold text-secondary mb-2 font-inter">Live Tracking Interval (Seconds)</label>
+                  <input
+                    type="number"
+                    value={systemSettings.bookingSettings.trackingInterval}
+                    onChange={(e) => handleNestedChange('bookingSettings', 'trackingInterval', Number(e.target.value))}
+                    min="1"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-inter text-secondary"
+                  />
+                  <p className="text-xs text-gray-500 mt-1.5 font-inter">Interval (in seconds) between successive live telemetry coordinate packets sent from en-route providers.</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-secondary mb-2 font-inter">Auto-Assign Search Radius (KM)</label>
+                  <input
+                    type="number"
+                    value={systemSettings.bookingSettings.autoAssignRadius}
+                    onChange={(e) => handleNestedChange('bookingSettings', 'autoAssignRadius', Number(e.target.value))}
+                    min="1"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-inter text-secondary"
+                  />
+                  <p className="text-xs text-gray-500 mt-1.5 font-inter">Maximum radius distance (in kilometers) scanned around a booking to match nearby online specialists.</p>
+                </div>
 
                 <div>
                   <label className="block text-sm font-semibold text-secondary mb-2 font-inter">Cancellation Window (Minutes)</label>

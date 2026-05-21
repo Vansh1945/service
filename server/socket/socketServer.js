@@ -205,7 +205,7 @@ const initSocket = (httpServer) => {
                 }
 
                 // Security: Tracking allowed only if status is accepted or in-progress
-                const allowedStatuses = ['accepted', 'in-progress', 'in_progress', 'scheduled', 'arriving', 'assigned'];
+                const allowedStatuses = ['accepted', 'arriving', 'started', 'in-progress', 'in_progress'];
                 if (!allowedStatuses.includes(booking.status)) {
                     return socket.emit('error-alert', { message: 'Location tracking is inactive for this status' });
                 }
@@ -282,7 +282,14 @@ const initSocket = (httpServer) => {
                                 durationText = `${durMin} mins`;
                             }
                             if (feature.geometry) {
-                                routeCoords = decodePolyline(feature.geometry);
+                                if (typeof feature.geometry === 'string') {
+                                    routeCoords = decodePolyline(feature.geometry);
+                                } else if (feature.geometry.coordinates) {
+                                    routeCoords = feature.geometry.coordinates.map(c => ({
+                                        lat: c[1],
+                                        lng: c[0]
+                                    }));
+                                }
                             }
                         }
                     } catch (gErr) {
