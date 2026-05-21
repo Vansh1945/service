@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useMemo } from "react";
+import { createContext, useContext, useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
 import { toast } from 'react-toastify';
@@ -152,45 +152,46 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    // Removed force auto-logout on token expiration to maintain persistence
-    useEffect(() => {
-        // Fetch fresh user data to auto open logged-in account
-        const restoreSession = async () => {
-            if (!token || !role) return;
+    // Callback to refresh user data from DB
+    const refreshUser = useCallback(async () => {
+        if (!token || !role) return;
 
-            try {
-                let res;
-                if (role === 'admin') {
-                    res = await AdminService.getAdminProfile();
-                } else if (role === 'provider') {
-                    res = await ProviderService.getProfile();
-                } else {
-                    res = await CustomerService.getProfile();
-                }
+        try {
+            let res;
+            if (role === 'admin') {
+                res = await AdminService.getAdminProfile();
+            } else if (role === 'provider') {
+                res = await ProviderService.getProfile();
+            } else {
+                res = await CustomerService.getProfile();
+            }
 
-                if (res.data?.success || res.status === 200) {
-                    const data = res.data;
-                    const userData = data.admin || data.provider || data.user || data.data;
+            if (res.data?.success || res.status === 200) {
+                const data = res.data;
+                const userData = data.admin || data.provider || data.user || data.data;
 
-                    if (userData) {
-                        const userObj = {
-                            ...userData,
-                            isAdmin: role === 'admin' || userData.isAdmin
-                        };
-                        setUser(userObj);
-                        localStorage.setItem("user", JSON.stringify(userObj));
-                    }
-                }
-            } catch (error) {
-                console.error("Failed to restore session data:", error);
-                if (error.response?.status === 401 && isTokenExpired(token)) {
-                    logoutUser();
+                if (userData) {
+                    const userObj = {
+                        ...userData,
+                        isAdmin: role === 'admin' || userData.isAdmin
+                    };
+                    setUser(userObj);
+                    localStorage.setItem("user", JSON.stringify(userObj));
+                    return userObj;
                 }
             }
-        };
-
-        restoreSession();
+        } catch (error) {
+            console.error("Failed to refresh session data:", error);
+            if (error.response?.status === 401 && isTokenExpired(token)) {
+                logoutUser();
+            }
+        }
     }, [token, role]);
+
+    // Fetch fresh user data on token or role change
+    useEffect(() => {
+        refreshUser();
+    }, [token, role, refreshUser]);
 
     // Context value
     const contextValue = useMemo(() => ({
@@ -207,11 +208,12 @@ export const AuthProvider = ({ children }) => {
         resetDeepLink: () => setIsDeepLink(false),
         loginUser,
         logoutUser,
+        refreshUser,
         API,
         API_URL_IMAGE,
         showToast,
         isTokenExpired
-    }), [token, refreshToken, role, user, isAdmin, isDeepLink, intendedRoute, API]);
+    }), [token, refreshToken, role, user, isAdmin, isDeepLink, intendedRoute, API, refreshUser]);
 
     return (
         <AuthContext.Provider value={contextValue}>

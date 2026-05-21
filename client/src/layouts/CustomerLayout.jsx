@@ -10,6 +10,7 @@ import { useAuth } from '../context/auth';
 import NotificationBell from '../components/NotificationBell';
 
 import * as SystemService from '../services/SystemService';
+import * as CustomerService from '../services/CustomerService';
 
 const CustomerLayout = () => {
     const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
@@ -20,7 +21,69 @@ const CustomerLayout = () => {
     });
     const location = useLocation();
     const navigate = useNavigate();
-    const { user, logoutUser, API, token } = useAuth();
+    const { user, logoutUser, API, token, refreshUser } = useAuth();
+    const locationRequestedRef = React.useRef(false);
+
+    useEffect(() => {
+        if (!token || !user || locationRequestedRef.current) return;
+        locationRequestedRef.current = true;
+
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                async (position) => {
+                    const { latitude, longitude } = position.coords;
+                    console.log("Customer auto-detected location:", { latitude, longitude });
+                    try {
+                        let street = '';
+                        let city = '';
+                        let state = '';
+                        let postalCode = '';
+                        let country = '';
+                        try {
+                            const response = await fetch(
+                                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`,
+                                {
+                                    headers: {
+                                        'User-Agent': 'SafeVoltSolutionsApp/1.0 (contact: support@safevoltsolutions.com)'
+                                    }
+                                }
+                            );
+                            const geoData = await response.json();
+                            const addr = geoData.address || {};
+                            street = addr.road || addr.suburb || addr.neighbourhood || '';
+                            city = addr.city || addr.town || addr.village || addr.county || '';
+                            state = addr.state || '';
+                            postalCode = addr.postcode || '';
+                            country = addr.country || '';
+                        } catch (geoErr) {
+                            console.error("Failed to reverse-geocode coordinates:", geoErr);
+                        }
+
+                        await CustomerService.updateProfile({
+                            name: user.name,
+                            phone: user.phone,
+                            address: {
+                                street: street || user.address?.street || '',
+                                city: city || user.address?.city || '',
+                                state: state || user.address?.state || '',
+                                postalCode: postalCode || user.address?.postalCode || '',
+                                country: country || user.address?.country || '',
+                                lat: latitude,
+                                lng: longitude
+                            }
+                        });
+                        await refreshUser();
+                    } catch (err) {
+                        console.error("Failed to auto-update customer location:", err);
+                    }
+                },
+                (err) => {
+                    console.warn("Customer geolocation access denied or failed:", err.message);
+                },
+                { enableHighAccuracy: true }
+            );
+        }
+    }, [token, user, refreshUser]);
 
     useEffect(() => {
         const fetchSystemSettings = async () => {

@@ -20,8 +20,12 @@ import * as ComplaintService from '../../services/ComplaintService';
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 
-const customerIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
-const providerIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
+const customerIcon = L.divIcon({ html: `<div style="background-color: #EF4444; width: 24px; height: 24px; border-radius: 50% 50% 50% 0; border: 3px solid white; transform: rotate(-45deg); box-shadow: 0 0 5px rgba(0,0,0,0.5);"></div>`, className: '', iconSize: [24, 24], iconAnchor: [12, 24], popupAnchor: [1, -34] });
+const providerIcon = L.divIcon({ html: `<div style="background-color: #10B981; width: 24px; height: 24px; border-radius: 50% 50% 50% 0; border: 3px solid white; transform: rotate(-45deg); box-shadow: 0 0 5px rgba(0,0,0,0.5);"></div>`, className: '', iconSize: [24, 24], iconAnchor: [12, 24], popupAnchor: [1, -34] });
+
+// Override default Leaflet marker assets with divIcon to prevent 404 image errors in Vite
+const defaultIcon = L.divIcon({ html: `<div style="background-color: #3B82F6; width: 24px; height: 24px; border-radius: 50% 50% 50% 0; border: 3px solid white; transform: rotate(-45deg); box-shadow: 0 0 5px rgba(0,0,0,0.5);"></div>`, className: '', iconSize: [24, 24], iconAnchor: [12, 24], popupAnchor: [1, -34] });
+L.Marker.prototype.options.icon = defaultIcon;
 
 const MapBoundsHelper = ({ providerLoc, targetLat, targetLng }) => {
   const map = useMap();
@@ -51,8 +55,12 @@ const NavigationModal = ({ isOpen, onClose, booking }) => {
 
   // Fallback hashing for lat/lng if not present
   const getCoordinates = useCallback((address) => {
-    if (address && typeof address.lat === 'number' && typeof address.lng === 'number' && address.lat !== 0) {
-      return { lat: address.lat, lng: address.lng };
+    if (address && address.lat != null && address.lng != null) {
+      const pLat = parseFloat(address.lat);
+      const pLng = parseFloat(address.lng);
+      if (!isNaN(pLat) && !isNaN(pLng) && (pLat !== 0 || pLng !== 0)) {
+        return { lat: pLat, lng: pLng };
+      }
     }
     const addrStr = `${address?.street || ''} ${address?.city || ''} ${address?.postalCode || ''}`.trim();
     let hash = 0;
@@ -122,7 +130,13 @@ const NavigationModal = ({ isOpen, onClose, booking }) => {
       }
     };
 
+    let lastUpdatedTime = 0;
+
     const handleLocationUpdate = (pos) => {
+      const now = Date.now();
+      if (now - lastUpdatedTime < 5000) return; // Throttle to every 5 seconds
+      lastUpdatedTime = now;
+
       const { latitude, longitude } = pos.coords;
       
       // Calculate fast instant fallback estimate

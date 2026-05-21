@@ -13,6 +13,8 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
+const locationIcon = L.divIcon({ html: `<div style="background-color: #EF4444; width: 24px; height: 24px; border-radius: 50% 50% 50% 0; border: 3px solid white; transform: rotate(-45deg); box-shadow: 0 0 5px rgba(0,0,0,0.5);"></div>`, className: '', iconSize: [24, 24], iconAnchor: [12, 24], popupAnchor: [1, -34] });
+
 const DraggableMarker = ({ position, setPosition }) => {
     const markerRef = useRef(null);
 
@@ -38,6 +40,7 @@ const DraggableMarker = ({ position, setPosition }) => {
             eventHandlers={eventHandlers}
             position={position}
             ref={markerRef}
+            icon={locationIcon}
         />
     );
 };

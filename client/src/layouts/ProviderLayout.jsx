@@ -24,12 +24,79 @@ const ProviderLayout = () => {
     });
     const location = useLocation();
     const navigate = useNavigate();
-    const { user, logoutUser, API, token } = useAuth();
+    const { user, logoutUser, API, token, refreshUser } = useAuth();
     const testPassed = user?.testPassed || false;
 
     const { socket, isConnected } = useSocket();
     const [isOnline, setIsOnline] = useState(true);
     const [activeBookingId, setActiveBookingId] = useState(null);
+    const locationRequestedRef = React.useRef(false);
+
+    // Auto-detect and update provider location on app open
+    useEffect(() => {
+        if (!token || !user || locationRequestedRef.current) return;
+        locationRequestedRef.current = true;
+
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                async (position) => {
+                    const { latitude, longitude } = position.coords;
+                    console.log("Provider auto-detected location:", { latitude, longitude });
+                    try {
+                        let street = '';
+                        let city = '';
+                        let state = '';
+                        let postalCode = '';
+                        let country = '';
+                        try {
+                            const response = await fetch(
+                                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`,
+                                {
+                                    headers: {
+                                        'User-Agent': 'SafeVoltSolutionsApp/1.0 (contact: support@safevoltsolutions.com)'
+                                    }
+                                }
+                            );
+                            const geoData = await response.json();
+                            const addr = geoData.address || {};
+                            street = addr.road || addr.suburb || addr.neighbourhood || '';
+                            city = addr.city || addr.town || addr.village || addr.county || '';
+                            state = addr.state || '';
+                            postalCode = addr.postcode || '';
+                            country = addr.country || '';
+                        } catch (geoErr) {
+                            console.error("Failed to reverse-geocode coordinates:", geoErr);
+                        }
+
+                        // Must use FormData since provider profile backend uses Multer for potential file uploads
+                        const formData = new FormData();
+                        formData.append('updateType', 'address');
+                        formData.append('lat', latitude);
+                        formData.append('lng', longitude);
+                        if (street || user.address?.street) formData.append('street', street || user.address?.street || '');
+                        if (city || user.address?.city) formData.append('city', city || user.address?.city || '');
+                        if (state || user.address?.state) formData.append('state', state || user.address?.state || '');
+                        if (postalCode || user.address?.postalCode) formData.append('postalCode', postalCode || user.address?.postalCode || '');
+                        if (country || user.address?.country) formData.append('country', country || user.address?.country || '');
+
+                        await axiosInstance.put('/provider/profile', formData, {
+                            headers: {
+                                'Content-Type': 'multipart/form-data'
+                            }
+                        });
+                        
+                        await refreshUser();
+                    } catch (err) {
+                        console.error("Failed to auto-update provider location:", err);
+                    }
+                },
+                (err) => {
+                    console.warn("Provider geolocation access denied or failed:", err.message);
+                },
+                { enableHighAccuracy: true }
+            );
+        }
+    }, [token, user]);
 
     // Fetch active bookings to see if we need tracking
     useEffect(() => {

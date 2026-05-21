@@ -3,28 +3,32 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
 import { useSocket } from '../../socket/SocketContext';
 import Loader from '../../components/Loader';
-import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, useMap, Popup, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 
-const customerIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
-const providerIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
+const customerIcon = L.divIcon({ html: `<div style="background-color: #EF4444; width: 24px; height: 24px; border-radius: 50% 50% 50% 0; border: 3px solid white; transform: rotate(-45deg); box-shadow: 0 0 5px rgba(0,0,0,0.5);"></div>`, className: '', iconSize: [24, 24], iconAnchor: [12, 24], popupAnchor: [1, -34] });
+const providerIcon = L.divIcon({ html: `<div style="background-color: #10B981; width: 24px; height: 24px; border-radius: 50% 50% 50% 0; border: 3px solid white; transform: rotate(-45deg); box-shadow: 0 0 5px rgba(0,0,0,0.5);"></div>`, className: '', iconSize: [24, 24], iconAnchor: [12, 24], popupAnchor: [1, -34] });
+
+// Override default Leaflet marker assets with divIcon to prevent 404 image errors in Vite
+const defaultIcon = L.divIcon({ html: `<div style="background-color: #3B82F6; width: 24px; height: 24px; border-radius: 50% 50% 50% 0; border: 3px solid white; transform: rotate(-45deg); box-shadow: 0 0 5px rgba(0,0,0,0.5);"></div>`, className: '', iconSize: [24, 24], iconAnchor: [12, 24], popupAnchor: [1, -34] });
+L.Marker.prototype.options.icon = defaultIcon;
 
 const MapBoundsHelper = ({ providerLoc, targetLat, targetLng }) => {
-  const map = useMap();
-  React.useEffect(() => {
-    if (targetLat && targetLng) {
-      if (providerLoc) {
-        const bounds = L.latLngBounds([
-          [targetLat, targetLng],
-          [providerLoc.lat, providerLoc.lng]
-        ]);
-        map.fitBounds(bounds, { padding: [50, 50] });
-      } else {
-        map.setView([targetLat, targetLng], 15);
-      }
-    }
-  }, [providerLoc, targetLat, targetLng, map]);
-  return null;
+    const map = useMap();
+    React.useEffect(() => {
+        if (targetLat && targetLng) {
+            if (providerLoc) {
+                const bounds = L.latLngBounds([
+                    [targetLat, targetLng],
+                    [providerLoc.lat, providerLoc.lng]
+                ]);
+                map.fitBounds(bounds, { padding: [50, 50] });
+            } else {
+                map.setView([targetLat, targetLng], 15);
+            }
+        }
+    }, [providerLoc, targetLat, targetLng, map]);
+    return null;
 };
 import * as BookingService from '../../services/BookingService';
 import * as AdminService from '../../services/AdminService';
@@ -310,9 +314,13 @@ const AdminLiveTrackingMap = ({ bookingId, address, status, provider, booking })
     let targetLat = 28.5;
     let targetLng = 77.1;
 
-    if (address && typeof address.lat === 'number' && typeof address.lng === 'number') {
-        targetLat = address.lat;
-        targetLng = address.lng;
+    if (address && address.lat != null && address.lng != null) {
+        const parsedLat = parseFloat(address.lat);
+        const parsedLng = parseFloat(address.lng);
+        if (!isNaN(parsedLat) && !isNaN(parsedLng) && (parsedLat !== 0 || parsedLng !== 0)) {
+            targetLat = parsedLat;
+            targetLng = parsedLng;
+        }
     }
 
     // Resolve provider coordinate fallback
@@ -334,16 +342,32 @@ const AdminLiveTrackingMap = ({ bookingId, address, status, provider, booking })
                     {trackingState.liveDistance && <span>• Distance: {trackingState.liveDistance}</span>}
                 </div>
             </div>
-            
+
             <div className="relative w-full h-[250px] bg-slate-100 flex items-center justify-center">
                 <MapContainer center={[targetLat, targetLng]} zoom={14} style={{ height: '100%', width: '100%', zIndex: 10 }}>
                     <TileLayer
                         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     />
-                    <Marker position={[targetLat, targetLng]} icon={customerIcon} />
+                    <Marker position={[targetLat, targetLng]} icon={customerIcon}>
+                        <Popup>
+                            <div className="font-semibold text-sm">Customer Location</div>
+                            <div className="text-xs text-gray-500">Service Destination</div>
+                        </Popup>
+                        <Tooltip permanent direction="top" offset={[0, -35]} className="font-bold text-red-600 bg-white/90 backdrop-blur-sm px-2 py-1 rounded shadow-sm border border-red-100">
+                            Customer
+                        </Tooltip>
+                    </Marker>
                     {providerCoords && (
-                        <Marker position={[providerCoords.lat, providerCoords.lng]} icon={providerIcon} />
+                        <Marker position={[providerCoords.lat, providerCoords.lng]} icon={providerIcon}>
+                            <Popup>
+                                <div className="font-semibold text-sm">Provider Location</div>
+                                <div className="text-xs text-gray-500">Current Position</div>
+                            </Popup>
+                            <Tooltip permanent direction="top" offset={[0, -35]} className="font-bold text-green-700 bg-white/90 backdrop-blur-sm px-2 py-1 rounded shadow-sm border border-green-100">
+                                Provider
+                            </Tooltip>
+                        </Marker>
                     )}
                     {trackingState.routeCoordinates?.length > 0 && (
                         <Polyline positions={trackingState.routeCoordinates.map(c => [c.lat, c.lng])} color="#0D9488" weight={4} opacity={0.8} />
@@ -351,7 +375,7 @@ const AdminLiveTrackingMap = ({ bookingId, address, status, provider, booking })
                     <MapBoundsHelper providerLoc={providerCoords} targetLat={targetLat} targetLng={targetLng} />
                 </MapContainer>
             </div>
-            
+
             {trackingState.providerReached && (
                 <div className="bg-green-50 p-2 text-center text-xs font-bold text-green-700 border-t border-green-100 flex items-center justify-center gap-1.5 animate-pulse">
                     <span>✓ Technician has arrived at the client destination!</span>
@@ -359,6 +383,16 @@ const AdminLiveTrackingMap = ({ bookingId, address, status, provider, booking })
             )}
         </div>
     );
+};
+
+const getStartPin = (b) => {
+    if (!b) return 'N/A';
+    return b.startPin || b.startOtp || b.pin || (b.statusHistory && b.statusHistory.find(h => h.note?.includes('START_PIN'))?.note.match(/START_PIN:(\d+)/)?.[1]) || 'N/A';
+};
+
+const getCompletionPin = (b) => {
+    if (!b) return 'N/A';
+    return b.completionPin || b.completionOtp || (b.statusHistory && b.statusHistory.find(h => h.note?.includes('COMPLETION_PIN'))?.note.match(/COMPLETION_PIN:(\d+)/)?.[1]) || 'N/A';
 };
 
 const AdminBookingsView = () => {
@@ -1275,7 +1309,7 @@ const AdminBookingsView = () => {
                                             <Lock className="w-4 h-4 mr-2 text-primary" />
                                             Secure PIN Verification Audit
                                         </h3>
-                                        
+
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                             {/* Start PIN Details */}
                                             <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
@@ -1292,7 +1326,7 @@ const AdminBookingsView = () => {
                                                     )}
                                                 </div>
                                                 <p className="text-xl font-black text-secondary tracking-widest font-mono">
-                                                    {selectedBooking.booking?.startPin || selectedBooking.booking?.startOtp || 'N/A'}
+                                                    {getStartPin(selectedBooking.booking)}
                                                 </p>
                                                 {selectedBooking.booking?.serviceStartedAt && (
                                                     <p className="text-[9px] text-gray-500 mt-2 font-medium">
@@ -1316,7 +1350,7 @@ const AdminBookingsView = () => {
                                                     )}
                                                 </div>
                                                 <p className="text-xl font-black text-secondary tracking-widest font-mono">
-                                                    {selectedBooking.booking?.completionPin || selectedBooking.booking?.completionOtp || 'N/A'}
+                                                    {getCompletionPin(selectedBooking.booking)}
                                                 </p>
                                                 {selectedBooking.booking?.serviceCompletedAt && (
                                                     <p className="text-[9px] text-gray-500 mt-2 font-medium">
@@ -1343,27 +1377,14 @@ const AdminBookingsView = () => {
                                                         </a>
                                                     </div>
                                                 )}
-                                                {selectedBooking.booking.completionVerificationLocation && (
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="text-gray-400">Completion Location:</span>
-                                                        <a
-                                                            href={`https://www.google.com/maps?q=${selectedBooking.booking.completionVerificationLocation.latitude},${selectedBooking.booking.completionVerificationLocation.longitude}`}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="text-emerald-600 font-medium hover:underline flex items-center gap-1"
-                                                        >
-                                                            <MapPin className="w-3.5 h-3.5" /> View Map Location
-                                                        </a>
-                                                    </div>
-                                                )}
                                             </div>
                                         )}
 
                                         {/* Live Google Map Tracking when booking is active */}
                                         {selectedBooking.booking && ['accepted', 'in-progress', 'in_progress', 'scheduled', 'arriving', 'assigned'].includes(selectedBooking.booking.status) && (
                                             <div className="mt-4 pt-2">
-                                                <AdminLiveTrackingMap 
-                                                    bookingId={selectedBooking.booking._id} 
+                                                <AdminLiveTrackingMap
+                                                    bookingId={selectedBooking.booking._id}
                                                     address={selectedBooking.booking.address}
                                                     status={selectedBooking.booking.status}
                                                     provider={selectedBooking.provider}

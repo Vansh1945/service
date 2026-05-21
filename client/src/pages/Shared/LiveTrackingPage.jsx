@@ -47,9 +47,13 @@ const LiveTrackingPage = () => {
     if (!booking) return { lat: 31.3260, lng: 75.5761 }; // Jalandhar default
     let lat = 31.3260;
     let lng = 75.5761;
-    if (booking.address && typeof booking.address.lat === 'number' && typeof booking.address.lng === 'number' && booking.address.lat !== 0) {
-      lat = booking.address.lat;
-      lng = booking.address.lng;
+    if (booking.address && booking.address.lat != null && booking.address.lng != null) {
+      const pLat = parseFloat(booking.address.lat);
+      const pLng = parseFloat(booking.address.lng);
+      if (!isNaN(pLat) && !isNaN(pLng) && (pLat !== 0 || pLng !== 0)) {
+        lat = pLat;
+        lng = pLng;
+      }
     } else if (booking.statusHistory) {
       for (const h of booking.statusHistory) {
         if (h.note) {
@@ -155,7 +159,13 @@ const LiveTrackingPage = () => {
       // -------------------------
       // PROVIDER LOGIC: Broadcast Location
       // -------------------------
+      let lastUpdatedTime = 0;
+
       const handleLocationUpdate = (pos) => {
+        const now = Date.now();
+        if (now - lastUpdatedTime < 5000) return; // Throttle to every 5 seconds
+        lastUpdatedTime = now;
+
         const { latitude, longitude } = pos.coords;
         
         const dist = calculateHaversine(latitude, longitude, targetLat, targetLng);
@@ -187,9 +197,13 @@ const LiveTrackingPage = () => {
             const provDB = booking?.provider || booking?.providerDetails;
             let fbLat = 31.3260, fbLng = 75.5761; // Jalandhar default
             
-            if (provDB?.address?.lat && provDB?.address?.lng) {
-               fbLat = provDB.address.lat;
-               fbLng = provDB.address.lng;
+            if (provDB?.address?.lat != null && provDB?.address?.lng != null) {
+               const pLat = parseFloat(provDB.address.lat);
+               const pLng = parseFloat(provDB.address.lng);
+               if (!isNaN(pLat) && !isNaN(pLng) && (pLat !== 0 || pLng !== 0)) {
+                 fbLat = pLat;
+                 fbLng = pLng;
+               }
             } else if (provDB?.currentLocation?.coordinates?.length === 2 && provDB.currentLocation.coordinates[0] !== 0) {
                fbLat = provDB.currentLocation.coordinates[1];
                fbLng = provDB.currentLocation.coordinates[0];
