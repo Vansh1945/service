@@ -11,7 +11,7 @@ const CustomerBookingsPage = lazy(() => import("../pages/Customer/CustomerBookin
 const BookingConfirmation = lazy(() => import("../pages/Customer/BookingConfirmation"));
 const FeedbackManagement = lazy(() => import("../pages/Customer/Feedback"));
 const ComplaintsPage = lazy(() => import("../pages/Customer/Complaint"));
-const LiveTrackingPage = lazy(() => import("../pages/Customer/LiveTrackingPage"));
+const LiveTrackingPage = lazy(() => import("../pages/Shared/LiveTrackingPage"));
 
 const CustomerRoutes = () => {
     return (

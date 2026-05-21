@@ -405,7 +405,9 @@ exports.completeProfile = async (req, res) => {
             postalCode,
             country,
             accountNo,
-            ifsc
+            ifsc,
+            lat,
+            lng
         } = req.body;
 
         // Validate required fields
@@ -531,8 +533,17 @@ exports.completeProfile = async (req, res) => {
             city,
             state,
             postalCode,
-            country: country || 'India'
+            country: country || 'India',
+            lat: lat ? parseFloat(lat) : null,
+            lng: lng ? parseFloat(lng) : null
         };
+
+        if (lat && lng) {
+            provider.currentLocation = {
+                type: 'Point',
+                coordinates: [parseFloat(lng), parseFloat(lat)]
+            };
+        }
 
         // Update bank details
         provider.bankDetails = {
@@ -712,7 +723,7 @@ exports.updateProviderProfile = async (req, res) => {
             // Professional info
             services, experience, serviceArea,
             // Address info
-            street, city, state, postalCode, country,
+            street, city, state, postalCode, country, lat, lng,
             // Bank details
             accountNo, ifsc, bankName, accountName,
             // Update type to determine which section to update
@@ -857,15 +868,23 @@ exports.updateProviderProfile = async (req, res) => {
 
         if (!updateType || updateType === 'address') {
             // Address Updates
-            if (street || city || state || postalCode || country) {
+            if (street || city || state || postalCode || country || lat || lng) {
                 updates.address = {
                     ...currentProvider.address,
                     ...(street && { street }),
                     ...(city && { city }),
                     ...(state && { state }),
                     ...(postalCode && { postalCode }),
-                    ...(country && { country })
+                    ...(country && { country }),
+                    ...(lat !== undefined && { lat: lat ? parseFloat(lat) : null }),
+                    ...(lng !== undefined && { lng: lng ? parseFloat(lng) : null })
                 };
+                if (lat && lng) {
+                    updates.currentLocation = {
+                        type: 'Point',
+                        coordinates: [parseFloat(lng), parseFloat(lat)]
+                    };
+                }
             }
         }
 

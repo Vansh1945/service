@@ -1116,7 +1116,7 @@ const ProviderBooking = () => {
             {booking.status === 'accepted' && (
               <>
                 <button
-                  onClick={() => setNavModal({ isOpen: true, booking })}
+                  onClick={() => navigate(`/provider/track/${booking._id}`)}
                   className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 transition-all w-full shadow-sm active:scale-95 text-center mb-1.5"
                 >
                   <Navigation className="w-3.5 h-3.5 animate-pulse" /> Navigate to Customer
@@ -1149,7 +1149,7 @@ const ProviderBooking = () => {
             {booking.status === 'in-progress' && (
               <>
                 <button
-                  onClick={() => setNavModal({ isOpen: true, booking })}
+                  onClick={() => navigate(`/provider/track/${booking._id}`)}
                   className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 transition-all w-full shadow-sm active:scale-95 text-center mb-1.5"
                 >
                   <Navigation className="w-3.5 h-3.5 animate-pulse" /> Navigate to Customer
@@ -1903,12 +1903,7 @@ const ProviderBooking = () => {
         type={confirmDialog.type}
       />
 
-      {/* ── Navigation Modal ── */}
-      <NavigationModal
-        isOpen={navModal.isOpen}
-        onClose={() => setNavModal({ isOpen: false, booking: null })}
-        booking={navModal.booking}
-      />
+
 
       {/* Image Preview Gallery Modal */}
       {previewImage && (

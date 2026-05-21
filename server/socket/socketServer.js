@@ -253,15 +253,15 @@ const initSocket = (httpServer) => {
                         hash |= 0;
                     }
                     const absHash = Math.abs(hash);
-                    targetLat = 28.5 + (absHash % 1000) / 1000 * 0.2;
-                    targetLng = 77.1 + (Math.floor(absHash / 1000) % 1000) / 1000 * 0.2;
+                    targetLat = 31.3260 + (absHash % 1000) / 1000 * 0.1;
+                    targetLng = 75.5761 + (Math.floor(absHash / 1000) % 1000) / 1000 * 0.1;
                 }
 
                 const d = calculateDistance(latitude, longitude, targetLat, targetLng);
 
-                // Initial fallbacks (straight line)
-                let distanceText = `${(d / 1000).toFixed(1)} km`;
-                let durationText = `${Math.round(d / 1000 * 2.5) || 1} mins`;
+                // Initial fallbacks (straight line or client calculated road distance)
+                let distanceText = payload.liveDistance || `${(d / 1000).toFixed(1)} km`;
+                let durationText = payload.liveDuration || `${Math.round(d / 1000 * 2.5) || 1} mins`;
                 let routeCoords = [{ lat: latitude, lng: longitude }, { lat: targetLat, lng: targetLng }];
 
                 // Request Route from OpenRouteService API

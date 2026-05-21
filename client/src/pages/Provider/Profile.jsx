@@ -4,12 +4,13 @@ import { toast } from 'react-toastify';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import 'react-toastify/dist/ReactToastify.css';
-import { Loader2, AlertCircle, Edit2, X, Check, Upload, Eye, Camera, FileText, CreditCard, Bell, Shield, Gift, Package, Wallet, User } from 'lucide-react';
+import { Loader2, AlertCircle, Edit2, X, Check, Upload, Eye, Camera, FileText, CreditCard, Bell, Shield, Gift, Package, Wallet, User, MapPin, Navigation } from 'lucide-react';
 import * as ProviderService from '../../services/ProviderService';
 import * as SystemService from '../../services/SystemService';
 import * as NotificationService from '../../services/NotificationService';
 import useCategory from '../../hooks/useCategory';
 import { formatDate, formatCurrency, compressImage } from '../../utils/format';
+import LocationPickerModal from '../../components/LocationPickerModal';
 
 const ProviderProfile = () => {
   const { token, API, showToast, logoutUser } = useAuth();
@@ -87,7 +88,9 @@ const ProviderProfile = () => {
       city: '',
       state: '',
       postalCode: '',
-      country: 'India'
+      country: 'India',
+      lat: null,
+      lng: null
     },
     bankDetails: {
       accountNo: '',
@@ -128,6 +131,62 @@ const ProviderProfile = () => {
   });
 
   const [editMode, setEditMode] = useState({ basic: false, professional: false, address: false, bank: false });
+  const [isMapOpen, setIsMapOpen] = useState(false);
+  const [detecting, setDetecting] = useState(false);
+
+  const handleDetectAddress = () => {
+    if (!navigator.geolocation) {
+      toast.error('Geolocation is not supported by your browser');
+      return;
+    }
+
+    setDetecting(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        try {
+          const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1`);
+          const data = await response.json();
+          
+          if (data && data.address) {
+            const { address } = data;
+            const houseInfo = address.house_number ? `House No. ${address.house_number}` : '';
+            const landmarkInfo = address.building || address.amenity || address.shop || address.office || address.commercial || address.tourism || address.leisure || address.historic ? `Near ${address.building || address.amenity || address.shop || address.office || address.commercial || address.tourism || address.leisure || address.historic}` : '';
+            const streetAddress = [houseInfo, address.road, address.neighbourhood, address.suburb, landmarkInfo].filter(Boolean).join(', ') || data.display_name.split(',').slice(0, 3).join(', ');
+            
+            setProfileData(prev => ({
+              ...prev,
+              address: {
+                ...prev.address,
+                street: streetAddress,
+                city: address.city || address.town || address.village || prev.address.city,
+                state: address.state || prev.address.state,
+                postalCode: address.postcode || prev.address.postalCode,
+                country: 'India',
+                lat: latitude,
+                lng: longitude
+              },
+              serviceArea: address.city || address.town || address.village || prev.address.city
+            }));
+            toast.success('Address auto-detected successfully!');
+          } else {
+            toast.error('Failed to resolve current address details');
+          }
+        } catch (error) {
+          toast.error('Error connecting to map service');
+        } finally {
+          setDetecting(false);
+        }
+      },
+      (error) => {
+        setDetecting(false);
+        console.error(error);
+        toast.error('Failed to retrieve location coordinates');
+      },
+      { enableHighAccuracy: true }
+    );
+  };
+
   const [fileUploads, setFileUploads] = useState({ profilePic: null, resume: null, passbookImage: null });
   const { categories: providerServices, loading: providerServicesLoading } = useCategory();
   const [loading, setLoading] = useState(false);
@@ -144,7 +203,7 @@ const ProviderProfile = () => {
           setProfileData({
             ...data.provider,
             services: Array.isArray(data.provider.services) ? data.provider.services : [],
-            address: data.provider.address || { street: '', city: '', state: '', postalCode: '', country: 'India' },
+            address: data.provider.address || { street: '', city: '', state: '', postalCode: '', country: 'India', lat: null, lng: null },
             bankDetails: data.provider.bankDetails || { accountNo: '', ifsc: '', bankName: '', accountName: '', passbookImage: '', passbookImagePublicId: '', verified: false },
             feedbacks: data.provider.feedbacks || []
           });
@@ -230,6 +289,12 @@ const ProviderProfile = () => {
           formData.append('state', profileData.address.state);
           formData.append('postalCode', profileData.address.postalCode);
           formData.append('country', profileData.address.country);
+          if (profileData.address.lat !== undefined && profileData.address.lat !== null) {
+            formData.append('lat', profileData.address.lat);
+          }
+          if (profileData.address.lng !== undefined && profileData.address.lng !== null) {
+            formData.append('lng', profileData.address.lng);
+          }
           break;
         case 'bank':
           formData.append('accountNo', profileData.bankDetails.accountNo);
@@ -733,6 +798,51 @@ const ProviderProfile = () => {
 
                     {editMode.address ? (
                       <form onSubmit={(e) => { e.preventDefault(); updateProfile('address'); }} className="space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2">
+                          <button
+                            type="button"
+                            onClick={() => setIsMapOpen(true)}
+                            className="w-full py-2.5 px-4 bg-primary/10 hover:bg-primary/15 text-primary border border-primary/25 hover:border-primary/40 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 group shadow-sm"
+                          >
+                            <MapPin className="w-4 h-4 text-primary group-hover:scale-110 transition-transform" />
+                            Select on Map
+                          </button>
+                          <button
+                            type="button"
+                            disabled={detecting}
+                            onClick={handleDetectAddress}
+                            className="w-full py-2.5 px-4 bg-accent/10 hover:bg-accent/15 text-accent border border-accent/25 hover:border-accent/40 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 group shadow-sm disabled:opacity-50"
+                          >
+                            <Navigation className={`w-4 h-4 text-accent group-hover:scale-110 transition-transform ${detecting ? 'animate-ping' : ''}`} />
+                            {detecting ? 'Detecting Location...' : 'Auto-Detect Location'}
+                          </button>
+                        </div>
+                        <LocationPickerModal
+                          isOpen={isMapOpen}
+                          onClose={() => setIsMapOpen(false)}
+                          onLocationSelect={(loc) => {
+                            setProfileData(prev => ({
+                              ...prev,
+                              address: {
+                                ...prev.address,
+                                street: loc.street,
+                                city: loc.city,
+                                state: loc.state,
+                                postalCode: loc.postalCode,
+                                country: 'India',
+                                lat: loc.lat,
+                                lng: loc.lng
+                              },
+                              serviceArea: loc.city
+                            }));
+                            toast.success('Location & coordinates loaded successfully!');
+                          }}
+                        />
+                        {profileData.address.lat && profileData.address.lng && (
+                          <p className="text-[10px] text-green-600 font-bold bg-green-50 border border-green-200 px-3 py-1.5 rounded-lg">
+                            ✔ Map coordinates attached: {profileData.address.lat.toFixed(5)}, {profileData.address.lng.toFixed(5)}
+                          </p>
+                        )}
                         <div className="grid grid-cols-2 gap-3">
                           <input type="text" name="street" placeholder="Street" value={profileData.address.street}
                             onChange={(e) => handleChange(e, 'address')} className="col-span-2 px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-secondary" />

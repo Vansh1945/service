@@ -79,6 +79,23 @@ const userSchema = new mongoose.Schema({
     city: String,
     state: String,
     postalCode: String,
+    lat: { type: Number, default: 0 },
+    lng: { type: Number, default: 0 }
+  },
+  currentLocation: {
+    type: {
+      type: String,
+      enum: ['Point'],
+      default: 'Point'
+    },
+    coordinates: {
+      type: [Number],
+      default: [0, 0]
+    },
+    lastUpdated: {
+      type: Date,
+      default: Date.now
+    }
   },
   firstBookingUsed: {
     type: Boolean,
@@ -175,6 +192,7 @@ const userSchema = new mongoose.Schema({
 // Additional indexes for commonly queried fields
 userSchema.index({ role: 1 });
 userSchema.index({ createdAt: -1 });
+userSchema.index({ currentLocation: '2dsphere' });
 
 
 // Password hash (skip for Firebase users with no password)

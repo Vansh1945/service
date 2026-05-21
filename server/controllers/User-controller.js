@@ -230,8 +230,16 @@ const register = async (req, res) => {
       userData.address = {
         street: address.street.trim(),
         city: address.city.trim(),
-        postalCode: address.postalCode ? address.postalCode.trim() : undefined
+        postalCode: address.postalCode ? address.postalCode.trim() : undefined,
+        lat: typeof address.lat === 'number' ? address.lat : 0,
+        lng: typeof address.lng === 'number' ? address.lng : 0
       };
+      if (typeof address.lat === 'number' && typeof address.lng === 'number') {
+        userData.currentLocation = {
+          type: 'Point',
+          coordinates: [address.lng, address.lat]
+        };
+      }
     }
 
     const user = await User.create(userData);
@@ -374,6 +382,14 @@ const updateProfile = async (req, res) => {
       phone: req.body.phone,
       address: req.body.address
     };
+
+    if (req.body.address && typeof req.body.address.lat === 'number' && typeof req.body.address.lng === 'number') {
+      updates.currentLocation = {
+        type: 'Point',
+        coordinates: [req.body.address.lng, req.body.address.lat],
+        lastUpdated: new Date()
+      };
+    }
 
     const user = await User.findByIdAndUpdate(
       req.user._id,
