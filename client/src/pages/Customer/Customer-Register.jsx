@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import AddressSelector from '../../components/AddressSelector';
 import LocationPickerModal from '../../components/LocationPickerModal';
-import { detectCurrentLocation, toLegacyAddressFields, smartAddressBuilder } from '../../utils/format';
+import { detectCurrentLocation, toLegacyAddressFields, smartAddressBuilder, buildAddressPreview } from '../../utils/format';
 import { latLngToS2CellId } from '../../utils/s2Helper';
 
 // ─── Static sub-components (defined OUTSIDE to avoid remount) ──────────────
@@ -53,6 +53,9 @@ const CustomerRegistration = () => {
   const autocompleteInputRef = useRef(null);
   const [detecting, setDetecting] = useState(false);
   const [isMapModalOpen, setIsMapModalOpen] = useState(false);
+  const [currentStep, setCurrentStep] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState({});
 
   useEffect(() => {
     // Autocomplete disabled for Nominatim. Can type directly.
@@ -100,10 +103,6 @@ const CustomerRegistration = () => {
     }
   });
 
-  const [currentStep, setCurrentStep] = useState(1);
-  const [isLoading, setIsLoading] = useState(false);
-  const [errors, setErrors] = useState({});
-
   const totalSteps = 3;
 
   const handleChange = (e) => {
@@ -130,7 +129,7 @@ const CustomerRegistration = () => {
         updatedAddress.street = houseNum && rd ? `${houseNum}, ${rd}` : (houseNum || rd);
 
         // Re-build formattedAddress based on the changed inputs
-        updatedAddress.formattedAddress = smartAddressBuilder(
+        updatedAddress.formattedAddress = buildAddressPreview(updatedAddress) || smartAddressBuilder(
           {
             house_number: updatedAddress.houseNumber,
             road: updatedAddress.road,
@@ -171,7 +170,7 @@ const CustomerRegistration = () => {
       if (state !== undefined) updatedAddress.state = state;
       if (city !== undefined) updatedAddress.city = city;
 
-      updatedAddress.formattedAddress = smartAddressBuilder(
+        updatedAddress.formattedAddress = buildAddressPreview(updatedAddress) || smartAddressBuilder(
         {
           house_number: updatedAddress.houseNumber,
           road: updatedAddress.road,

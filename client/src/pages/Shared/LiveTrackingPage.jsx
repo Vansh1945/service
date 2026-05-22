@@ -25,6 +25,9 @@ const calculateHaversine = (lat1, lon1, lat2, lon2) => {
   return R * c;
 };
 
+const routeKeyFor = (pLat, pLng, tLat, tLng) =>
+  [pLat, pLng, tLat, tLng].map((value) => Number(value).toFixed(4)).join(',');
+
 const LiveTrackingPage = () => {
   const { bookingId } = useParams();
   const navigate = useNavigate();
@@ -39,6 +42,7 @@ const LiveTrackingPage = () => {
   // Unified State
   const [providerLoc, setProviderLoc] = useState(null);
   const [routeCoords, setRouteCoords] = useState([]);
+  const [routeSource, setRouteSource] = useState('none');
   const [eta, setEta] = useState('');
   const [distance, setDistance] = useState('');
   const [loadingRoute, setLoadingRoute] = useState(true);
@@ -102,20 +106,22 @@ const LiveTrackingPage = () => {
             }
             if (initialLoc) setProviderLoc(initialLoc);
 
-            if (b.routeCoordinates?.length > 1) {
+            if (b.routeCoordinates?.length > 2) {
               setRouteCoords(b.routeCoordinates.map((c) => [c.lat, c.lng]));
+              setRouteSource('road');
               setLoadingRoute(false);
             } else if (initialLoc && b.address?.lat != null && b.address?.lng != null) {
               const tLat = parseFloat(b.address.lat);
               const tLng = parseFloat(b.address.lng);
               if (!isNaN(tLat) && !isNaN(tLng)) {
-                setRouteCoords([[initialLoc.lat, initialLoc.lng], [tLat, tLng]]);
                 if (!b.liveDistance) {
                   const km = calculateHaversine(initialLoc.lat, initialLoc.lng, tLat, tLng);
                   setDistance(`${(km * 1.2).toFixed(1)} km`);
                   setEta(`${Math.max(2, Math.round((km * 1.2 / 25) * 60))} mins`);
                 }
-                setLoadingRoute(false);
+                setRouteCoords([]);
+                setRouteSource('none');
+                setLoadingRoute(true);
               }
             }
           }
@@ -137,6 +143,7 @@ const LiveTrackingPage = () => {
   const lastProviderPosRef = useRef(null);
   const routeFetchInFlightRef = useRef(false);
   const routeTimeoutRef = useRef(null);
+  const routeRequestKeyRef = useRef('');
 
   // Keep refs synchronized with active states/props
   useEffect(() => {
@@ -166,20 +173,30 @@ const LiveTrackingPage = () => {
 
   const fetchClientRoute = useCallback(async (pLat, pLng, tLat, tLng) => {
     if (routeFetchInFlightRef.current) return;
+    const routeKey = routeKeyFor(pLat, pLng, tLat, tLng);
     routeFetchInFlightRef.current = true;
+    routeRequestKeyRef.current = routeKey;
+    setLoadingRoute(true);
     try {
       const url = `https://router.project-osrm.org/route/v1/driving/${pLng},${pLat};${tLng},${tLat}?overview=full&geometries=geojson`;
       const res = await fetch(url);
       const data = await res.json();
       if (data.routes?.[0]) {
         const route = data.routes[0];
+        if (!route.geometry?.coordinates?.length) {
+          throw new Error('Route geometry missing');
+        }
         setDistance(`${(route.distance / 1000).toFixed(1)} km`);
         setEta(`${Math.max(1, Math.round(route.duration / 60))} mins`);
         setRouteCoords(route.geometry.coordinates.map((c) => [c[1], c[0]]));
+        setRouteSource('road');
+      } else {
+        throw new Error(data.message || data.code || 'Road route not found');
       }
     } catch (err) {
       console.warn('Client route fallback:', err.message);
       setRouteCoords([[pLat, pLng], [tLat, tLng]]);
+      setRouteSource('fallback');
       const km = calculateHaversine(pLat, pLng, tLat, tLng);
       setDistance(`${(km * 1.2).toFixed(1)} km`);
       setEta(`${Math.max(2, Math.round((km * 1.2 / 25) * 60))} mins`);
@@ -194,6 +211,9 @@ const LiveTrackingPage = () => {
     if (isProvider || loading) return;
     routeTimeoutRef.current = setTimeout(() => {
       setLoadingRoute(false);
+      if (providerLoc?.lat && targetLat && targetLng) {
+        setRouteSource('fallback');
+      }
       setRouteCoords((prev) => {
         if (prev.length > 1) return prev;
         if (providerLoc?.lat && targetLat && targetLng) {
@@ -205,12 +225,13 @@ const LiveTrackingPage = () => {
     return () => {
       if (routeTimeoutRef.current) clearTimeout(routeTimeoutRef.current);
     };
-  }, [isProvider, loading, bookingId]);
+  }, [isProvider, loading, bookingId, providerLoc, targetLat, targetLng]);
 
   // Customer: fetch road route when provider position is known but polyline missing
   useEffect(() => {
     if (isProvider || !providerLoc?.lat || !targetLat || !targetLng) return;
-    if (routeCoords.length > 1) {
+    const nextRouteKey = routeKeyFor(providerLoc.lat, providerLoc.lng, targetLat, targetLng);
+    if (routeRequestKeyRef.current === nextRouteKey && (routeSource === 'road' || routeSource === 'fallback')) {
       setLoadingRoute(false);
       return;
     }
@@ -218,7 +239,7 @@ const LiveTrackingPage = () => {
       fetchClientRoute(providerLoc.lat, providerLoc.lng, targetLat, targetLng);
     }, 800);
     return () => clearTimeout(t);
-  }, [isProvider, providerLoc, targetLat, targetLng, routeCoords.length, fetchClientRoute]);
+  }, [isProvider, providerLoc, targetLat, targetLng, routeSource, fetchClientRoute]);
 
   // Stable watchPosition and socket setup: completely decoupled from mutable state refreshes
   useEffect(() => {
@@ -229,11 +250,12 @@ const LiveTrackingPage = () => {
     const applySocketRoute = (data) => {
       if (data.liveDistance) setDistance(data.liveDistance);
       if (data.liveDuration) setEta(data.liveDuration);
-      if (data.routeCoordinates?.length > 0) {
+      if (data.routeCoordinates?.length > 2) {
         const coords = data.routeCoordinates.map((c) => [c.lat, c.lng]);
-        if (coords.length > 1) setRouteCoords(coords);
+        setRouteCoords(coords);
+        setRouteSource('road');
       }
-      if (data.liveDistance || data.liveDuration || data.routeCoordinates?.length > 1) {
+      if (data.liveDistance || data.liveDuration || data.routeCoordinates?.length > 2) {
         setLoadingRoute(false);
       }
     };

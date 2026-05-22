@@ -11,7 +11,7 @@ import { getPublicServiceById } from '../../services/ServiceService';
 import { getAvailableCoupons, applyCoupon as applyCouponAPI } from '../../services/CouponService';
 import { createBooking } from '../../services/BookingService';
 import * as CustomerService from '../../services/CustomerService';
-import { formatDate, formatCurrency, detectCurrentLocation, toLegacyAddressFields, smartAddressBuilder } from '../../utils/format';
+import { formatDate, formatCurrency, detectCurrentLocation, toLegacyAddressFields, smartAddressBuilder, buildAddressPreview } from '../../utils/format';
 import LocationPickerModal from '../../components/LocationPickerModal';
 
 const BookService = () => {
@@ -317,7 +317,7 @@ const BookService = () => {
       updatedCustom.street = houseNum && rd ? `${houseNum}, ${rd}` : (houseNum || rd);
 
       // Re-build formattedAddress based on the changed inputs
-      updatedCustom.formattedAddress = smartAddressBuilder(
+      updatedCustom.formattedAddress = buildAddressPreview(updatedCustom) || smartAddressBuilder(
         {
           house_number: updatedCustom.houseNumber,
           road: updatedCustom.road,
@@ -344,7 +344,7 @@ const BookService = () => {
       if (state !== undefined) updatedCustom.state = state;
       if (city !== undefined) updatedCustom.city = city;
       
-      updatedCustom.formattedAddress = smartAddressBuilder(
+      updatedCustom.formattedAddress = buildAddressPreview(updatedCustom) || smartAddressBuilder(
         {
           house_number: updatedCustom.houseNumber,
           road: updatedCustom.road,
@@ -1058,11 +1058,10 @@ const BookService = () => {
           isOpen={isMapModalOpen}
           onClose={() => setIsMapModalOpen(false)}
           onLocationSelect={(loc) => {
-            const legacyFields = toLegacyAddressFields(loc);
             setFormData(prev => ({
               ...prev,
               useCustomAddress: true,
-              customAddress: { ...prev.customAddress, ...legacyFields }
+              customAddress: { ...prev.customAddress, ...loc }
             }));
             toast.success('Address picked from map!');
           }}

@@ -21,7 +21,7 @@ export const formatDate = (date) => {
       month: "short",
       year: "numeric",
     });
-  } catch (err) {
+  } catch {
     return FALLBACK;
   }
 };
@@ -56,7 +56,7 @@ export const formatTime = (time) => {
     }
     
     return FALLBACK;
-  } catch (err) {
+  } catch {
     return FALLBACK;
   }
 };
@@ -152,7 +152,7 @@ export const getOptimizedCloudinaryUrl = (url, width = 800) => {
   
   // Clean existing auto/quality/width transformations to avoid duplicate paths
   let cleanUrl = url;
-  const uploadRegex = /\/(image\/upload|upload)\/([^\/]+)\//;
+  const uploadRegex = /\/(image\/upload|upload)\/([^/]+)\//;
   const match = cleanUrl.match(uploadRegex);
   if (match) {
     const transformStr = match[2];
@@ -251,6 +251,63 @@ export const compressImage = (file, options = {}) => {
   });
 };
 
+export const buildAddressPreview = (address = {}) => {
+  const cleanPart = (val) => {
+    if (!val) return "";
+    return val
+      .toString()
+      .replace(/[\u0900-\u097F\u0A00-\u0A7F]/g, "")
+      .replace(/\s+district$/i, "")
+      .replace(/^[,.\s-]+|[,.\s-]+$/g, "")
+      .trim();
+  };
+
+  const houseNumber = cleanPart(
+    address.houseNumber ||
+    address.house_number ||
+    address.house ||
+    address.flat ||
+    address.apartment ||
+    address.unit ||
+    address.office
+  );
+  const road = cleanPart(address.road || address.streetName || address.street || address.footway || address.path);
+  const area = cleanPart(
+    address.area ||
+    address.locality ||
+    address.residential ||
+    address.neighbourhood ||
+    address.suburb ||
+    address.quarter ||
+    address.hamlet ||
+    address.village
+  );
+  const city = cleanPart(address.city || address.town || address.municipality || address.city_district || address.county || address.state_district);
+  const pincode = cleanPart(address.pincode || address.postalCode || address.postcode || address.postal_code);
+
+  const parts = [];
+  for (const part of [houseNumber, road, area, city, pincode]) {
+    if (!part) continue;
+    const partLower = part.toLowerCase();
+    let duplicateIndex = -1;
+    const isDuplicate = parts.some((existing, index) => {
+      const existingLower = existing.toLowerCase();
+      const matched = existingLower === partLower || existingLower.includes(partLower) || partLower.includes(existingLower);
+      if (matched) duplicateIndex = index;
+      return matched;
+    });
+    if (isDuplicate) {
+      if (duplicateIndex !== -1 && part.length > parts[duplicateIndex].length) {
+        parts[duplicateIndex] = part;
+      }
+    } else {
+      parts.push(part);
+    }
+  }
+
+  return parts.join(", ");
+};
+
 /**
  * Parses and builds a highly accurate, clean, human-readable address from Nominatim geocoding data.
  * Deduplicates tokens, removes tahsil/tehsil sub-structures, strips non-Latin scripts (e.g. Hindi/Punjabi names),
@@ -305,7 +362,8 @@ export const smartAddressBuilder = (addressObj, displayName = "") => {
                  cleanPart(addr.hamlet) ||
                  "";
 
-  let city = cleanPart(addr.city || addr.town || addr.municipality || addr.city_district);
+  let city = cleanPart(addr.city || addr.town || addr.municipality || addr.city_district || addr.village || addr.county || addr.state_district);
+  city = city.replace(/\s+district$/i, "").trim();
   let state = cleanPart(addr.state);
   let pincode = cleanPart(addr.postcode || addr.postal_code);
 
@@ -461,7 +519,8 @@ export const cleanAddressFields = (addressObj, displayName = "") => {
   let quarter = cleanPart(addr.quarter);
   let hamlet = cleanPart(addr.hamlet);
   let landmark = cleanPart(addr.landmark || addr.place || addr.commercial || addr.industrial);
-  let city = cleanPart(addr.city || addr.town || addr.municipality || addr.city_district);
+  let city = cleanPart(addr.city || addr.town || addr.municipality || addr.city_district || addr.village || addr.county || addr.state_district);
+  city = city.replace(/\s+district$/i, "").trim();
   let state = cleanPart(addr.state);
   let pincode = cleanPart(addr.postcode || addr.postal_code);
 
@@ -484,8 +543,8 @@ export const cleanAddressFields = (addressObj, displayName = "") => {
   let finalLocality = getFallback(locality);
   let finalLandmark = getFallback(landmark);
   let finalArea = getFallback(area);
-  let finalCity = city || "Jalandhar";
-  let finalState = state || "Punjab";
+  let finalCity = city || locality || "";
+  let finalState = state || "";
   let finalPincode = pincode || "";
 
   // Filter out unwanted terms from finalized fields
@@ -566,6 +625,13 @@ export const cleanAddressFields = (addressObj, displayName = "") => {
 
   let streetAddress = uniqueCandidates.join(", ");
   const formattedAddress = smartAddressBuilder(addr, displayName);
+  const fullAddressPreview = buildAddressPreview({
+    houseNumber: finalHouseNumber,
+    road: finalRoad,
+    area: finalArea || finalLocality,
+    city: finalCity,
+    pincode: finalPincode
+  });
 
   // Check if we only found city + pincode (no granular details)
   const hasGranularDetails = !!(
@@ -587,7 +653,7 @@ export const cleanAddressFields = (addressObj, displayName = "") => {
     landmark: finalLandmark || "",
     area: finalArea || finalLocality || "",
     country: cleanPart(addr.country) || "India",
-    formattedAddress: formattedAddress || streetAddress || "",
+    formattedAddress: fullAddressPreview || formattedAddress || streetAddress || "",
     isCityCenterOnly,
     lat: null,
     lng: null
@@ -616,7 +682,7 @@ const mergePhotonNominatim = (photonProps, nominatimAddr, displayName) => {
     road: p.street || n.road || n.street || n.footway || "",
     neighbourhood: n.neighbourhood || n.quarter || n.residential || "",
     suburb: p.district || n.suburb || n.city_district || "",
-    city: p.city || n.city || n.town || n.municipality || "",
+    city: p.city || n.city || n.town || n.municipality || n.city_district || n.village || n.county || n.state_district || "",
     state: p.state || n.state || "",
     postcode: p.postcode || n.postcode || "",
     country: p.country || n.country || "India",
@@ -650,7 +716,7 @@ export const reverseGeocode = async (lat, lng) => {
       nominatimAddr = nomJson.address;
       displayName = nomJson.display_name || "";
     }
-  } catch (_) { /* Nominatim primary failed, fallback to Photon */ }
+  } catch { /* Nominatim primary failed, fallback to Photon */ }
 
   // 2. Try Photon Fallback only if Nominatim failed
   if (!nominatimAddr) {
@@ -666,7 +732,7 @@ export const reverseGeocode = async (lat, lng) => {
         if (props.city) displayName += (displayName ? ", " : "") + props.city;
         if (props.state) displayName += (displayName ? ", " : "") + props.state;
       }
-    } catch (_) { /* Photon fallback failed */ }
+    } catch { /* Photon fallback failed */ }
   }
 
   const merged = mergePhotonNominatim(photonProps, nominatimAddr, displayName);
@@ -682,7 +748,10 @@ export const reverseGeocode = async (lat, lng) => {
  * GPS + reverse geocode — use for "Detect Location" buttons with stabilization (up to 3 watched readings, target accuracy <= 50m).
  */
 export const detectCurrentLocation = (options = {}) => {
-  const maxRetries = 2;
+  const targetAccuracy = options.targetAccuracy ?? 80;
+  const maxUpdates = options.maxUpdates ?? 2;
+  const timeoutMs = options.timeout ?? 10000;
+  const maxRetries = options.maxRetries ?? 0;
   let retryCount = 0;
 
   const executeDetection = () =>
@@ -705,7 +774,7 @@ export const detectCurrentLocation = (options = {}) => {
 
       const timeoutId = setTimeout(() => {
         clearWatchSafe();
-        if (bestPos && bestPos.coords.accuracy <= 30) {
+        if (bestPos && bestPos.coords.accuracy <= targetAccuracy) {
           resolvePosition(bestPos);
         } else {
           if (retryCount < maxRetries) {
@@ -715,14 +784,14 @@ export const detectCurrentLocation = (options = {}) => {
             resolve(executeDetection());
           } else {
             if (bestPos) {
-              console.warn(`Best position accuracy is ${bestPos.coords.accuracy}m (target <= 30m). Resolving anyway.`);
+              console.warn(`Best position accuracy is ${bestPos.coords.accuracy}m (target <= ${targetAccuracy}m). Resolving anyway.`);
               resolvePosition(bestPos);
             } else {
               reject(new Error("Location request timed out. Please retry."));
             }
           }
         }
-      }, options.timeout ?? 20000);
+      }, timeoutMs);
 
       const resolvePosition = async (pos) => {
         clearTimeout(timeoutId);
@@ -748,15 +817,15 @@ export const detectCurrentLocation = (options = {}) => {
             bestPos = pos;
           }
 
-          if (currentAccuracy <= 30) {
+          if (currentAccuracy <= targetAccuracy) {
             resolvePosition(pos);
-          } else if (updateCount >= 3) {
-            if (bestPos.coords.accuracy <= 30) {
+          } else if (updateCount >= maxUpdates) {
+            if (bestPos.coords.accuracy <= targetAccuracy) {
               resolvePosition(bestPos);
             } else {
               if (retryCount < maxRetries) {
                 retryCount++;
-                console.warn(`GPS accuracy too low (${bestPos.coords.accuracy}m > 30m) after 3 updates. Retrying...`);
+                console.warn(`GPS accuracy too low (${bestPos.coords.accuracy}m > ${targetAccuracy}m) after ${maxUpdates} updates. Retrying...`);
                 clearTimeout(timeoutId);
                 clearWatchSafe();
                 resolve(executeDetection());
@@ -785,7 +854,7 @@ export const detectCurrentLocation = (options = {}) => {
         },
         {
           enableHighAccuracy: true,
-          timeout: options.timeout ?? 20000,
+          timeout: timeoutMs,
           maximumAge: 0,
         }
       );
@@ -800,8 +869,9 @@ export const toLegacyAddressFields = (structured) => {
   const lng = structured.lng;
   const s2CellId = (lat && lng) ? latLngToS2CellId(lat, lng, 13) : (structured.s2CellId || null);
   const s2CellIdPrecise = (lat && lng) ? latLngToS2CellId(lat, lng, 15) : (structured.s2CellIdPrecise || null);
+  const formattedAddress = buildAddressPreview(structured) || structured.formattedAddress || smartAddressBuilder(structured, "");
   return {
-    street: structured.street || structured.addressLine || structured.formattedAddress || "",
+    street: structured.street || structured.addressLine || formattedAddress || "",
     city: structured.city || "",
     state: structured.state || "",
     postalCode: structured.postalCode || structured.pincode || "",
@@ -816,7 +886,7 @@ export const toLegacyAddressFields = (structured) => {
     landmark: structured.landmark || "",
     area: structured.area || "",
     pincode: structured.pincode || structured.postalCode || "",
-    formattedAddress: structured.formattedAddress || smartAddressBuilder(structured, "")
+    formattedAddress
   };
 };
 

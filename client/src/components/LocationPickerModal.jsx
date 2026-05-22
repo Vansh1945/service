@@ -7,6 +7,7 @@ import 'leaflet/dist/leaflet.css';
 import {
   reverseGeocode,
   toLegacyAddressFields,
+  buildAddressPreview,
   LIGHT_MAP_TILES,
   LIGHT_MAP_ATTRIBUTION,
   smartAddressBuilder,
@@ -104,9 +105,16 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
   }, [position, isOpen]);
 
   const handleCurrentLocation = async () => {
+    if (detecting) return;
     setDetecting(true);
+    toast.info('Detecting your current location...');
     try {
-      const result = await detectCurrentLocation({ timeout: 15000 });
+      const result = await detectCurrentLocation({
+        timeout: 8000,
+        targetAccuracy: 80,
+        maxUpdates: 2,
+        maxRetries: 0
+      });
       setPosition([result.latitude, result.longitude]);
       setStructuredAddress(result.address);
       if (result.address.houseNumber) {
@@ -126,7 +134,7 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
     try {
       const data = await reverseGeocode(lat, lng);
       setStructuredAddress(data);
-      if (data.houseNumber) setHouseNo(data.houseNumber);
+      setHouseNo(data.houseNumber || '');
     } catch (error) {
       console.error('Error fetching address:', error);
       toast.error('Could not resolve address for this location');
@@ -141,11 +149,6 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
       return;
     }
 
-    if (structuredAddress.isCityCenterOnly) {
-      toast.error('Selected location is too broad (city center only). Please drag the map pin to your exact building, street, or colony.');
-      return;
-    }
-
     const updatedAddress = {
       ...structuredAddress,
       houseNumber: houseNo.trim(),
@@ -154,20 +157,6 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
     };
 
     if (houseNo.trim()) {
-      updatedAddress.formattedAddress = smartAddressBuilder(
-        {
-          house_number: houseNo.trim(),
-          road: updatedAddress.road,
-          residential: updatedAddress.residential,
-          neighbourhood: updatedAddress.neighbourhood,
-          suburb: updatedAddress.suburb,
-          city: updatedAddress.city,
-          state: updatedAddress.state,
-          postcode: updatedAddress.pincode
-        },
-        updatedAddress._displayName || updatedAddress.formattedAddress
-      );
-
       const streetBase = updatedAddress.street || updatedAddress.road || '';
       if (streetBase) {
         if (!streetBase.includes(houseNo.trim())) {
@@ -181,6 +170,20 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
       updatedAddress.addressLine = updatedAddress.street;
     }
 
+    updatedAddress.formattedAddress = buildAddressPreview(updatedAddress) || smartAddressBuilder(
+      {
+        house_number: houseNo.trim(),
+        road: updatedAddress.road,
+        residential: updatedAddress.area || updatedAddress.residential,
+        neighbourhood: updatedAddress.area || updatedAddress.neighbourhood,
+        suburb: updatedAddress.area || updatedAddress.suburb,
+        city: updatedAddress.city,
+        state: updatedAddress.state,
+        postcode: updatedAddress.pincode || updatedAddress.postalCode
+      },
+      updatedAddress._displayName || updatedAddress.formattedAddress
+    );
+
     const legacy = {
       ...toLegacyAddressFields(updatedAddress),
       s2CellId: cellId13,
@@ -193,13 +196,12 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
 
   if (!isOpen) return null;
 
-  const displayText =
-    structuredAddress?.formattedAddress ||
-    (structuredAddress
-      ? [structuredAddress.houseNumber, structuredAddress.road, structuredAddress.area, structuredAddress.city, structuredAddress.state, structuredAddress.pincode]
-          .filter(Boolean)
-          .join(', ')
-      : '');
+  const displayText = structuredAddress
+    ? buildAddressPreview({
+        ...structuredAddress,
+        houseNumber: houseNo || structuredAddress.houseNumber
+      }) || structuredAddress.formattedAddress
+    : '';
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
@@ -246,9 +248,17 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
 
 
           <button
-            onClick={handleCurrentLocation}
-            className="absolute bottom-4 right-4 z-[400] bg-red-500 hover:bg-red-600 text-white p-3 rounded-full shadow-lg shadow-red-500/20 active:scale-95 transition-all border-none flex items-center justify-center"
-            title="My Location"
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              handleCurrentLocation();
+            }}
+            disabled={detecting}
+            className="absolute bottom-4 right-4 z-[1000] bg-red-500 hover:bg-red-600 text-white p-3 rounded-full shadow-lg shadow-red-500/20 active:scale-95 transition-all border-none flex items-center justify-center disabled:opacity-70 disabled:cursor-wait"
+            title={detecting ? 'Detecting location...' : 'My Location'}
+            aria-label={detecting ? 'Detecting current location' : 'Detect current location'}
           >
             <Navigation className={`w-5 h-5 ${detecting ? 'animate-pulse' : ''}`} />
           </button>

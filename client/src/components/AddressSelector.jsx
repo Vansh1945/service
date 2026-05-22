@@ -21,6 +21,8 @@ const AddressSelector = ({
 
   // Find state code from state name
   const currentStateCode = states.find(s => s.name === selectedState)?.isoCode;
+  const hasSelectedStateOption = !selectedState || states.some(s => s.name === selectedState);
+  const hasSelectedCityOption = !selectedCity || cities.some(c => c.name === selectedCity);
 
   useEffect(() => {
     if (currentStateCode) {
@@ -59,6 +61,9 @@ const AddressSelector = ({
               required
             >
               <option value="">Select State</option>
+              {!hasSelectedStateOption && (
+                <option value={selectedState}>{selectedState}</option>
+              )}
               {states.map((state) => (
                 <option key={state.isoCode} value={state.name}>
                   {state.name}
@@ -90,6 +95,9 @@ const AddressSelector = ({
               required
             >
               <option value="">Select City</option>
+              {!hasSelectedCityOption && (
+                <option value={selectedCity}>{selectedCity}</option>
+              )}
               {cities.map((city) => (
                 <option key={city.name} value={city.name}>
                   {city.name}

@@ -178,10 +178,18 @@ const UserProfile = () => {
 
     const handleAddressChange = (e) => {
         const { name, value } = e.target;
-        setProfile(prev => ({
-            ...prev,
-            address: { ...prev.address, [name]: value }
-        }));
+        setProfile(prev => {
+            const updatedAddress = { ...prev.address, [name]: value };
+            if (name === 'postalCode') {
+                updatedAddress.pincode = value;
+            } else if (name === 'pincode') {
+                updatedAddress.postalCode = value;
+            }
+            return {
+                ...prev,
+                address: updatedAddress
+            };
+        });
     };
 
     const handleSubmit = async (e) => {
@@ -724,12 +732,11 @@ const UserProfile = () => {
                     isOpen={isMapModalOpen}
                     onClose={() => setIsMapModalOpen(false)}
                     onLocationSelect={(loc) => {
-                        const legacyFields = toLegacyAddressFields(loc);
                         setProfile(prev => ({
                             ...prev,
                             address: {
                                 ...prev.address,
-                                ...legacyFields
+                                ...loc
                             }
                         }));
                     }}
