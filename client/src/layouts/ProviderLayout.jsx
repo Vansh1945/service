@@ -13,7 +13,7 @@ import { toast } from 'react-toastify';
 
 import * as SystemService from '../services/SystemService';
 import axiosInstance from '../api/axiosInstance';
-import { cleanAddressFields } from '../utils/format';
+import { detectCurrentLocation, toLegacyAddressFields } from '../utils/format';
 
 const ProviderLayout = () => {
     const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -38,67 +38,28 @@ const ProviderLayout = () => {
         if (!token || !user || locationRequestedRef.current) return;
         locationRequestedRef.current = true;
 
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                async (position) => {
-                    const { latitude, longitude } = position.coords;
-                    console.log("Provider auto-detected location:", { latitude, longitude });
-                    try {
-                        let street = '';
-                        let city = '';
-                        let state = '';
-                        let postalCode = '';
-                        let country = '';
-                        try {
-                            const response = await fetch(
-                                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1`,
-                                {
-                                    headers: {
-                                        'User-Agent': 'SafeVoltSolutionsApp/1.0 (contact: support@safevoltsolutions.com)'
-                                    }
-                                }
-                            );
-                            const geoData = await response.json();
-                            if (geoData && geoData.address) {
-                                const cleanFields = cleanAddressFields(geoData.address, geoData.display_name);
-                                street = cleanFields.street;
-                                city = cleanFields.city;
-                                state = cleanFields.state;
-                                postalCode = cleanFields.postalCode;
-                                country = 'India';
-                            }
-                        } catch (geoErr) {
-                            console.error("Failed to reverse-geocode coordinates:", geoErr);
-                        }
+        detectCurrentLocation({ maximumAge: 60000 })
+            .then(async ({ latitude, longitude, address }) => {
+                const fields = toLegacyAddressFields({ ...address, lat: latitude, lng: longitude });
+                const formData = new FormData();
+                formData.append('updateType', 'address');
+                formData.append('lat', latitude);
+                formData.append('lng', longitude);
+                formData.append('street', fields.street || user.address?.street || '');
+                formData.append('city', fields.city || user.address?.city || '');
+                formData.append('state', fields.state || user.address?.state || '');
+                formData.append('postalCode', fields.postalCode || user.address?.postalCode || '');
+                formData.append('country', fields.country || user.address?.country || 'India');
+                if (fields.formattedAddress) formData.append('formattedAddress', fields.formattedAddress);
 
-                        // Must use FormData since provider profile backend uses Multer for potential file uploads
-                        const formData = new FormData();
-                        formData.append('updateType', 'address');
-                        formData.append('lat', latitude);
-                        formData.append('lng', longitude);
-                        if (street || user.address?.street) formData.append('street', street || user.address?.street || '');
-                        if (city || user.address?.city) formData.append('city', city || user.address?.city || '');
-                        if (state || user.address?.state) formData.append('state', state || user.address?.state || '');
-                        if (postalCode || user.address?.postalCode) formData.append('postalCode', postalCode || user.address?.postalCode || '');
-                        if (country || user.address?.country) formData.append('country', country || user.address?.country || '');
-
-                        await axiosInstance.put('/provider/profile', formData, {
-                            headers: {
-                                'Content-Type': 'multipart/form-data'
-                            }
-                        });
-                        
-                        await refreshUser();
-                    } catch (err) {
-                        console.error("Failed to auto-update provider location:", err);
-                    }
-                },
-                (err) => {
-                    console.warn("Provider geolocation access denied or failed:", err.message);
-                },
-                { enableHighAccuracy: true }
-            );
-        }
+                await axiosInstance.put('/provider/profile', formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+                await refreshUser();
+            })
+            .catch((err) => {
+                console.warn('Provider geolocation sync skipped:', err.message);
+            });
     }, [token, user]);
 
     // Fetch active bookings to see if we need tracking

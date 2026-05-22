@@ -33,7 +33,7 @@ const MapBoundsHelper = ({ providerLoc, targetLat, targetLng }) => {
 import * as BookingService from '../../services/BookingService';
 import * as AdminService from '../../services/AdminService';
 import Pagination from '../../components/Pagination';
-import { formatDate, formatCurrency } from '../../utils/format';
+import { formatDate, formatCurrency, LIGHT_MAP_TILES, LIGHT_MAP_ATTRIBUTION } from '../../utils/format';
 import {
     Search,
     Calendar,
@@ -345,10 +345,7 @@ const AdminLiveTrackingMap = ({ bookingId, address, status, provider, booking })
 
             <div className="relative w-full h-[250px] bg-slate-100 flex items-center justify-center">
                 <MapContainer center={[targetLat, targetLng]} zoom={14} style={{ height: '100%', width: '100%', zIndex: 10 }}>
-                    <TileLayer
-                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    />
+                    <TileLayer attribution={LIGHT_MAP_ATTRIBUTION} url={LIGHT_MAP_TILES} />
                     <Marker position={[targetLat, targetLng]} icon={customerIcon}>
                         <Popup>
                             <div className="font-semibold text-sm">Customer Location</div>

@@ -35,7 +35,14 @@ const addressSchema = new Schema({
   lng: {
     type: Number,
     default: null
-  }
+  },
+  addressLine: { type: String, trim: true },
+  houseNumber: { type: String, trim: true },
+  road: { type: String, trim: true },
+  landmark: { type: String, trim: true },
+  area: { type: String, trim: true },
+  pincode: { type: String, trim: true },
+  formattedAddress: { type: String, trim: true }
 });
 
 // Service Item Sub-Schema

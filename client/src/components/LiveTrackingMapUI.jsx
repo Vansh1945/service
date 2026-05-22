@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Marker, Polyline, Circle, useMap } from 'react
 import L from 'leaflet';
 import { Loader } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
+import { LIGHT_MAP_TILES, LIGHT_MAP_ATTRIBUTION, calculateBearing } from '../utils/format';
 
 // Fix for default Leaflet marker assets in Vite using a custom divIcon
 let DefaultIcon = L.divIcon({
@@ -17,34 +18,19 @@ L.Marker.prototype.options.icon = DefaultIcon;
 // Custom stylized pins
 const customerIcon = L.divIcon({ html: `<div style="background-color: #EF4444; width: 24px; height: 24px; border-radius: 50% 50% 50% 0; border: 3px solid white; transform: rotate(-45deg); box-shadow: 0 0 5px rgba(0,0,0,0.5);"></div>`, className: '', iconSize: [24, 24], iconAnchor: [12, 24], popupAnchor: [1, -34] });
 
-// Calculate bearing between two GPS coordinates using spherical trigonometry
-const calculateBearing = (lat1, lon1, lat2, lon2) => {
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const lat1Rad = (lat1 * Math.PI) / 180;
-  const lat2Rad = (lat2 * Math.PI) / 180;
-
-  const y = Math.sin(dLon) * Math.cos(lat2Rad);
-  const x =
-    Math.cos(lat1Rad) * Math.sin(lat2Rad) -
-    Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
-
-  const brng = (Math.atan2(y, x) * 180) / Math.PI;
-  return (brng + 360) % 360;
-};
-
-// Custom dynamic provider arrow SVG icon matching bearing direction
+// Bike/car style moving provider marker with direction rotation
 const createProviderIcon = (bearing) => {
   return L.divIcon({
     html: `
-      <div style="transform: rotate(${bearing}deg); width: 36px; height: 36px; display: flex; items-center: center; justify-content: center; transition: transform 0.4s ease-out; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36" fill="#10B981" stroke="white" stroke-width="2.5" stroke-linejoin="round">
-          <polygon points="12,2 22,22 12,17 2,22" />
-        </svg>
+      <div style="transform: rotate(${bearing}deg); width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; transition: transform 0.35s ease-out; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.25));">
+        <div style="background:#10B981;border:3px solid #fff;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M5 20a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm14 0a3 3 0 1 1 0-6 3 3 0 0 1 0 6zM6.5 17h11M5 12l2-5h7l2 3h3l-2 4H8l-1-2z"/></svg>
+        </div>
       </div>
     `,
     className: '',
-    iconSize: [36, 36],
-    iconAnchor: [18, 18], // Perfectly centered anchor for seamless rotation
+    iconSize: [40, 40],
+    iconAnchor: [20, 20],
   });
 };
 
@@ -77,7 +63,7 @@ const SmoothMarker = ({ position, children }) => {
       return;
     }
 
-    const duration = 4000; // Continuous 4-second animation for en-route smoothness
+    const duration = 2800; // Sync with ~5s GPS throttle for smooth Uber-style movement
     const startTime = performance.now();
 
     const animate = (time) => {
@@ -176,10 +162,10 @@ const LiveTrackingMapUI = ({ targetLat, targetLng, providerLoc, routeCoords = []
       <style>{customStyles}</style>
 
       {/* Route GPS detection spinner overlay */}
-      {loadingRoute && (!providerLoc || routeCoords.length === 0) && (
-        <div className="absolute inset-0 z-[1001] bg-slate-950/80 flex flex-col items-center justify-center backdrop-blur-sm">
-          <Loader className="w-10 h-10 animate-spin text-teal-400" />
-          <p className="text-xs font-bold text-slate-200 mt-3 animate-pulse uppercase tracking-wider">Calculating live en-route path...</p>
+      {loadingRoute && routeCoords.length < 2 && (
+        <div className="absolute inset-0 z-[1001] bg-white/75 flex flex-col items-center justify-center backdrop-blur-sm">
+          <Loader className="w-10 h-10 animate-spin text-primary" />
+          <p className="text-xs font-bold text-secondary mt-3 animate-pulse uppercase tracking-wider">Calculating route...</p>
         </div>
       )}
 
@@ -189,11 +175,7 @@ const LiveTrackingMapUI = ({ targetLat, targetLng, providerLoc, routeCoords = []
         style={{ height: '100%', width: '100%', zIndex: 10 }}
         zoomControl={false}
       >
-        {/* CartoDB Dark Matter Tile Layer */}
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-        />
+        <TileLayer attribution={LIGHT_MAP_ATTRIBUTION} url={LIGHT_MAP_TILES} />
         
         {/* Customer Target Pulse Ring */}
         {targetLat && targetLng && (
@@ -237,9 +219,9 @@ const LiveTrackingMapUI = ({ targetLat, targetLng, providerLoc, routeCoords = []
         {routeCoords && routeCoords.length > 0 && (
           <Polyline 
             positions={routeCoords} 
-            color="#00F0FF" 
-            weight={6} 
-            opacity={0.85} 
+            color="#2563EB" 
+            weight={5} 
+            opacity={0.9} 
             lineCap="round" 
             lineJoin="round"
             className="custom-route-polyline"

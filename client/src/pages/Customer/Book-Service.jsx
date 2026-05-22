@@ -11,7 +11,7 @@ import { getPublicServiceById } from '../../services/ServiceService';
 import { getAvailableCoupons, applyCoupon as applyCouponAPI } from '../../services/CouponService';
 import { createBooking } from '../../services/BookingService';
 import * as CustomerService from '../../services/CustomerService';
-import { formatDate, formatCurrency, cleanAddressFields } from '../../utils/format';
+import { formatDate, formatCurrency, detectCurrentLocation, toLegacyAddressFields } from '../../utils/format';
 import LocationPickerModal from '../../components/LocationPickerModal';
 
 const BookService = () => {
@@ -30,52 +30,22 @@ const BookService = () => {
   const [detecting, setDetecting] = useState(false);
   const [isMapModalOpen, setIsMapModalOpen] = useState(false);
 
-  const handleDetectAddress = () => {
-    if (!navigator.geolocation) {
-      toast.error('Geolocation is not supported by your browser');
-      return;
-    }
-
+  const handleDetectAddress = async () => {
     setDetecting(true);
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        try {
-            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1`);
-            const data = await response.json();
-            
-            if (data && data.address) {
-                const cleanFields = cleanAddressFields(data.address, data.display_name);
-                
-                setFormData(prev => ({
-                    ...prev,
-                    customAddress: {
-                        street: cleanFields.street,
-                        city: cleanFields.city,
-                        state: cleanFields.state,
-                        postalCode: cleanFields.postalCode,
-                        country: 'India',
-                        lat: latitude,
-                        lng: longitude
-                    }
-                }));
-                toast.success('Address auto-detected successfully!');
-            } else {
-                toast.error('Failed to resolve current address details');
-            }
-        } catch (error) {
-            toast.error('Error connecting to map service');
-        } finally {
-            setDetecting(false);
-        }
-      },
-      (error) => {
-        setDetecting(false);
-        console.error(error);
-        toast.error('Failed to retrieve location coordinates');
-      },
-      { enableHighAccuracy: true }
-    );
+    try {
+      const { latitude, longitude, address } = await detectCurrentLocation();
+      const fields = toLegacyAddressFields({ ...address, lat: latitude, lng: longitude });
+      setFormData((prev) => ({
+        ...prev,
+        useCustomAddress: true,
+        customAddress: { ...prev.customAddress, ...fields }
+      }));
+      toast.success('Address auto-detected successfully!');
+    } catch (error) {
+      toast.error(error.message || 'Failed to detect location');
+    } finally {
+      setDetecting(false);
+    }
   };
 
   // Form state
@@ -971,15 +941,8 @@ const BookService = () => {
           onLocationSelect={(loc) => {
             setFormData(prev => ({
               ...prev,
-              customAddress: {
-                ...prev.customAddress,
-                street: loc.street,
-                city: loc.city || prev.customAddress.city,
-                state: loc.state || prev.customAddress.state,
-                postalCode: loc.postalCode || prev.customAddress.postalCode,
-                lat: loc.lat,
-                lng: loc.lng
-              }
+              useCustomAddress: true,
+              customAddress: { ...prev.customAddress, ...loc }
             }));
             toast.success('Address picked from map!');
           }}

@@ -187,28 +187,18 @@ const setTargetLocation = async (booking, latitude, longitude, session = null) =
   await booking.save({ session });
 };
 
-const getBookingAddressLocation = (booking, providerCoords = null) => {
+const getBookingAddressLocation = (booking) => {
   const target = getTargetLocation(booking);
   if (target) return target;
-  
-  if (providerCoords && process.env.NODE_ENV !== 'production') {
-    return {
-      latitude: providerCoords.latitude,
-      longitude: providerCoords.longitude
-    };
-  }
-  
+
   const address = booking.address || {};
-  const addressStr = `${address.street || ''} ${address.city || ''} ${address.postalCode || ''}`.trim();
-  let hash = 0;
-  for (let i = 0; i < addressStr.length; i++) {
-    hash = (hash << 5) - hash + addressStr.charCodeAt(i);
-    hash |= 0;
+  const lat = parseFloat(address.lat);
+  const lng = parseFloat(address.lng);
+  if (!isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0)) {
+    return { latitude: lat, longitude: lng };
   }
-  const absHash = Math.abs(hash);
-  const latitude = 28.5 + (absHash % 1000) / 1000 * 0.2;
-  const longitude = 77.1 + (Math.floor(absHash / 1000) % 1000) / 1000 * 0.2;
-  return { latitude, longitude };
+
+  return null;
 };
 
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -2649,10 +2639,14 @@ const startBooking = async (req, res) => {
     const providerLat = parseFloat(latitude);
     const providerLng = parseFloat(longitude);
 
-    // Get customer address coordinates
-    const targetLoc = getBookingAddressLocation(booking, { latitude: providerLat, longitude: providerLng });
-    
-    // Save target location if not already persisted
+    const targetLoc = getBookingAddressLocation(booking);
+    if (!targetLoc) {
+      return res.status(400).json({
+        success: false,
+        message: 'Booking address has no GPS coordinates. Ask customer to pin exact location on map.'
+      });
+    }
+
     if (!getTargetLocation(booking)) {
       await setTargetLocation(booking, targetLoc.latitude, targetLoc.longitude);
     }
@@ -3049,7 +3043,13 @@ const completeBooking = async (req, res) => {
     const providerLat = parseFloat(latitude);
     const providerLng = parseFloat(longitude);
 
-    const targetLoc = getBookingAddressLocation(booking, { latitude: providerLat, longitude: providerLng });
+    const targetLoc = getBookingAddressLocation(booking);
+    if (!targetLoc) {
+      return res.status(400).json({
+        success: false,
+        message: 'Booking address has no GPS coordinates for completion verification.'
+      });
+    }
 
     const distance = calculateDistance(providerLat, providerLng, targetLoc.latitude, targetLoc.longitude);
     if (distance > 300) {

@@ -15,7 +15,7 @@ import {
 import LoadingSpinner from '../../components/Loader';
 import * as BookingService from '../../services/BookingService';
 import Pagination from '../../components/Pagination';
-import { formatDate, formatTime, formatCurrency, formatDuration, compressImage } from '../../utils/format';
+import { formatDate, formatTime, formatCurrency, formatDuration, compressImage, filterGPSJitter, LIGHT_MAP_TILES, LIGHT_MAP_ATTRIBUTION } from '../../utils/format';
 import * as ComplaintService from '../../services/ComplaintService';
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -53,31 +53,27 @@ const NavigationModal = ({ isOpen, onClose, booking }) => {
   const [distance, setDistance] = useState('');
   const [loadingRoute, setLoadingRoute] = useState(true);
 
-  // Fallback hashing for lat/lng if not present
-  const getCoordinates = useCallback((address) => {
-    if (address && address.lat != null && address.lng != null) {
-      const pLat = parseFloat(address.lat);
-      const pLng = parseFloat(address.lng);
-      if (!isNaN(pLat) && !isNaN(pLng) && (pLat !== 0 || pLng !== 0)) {
-        return { lat: pLat, lng: pLng };
+  const resolveTargetCoords = useCallback((b) => {
+    if (!b) return null;
+    const addr = b.address || {};
+    const pLat = parseFloat(addr.lat);
+    const pLng = parseFloat(addr.lng);
+    if (!isNaN(pLat) && !isNaN(pLng) && (pLat !== 0 || pLng !== 0)) {
+      return { lat: pLat, lng: pLng };
+    }
+    if (b.statusHistory) {
+      for (const h of b.statusHistory) {
+        const match = h.note?.match(/TARGET_LOCATION:([-\d.]+),([-\d.]+)/);
+        if (match) return { lat: parseFloat(match[1]), lng: parseFloat(match[2]) };
       }
     }
-    const addrStr = `${address?.street || ''} ${address?.city || ''} ${address?.postalCode || ''}`.trim();
-    let hash = 0;
-    for (let i = 0; i < addrStr.length; i++) {
-      hash = (hash << 5) - hash + addrStr.charCodeAt(i);
-      hash |= 0;
-    }
-    const absHash = Math.abs(hash);
-    const lat = 28.5 + (absHash % 1000) / 1000 * 0.2;
-    const lng = 77.1 + (Math.floor(absHash / 1000) % 1000) / 1000 * 0.2;
-    return { lat, lng };
+    return null;
   }, []);
 
   const { lat: targetLat, lng: targetLng } = useMemo(() => {
-    if (!booking) return { lat: 28.5, lng: 77.1 };
-    return getCoordinates(booking.address);
-  }, [booking, getCoordinates]);
+    const coords = resolveTargetCoords(booking);
+    return coords || { lat: 31.326, lng: 75.5761 };
+  }, [booking, resolveTargetCoords]);
 
   useEffect(() => {
     if (!isOpen || !booking) return;
@@ -85,131 +81,69 @@ const NavigationModal = ({ isOpen, onClose, booking }) => {
     setLoadingRoute(true);
     let watchId = null;
 
-    const calculateHaversine = (lat1, lon1, lat2, lon2) => {
-      const R = 6371; // Earth radius in km
-      const dLat = (lat2 - lat1) * Math.PI / 180;
-      const dLon = (lon2 - lon1) * Math.PI / 180;
-      const a = 
-        Math.sin(dLat/2) * Math.sin(dLat/2) +
-        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-        Math.sin(dLon/2) * Math.sin(dLon/2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-      return R * c;
-    };
+    let lastUpdatedTime = 0;
+    let lastPosRef = null;
 
-    // 1. Initialize with an instant nearby fallback position to bypass the "Detecting GPS location..." screen entirely
-    const initialLat = targetLat - 0.004;
-    const initialLng = targetLng - 0.004;
-    setProviderLoc({ lat: initialLat, lng: initialLng });
-
-    // 2. Pre-calculate instant fast Haversine estimates
-    const initialDist = calculateHaversine(initialLat, initialLng, targetLat, targetLng);
-    const estDetourDist = initialDist * 1.25;
-    const estTimeMin = Math.max(2, Math.round((estDetourDist / 25) * 60));
-    setDistance(`${estDetourDist.toFixed(1)} km`);
-    setEta(`${estTimeMin} mins`);
-    setRouteCoords([[initialLat, initialLng], [targetLat, targetLng]]);
-    const fetchRoute = async (pLat, pLng) => {
-      try {
-        const url = `https://router.project-osrm.org/route/v1/driving/${pLng},${pLat};${targetLng},${targetLat}?overview=full&geometries=geojson`;
-        const res = await fetch(url);
-        const data = await res.json();
-        if (data.routes && data.routes[0]) {
-          const route = data.routes[0];
-          const distKm = (route.distance / 1000).toFixed(1);
-          const durMin = Math.round(route.duration / 60);
-          setEta(`${durMin} mins`);
-          setDistance(`${distKm} km`);
-          const coords = route.geometry.coordinates.map(c => [c[1], c[0]]);
-          setRouteCoords(coords);
-        }
-      } catch (err) {
-        console.error("OSRM Route Error, using fallback:", err);
-      } finally {
+    const applySocketRoute = (data) => {
+      if (data.latitude != null && data.longitude != null) {
+        setProviderLoc({ lat: data.latitude, lng: data.longitude });
+      }
+      if (data.liveDistance) setDistance(data.liveDistance);
+      if (data.liveDuration) setEta(data.liveDuration);
+      if (data.routeCoordinates?.length > 1) {
+        setRouteCoords(data.routeCoordinates.map((c) => [c.lat, c.lng]));
         setLoadingRoute(false);
       }
     };
 
-    let lastUpdatedTime = 0;
+    if (socket && booking?._id) {
+      socket.emit('join-booking-tracking', { bookingId: booking._id });
+      socket.on('provider-live-location', applySocketRoute);
+      socket.on('tracking-started', applySocketRoute);
+    }
 
     const handleLocationUpdate = (pos) => {
       const now = Date.now();
-      if (now - lastUpdatedTime < 5000) return; // Throttle to every 5 seconds
+      if (now - lastUpdatedTime < 5000) return;
       lastUpdatedTime = now;
 
       const { latitude, longitude } = pos.coords;
-      
-      // Calculate fast instant fallback estimate
-      const dist = calculateHaversine(latitude, longitude, targetLat, targetLng);
-      const estDetourDist = dist * 1.25; // Detour factor for typical city streets
-      const estTimeMin = Math.max(2, Math.round((estDetourDist / 25) * 60)); // Assumes 25 km/h average speed in city traffic
+      const smoothed = filterGPSJitter(lastPosRef, { lat: latitude, lng: longitude }, 8);
+      lastPosRef = smoothed;
+      setProviderLoc(smoothed);
+      setLoadingRoute(true);
 
-      setProviderLoc({ lat: latitude, lng: longitude });
-      
-      // Update with fast estimates instantly
-      setDistance(`${estDetourDist.toFixed(1)} km`);
-      setEta(`${estTimeMin} mins`);
-      setRouteCoords(prev => prev.length === 0 ? [[latitude, longitude], [targetLat, targetLng]] : prev);
-      
-      // Emit location update via socket so other users (Admin and Customer) receive updates live
       if (socket && booking?._id) {
         socket.emit('provider-location-update', {
           bookingId: booking._id,
-          latitude,
-          longitude
+          latitude: smoothed.lat,
+          longitude: smoothed.lng
         });
       }
-
-      // Trigger background driving route request
-      fetchRoute(latitude, longitude);
     };
 
     if (navigator.geolocation) {
-      // 1. Try with high accuracy, but set a fast 2-second timeout
       navigator.geolocation.getCurrentPosition(
         handleLocationUpdate,
-        (err) => {
-          console.warn("GPS High Accuracy failed/timed out, retrying with fast low accuracy:", err);
-          // 2. Fall back to low accuracy (IP/WiFi-based) which resolves instantly
-          navigator.geolocation.getCurrentPosition(
-            handleLocationUpdate,
-            (err2) => {
-              console.error("GPS Low Accuracy also failed:", err2);
-              // 3. Ultimate Fallback: Place provider nearby the customer's coordinate to load the map instantly
-              const fallbackLat = targetLat - 0.005;
-              const fallbackLng = targetLng - 0.005;
-              handleLocationUpdate({
-                coords: {
-                  latitude: fallbackLat,
-                  longitude: fallbackLng
-                }
-              });
-            },
-            { enableHighAccuracy: false, timeout: 4000, maximumAge: 30000 }
-          );
-        },
-        { enableHighAccuracy: true, timeout: 2000, maximumAge: 10000 }
+        (err) => console.warn('GPS error:', err.message),
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
       );
-
       watchId = navigator.geolocation.watchPosition(
         handleLocationUpdate,
-        (err) => console.error("GPS Watch Error:", err),
+        (err) => console.error('GPS Watch Error:', err),
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     } else {
-      // Direct ultimate fallback if navigator.geolocation is not supported
-      const fallbackLat = targetLat - 0.005;
-      const fallbackLng = targetLng - 0.005;
-      handleLocationUpdate({
-        coords: {
-          latitude: fallbackLat,
-          longitude: fallbackLng
-        }
-      });
+      setLoadingRoute(false);
     }
 
     return () => {
       if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+      if (socket && booking?._id) {
+        socket.emit('leave-booking-tracking', { bookingId: booking._id });
+        socket.off('provider-live-location');
+        socket.off('tracking-started');
+      }
     };
   }, [isOpen, booking, targetLat, targetLng, socket]);
 
@@ -246,10 +180,7 @@ const NavigationModal = ({ isOpen, onClose, booking }) => {
           style={{ height: '100%', width: '100%', zIndex: 10 }}
           zoomControl={false}
         >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
+          <TileLayer attribution={LIGHT_MAP_ATTRIBUTION} url={LIGHT_MAP_TILES} />
           {targetLat && targetLng && (
             <Marker position={[targetLat, targetLng]} icon={customerIcon} />
           )}
@@ -257,7 +188,7 @@ const NavigationModal = ({ isOpen, onClose, booking }) => {
             <Marker position={[providerLoc.lat, providerLoc.lng]} icon={providerIcon} />
           )}
           {routeCoords.length > 0 && (
-            <Polyline positions={routeCoords} color="#00F0FF" weight={5} opacity={0.8} />
+            <Polyline positions={routeCoords} color="#2563EB" weight={5} opacity={0.9} lineCap="round" />
           )}
           <MapBoundsHelper providerLoc={providerLoc} targetLat={targetLat} targetLng={targetLng} />
         </MapContainer>

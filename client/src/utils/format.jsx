@@ -287,13 +287,19 @@ export const smartAddressBuilder = (addressObj, displayName = "") => {
   const isUnwanted = (val) => {
     const s = val.toLowerCase();
     return (
-      s.includes("tahsil") || 
-      s.includes("tehsil") || 
-      s.includes("तहसील") || 
-      s.includes("ਤਹਿਸੀਲ") || 
-      s.includes("taluk") || 
-      s.includes("taluka") || 
-      s === "india"
+      s.includes("tahsil") ||
+      s.includes("tehsil") ||
+      s.includes("तहसील") ||
+      s.includes("ਤਹਿਸੀਲ") ||
+      s.includes("taluk") ||
+      s.includes("taluka") ||
+      s.includes(" i tahsil") ||
+      s.includes("subdistrict") ||
+      s.includes("sub-district") ||
+      s === "india" ||
+      s === "county" ||
+      /^district$/i.test(s.trim()) ||
+      /[\u0900-\u097F\u0A00-\u0A7F]/.test(val)
     );
   };
   
@@ -459,13 +465,19 @@ export const cleanAddressFields = (addressObj, displayName = "") => {
   const isUnwanted = (val) => {
     const s = val.toLowerCase();
     return (
-      s.includes("tahsil") || 
-      s.includes("tehsil") || 
-      s.includes("तहसील") || 
-      s.includes("ਤਹਿਸੀਲ") || 
-      s.includes("taluk") || 
-      s.includes("taluka") || 
-      s === "india"
+      s.includes("tahsil") ||
+      s.includes("tehsil") ||
+      s.includes("तहसील") ||
+      s.includes("ਤਹਿਸੀਲ") ||
+      s.includes("taluk") ||
+      s.includes("taluka") ||
+      s.includes(" i tahsil") ||
+      s.includes("subdistrict") ||
+      s.includes("sub-district") ||
+      s === "india" ||
+      s === "county" ||
+      /^district$/i.test(s.trim()) ||
+      /[\u0900-\u097F\u0A00-\u0A7F]/.test(val)
     );
   };
 
@@ -602,10 +614,180 @@ export const cleanAddressFields = (addressObj, displayName = "") => {
   if (isUnwanted(city)) city = "";
   if (isUnwanted(state)) state = "";
 
+  const area = [neighbourhood, suburb].filter(Boolean).join(", ");
+  const formattedAddress = smartAddressBuilder(addr, displayName);
+
   return {
-    street: streetAddress || "Unknown Street Address",
-    city: city || "Jalandhar",
-    state: state || "Punjab",
-    postalCode: pincode || "144001"
+    street: streetAddress || road || formattedAddress || "",
+    city: city || "",
+    state: state || "",
+    postalCode: pincode || "",
+    pincode: pincode || "",
+    addressLine: streetAddress || road || "",
+    houseNumber: houseNo || "",
+    road: road || "",
+    landmark: landmark || "",
+    area: area || suburb || neighbourhood || "",
+    country: cleanPart(addr.country) || "India",
+    formattedAddress: formattedAddress || streetAddress || "",
+    lat: null,
+    lng: null
   };
+};
+
+/** Light Uber-style map tiles (road labels visible) */
+export const LIGHT_MAP_TILES =
+  "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
+export const LIGHT_MAP_ATTRIBUTION =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
+
+const GEOCODE_CACHE = new Map();
+const GEOCODE_CACHE_TTL_MS = 5 * 60 * 1000;
+const GEOCODE_USER_AGENT = "SafeVoltServiceBooking/1.0 (service-booking-app)";
+
+const coordCacheKey = (lat, lng) =>
+  `${Number(lat).toFixed(5)},${Number(lng).toFixed(5)}`;
+
+const mergePhotonNominatim = (photonProps, nominatimAddr, displayName) => {
+  const p = photonProps || {};
+  const n = nominatimAddr || {};
+  return {
+    house_number: p.housenumber || n.house_number || n.house || "",
+    building: p.name || n.building || n.apartments || "",
+    road: p.street || n.road || n.street || n.footway || "",
+    neighbourhood: n.neighbourhood || n.quarter || n.residential || "",
+    suburb: p.district || n.suburb || n.city_district || "",
+    city: p.city || n.city || n.town || n.municipality || "",
+    state: p.state || n.state || "",
+    postcode: p.postcode || n.postcode || "",
+    country: p.country || n.country || "India",
+    landmark: n.amenity || n.place || "",
+    _displayName: displayName || ""
+  };
+};
+
+/**
+ * Reverse geocode with Photon (primary) + Nominatim (fallback) and smart cache.
+ */
+export const reverseGeocode = async (lat, lng) => {
+  const cacheKey = coordCacheKey(lat, lng);
+  const cached = GEOCODE_CACHE.get(cacheKey);
+  if (cached && Date.now() - cached.ts < GEOCODE_CACHE_TTL_MS) {
+    return cached.data;
+  }
+
+  let photonProps = null;
+  let nominatimAddr = null;
+  let displayName = "";
+
+  try {
+    const photonRes = await fetch(
+      `https://photon.komoot.io/reverse?lat=${lat}&lon=${lng}&lang=en`
+    );
+    const photonJson = await photonRes.json();
+    if (photonJson?.features?.[0]?.properties) {
+      photonProps = photonJson.features[0].properties;
+    }
+  } catch (_) { /* Photon optional */ }
+
+  try {
+    const nomRes = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1&accept-language=en`,
+      { headers: { "User-Agent": GEOCODE_USER_AGENT } }
+    );
+    const nomJson = await nomRes.json();
+    if (nomJson?.address) {
+      nominatimAddr = nomJson.address;
+      displayName = nomJson.display_name || "";
+    }
+  } catch (_) { /* Nominatim fallback failed */ }
+
+  const merged = mergePhotonNominatim(photonProps, nominatimAddr, displayName);
+  const structured = cleanAddressFields(merged, displayName);
+  structured.lat = lat;
+  structured.lng = lng;
+
+  GEOCODE_CACHE.set(cacheKey, { ts: Date.now(), data: structured });
+  return structured;
+};
+
+/**
+ * GPS + reverse geocode — use for "Detect Location" buttons.
+ */
+export const detectCurrentLocation = (options = {}) =>
+  new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error("Geolocation is not supported by your browser"));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const { latitude, longitude, accuracy } = pos.coords;
+          const address = await reverseGeocode(latitude, longitude);
+          resolve({ latitude, longitude, accuracy, address });
+        } catch (err) {
+          reject(err);
+        }
+      },
+      (err) => {
+        const msg =
+          err.code === 1
+            ? "Location permission denied. Enable GPS in browser settings."
+            : err.code === 2
+              ? "Location unavailable. Try again outdoors."
+              : "Location request timed out. Please retry.";
+        reject(new Error(msg));
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: options.timeout ?? 15000,
+        maximumAge: options.maximumAge ?? 0
+      }
+    );
+  });
+
+/** Map structured address to legacy form fields */
+export const toLegacyAddressFields = (structured) => ({
+  street: structured.street || structured.addressLine || structured.formattedAddress || "",
+  city: structured.city || "",
+  state: structured.state || "",
+  postalCode: structured.postalCode || structured.pincode || "",
+  country: structured.country || "India",
+  lat: structured.lat,
+  lng: structured.lng,
+  addressLine: structured.addressLine || structured.street || "",
+  houseNumber: structured.houseNumber || "",
+  road: structured.road || "",
+  landmark: structured.landmark || "",
+  area: structured.area || "",
+  pincode: structured.pincode || structured.postalCode || "",
+  formattedAddress: structured.formattedAddress || smartAddressBuilder(structured, "")
+});
+
+/** Filter GPS jitter — ignore moves smaller than minMeters */
+export const filterGPSJitter = (prev, next, minMeters = 8) => {
+  if (!prev || prev.lat == null || prev.lng == null) return next;
+  const R = 6371000;
+  const dLat = ((next.lat - prev.lat) * Math.PI) / 180;
+  const dLng = ((next.lng - prev.lng) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((prev.lat * Math.PI) / 180) *
+      Math.cos((next.lat * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2;
+  const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return dist < minMeters ? prev : next;
+};
+
+/** Bearing in degrees for marker rotation */
+export const calculateBearing = (lat1, lon1, lat2, lon2) => {
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const lat1Rad = (lat1 * Math.PI) / 180;
+  const lat2Rad = (lat2 * Math.PI) / 180;
+  const y = Math.sin(dLon) * Math.cos(lat2Rad);
+  const x =
+    Math.cos(lat1Rad) * Math.sin(lat2Rad) -
+    Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
 };

@@ -7,6 +7,10 @@ const Provider = require('../models/Provider-model');
 
 let io = null;
 
+const ROUTE_CACHE = new Map();
+const ROUTE_CACHE_TTL_MS = 45000;
+const LAST_PROVIDER_POS = new Map();
+
 // Distance helper (Haversine formula in meters)
 function calculateDistance(lat1, lon1, lat2, lon2) {
     const R = 6371e3; // metres
@@ -68,6 +72,115 @@ function decodePolyline(str) {
     }
 
     return coordinates;
+}
+
+function routeCacheKey(pLat, pLng, tLat, tLng) {
+    return `${pLat.toFixed(4)},${pLng.toFixed(4)}->${tLat.toFixed(4)},${tLng.toFixed(4)}`;
+}
+
+function filterGPSJitter(providerId, lat, lng, minMeters = 8) {
+    const prev = LAST_PROVIDER_POS.get(providerId);
+    if (!prev) {
+        LAST_PROVIDER_POS.set(providerId, { lat, lng, ts: Date.now() });
+        return { lat, lng, filtered: false };
+    }
+    const d = calculateDistance(prev.lat, prev.lng, lat, lng);
+    if (d < minMeters) {
+        return { lat: prev.lat, lng: prev.lng, filtered: true };
+    }
+    LAST_PROVIDER_POS.set(providerId, { lat, lng, ts: Date.now() });
+    return { lat, lng, filtered: false };
+}
+
+async function fetchDrivingRoute(startLng, startLat, endLng, endLat) {
+    const cacheKey = routeCacheKey(startLat, startLng, endLat, endLng);
+    const cached = ROUTE_CACHE.get(cacheKey);
+    if (cached && Date.now() - cached.ts < ROUTE_CACHE_TTL_MS) {
+        return cached.data;
+    }
+
+    const apiKey = process.env.ORS_API_KEY || process.env.OPENROUTESERVICE_API_KEY;
+    let distanceText = null;
+    let durationText = null;
+    let routeCoords = null;
+
+    if (apiKey) {
+        try {
+            const axios = require('axios');
+            const directionsUrl = `https://api.openrouteservice.org/v2/directions/driving-car?api_key=${apiKey}&start=${startLng},${startLat}&end=${endLng},${endLat}`;
+            const response = await axios.get(directionsUrl, { timeout: 12000 });
+            if (response.data?.features?.[0]) {
+                const feature = response.data.features[0];
+                const prop = feature.properties?.segments?.[0];
+                if (prop) {
+                    distanceText = `${(prop.distance / 1000).toFixed(1)} km`;
+                    durationText = `${Math.max(1, Math.round(prop.duration / 60))} mins`;
+                }
+                if (feature.geometry) {
+                    if (typeof feature.geometry === 'string') {
+                        routeCoords = decodePolyline(feature.geometry);
+                    } else if (feature.geometry.coordinates) {
+                        routeCoords = feature.geometry.coordinates.map((c) => ({
+                            lat: c[1],
+                            lng: c[0]
+                        }));
+                    }
+                }
+            }
+        } catch (gErr) {
+            console.error('ORS route error:', gErr.message);
+        }
+    }
+
+    if (!routeCoords || routeCoords.length < 2) {
+        try {
+            const axios = require('axios');
+            const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=geojson`;
+            const osrmRes = await axios.get(osrmUrl, { timeout: 12000 });
+            const route = osrmRes.data?.routes?.[0];
+            if (route) {
+                distanceText = `${(route.distance / 1000).toFixed(1)} km`;
+                durationText = `${Math.max(1, Math.round(route.duration / 60))} mins`;
+                routeCoords = route.geometry.coordinates.map((c) => ({
+                    lat: c[1],
+                    lng: c[0]
+                }));
+            }
+        } catch (osrmErr) {
+            console.error('OSRM route fallback error:', osrmErr.message);
+        }
+    }
+
+    const result = {
+        distanceText,
+        durationText,
+        routeCoords: routeCoords?.length >= 2
+            ? routeCoords
+            : [{ lat: startLat, lng: startLng }, { lat: endLat, lng: endLng }]
+    };
+    ROUTE_CACHE.set(cacheKey, { ts: Date.now(), data: result });
+    return result;
+}
+
+function resolveBookingTargetCoords(booking) {
+    if (booking.address && typeof booking.address.lat === 'number' && typeof booking.address.lng === 'number') {
+        const lat = parseFloat(booking.address.lat);
+        const lng = parseFloat(booking.address.lng);
+        if (!isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0)) {
+            return { lat, lng };
+        }
+    }
+    if (booking.statusHistory) {
+        for (const h of booking.statusHistory) {
+            if (h.note) {
+                const match = h.note.match(/TARGET_LOCATION:([-\d.]+),([-\d.]+)/);
+                if (match) {
+                    return { lat: parseFloat(match[1]), lng: parseFloat(match[2]) };
+                }
+            }
+        }
+    }
+    return null;
 }
 
 const initSocket = (httpServer) => {
@@ -204,103 +317,67 @@ const initSocket = (httpServer) => {
                     return socket.emit('error-alert', { message: 'Unauthorized location update' });
                 }
 
-                // Security: Tracking allowed only if status is accepted or in-progress
+                // Security: tracking only while en route / in service
+                const blockedStatuses = ['completed', 'cancelled', 'pending', 'no-show'];
                 const allowedStatuses = ['accepted', 'arriving', 'started', 'in-progress', 'in_progress'];
-                if (!allowedStatuses.includes(booking.status)) {
+                if (blockedStatuses.includes(booking.status) || !allowedStatuses.includes(booking.status)) {
                     return socket.emit('error-alert', { message: 'Location tracking is inactive for this status' });
                 }
+
+                const smoothed = filterGPSJitter(userId, latitude, longitude);
+                const emitLat = smoothed.lat;
+                const emitLng = smoothed.lng;
 
                 // Update provider's current location in DB
                 await Provider.findByIdAndUpdate(userId, {
                     currentLocation: {
                         type: 'Point',
-                        coordinates: [longitude, latitude] // GeoJSON: longitude first
+                        coordinates: [emitLng, emitLat] // GeoJSON: longitude first
                     },
                     isOnline: true,
                     activeBooking: bookingId,
                     lastUpdated: new Date()
                 });
 
-                // Get target booking coordinates
-                let targetLat = null;
-                let targetLng = null;
+                const target = resolveBookingTargetCoords(booking);
+                let targetLat = target?.lat ?? null;
+                let targetLng = target?.lng ?? null;
 
-                if (booking.address && typeof booking.address.lat === 'number' && typeof booking.address.lng === 'number') {
-                    targetLat = booking.address.lat;
-                    targetLng = booking.address.lng;
-                } else {
-                    if (booking.statusHistory) {
-                        for (const h of booking.statusHistory) {
-                            if (h.note) {
-                                const match = h.note.match(/TARGET_LOCATION:([-\d.]+),([-\d.]+)/);
-                                if (match) {
-                                    targetLat = parseFloat(match[1]);
-                                    targetLng = parseFloat(match[2]);
-                                    break;
-                                }
-                            }
+                let distanceText = payload.liveDistance || '';
+                let durationText = payload.liveDuration || '';
+                let routeCoords = [
+                    { lat: emitLat, lng: emitLng },
+                    ...(targetLat != null && targetLng != null
+                        ? [{ lat: targetLat, lng: targetLng }]
+                        : [])
+                ];
+
+                if (targetLat != null && targetLng != null) {
+                    const d = calculateDistance(emitLat, emitLng, targetLat, targetLng);
+                    distanceText = distanceText || `${(d / 1000).toFixed(1)} km`;
+                    durationText = durationText || `${Math.max(1, Math.round((d / 1000) * 2.5))} mins`;
+
+                    if (!smoothed.filtered) {
+                        try {
+                            const routeData = await Promise.race([
+                                fetchDrivingRoute(emitLng, emitLat, targetLng, targetLat),
+                                new Promise((_, reject) =>
+                                    setTimeout(() => reject(new Error('route timeout')), 8000)
+                                )
+                            ]);
+                            if (routeData.distanceText) distanceText = routeData.distanceText;
+                            if (routeData.durationText) durationText = routeData.durationText;
+                            if (routeData.routeCoords?.length > 1) routeCoords = routeData.routeCoords;
+                        } catch (routeErr) {
+                            console.warn('Route fetch skipped:', routeErr.message);
                         }
-                    }
-                }
-
-                // Fallback math calculation if coordinates are not available
-                if (targetLat === null || targetLng === null) {
-                    const addr = booking.address || {};
-                    const addrStr = `${addr.street || ''} ${addr.city || ''} ${addr.postalCode || ''}`.trim();
-                    let hash = 0;
-                    for (let i = 0; i < addrStr.length; i++) {
-                        hash = (hash << 5) - hash + addrStr.charCodeAt(i);
-                        hash |= 0;
-                    }
-                    const absHash = Math.abs(hash);
-                    targetLat = 31.3260 + (absHash % 1000) / 1000 * 0.1;
-                    targetLng = 75.5761 + (Math.floor(absHash / 1000) % 1000) / 1000 * 0.1;
-                }
-
-                const d = calculateDistance(latitude, longitude, targetLat, targetLng);
-
-                // Initial fallbacks (straight line or client calculated road distance)
-                let distanceText = payload.liveDistance || `${(d / 1000).toFixed(1)} km`;
-                let durationText = payload.liveDuration || `${Math.round(d / 1000 * 2.5) || 1} mins`;
-                let routeCoords = [{ lat: latitude, lng: longitude }, { lat: targetLat, lng: targetLng }];
-
-                // Request Route from OpenRouteService API
-                const apiKey = process.env.ORS_API_KEY || process.env.OPENROUTESERVICE_API_KEY;
-                if (apiKey) {
-                    try {
-                        const axios = require('axios');
-                        const directionsUrl = `https://api.openrouteservice.org/v2/directions/driving-car?api_key=${apiKey}&start=${longitude},${latitude}&end=${targetLng},${targetLat}`;
-                        const response = await axios.get(directionsUrl);
-                        if (response.data?.features?.[0]) {
-                            const feature = response.data.features[0];
-                            const prop = feature.properties?.segments?.[0];
-                            if (prop) {
-                                // ORS returns distance in meters, duration in seconds
-                                const distKm = prop.distance / 1000;
-                                const durMin = Math.round(prop.duration / 60);
-                                distanceText = `${distKm.toFixed(1)} km`;
-                                durationText = `${durMin} mins`;
-                            }
-                            if (feature.geometry) {
-                                if (typeof feature.geometry === 'string') {
-                                    routeCoords = decodePolyline(feature.geometry);
-                                } else if (feature.geometry.coordinates) {
-                                    routeCoords = feature.geometry.coordinates.map(c => ({
-                                        lat: c[1],
-                                        lng: c[0]
-                                    }));
-                                }
-                            }
-                        }
-                    } catch (gErr) {
-                        console.error('Error fetching ORS route:', gErr.message);
                     }
                 }
 
                 // Update booking model
                 booking.providerLiveLocation = {
-                    lat: latitude,
-                    lng: longitude,
+                    lat: emitLat,
+                    lng: emitLng,
                     updatedAt: new Date()
                 };
                 booking.liveDistance = distanceText;
@@ -309,12 +386,15 @@ const initSocket = (httpServer) => {
                 booking.trackingEnabled = true;
 
                 // Arrival detection (100m threshold)
-                if (d <= 100 && !booking.providerReached) {
+                const arrivalDist = targetLat != null && targetLng != null
+                    ? calculateDistance(emitLat, emitLng, targetLat, targetLng)
+                    : Infinity;
+                if (arrivalDist <= 100 && !booking.providerReached) {
                     booking.providerReached = true;
                     booking.statusHistory.push({
                         status: booking.status,
                         timestamp: new Date(),
-                        note: `Provider arrived at service location. Target coordinates: ${targetLat}, ${targetLng}. Current coordinates: ${latitude}, ${longitude}. Distance: ${Math.round(d)}m.`,
+                        note: `Provider arrived at service location. Target coordinates: ${targetLat}, ${targetLng}. Current coordinates: ${emitLat}, ${emitLng}. Distance: ${Math.round(arrivalDist)}m.`,
                         updatedBy: 'system'
                     });
 
@@ -352,8 +432,8 @@ const initSocket = (httpServer) => {
                 io.to(`booking_${bookingId}`).emit('provider-live-location', {
                     bookingId,
                     providerId: userId,
-                    latitude,
-                    longitude,
+                    latitude: emitLat,
+                    longitude: emitLng,
                     liveDistance: booking.liveDistance,
                     liveDuration: booking.liveDuration,
                     routeCoordinates: booking.routeCoordinates,
@@ -364,8 +444,8 @@ const initSocket = (httpServer) => {
                 io.to('admin_live_room').emit('provider-moving', {
                     bookingId,
                     providerId: userId,
-                    latitude,
-                    longitude,
+                    latitude: emitLat,
+                    longitude: emitLng,
                     liveDistance: booking.liveDistance,
                     liveDuration: booking.liveDuration,
                     providerReached: booking.providerReached,

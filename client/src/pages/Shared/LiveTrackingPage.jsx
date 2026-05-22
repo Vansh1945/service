@@ -9,6 +9,7 @@ import { toast } from 'react-toastify';
 import Loader from '../../components/Loader';
 import LiveTrackingMapUI from '../../components/LiveTrackingMapUI';
 import * as BookingService from '../../services/BookingService';
+import { filterGPSJitter } from '../../utils/format';
 
 const calculateHaversine = (lat1, lon1, lat2, lon2) => {
   const R = 6371; // Earth radius in km
@@ -90,17 +91,33 @@ const LiveTrackingPage = () => {
             setProviderReached(b.providerReached || false);
             setDistance(b.liveDistance || '');
             setEta(b.liveDuration || '');
-            
-            // Initial Provider Location from DB (MongoDB stores [longitude, latitude])
+
             const providerDetails = b.provider || b.providerDetails;
             let initialLoc = b.providerLiveLocation;
             if (!initialLoc && providerDetails?.currentLocation?.coordinates?.length === 2) {
               const coords = providerDetails.currentLocation.coordinates;
               if (coords[0] !== 0 && coords[1] !== 0) {
-                 initialLoc = { lat: coords[1], lng: coords[0] };
+                initialLoc = { lat: coords[1], lng: coords[0] };
               }
             }
             if (initialLoc) setProviderLoc(initialLoc);
+
+            if (b.routeCoordinates?.length > 1) {
+              setRouteCoords(b.routeCoordinates.map((c) => [c.lat, c.lng]));
+              setLoadingRoute(false);
+            } else if (initialLoc && b.address?.lat != null && b.address?.lng != null) {
+              const tLat = parseFloat(b.address.lat);
+              const tLng = parseFloat(b.address.lng);
+              if (!isNaN(tLat) && !isNaN(tLng)) {
+                setRouteCoords([[initialLoc.lat, initialLoc.lng], [tLat, tLng]]);
+                if (!b.liveDistance) {
+                  const km = calculateHaversine(initialLoc.lat, initialLoc.lng, tLat, tLng);
+                  setDistance(`${(km * 1.2).toFixed(1)} km`);
+                  setEta(`${Math.max(2, Math.round((km * 1.2 / 25) * 60))} mins`);
+                }
+                setLoadingRoute(false);
+              }
+            }
           }
         }
       } catch (err) {
@@ -117,7 +134,9 @@ const LiveTrackingPage = () => {
   // Tracking and stability refs
   const bookingRef = useRef(null);
   const targetLocRef = useRef({ lat: 31.3260, lng: 75.5761 });
-  const lastOSRMPosRef = useRef(null);
+  const lastProviderPosRef = useRef(null);
+  const routeFetchInFlightRef = useRef(false);
+  const routeTimeoutRef = useRef(null);
 
   // Keep refs synchronized with active states/props
   useEffect(() => {
@@ -145,33 +164,61 @@ const LiveTrackingPage = () => {
     }
   }, [booking, isProvider, providerLoc]);
 
-  // Fetch initial route for customer once provider location is available
-  useEffect(() => {
-    if (!isProvider && providerLoc && routeCoords.length === 0 && targetLat && targetLng) {
-      const fetchInitialRoute = async () => {
-        try {
-          setLoadingRoute(true);
-          const url = `https://router.project-osrm.org/route/v1/driving/${providerLoc.lng},${providerLoc.lat};${targetLng},${targetLat}?overview=full&geometries=geojson`;
-          const res = await fetch(url);
-          const data = await res.json();
-          if (data.routes && data.routes[0]) {
-            const route = data.routes[0];
-            const distKm = (route.distance / 1000).toFixed(1);
-            const durMin = Math.round(route.duration / 60);
-            setEta(`${durMin} mins`);
-            setDistance(`${distKm} km`);
-            const coords = route.geometry.coordinates.map(c => [c[1], c[0]]);
-            setRouteCoords(coords);
-          }
-        } catch (err) {
-          console.error("Initial OSRM Route Error:", err);
-        } finally {
-          setLoadingRoute(false);
-        }
-      };
-      fetchInitialRoute();
+  const fetchClientRoute = useCallback(async (pLat, pLng, tLat, tLng) => {
+    if (routeFetchInFlightRef.current) return;
+    routeFetchInFlightRef.current = true;
+    try {
+      const url = `https://router.project-osrm.org/route/v1/driving/${pLng},${pLat};${tLng},${tLat}?overview=full&geometries=geojson`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.routes?.[0]) {
+        const route = data.routes[0];
+        setDistance(`${(route.distance / 1000).toFixed(1)} km`);
+        setEta(`${Math.max(1, Math.round(route.duration / 60))} mins`);
+        setRouteCoords(route.geometry.coordinates.map((c) => [c[1], c[0]]));
+      }
+    } catch (err) {
+      console.warn('Client route fallback:', err.message);
+      setRouteCoords([[pLat, pLng], [tLat, tLng]]);
+      const km = calculateHaversine(pLat, pLng, tLat, tLng);
+      setDistance(`${(km * 1.2).toFixed(1)} km`);
+      setEta(`${Math.max(2, Math.round((km * 1.2 / 25) * 60))} mins`);
+    } finally {
+      routeFetchInFlightRef.current = false;
+      setLoadingRoute(false);
     }
-  }, [isProvider, providerLoc, routeCoords.length, targetLat, targetLng]);
+  }, []);
+
+  // Max 6s loading overlay — then show map with straight-line fallback
+  useEffect(() => {
+    if (isProvider || loading) return;
+    routeTimeoutRef.current = setTimeout(() => {
+      setLoadingRoute(false);
+      setRouteCoords((prev) => {
+        if (prev.length > 1) return prev;
+        if (providerLoc?.lat && targetLat && targetLng) {
+          return [[providerLoc.lat, providerLoc.lng], [targetLat, targetLng]];
+        }
+        return prev;
+      });
+    }, 6000);
+    return () => {
+      if (routeTimeoutRef.current) clearTimeout(routeTimeoutRef.current);
+    };
+  }, [isProvider, loading, bookingId]);
+
+  // Customer: fetch road route when provider position is known but polyline missing
+  useEffect(() => {
+    if (isProvider || !providerLoc?.lat || !targetLat || !targetLng) return;
+    if (routeCoords.length > 1) {
+      setLoadingRoute(false);
+      return;
+    }
+    const t = setTimeout(() => {
+      fetchClientRoute(providerLoc.lat, providerLoc.lng, targetLat, targetLng);
+    }, 800);
+    return () => clearTimeout(t);
+  }, [isProvider, providerLoc, targetLat, targetLng, routeCoords.length, fetchClientRoute]);
 
   // Stable watchPosition and socket setup: completely decoupled from mutable state refreshes
   useEffect(() => {
@@ -179,40 +226,27 @@ const LiveTrackingPage = () => {
 
     let watchId = null;
 
-    const fetchOSRMRoute = async (pLat, pLng) => {
-      try {
-        setLoadingRoute(true);
-        const { lat: tLat, lng: tLng } = targetLocRef.current;
-        const url = `https://router.project-osrm.org/route/v1/driving/${pLng},${pLat};${tLng},${tLat}?overview=full&geometries=geojson`;
-        const res = await fetch(url);
-        const data = await res.json();
-        if (data.routes && data.routes[0]) {
-          const route = data.routes[0];
-          const distKm = (route.distance / 1000).toFixed(1);
-          const durMin = Math.round(route.duration / 60);
-          
-          setEta(`${durMin} mins`);
-          setDistance(`${distKm} km`);
-          
-          const coords = route.geometry.coordinates.map(c => [c[1], c[0]]);
-          setRouteCoords(coords);
-
-          if (isProvider) {
-            socket.emit('provider-location-update', {
-              bookingId,
-              latitude: pLat,
-              longitude: pLng,
-              liveDistance: `${distKm} km`,
-              liveDuration: `${durMin} mins`
-            });
-          }
-        }
-      } catch (err) {
-        console.error("OSRM Route Error:", err);
-      } finally {
+    const applySocketRoute = (data) => {
+      if (data.liveDistance) setDistance(data.liveDistance);
+      if (data.liveDuration) setEta(data.liveDuration);
+      if (data.routeCoordinates?.length > 0) {
+        const coords = data.routeCoordinates.map((c) => [c.lat, c.lng]);
+        if (coords.length > 1) setRouteCoords(coords);
+      }
+      if (data.liveDistance || data.liveDuration || data.routeCoordinates?.length > 1) {
         setLoadingRoute(false);
       }
     };
+
+    socket.on('tracking-started', (data) => {
+      applySocketRoute(data);
+      if (data.providerLiveLocation?.lat != null) {
+        setProviderLoc({
+          lat: data.providerLiveLocation.lat,
+          lng: data.providerLiveLocation.lng
+        });
+      }
+    });
 
     if (isProvider) {
       // -------------------------
@@ -222,47 +256,23 @@ const LiveTrackingPage = () => {
 
       const handleLocationUpdate = (pos) => {
         const now = Date.now();
-        if (now - lastUpdatedTime < 5000) return; // Throttle to every 5 seconds
+        if (now - lastUpdatedTime < 5000) return;
         lastUpdatedTime = now;
 
         const { latitude, longitude } = pos.coords;
-        const { lat: tLat, lng: tLng } = targetLocRef.current;
-        
-        const dist = calculateHaversine(latitude, longitude, tLat, tLng);
-        const estDetourDist = dist * 1.25;
-        const estTimeMin = Math.max(2, Math.round((estDetourDist / 25) * 60));
+        const smoothed = filterGPSJitter(
+          lastProviderPosRef.current,
+          { lat: latitude, lng: longitude },
+          8
+        );
+        lastProviderPosRef.current = smoothed;
 
-        setProviderLoc({ lat: latitude, lng: longitude });
-        setDistance(`${estDetourDist.toFixed(1)} km`);
-        setEta(`${estTimeMin} mins`);
-        setRouteCoords(prev => prev.length === 0 ? [[latitude, longitude], [tLat, tLng]] : prev);
-        
+        setProviderLoc(smoothed);
         socket.emit('provider-location-update', {
-          bookingId, latitude, longitude,
-          liveDistance: `${estDetourDist.toFixed(1)} km`,
-          liveDuration: `${estTimeMin} mins`
+          bookingId,
+          latitude: smoothed.lat,
+          longitude: smoothed.lng
         });
-
-        // Throttle OSRM calls based on distance >= 15m
-        let shouldFetchOSRM = false;
-        if (!lastOSRMPosRef.current) {
-          shouldFetchOSRM = true;
-        } else {
-          const delta = calculateHaversine(
-            latitude,
-            longitude,
-            lastOSRMPosRef.current.lat,
-            lastOSRMPosRef.current.lng
-          );
-          if (delta >= 0.015) { // 15 meters
-            shouldFetchOSRM = true;
-          }
-        }
-
-        if (shouldFetchOSRM) {
-          lastOSRMPosRef.current = { lat: latitude, lng: longitude };
-          fetchOSRMRoute(latitude, longitude);
-        }
       };
 
       if (navigator.geolocation) {
@@ -296,37 +306,24 @@ const LiveTrackingPage = () => {
           (err) => console.error("GPS Watch Error:", err),
           { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
+
+        socket.on('provider-live-location', (data) => {
+          applySocketRoute(data);
+        });
       }
     } else {
       // -------------------------
       // CUSTOMER LOGIC: Receive Broadcasts
       // -------------------------
       socket.on('provider-live-location', (data) => {
-        setProviderLoc({ lat: data.latitude, lng: data.longitude });
-        if (data.liveDistance) setDistance(data.liveDistance);
-        if (data.liveDuration) setEta(data.liveDuration);
-        if (data.routeCoordinates?.length > 0) {
-           setRouteCoords(data.routeCoordinates.map(c => [c.lat, c.lng]));
-        } else {
-           let shouldFetchOSRM = false;
-           if (!lastOSRMPosRef.current) {
-             shouldFetchOSRM = true;
-           } else {
-             const delta = calculateHaversine(
-               data.latitude,
-               data.longitude,
-               lastOSRMPosRef.current.lat,
-               lastOSRMPosRef.current.lng
-             );
-             if (delta >= 0.015) {
-               shouldFetchOSRM = true;
-             }
-           }
-           if (shouldFetchOSRM) {
-             lastOSRMPosRef.current = { lat: data.latitude, lng: data.longitude };
-             fetchOSRMRoute(data.latitude, data.longitude);
-           }
-        }
+        const smoothed = filterGPSJitter(
+          lastProviderPosRef.current,
+          { lat: data.latitude, lng: data.longitude },
+          8
+        );
+        lastProviderPosRef.current = smoothed;
+        setProviderLoc(smoothed);
+        applySocketRoute(data);
         if (data.providerReached !== undefined) setProviderReached(data.providerReached);
       });
 
@@ -342,6 +339,7 @@ const LiveTrackingPage = () => {
       socket.emit('leave-booking-tracking', { bookingId });
       socket.off('provider-live-location');
       socket.off('provider-arrived');
+      socket.off('tracking-started');
     };
   }, [socket, bookingId, isProvider]);
 
@@ -474,7 +472,11 @@ const LiveTrackingPage = () => {
                     <span>{[otherUser.address.street, otherUser.address.city].filter(Boolean).join(', ')}</span>
                   </p>
                 )}
-                {isProvider && <span className="text-xs text-gray-500">{booking.address?.street}, {booking.address?.city}</span>}
+                {isProvider && (
+                  <span className="text-xs text-gray-500 truncate">
+                    {booking.address?.formattedAddress || [booking.address?.street, booking.address?.city].filter(Boolean).join(', ')}
+                  </span>
+                )}
               </div>
               
               {otherUser.phone && (

@@ -79,8 +79,16 @@ const userSchema = new mongoose.Schema({
     city: String,
     state: String,
     postalCode: String,
+    country: { type: String, default: 'India' },
     lat: { type: Number, default: 0 },
-    lng: { type: Number, default: 0 }
+    lng: { type: Number, default: 0 },
+    addressLine: String,
+    houseNumber: String,
+    road: String,
+    landmark: String,
+    area: String,
+    pincode: String,
+    formattedAddress: String
   },
   currentLocation: {
     type: {

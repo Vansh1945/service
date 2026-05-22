@@ -125,7 +125,14 @@ const providerSchema = new mongoose.Schema({
         postalCode: { type: String },
         country: { type: String, default: 'India' },
         lat: { type: Number, default: null },
-        lng: { type: Number, default: null }
+        lng: { type: Number, default: null },
+        addressLine: { type: String },
+        houseNumber: { type: String },
+        road: { type: String },
+        landmark: { type: String },
+        area: { type: String },
+        pincode: { type: String },
+        formattedAddress: { type: String }
     },
 
     // Geo JSON Location for 2dsphere queries

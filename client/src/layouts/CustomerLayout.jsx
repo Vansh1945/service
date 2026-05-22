@@ -11,7 +11,7 @@ import NotificationBell from '../components/NotificationBell';
 
 import * as SystemService from '../services/SystemService';
 import * as CustomerService from '../services/CustomerService';
-import { cleanAddressFields } from '../utils/format';
+import { detectCurrentLocation, toLegacyAddressFields } from '../utils/format';
 
 const CustomerLayout = () => {
     const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
@@ -29,63 +29,25 @@ const CustomerLayout = () => {
         if (!token || !user || locationRequestedRef.current) return;
         locationRequestedRef.current = true;
 
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                async (position) => {
-                    const { latitude, longitude } = position.coords;
-                    console.log("Customer auto-detected location:", { latitude, longitude });
-                    try {
-                        let street = '';
-                        let city = '';
-                        let state = '';
-                        let postalCode = '';
-                        let country = '';
-                        try {
-                            const response = await fetch(
-                                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1`,
-                                {
-                                    headers: {
-                                        'User-Agent': 'SafeVoltSolutionsApp/1.0 (contact: support@safevoltsolutions.com)'
-                                    }
-                                }
-                            );
-                            const geoData = await response.json();
-                            if (geoData && geoData.address) {
-                                const cleanFields = cleanAddressFields(geoData.address, geoData.display_name);
-                                street = cleanFields.street;
-                                city = cleanFields.city;
-                                state = cleanFields.state;
-                                postalCode = cleanFields.postalCode;
-                                country = 'India';
-                            }
-                        } catch (geoErr) {
-                            console.error("Failed to reverse-geocode coordinates:", geoErr);
-                        }
-
-                        await CustomerService.updateProfile({
-                            name: user.name,
-                            phone: user.phone,
-                            address: {
-                                street: street || user.address?.street || '',
-                                city: city || user.address?.city || '',
-                                state: state || user.address?.state || '',
-                                postalCode: postalCode || user.address?.postalCode || '',
-                                country: country || user.address?.country || '',
-                                lat: latitude,
-                                lng: longitude
-                            }
-                        });
-                        await refreshUser();
-                    } catch (err) {
-                        console.error("Failed to auto-update customer location:", err);
+        detectCurrentLocation({ maximumAge: 60000 })
+            .then(async ({ latitude, longitude, address }) => {
+                const fields = toLegacyAddressFields({ ...address, lat: latitude, lng: longitude });
+                await CustomerService.updateProfile({
+                    name: user.name,
+                    phone: user.phone,
+                    address: {
+                        ...fields,
+                        street: fields.street || user.address?.street || '',
+                        city: fields.city || user.address?.city || '',
+                        state: fields.state || user.address?.state || '',
+                        postalCode: fields.postalCode || user.address?.postalCode || ''
                     }
-                },
-                (err) => {
-                    console.warn("Customer geolocation access denied or failed:", err.message);
-                },
-                { enableHighAccuracy: true }
-            );
-        }
+                });
+                await refreshUser();
+            })
+            .catch((err) => {
+                console.warn('Customer geolocation sync skipped:', err.message);
+            });
     }, [token, user, refreshUser]);
 
     useEffect(() => {

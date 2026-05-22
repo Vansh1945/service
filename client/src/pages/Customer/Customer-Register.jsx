@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import AddressSelector from '../../components/AddressSelector';
 import LocationPickerModal from '../../components/LocationPickerModal';
-import { cleanAddressFields } from '../../utils/format';
+import { detectCurrentLocation, toLegacyAddressFields } from '../../utils/format';
 
 // ─── Static sub-components (defined OUTSIDE to avoid remount) ──────────────
 
@@ -59,49 +59,29 @@ const CustomerRegistration = () => {
     // Autocomplete disabled for Nominatim. Can type directly.
   }, [currentStep]);
 
-  const handleDetectAddress = () => {
-    if (!navigator.geolocation) {
-      showToast('Geolocation is not supported by your browser', 'error');
-      return;
-    }
-
+  const handleDetectAddress = async () => {
     setDetecting(true);
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        try {
-            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1`);
-            const data = await response.json();
-            
-            if (data && data.address) {
-                const cleanFields = cleanAddressFields(data.address, data.display_name);
-                
-                setFormData(prev => ({
-                    ...prev,
-                    address: {
-                        street: cleanFields.street,
-                        city: cleanFields.city,
-                        state: cleanFields.state,
-                        postalCode: cleanFields.postalCode
-                    }
-                }));
-                showToast('Address auto-detected successfully!');
-            } else {
-                showToast('Failed to resolve current address details', 'error');
-            }
-        } catch (error) {
-            showToast('Error connecting to map service', 'error');
-        } finally {
-            setDetecting(false);
+    try {
+      const { latitude, longitude, address } = await detectCurrentLocation();
+      const fields = toLegacyAddressFields({ ...address, lat: latitude, lng: longitude });
+      setFormData((prev) => ({
+        ...prev,
+        address: {
+          street: fields.street,
+          city: fields.city,
+          state: fields.state,
+          postalCode: fields.postalCode,
+          lat: latitude,
+          lng: longitude,
+          formattedAddress: fields.formattedAddress
         }
-      },
-      (error) => {
-        setDetecting(false);
-        console.error(error);
-        showToast('Failed to retrieve location coordinates', 'error');
-      },
-      { enableHighAccuracy: true }
-    );
+      }));
+      showToast('Address auto-detected successfully!');
+    } catch (error) {
+      showToast(error.message || 'Failed to detect location', 'error');
+    } finally {
+      setDetecting(false);
+    }
   };
 
   const [formData, setFormData] = useState({
@@ -570,4 +550,4 @@ const CustomerRegistration = () => {
   );
 };
 
-export default CustomerRegistration;
+export default CustomerRegistration;

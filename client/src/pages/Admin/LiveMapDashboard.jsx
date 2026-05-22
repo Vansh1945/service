@@ -179,7 +179,7 @@ const LiveMapDashboard = () => {
   const [liveLogs, setLiveLogs] = useState([]);
   const [mapCenter, setMapCenter] = useState([28.6139, 77.2090]);
   const [mapZoom, setMapZoom] = useState(12);
-  const [mapStyle, setMapStyle] = useState(() => localStorage.getItem('admin_map_style') || 'dark'); // 'streets', 'voyager', or 'dark'
+  const [mapStyle, setMapStyle] = useState(() => localStorage.getItem('admin_map_style') || 'voyager'); // 'streets', 'voyager', or 'dark'
   const [showHeatmap, setShowHeatmap] = useState(true);
   const [tick, setTick] = useState(0);
   
@@ -418,7 +418,7 @@ const LiveMapDashboard = () => {
           <div className="bg-slate-800/80 border border-slate-700/60 rounded-xl px-3 py-1.5 flex items-center space-x-2 shrink-0 snap-start">
             <Users className="w-4 h-4 text-emerald-400" />
             <div>
-              <p className="text-[9px] uppercase font-black tracking-widest text-slate-400">ACTIVE ORDERS</p>
+              <p className="text-[9px] uppercase font-black tracking-widest text-slate-400">ACTIVE BOOKING</p>
               <h3 className="text-xs font-black text-white">{stats.densityHotspots}</h3>
             </div>
           </div>

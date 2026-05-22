@@ -9,7 +9,7 @@ import * as ProviderService from '../../services/ProviderService';
 import * as SystemService from '../../services/SystemService';
 import * as NotificationService from '../../services/NotificationService';
 import useCategory from '../../hooks/useCategory';
-import { formatDate, formatCurrency, compressImage, cleanAddressFields } from '../../utils/format';
+import { formatDate, formatCurrency, compressImage, detectCurrentLocation, toLegacyAddressFields } from '../../utils/format';
 import LocationPickerModal from '../../components/LocationPickerModal';
 
 const ProviderProfile = () => {
@@ -134,54 +134,22 @@ const ProviderProfile = () => {
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [detecting, setDetecting] = useState(false);
 
-  const handleDetectAddress = () => {
-    if (!navigator.geolocation) {
-      toast.error('Geolocation is not supported by your browser');
-      return;
-    }
-
+  const handleDetectAddress = async () => {
     setDetecting(true);
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        try {
-          const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1`);
-          const data = await response.json();
-          
-          if (data && data.address) {
-            const cleanFields = cleanAddressFields(data.address, data.display_name);
-            
-            setProfileData(prev => ({
-              ...prev,
-              address: {
-                ...prev.address,
-                street: cleanFields.street,
-                city: cleanFields.city,
-                state: cleanFields.state,
-                postalCode: cleanFields.postalCode,
-                country: 'India',
-                lat: latitude,
-                lng: longitude
-              },
-              serviceArea: cleanFields.city
-            }));
-            toast.success('Address auto-detected successfully!');
-          } else {
-            toast.error('Failed to resolve current address details');
-          }
-        } catch (error) {
-          toast.error('Error connecting to map service');
-        } finally {
-          setDetecting(false);
-        }
-      },
-      (error) => {
-        setDetecting(false);
-        console.error(error);
-        toast.error('Failed to retrieve location coordinates');
-      },
-      { enableHighAccuracy: true }
-    );
+    try {
+      const { latitude, longitude, address } = await detectCurrentLocation();
+      const fields = toLegacyAddressFields({ ...address, lat: latitude, lng: longitude });
+      setProfileData((prev) => ({
+        ...prev,
+        address: { ...prev.address, ...fields },
+        serviceArea: fields.city || prev.serviceArea
+      }));
+      toast.success('Address auto-detected successfully!');
+    } catch (error) {
+      toast.error(error.message || 'Failed to detect location');
+    } finally {
+      setDetecting(false);
+    }
   };
 
   const [fileUploads, setFileUploads] = useState({ profilePic: null, resume: null, passbookImage: null });
