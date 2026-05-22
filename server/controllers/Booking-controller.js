@@ -330,6 +330,13 @@ const autoAssignProviderIfEnabled = async (bookingId) => {
       return cat?._id ? cat._id.toString() : cat?.toString();
     }).filter(Boolean);
 
+    const { latLngToS2CellId, getNeighbors } = require('../utils/s2Helper');
+    let targetCell = booking.address?.s2CellId;
+    if (!targetCell) {
+      targetCell = latLngToS2CellId(lat, lng, 13);
+    }
+    const searchCells = [targetCell, ...getNeighbors(targetCell)];
+
     const query = {
       role: 'provider',
       isActive: true,
@@ -344,25 +351,43 @@ const autoAssignProviderIfEnabled = async (bookingId) => {
       ],
       'performanceScore.restrictionsActive': { $ne: true },
       services: { $all: bookingServicesCategories },
-      currentLocation: {
-        $near: {
-          $geometry: {
-            type: 'Point',
-            coordinates: [lng, lat]
-          },
-          $maxDistance: maxDistanceMeters
-        }
-      }
+      s2CellId: { $in: searchCells }
     };
 
     const nearbyProviders = await Provider.find(query);
 
-    if (!nearbyProviders || nearbyProviders.length === 0) {
-      console.log(`[AutoAssign] No nearby providers found for booking ${booking._id} within ${maxDistanceKm}km`);
+    const calculateDistance = (lat1, lon1, lat2, lon2) => {
+      const R = 6371e3; // metres
+      const φ1 = lat1 * Math.PI / 180;
+      const φ2 = lat2 * Math.PI / 180;
+      const Δφ = (lat2 - lat1) * Math.PI / 180;
+      const Δλ = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+                Math.cos(φ1) * Math.cos(φ2) *
+                Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    };
+
+    // Sort in memory by distance
+    const providersWithDistance = nearbyProviders.map(p => {
+      const pLng = p.currentLocation?.coordinates?.[0];
+      const pLat = p.currentLocation?.coordinates?.[1];
+      let dist = Infinity;
+      if (typeof pLat === 'number' && typeof pLng === 'number' && (pLat !== 0 || pLng !== 0)) {
+        dist = calculateDistance(lat, lng, pLat, pLng);
+      }
+      return { provider: p, distance: dist };
+    }).filter(item => item.distance <= maxDistanceMeters);
+
+    providersWithDistance.sort((a, b) => a.distance - b.distance);
+
+    if (providersWithDistance.length === 0) {
+      console.log(`[AutoAssign] No nearby providers found for booking ${booking._id} within ${maxDistanceKm}km (S2 Matchmaking)`);
       return null;
     }
 
-    const nearestProvider = nearbyProviders[0];
+    const nearestProvider = providersWithDistance[0].provider;
 
     // Auto-assign to nearest provider
     booking.provider = nearestProvider._id;
@@ -2652,6 +2677,32 @@ const startBooking = async (req, res) => {
     }
 
     const distance = calculateDistance(providerLat, providerLng, targetLoc.latitude, targetLoc.longitude);
+
+    // Dual-Layer S2 Precise Geofencing Verification (Level 15)
+    const { latLngToS2CellId, getNeighbors } = require('../utils/s2Helper');
+    const providerS2Precise = latLngToS2CellId(providerLat, providerLng, 15);
+    let targetS2Precise = booking.address?.s2CellIdPrecise;
+    if (!targetS2Precise) {
+      targetS2Precise = latLngToS2CellId(targetLoc.latitude, targetLoc.longitude, 15);
+    }
+    const acceptableCells = [targetS2Precise, ...getNeighbors(targetS2Precise)];
+    if (!acceptableCells.includes(providerS2Precise)) {
+      await createFraudLog(booking, 'failed_login', `S2 Geofence mismatch during start verification: Provider at ${providerLat}, ${providerLng} (Cell: ${providerS2Precise}) but target at ${targetLoc.latitude}, ${targetLoc.longitude} (Cell: ${targetS2Precise})`, 25, req);
+      
+      booking.statusHistory.push({
+        status: booking.status,
+        timestamp: new Date(),
+        note: `S2 Geofencing verification failed. Provider Cell: ${providerS2Precise}, Target Cell: ${targetS2Precise}.`,
+        updatedBy: 'system'
+      });
+      await booking.save();
+
+      return res.status(400).json({
+        success: false,
+        message: `S2 Geofencing verification failed. You are outside the precise geofence boundary of the service location.`
+      });
+    }
+
     if (distance > 200) {
       await createFraudLog(booking, 'failed_login', `Geofencing mismatch during start verification: Provider at ${providerLat}, ${providerLng} but target at ${targetLoc.latitude}, ${targetLoc.longitude} (Distance: ${Math.round(distance)}m)`, 25, req);
       
@@ -3052,6 +3103,34 @@ const completeBooking = async (req, res) => {
     }
 
     const distance = calculateDistance(providerLat, providerLng, targetLoc.latitude, targetLoc.longitude);
+
+    // Dual-Layer S2 Precise Geofencing Verification (Level 15)
+    const { latLngToS2CellId, getNeighbors } = require('../utils/s2Helper');
+    const providerS2Precise = latLngToS2CellId(providerLat, providerLng, 15);
+    let targetS2Precise = booking.address?.s2CellIdPrecise;
+    if (!targetS2Precise) {
+      targetS2Precise = latLngToS2CellId(targetLoc.latitude, targetLoc.longitude, 15);
+    }
+    const acceptableCells = [targetS2Precise, ...getNeighbors(targetS2Precise)];
+    if (!acceptableCells.includes(providerS2Precise)) {
+      await createFraudLog(booking, 'failed_login', `S2 Geofence mismatch during completion verification: Provider at ${providerLat}, ${providerLng} (Cell: ${providerS2Precise}) but target at ${targetLoc.latitude}, ${targetLoc.longitude} (Cell: ${targetS2Precise})`, 25, req);
+
+      booking.statusHistory.push({
+        status: booking.status,
+        timestamp: new Date(),
+        note: `S2 Geofencing verification failed. Provider Cell: ${providerS2Precise}, Target Cell: ${targetS2Precise}.`,
+        updatedBy: 'system'
+      });
+      await booking.save({ session });
+
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({
+        success: false,
+        message: `S2 Geofencing verification failed. You are outside the precise geofence boundary of the service location.`
+      });
+    }
+
     if (distance > 300) {
       await createFraudLog(booking, 'failed_login', `Geofencing mismatch during completion verification: Provider at ${providerLat}, ${providerLng} but target at ${targetLoc.latitude}, ${targetLoc.longitude} (Distance: ${Math.round(distance)}m)`, 25, req);
 

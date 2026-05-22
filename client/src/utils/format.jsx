@@ -2,6 +2,7 @@
  * Standard utility for formatting data across the application.
  * All formatting should be done through these functions to ensure consistency.
  */
+import { latLngToS2CellId } from './s2Helper';
 
 const FALLBACK = "--";
 
@@ -261,31 +262,18 @@ export const compressImage = (file, options = {}) => {
  */
 export const smartAddressBuilder = (addressObj, displayName = "") => {
   const addr = addressObj || {};
-  
-  // 1. Extract key address tokens
-  let houseNo = addr.house_number || addr.building || addr.flat || addr.apartment || addr.house || addr.unit || addr.office || addr.amenity || "";
-  let road = addr.road || addr.street || addr.footway || addr.path || "";
-  let neighbourhood = addr.neighbourhood || addr.quarter || addr.residential || addr.development || "";
-  let suburb = addr.suburb || addr.village || addr.townland || "";
-  let landmark = addr.landmark || addr.place || addr.commercial || addr.industrial || "";
-  let city = addr.city || addr.town || addr.municipality || addr.city_district || "";
-  let state = addr.state || "";
-  let pincode = addr.postcode || addr.postal_code || "";
-  
-  // Helper for cleaning up text tokens
+
   const cleanPart = (val) => {
     if (!val) return "";
     let s = val.toString().trim();
-    // Remove non-Latin characters (Devanagari, Gurmukhi, etc.)
-    s = s.replace(/[\u0900-\u097F\u0A00-\u0A7F]/g, "");
-    // Clean any dangling punctuation or extra spaces
+    s = s.replace(/[\u0900-\u097F\u0A00-\u0A7F]/g, ""); // strip Devanagari/Gurmukhi
     s = s.replace(/^[,.\s-]+|[,.\s-]+$/g, "").trim();
     return s;
   };
 
-  // Filter unwanted words
   const isUnwanted = (val) => {
-    const s = val.toLowerCase();
+    if (!val) return true;
+    const s = val.toString().toLowerCase();
     return (
       s.includes("tahsil") ||
       s.includes("tehsil") ||
@@ -298,147 +286,127 @@ export const smartAddressBuilder = (addressObj, displayName = "") => {
       s.includes("sub-district") ||
       s === "india" ||
       s === "county" ||
-      /^district$/i.test(s.trim()) ||
+      s === "state district" ||
+      s.includes("district") ||
+      s.includes("state_district") ||
       /[\u0900-\u097F\u0A00-\u0A7F]/.test(val)
     );
   };
+
+  let houseNo = cleanPart(addr.house_number || addr.house || addr.flat || addr.apartment || addr.unit || addr.office);
+  let building = cleanPart(addr.building || addr.apartments || addr.amenity);
+  let road = cleanPart(addr.road || addr.street || addr.footway || addr.path);
   
-  const candidates = [];
-  const addCandidate = (val) => {
-    const clean = cleanPart(val);
-    if (clean && !isUnwanted(clean)) {
-      candidates.push(clean);
-    }
+  // Locality priority: 1. suburb, 2. neighbourhood, 3. residential, 4. quarter, 5. hamlet
+  let locality = cleanPart(addr.suburb) ||
+                 cleanPart(addr.neighbourhood) ||
+                 cleanPart(addr.residential) ||
+                 cleanPart(addr.quarter) ||
+                 cleanPart(addr.hamlet) ||
+                 "";
+
+  let city = cleanPart(addr.city || addr.town || addr.municipality || addr.city_district);
+  let state = cleanPart(addr.state);
+  let pincode = cleanPart(addr.postcode || addr.postal_code);
+
+  const fallbackList = [houseNo, building, road, locality].filter(Boolean);
+  const getFallback = (val) => {
+    if (val && val.trim()) return val;
+    return fallbackList[0] || "";
   };
 
-  // Add extracted components in preferred logical order
-  addCandidate(houseNo);
-  addCandidate(road);
-  addCandidate(landmark);
-  addCandidate(neighbourhood);
-  addCandidate(suburb);
-  addCandidate(city);
-  addCandidate(state);
+  houseNo = getFallback(houseNo);
+  building = getFallback(building);
+  road = getFallback(road);
+  locality = getFallback(locality);
+
+  // Filter unwanted
+  if (isUnwanted(houseNo)) houseNo = "";
+  if (isUnwanted(building)) building = "";
+  if (isUnwanted(road)) road = "";
+  if (isUnwanted(locality)) locality = "";
+  if (isUnwanted(city)) city = "";
+  if (isUnwanted(state)) state = "";
+
+  const parts = [];
   
-  // If we have a display_name, parse it to recover specific missing details (e.g. "Phase 1")
+  // House/building details first
+  let houseBuildingPart = [houseNo, building].filter(Boolean).join(", ");
+  if (houseNo && building && (houseNo.toLowerCase().includes(building.toLowerCase()) || building.toLowerCase().includes(houseNo.toLowerCase()))) {
+    houseBuildingPart = houseNo.length > building.length ? houseNo : building;
+  }
+  if (houseBuildingPart) parts.push(houseBuildingPart);
+
+  if (road) parts.push(road);
+
+  // Recover specific missing details (e.g. "Phase 1", "Urban Estate Phase II", sector names) from displayName
   if (displayName) {
     const displayParts = displayName.split(",")
       .map(cleanPart)
       .filter(p => p && !isUnwanted(p));
-      
+
+    const cityLower = city ? city.toLowerCase() : "";
+    const stateLower = state ? state.toLowerCase() : "";
+
     for (const dp of displayParts) {
       const dpLower = dp.toLowerCase();
-      // Only insert if not already represented in the structured candidates list
-      const alreadyMatched = candidates.some(c => {
-        const cLower = c.toLowerCase();
-        return cLower.includes(dpLower) || dpLower.includes(cLower);
-      });
-      if (!alreadyMatched) {
-        // Insert before city/state if found, otherwise append
-        const cityLower = city ? city.toLowerCase() : "";
-        const stateLower = state ? state.toLowerCase() : "";
-        let insertIdx = candidates.length;
-        for (let i = 0; i < candidates.length; i++) {
-          const cLower = candidates[i].toLowerCase();
-          if (cLower === cityLower || cLower === stateLower) {
-            insertIdx = i;
-            break;
-          }
-        }
-        candidates.splice(insertIdx, 0, dp);
-      }
-    }
-  }
-  
-  const cleanPincode = cleanPart(pincode);
-  
-  // Deduplicate candidate strings token-wise
-  const uniqueCandidates = [];
-  for (const cand of candidates) {
-    const candLower = cand.toLowerCase();
-    let isDup = false;
-    for (let i = 0; i < uniqueCandidates.length; i++) {
-      const existingLower = uniqueCandidates[i].toLowerCase();
-      if (existingLower === candLower) {
-        isDup = true;
-        break;
-      }
-      // If one candidate is a sub-phrase of another, keep the longer/more specific one
-      if (existingLower.includes(candLower)) {
-        isDup = true;
-        break;
-      }
-      if (candLower.includes(existingLower)) {
-        uniqueCandidates[i] = cand;
-        isDup = true;
-        break;
-      }
-    }
-    if (!isDup) {
-      uniqueCandidates.push(cand);
-    }
-  }
-  
-  // Separate out state for special formatting at the end with the pincode
-  const cleanState = cleanPart(state);
-  let stateIdx = -1;
-  if (cleanState) {
-    stateIdx = uniqueCandidates.findIndex(c => c.toLowerCase() === cleanState.toLowerCase());
-  }
-  
-  let mainParts = [...uniqueCandidates];
-  let statePart = "";
-  
-  if (stateIdx !== -1) {
-    statePart = mainParts[stateIdx];
-    mainParts.splice(stateIdx, 1);
-  } else if (cleanState) {
-    statePart = cleanState;
-  }
-  
-  if (statePart && cleanPincode) {
-    if (!statePart.includes(cleanPincode)) {
-      statePart = `${statePart} ${cleanPincode}`;
-    }
-  } else if (cleanPincode) {
-    statePart = cleanPincode;
-  }
-  
-  if (statePart) {
-    mainParts.push(statePart);
-  }
-  
-  let formattedAddress = mainParts.join(", ");
-  
-  // Fallback to parsed displayName if the extracted structures were too sparse
-  if (!formattedAddress || mainParts.length < 2) {
-    if (displayName) {
-      const dp = displayName.split(",")
-        .map(cleanPart)
-        .filter(p => p && !isUnwanted(p));
-      
-      const uniqueDp = [];
-      for (const item of dp) {
-        if (!uniqueDp.some(x => x.toLowerCase() === item.toLowerCase() || x.toLowerCase().includes(item.toLowerCase()))) {
-          uniqueDp.push(item);
+      if (
+        dpLower.includes("phase") ||
+        dpLower.includes("sector") ||
+        dpLower.includes("block") ||
+        dpLower.includes("colony") ||
+        dpLower.includes("estate") ||
+        dpLower.includes("town") ||
+        dpLower.includes("urban")
+      ) {
+        const matched = parts.some(p => p.toLowerCase().includes(dpLower) || dpLower.includes(p.toLowerCase()));
+        if (!matched && dpLower !== cityLower && dpLower !== stateLower) {
+          parts.push(dp);
         }
       }
-      
-      if (cleanPincode) {
-        const lastIdx = uniqueDp.length - 1;
-        if (lastIdx >= 0) {
-          if (!uniqueDp[lastIdx].includes(cleanPincode)) {
-            uniqueDp[lastIdx] = `${uniqueDp[lastIdx]} ${cleanPincode}`;
-          }
-        } else {
-          uniqueDp.push(cleanPincode);
-        }
-      }
-      formattedAddress = uniqueDp.join(", ");
     }
   }
-  
-  return formattedAddress || displayName || "Unknown Location";
+
+  if (locality) {
+    const matched = parts.some(p => p.toLowerCase().includes(locality.toLowerCase()) || locality.toLowerCase().includes(p.toLowerCase()));
+    if (!matched) {
+      parts.push(locality);
+    }
+  }
+
+  if (city) {
+    const matched = parts.some(p => p.toLowerCase().includes(city.toLowerCase()) || city.toLowerCase().includes(p.toLowerCase()));
+    if (!matched) {
+      parts.push(city);
+    }
+  }
+
+  if (state) {
+    const matched = parts.some(p => p.toLowerCase().includes(state.toLowerCase()) || state.toLowerCase().includes(p.toLowerCase()));
+    let stateString = state;
+    if (pincode) {
+      stateString = `${state} ${pincode}`;
+    }
+    if (!matched) {
+      parts.push(stateString);
+    } else {
+      const idx = parts.findIndex(p => p.toLowerCase().includes(state.toLowerCase()));
+      if (idx !== -1) {
+        parts[idx] = stateString;
+      }
+    }
+  } else if (pincode) {
+    parts.push(pincode);
+  }
+
+  const uniqueParts = [];
+  for (const part of parts) {
+    if (!uniqueParts.some(p => p.toLowerCase() === part.toLowerCase())) {
+      uniqueParts.push(part);
+    }
+  }
+
+  return uniqueParts.join(", ");
 };
 
 /**
@@ -453,7 +421,6 @@ export const smartAddressBuilder = (addressObj, displayName = "") => {
 export const cleanAddressFields = (addressObj, displayName = "") => {
   const addr = addressObj || {};
   
-  // Clean string helper
   const cleanPart = (val) => {
     if (!val) return "";
     let s = val.toString().trim();
@@ -463,7 +430,8 @@ export const cleanAddressFields = (addressObj, displayName = "") => {
   };
 
   const isUnwanted = (val) => {
-    const s = val.toLowerCase();
+    if (!val) return true;
+    const s = val.toString().toLowerCase();
     return (
       s.includes("tahsil") ||
       s.includes("tehsil") ||
@@ -476,71 +444,90 @@ export const cleanAddressFields = (addressObj, displayName = "") => {
       s.includes("sub-district") ||
       s === "india" ||
       s === "county" ||
-      /^district$/i.test(s.trim()) ||
+      s === "state district" ||
+      s.includes("district") ||
+      s.includes("state_district") ||
       /[\u0900-\u097F\u0A00-\u0A7F]/.test(val)
     );
   };
 
-  // 1. Extract base fields
-  let houseNo = addr.house_number || addr.building || addr.flat || addr.apartment || addr.house || addr.unit || addr.office || addr.amenity || "";
-  let road = addr.road || addr.street || addr.footway || addr.path || "";
-  let neighbourhood = addr.neighbourhood || addr.quarter || addr.residential || addr.development || "";
-  let suburb = addr.suburb || addr.village || addr.townland || "";
-  let landmark = addr.landmark || addr.place || addr.commercial || addr.industrial || "";
-  
-  let city = addr.city || addr.town || addr.municipality || addr.city_district || "";
-  let state = addr.state || "";
-  let pincode = addr.postcode || addr.postal_code || "";
+  // 1. Gather raw tokens
+  let houseNo = cleanPart(addr.house_number || addr.house || addr.flat || addr.apartment || addr.unit || addr.office);
+  let building = cleanPart(addr.building || addr.apartments || addr.amenity);
+  let road = cleanPart(addr.road || addr.street || addr.footway || addr.path);
+  let residential = cleanPart(addr.residential || addr.development);
+  let neighbourhood = cleanPart(addr.neighbourhood || addr.quarter);
+  let suburb = cleanPart(addr.suburb || addr.village || addr.townland);
+  let quarter = cleanPart(addr.quarter);
+  let hamlet = cleanPart(addr.hamlet);
+  let landmark = cleanPart(addr.landmark || addr.place || addr.commercial || addr.industrial);
+  let city = cleanPart(addr.city || addr.town || addr.municipality || addr.city_district);
+  let state = cleanPart(addr.state);
+  let pincode = cleanPart(addr.postcode || addr.postal_code);
 
-  // Clean them
-  houseNo = cleanPart(houseNo);
-  road = cleanPart(road);
-  neighbourhood = cleanPart(neighbourhood);
-  suburb = cleanPart(suburb);
-  landmark = cleanPart(landmark);
-  city = cleanPart(city);
-  state = cleanPart(state);
-  pincode = cleanPart(pincode);
+  // Apply locality priority list: suburb -> neighbourhood -> residential -> quarter -> hamlet
+  let locality = suburb || neighbourhood || residential || quarter || hamlet || "";
+  let area = locality || "";
 
-  // 2. Build candidates list for street
-  const candidates = [];
-  const addCandidate = (val) => {
-    if (val && !isUnwanted(val)) {
-      candidates.push(val);
-    }
+  // The fallback array in order: house_number -> building -> road -> residential -> suburb -> neighbourhood
+  const fallbackList = [houseNo, building, road, residential, suburb, neighbourhood].filter(Boolean);
+
+  const getFallback = (val) => {
+    if (val && val.trim()) return val;
+    return fallbackList[0] || "";
   };
 
-  addCandidate(houseNo);
-  addCandidate(road);
-  addCandidate(landmark);
-  addCandidate(neighbourhood);
-  addCandidate(suburb);
+  // Populate all fields using empty field fallback order to avoid blank values
+  let finalHouseNumber = getFallback(houseNo);
+  let finalBuilding = getFallback(building);
+  let finalRoad = getFallback(road);
+  let finalLocality = getFallback(locality);
+  let finalLandmark = getFallback(landmark);
+  let finalArea = getFallback(area);
+  let finalCity = city || "Jalandhar";
+  let finalState = state || "Punjab";
+  let finalPincode = pincode || "";
 
-  // If we have displayName, let's extract extra tokens (like "Phase 1") that are NOT city, state, or pincode
+  // Filter out unwanted terms from finalized fields
+  if (isUnwanted(finalHouseNumber)) finalHouseNumber = "";
+  if (isUnwanted(finalBuilding)) finalBuilding = "";
+  if (isUnwanted(finalRoad)) finalRoad = "";
+  if (isUnwanted(finalLocality)) finalLocality = "";
+  if (isUnwanted(finalLandmark)) finalLandmark = "";
+  if (isUnwanted(finalArea)) finalArea = "";
+  if (isUnwanted(finalCity)) finalCity = "";
+  if (isUnwanted(finalState)) finalState = "";
+
+  // Make sure they have fallbacks if the clean operations emptied them
+  finalHouseNumber = getFallback(finalHouseNumber);
+  finalBuilding = getFallback(finalBuilding);
+  finalRoad = getFallback(finalRoad);
+  finalLocality = getFallback(finalLocality);
+  finalArea = getFallback(finalArea);
+
+  // If we have displayName, parse it for extra details (like "Phase 1")
+  let candidates = [finalHouseNumber, finalBuilding, finalRoad, finalLocality].filter(Boolean);
   if (displayName) {
     const displayParts = displayName.split(",")
       .map(cleanPart)
       .filter(p => p && !isUnwanted(p));
 
-    const cityLower = city.toLowerCase();
-    const stateLower = state.toLowerCase();
-    const pincodeLower = pincode.toLowerCase();
+    const cityLower = finalCity.toLowerCase();
+    const stateLower = finalState.toLowerCase();
+    const pincodeLower = finalPincode.toLowerCase();
 
     for (const dp of displayParts) {
       const dpLower = dp.toLowerCase();
-      
-      // Skip if it represents city, state, or pincode
       if (
         dpLower === cityLower || 
         dpLower === stateLower || 
         dpLower === pincodeLower || 
-        cityLower.includes(dpLower) ||
-        stateLower.includes(dpLower)
+        (cityLower && cityLower.includes(dpLower)) ||
+        (stateLower && stateLower.includes(dpLower))
       ) {
         continue;
       }
 
-      // Check if it's already in candidates
       const alreadyMatched = candidates.some(c => {
         const cLower = c.toLowerCase();
         return cLower.includes(dpLower) || dpLower.includes(cLower);
@@ -548,22 +535,21 @@ export const cleanAddressFields = (addressObj, displayName = "") => {
 
       if (!alreadyMatched) {
         candidates.push(dp);
+        // Put in road if road is blank, or in area
+        if (!finalRoad) finalRoad = dp;
+        else if (!finalLocality || finalLocality === finalRoad) finalLocality = dp;
       }
     }
   }
 
-  // Deduplicate candidates
+  // Final deduplication
   const uniqueCandidates = [];
   for (const cand of candidates) {
     const candLower = cand.toLowerCase();
     let isDup = false;
     for (let i = 0; i < uniqueCandidates.length; i++) {
       const existingLower = uniqueCandidates[i].toLowerCase();
-      if (existingLower === candLower) {
-        isDup = true;
-        break;
-      }
-      if (existingLower.includes(candLower)) {
+      if (existingLower === candLower || existingLower.includes(candLower)) {
         isDup = true;
         break;
       }
@@ -579,57 +565,30 @@ export const cleanAddressFields = (addressObj, displayName = "") => {
   }
 
   let streetAddress = uniqueCandidates.join(", ");
-
-  // Fallback to parsing display_name if streetAddress is too sparse
-  if ((!streetAddress || uniqueCandidates.length < 1) && displayName) {
-    const displayParts = displayName.split(",")
-      .map(cleanPart)
-      .filter(p => p && !isUnwanted(p));
-
-    const cityLower = city.toLowerCase();
-    const stateLower = state.toLowerCase();
-    const pincodeLower = pincode.toLowerCase();
-
-    const filtered = displayParts.filter(p => {
-      const pLower = p.toLowerCase();
-      return (
-        pLower !== cityLower && 
-        pLower !== stateLower && 
-        pLower !== pincodeLower &&
-        !cityLower.includes(pLower) &&
-        !stateLower.includes(pLower)
-      );
-    });
-
-    const uniqueFiltered = [];
-    for (const item of filtered) {
-      if (!uniqueFiltered.some(x => x.toLowerCase() === item.toLowerCase() || x.toLowerCase().includes(item.toLowerCase()))) {
-        uniqueFiltered.push(item);
-      }
-    }
-    streetAddress = uniqueFiltered.join(", ");
-  }
-
-  // Make sure city, state, postalCode are cleaned of tahsils or non-Latin scripts
-  if (isUnwanted(city)) city = "";
-  if (isUnwanted(state)) state = "";
-
-  const area = [neighbourhood, suburb].filter(Boolean).join(", ");
   const formattedAddress = smartAddressBuilder(addr, displayName);
 
+  // Check if we only found city + pincode (no granular details)
+  const hasGranularDetails = !!(
+    houseNo || building || road || residential || neighbourhood || suburb || quarter || hamlet || landmark
+  );
+  const isCityCenterOnly = !hasGranularDetails;
+
   return {
-    street: streetAddress || road || formattedAddress || "",
-    city: city || "",
-    state: state || "",
-    postalCode: pincode || "",
-    pincode: pincode || "",
-    addressLine: streetAddress || road || "",
-    houseNumber: houseNo || "",
-    road: road || "",
-    landmark: landmark || "",
-    area: area || suburb || neighbourhood || "",
+    street: streetAddress || finalRoad || formattedAddress || "",
+    city: finalCity,
+    state: finalState,
+    postalCode: finalPincode,
+    pincode: finalPincode,
+    addressLine: streetAddress || finalRoad || "",
+    houseNumber: finalHouseNumber || "",
+    building: finalBuilding || "",
+    road: finalRoad || "",
+    locality: finalLocality || "",
+    landmark: finalLandmark || "",
+    area: finalArea || finalLocality || "",
     country: cleanPart(addr.country) || "India",
     formattedAddress: formattedAddress || streetAddress || "",
+    isCityCenterOnly,
     lat: null,
     lng: null
   };
@@ -667,7 +626,7 @@ const mergePhotonNominatim = (photonProps, nominatimAddr, displayName) => {
 };
 
 /**
- * Reverse geocode with Photon (primary) + Nominatim (fallback) and smart cache.
+ * Reverse geocode with Nominatim (primary, zoom=18) + Photon (fallback) and smart cache.
  */
 export const reverseGeocode = async (lat, lng) => {
   const cacheKey = coordCacheKey(lat, lng);
@@ -680,19 +639,10 @@ export const reverseGeocode = async (lat, lng) => {
   let nominatimAddr = null;
   let displayName = "";
 
-  try {
-    const photonRes = await fetch(
-      `https://photon.komoot.io/reverse?lat=${lat}&lon=${lng}&lang=en`
-    );
-    const photonJson = await photonRes.json();
-    if (photonJson?.features?.[0]?.properties) {
-      photonProps = photonJson.features[0].properties;
-    }
-  } catch (_) { /* Photon optional */ }
-
+  // 1. Try Nominatim Primary (zoom=19 for building granularity)
   try {
     const nomRes = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1&accept-language=en`,
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=19&addressdetails=1&accept-language=en`,
       { headers: { "User-Agent": GEOCODE_USER_AGENT } }
     );
     const nomJson = await nomRes.json();
@@ -700,7 +650,24 @@ export const reverseGeocode = async (lat, lng) => {
       nominatimAddr = nomJson.address;
       displayName = nomJson.display_name || "";
     }
-  } catch (_) { /* Nominatim fallback failed */ }
+  } catch (_) { /* Nominatim primary failed, fallback to Photon */ }
+
+  // 2. Try Photon Fallback only if Nominatim failed
+  if (!nominatimAddr) {
+    try {
+      const photonRes = await fetch(
+        `https://photon.komoot.io/reverse?lat=${lat}&lon=${lng}&lang=en`
+      );
+      const photonJson = await photonRes.json();
+      if (photonJson?.features?.[0]?.properties) {
+        photonProps = photonJson.features[0].properties;
+        const props = photonJson.features[0].properties;
+        displayName = props.name || props.street || "";
+        if (props.city) displayName += (displayName ? ", " : "") + props.city;
+        if (props.state) displayName += (displayName ? ", " : "") + props.state;
+      }
+    } catch (_) { /* Photon fallback failed */ }
+  }
 
   const merged = mergePhotonNominatim(photonProps, nominatimAddr, displayName);
   const structured = cleanAddressFields(merged, displayName);
@@ -712,58 +679,146 @@ export const reverseGeocode = async (lat, lng) => {
 };
 
 /**
- * GPS + reverse geocode — use for "Detect Location" buttons.
+ * GPS + reverse geocode — use for "Detect Location" buttons with stabilization (up to 3 watched readings, target accuracy <= 50m).
  */
-export const detectCurrentLocation = (options = {}) =>
-  new Promise((resolve, reject) => {
-    if (!navigator.geolocation) {
-      reject(new Error("Geolocation is not supported by your browser"));
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
+export const detectCurrentLocation = (options = {}) => {
+  const maxRetries = 2;
+  let retryCount = 0;
+
+  const executeDetection = () =>
+    new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error("Geolocation is not supported by your browser"));
+        return;
+      }
+
+      let watchId = null;
+      let updateCount = 0;
+      let bestPos = null;
+
+      const clearWatchSafe = () => {
+        if (watchId !== null) {
+          navigator.geolocation.clearWatch(watchId);
+          watchId = null;
+        }
+      };
+
+      const timeoutId = setTimeout(() => {
+        clearWatchSafe();
+        if (bestPos && bestPos.coords.accuracy <= 30) {
+          resolvePosition(bestPos);
+        } else {
+          if (retryCount < maxRetries) {
+            retryCount++;
+            console.warn(`GPS accuracy too low or timed out. Retrying attempt ${retryCount}...`);
+            clearTimeout(timeoutId);
+            resolve(executeDetection());
+          } else {
+            if (bestPos) {
+              console.warn(`Best position accuracy is ${bestPos.coords.accuracy}m (target <= 30m). Resolving anyway.`);
+              resolvePosition(bestPos);
+            } else {
+              reject(new Error("Location request timed out. Please retry."));
+            }
+          }
+        }
+      }, options.timeout ?? 20000);
+
+      const resolvePosition = async (pos) => {
+        clearTimeout(timeoutId);
+        clearWatchSafe();
         try {
           const { latitude, longitude, accuracy } = pos.coords;
           const address = await reverseGeocode(latitude, longitude);
-          resolve({ latitude, longitude, accuracy, address });
+          // Compute S2 cell IDs so all callers get them immediately
+          const s2CellId = latLngToS2CellId(latitude, longitude, 13);
+          const s2CellIdPrecise = latLngToS2CellId(latitude, longitude, 15);
+          resolve({ latitude, longitude, accuracy, address: { ...address, lat: latitude, lng: longitude, s2CellId, s2CellIdPrecise } });
         } catch (err) {
           reject(err);
         }
-      },
-      (err) => {
-        const msg =
-          err.code === 1
-            ? "Location permission denied. Enable GPS in browser settings."
-            : err.code === 2
-              ? "Location unavailable. Try again outdoors."
-              : "Location request timed out. Please retry.";
-        reject(new Error(msg));
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: options.timeout ?? 15000,
-        maximumAge: options.maximumAge ?? 0
-      }
-    );
-  });
+      };
 
-/** Map structured address to legacy form fields */
-export const toLegacyAddressFields = (structured) => ({
-  street: structured.street || structured.addressLine || structured.formattedAddress || "",
-  city: structured.city || "",
-  state: structured.state || "",
-  postalCode: structured.postalCode || structured.pincode || "",
-  country: structured.country || "India",
-  lat: structured.lat,
-  lng: structured.lng,
-  addressLine: structured.addressLine || structured.street || "",
-  houseNumber: structured.houseNumber || "",
-  road: structured.road || "",
-  landmark: structured.landmark || "",
-  area: structured.area || "",
-  pincode: structured.pincode || structured.postalCode || "",
-  formattedAddress: structured.formattedAddress || smartAddressBuilder(structured, "")
-});
+      watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          updateCount++;
+          const currentAccuracy = pos.coords.accuracy;
+
+          if (!bestPos || currentAccuracy < bestPos.coords.accuracy) {
+            bestPos = pos;
+          }
+
+          if (currentAccuracy <= 30) {
+            resolvePosition(pos);
+          } else if (updateCount >= 3) {
+            if (bestPos.coords.accuracy <= 30) {
+              resolvePosition(bestPos);
+            } else {
+              if (retryCount < maxRetries) {
+                retryCount++;
+                console.warn(`GPS accuracy too low (${bestPos.coords.accuracy}m > 30m) after 3 updates. Retrying...`);
+                clearTimeout(timeoutId);
+                clearWatchSafe();
+                resolve(executeDetection());
+              } else {
+                resolvePosition(bestPos);
+              }
+            }
+          }
+        },
+        (err) => {
+          clearTimeout(timeoutId);
+          clearWatchSafe();
+          if (retryCount < maxRetries) {
+            retryCount++;
+            console.warn(`GPS error: ${err.message}. Retrying...`);
+            resolve(executeDetection());
+          } else {
+            const msg =
+              err.code === 1
+                ? "Location permission denied. Enable GPS in browser settings."
+                : err.code === 2
+                  ? "Location unavailable. Try again outdoors."
+                  : "Location request timed out. Please retry.";
+            reject(new Error(msg));
+          }
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: options.timeout ?? 20000,
+          maximumAge: 0,
+        }
+      );
+    });
+
+  return executeDetection();
+};
+
+/** Map structured address to legacy form fields (also computes S2 cells if lat/lng present) */
+export const toLegacyAddressFields = (structured) => {
+  const lat = structured.lat;
+  const lng = structured.lng;
+  const s2CellId = (lat && lng) ? latLngToS2CellId(lat, lng, 13) : (structured.s2CellId || null);
+  const s2CellIdPrecise = (lat && lng) ? latLngToS2CellId(lat, lng, 15) : (structured.s2CellIdPrecise || null);
+  return {
+    street: structured.street || structured.addressLine || structured.formattedAddress || "",
+    city: structured.city || "",
+    state: structured.state || "",
+    postalCode: structured.postalCode || structured.pincode || "",
+    country: structured.country || "India",
+    lat,
+    lng,
+    s2CellId,
+    s2CellIdPrecise,
+    addressLine: structured.addressLine || structured.street || "",
+    houseNumber: structured.houseNumber || "",
+    road: structured.road || "",
+    landmark: structured.landmark || "",
+    area: structured.area || "",
+    pincode: structured.pincode || structured.postalCode || "",
+    formattedAddress: structured.formattedAddress || smartAddressBuilder(structured, "")
+  };
+};
 
 /** Filter GPS jitter — ignore moves smaller than minMeters */
 export const filterGPSJitter = (prev, next, minMeters = 8) => {

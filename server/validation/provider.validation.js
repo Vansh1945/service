@@ -47,7 +47,16 @@ const completeProfileSchema = z.object({
   postalCode: z.string().regex(/^\d{6}$/, "Postal code must be 6 digits"),
   country: z.string().optional(),
   accountNo: z.string().regex(/^[0-9]{9,18}$/, "Please enter a valid account number (9-18 digits)"),
-  ifsc: z.string().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, "Please enter a valid IFSC code")
+  ifsc: z.string().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, "Please enter a valid IFSC code"),
+  lat: z.union([z.number(), z.string()]).nullable().optional().transform(val => (val === null || val === undefined || val === '') ? null : parseFloat(val)),
+  lng: z.union([z.number(), z.string()]).nullable().optional().transform(val => (val === null || val === undefined || val === '') ? null : parseFloat(val)),
+  houseNumber: z.string().optional().or(z.literal('')),
+  road: z.string().optional().or(z.literal('')),
+  landmark: z.string().optional().or(z.literal('')),
+  area: z.string().optional().or(z.literal('')),
+  pincode: z.string().optional().or(z.literal('')),
+  formattedAddress: z.string().optional().or(z.literal('')),
+  addressLine: z.string().optional().or(z.literal(''))
 });
 
 const updateProviderProfileSchema = z.object({
@@ -78,7 +87,16 @@ const updateProviderProfileSchema = z.object({
   ifsc: z.string().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, "Please enter a valid IFSC code").optional(),
   bankName: z.string().optional(),
   accountName: z.string().optional(),
-  updateType: z.string().optional()
+  updateType: z.string().optional(),
+  lat: z.union([z.number(), z.string()]).nullable().optional().transform(val => (val === null || val === undefined || val === '') ? null : parseFloat(val)),
+  lng: z.union([z.number(), z.string()]).nullable().optional().transform(val => (val === null || val === undefined || val === '') ? null : parseFloat(val)),
+  houseNumber: z.string().optional().or(z.literal('')),
+  road: z.string().optional().or(z.literal('')),
+  landmark: z.string().optional().or(z.literal('')),
+  area: z.string().optional().or(z.literal('')),
+  pincode: z.string().optional().or(z.literal('')),
+  formattedAddress: z.string().optional().or(z.literal('')),
+  addressLine: z.string().optional().or(z.literal(''))
 });
 
 module.exports = {

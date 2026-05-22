@@ -90,7 +90,9 @@ const ProviderProfile = () => {
       postalCode: '',
       country: 'India',
       lat: null,
-      lng: null
+      lng: null,
+      s2CellId: null,
+      s2CellIdPrecise: null
     },
     bankDetails: {
       accountNo: '',
@@ -260,6 +262,13 @@ const ProviderProfile = () => {
           if (profileData.address.lng !== undefined && profileData.address.lng !== null) {
             formData.append('lng', profileData.address.lng);
           }
+          // houseNumber, road, landmark, area fields if present
+          if (profileData.address.houseNumber) formData.append('houseNumber', profileData.address.houseNumber);
+          if (profileData.address.road) formData.append('road', profileData.address.road);
+          if (profileData.address.landmark) formData.append('landmark', profileData.address.landmark);
+          if (profileData.address.area) formData.append('area', profileData.address.area);
+          if (profileData.address.pincode) formData.append('pincode', profileData.address.pincode);
+          if (profileData.address.formattedAddress) formData.append('formattedAddress', profileData.address.formattedAddress);
           break;
         case 'bank':
           formData.append('accountNo', profileData.bankDetails.accountNo);
@@ -547,33 +556,33 @@ const ProviderProfile = () => {
                   </div>
                 </div>
 
-                  {/* Experience ID Proof */}
-                  <div className="bg-white rounded-xl p-6 text-center border border-gray-100 shadow-sm relative group">
-                    <div className="w-16 h-16 mx-auto bg-primary/5 rounded-full flex items-center justify-center mb-4 text-primary group-hover:scale-110 transition-transform">
-                      <FileText className="w-8 h-8" />
-                    </div>
-                    <h4 className="font-bold text-secondary text-sm mb-2 uppercase tracking-tight">Experience / ID Proof</h4>
-                    <span className={`inline-block px-3 py-1 text-[10px] font-black uppercase tracking-tighter rounded-full mb-4 ${profileData.resume ? 'bg-primary/10 text-primary' : 'bg-red-50 text-red-500'
-                      }`}>
-                      {profileData.resume ? '✓ Verified Proof' : '✗ Multi-Proof ID'}
-                    </span>
-                    <div className="space-y-2">
-                      <input id="resumeUpload" type="file" onChange={(e) => handleFileChange(e, 'resume')} accept=".pdf,.doc,.docx,image/*" className="hidden" />
-                      <label htmlFor="resumeUpload" className="block w-full px-4 py-2.5 bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl text-xs font-bold text-secondary hover:border-primary transition-all cursor-pointer">
-                        <Upload className="w-3.5 h-3.5 inline mr-2" /> Upload ID Proof
-                      </label>
-                      {fileUploads.resume && (
-                        <button onClick={() => updateProfile('resume')} className="block w-full px-4 py-2.5 bg-accent text-white rounded-xl text-xs font-black shadow-lg shadow-accent/20">
-                          <Check className="w-3.5 h-3.5 inline mr-2" /> Submit Document
-                        </button>
-                      )}
-                      {profileData.resume && (
-                        <button onClick={() => viewDocument('resume')} className="block w-full px-4 py-2.5 bg-secondary text-white rounded-xl text-xs font-bold hover:opacity-90 transition-opacity">
-                          <Eye className="w-3.5 h-3.5 inline mr-2" /> View Document
-                        </button>
-                      )}
-                    </div>
+                {/* Experience ID Proof */}
+                <div className="bg-white rounded-xl p-6 text-center border border-gray-100 shadow-sm relative group">
+                  <div className="w-16 h-16 mx-auto bg-primary/5 rounded-full flex items-center justify-center mb-4 text-primary group-hover:scale-110 transition-transform">
+                    <FileText className="w-8 h-8" />
                   </div>
+                  <h4 className="font-bold text-secondary text-sm mb-2 uppercase tracking-tight">Experience / ID Proof</h4>
+                  <span className={`inline-block px-3 py-1 text-[10px] font-black uppercase tracking-tighter rounded-full mb-4 ${profileData.resume ? 'bg-primary/10 text-primary' : 'bg-red-50 text-red-500'
+                    }`}>
+                    {profileData.resume ? '✓ Verified Proof' : '✗ Multi-Proof ID'}
+                  </span>
+                  <div className="space-y-2">
+                    <input id="resumeUpload" type="file" onChange={(e) => handleFileChange(e, 'resume')} accept=".pdf,.doc,.docx,image/*" className="hidden" />
+                    <label htmlFor="resumeUpload" className="block w-full px-4 py-2.5 bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl text-xs font-bold text-secondary hover:border-primary transition-all cursor-pointer">
+                      <Upload className="w-3.5 h-3.5 inline mr-2" /> Upload ID Proof
+                    </label>
+                    {fileUploads.resume && (
+                      <button onClick={() => updateProfile('resume')} className="block w-full px-4 py-2.5 bg-accent text-white rounded-xl text-xs font-black shadow-lg shadow-accent/20">
+                        <Check className="w-3.5 h-3.5 inline mr-2" /> Submit Document
+                      </button>
+                    )}
+                    {profileData.resume && (
+                      <button onClick={() => viewDocument('resume')} className="block w-full px-4 py-2.5 bg-secondary text-white rounded-xl text-xs font-bold hover:opacity-90 transition-opacity">
+                        <Eye className="w-3.5 h-3.5 inline mr-2" /> View Document
+                      </button>
+                    )}
+                  </div>
+                </div>
 
                 {/* Passbook */}
                 <div className="bg-white rounded-xl p-6 text-center border border-gray-100 shadow-sm relative group">
@@ -698,14 +707,14 @@ const ProviderProfile = () => {
                           <label className="block text-xs font-semibold text-gray-600 mb-2 uppercase">Services (Max 3)</label>
                           <div className="grid grid-cols-2 gap-3 bg-white p-4 rounded-lg border border-gray-200 max-h-48 overflow-y-auto">
                             {providerServices.map(service => (
-                                  <label key={service.value} className="flex items-center gap-2">
-                                    <input type="checkbox" checked={(profileData.services || []).includes(service.value)}
-                                      onChange={() => handleServiceChange(service.value)}
-                                      disabled={(profileData.services || []).length >= 3 && !(profileData.services || []).includes(service.value)}
-                                      className="w-4 h-4 text-primary rounded" />
-                                    <span className="text-sm text-gray-700">{service.label}</span>
-                                  </label>
-                                ))}
+                              <label key={service.value} className="flex items-center gap-2">
+                                <input type="checkbox" checked={(profileData.services || []).includes(service.value)}
+                                  onChange={() => handleServiceChange(service.value)}
+                                  disabled={(profileData.services || []).length >= 3 && !(profileData.services || []).includes(service.value)}
+                                  className="w-4 h-4 text-primary rounded" />
+                                <span className="text-sm text-gray-700">{service.label}</span>
+                              </label>
+                            ))}
                           </div>
                           <p className="text-xs text-gray-500 mt-2">Selected: {(profileData.services || []).length}/3</p>
                         </div>
@@ -763,29 +772,21 @@ const ProviderProfile = () => {
 
                     {editMode.address ? (
                       <form onSubmit={(e) => { e.preventDefault(); updateProfile('address'); }} className="space-y-3">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2">
+                        <div className="flex justify-center items-center py-2">
                           <button
                             type="button"
                             onClick={() => setIsMapOpen(true)}
-                            className="w-full py-2.5 px-4 bg-primary/10 hover:bg-primary/15 text-primary border border-primary/25 hover:border-primary/40 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 group shadow-sm"
+                            className="bg-red-500 hover:bg-red-600 text-white rounded-full p-3 shadow-lg shadow-red-500/20 active:scale-95 transition-all flex items-center justify-center"
+                            title="Select Location on Map"
                           >
-                            <MapPin className="w-4 h-4 text-primary group-hover:scale-110 transition-transform" />
-                            Select on Map
-                          </button>
-                          <button
-                            type="button"
-                            disabled={detecting}
-                            onClick={handleDetectAddress}
-                            className="w-full py-2.5 px-4 bg-accent/10 hover:bg-accent/15 text-accent border border-accent/25 hover:border-accent/40 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 group shadow-sm disabled:opacity-50"
-                          >
-                            <Navigation className={`w-4 h-4 text-accent group-hover:scale-110 transition-transform ${detecting ? 'animate-ping' : ''}`} />
-                            {detecting ? 'Detecting Location...' : 'Auto-Detect Location'}
+                            <MapPin className="w-5 h-5" />
                           </button>
                         </div>
                         <LocationPickerModal
                           isOpen={isMapOpen}
                           onClose={() => setIsMapOpen(false)}
                           onLocationSelect={(loc) => {
+                            // loc includes s2CellId and s2CellIdPrecise from LocationPickerModal
                             setProfileData(prev => ({
                               ...prev,
                               address: {
@@ -796,18 +797,21 @@ const ProviderProfile = () => {
                                 postalCode: loc.postalCode,
                                 country: 'India',
                                 lat: loc.lat,
-                                lng: loc.lng
+                                lng: loc.lng,
+                                s2CellId: loc.s2CellId || null,
+                                s2CellIdPrecise: loc.s2CellIdPrecise || null,
+                                houseNumber: loc.houseNumber || prev.address.houseNumber,
+                                road: loc.road || prev.address.road,
+                                landmark: loc.landmark || prev.address.landmark,
+                                area: loc.area || prev.address.area,
+                                pincode: loc.pincode || loc.postalCode || prev.address.pincode,
+                                formattedAddress: loc.formattedAddress || prev.address.formattedAddress
                               },
                               serviceArea: loc.city
                             }));
-                            toast.success('Location & coordinates loaded successfully!');
                           }}
                         />
-                        {profileData.address.lat && profileData.address.lng && (
-                          <p className="text-[10px] text-green-600 font-bold bg-green-50 border border-green-200 px-3 py-1.5 rounded-lg">
-                            ✔ Map coordinates attached: {profileData.address.lat.toFixed(5)}, {profileData.address.lng.toFixed(5)}
-                          </p>
-                        )}
+
                         <div className="grid grid-cols-2 gap-3">
                           <input type="text" name="street" placeholder="Street" value={profileData.address.street}
                             onChange={(e) => handleChange(e, 'address')} className="col-span-2 px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-secondary" />

@@ -634,6 +634,41 @@ const AdminProviders = () => {
                     </div>
                   </div>
                 </div>
+
+                {/* S2 Geofence Telemetry */}
+                {(selectedProvider.address?.s2CellId || selectedProvider.address?.s2CellIdPrecise) && (
+                  <div className="mt-4 bg-slate-900 p-3 rounded-lg border border-slate-700">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                      <MapPin className="w-3 h-3 text-teal-400" /> S2 Geofence Telemetry
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {selectedProvider.address?.s2CellId && (
+                        <div className="flex justify-between items-center bg-slate-950/50 p-2 rounded border border-slate-800">
+                          <span className="text-[10px] text-slate-400 font-medium">Level 13 (≈1km²)</span>
+                          <span className="font-mono text-[10px] text-teal-300">
+                            {selectedProvider.address.s2CellId}
+                          </span>
+                        </div>
+                      )}
+                      {selectedProvider.address?.s2CellIdPrecise && (
+                        <div className="flex justify-between items-center bg-slate-950/50 p-2 rounded border border-slate-800">
+                          <span className="text-[10px] text-slate-400 font-medium">Level 15 (≈150m²)</span>
+                          <span className="font-mono text-[10px] text-emerald-300">
+                            {selectedProvider.address.s2CellIdPrecise}
+                          </span>
+                        </div>
+                      )}
+                      {selectedProvider.address?.lat && selectedProvider.address?.lng && (
+                        <div className="flex justify-between items-center bg-slate-950/50 p-2 rounded border border-slate-800">
+                          <span className="text-[10px] text-slate-400 font-medium">Coordinates</span>
+                          <span className="font-mono text-[10px] text-slate-300">
+                            {parseFloat(selectedProvider.address.lat).toFixed(6)}, {parseFloat(selectedProvider.address.lng).toFixed(6)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Professional Information */}

@@ -126,6 +126,8 @@ const providerSchema = new mongoose.Schema({
         country: { type: String, default: 'India' },
         lat: { type: Number, default: null },
         lng: { type: Number, default: null },
+        s2CellId: { type: String, index: true, default: null },
+        s2CellIdPrecise: { type: String, index: true, default: null },
         addressLine: { type: String },
         houseNumber: { type: String },
         road: { type: String },
@@ -158,10 +160,23 @@ const providerSchema = new mongoose.Schema({
             type: [Number],
             default: [0,0]
         },
+        s2CellId: { type: String, index: true, default: null },
+        s2CellIdPrecise: { type: String, index: true, default: null },
         lastUpdated: {
             type: Date,
             default: Date.now
         }
+    },
+
+    s2CellId: {
+        type: String,
+        index: true,
+        default: null
+    },
+    s2CellIdPrecise: {
+        type: String,
+        index: true,
+        default: null
     },
 
     isOnline: {
@@ -346,8 +361,46 @@ providerSchema.index({ 'performanceScore.rating': -1 });
 providerSchema.index({ location: '2dsphere' });
 providerSchema.index({ currentLocation: '2dsphere' });
 providerSchema.index({ createdAt: -1 });
+providerSchema.index({ s2CellId: 1 });
+providerSchema.index({ s2CellIdPrecise: 1 });
+providerSchema.index({ "address.s2CellId": 1 });
+providerSchema.index({ "address.s2CellIdPrecise": 1 });
 
 providerSchema.pre('save', async function (next) {
+    // Populate S2 cell fields on creation or coordinate modifications
+    if (this.isModified('address.lat') || this.isModified('address.lng') || this.isNew) {
+        try {
+            const { latLngToS2CellId } = require('../utils/s2Helper');
+            if (this.address && typeof this.address.lat === 'number' && typeof this.address.lng === 'number') {
+                this.address.s2CellId = latLngToS2CellId(this.address.lat, this.address.lng, 13);
+                this.address.s2CellIdPrecise = latLngToS2CellId(this.address.lat, this.address.lng, 15);
+            }
+        } catch (s2Err) {
+            console.error('Error computing provider address S2 cells in pre-save:', s2Err);
+        }
+    }
+
+    if (this.isModified('currentLocation.coordinates') || this.isNew) {
+        try {
+            const { latLngToS2CellId } = require('../utils/s2Helper');
+            if (this.currentLocation && this.currentLocation.coordinates && this.currentLocation.coordinates.length === 2) {
+                const lng = this.currentLocation.coordinates[0];
+                const lat = this.currentLocation.coordinates[1];
+                if (typeof lat === 'number' && typeof lng === 'number' && (lat !== 0 || lng !== 0)) {
+                    const cell13 = latLngToS2CellId(lat, lng, 13);
+                    const cell15 = latLngToS2CellId(lat, lng, 15);
+                    this.currentLocation.s2CellId = cell13;
+                    this.currentLocation.s2CellIdPrecise = cell15;
+                    // Also populate top level fields
+                    this.s2CellId = cell13;
+                    this.s2CellIdPrecise = cell15;
+                }
+            }
+        } catch (s2Err) {
+            console.error('Error computing provider currentLocation S2 cells in pre-save:', s2Err);
+        }
+    }
+
     if (this.isNew) {
         const existingProvider = await this.constructor.findOne({
             email: this.email,

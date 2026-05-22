@@ -11,7 +11,7 @@ import { getPublicServiceById } from '../../services/ServiceService';
 import { getAvailableCoupons, applyCoupon as applyCouponAPI } from '../../services/CouponService';
 import { createBooking } from '../../services/BookingService';
 import * as CustomerService from '../../services/CustomerService';
-import { formatDate, formatCurrency, detectCurrentLocation, toLegacyAddressFields } from '../../utils/format';
+import { formatDate, formatCurrency, detectCurrentLocation, toLegacyAddressFields, smartAddressBuilder } from '../../utils/format';
 import LocationPickerModal from '../../components/LocationPickerModal';
 
 const BookService = () => {
@@ -58,7 +58,17 @@ const BookService = () => {
       city: '',
       state: '',
       postalCode: '',
-      country: 'India'
+      country: 'India',
+      houseNumber: '',
+      road: '',
+      landmark: '',
+      area: '',
+      pincode: '',
+      formattedAddress: '',
+      lat: null,
+      lng: null,
+      s2CellId: null,
+      s2CellIdPrecise: null
     },
     useCustomAddress: false,
     notes: '',
@@ -291,10 +301,67 @@ const BookService = () => {
 
   const handleAddressChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      customAddress: { ...prev.customAddress, [name]: value }
-    }));
+    setFormData(prev => {
+      const updatedCustom = { ...prev.customAddress, [name]: value };
+      
+      // Keep postalCode and pincode in sync
+      if (name === 'postalCode') {
+        updatedCustom.pincode = value;
+      } else if (name === 'pincode') {
+        updatedCustom.postalCode = value;
+      }
+      
+      // Auto-construct street if houseNumber and road are updated
+      const houseNum = updatedCustom.houseNumber || '';
+      const rd = updatedCustom.road || '';
+      updatedCustom.street = houseNum && rd ? `${houseNum}, ${rd}` : (houseNum || rd);
+
+      // Re-build formattedAddress based on the changed inputs
+      updatedCustom.formattedAddress = smartAddressBuilder(
+        {
+          house_number: updatedCustom.houseNumber,
+          road: updatedCustom.road,
+          residential: updatedCustom.area,
+          neighbourhood: updatedCustom.area,
+          suburb: updatedCustom.area,
+          city: updatedCustom.city,
+          state: updatedCustom.state,
+          postcode: updatedCustom.pincode
+        },
+        ""
+      );
+      
+      return {
+        ...prev,
+        customAddress: updatedCustom
+      };
+    });
+  };
+
+  const handleStateCityChange = (state, city) => {
+    setFormData(prev => {
+      const updatedCustom = { ...prev.customAddress };
+      if (state !== undefined) updatedCustom.state = state;
+      if (city !== undefined) updatedCustom.city = city;
+      
+      updatedCustom.formattedAddress = smartAddressBuilder(
+        {
+          house_number: updatedCustom.houseNumber,
+          road: updatedCustom.road,
+          residential: updatedCustom.area,
+          neighbourhood: updatedCustom.area,
+          suburb: updatedCustom.area,
+          city: updatedCustom.city,
+          state: updatedCustom.state,
+          postcode: updatedCustom.pincode
+        },
+        ""
+      );
+      return {
+        ...prev,
+        customAddress: updatedCustom
+      };
+    });
   };
 
   const handleDateChange = (date) => {
@@ -327,13 +394,14 @@ const BookService = () => {
     }
 
     if (formData.useCustomAddress) {
-      const { street, city, state, postalCode } = formData.customAddress;
-      if (!street?.trim() || !city?.trim() || !state?.trim() || !postalCode?.trim()) {
-        toast.error('Please fill all address fields');
+      const { houseNumber, road, city, state, postalCode, pincode } = formData.customAddress;
+      const code = pincode || postalCode;
+      if (!houseNumber?.trim() || !road?.trim() || !city?.trim() || !state?.trim() || !code?.trim()) {
+        toast.error('Please fill all mandatory address fields (House No, Road/Street, City, State, Pincode)');
         return false;
       }
-      if (!/^\d{6}$/.test(postalCode.trim())) {
-        toast.error('Please enter a valid 6-digit postal code');
+      if (!/^\d{6}$/.test(code.trim())) {
+        toast.error('Please enter a valid 6-digit pincode');
         return false;
       }
     } else if (addresses.length === 0) {
@@ -370,13 +438,21 @@ const BookService = () => {
         date: formattedDate,
         time: formData.time,
         address: {
-          street: addressData.street.trim(),
-          city: addressData.city.trim(),
-          state: addressData.state.trim(),
-          postalCode: addressData.postalCode.trim(),
+          street: addressData.street ? addressData.street.trim() : '',
+          city: addressData.city ? addressData.city.trim() : '',
+          state: addressData.state ? addressData.state.trim() : '',
+          postalCode: addressData.postalCode ? addressData.postalCode.trim() : (addressData.pincode ? addressData.pincode.trim() : ''),
+          pincode: addressData.pincode ? addressData.pincode.trim() : (addressData.postalCode ? addressData.postalCode.trim() : ''),
           country: addressData.country || 'India',
+          houseNumber: addressData.houseNumber ? addressData.houseNumber.trim() : '',
+          road: addressData.road ? addressData.road.trim() : '',
+          landmark: addressData.landmark ? addressData.landmark.trim() : '',
+          area: addressData.area ? addressData.area.trim() : '',
+          formattedAddress: addressData.formattedAddress ? addressData.formattedAddress.trim() : '',
           lat: addressData.lat || null,
-          lng: addressData.lng || null
+          lng: addressData.lng || null,
+          s2CellId: addressData.s2CellId || null,
+          s2CellIdPrecise: addressData.s2CellIdPrecise || null
         },
         notes: formData.notes.trim(),
         quantity: formData.quantity,
@@ -593,72 +669,115 @@ const BookService = () => {
                       <div className="flex-1">
                         <p className="text-sm font-semibold text-secondary">New Address</p>
                         {formData.useCustomAddress && (
-                          <div className="mt-4 space-y-4">
-                            <div>
-                              <div className="flex justify-between items-center mb-1.5">
-                                <label className="block text-sm font-semibold text-secondary">
-                                  Street Address *
-                                </label>
-                                <div className="flex items-center gap-3">
-                                  <button
-                                    type="button"
-                                    onClick={() => setIsMapModalOpen(true)}
-                                    className="inline-flex items-center gap-1 text-[11px] font-bold text-primary hover:text-teal-700 transition-colors uppercase tracking-wider"
-                                  >
-                                    <MapPin className="w-3 h-3" />
-                                    Pick on Map
-                                  </button>
-                                  <button
-                                    type="button"
-                                    disabled={detecting}
-                                    onClick={handleDetectAddress}
-                                    className="inline-flex items-center gap-1 text-[11px] font-bold text-primary hover:text-teal-700 disabled:opacity-50 transition-colors uppercase tracking-wider"
-                                  >
-                                    <Navigation className={`w-3 h-3 ${detecting ? 'animate-ping' : ''}`} />
-                                    {detecting ? 'Detecting...' : 'Auto Detect'}
-                                  </button>
-                                </div>
-                              </div>
-                              <input
-                                ref={autocompleteInputRef}
-                                type="text"
-                                name="street"
-                                placeholder="E.g. House No. 123, Sector 45"
-                                value={formData.customAddress.street}
-                                onChange={handleAddressChange}
-                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
-                                required
-                              />
+                          <div className="mt-4 p-4 rounded-xl border border-gray-200 bg-gray-50/30 space-y-4 animate-fadeIn w-full">
+                            <div className="flex justify-between items-center pb-2 border-b border-gray-100">
+                              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Address Details</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setIsMapModalOpen(true)}
+                                  className="bg-red-500 hover:bg-red-600 text-white rounded-full p-2.5 shadow-lg shadow-red-500/20 active:scale-95 transition-all flex items-center justify-center"
+                                  title="Select Location on Map"
+                                >
+                                  <MapPin className="w-5 h-5" />
+                                </button>
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
+
+                            {/* Row 1: House No. & Road Name */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-xs font-semibold text-secondary mb-1">
+                                  House / Flat / Shop No. *
+                                </label>
+                                <input
+                                  type="text"
+                                  name="houseNumber"
+                                  placeholder="e.g. House No. 349, Flat 4B"
+                                  value={formData.customAddress.houseNumber || ''}
+                                  onChange={handleAddressChange}
+                                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                                  required
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-semibold text-secondary mb-1">
+                                  Road / Street / Lane *
+                                </label>
+                                <input
+                                  type="text"
+                                  name="road"
+                                  placeholder="e.g. MG Road, Phase 1"
+                                  value={formData.customAddress.road || ''}
+                                  onChange={handleAddressChange}
+                                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                                  required
+                                />
+                              </div>
+                            </div>
+
+                            {/* Row 2: Landmark & Area */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-xs font-semibold text-secondary mb-1">
+                                  Landmark (Optional)
+                                </label>
+                                <input
+                                  type="text"
+                                  name="landmark"
+                                  placeholder="e.g. Near Shiv Temple"
+                                  value={formData.customAddress.landmark || ''}
+                                  onChange={handleAddressChange}
+                                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-semibold text-secondary mb-1">
+                                  Area / Locality / Sector
+                                </label>
+                                <input
+                                  type="text"
+                                  name="area"
+                                  placeholder="e.g. Sector 15, Vasant Kunj"
+                                  value={formData.customAddress.area || ''}
+                                  onChange={handleAddressChange}
+                                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Row 3: State & City Selector */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div>
                                 <AddressSelector
                                   selectedState={formData.customAddress.state}
                                   selectedCity={formData.customAddress.city}
-                                  onStateChange={(state) => setFormData(prev => ({
-                                    ...prev,
-                                    customAddress: { ...prev.customAddress, state, city: '' }
-                                  }))}
-                                  onCityChange={(city) => setFormData(prev => ({
-                                    ...prev,
-                                    customAddress: { ...prev.customAddress, city }
-                                  }))}
+                                  onStateChange={(state) => handleStateCityChange(state, '')}
+                                  onCityChange={(city) => handleStateCityChange(undefined, city)}
                                 />
                               </div>
                               <div>
-                                <label className="block text-sm font-semibold text-secondary mb-1.5">
+                                <label className="block text-xs font-semibold text-secondary mb-1">
                                   Pincode *
                                 </label>
                                 <input
                                   type="text"
-                                  name="postalCode"
+                                  name="pincode"
                                   placeholder="6-digit Pincode"
-                                  value={formData.customAddress.postalCode}
+                                  value={formData.customAddress.pincode || formData.customAddress.postalCode || ''}
                                   onChange={handleAddressChange}
-                                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white font-mono"
                                   maxLength="6"
                                   required
                                 />
+                              </div>
+                            </div>
+
+                            {/* Row 4: Formatted Address (Computed Preview) */}
+                            <div>
+                              <label className="block text-xs font-semibold text-gray-400 mb-1">
+                                Address Preview
+                              </label>
+                              <div className="w-full p-3 text-xs bg-white rounded-lg border border-gray-200 text-secondary font-medium leading-relaxed shadow-inner min-h-[48px] flex items-center">
+                                {formData.customAddress.formattedAddress || 'Please fill House No. and Road name to construct preview...'}
                               </div>
                             </div>
                           </div>
@@ -939,10 +1058,11 @@ const BookService = () => {
           isOpen={isMapModalOpen}
           onClose={() => setIsMapModalOpen(false)}
           onLocationSelect={(loc) => {
+            const legacyFields = toLegacyAddressFields(loc);
             setFormData(prev => ({
               ...prev,
               useCustomAddress: true,
-              customAddress: { ...prev.customAddress, ...loc }
+              customAddress: { ...prev.customAddress, ...legacyFields }
             }));
             toast.success('Address picked from map!');
           }}

@@ -1062,6 +1062,41 @@ const AdminBookingsView = () => {
                                         </div>
                                     </div>
 
+                                    {/* S2 Geofence Telemetry */}
+                                    {(selectedBooking.booking.address?.s2CellId || selectedBooking.booking.address?.s2CellIdPrecise) && (
+                                        <div className="bg-slate-900 p-3 rounded-lg border border-slate-700">
+                                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                                                <MapPin className="w-3 h-3 text-teal-400" /> S2 Geofence Telemetry
+                                            </p>
+                                            <div className="space-y-1.5">
+                                                {selectedBooking.booking.address?.s2CellId && (
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-[10px] text-slate-400 font-medium">Level 13 (≈1km²)</span>
+                                                        <span className="font-mono text-[10px] text-teal-300 bg-teal-950/50 px-2 py-0.5 rounded border border-teal-800/50">
+                                                            {selectedBooking.booking.address.s2CellId}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                {selectedBooking.booking.address?.s2CellIdPrecise && (
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-[10px] text-slate-400 font-medium">Level 15 (≈150m²)</span>
+                                                        <span className="font-mono text-[10px] text-emerald-300 bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-800/50">
+                                                            {selectedBooking.booking.address.s2CellIdPrecise}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                {selectedBooking.booking.address?.lat && selectedBooking.booking.address?.lng && (
+                                                    <div className="flex justify-between items-center pt-1 border-t border-slate-700">
+                                                        <span className="text-[10px] text-slate-500">Coordinates</span>
+                                                        <span className="font-mono text-[10px] text-slate-300">
+                                                            {parseFloat(selectedBooking.booking.address.lat).toFixed(6)}, {parseFloat(selectedBooking.booking.address.lng).toFixed(6)}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {/* Customer Information */}
                                     <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
                                         <h3 className="font-semibold text-secondary mb-3">Customer Information</h3>

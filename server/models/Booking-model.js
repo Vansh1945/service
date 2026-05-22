@@ -36,6 +36,16 @@ const addressSchema = new Schema({
     type: Number,
     default: null
   },
+  s2CellId: {
+    type: String,
+    index: true,
+    default: null
+  },
+  s2CellIdPrecise: {
+    type: String,
+    index: true,
+    default: null
+  },
   addressLine: { type: String, trim: true },
   houseNumber: { type: String, trim: true },
   road: { type: String, trim: true },
@@ -389,6 +399,19 @@ const bookingSchema = new Schema({
 // Pre-save hook to calculate commission and totals
 bookingSchema.pre('save', async function (next) {
   this.updatedAt = Date.now();
+
+  // Populate address S2 cell fields on creation or update
+  if (this.isModified('address.lat') || this.isModified('address.lng') || this.isNew) {
+    try {
+      const { latLngToS2CellId } = require('../utils/s2Helper');
+      if (this.address && typeof this.address.lat === 'number' && typeof this.address.lng === 'number') {
+        this.address.s2CellId = latLngToS2CellId(this.address.lat, this.address.lng, 13);
+        this.address.s2CellIdPrecise = latLngToS2CellId(this.address.lat, this.address.lng, 15);
+      }
+    } catch (s2Err) {
+      console.error('Error computing address S2 cells in pre-save:', s2Err);
+    }
+  }
 
   // Track status changes
   if (this.isModified('status') && !this.isNew) {

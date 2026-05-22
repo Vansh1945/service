@@ -14,6 +14,7 @@ const Feedback = require('../models/Feedback-model');
 const Complaint = require('../models/Complaint-model');
 const User = require('../models/User-model');
 const Admin = require('../models/Admin-model');
+const { latLngToS2CellId } = require('../utils/s2Helper');
 
 // Helper to get synchronized payout status
 const getPayoutStatus = (earning, booking) => {
@@ -407,7 +408,14 @@ exports.completeProfile = async (req, res) => {
             accountNo,
             ifsc,
             lat,
-            lng
+            lng,
+            houseNumber,
+            road,
+            landmark,
+            area,
+            pincode,
+            formattedAddress,
+            addressLine
         } = req.body;
 
         // Validate required fields
@@ -527,22 +535,41 @@ exports.completeProfile = async (req, res) => {
         provider.experience = experience;
         provider.serviceArea = serviceArea;
 
-        // Update address
+        // Update address with explicit S2 cell computation (pre-save hooks handle .save() but
+        // we also set them here for correctness during the save cycle)
+        const addrLat = lat ? parseFloat(lat) : null;
+        const addrLng = lng ? parseFloat(lng) : null;
+        const addrS2CellId = (addrLat && addrLng) ? latLngToS2CellId(addrLat, addrLng, 13) : null;
+        const addrS2CellIdPrecise = (addrLat && addrLng) ? latLngToS2CellId(addrLat, addrLng, 15) : null;
+
         provider.address = {
             street,
             city,
             state,
             postalCode,
             country: country || 'India',
-            lat: lat ? parseFloat(lat) : null,
-            lng: lng ? parseFloat(lng) : null
+            lat: addrLat,
+            lng: addrLng,
+            s2CellId: addrS2CellId,
+            s2CellIdPrecise: addrS2CellIdPrecise,
+            houseNumber: houseNumber || undefined,
+            road: road || undefined,
+            landmark: landmark || undefined,
+            area: area || undefined,
+            pincode: pincode || undefined,
+            formattedAddress: formattedAddress || undefined,
+            addressLine: addressLine || undefined
         };
 
-        if (lat && lng) {
+        if (addrLat && addrLng) {
             provider.currentLocation = {
                 type: 'Point',
-                coordinates: [parseFloat(lng), parseFloat(lat)]
+                coordinates: [addrLng, addrLat],
+                s2CellId: addrS2CellId,
+                s2CellIdPrecise: addrS2CellIdPrecise
             };
+            provider.s2CellId = addrS2CellId;
+            provider.s2CellIdPrecise = addrS2CellIdPrecise;
         }
 
         // Update bank details
@@ -724,6 +751,7 @@ exports.updateProviderProfile = async (req, res) => {
             services, experience, serviceArea,
             // Address info
             street, city, state, postalCode, country, lat, lng,
+            houseNumber, road, landmark, area, pincode, formattedAddress, addressLine,
             // Bank details
             accountNo, ifsc, bankName, accountName,
             // Update type to determine which section to update
@@ -868,22 +896,43 @@ exports.updateProviderProfile = async (req, res) => {
 
         if (!updateType || updateType === 'address') {
             // Address Updates
-            if (street || city || state || postalCode || country || lat || lng) {
+            if (street || city || state || postalCode || country || lat || lng || houseNumber || road || landmark || area || pincode || formattedAddress || addressLine) {
+                const currentAddr = currentProvider.address || {};
+                const newLat = lat !== undefined ? (lat ? parseFloat(lat) : null) : currentAddr.lat;
+                const newLng = lng !== undefined ? (lng ? parseFloat(lng) : null) : currentAddr.lng;
+
+                // Compute S2 explicitly — findByIdAndUpdate bypasses pre-save hooks
+                const newS2CellId = (newLat && newLng) ? latLngToS2CellId(newLat, newLng, 13) : currentAddr.s2CellId || null;
+                const newS2CellIdPrecise = (newLat && newLng) ? latLngToS2CellId(newLat, newLng, 15) : currentAddr.s2CellIdPrecise || null;
+
                 updates.address = {
-                    ...currentProvider.address,
+                    ...currentAddr,
                     ...(street && { street }),
                     ...(city && { city }),
                     ...(state && { state }),
                     ...(postalCode && { postalCode }),
                     ...(country && { country }),
-                    ...(lat !== undefined && { lat: lat ? parseFloat(lat) : null }),
-                    ...(lng !== undefined && { lng: lng ? parseFloat(lng) : null })
+                    lat: newLat,
+                    lng: newLng,
+                    s2CellId: newS2CellId,
+                    s2CellIdPrecise: newS2CellIdPrecise,
+                    houseNumber: houseNumber !== undefined ? houseNumber : currentAddr.houseNumber,
+                    road: road !== undefined ? road : currentAddr.road,
+                    landmark: landmark !== undefined ? landmark : currentAddr.landmark,
+                    area: area !== undefined ? area : currentAddr.area,
+                    pincode: pincode !== undefined ? pincode : currentAddr.pincode,
+                    formattedAddress: formattedAddress !== undefined ? formattedAddress : currentAddr.formattedAddress,
+                    addressLine: addressLine !== undefined ? addressLine : currentAddr.addressLine
                 };
-                if (lat && lng) {
+                if (newLat && newLng) {
                     updates.currentLocation = {
                         type: 'Point',
-                        coordinates: [parseFloat(lng), parseFloat(lat)]
+                        coordinates: [newLng, newLat],
+                        s2CellId: newS2CellId,
+                        s2CellIdPrecise: newS2CellIdPrecise
                     };
+                    updates.s2CellId = newS2CellId;
+                    updates.s2CellIdPrecise = newS2CellIdPrecise;
                 }
             }
         }

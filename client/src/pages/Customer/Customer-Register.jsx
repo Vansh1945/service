@@ -9,7 +9,8 @@ import {
 } from 'lucide-react';
 import AddressSelector from '../../components/AddressSelector';
 import LocationPickerModal from '../../components/LocationPickerModal';
-import { detectCurrentLocation, toLegacyAddressFields } from '../../utils/format';
+import { detectCurrentLocation, toLegacyAddressFields, smartAddressBuilder } from '../../utils/format';
+import { latLngToS2CellId } from '../../utils/s2Helper';
 
 // ─── Static sub-components (defined OUTSIDE to avoid remount) ──────────────
 
@@ -53,8 +54,6 @@ const CustomerRegistration = () => {
   const [detecting, setDetecting] = useState(false);
   const [isMapModalOpen, setIsMapModalOpen] = useState(false);
 
-
-
   useEffect(() => {
     // Autocomplete disabled for Nominatim. Can type directly.
   }, [currentStep]);
@@ -63,18 +62,11 @@ const CustomerRegistration = () => {
     setDetecting(true);
     try {
       const { latitude, longitude, address } = await detectCurrentLocation();
+      // address already contains s2CellId/s2CellIdPrecise from detectCurrentLocation
       const fields = toLegacyAddressFields({ ...address, lat: latitude, lng: longitude });
       setFormData((prev) => ({
         ...prev,
-        address: {
-          street: fields.street,
-          city: fields.city,
-          state: fields.state,
-          postalCode: fields.postalCode,
-          lat: latitude,
-          lng: longitude,
-          formattedAddress: fields.formattedAddress
-        }
+        address: fields
       }));
       showToast('Address auto-detected successfully!');
     } catch (error) {
@@ -93,7 +85,18 @@ const CustomerRegistration = () => {
       street: '',
       city: '',
       state: '',
-      postalCode: ''
+      postalCode: '',
+      country: 'India',
+      houseNumber: '',
+      road: '',
+      landmark: '',
+      area: '',
+      pincode: '',
+      formattedAddress: '',
+      lat: null,
+      lng: null,
+      s2CellId: null,
+      s2CellIdPrecise: null
     }
   });
 
@@ -108,13 +111,44 @@ const CustomerRegistration = () => {
 
     if (name.includes('address.')) {
       const addressField = name.split('.')[1];
-      setFormData(prev => ({
-        ...prev,
-        address: {
+      setFormData(prev => {
+        const updatedAddress = {
           ...prev.address,
           [addressField]: value
+        };
+
+        // Keep postalCode and pincode in sync
+        if (addressField === 'postalCode') {
+          updatedAddress.pincode = value;
+        } else if (addressField === 'pincode') {
+          updatedAddress.postalCode = value;
         }
-      }));
+
+        // Auto-construct street if houseNumber and road are updated
+        const houseNum = updatedAddress.houseNumber || '';
+        const rd = updatedAddress.road || '';
+        updatedAddress.street = houseNum && rd ? `${houseNum}, ${rd}` : (houseNum || rd);
+
+        // Re-build formattedAddress based on the changed inputs
+        updatedAddress.formattedAddress = smartAddressBuilder(
+          {
+            house_number: updatedAddress.houseNumber,
+            road: updatedAddress.road,
+            residential: updatedAddress.area,
+            neighbourhood: updatedAddress.area,
+            suburb: updatedAddress.area,
+            city: updatedAddress.city,
+            state: updatedAddress.state,
+            postcode: updatedAddress.pincode
+          },
+          ""
+        );
+
+        return {
+          ...prev,
+          address: updatedAddress
+        };
+      });
     } else {
       setFormData(prev => ({
         ...prev,
@@ -129,6 +163,33 @@ const CustomerRegistration = () => {
         return newErrors;
       });
     }
+  };
+
+  const handleStateCityChange = (state, city) => {
+    setFormData(prev => {
+      const updatedAddress = { ...prev.address };
+      if (state !== undefined) updatedAddress.state = state;
+      if (city !== undefined) updatedAddress.city = city;
+
+      updatedAddress.formattedAddress = smartAddressBuilder(
+        {
+          house_number: updatedAddress.houseNumber,
+          road: updatedAddress.road,
+          residential: updatedAddress.area,
+          neighbourhood: updatedAddress.area,
+          suburb: updatedAddress.area,
+          city: updatedAddress.city,
+          state: updatedAddress.state,
+          postcode: updatedAddress.pincode
+        },
+        ""
+      );
+
+      return {
+        ...prev,
+        address: updatedAddress
+      };
+    });
   };
 
   const handleValidationErrors = (backendErrors) => {
@@ -349,57 +410,99 @@ const CustomerRegistration = () => {
             </div>
             <Section title="Location Details" icon={MapPin}>
               <div className="space-y-4">
-                <div className="flex flex-col gap-1 w-full">
-                  <div className="flex justify-between items-center">
-                    <label className="text-xs font-semibold text-secondary uppercase tracking-wide">Street Address *</label>
-                    <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setIsMapModalOpen(true)}
-                        className="inline-flex items-center gap-1 text-[10px] font-bold text-primary hover:text-teal-700 transition-colors uppercase tracking-wider"
-                      >
-                        <MapPin className="w-3 h-3" />
-                        Pick on Map
-                      </button>
-                      <button
-                        type="button"
-                        disabled={detecting}
-                        onClick={handleDetectAddress}
-                        className="inline-flex items-center gap-1 text-[10px] font-bold text-primary hover:text-teal-700 disabled:opacity-50 transition-colors uppercase tracking-wider"
-                      >
-                        <Navigation className={`w-3 h-3 ${detecting ? 'animate-ping' : ''}`} />
-                        {detecting ? 'Detecting...' : 'Auto Detect'}
-                      </button>
-                    </div>
-                  </div>
-                  <input
-                    ref={autocompleteInputRef}
-                    type="text"
-                    id="street"
-                    name="address.street"
-                    value={formData.address.street}
-                    onChange={handleChange}
-                    placeholder="123 Main Street, Apt 4"
-                    className={inputCls}
-                  />
+                <div className="flex justify-between items-center pb-2 border-b border-gray-150">
+                  <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Address Details</span>
+                  <button
+                    type="button"
+                    onClick={() => setIsMapModalOpen(true)}
+                    className="bg-red-500 hover:bg-red-600 text-white rounded-full p-2.5 shadow-lg shadow-red-500/20 active:scale-95 transition-all flex items-center justify-center"
+                    title="Select Location on Map"
+                  >
+                    <MapPin className="w-5 h-5" />
+                  </button>
                 </div>
-                <AddressSelector
-                  selectedState={formData.address.state}
-                  selectedCity={formData.address.city}
-                  onStateChange={(value) => handleChange({ target: { name: 'address.state', value } })}
-                  onCityChange={(value) => handleChange({ target: { name: 'address.city', value } })}
-                />
-                <Field label="Postal Code *" error={errors['address.postalCode']}>
-                  <input
-                    type="text"
-                    id="postalCode"
-                    name="address.postalCode"
-                    value={formData.address.postalCode}
-                    onChange={handleChange}
-                    placeholder="400001"
-                    className={inputCls}
-                  />
-                </Field>
+
+                {/* Row 1: House No. & Road Name */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Field label="House / Flat / Shop No. *" error={errors['address.houseNumber']}>
+                    <input
+                      type="text"
+                      name="address.houseNumber"
+                      value={formData.address.houseNumber || ''}
+                      onChange={handleChange}
+                      placeholder="e.g. House No. 349, Flat 4B"
+                      className={inputCls}
+                      required
+                    />
+                  </Field>
+                  <Field label="Road / Street / Lane *" error={errors['address.road']}>
+                    <input
+                      type="text"
+                      name="address.road"
+                      value={formData.address.road || ''}
+                      onChange={handleChange}
+                      placeholder="e.g. MG Road, Phase 1"
+                      className={inputCls}
+                      required
+                    />
+                  </Field>
+                </div>
+
+                {/* Row 2: Landmark & Area */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Field label="Landmark (Optional)" error={errors['address.landmark']}>
+                    <input
+                      type="text"
+                      name="address.landmark"
+                      value={formData.address.landmark || ''}
+                      onChange={handleChange}
+                      placeholder="e.g. Near Shiv Temple"
+                      className={inputCls}
+                    />
+                  </Field>
+                  <Field label="Area / Locality / Sector" error={errors['address.area']}>
+                    <input
+                      type="text"
+                      name="address.area"
+                      value={formData.address.area || ''}
+                      onChange={handleChange}
+                      placeholder="e.g. Sector 15, Vasant Kunj"
+                      className={inputCls}
+                    />
+                  </Field>
+                </div>
+
+                {/* Row 3: State & City Selector */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-1">
+                    <AddressSelector
+                      selectedState={formData.address.state}
+                      selectedCity={formData.address.city}
+                      onStateChange={(state) => handleStateCityChange(state, '')}
+                      onCityChange={(city) => handleStateCityChange(undefined, city)}
+                    />
+                  </div>
+                  <Field label="Pincode *" error={errors['address.pincode'] || errors['address.postalCode']}>
+                    <input
+                      type="text"
+                      name="address.pincode"
+                      value={formData.address.pincode || formData.address.postalCode || ''}
+                      onChange={handleChange}
+                      placeholder="6-digit Pincode"
+                      className={`${inputCls} font-mono`}
+                      maxLength="6"
+                      required
+                    />
+                  </Field>
+                </div>
+
+                {/* Row 4: Calculated Address Preview */}
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Address Preview</label>
+                  <div className="w-full p-3 text-xs bg-gray-50 border border-gray-200 rounded-lg text-secondary font-medium leading-relaxed shadow-inner min-h-[48px] flex items-center">
+                    {formData.address.formattedAddress || 'Please fill House No. and Road name to construct preview...'}
+                  </div>
+                </div>
               </div>
             </Section>
           </div>
@@ -532,14 +635,12 @@ const CustomerRegistration = () => {
           isOpen={isMapModalOpen}
           onClose={() => setIsMapModalOpen(false)}
           onLocationSelect={(loc) => {
+            // loc already contains s2CellId, s2CellIdPrecise from LocationPickerModal
             setFormData(prev => ({
               ...prev,
               address: {
                 ...prev.address,
-                street: loc.street,
-                city: loc.city || prev.address.city,
-                state: loc.state || prev.address.state,
-                postalCode: loc.postalCode || prev.address.postalCode
+                ...loc
               }
             }));
             showToast('Address picked from map!');

@@ -12,6 +12,7 @@ const jwt = require('jsonwebtoken');
 const { uploadProfilePic } = require('../middlewares/upload');
 const path = require('path');
 const fs = require('fs');
+const { latLngToS2CellId } = require('../utils/s2Helper');
 
 /**
  * Register a new user
@@ -228,16 +229,25 @@ const register = async (req, res) => {
     // Add address if provided
     if (address) {
       userData.address = {
-        street: address.street.trim(),
-        city: address.city.trim(),
+        street: address.street ? address.street.trim() : undefined,
+        city: address.city ? address.city.trim() : undefined,
+        state: address.state ? address.state.trim() : undefined,
         postalCode: address.postalCode ? address.postalCode.trim() : undefined,
-        lat: typeof address.lat === 'number' ? address.lat : 0,
-        lng: typeof address.lng === 'number' ? address.lng : 0
+        country: address.country ? address.country.trim() : 'India',
+        lat: typeof address.lat === 'number' ? address.lat : (address.lat ? parseFloat(address.lat) : 0),
+        lng: typeof address.lng === 'number' ? address.lng : (address.lng ? parseFloat(address.lng) : 0),
+        houseNumber: address.houseNumber ? address.houseNumber.trim() : undefined,
+        road: address.road ? address.road.trim() : undefined,
+        landmark: address.landmark ? address.landmark.trim() : undefined,
+        area: address.area ? address.area.trim() : undefined,
+        pincode: address.pincode ? address.pincode.trim() : undefined,
+        formattedAddress: address.formattedAddress ? address.formattedAddress.trim() : undefined,
+        addressLine: address.addressLine ? address.addressLine.trim() : undefined
       };
-      if (typeof address.lat === 'number' && typeof address.lng === 'number') {
+      if (typeof userData.address.lat === 'number' && typeof userData.address.lng === 'number' && !isNaN(userData.address.lat) && !isNaN(userData.address.lng)) {
         userData.currentLocation = {
           type: 'Point',
-          coordinates: [address.lng, address.lat]
+          coordinates: [userData.address.lng, userData.address.lat]
         };
       }
     }
@@ -379,16 +389,46 @@ const updateProfile = async (req, res) => {
   try {
     const updates = {
       name: req.body.name,
-      phone: req.body.phone,
-      address: req.body.address
+      phone: req.body.phone
     };
 
-    if (req.body.address && typeof req.body.address.lat === 'number' && typeof req.body.address.lng === 'number') {
-      updates.currentLocation = {
-        type: 'Point',
-        coordinates: [req.body.address.lng, req.body.address.lat],
-        lastUpdated: new Date()
+    if (req.body.address) {
+      const address = req.body.address;
+      const latVal = typeof address.lat === 'number' ? address.lat : (address.lat ? parseFloat(address.lat) : 0);
+      const lngVal = typeof address.lng === 'number' ? address.lng : (address.lng ? parseFloat(address.lng) : 0);
+
+      // Compute S2 Cell IDs explicitly (findByIdAndUpdate bypasses pre-save hooks)
+      const s2CellId = (latVal && lngVal && !isNaN(latVal) && !isNaN(lngVal)) ? latLngToS2CellId(latVal, lngVal, 13) : (address.s2CellId || null);
+      const s2CellIdPrecise = (latVal && lngVal && !isNaN(latVal) && !isNaN(lngVal)) ? latLngToS2CellId(latVal, lngVal, 15) : (address.s2CellIdPrecise || null);
+
+      updates.address = {
+        street: address.street ? address.street.trim() : undefined,
+        city: address.city ? address.city.trim() : undefined,
+        state: address.state ? address.state.trim() : undefined,
+        postalCode: address.postalCode ? address.postalCode.trim() : undefined,
+        country: address.country ? address.country.trim() : 'India',
+        lat: latVal,
+        lng: lngVal,
+        s2CellId,
+        s2CellIdPrecise,
+        houseNumber: address.houseNumber ? address.houseNumber.trim() : undefined,
+        road: address.road ? address.road.trim() : undefined,
+        landmark: address.landmark ? address.landmark.trim() : undefined,
+        area: address.area ? address.area.trim() : undefined,
+        pincode: address.pincode ? address.pincode.trim() : undefined,
+        formattedAddress: address.formattedAddress ? address.formattedAddress.trim() : undefined,
+        addressLine: address.addressLine ? address.addressLine.trim() : undefined
       };
+      
+      if (typeof latVal === 'number' && typeof lngVal === 'number' && !isNaN(latVal) && !isNaN(lngVal)) {
+        updates.currentLocation = {
+          type: 'Point',
+          coordinates: [lngVal, latVal],
+          s2CellId,
+          s2CellIdPrecise,
+          lastUpdated: new Date()
+        };
+      }
     }
 
     const user = await User.findByIdAndUpdate(

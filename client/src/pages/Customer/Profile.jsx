@@ -24,7 +24,23 @@ const UserProfile = () => {
         name: '',
         email: '',
         phone: '',
-        address: { street: '', city: '', state: '', postalCode: '' },
+        address: {
+            street: '',
+            city: '',
+            state: '',
+            postalCode: '',
+            lat: null,
+            lng: null,
+            s2CellId: null,
+            s2CellIdPrecise: null,
+            houseNumber: '',
+            road: '',
+            landmark: '',
+            area: '',
+            pincode: '',
+            formattedAddress: '',
+            addressLine: ''
+        },
         profilePicUrl: '',
         firstBookingUsed: false,
         totalBookings: 0,
@@ -366,126 +382,115 @@ const UserProfile = () => {
                                 {isEditing ? (
                                     <form onSubmit={handleSubmit} className="space-y-4">
                                         <div>
-                                        <label className="block text-xs font-semibold text-gray-500 mb-1">Full Name *</label>
-                                        <input
-                                            type="text"
-                                            name="name"
-                                            value={profile.name}
-                                            onChange={handleInputChange}
-                                            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20"
-                                            required
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-semibold text-gray-500 mb-1">Phone Number</label>
-                                        <input
-                                            type="tel"
-                                            name="phone"
-                                            value={profile.phone}
-                                            onChange={handleInputChange}
-                                            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20"
-                                        />
-                                    </div>
-                                    <div className="pt-2 border-t border-gray-100">
-                                        <h3 className="text-sm font-semibold text-secondary mb-3">Address</h3>
-                                        <div className="space-y-3">
-                                            <div className="flex justify-between items-center mb-1">
-                                                <label className="block text-xs font-semibold text-gray-500">Street Address</label>
-                                                <div className="flex items-center gap-3">
+                                            <label className="block text-xs font-semibold text-gray-500 mb-1">Full Name *</label>
+                                            <input
+                                                type="text"
+                                                name="name"
+                                                value={profile.name}
+                                                onChange={handleInputChange}
+                                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20"
+                                                required
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-gray-500 mb-1">Phone Number</label>
+                                            <input
+                                                type="tel"
+                                                name="phone"
+                                                value={profile.phone}
+                                                onChange={handleInputChange}
+                                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20"
+                                            />
+                                        </div>
+                                        <div className="pt-2 border-t border-gray-100">
+                                            <h3 className="text-sm font-semibold text-secondary mb-3">Address</h3>
+                                            <div className="space-y-3">
+                                                <div className="flex justify-between items-center mb-1">
+                                                    <label className="block text-xs font-semibold text-gray-500">Street Address</label>
                                                     <button
                                                         type="button"
                                                         onClick={() => setIsMapModalOpen(true)}
-                                                        className="inline-flex items-center gap-1 text-[10px] font-bold text-primary hover:text-teal-700 transition-colors uppercase tracking-wider"
+                                                        className="bg-red-500 hover:bg-red-600 text-white rounded-full p-2 shadow-lg shadow-red-500/20 active:scale-95 transition-all flex items-center justify-center"
+                                                        title="Select Location on Map"
                                                     >
-                                                        <MapPin className="w-3 h-3" />
-                                                        Pick on Map
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        disabled={detecting}
-                                                        onClick={handleDetectAddress}
-                                                        className="inline-flex items-center gap-1 text-[10px] font-bold text-primary hover:text-teal-700 disabled:opacity-50 transition-colors uppercase tracking-wider"
-                                                    >
-                                                        <Navigation className={`w-3 h-3 ${detecting ? 'animate-ping' : ''}`} />
-                                                        {detecting ? 'Detecting...' : 'Auto Detect'}
+                                                        <MapPin className="w-4 h-4" />
                                                     </button>
                                                 </div>
-                                            </div>
-                                            <input
-                                                ref={autocompleteInputRef}
-                                                type="text"
-                                                name="street"
-                                                value={profile.address.street}
-                                                onChange={handleAddressChange}
-                                                placeholder="Street Address"
-                                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-                                            />
-                                            <AddressSelector
-                                                selectedState={profile.address.state}
-                                                selectedCity={profile.address.city}
-                                                onStateChange={(state) => setProfile(prev => ({
-                                                    ...prev,
-                                                    address: { ...prev.address, state, city: '' }
-                                                }))}
-                                                onCityChange={(city) => setProfile(prev => ({
-                                                    ...prev,
-                                                    address: { ...prev.address, city }
-                                                }))}
-                                            />
-                                            <input
-                                                type="text"
-                                                name="postalCode"
-                                                value={profile.address.postalCode}
-                                                onChange={handleAddressChange}
-                                                placeholder="Postal Code"
-                                                maxLength="6"
-                                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-                                            />
-                                        </div>
-                                    </div>
-                                    <button type="submit" disabled={loading} className="w-full py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50">
-                                        {loading ? 'Saving...' : 'Save Changes'}
-                                    </button>
-                                </form>
-                            ) : (
-                                <div className="space-y-4">
-                                    {/* Personal Info Grid */}
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        <div><p className="text-xs text-gray-400 mb-1">Full Name</p><p className="text-sm font-medium text-secondary">{profile.name}</p></div>
-                                        <div><p className="text-xs text-gray-400 mb-1">Email</p><p className="text-sm font-medium text-secondary">{profile.email}</p></div>
-                                        <div><p className="text-xs text-gray-400 mb-1">Phone</p><p className="text-sm font-medium text-secondary">{profile.phone || 'Not provided'}</p></div>
-                                    </div>
-
-                                    {/* Address */}
-                                    <div className="pt-4 border-t border-gray-100">
-                                        <div className="flex items-start gap-3">
-                                            <div className="p-2 bg-gray-50 rounded-lg"><MapPin className="w-5 h-5 text-primary" /></div>
-                                            <div className="flex-1">
-                                                <h3 className="text-sm font-bold text-secondary mb-1">Saved Address</h3>
-                                                {profile.address.street || profile.address.city ? (
-                                                    <div className="text-sm text-gray-500">
-                                                        <p className="font-semibold text-secondary">{profile.address.street}</p>
-                                                        <p>{profile.address.city}, {profile.address.state}</p>
-                                                        <p>{profile.address.postalCode}</p>
-                                                    </div>
-                                                ) : (
-                                                    <p className="text-sm text-gray-400 italic">No address added yet</p>
-                                                )}
+                                                <input
+                                                    ref={autocompleteInputRef}
+                                                    type="text"
+                                                    name="street"
+                                                    value={profile.address.street}
+                                                    onChange={handleAddressChange}
+                                                    placeholder="Street Address"
+                                                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
+                                                />
+                                                <AddressSelector
+                                                    selectedState={profile.address.state}
+                                                    selectedCity={profile.address.city}
+                                                    onStateChange={(state) => setProfile(prev => ({
+                                                        ...prev,
+                                                        address: { ...prev.address, state, city: '' }
+                                                    }))}
+                                                    onCityChange={(city) => setProfile(prev => ({
+                                                        ...prev,
+                                                        address: { ...prev.address, city }
+                                                    }))}
+                                                />
+                                                <input
+                                                    type="text"
+                                                    name="postalCode"
+                                                    value={profile.address.postalCode}
+                                                    onChange={handleAddressChange}
+                                                    placeholder="Postal Code"
+                                                    maxLength="6"
+                                                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
+                                                />
                                             </div>
                                         </div>
-                                    </div>
-
-                                    <div className="pt-2 border-t border-gray-100 flex justify-end">
-                                        <button
-                                            onClick={logoutUser}
-                                            className="px-6 py-2 border border-transparent rounded-lg text-xs font-bold text-red-500 hover:bg-red-50 transition-colors uppercase tracking-widest"
-                                        >
-                                            Logout account
+                                        <button type="submit" disabled={loading} className="w-full py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50">
+                                            {loading ? 'Saving...' : 'Save Changes'}
                                         </button>
+                                    </form>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {/* Personal Info Grid */}
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <div><p className="text-xs text-gray-400 mb-1">Full Name</p><p className="text-sm font-medium text-secondary">{profile.name}</p></div>
+                                            <div><p className="text-xs text-gray-400 mb-1">Email</p><p className="text-sm font-medium text-secondary">{profile.email}</p></div>
+                                            <div><p className="text-xs text-gray-400 mb-1">Phone</p><p className="text-sm font-medium text-secondary">{profile.phone || 'Not provided'}</p></div>
+                                        </div>
+
+                                        {/* Address */}
+                                        <div className="pt-4 border-t border-gray-100">
+                                            <div className="flex items-start gap-3">
+                                                <div className="p-2 bg-gray-50 rounded-lg"><MapPin className="w-5 h-5 text-primary" /></div>
+                                                <div className="flex-1">
+                                                    <h3 className="text-sm font-bold text-secondary mb-1">Saved Address</h3>
+                                                    {profile.address.street || profile.address.city ? (
+                                                        <div className="text-sm text-gray-500">
+                                                            <p className="font-semibold text-secondary">{profile.address.street}</p>
+                                                            <p>{profile.address.city}, {profile.address.state}</p>
+                                                            <p>{profile.address.postalCode}</p>
+                                                        </div>
+                                                    ) : (
+                                                        <p className="text-sm text-gray-400 italic">No address added yet</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="pt-2 border-t border-gray-100 flex justify-end">
+                                            <button
+                                                onClick={logoutUser}
+                                                className="px-6 py-2 border border-transparent rounded-lg text-xs font-bold text-red-500 hover:bg-red-50 transition-colors uppercase tracking-widest"
+                                            >
+                                                Logout account
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
-                            )}
-                        </div>
+                                )}
+                            </div>
                         )}
 
                         {/* Payments & Wallet View */}
@@ -499,7 +504,7 @@ const UserProfile = () => {
                                         {/* Balance Header */}
                                         <div className="flex items-center justify-between mb-5">
                                             <p className="text-white/60 text-[10px] uppercase tracking-widest font-black flex items-center gap-2">
-                                                <Wallet className="w-4 h-4 text-primary"/> My Wallet
+                                                <Wallet className="w-4 h-4 text-primary" /> My Wallet
                                             </p>
                                             <button
                                                 onClick={() => { fetchProfile(); fetchTransactions(); }}
@@ -557,8 +562,8 @@ const UserProfile = () => {
                                                     const isCredit = entry.type === 'credit';
                                                     const amountColor = isCredit ? 'text-emerald-600' : 'text-red-500';
                                                     const IconComponent = isCredit ? ArrowDownLeft : Wallet;
-                                                    const iconBg = isCredit 
-                                                        ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
+                                                    const iconBg = isCredit
+                                                        ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
                                                         : 'bg-red-50 text-red-500 border border-red-100';
 
                                                     return (
@@ -579,11 +584,10 @@ const UserProfile = () => {
                                                                 <p className={`text-base font-black ${amountColor}`}>
                                                                     {isCredit ? '+' : '−'}{formatCurrency(entry.amount)}
                                                                 </p>
-                                                                <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full ${
-                                                                    isCredit
+                                                                <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full ${isCredit
                                                                         ? 'bg-emerald-50 text-emerald-600'
                                                                         : 'bg-red-50 text-red-500'
-                                                                }`}>
+                                                                    }`}>
                                                                     {isCredit ? 'Credit' : 'Debit'}
                                                                 </span>
                                                             </div>
@@ -594,7 +598,7 @@ const UserProfile = () => {
                                         ) : (
                                             <div className="text-center py-12">
                                                 <div className="w-14 h-14 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-gray-100">
-                                                    <Wallet className="w-7 h-7 text-gray-300"/>
+                                                    <Wallet className="w-7 h-7 text-gray-300" />
                                                 </div>
                                                 <p className="text-sm font-bold text-gray-500">No wallet activity yet</p>
                                                 <p className="text-xs text-gray-400 mt-1.5 max-w-[200px] mx-auto">
@@ -720,17 +724,14 @@ const UserProfile = () => {
                     isOpen={isMapModalOpen}
                     onClose={() => setIsMapModalOpen(false)}
                     onLocationSelect={(loc) => {
+                        const legacyFields = toLegacyAddressFields(loc);
                         setProfile(prev => ({
                             ...prev,
                             address: {
                                 ...prev.address,
-                                street: loc.street,
-                                city: loc.city || prev.address.city,
-                                state: loc.state || prev.address.state,
-                                postalCode: loc.postalCode || prev.address.postalCode
+                                ...legacyFields
                             }
                         }));
-                        toast.success('Address picked from map!');
                     }}
                 />
             )}

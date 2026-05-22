@@ -328,12 +328,20 @@ const initSocket = (httpServer) => {
                 const emitLat = smoothed.lat;
                 const emitLng = smoothed.lng;
 
+                const { latLngToS2CellId } = require('../utils/s2Helper');
+                const providerS2CellId = latLngToS2CellId(emitLat, emitLng, 13);
+                const providerS2CellIdPrecise = latLngToS2CellId(emitLat, emitLng, 15);
+
                 // Update provider's current location in DB
                 await Provider.findByIdAndUpdate(userId, {
                     currentLocation: {
                         type: 'Point',
-                        coordinates: [emitLng, emitLat] // GeoJSON: longitude first
+                        coordinates: [emitLng, emitLat], // GeoJSON: longitude first
+                        s2CellId: providerS2CellId,
+                        s2CellIdPrecise: providerS2CellIdPrecise
                     },
+                    s2CellId: providerS2CellId,
+                    s2CellIdPrecise: providerS2CellIdPrecise,
                     isOnline: true,
                     activeBooking: bookingId,
                     lastUpdated: new Date()
@@ -434,6 +442,8 @@ const initSocket = (httpServer) => {
                     providerId: userId,
                     latitude: emitLat,
                     longitude: emitLng,
+                    s2CellId: providerS2CellId,
+                    s2CellIdPrecise: providerS2CellIdPrecise,
                     liveDistance: booking.liveDistance,
                     liveDuration: booking.liveDuration,
                     routeCoordinates: booking.routeCoordinates,
@@ -446,6 +456,8 @@ const initSocket = (httpServer) => {
                     providerId: userId,
                     latitude: emitLat,
                     longitude: emitLng,
+                    s2CellId: providerS2CellId,
+                    s2CellIdPrecise: providerS2CellIdPrecise,
                     liveDistance: booking.liveDistance,
                     liveDuration: booking.liveDuration,
                     providerReached: booking.providerReached,

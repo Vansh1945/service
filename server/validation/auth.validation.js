@@ -20,7 +20,18 @@ const addressSchema = z.object({
   postalCode: z.string()
     .regex(/^\d{6}$/, "Postal code must be a valid 6-digit number")
     .optional()
-    .or(z.literal(''))
+    .or(z.literal('')),
+  state: z.string().optional().or(z.literal('')),
+  country: z.string().optional().default('India'),
+  lat: z.union([z.number(), z.string()]).nullable().optional().transform(val => (val === null || val === undefined || val === '') ? null : parseFloat(val)),
+  lng: z.union([z.number(), z.string()]).nullable().optional().transform(val => (val === null || val === undefined || val === '') ? null : parseFloat(val)),
+  addressLine: z.string().optional().or(z.literal('')),
+  houseNumber: z.string().optional().or(z.literal('')),
+  road: z.string().optional().or(z.literal('')),
+  landmark: z.string().optional().or(z.literal('')),
+  area: z.string().optional().or(z.literal('')),
+  pincode: z.string().optional().or(z.literal('')),
+  formattedAddress: z.string().optional().or(z.literal(''))
 });
 
 const registerSchema = z.object({
