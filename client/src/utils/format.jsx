@@ -344,8 +344,8 @@ export const smartAddressBuilder = (addressObj, displayName = "") => {
       s === "india" ||
       s === "county" ||
       s === "state district" ||
-      s.includes("district") ||
-      s.includes("state_district") ||
+      s === "district" ||
+      s === "state_district" ||
       /[\u0900-\u097F\u0A00-\u0A7F]/.test(val)
     );
   };
@@ -503,8 +503,8 @@ export const cleanAddressFields = (addressObj, displayName = "") => {
       s === "india" ||
       s === "county" ||
       s === "state district" ||
-      s.includes("district") ||
-      s.includes("state_district") ||
+      s === "district" ||
+      s === "state_district" ||
       /[\u0900-\u097F\u0A00-\u0A7F]/.test(val)
     );
   };
@@ -705,10 +705,10 @@ export const reverseGeocode = async (lat, lng) => {
   let nominatimAddr = null;
   let displayName = "";
 
-  // 1. Try Nominatim Primary (zoom=19 for building granularity)
+  // 1. Try Nominatim Primary (zoom=18 is maximum supported level for building/street resolution)
   try {
     const nomRes = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=19&addressdetails=1&accept-language=en`,
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&accept-language=en`,
       { headers: { "User-Agent": GEOCODE_USER_AGENT } }
     );
     const nomJson = await nomRes.json();
@@ -735,10 +735,83 @@ export const reverseGeocode = async (lat, lng) => {
     } catch { /* Photon fallback failed */ }
   }
 
-  const merged = mergePhotonNominatim(photonProps, nominatimAddr, displayName);
-  const structured = cleanAddressFields(merged, displayName);
+  let merged = mergePhotonNominatim(photonProps, nominatimAddr, displayName);
+  let structured = cleanAddressFields(merged, displayName);
   structured.lat = lat;
   structured.lng = lng;
+
+  // Fallback A: If address is city-center only (no granular suburb, road or village), try zoom=16 to resolve suburb boundary
+  if (structured.isCityCenterOnly) {
+    try {
+      const nomResArea = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=16&addressdetails=1&accept-language=en`,
+        { headers: { "User-Agent": GEOCODE_USER_AGENT } }
+      );
+      const nomJsonArea = await nomResArea.json();
+      if (nomJsonArea?.address) {
+        const mergedArea = mergePhotonNominatim(null, nomJsonArea.address, nomJsonArea.display_name || "");
+        const structuredArea = cleanAddressFields(mergedArea, nomJsonArea.display_name || "");
+        if (!structuredArea.isCityCenterOnly) {
+          structured = {
+            ...structured,
+            ...structuredArea,
+            lat,
+            lng
+          };
+        }
+      }
+    } catch (err) {
+      console.warn("Secondary geocode for zoom=16 failed:", err);
+    }
+  }
+
+  // Fallback B: If still city-center only, try zoom=14 to resolve townland/neighbourhood/postcode area boundary
+  if (structured.isCityCenterOnly) {
+    try {
+      const nomResArea = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=14&addressdetails=1&accept-language=en`,
+        { headers: { "User-Agent": GEOCODE_USER_AGENT } }
+      );
+      const nomJsonArea = await nomResArea.json();
+      if (nomJsonArea?.address) {
+        const mergedArea = mergePhotonNominatim(null, nomJsonArea.address, nomJsonArea.display_name || "");
+        const structuredArea = cleanAddressFields(mergedArea, nomJsonArea.display_name || "");
+        if (!structuredArea.isCityCenterOnly) {
+          structured = {
+            ...structured,
+            ...structuredArea,
+            lat,
+            lng
+          };
+        }
+      }
+    } catch (err) {
+      console.warn("Secondary geocode for zoom=14 failed:", err);
+    }
+  }
+
+  // Fallback C: If geocoding did not return a postcode, query zoom=14 specifically to resolve postal code boundary
+  if ((!structured.pincode && !structured.postalCode) || structured.pincode === "") {
+    try {
+      const nomResArea = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=14&addressdetails=1&accept-language=en`,
+        { headers: { "User-Agent": GEOCODE_USER_AGENT } }
+      );
+      const nomJsonArea = await nomResArea.json();
+      if (nomJsonArea?.address?.postcode) {
+        const areaPincode = nomJsonArea.address.postcode;
+        structured.pincode = areaPincode;
+        structured.postalCode = areaPincode;
+        
+        // Append pincode to formattedAddress preview if missing
+        if (structured.formattedAddress && !structured.formattedAddress.includes(areaPincode)) {
+          structured.formattedAddress = `${structured.formattedAddress}, ${areaPincode}`;
+        }
+      }
+    } catch (err) {
+      console.warn("Secondary geocode for postcode failed:", err);
+    }
+  }
 
   GEOCODE_CACHE.set(cacheKey, { ts: Date.now(), data: structured });
   return structured;

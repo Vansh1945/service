@@ -76,8 +76,14 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
   const [detecting, setDetecting] = useState(false);
   const [hasInitialized, setHasInitialized] = useState(false);
   const [houseNo, setHouseNo] = useState('');
+  const [road, setRoad] = useState('');
+  const [area, setArea] = useState('');
+  const [city, setCity] = useState('');
+  const [pincode, setPincode] = useState('');
   const geocodeTimerRef = useRef(null);
   const shouldSkipGeocodeRef = useRef(false);
+  const searchContextRef = useRef(null);
+  const didInitializeRef = useRef(false);
 
   // State for India-only address search autocomplete
   const [searchQuery, setSearchQuery] = useState('');
@@ -98,21 +104,64 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
     }
     setSearching(true);
     try {
-      const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=15`);
+      const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=15&countrycode=in&lat=${position[0]}&lon=${position[1]}&location_bias_scale=0.6`);
       const data = await res.json();
-      if (data?.features) {
-        // Filter only India
-        const filtered = data.features.filter(feat => {
-          const props = feat.properties || {};
-          const country = props.country || '';
-          const countryCode = props.countrycode || '';
-          return country.toLowerCase() === 'india' || countryCode.toLowerCase() === 'in';
-        });
-        setSearchResults(filtered);
-        setShowDropdown(true);
-      } else {
-        setSearchResults([]);
+      let results = data?.features || [];
+      
+      // Filter India strictly to prevent any noise
+      results = results.filter(feat => {
+        const props = feat.properties || {};
+        const country = props.country || '';
+        const countryCode = props.countrycode || '';
+        return country.toLowerCase() === 'india' || countryCode.toLowerCase() === 'in';
+      });
+
+      // Nominatim search fallback if results are low to guarantee "Google Maps-like" POI/landmark lookup
+      if (results.length < 5) {
+        try {
+          const nomSearchRes = await fetch(
+            `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&countrycodes=in&limit=10&accept-language=en`,
+            { headers: { "User-Agent": "SafeVoltServiceBooking/1.0 (service-booking-app)" } }
+          );
+          const nomSearchJson = await nomSearchRes.json();
+          if (Array.isArray(nomSearchJson) && nomSearchJson.length > 0) {
+            const mappedNom = nomSearchJson.map(item => ({
+              geometry: {
+                coordinates: [parseFloat(item.lon), parseFloat(item.lat)]
+              },
+              properties: {
+                name: item.address.amenity || item.address.shop || item.address.building || item.address.house_number || item.display_name.split(",")[0],
+                street: item.address.road || item.address.suburb || "",
+                city: item.address.city || item.address.town || item.address.village || "",
+                state: item.address.state || "",
+                postcode: item.address.postcode || "",
+                country: item.address.country || "India",
+                district: item.address.suburb || item.address.neighbourhood || ""
+              }
+            }));
+            
+            // Deduplicate against existing results
+            const existingKeys = new Set(results.map(r => {
+              const namePart = (r.properties.name || '').toLowerCase();
+              const cityPart = (r.properties.city || '').toLowerCase();
+              return `${namePart}|${cityPart}`;
+            }));
+
+            for (const item of mappedNom) {
+              const key = `${(item.properties.name || '').toLowerCase()}|${(item.properties.city || '').toLowerCase()}`;
+              if (!existingKeys.has(key)) {
+                results.push(item);
+                existingKeys.add(key);
+              }
+            }
+          }
+        } catch (nomErr) {
+          console.warn("Nominatim search fallback failed:", nomErr);
+        }
       }
+
+      setSearchResults(results.slice(0, 15));
+      setShowDropdown(results.length > 0);
     } catch (err) {
       console.error('Search error:', err);
     } finally {
@@ -125,53 +174,50 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
     const lat = coords[1];
     const lng = coords[0];
     
-    shouldSkipGeocodeRef.current = true;
-    setPosition([lat, lng]);
+    const pProps = result.properties || {};
     
-    const pProps = result.properties;
-    const parts = [
-      pProps.name,
-      pProps.housenumber ? `${pProps.housenumber} ${pProps.street || ''}` : pProps.street,
-      pProps.district || pProps.suburb,
-      pProps.city,
-      pProps.state,
-      pProps.postcode
-    ].filter(Boolean);
-    const dispName = parts.join(', ');
+    // Extract any 6-digit pincode explicitly typed by the user in the search query
+    const pincodeMatch = searchQuery.match(/\b\d{6}\b/);
+    const queryPincode = pincodeMatch ? pincodeMatch[0] : null;
     
-    const merged = {
-      house_number: pProps.housenumber || "",
-      building: pProps.name || "",
-      road: pProps.street || "",
-      neighbourhood: pProps.district || "",
-      suburb: pProps.suburb || "",
-      city: pProps.city || "",
-      state: pProps.state || "",
-      postcode: pProps.postcode || "",
-      country: pProps.country || "India",
-      landmark: "",
-      _displayName: dispName
+    const postcode = queryPincode || pProps.postcode || "";
+    const cityVal = pProps.city || "";
+    const streetVal = pProps.street || "";
+    const areaVal = pProps.district || pProps.suburb || pProps.locality || pProps.name || "";
+
+    searchContextRef.current = {
+      pincode: postcode,
+      area: areaVal,
+      road: streetVal,
+      city: cityVal
     };
     
-    const structured = cleanAddressFields(merged, dispName);
-    structured.lat = lat;
-    structured.lng = lng;
+    // Populate editable states immediately to avoid UI flicker
+    setRoad(streetVal);
+    setArea(areaVal);
+    setCity(cityVal);
+    setPincode(postcode);
     
-    setStructuredAddress(structured);
-    setHouseNo(structured.houseNumber || '');
+    // Set position and trigger a high-precision geocode immediately for the exact coordinates
+    shouldSkipGeocodeRef.current = true; // Tell position useEffect to skip redundant geocoding
+    setPosition([lat, lng]);
+    fetchAddressFromCoords(lat, lng);
+    
     setShowDropdown(false);
     setSearchQuery('');
   };
 
   useEffect(() => {
-    if (isOpen && !hasInitialized) {
+    if (isOpen && !didInitializeRef.current) {
+      didInitializeRef.current = true;
       handleCurrentLocation();
       setHasInitialized(true);
     }
     if (!isOpen) {
+      didInitializeRef.current = false;
       setHasInitialized(false);
     }
-  }, [isOpen, hasInitialized]);
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen || position[0] === 20.5937 && position[1] === 78.9629) return;
@@ -202,11 +248,11 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
       shouldSkipGeocodeRef.current = true;
       setPosition([result.latitude, result.longitude]);
       setStructuredAddress(result.address);
-      if (result.address.houseNumber) {
-        setHouseNo(result.address.houseNumber);
-      } else {
-        setHouseNo('');
-      }
+      setHouseNo(result.address.houseNumber || '');
+      setRoad(result.address.road || '');
+      setArea(result.address.area || result.address.locality || '');
+      setCity(result.address.city || '');
+      setPincode(result.address.pincode || result.address.postalCode || '');
     } catch (err) {
       toast.error(err.message || 'Could not fetch current location');
     } finally {
@@ -218,8 +264,48 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
     setLoading(true);
     try {
       const data = await reverseGeocode(lat, lng);
-      setStructuredAddress(data);
-      setHouseNo(data.houseNumber || '');
+      
+      // Merge with search result context if available to preserve user query's pincode and sub-locality
+      if (searchContextRef.current) {
+        const ctx = searchContextRef.current;
+        
+        // Preserve search suggestion values, only fallback to geocoded ones if suggestion had them empty
+        const finalRoadValue = ctx.road || data.road || '';
+        const finalAreaValue = ctx.area || data.area || data.locality || '';
+        const finalCityValue = ctx.city || data.city || '';
+        
+        // Resolve pincode with specific fallback
+        let finalPincodeValue = ctx.pincode || data.pincode || data.postalCode || '';
+        if (finalPincodeValue.endsWith("001") && ctx.pincode && ctx.pincode !== "") {
+          finalPincodeValue = ctx.pincode;
+        }
+
+        setStructuredAddress({
+          ...data,
+          road: finalRoadValue,
+          area: finalAreaValue,
+          city: finalCityValue,
+          pincode: finalPincodeValue,
+          postalCode: finalPincodeValue
+        });
+
+        setHouseNo(data.houseNumber || '');
+        setRoad(finalRoadValue);
+        setArea(finalAreaValue);
+        setCity(finalCityValue);
+        setPincode(finalPincodeValue);
+        
+        // Reset context
+        searchContextRef.current = null;
+      } else {
+        // Standard pin drag geocode: overwrite everything with fresh coordinates data
+        setStructuredAddress(data);
+        setHouseNo(data.houseNumber || '');
+        setRoad(data.road || '');
+        setArea(data.area || data.locality || '');
+        setCity(data.city || '');
+        setPincode(data.pincode || data.postalCode || '');
+      }
     } catch (error) {
       console.error('Error fetching address:', error);
       toast.error('Could not resolve address for this location');
@@ -237,12 +323,17 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
     const updatedAddress = {
       ...structuredAddress,
       houseNumber: houseNo.trim(),
+      road: road.trim(),
+      area: area.trim(),
+      city: city.trim(),
+      pincode: pincode.trim(),
+      postalCode: pincode.trim(),
       lat: position[0],
       lng: position[1]
     };
 
     if (houseNo.trim()) {
-      const streetBase = updatedAddress.street || updatedAddress.road || '';
+      const streetBase = updatedAddress.road || updatedAddress.street || '';
       if (streetBase) {
         if (!streetBase.includes(houseNo.trim())) {
           updatedAddress.street = `${houseNo.trim()}, ${streetBase}`;
@@ -259,12 +350,12 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
       {
         house_number: houseNo.trim(),
         road: updatedAddress.road,
-        residential: updatedAddress.area || updatedAddress.residential,
-        neighbourhood: updatedAddress.area || updatedAddress.neighbourhood,
-        suburb: updatedAddress.area || updatedAddress.suburb,
+        residential: updatedAddress.area,
+        neighbourhood: updatedAddress.area,
+        suburb: updatedAddress.area,
         city: updatedAddress.city,
         state: updatedAddress.state,
-        postcode: updatedAddress.pincode || updatedAddress.postalCode
+        postcode: updatedAddress.pincode
       },
       updatedAddress._displayName || updatedAddress.formattedAddress
     );
@@ -284,13 +375,17 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
   const displayText = structuredAddress
     ? buildAddressPreview({
         ...structuredAddress,
-        houseNumber: houseNo || structuredAddress.houseNumber
+        houseNumber: houseNo,
+        road: road,
+        area: area,
+        city: city,
+        pincode: pincode
       }) || structuredAddress.formattedAddress
     : '';
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col h-[85vh] md:h-[600px]">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col h-[90vh] max-h-[780px]">
         <div className="flex items-center justify-between p-4 border-b border-gray-100">
           <h3 className="font-bold text-secondary flex items-center gap-2">
             <MapPin className="w-5 h-5 text-primary" /> Select Your Location
@@ -342,16 +437,30 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
                 const street = props.street || '';
                 const city = props.city || '';
                 const state = props.state || '';
-                const formatted = [name, street, city, state].filter(Boolean).join(', ');
+                const postcode = props.postcode || '';
+                
+                // Construct a beautiful split address format
+                const mainTitle = name || street || city;
+                const subTitle = [
+                  name ? street : '',
+                  props.district || props.suburb || '',
+                  city,
+                  state,
+                  postcode
+                ].filter(Boolean).filter(s => s !== mainTitle).join(', ');
+
                 return (
                   <button
                     key={idx}
                     type="button"
                     onClick={() => handleSelectSearchResult(result)}
-                    className="w-full text-left px-4 py-2.5 hover:bg-gray-50 text-xs font-medium text-secondary transition-colors flex items-start gap-2.5 border-none bg-transparent"
+                    className="w-full text-left px-4 py-2.5 hover:bg-gray-50 text-xs text-secondary transition-colors flex items-start gap-2.5 border-none bg-transparent"
                   >
-                    <MapPin className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
-                    <span className="line-clamp-2">{formatted}</span>
+                    <MapPin className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                    <div className="flex flex-col">
+                      <span className="font-bold text-secondary text-xs">{mainTitle}</span>
+                      {subTitle && <span className="text-gray-400 text-[10px] mt-0.5">{subTitle}</span>}
+                    </div>
                   </button>
                 );
               })}
@@ -400,21 +509,45 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
             />
           </div>
           <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="bg-gray-50 p-2 rounded-lg border border-gray-100">
-              <span className="text-gray-400 font-semibold block">Road</span>
-              <span className="text-secondary font-medium truncate block">{structuredAddress?.road || '—'}</span>
+            <div className="bg-gray-50 p-2 rounded-lg border border-gray-200 focus-within:border-primary/40 focus-within:ring-2 focus-within:ring-primary/10 transition-all duration-200">
+              <label className="text-gray-400 font-semibold block text-[10px] uppercase tracking-wider">Road / Street</label>
+              <input
+                type="text"
+                value={road}
+                onChange={(e) => setRoad(e.target.value)}
+                placeholder="e.g. Street 1, Main Road"
+                className="w-full bg-transparent text-secondary font-medium text-xs focus:outline-none border-none p-0 mt-0.5"
+              />
             </div>
-            <div className="bg-gray-50 p-2 rounded-lg border border-gray-100">
-              <span className="text-gray-400 font-semibold block">Area</span>
-              <span className="text-secondary font-medium truncate block">{structuredAddress?.area || '—'}</span>
+            <div className="bg-gray-50 p-2 rounded-lg border border-gray-200 focus-within:border-primary/40 focus-within:ring-2 focus-within:ring-primary/10 transition-all duration-200">
+              <label className="text-gray-400 font-semibold block text-[10px] uppercase tracking-wider">Area / Locality</label>
+              <input
+                type="text"
+                value={area}
+                onChange={(e) => setArea(e.target.value)}
+                placeholder="e.g. Urban Estate Phase 2"
+                className="w-full bg-transparent text-secondary font-medium text-xs focus:outline-none border-none p-0 mt-0.5"
+              />
             </div>
-            <div className="bg-gray-50 p-2 rounded-lg border border-gray-100">
-              <span className="text-gray-400 font-semibold block">City</span>
-              <span className="text-secondary font-medium truncate block">{structuredAddress?.city || '—'}</span>
+            <div className="bg-gray-50 p-2 rounded-lg border border-gray-200 focus-within:border-primary/40 focus-within:ring-2 focus-within:ring-primary/10 transition-all duration-200">
+              <label className="text-gray-400 font-semibold block text-[10px] uppercase tracking-wider">City</label>
+              <input
+                type="text"
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                placeholder="e.g. Jalandhar"
+                className="w-full bg-transparent text-secondary font-medium text-xs focus:outline-none border-none p-0 mt-0.5"
+              />
             </div>
-            <div className="bg-gray-50 p-2 rounded-lg border border-gray-100">
-              <span className="text-gray-400 font-semibold block">Pincode</span>
-              <span className="text-secondary font-medium truncate block">{structuredAddress?.pincode || structuredAddress?.postalCode || '—'}</span>
+            <div className="bg-gray-50 p-2 rounded-lg border border-gray-200 focus-within:border-primary/40 focus-within:ring-2 focus-within:ring-primary/10 transition-all duration-200">
+              <label className="text-gray-400 font-semibold block text-[10px] uppercase tracking-wider">Pincode</label>
+              <input
+                type="text"
+                value={pincode}
+                onChange={(e) => setPincode(e.target.value)}
+                placeholder="e.g. 144005"
+                className="w-full bg-transparent text-secondary font-medium text-xs focus:outline-none border-none p-0 mt-0.5"
+              />
             </div>
           </div>
           <div>
