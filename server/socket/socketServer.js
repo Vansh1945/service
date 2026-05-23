@@ -330,7 +330,7 @@ const initSocket = (httpServer) => {
 
                 const { latLngToS2CellId } = require('../utils/s2Helper');
                 const providerS2CellId = latLngToS2CellId(emitLat, emitLng, 13);
-                const providerS2CellIdPrecise = latLngToS2CellId(emitLat, emitLng, 15);
+                const providerS2CellIdPrecise = latLngToS2CellId(emitLat, emitLng, 20);
 
                 // Update provider's current location in DB
                 await Provider.findByIdAndUpdate(userId, {

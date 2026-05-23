@@ -160,14 +160,8 @@ const LiveTrackingMapUI = ({ targetLat, targetLng, providerLoc, routeCoords = []
   const providerPos = providerLoc && providerLoc.lat && providerLoc.lng ? [providerLoc.lat, providerLoc.lng] : null;
 
   // Real-time S2 Geometry Cell calculations for visual containment geofencing
-  const customerS2CellId = targetLat && targetLng ? latLngToS2CellId(targetLat, targetLng, 15) : null;
-  const customerS2Corners = customerS2CellId ? s2CellIdToCorners(customerS2CellId) : [];
-
-  const customerL13CellId = targetLat && targetLng ? latLngToS2CellId(targetLat, targetLng, 13) : null;
-  const customerL13Corners = customerL13CellId ? s2CellIdToCorners(customerL13CellId) : [];
-
-  const providerS2CellId = providerLoc && providerLoc.lat && providerLoc.lng ? latLngToS2CellId(providerLoc.lat, providerLoc.lng, 15) : null;
-  const providerS2Corners = providerS2CellId ? s2CellIdToCorners(providerS2CellId) : [];
+  const customerS2CellId = targetLat && targetLng ? latLngToS2CellId(targetLat, targetLng, 20) : null;
+  const providerS2CellId = providerLoc && providerLoc.lat && providerLoc.lng ? latLngToS2CellId(providerLoc.lat, providerLoc.lng, 20) : null;
 
   return (
     <div className="w-full h-[60vh] md:h-full flex-grow relative z-10">
@@ -189,13 +183,13 @@ const LiveTrackingMapUI = ({ targetLat, targetLng, providerLoc, routeCoords = []
         </div>
         <div className="space-y-1.5 text-[11px] font-mono">
           <div className="flex justify-between gap-4 border-b border-slate-800 pb-1">
-            <span className="text-slate-400 font-sans">Dest L15 Cell:</span>
+            <span className="text-slate-400 font-sans">Dest L20 Cell:</span>
             <span className="text-red-400 font-semibold">{customerS2CellId || '—'}</span>
           </div>
           {providerLoc && (
             <>
               <div className="flex justify-between gap-4 border-b border-slate-800 pb-1">
-                <span className="text-slate-400 font-sans">Provider L15 Cell:</span>
+                <span className="text-slate-400 font-sans">Provider L20 Cell:</span>
                 <span className="text-emerald-400 font-semibold">{providerS2CellId || '—'}</span>
               </div>
               <div className="flex justify-between gap-4">
@@ -227,48 +221,6 @@ const LiveTrackingMapUI = ({ targetLat, targetLng, providerLoc, routeCoords = []
               fillColor: '#EF4444',
               weight: 2,
               className: 'live-pulse-ring'
-            }}
-          />
-        )}
-
-        {/* Customer L13 Matchmaking Cell */}
-        {customerL13Corners.length > 0 && (
-          <Polygon
-            positions={customerL13Corners}
-            pathOptions={{
-              color: '#3B82F6',
-              weight: 1.5,
-              dashArray: '8, 8',
-              fillColor: '#3B82F6',
-              fillOpacity: 0.02
-            }}
-          />
-        )}
-
-        {/* Customer L15 Geofence Cell */}
-        {customerS2Corners.length > 0 && (
-          <Polygon
-            positions={customerS2Corners}
-            pathOptions={{
-              color: '#EF4444',
-              weight: 2,
-              dashArray: '5, 5',
-              fillColor: '#EF4444',
-              fillOpacity: 0.08
-            }}
-          />
-        )}
-
-        {/* Provider L15 Cell */}
-        {providerS2Corners.length > 0 && (
-          <Polygon
-            positions={providerS2Corners}
-            pathOptions={{
-              color: '#10B981',
-              weight: 1.8,
-              dashArray: '4, 4',
-              fillColor: '#10B981',
-              fillOpacity: 0.06
             }}
           />
         )}

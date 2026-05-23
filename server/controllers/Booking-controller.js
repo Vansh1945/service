@@ -2678,12 +2678,12 @@ const startBooking = async (req, res) => {
 
     const distance = calculateDistance(providerLat, providerLng, targetLoc.latitude, targetLoc.longitude);
 
-    // Dual-Layer S2 Precise Geofencing Verification (Level 15)
-    const { latLngToS2CellId, getNeighbors } = require('../utils/s2Helper');
-    const providerS2Precise = latLngToS2CellId(providerLat, providerLng, 15);
+    // Dual-Layer S2 Precise Geofencing Verification (Level 20)
+    const { latLngToS2CellId, getNeighbors, getLevel } = require('../utils/s2Helper');
+    const providerS2Precise = latLngToS2CellId(providerLat, providerLng, 20);
     let targetS2Precise = booking.address?.s2CellIdPrecise;
-    if (!targetS2Precise) {
-      targetS2Precise = latLngToS2CellId(targetLoc.latitude, targetLoc.longitude, 15);
+    if (!targetS2Precise || targetS2Precise.length !== 16 || getLevel(BigInt('0x' + targetS2Precise)) !== 20) {
+      targetS2Precise = latLngToS2CellId(targetLoc.latitude, targetLoc.longitude, 20);
     }
     const acceptableCells = [targetS2Precise, ...getNeighbors(targetS2Precise)];
     if (!acceptableCells.includes(providerS2Precise)) {
@@ -2703,7 +2703,7 @@ const startBooking = async (req, res) => {
       });
     }
 
-    if (distance > 200) {
+    if (distance > 150) {
       await createFraudLog(booking, 'failed_login', `Geofencing mismatch during start verification: Provider at ${providerLat}, ${providerLng} but target at ${targetLoc.latitude}, ${targetLoc.longitude} (Distance: ${Math.round(distance)}m)`, 25, req);
       
       // Push warning to history
@@ -2717,7 +2717,7 @@ const startBooking = async (req, res) => {
 
       return res.status(400).json({
         success: false,
-        message: `Geofencing verification failed. You must be within 200 meters of the service location. Current distance: ${Math.round(distance)}m`
+        message: `Geofencing verification failed. You must be within 150 meters of the service location. Current distance: ${Math.round(distance)}m`
       });
     }
 
@@ -3104,12 +3104,12 @@ const completeBooking = async (req, res) => {
 
     const distance = calculateDistance(providerLat, providerLng, targetLoc.latitude, targetLoc.longitude);
 
-    // Dual-Layer S2 Precise Geofencing Verification (Level 15)
-    const { latLngToS2CellId, getNeighbors } = require('../utils/s2Helper');
-    const providerS2Precise = latLngToS2CellId(providerLat, providerLng, 15);
+    // Dual-Layer S2 Precise Geofencing Verification (Level 20)
+    const { latLngToS2CellId, getNeighbors, getLevel } = require('../utils/s2Helper');
+    const providerS2Precise = latLngToS2CellId(providerLat, providerLng, 20);
     let targetS2Precise = booking.address?.s2CellIdPrecise;
-    if (!targetS2Precise) {
-      targetS2Precise = latLngToS2CellId(targetLoc.latitude, targetLoc.longitude, 15);
+    if (!targetS2Precise || targetS2Precise.length !== 16 || getLevel(BigInt('0x' + targetS2Precise)) !== 20) {
+      targetS2Precise = latLngToS2CellId(targetLoc.latitude, targetLoc.longitude, 20);
     }
     const acceptableCells = [targetS2Precise, ...getNeighbors(targetS2Precise)];
     if (!acceptableCells.includes(providerS2Precise)) {

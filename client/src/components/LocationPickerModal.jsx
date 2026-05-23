@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Polygon, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
-import { X, MapPin, Navigation } from 'lucide-react';
+import { X, MapPin, Navigation, Search } from 'lucide-react';
 import { toast } from 'react-toastify';
 import 'leaflet/dist/leaflet.css';
 import {
@@ -11,7 +11,8 @@ import {
   LIGHT_MAP_TILES,
   LIGHT_MAP_ATTRIBUTION,
   smartAddressBuilder,
-  detectCurrentLocation
+  detectCurrentLocation,
+  cleanAddressFields
 } from '../utils/format';
 import { latLngToS2CellId, s2CellIdToCorners } from '../utils/s2Helper';
 
@@ -76,12 +77,91 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
   const [hasInitialized, setHasInitialized] = useState(false);
   const [houseNo, setHouseNo] = useState('');
   const geocodeTimerRef = useRef(null);
+  const shouldSkipGeocodeRef = useRef(false);
+
+  // State for India-only address search autocomplete
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
 
   // S2 Cell calculations for real-time visualization & backend sync
   const cellId13 = position ? latLngToS2CellId(position[0], position[1], 13) : null;
-  const cellId15 = position ? latLngToS2CellId(position[0], position[1], 15) : null;
-  const cellCorners13 = cellId13 ? s2CellIdToCorners(cellId13) : [];
-  const cellCorners15 = cellId15 ? s2CellIdToCorners(cellId15) : [];
+  const cellId20 = position ? latLngToS2CellId(position[0], position[1], 20) : null;
+
+  const handleSearch = async (query) => {
+    setSearchQuery(query);
+    if (query.trim().length < 3) {
+      setSearchResults([]);
+      setShowDropdown(false);
+      return;
+    }
+    setSearching(true);
+    try {
+      const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=15`);
+      const data = await res.json();
+      if (data?.features) {
+        // Filter only India
+        const filtered = data.features.filter(feat => {
+          const props = feat.properties || {};
+          const country = props.country || '';
+          const countryCode = props.countrycode || '';
+          return country.toLowerCase() === 'india' || countryCode.toLowerCase() === 'in';
+        });
+        setSearchResults(filtered);
+        setShowDropdown(true);
+      } else {
+        setSearchResults([]);
+      }
+    } catch (err) {
+      console.error('Search error:', err);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleSelectSearchResult = (result) => {
+    const coords = result.geometry.coordinates; // [lng, lat]
+    const lat = coords[1];
+    const lng = coords[0];
+    
+    shouldSkipGeocodeRef.current = true;
+    setPosition([lat, lng]);
+    
+    const pProps = result.properties;
+    const parts = [
+      pProps.name,
+      pProps.housenumber ? `${pProps.housenumber} ${pProps.street || ''}` : pProps.street,
+      pProps.district || pProps.suburb,
+      pProps.city,
+      pProps.state,
+      pProps.postcode
+    ].filter(Boolean);
+    const dispName = parts.join(', ');
+    
+    const merged = {
+      house_number: pProps.housenumber || "",
+      building: pProps.name || "",
+      road: pProps.street || "",
+      neighbourhood: pProps.district || "",
+      suburb: pProps.suburb || "",
+      city: pProps.city || "",
+      state: pProps.state || "",
+      postcode: pProps.postcode || "",
+      country: pProps.country || "India",
+      landmark: "",
+      _displayName: dispName
+    };
+    
+    const structured = cleanAddressFields(merged, dispName);
+    structured.lat = lat;
+    structured.lng = lng;
+    
+    setStructuredAddress(structured);
+    setHouseNo(structured.houseNumber || '');
+    setShowDropdown(false);
+    setSearchQuery('');
+  };
 
   useEffect(() => {
     if (isOpen && !hasInitialized) {
@@ -95,6 +175,10 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
 
   useEffect(() => {
     if (!isOpen || position[0] === 20.5937 && position[1] === 78.9629) return;
+    if (shouldSkipGeocodeRef.current) {
+      shouldSkipGeocodeRef.current = false;
+      return;
+    }
     if (geocodeTimerRef.current) clearTimeout(geocodeTimerRef.current);
     geocodeTimerRef.current = setTimeout(() => {
       fetchAddressFromCoords(position[0], position[1]);
@@ -115,6 +199,7 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
         maxUpdates: 2,
         maxRetries: 0
       });
+      shouldSkipGeocodeRef.current = true;
       setPosition([result.latitude, result.longitude]);
       setStructuredAddress(result.address);
       if (result.address.houseNumber) {
@@ -187,7 +272,7 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
     const legacy = {
       ...toLegacyAddressFields(updatedAddress),
       s2CellId: cellId13,
-      s2CellIdPrecise: cellId15
+      s2CellIdPrecise: cellId20
     };
     onLocationSelect(legacy);
     onClose();
@@ -215,34 +300,69 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
           </button>
         </div>
 
+        {/* India-Only Address Search Autocomplete Input */}
+        <div className="relative p-3 border-b border-gray-100 bg-white z-[1005]">
+          <div className="relative">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => handleSearch(e.target.value)}
+              placeholder="Search address in India..."
+              className="w-full pl-10 pr-10 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
+            />
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="w-4 h-4 text-gray-400" />
+            </div>
+            {searching && (
+              <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent"></div>
+              </div>
+            )}
+            {!searching && searchQuery && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setSearchResults([]);
+                  setShowDropdown(false);
+                }}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 border-none bg-transparent"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Search Dropdown Overlay */}
+          {showDropdown && searchResults.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-1 mx-3 bg-white border border-gray-200 rounded-lg shadow-xl max-h-[220px] overflow-y-auto z-[1010] divide-y divide-gray-50">
+              {searchResults.map((result, idx) => {
+                const props = result.properties || {};
+                const name = props.name || '';
+                const street = props.street || '';
+                const city = props.city || '';
+                const state = props.state || '';
+                const formatted = [name, street, city, state].filter(Boolean).join(', ');
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => handleSelectSearchResult(result)}
+                    className="w-full text-left px-4 py-2.5 hover:bg-gray-50 text-xs font-medium text-secondary transition-colors flex items-start gap-2.5 border-none bg-transparent"
+                  >
+                    <MapPin className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+                    <span className="line-clamp-2">{formatted}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         <div className="flex-1 relative bg-gray-100">
           <MapContainer center={position} zoom={16} style={{ height: '100%', width: '100%' }}>
             <TileLayer attribution={LIGHT_MAP_ATTRIBUTION} url={LIGHT_MAP_TILES} />
             <DraggableMarker position={position} setPosition={setPosition} />
-            {cellCorners13.length > 0 && (
-              <Polygon
-                positions={cellCorners13}
-                pathOptions={{
-                  color: '#3B82F6',
-                  weight: 1.5,
-                  dashArray: '8, 8',
-                  fillColor: '#3B82F6',
-                  fillOpacity: 0.04
-                }}
-              />
-            )}
-            {cellCorners15.length > 0 && (
-              <Polygon
-                positions={cellCorners15}
-                pathOptions={{
-                  color: '#10B981',
-                  weight: 2,
-                  dashArray: '5, 5',
-                  fillColor: '#10B981',
-                  fillOpacity: 0.15
-                }}
-              />
-            )}
             <MapUpdater center={position} />
           </MapContainer>
 
@@ -295,28 +415,6 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
             <div className="bg-gray-50 p-2 rounded-lg border border-gray-100">
               <span className="text-gray-400 font-semibold block">Pincode</span>
               <span className="text-secondary font-medium truncate block">{structuredAddress?.pincode || structuredAddress?.postalCode || '—'}</span>
-            </div>
-          </div>
-          <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white p-2.5 rounded-lg border border-slate-700 shadow-md">
-            <div className="flex justify-between items-center mb-1">
-              <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">S2 Geometry Location System</span>
-              <div className="flex items-center gap-1.5">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-                <span className="text-[9px] text-emerald-400 font-semibold">Active</span>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
-              <div className="bg-slate-800/50 p-1 rounded border border-slate-700/50">
-                <span className="text-slate-400 block text-[9px] uppercase tracking-tight">L13 Neighborhood Cell</span>
-                <span className="text-blue-300 font-semibold truncate block">{cellId13 || '—'}</span>
-              </div>
-              <div className="bg-slate-800/50 p-1 rounded border border-slate-700/50">
-                <span className="text-slate-400 block text-[9px] uppercase tracking-tight">L15 Geofence Cell</span>
-                <span className="text-emerald-300 font-semibold truncate block">{cellId15 || '—'}</span>
-              </div>
             </div>
           </div>
           <div>

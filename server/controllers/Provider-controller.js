@@ -540,7 +540,7 @@ exports.completeProfile = async (req, res) => {
         const addrLat = lat ? parseFloat(lat) : null;
         const addrLng = lng ? parseFloat(lng) : null;
         const addrS2CellId = (addrLat && addrLng) ? latLngToS2CellId(addrLat, addrLng, 13) : null;
-        const addrS2CellIdPrecise = (addrLat && addrLng) ? latLngToS2CellId(addrLat, addrLng, 15) : null;
+        const addrS2CellIdPrecise = (addrLat && addrLng) ? latLngToS2CellId(addrLat, addrLng, 20) : null;
 
         provider.address = {
             street,
@@ -903,7 +903,7 @@ exports.updateProviderProfile = async (req, res) => {
 
                 // Compute S2 explicitly — findByIdAndUpdate bypasses pre-save hooks
                 const newS2CellId = (newLat && newLng) ? latLngToS2CellId(newLat, newLng, 13) : currentAddr.s2CellId || null;
-                const newS2CellIdPrecise = (newLat && newLng) ? latLngToS2CellId(newLat, newLng, 15) : currentAddr.s2CellIdPrecise || null;
+                const newS2CellIdPrecise = (newLat && newLng) ? latLngToS2CellId(newLat, newLng, 20) : currentAddr.s2CellIdPrecise || null;
 
                 updates.address = {
                     ...currentAddr,

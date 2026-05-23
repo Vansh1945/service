@@ -399,7 +399,7 @@ const updateProfile = async (req, res) => {
 
       // Compute S2 Cell IDs explicitly (findByIdAndUpdate bypasses pre-save hooks)
       const s2CellId = (latVal && lngVal && !isNaN(latVal) && !isNaN(lngVal)) ? latLngToS2CellId(latVal, lngVal, 13) : (address.s2CellId || null);
-      const s2CellIdPrecise = (latVal && lngVal && !isNaN(latVal) && !isNaN(lngVal)) ? latLngToS2CellId(latVal, lngVal, 15) : (address.s2CellIdPrecise || null);
+      const s2CellIdPrecise = (latVal && lngVal && !isNaN(latVal) && !isNaN(lngVal)) ? latLngToS2CellId(latVal, lngVal, 20) : (address.s2CellIdPrecise || null);
 
       updates.address = {
         street: address.street ? address.street.trim() : undefined,

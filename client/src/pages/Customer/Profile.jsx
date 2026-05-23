@@ -7,10 +7,11 @@ import AddressSelector from '../../components/AddressSelector';
 import * as NotificationService from '../../services/NotificationService';
 import {
     User, MapPin, Mail, Phone, Camera, LogOut, Shield, Bell,
-    ChevronRight, ArrowLeft, CreditCard, Package, Edit2, CheckCircle, Gift, Wallet, ArrowDownLeft, RotateCcw, Navigation
+    ChevronRight, ArrowLeft, CreditCard, Package, Edit2, CheckCircle, Gift, Wallet, ArrowDownLeft, RotateCcw, Navigation,
+    Building, ChevronDown
 } from 'lucide-react';
 import { getWalletHistory } from '../../services/CustomerService';
-import { formatCurrency, formatDate, formatDateTime, compressImage, detectCurrentLocation, toLegacyAddressFields } from '../../utils/format';
+import { formatCurrency, formatDate, formatDateTime, compressImage, detectCurrentLocation, toLegacyAddressFields, buildAddressPreview } from '../../utils/format';
 import LocationPickerModal from '../../components/LocationPickerModal';
 
 const UserProfile = () => {
@@ -52,6 +53,50 @@ const UserProfile = () => {
     const [transactions, setTransactions] = useState({ data: [], summary: {} });
     const [selectedFile, setSelectedFile] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [states, setStates] = useState([]);
+    const [cities, setCities] = useState([]);
+
+    useEffect(() => {
+        import('country-state-city').then(({ State }) => {
+            const countryStates = State.getStatesOfCountry('IN');
+            setStates(countryStates);
+        });
+    }, []);
+
+    const currentStateCode = states.find(s => s.name === profile.address.state)?.isoCode;
+
+    useEffect(() => {
+        if (currentStateCode) {
+            import('country-state-city').then(({ City }) => {
+                const stateCities = City.getCitiesOfState('IN', currentStateCode);
+                setCities(stateCities);
+            });
+        } else {
+            setCities([]);
+        }
+    }, [currentStateCode]);
+
+    const handleStateChange = (stateName) => {
+        setProfile(prev => {
+            const updatedAddress = { ...prev.address, state: stateName, city: '' };
+            updatedAddress.formattedAddress = buildAddressPreview(updatedAddress);
+            return {
+                ...prev,
+                address: updatedAddress
+            };
+        });
+    };
+
+    const handleCityChange = (cityName) => {
+        setProfile(prev => {
+            const updatedAddress = { ...prev.address, city: cityName };
+            updatedAddress.formattedAddress = buildAddressPreview(updatedAddress);
+            return {
+                ...prev,
+                address: updatedAddress
+            };
+        });
+    };
 
     const [preferences, setPreferences] = useState({
         booking: true,
@@ -185,6 +230,17 @@ const UserProfile = () => {
             } else if (name === 'pincode') {
                 updatedAddress.postalCode = value;
             }
+            
+            // Construct street address dynamically
+            const parts = [];
+            if (updatedAddress.houseNumber) parts.push(updatedAddress.houseNumber);
+            if (updatedAddress.road) parts.push(updatedAddress.road);
+            updatedAddress.street = parts.join(', ') || updatedAddress.street || '';
+            updatedAddress.addressLine = updatedAddress.street;
+            
+            // Update formatted address preview
+            updatedAddress.formattedAddress = buildAddressPreview(updatedAddress);
+            
             return {
                 ...prev,
                 address: updatedAddress
@@ -410,50 +466,164 @@ const UserProfile = () => {
                                                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20"
                                             />
                                         </div>
-                                        <div className="pt-2 border-t border-gray-100">
-                                            <h3 className="text-sm font-semibold text-secondary mb-3">Address</h3>
-                                            <div className="space-y-3">
-                                                <div className="flex justify-between items-center mb-1">
-                                                    <label className="block text-xs font-semibold text-gray-500">Street Address</label>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setIsMapModalOpen(true)}
-                                                        className="bg-red-500 hover:bg-red-600 text-white rounded-full p-2 shadow-lg shadow-red-500/20 active:scale-95 transition-all flex items-center justify-center"
-                                                        title="Select Location on Map"
-                                                    >
-                                                        <MapPin className="w-4 h-4" />
-                                                    </button>
+                                        <div className="pt-4 border-t border-gray-100 relative">
+                                            <div className="flex justify-between items-center mb-4">
+                                                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Address Details</h3>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsMapModalOpen(true)}
+                                                    className="w-10 h-10 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-lg hover:shadow-red-500/30 transition-all hover:scale-105 active:scale-95 absolute -top-1 right-0 z-10"
+                                                    title="Select Location on Map"
+                                                >
+                                                    <MapPin className="w-5 h-5" />
+                                                </button>
+                                            </div>
+
+                                            <div className="space-y-4">
+                                                {/* House No & Road Grid */}
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="block text-xs font-semibold text-gray-500 mb-1">House / Flat / Shop No. *</label>
+                                                        <input
+                                                            type="text"
+                                                            name="houseNumber"
+                                                            value={profile.address.houseNumber || ''}
+                                                            onChange={handleAddressChange}
+                                                            placeholder="e.g. House No. 349, Flat 4B"
+                                                            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20"
+                                                            required
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-semibold text-gray-500 mb-1">Road / Street / Lane *</label>
+                                                        <input
+                                                            type="text"
+                                                            name="road"
+                                                            value={profile.address.road || ''}
+                                                            onChange={handleAddressChange}
+                                                            placeholder="e.g. MG Road, Phase 1"
+                                                            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20"
+                                                            required
+                                                        />
+                                                    </div>
                                                 </div>
-                                                <input
-                                                    ref={autocompleteInputRef}
-                                                    type="text"
-                                                    name="street"
-                                                    value={profile.address.street}
-                                                    onChange={handleAddressChange}
-                                                    placeholder="Street Address"
-                                                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-                                                />
-                                                <AddressSelector
-                                                    selectedState={profile.address.state}
-                                                    selectedCity={profile.address.city}
-                                                    onStateChange={(state) => setProfile(prev => ({
-                                                        ...prev,
-                                                        address: { ...prev.address, state, city: '' }
-                                                    }))}
-                                                    onCityChange={(city) => setProfile(prev => ({
-                                                        ...prev,
-                                                        address: { ...prev.address, city }
-                                                    }))}
-                                                />
-                                                <input
-                                                    type="text"
-                                                    name="postalCode"
-                                                    value={profile.address.postalCode}
-                                                    onChange={handleAddressChange}
-                                                    placeholder="Postal Code"
-                                                    maxLength="6"
-                                                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-                                                />
+
+                                                {/* Landmark & Area Grid */}
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="block text-xs font-semibold text-gray-500 mb-1">Landmark (Optional)</label>
+                                                        <input
+                                                            type="text"
+                                                            name="landmark"
+                                                            value={profile.address.landmark || ''}
+                                                            onChange={handleAddressChange}
+                                                            placeholder="e.g. Near Shiv Temple"
+                                                            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-semibold text-gray-500 mb-1">Area / Locality / Sector</label>
+                                                        <input
+                                                            type="text"
+                                                            name="area"
+                                                            value={profile.address.area || ''}
+                                                            onChange={handleAddressChange}
+                                                            placeholder="e.g. Sector 15, Vasant Kunj"
+                                                            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20"
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                {/* State, City, Pincode Grid */}
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                    {/* State Selection */}
+                                                    <div>
+                                                        <label htmlFor="state" className="block text-xs font-semibold text-gray-500 mb-1">State *</label>
+                                                        <div className="relative">
+                                                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                                <MapPin className="text-gray-400 w-4 h-4" />
+                                                            </div>
+                                                            <select
+                                                                id="state"
+                                                                name="state"
+                                                                value={profile.address.state || ''}
+                                                                onChange={(e) => handleStateChange(e.target.value)}
+                                                                className="w-full pl-9 pr-10 py-2 bg-white border border-gray-200 rounded-lg text-sm text-secondary focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-medium appearance-none"
+                                                                required
+                                                            >
+                                                                <option value="">Select State</option>
+                                                                {!(!profile.address.state || states.some(s => s.name === profile.address.state)) && (
+                                                                    <option value={profile.address.state}>{profile.address.state}</option>
+                                                                )}
+                                                                {states.map((state) => (
+                                                                    <option key={state.isoCode} value={state.name}>
+                                                                        {state.name}
+                                                                    </option>
+                                                                ))}
+                                                            </select>
+                                                            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                                                <ChevronDown className="w-4 h-4 text-gray-400" />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* City Selection */}
+                                                    <div>
+                                                        <label htmlFor="city" className="block text-xs font-semibold text-gray-500 mb-1">City *</label>
+                                                        <div className="relative">
+                                                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                                <Building className="text-gray-400 w-4 h-4" />
+                                                            </div>
+                                                            <select
+                                                                id="city"
+                                                                name="city"
+                                                                value={profile.address.city || ''}
+                                                                onChange={(e) => handleCityChange(e.target.value)}
+                                                                className="w-full pl-9 pr-10 py-2 bg-white border border-gray-200 rounded-lg text-sm text-secondary focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-medium appearance-none disabled:bg-gray-50 disabled:text-gray-400"
+                                                                disabled={!profile.address.state}
+                                                                required
+                                                            >
+                                                                <option value="">Select City</option>
+                                                                {!(!profile.address.city || cities.some(c => c.name === profile.address.city)) && (
+                                                                    <option value={profile.address.city}>{profile.address.city}</option>
+                                                                )}
+                                                                {cities.map((city) => (
+                                                                    <option key={city.name} value={city.name}>
+                                                                        {city.name}
+                                                                    </option>
+                                                                ))}
+                                                            </select>
+                                                            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                                                <ChevronDown className="w-4 h-4 text-gray-400" />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Pincode Selection */}
+                                                    <div>
+                                                        <label className="block text-xs font-semibold text-gray-500 mb-1">Pincode *</label>
+                                                        <input
+                                                            type="text"
+                                                            name="pincode"
+                                                            value={profile.address.pincode || profile.address.postalCode || ''}
+                                                            onChange={handleAddressChange}
+                                                            placeholder="6-digit Pincode"
+                                                            maxLength="6"
+                                                            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20"
+                                                            required
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                {/* Address Preview Box */}
+                                                <div>
+                                                    <label className="block text-xs font-semibold text-gray-500 mb-1">Address Preview</label>
+                                                    <div className="w-full min-h-[48px] bg-gray-50 p-3 rounded-lg border border-gray-200 text-sm font-medium text-gray-500 leading-relaxed">
+                                                        {(profile.address.houseNumber && profile.address.road)
+                                                            ? (buildAddressPreview(profile.address) || 'Constructing preview...')
+                                                            : 'Please fill House No. and Road name to construct preview...'}
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                         <button type="submit" disabled={loading} className="w-full py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50">
@@ -477,9 +647,9 @@ const UserProfile = () => {
                                                     <h3 className="text-sm font-bold text-secondary mb-1">Saved Address</h3>
                                                     {profile.address.street || profile.address.city ? (
                                                         <div className="text-sm text-gray-500">
-                                                            <p className="font-semibold text-secondary">{profile.address.street}</p>
-                                                            <p>{profile.address.city}, {profile.address.state}</p>
-                                                            <p>{profile.address.postalCode}</p>
+                                                            <p className="font-semibold text-secondary">
+                                                                {profile.address.formattedAddress || buildAddressPreview(profile.address) || profile.address.street}
+                                                            </p>
                                                         </div>
                                                     ) : (
                                                         <p className="text-sm text-gray-400 italic">No address added yet</p>

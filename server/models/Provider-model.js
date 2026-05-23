@@ -373,7 +373,7 @@ providerSchema.pre('save', async function (next) {
             const { latLngToS2CellId } = require('../utils/s2Helper');
             if (this.address && typeof this.address.lat === 'number' && typeof this.address.lng === 'number') {
                 this.address.s2CellId = latLngToS2CellId(this.address.lat, this.address.lng, 13);
-                this.address.s2CellIdPrecise = latLngToS2CellId(this.address.lat, this.address.lng, 15);
+                this.address.s2CellIdPrecise = latLngToS2CellId(this.address.lat, this.address.lng, 20);
             }
         } catch (s2Err) {
             console.error('Error computing provider address S2 cells in pre-save:', s2Err);
@@ -388,12 +388,12 @@ providerSchema.pre('save', async function (next) {
                 const lat = this.currentLocation.coordinates[1];
                 if (typeof lat === 'number' && typeof lng === 'number' && (lat !== 0 || lng !== 0)) {
                     const cell13 = latLngToS2CellId(lat, lng, 13);
-                    const cell15 = latLngToS2CellId(lat, lng, 15);
+                    const cell20 = latLngToS2CellId(lat, lng, 20);
                     this.currentLocation.s2CellId = cell13;
-                    this.currentLocation.s2CellIdPrecise = cell15;
+                    this.currentLocation.s2CellIdPrecise = cell20;
                     // Also populate top level fields
                     this.s2CellId = cell13;
-                    this.s2CellIdPrecise = cell15;
+                    this.s2CellIdPrecise = cell20;
                 }
             }
         } catch (s2Err) {

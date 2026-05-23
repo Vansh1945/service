@@ -4,12 +4,12 @@ import { toast } from 'react-toastify';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import 'react-toastify/dist/ReactToastify.css';
-import { Loader2, AlertCircle, Edit2, X, Check, Upload, Eye, Camera, FileText, CreditCard, Bell, Shield, Gift, Package, Wallet, User, MapPin, Navigation } from 'lucide-react';
+import { Loader2, AlertCircle, Edit2, X, Check, Upload, Eye, Camera, FileText, CreditCard, Bell, Shield, Gift, Package, Wallet, User, MapPin, Navigation, Building, ChevronDown } from 'lucide-react';
 import * as ProviderService from '../../services/ProviderService';
 import * as SystemService from '../../services/SystemService';
 import * as NotificationService from '../../services/NotificationService';
 import useCategory from '../../hooks/useCategory';
-import { formatDate, formatCurrency, compressImage, detectCurrentLocation, toLegacyAddressFields } from '../../utils/format';
+import { formatDate, formatCurrency, compressImage, detectCurrentLocation, toLegacyAddressFields, buildAddressPreview } from '../../utils/format';
 import LocationPickerModal from '../../components/LocationPickerModal';
 
 const ProviderProfile = () => {
@@ -135,6 +135,50 @@ const ProviderProfile = () => {
   const [editMode, setEditMode] = useState({ basic: false, professional: false, address: false, bank: false });
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [detecting, setDetecting] = useState(false);
+  const [states, setStates] = useState([]);
+  const [cities, setCities] = useState([]);
+
+  useEffect(() => {
+    import('country-state-city').then(({ State }) => {
+      const countryStates = State.getStatesOfCountry('IN');
+      setStates(countryStates);
+    });
+  }, []);
+
+  const currentStateCode = states.find(s => s.name === profileData.address.state)?.isoCode;
+
+  useEffect(() => {
+    if (currentStateCode) {
+      import('country-state-city').then(({ City }) => {
+        const stateCities = City.getCitiesOfState('IN', currentStateCode);
+        setCities(stateCities);
+      });
+    } else {
+      setCities([]);
+    }
+  }, [currentStateCode]);
+
+  const handleProviderStateChange = (stateName) => {
+    setProfileData(prev => {
+      const updatedAddress = { ...prev.address, state: stateName, city: '' };
+      updatedAddress.formattedAddress = buildAddressPreview(updatedAddress);
+      return {
+        ...prev,
+        address: updatedAddress
+      };
+    });
+  };
+
+  const handleProviderCityChange = (cityName) => {
+    setProfileData(prev => {
+      const updatedAddress = { ...prev.address, city: cityName };
+      updatedAddress.formattedAddress = buildAddressPreview(updatedAddress);
+      return {
+        ...prev,
+        address: updatedAddress
+      };
+    });
+  };
 
   const handleDetectAddress = async () => {
     setDetecting(true);
@@ -204,7 +248,29 @@ const ProviderProfile = () => {
   const handleChange = (e, section) => {
     const { name, value } = e.target;
     if (section === 'address') {
-      setProfileData(prev => ({ ...prev, address: { ...prev.address, [name]: value } }));
+      setProfileData(prev => {
+        const updatedAddress = { ...prev.address, [name]: value };
+        if (name === 'postalCode') {
+          updatedAddress.pincode = value;
+        } else if (name === 'pincode') {
+          updatedAddress.postalCode = value;
+        }
+        
+        // Construct street address dynamically
+        const parts = [];
+        if (updatedAddress.houseNumber) parts.push(updatedAddress.houseNumber);
+        if (updatedAddress.road) parts.push(updatedAddress.road);
+        updatedAddress.street = parts.join(', ') || updatedAddress.street || '';
+        updatedAddress.addressLine = updatedAddress.street;
+        
+        // Update formatted address preview
+        updatedAddress.formattedAddress = buildAddressPreview(updatedAddress);
+        
+        return {
+          ...prev,
+          address: updatedAddress
+        };
+      });
     } else if (section === 'bank') {
       setProfileData(prev => ({ ...prev, bankDetails: { ...prev.bankDetails, [name]: value } }));
     } else {
@@ -771,17 +837,19 @@ const ProviderProfile = () => {
                     </div>
 
                     {editMode.address ? (
-                      <form onSubmit={(e) => { e.preventDefault(); updateProfile('address'); }} className="space-y-3">
-                        <div className="flex justify-center items-center py-2">
+                      <form onSubmit={(e) => { e.preventDefault(); updateProfile('address'); }} className="space-y-4 relative">
+                        <div className="flex justify-between items-center mb-4">
+                          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Address Details</h3>
                           <button
                             type="button"
                             onClick={() => setIsMapOpen(true)}
-                            className="bg-red-500 hover:bg-red-600 text-white rounded-full p-3 shadow-lg shadow-red-500/20 active:scale-95 transition-all flex items-center justify-center"
+                            className="w-10 h-10 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-lg hover:shadow-red-500/30 transition-all hover:scale-105 active:scale-95 absolute -top-1 right-0 z-10"
                             title="Select Location on Map"
                           >
                             <MapPin className="w-5 h-5" />
                           </button>
                         </div>
+
                         <LocationPickerModal
                           isOpen={isMapOpen}
                           onClose={() => setIsMapOpen(false)}
@@ -812,17 +880,151 @@ const ProviderProfile = () => {
                           }}
                         />
 
-                        <div className="grid grid-cols-2 gap-3">
-                          <input type="text" name="street" placeholder="Street" value={profileData.address.street}
-                            onChange={(e) => handleChange(e, 'address')} className="col-span-2 px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-secondary" />
-                          <input type="text" name="city" placeholder="City" value={profileData.address.city}
-                            onChange={(e) => handleChange(e, 'address')} className="px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-secondary" />
-                          <input type="text" name="state" placeholder="State" value={profileData.address.state}
-                            onChange={(e) => handleChange(e, 'address')} className="px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-secondary" />
-                          <input type="text" name="postalCode" placeholder="Postal Code" value={profileData.address.postalCode}
-                            onChange={(e) => handleChange(e, 'address')} className="px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-secondary" />
-                          <input type="text" name="country" placeholder="Country" value={profileData.address.country}
-                            onChange={(e) => handleChange(e, 'address')} className="px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-secondary" />
+                        <div className="space-y-4">
+                          {/* House No & Road Grid */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-xs font-semibold text-gray-500 mb-1">House / Flat / Shop No. *</label>
+                              <input
+                                type="text"
+                                name="houseNumber"
+                                value={profileData.address.houseNumber || ''}
+                                onChange={(e) => handleChange(e, 'address')}
+                                placeholder="e.g. House No. 349, Flat 4B"
+                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 text-secondary"
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-gray-500 mb-1">Road / Street / Lane *</label>
+                              <input
+                                type="text"
+                                name="road"
+                                value={profileData.address.road || ''}
+                                onChange={(e) => handleChange(e, 'address')}
+                                placeholder="e.g. MG Road, Phase 1"
+                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 text-secondary"
+                                required
+                              />
+                            </div>
+                          </div>
+
+                          {/* Landmark & Area Grid */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-xs font-semibold text-gray-500 mb-1">Landmark (Optional)</label>
+                              <input
+                                type="text"
+                                name="landmark"
+                                value={profileData.address.landmark || ''}
+                                onChange={(e) => handleChange(e, 'address')}
+                                placeholder="e.g. Near Shiv Temple"
+                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 text-secondary"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-gray-500 mb-1">Area / Locality / Sector</label>
+                              <input
+                                type="text"
+                                name="area"
+                                value={profileData.address.area || ''}
+                                onChange={(e) => handleChange(e, 'address')}
+                                placeholder="e.g. Sector 15, Vasant Kunj"
+                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 text-secondary"
+                              />
+                            </div>
+                          </div>
+
+                          {/* State, City, Pincode Grid */}
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            {/* State Selection */}
+                            <div>
+                              <label htmlFor="state" className="block text-xs font-semibold text-gray-500 mb-1">State *</label>
+                              <div className="relative">
+                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                  <MapPin className="text-gray-400 w-4 h-4" />
+                                </div>
+                                <select
+                                  id="state"
+                                  name="state"
+                                  value={profileData.address.state || ''}
+                                  onChange={(e) => handleProviderStateChange(e.target.value)}
+                                  className="w-full pl-9 pr-10 py-2 bg-white border border-gray-200 rounded-lg text-sm text-secondary focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-medium appearance-none"
+                                  required
+                                >
+                                  <option value="">Select State</option>
+                                  {!(!profileData.address.state || states.some(s => s.name === profileData.address.state)) && (
+                                    <option value={profileData.address.state}>{profileData.address.state}</option>
+                                  )}
+                                  {states.map((state) => (
+                                    <option key={state.isoCode} value={state.name}>
+                                      {state.name}
+                                    </option>
+                                  ))}
+                                </select>
+                                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                  <ChevronDown className="w-4 h-4 text-gray-400" />
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* City Selection */}
+                            <div>
+                              <label htmlFor="city" className="block text-xs font-semibold text-gray-500 mb-1">City *</label>
+                              <div className="relative">
+                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                  <Building className="text-gray-400 w-4 h-4" />
+                                </div>
+                                <select
+                                  id="city"
+                                  name="city"
+                                  value={profileData.address.city || ''}
+                                  onChange={(e) => handleProviderCityChange(e.target.value)}
+                                  className="w-full pl-9 pr-10 py-2 bg-white border border-gray-200 rounded-lg text-sm text-secondary focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-medium appearance-none disabled:bg-gray-50 disabled:text-gray-400"
+                                  disabled={!profileData.address.state}
+                                  required
+                                >
+                                  <option value="">Select City</option>
+                                  {!(!profileData.address.city || cities.some(c => c.name === profileData.address.city)) && (
+                                    <option value={profileData.address.city}>{profileData.address.city}</option>
+                                  )}
+                                  {cities.map((city) => (
+                                    <option key={city.name} value={city.name}>
+                                      {city.name}
+                                    </option>
+                                  ))}
+                                </select>
+                                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                  <ChevronDown className="w-4 h-4 text-gray-400" />
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Pincode Selection */}
+                            <div>
+                              <label className="block text-xs font-semibold text-gray-500 mb-1">Pincode *</label>
+                              <input
+                                type="text"
+                                name="pincode"
+                                value={profileData.address.pincode || profileData.address.postalCode || ''}
+                                onChange={(e) => handleChange(e, 'address')}
+                                placeholder="6-digit Pincode"
+                                maxLength="6"
+                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 text-secondary"
+                                required
+                              />
+                            </div>
+                          </div>
+
+                          {/* Address Preview Box */}
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-500 mb-1">Address Preview</label>
+                            <div className="w-full min-h-[48px] bg-gray-50 p-3 rounded-lg border border-gray-200 text-sm font-medium text-gray-500 leading-relaxed">
+                              {(profileData.address.houseNumber && profileData.address.road)
+                                ? (buildAddressPreview(profileData.address) || 'Constructing preview...')
+                                : 'Please fill House No. and Road name to construct preview...'}
+                            </div>
+                          </div>
                         </div>
                         <div className="flex justify-end gap-2 pt-3">
                           <button type="button" onClick={() => setEditMode({ ...editMode, address: false })}
@@ -832,18 +1034,19 @@ const ProviderProfile = () => {
                       </form>
                     ) : (
                       <div className="space-y-3">
-                        {[
-                          { label: 'Street', value: profileData.address.street },
-                          { label: 'City', value: profileData.address.city },
-                          { label: 'State', value: profileData.address.state },
-                          { label: 'Postal Code', value: profileData.address.postalCode },
-                          { label: 'Country', value: profileData.address.country }
-                        ].map((item, idx) => (
-                          <div key={idx} className={`flex justify-between items-center pb-3 ${idx < 4 ? 'border-b border-gray-200' : ''}`}>
-                            <span className="text-sm text-gray-600">{item.label}</span>
-                            <span className="text-sm font-semibold text-secondary">{item.value || '—'}</span>
+                        <div className="flex items-start gap-3">
+                          <div className="p-2 bg-gray-100 rounded-lg shrink-0 mt-0.5"><MapPin className="w-5 h-5 text-primary" /></div>
+                          <div className="flex-1">
+                            <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">Saved Address</p>
+                            {profileData.address.street || profileData.address.city ? (
+                              <p className="text-sm font-semibold text-secondary leading-relaxed">
+                                {profileData.address.formattedAddress || buildAddressPreview(profileData.address) || profileData.address.street}
+                              </p>
+                            ) : (
+                              <p className="text-sm text-gray-400 italic">No address added yet</p>
+                            )}
                           </div>
-                        ))}
+                        </div>
                       </div>
                     )}
                   </div>

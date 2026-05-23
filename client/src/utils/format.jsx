@@ -801,7 +801,7 @@ export const detectCurrentLocation = (options = {}) => {
           const address = await reverseGeocode(latitude, longitude);
           // Compute S2 cell IDs so all callers get them immediately
           const s2CellId = latLngToS2CellId(latitude, longitude, 13);
-          const s2CellIdPrecise = latLngToS2CellId(latitude, longitude, 15);
+          const s2CellIdPrecise = latLngToS2CellId(latitude, longitude, 20);
           resolve({ latitude, longitude, accuracy, address: { ...address, lat: latitude, lng: longitude, s2CellId, s2CellIdPrecise } });
         } catch (err) {
           reject(err);
@@ -868,7 +868,7 @@ export const toLegacyAddressFields = (structured) => {
   const lat = structured.lat;
   const lng = structured.lng;
   const s2CellId = (lat && lng) ? latLngToS2CellId(lat, lng, 13) : (structured.s2CellId || null);
-  const s2CellIdPrecise = (lat && lng) ? latLngToS2CellId(lat, lng, 15) : (structured.s2CellIdPrecise || null);
+  const s2CellIdPrecise = (lat && lng) ? latLngToS2CellId(lat, lng, 20) : (structured.s2CellIdPrecise || null);
   const formattedAddress = buildAddressPreview(structured) || structured.formattedAddress || smartAddressBuilder(structured, "");
   return {
     street: structured.street || structured.addressLine || formattedAddress || "",
