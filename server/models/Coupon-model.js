@@ -172,21 +172,28 @@ couponSchema.statics.getAvailableCoupons = async function (userId, bookingValue 
   const query = {
     isActive: true,
     expiryDate: { $gte: new Date() },
-    usedBy: { $not: { $elemMatch: { user: userId } } },
     $or: [
       { isGlobal: true },
+      { isFirstBooking: true },
       { assignedTo: userId }
     ]
   };
 
-  // Exclude first-booking coupons if user has bookings
-  if (user && user.totalBookings > 0) {
-    query.isFirstBooking = false;
+  // Exclude first-booking coupons if user has already used their first booking
+  if (user && user.firstBookingUsed) {
+    query.$or = query.$or.filter(c => !c.isFirstBooking);
   }
 
-  const coupons = await this.find(query).select('-usedBy -createdBy');
+  const coupons = await this.find(query).select('-createdBy').lean();
 
-  return coupons;
+  // Attach a flag so the frontend can show "Already Used" without filtering them out
+  return coupons.map(coupon => ({
+    ...coupon,
+    alreadyUsed: coupon.usedBy
+      ? coupon.usedBy.some(u => u.user && u.user.toString() === userId.toString())
+      : false,
+    usedBy: undefined // strip usedBy from response
+  }));
 };
 
 // -------------------- Instance Methods --------------------

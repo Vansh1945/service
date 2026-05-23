@@ -1,16 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
 import { register } from '../../services/AuthService';
 import {
-  User, Mail, Phone, Lock, MapPin, Home,
+  User, Lock, MapPin,
   ArrowLeft, ArrowRight, CheckCircle, Shield, Zap,
-  Sparkles, Award, HeadphonesIcon, Info, Navigation
+  Sparkles, Award, HeadphonesIcon, Info
 } from 'lucide-react';
 import AddressSelector from '../../components/AddressSelector';
-import LocationPickerModal from '../../components/LocationPickerModal';
-import { detectCurrentLocation, toLegacyAddressFields, smartAddressBuilder, buildAddressPreview } from '../../utils/format';
-import { latLngToS2CellId } from '../../utils/s2Helper';
 
 // ─── Static sub-components (defined OUTSIDE to avoid remount) ──────────────
 
@@ -50,34 +47,10 @@ const STEP_ICONS = [User, MapPin, Lock];
 const CustomerRegistration = () => {
   const navigate = useNavigate();
   const { showToast } = useAuth();
-  const autocompleteInputRef = useRef(null);
-  const [detecting, setDetecting] = useState(false);
-  const [isMapModalOpen, setIsMapModalOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
-  useEffect(() => {
-    // Autocomplete disabled for Nominatim. Can type directly.
-  }, [currentStep]);
-
-  const handleDetectAddress = async () => {
-    setDetecting(true);
-    try {
-      const { latitude, longitude, address } = await detectCurrentLocation();
-      // address already contains s2CellId/s2CellIdPrecise from detectCurrentLocation
-      const fields = toLegacyAddressFields({ ...address, lat: latitude, lng: longitude });
-      setFormData((prev) => ({
-        ...prev,
-        address: fields
-      }));
-      showToast('Address auto-detected successfully!');
-    } catch (error) {
-      showToast(error.message || 'Failed to detect location', 'error');
-    } finally {
-      setDetecting(false);
-    }
-  };
 
   const [formData, setFormData] = useState({
     name: '',
@@ -170,7 +143,7 @@ const CustomerRegistration = () => {
       if (state !== undefined) updatedAddress.state = state;
       if (city !== undefined) updatedAddress.city = city;
 
-        updatedAddress.formattedAddress = buildAddressPreview(updatedAddress) || smartAddressBuilder(
+      updatedAddress.formattedAddress = buildAddressPreview(updatedAddress) || smartAddressBuilder(
         {
           house_number: updatedAddress.houseNumber,
           road: updatedAddress.road,
@@ -249,13 +222,12 @@ const CustomerRegistration = () => {
             <div key={s} className="flex-1 last:flex-none flex items-center">
               <div className="flex flex-col items-center gap-1.5 min-w-0">
                 <div
-                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
-                    done
-                      ? 'bg-primary text-background'
-                      : active
+                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${done
+                    ? 'bg-primary text-background'
+                    : active
                       ? 'bg-accent text-background ring-4 ring-accent/20 border-2 border-accent'
                       : 'bg-gray-100 text-gray-400'
-                  }`}
+                    }`}
                 >
                   {done ? (
                     <CheckCircle className="w-4 h-4" />
@@ -264,9 +236,8 @@ const CustomerRegistration = () => {
                   )}
                 </div>
                 <span
-                  className={`text-[10px] font-semibold whitespace-nowrap ${
-                    active ? 'text-accent font-bold' : done ? 'text-secondary' : 'text-gray-400'
-                  }`}
+                  className={`text-[10px] font-semibold whitespace-nowrap ${active ? 'text-accent font-bold' : done ? 'text-secondary' : 'text-gray-400'
+                    }`}
                 >
                   {STEP_LABELS[idx]}
                 </span>
@@ -310,16 +281,14 @@ const CustomerRegistration = () => {
         ].map(({ icon: Icon, title, desc, color }) => (
           <div
             key={title}
-            className={`rounded-xl border p-4 transition-all hover:shadow-sm ${
-              color === 'primary'
-                ? 'border-primary/20 bg-primary/5 hover:border-primary/30'
-                : 'border-accent/20 bg-accent/5 hover:border-accent/30'
-            }`}
+            className={`rounded-xl border p-4 transition-all hover:shadow-sm ${color === 'primary'
+              ? 'border-primary/20 bg-primary/5 hover:border-primary/30'
+              : 'border-accent/20 bg-accent/5 hover:border-accent/30'
+              }`}
           >
             <div
-              className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${
-                color === 'primary' ? 'bg-primary/15' : 'bg-accent/15'
-              }`}
+              className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${color === 'primary' ? 'bg-primary/15' : 'bg-accent/15'
+                }`}
             >
               <Icon className={`w-4 h-4 ${color === 'primary' ? 'text-primary' : 'text-accent'}`} />
             </div>
@@ -408,101 +377,11 @@ const CustomerRegistration = () => {
               <p className="text-sm text-gray-500 mt-1">Where can we reach you for services?</p>
             </div>
             <Section title="Location Details" icon={MapPin}>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center pb-2 border-b border-gray-150">
-                  <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Address Details</span>
-                  <button
-                    type="button"
-                    onClick={() => setIsMapModalOpen(true)}
-                    className="bg-red-500 hover:bg-red-600 text-white rounded-full p-2.5 shadow-lg shadow-red-500/20 active:scale-95 transition-all flex items-center justify-center"
-                    title="Select Location on Map"
-                  >
-                    <MapPin className="w-5 h-5" />
-                  </button>
-                </div>
-
-                {/* Row 1: House No. & Road Name */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Field label="House / Flat / Shop No. *" error={errors['address.houseNumber']}>
-                    <input
-                      type="text"
-                      name="address.houseNumber"
-                      value={formData.address.houseNumber || ''}
-                      onChange={handleChange}
-                      placeholder="e.g. House No. 349, Flat 4B"
-                      className={inputCls}
-                      required
-                    />
-                  </Field>
-                  <Field label="Road / Street / Lane *" error={errors['address.road']}>
-                    <input
-                      type="text"
-                      name="address.road"
-                      value={formData.address.road || ''}
-                      onChange={handleChange}
-                      placeholder="e.g. MG Road, Phase 1"
-                      className={inputCls}
-                      required
-                    />
-                  </Field>
-                </div>
-
-                {/* Row 2: Landmark & Area */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Field label="Landmark (Optional)" error={errors['address.landmark']}>
-                    <input
-                      type="text"
-                      name="address.landmark"
-                      value={formData.address.landmark || ''}
-                      onChange={handleChange}
-                      placeholder="e.g. Near Shiv Temple"
-                      className={inputCls}
-                    />
-                  </Field>
-                  <Field label="Area / Locality / Sector" error={errors['address.area']}>
-                    <input
-                      type="text"
-                      name="address.area"
-                      value={formData.address.area || ''}
-                      onChange={handleChange}
-                      placeholder="e.g. Sector 15, Vasant Kunj"
-                      className={inputCls}
-                    />
-                  </Field>
-                </div>
-
-                {/* Row 3: State & City Selector */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-1">
-                    <AddressSelector
-                      selectedState={formData.address.state}
-                      selectedCity={formData.address.city}
-                      onStateChange={(state) => handleStateCityChange(state, '')}
-                      onCityChange={(city) => handleStateCityChange(undefined, city)}
-                    />
-                  </div>
-                  <Field label="Pincode *" error={errors['address.pincode'] || errors['address.postalCode']}>
-                    <input
-                      type="text"
-                      name="address.pincode"
-                      value={formData.address.pincode || formData.address.postalCode || ''}
-                      onChange={handleChange}
-                      placeholder="6-digit Pincode"
-                      className={`${inputCls} font-mono`}
-                      maxLength="6"
-                      required
-                    />
-                  </Field>
-                </div>
-
-                {/* Row 4: Calculated Address Preview */}
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Address Preview</label>
-                  <div className="w-full p-3 text-xs bg-gray-50 border border-gray-200 rounded-lg text-secondary font-medium leading-relaxed shadow-inner min-h-[48px] flex items-center">
-                    {formData.address.formattedAddress || 'Please fill House No. and Road name to construct preview...'}
-                  </div>
-                </div>
-              </div>
+              <AddressSelector
+                address={formData.address}
+                onChange={(updatedAddress) => setFormData(prev => ({ ...prev, address: updatedAddress }))}
+                errors={errors}
+              />
             </Section>
           </div>
         );
@@ -540,7 +419,7 @@ const CustomerRegistration = () => {
               <input
                 type="checkbox"
                 id="terms"
-                required
+
                 className="w-4 h-4 mt-0.5 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer transition-all"
               />
               <label htmlFor="terms" className="text-xs text-gray-400 leading-relaxed cursor-pointer select-none">
@@ -557,7 +436,7 @@ const CustomerRegistration = () => {
   return (
     <div className="min-h-screen bg-gray-50 pt-20 pb-14 px-4">
       <div className="max-w-7xl mx-auto">
-        
+
         {/* Mobile Header (Hidden on LG) */}
         <div className="lg:hidden text-center mb-6">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-primary/10 rounded-full mb-3">
@@ -579,7 +458,7 @@ const CustomerRegistration = () => {
           <div className="w-full lg:flex-1 mt-6 lg:mt-8">
             <div className="bg-background rounded-2xl shadow-sm border border-gray-200 p-6 md:p-8">
               <ProgressIndicator />
-              
+
               <div className="mt-8">
                 {renderStepContent()}
 
@@ -629,23 +508,7 @@ const CustomerRegistration = () => {
           </div>
         </div>
       </div>
-      {isMapModalOpen && (
-        <LocationPickerModal
-          isOpen={isMapModalOpen}
-          onClose={() => setIsMapModalOpen(false)}
-          onLocationSelect={(loc) => {
-            // loc already contains s2CellId, s2CellIdPrecise from LocationPickerModal
-            setFormData(prev => ({
-              ...prev,
-              address: {
-                ...prev.address,
-                ...loc
-              }
-            }));
-            showToast('Address picked from map!');
-          }}
-        />
-      )}
+
     </div>
   );
 };

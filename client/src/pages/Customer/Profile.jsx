@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/auth';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
@@ -7,19 +7,16 @@ import AddressSelector from '../../components/AddressSelector';
 import * as NotificationService from '../../services/NotificationService';
 import {
     User, MapPin, Mail, Phone, Camera, LogOut, Shield, Bell,
-    ChevronRight, ArrowLeft, CreditCard, Package, Edit2, CheckCircle, Gift, Wallet, ArrowDownLeft, RotateCcw, Navigation,
-    Building, ChevronDown
+    ChevronRight, ArrowLeft, CreditCard, Package, Edit2, CheckCircle, Gift, Wallet, ArrowDownLeft, RotateCcw,
+    Tag, Copy, Clock, Zap, Star
 } from 'lucide-react';
 import { getWalletHistory } from '../../services/CustomerService';
-import { formatCurrency, formatDate, formatDateTime, compressImage, detectCurrentLocation, toLegacyAddressFields, buildAddressPreview } from '../../utils/format';
-import LocationPickerModal from '../../components/LocationPickerModal';
+import { getAvailableCoupons } from '../../services/CouponService';
+import { formatCurrency, formatDate, formatDateTime, compressImage } from '../../utils/format';
 
 const UserProfile = () => {
     const { user, logoutUser } = useAuth();
     const navigate = useNavigate();
-    const autocompleteInputRef = useRef(null);
-    const [detecting, setDetecting] = useState(false);
-    const [isMapModalOpen, setIsMapModalOpen] = useState(false);
 
     const [profile, setProfile] = useState({
         name: '',
@@ -49,54 +46,15 @@ const UserProfile = () => {
         wallet: { availableBalance: 0, totalRefunded: 0, lastUpdated: new Date() }
     });
     const [isEditing, setIsEditing] = useState(false);
+    const [isEditingAddress, setIsEditingAddress] = useState(false);
     const [activeTab, setActiveTab] = useState('profile');
     const [transactions, setTransactions] = useState({ data: [], summary: {} });
     const [selectedFile, setSelectedFile] = useState(null);
     const [loading, setLoading] = useState(false);
-    const [states, setStates] = useState([]);
-    const [cities, setCities] = useState([]);
+    const [addressLoading, setAddressLoading] = useState(false);
+    const [coupons, setCoupons] = useState([]);
+    const [couponsLoading, setCouponsLoading] = useState(false);
 
-    useEffect(() => {
-        import('country-state-city').then(({ State }) => {
-            const countryStates = State.getStatesOfCountry('IN');
-            setStates(countryStates);
-        });
-    }, []);
-
-    const currentStateCode = states.find(s => s.name === profile.address.state)?.isoCode;
-
-    useEffect(() => {
-        if (currentStateCode) {
-            import('country-state-city').then(({ City }) => {
-                const stateCities = City.getCitiesOfState('IN', currentStateCode);
-                setCities(stateCities);
-            });
-        } else {
-            setCities([]);
-        }
-    }, [currentStateCode]);
-
-    const handleStateChange = (stateName) => {
-        setProfile(prev => {
-            const updatedAddress = { ...prev.address, state: stateName, city: '' };
-            updatedAddress.formattedAddress = buildAddressPreview(updatedAddress);
-            return {
-                ...prev,
-                address: updatedAddress
-            };
-        });
-    };
-
-    const handleCityChange = (cityName) => {
-        setProfile(prev => {
-            const updatedAddress = { ...prev.address, city: cityName };
-            updatedAddress.formattedAddress = buildAddressPreview(updatedAddress);
-            return {
-                ...prev,
-                address: updatedAddress
-            };
-        });
-    };
 
     const [preferences, setPreferences] = useState({
         booking: true,
@@ -111,29 +69,6 @@ const UserProfile = () => {
         quietHours: { enabled: false, start: '22:00', end: '08:00' }
     });
     const [prefLoading, setPrefLoading] = useState(false);
-
-
-
-    useEffect(() => {
-        // Autocomplete disabled for Nominatim. Can type directly.
-    }, [isEditing]);
-
-    const handleDetectAddress = async () => {
-        setDetecting(true);
-        try {
-            const { latitude, longitude, address } = await detectCurrentLocation();
-            const fields = toLegacyAddressFields({ ...address, lat: latitude, lng: longitude });
-            setProfile((prev) => ({
-                ...prev,
-                address: { ...prev.address, ...fields }
-            }));
-            toast.success('Address auto-detected successfully!');
-        } catch (error) {
-            toast.error(error.message || 'Failed to detect location');
-        } finally {
-            setDetecting(false);
-        }
-    };
 
     const fetchPreferences = async () => {
         try {
@@ -186,8 +121,23 @@ const UserProfile = () => {
         if (user) {
             fetchProfile();
             fetchTransactions();
+            fetchCoupons();
         }
     }, [user]);
+
+    const fetchCoupons = async () => {
+        try {
+            setCouponsLoading(true);
+            const res = await getAvailableCoupons();
+            if (res.data?.success) {
+                setCoupons(res.data.data || []);
+            }
+        } catch (err) {
+            console.error('Failed to fetch coupons', err);
+        } finally {
+            setCouponsLoading(false);
+        }
+    };
 
     const fetchTransactions = async () => {
         try {
@@ -248,23 +198,47 @@ const UserProfile = () => {
         });
     };
 
+    // Only saves name and phone — never touches address
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
         try {
-            const response = await updateProfile(profile);
+            const response = await updateProfile({
+                name: profile.name,
+                phone: profile.phone
+            });
             const data = response.data;
             setIsEditing(false);
             setProfile(prev => ({
                 ...prev,
-                ...data.user,
-                address: data.user.address || prev.address
+                name: data.user.name || prev.name,
+                phone: data.user.phone || prev.phone
             }));
             toast.success('Profile updated successfully!');
         } catch (error) {
             toast.error(error.message);
         } finally {
             setLoading(false);
+        }
+    };
+
+    // Saves address only
+    const handleAddressSubmit = async (e) => {
+        e.preventDefault();
+        setAddressLoading(true);
+        try {
+            const response = await updateProfile({ address: profile.address });
+            const data = response.data;
+            setIsEditingAddress(false);
+            setProfile(prev => ({
+                ...prev,
+                address: data.user.address || prev.address
+            }));
+            toast.success('Address updated successfully!');
+        } catch (error) {
+            toast.error(error.message);
+        } finally {
+            setAddressLoading(false);
         }
     };
 
@@ -442,232 +416,115 @@ const UserProfile = () => {
 
                         {/* Profile Details Form/View */}
                         {activeTab === 'profile' && (
-                            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-                                {isEditing ? (
-                                    <form onSubmit={handleSubmit} className="space-y-4">
-                                        <div>
-                                            <label className="block text-xs font-semibold text-gray-500 mb-1">Full Name *</label>
-                                            <input
-                                                type="text"
-                                                name="name"
-                                                value={profile.name}
-                                                onChange={handleInputChange}
-                                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20"
-                                                required
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-semibold text-gray-500 mb-1">Phone Number</label>
-                                            <input
-                                                type="tel"
-                                                name="phone"
-                                                value={profile.phone}
-                                                onChange={handleInputChange}
-                                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20"
-                                            />
-                                        </div>
-                                        <div className="pt-4 border-t border-gray-100 relative">
-                                            <div className="flex justify-between items-center mb-4">
-                                                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Address Details</h3>
+                            <div className="space-y-4">
+                                {/* Personal Info Card */}
+                                <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Personal Information</h3>
+                                        <button
+                                            onClick={() => { setIsEditing(!isEditing); }}
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${
+                                                isEditing ? 'bg-gray-100 text-gray-600 hover:bg-gray-200' : 'bg-primary text-white hover:bg-primary/90'
+                                            }`}
+                                        >
+                                            {isEditing ? 'Cancel' : <><Edit2 className="w-3.5 h-3.5" /> Edit</>}
+                                        </button>
+                                    </div>
+
+                                    {isEditing ? (
+                                        <form onSubmit={handleSubmit} className="space-y-4">
+                                            <div>
+                                                <label className="block text-xs font-semibold text-gray-500 mb-1">Full Name *</label>
+                                                <input
+                                                    type="text"
+                                                    name="name"
+                                                    value={profile.name}
+                                                    onChange={handleInputChange}
+                                                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20"
+                                                    required
+                                                />
+                                            </div>
+                                            {/* Email - read only */}
+                                            <div>
+                                                <label className="block text-xs font-semibold text-gray-500 mb-1">Email Address</label>
+                                                <div className="w-full px-3 py-2 text-sm border border-dashed border-gray-200 rounded-lg bg-gray-50 text-gray-400 cursor-not-allowed flex items-center gap-2">
+                                                    <Mail className="w-3.5 h-3.5 shrink-0" />
+                                                    {profile.email}
+                                                    <span className="ml-auto text-[10px] bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded font-bold">Cannot change</span>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-semibold text-gray-500 mb-1">Phone Number</label>
+                                                <input
+                                                    type="tel"
+                                                    name="phone"
+                                                    value={profile.phone}
+                                                    onChange={handleInputChange}
+                                                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20"
+                                                />
+                                            </div>
+                                            <button type="submit" disabled={loading} className="w-full py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50">
+                                                {loading ? 'Saving...' : 'Save Name & Phone'}
+                                            </button>
+                                        </form>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                <div><p className="text-xs text-gray-400 mb-1">Full Name</p><p className="text-sm font-medium text-secondary">{profile.name}</p></div>
+                                                <div><p className="text-xs text-gray-400 mb-1">Email</p><p className="text-sm font-medium text-secondary">{profile.email}</p></div>
+                                                <div><p className="text-xs text-gray-400 mb-1">Phone</p><p className="text-sm font-medium text-secondary">{profile.phone || 'Not provided'}</p></div>
+                                            </div>
+                                            <div className="pt-2 border-t border-gray-100 flex justify-end">
                                                 <button
-                                                    type="button"
-                                                    onClick={() => setIsMapModalOpen(true)}
-                                                    className="w-10 h-10 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-lg hover:shadow-red-500/30 transition-all hover:scale-105 active:scale-95 absolute -top-1 right-0 z-10"
-                                                    title="Select Location on Map"
+                                                    onClick={logoutUser}
+                                                    className="px-6 py-2 border border-transparent rounded-lg text-xs font-bold text-red-500 hover:bg-red-50 transition-colors uppercase tracking-widest"
                                                 >
-                                                    <MapPin className="w-5 h-5" />
+                                                    Logout account
                                                 </button>
                                             </div>
-
-                                            <div className="space-y-4">
-                                                {/* House No & Road Grid */}
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                                    <div>
-                                                        <label className="block text-xs font-semibold text-gray-500 mb-1">House / Flat / Shop No. *</label>
-                                                        <input
-                                                            type="text"
-                                                            name="houseNumber"
-                                                            value={profile.address.houseNumber || ''}
-                                                            onChange={handleAddressChange}
-                                                            placeholder="e.g. House No. 349, Flat 4B"
-                                                            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20"
-                                                            required
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-xs font-semibold text-gray-500 mb-1">Road / Street / Lane *</label>
-                                                        <input
-                                                            type="text"
-                                                            name="road"
-                                                            value={profile.address.road || ''}
-                                                            onChange={handleAddressChange}
-                                                            placeholder="e.g. MG Road, Phase 1"
-                                                            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20"
-                                                            required
-                                                        />
-                                                    </div>
-                                                </div>
-
-                                                {/* Landmark & Area Grid */}
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                                    <div>
-                                                        <label className="block text-xs font-semibold text-gray-500 mb-1">Landmark (Optional)</label>
-                                                        <input
-                                                            type="text"
-                                                            name="landmark"
-                                                            value={profile.address.landmark || ''}
-                                                            onChange={handleAddressChange}
-                                                            placeholder="e.g. Near Shiv Temple"
-                                                            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20"
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-xs font-semibold text-gray-500 mb-1">Area / Locality / Sector</label>
-                                                        <input
-                                                            type="text"
-                                                            name="area"
-                                                            value={profile.address.area || ''}
-                                                            onChange={handleAddressChange}
-                                                            placeholder="e.g. Sector 15, Vasant Kunj"
-                                                            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20"
-                                                        />
-                                                    </div>
-                                                </div>
-
-                                                {/* State, City, Pincode Grid */}
-                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                                    {/* State Selection */}
-                                                    <div>
-                                                        <label htmlFor="state" className="block text-xs font-semibold text-gray-500 mb-1">State *</label>
-                                                        <div className="relative">
-                                                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                                                <MapPin className="text-gray-400 w-4 h-4" />
-                                                            </div>
-                                                            <select
-                                                                id="state"
-                                                                name="state"
-                                                                value={profile.address.state || ''}
-                                                                onChange={(e) => handleStateChange(e.target.value)}
-                                                                className="w-full pl-9 pr-10 py-2 bg-white border border-gray-200 rounded-lg text-sm text-secondary focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-medium appearance-none"
-                                                                required
-                                                            >
-                                                                <option value="">Select State</option>
-                                                                {!(!profile.address.state || states.some(s => s.name === profile.address.state)) && (
-                                                                    <option value={profile.address.state}>{profile.address.state}</option>
-                                                                )}
-                                                                {states.map((state) => (
-                                                                    <option key={state.isoCode} value={state.name}>
-                                                                        {state.name}
-                                                                    </option>
-                                                                ))}
-                                                            </select>
-                                                            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                                                                <ChevronDown className="w-4 h-4 text-gray-400" />
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* City Selection */}
-                                                    <div>
-                                                        <label htmlFor="city" className="block text-xs font-semibold text-gray-500 mb-1">City *</label>
-                                                        <div className="relative">
-                                                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                                                <Building className="text-gray-400 w-4 h-4" />
-                                                            </div>
-                                                            <select
-                                                                id="city"
-                                                                name="city"
-                                                                value={profile.address.city || ''}
-                                                                onChange={(e) => handleCityChange(e.target.value)}
-                                                                className="w-full pl-9 pr-10 py-2 bg-white border border-gray-200 rounded-lg text-sm text-secondary focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-medium appearance-none disabled:bg-gray-50 disabled:text-gray-400"
-                                                                disabled={!profile.address.state}
-                                                                required
-                                                            >
-                                                                <option value="">Select City</option>
-                                                                {!(!profile.address.city || cities.some(c => c.name === profile.address.city)) && (
-                                                                    <option value={profile.address.city}>{profile.address.city}</option>
-                                                                )}
-                                                                {cities.map((city) => (
-                                                                    <option key={city.name} value={city.name}>
-                                                                        {city.name}
-                                                                    </option>
-                                                                ))}
-                                                            </select>
-                                                            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                                                                <ChevronDown className="w-4 h-4 text-gray-400" />
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Pincode Selection */}
-                                                    <div>
-                                                        <label className="block text-xs font-semibold text-gray-500 mb-1">Pincode *</label>
-                                                        <input
-                                                            type="text"
-                                                            name="pincode"
-                                                            value={profile.address.pincode || profile.address.postalCode || ''}
-                                                            onChange={handleAddressChange}
-                                                            placeholder="6-digit Pincode"
-                                                            maxLength="6"
-                                                            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20"
-                                                            required
-                                                        />
-                                                    </div>
-                                                </div>
-
-                                                {/* Address Preview Box */}
-                                                <div>
-                                                    <label className="block text-xs font-semibold text-gray-500 mb-1">Address Preview</label>
-                                                    <div className="w-full min-h-[48px] bg-gray-50 p-3 rounded-lg border border-gray-200 text-sm font-medium text-gray-500 leading-relaxed">
-                                                        {(profile.address.houseNumber && profile.address.road)
-                                                            ? (buildAddressPreview(profile.address) || 'Constructing preview...')
-                                                            : 'Please fill House No. and Road name to construct preview...'}
-                                                    </div>
-                                                </div>
-                                            </div>
                                         </div>
-                                        <button type="submit" disabled={loading} className="w-full py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50">
-                                            {loading ? 'Saving...' : 'Save Changes'}
+                                    )}
+                                </div>
+
+                                {/* Address Card — separate save */}
+                                <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Saved Address</h3>
+                                        <button
+                                            onClick={() => setIsEditingAddress(!isEditingAddress)}
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${
+                                                isEditingAddress ? 'bg-gray-100 text-gray-600 hover:bg-gray-200' : 'bg-primary text-white hover:bg-primary/90'
+                                            }`}
+                                        >
+                                            {isEditingAddress ? 'Cancel' : <><Edit2 className="w-3.5 h-3.5" /> Edit Address</>}
                                         </button>
-                                    </form>
-                                ) : (
-                                    <div className="space-y-4">
-                                        {/* Personal Info Grid */}
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                            <div><p className="text-xs text-gray-400 mb-1">Full Name</p><p className="text-sm font-medium text-secondary">{profile.name}</p></div>
-                                            <div><p className="text-xs text-gray-400 mb-1">Email</p><p className="text-sm font-medium text-secondary">{profile.email}</p></div>
-                                            <div><p className="text-xs text-gray-400 mb-1">Phone</p><p className="text-sm font-medium text-secondary">{profile.phone || 'Not provided'}</p></div>
-                                        </div>
+                                    </div>
 
-                                        {/* Address */}
-                                        <div className="pt-4 border-t border-gray-100">
-                                            <div className="flex items-start gap-3">
-                                                <div className="p-2 bg-gray-50 rounded-lg"><MapPin className="w-5 h-5 text-primary" /></div>
-                                                <div className="flex-1">
-                                                    <h3 className="text-sm font-bold text-secondary mb-1">Saved Address</h3>
-                                                    {profile.address.street || profile.address.city ? (
-                                                        <div className="text-sm text-gray-500">
-                                                            <p className="font-semibold text-secondary">
-                                                                {profile.address.formattedAddress || buildAddressPreview(profile.address) || profile.address.street}
-                                                            </p>
-                                                        </div>
-                                                    ) : (
-                                                        <p className="text-sm text-gray-400 italic">No address added yet</p>
-                                                    )}
-                                                </div>
+                                    {isEditingAddress ? (
+                                        <form onSubmit={handleAddressSubmit} className="space-y-4">
+                                            <AddressSelector
+                                                address={profile.address}
+                                                onChange={(updatedAddress) => setProfile(prev => ({ ...prev, address: updatedAddress }))}
+                                            />
+                                            <button type="submit" disabled={addressLoading} className="w-full py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50">
+                                                {addressLoading ? 'Saving Address...' : 'Save Address'}
+                                            </button>
+                                        </form>
+                                    ) : (
+                                        <div className="flex items-start gap-3">
+                                            <div className="p-2 bg-gray-50 rounded-lg"><MapPin className="w-5 h-5 text-primary" /></div>
+                                            <div className="flex-1">
+                                                {profile.address.street || profile.address.city ? (
+                                                    <p className="text-sm font-semibold text-secondary">
+                                                        {profile.address.formattedAddress || profile.address.street}
+                                                    </p>
+                                                ) : (
+                                                    <p className="text-sm text-gray-400 italic">No address added yet. Click 'Edit Address' to add.</p>
+                                                )}
                                             </div>
                                         </div>
-
-                                        <div className="pt-2 border-t border-gray-100 flex justify-end">
-                                            <button
-                                                onClick={logoutUser}
-                                                className="px-6 py-2 border border-transparent rounded-lg text-xs font-bold text-red-500 hover:bg-red-50 transition-colors uppercase tracking-widest"
-                                            >
-                                                Logout account
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
+                                    )}
+                                </div>
                             </div>
                         )}
 
@@ -789,6 +646,127 @@ const UserProfile = () => {
                             </div>
                         )}
 
+                        {activeTab === 'offers' && (
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h3 className="text-base font-bold text-secondary">Available Offers</h3>
+                                        <p className="text-xs text-gray-400 mt-0.5">Coupons you can use on your next booking</p>
+                                    </div>
+                                    <span className="text-[10px] font-bold bg-primary/10 text-primary px-2.5 py-1 rounded-full">
+                                        {coupons.length} available
+                                    </span>
+                                </div>
+
+                                {couponsLoading ? (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        {[1, 2, 3, 4].map(i => (
+                                            <div key={i} className="h-36 bg-gray-100 rounded-2xl animate-pulse" />
+                                        ))}
+                                    </div>
+                                ) : coupons.length === 0 ? (
+                                    <div className="text-center py-16">
+                                        <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-gray-100">
+                                            <Gift className="w-8 h-8 text-gray-300" />
+                                        </div>
+                                        <p className="text-sm font-bold text-gray-500">No offers available</p>
+                                        <p className="text-xs text-gray-400 mt-1.5 max-w-[200px] mx-auto">
+                                            Check back later for exclusive deals and discounts.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        {coupons.map(coupon => {
+                                            const isPercent = coupon.discountType === 'percent';
+                                            const isExpiringSoon = coupon.expiryDate && (new Date(coupon.expiryDate) - new Date()) < 3 * 24 * 60 * 60 * 1000;
+                                            const isFirstBooking = coupon.isFirstBooking;
+                                            const isPersonal = coupon.assignedTo;
+
+                                            return (
+                                                <div
+                                                    key={coupon._id}
+                                                    className="relative bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all group"
+                                                >
+                                                    {/* Top color strip */}
+                                                    <div className={`h-1 w-full ${
+                                                        isFirstBooking ? 'bg-gradient-to-r from-violet-500 to-purple-500'
+                                                        : isPersonal ? 'bg-gradient-to-r from-amber-400 to-orange-400'
+                                                        : 'bg-gradient-to-r from-primary to-teal-400'
+                                                    }`} />
+
+                                                    <div className="p-3">
+                                                        {/* Badges row */}
+                                                        <div className="flex items-center gap-1 mb-2 flex-wrap">
+                                                            {isFirstBooking && (
+                                                                <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-violet-50 text-violet-600 border border-violet-100 px-2 py-0.5 rounded-full">
+                                                                    <Star className="w-2.5 h-2.5" /> First Booking
+                                                                </span>
+                                                            )}
+                                                            {isPersonal && (
+                                                                <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-amber-50 text-amber-600 border border-amber-100 px-2 py-0.5 rounded-full">
+                                                                    <Zap className="w-2.5 h-2.5" /> Personal
+                                                                </span>
+                                                            )}
+                                                            {!isFirstBooking && !isPersonal && (
+                                                                <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-full">
+                                                                    <Tag className="w-2.5 h-2.5" /> Global
+                                                                </span>
+                                                            )}
+                                                            {isExpiringSoon && (
+                                                                <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-red-50 text-red-500 border border-red-100 px-2 py-0.5 rounded-full">
+                                                                    <Clock className="w-2.5 h-2.5" /> Expiring Soon
+                                                                </span>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Discount amount */}
+                                                        <div className="flex items-end justify-between mb-2">
+                                                            <div>
+                                                                <p className={`text-xl font-black tracking-tighter ${
+                                                                    isFirstBooking ? 'text-violet-600'
+                                                                    : isPersonal ? 'text-amber-500'
+                                                                    : 'text-primary'
+                                                                }`}>
+                                                                    {isPercent ? `${coupon.discountValue}%` : `₹${coupon.discountValue}`}
+                                                                    <span className="text-xs font-bold ml-1">OFF</span>
+                                                                </p>
+                                                                {coupon.minBookingValue > 0 && (
+                                                                    <p className="text-[10px] text-gray-400 mt-0.5">
+                                                                        Min order: <span className="font-semibold text-gray-600">{formatCurrency(coupon.minBookingValue)}</span>
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Coupon code + copy */}
+                                                        <div className="flex items-center justify-between bg-gray-50 border border-dashed border-gray-200 rounded-lg px-2.5 py-1.5">
+                                                            <span className="text-xs font-black tracking-widest text-secondary font-mono">{coupon.code}</span>
+                                                            <button
+                                                                onClick={() => {
+                                                                    navigator.clipboard.writeText(coupon.code);
+                                                                    toast.success(`Copied: ${coupon.code}`);
+                                                                }}
+                                                                className="p-1 rounded-md bg-white border border-gray-200 hover:border-primary hover:bg-primary/5 transition-all active:scale-90"
+                                                                title="Copy code"
+                                                            >
+                                                                <Copy className="w-3.5 h-3.5 text-gray-400 group-hover:text-primary" />
+                                                            </button>
+                                                        </div>
+
+                                                        {/* Expiry */}
+                                                        <p className="text-[10px] text-gray-400 mt-2 flex items-center gap-1">
+                                                            <Clock className="w-3 h-3" />
+                                                            Valid till: <span className="font-semibold text-gray-500">{formatDate(coupon.expiryDate)}</span>
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         {activeTab === 'settings' && (
                             <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 space-y-6">
                                 <div>
@@ -896,22 +874,6 @@ const UserProfile = () => {
                     </div>
                 </div>
             </div>
-
-            {isMapModalOpen && (
-                <LocationPickerModal
-                    isOpen={isMapModalOpen}
-                    onClose={() => setIsMapModalOpen(false)}
-                    onLocationSelect={(loc) => {
-                        setProfile(prev => ({
-                            ...prev,
-                            address: {
-                                ...prev.address,
-                                ...loc
-                            }
-                        }));
-                    }}
-                />
-            )}
         </div>
     );
 };

@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
-  User, Mail, Phone, Lock, MapPin, Home, Building,
+  User, Mail, Phone, Lock, MapPin,
   ArrowLeft, CheckCircle, Shield, Zap,
   Sparkles, Award, Users,
   DollarSign, Calendar, FileText, Camera, CreditCard,
-  Briefcase, RotateCcw, AlertCircle, ChevronDown, X, Info, Navigation
+  Briefcase, RotateCcw, AlertCircle, X, Info
 } from 'lucide-react';
 import AddressSelector from '../../components/AddressSelector';
-import LocationPickerModal from '../../components/LocationPickerModal';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
 import { toast } from 'react-toastify';
@@ -17,8 +16,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import useCategory from '../../hooks/useCategory';
 import * as SystemService from '../../services/SystemService';
 import * as ProviderService from '../../services/ProviderService';
-import { formatTime, compressImage, detectCurrentLocation, toLegacyAddressFields, smartAddressBuilder } from '../../utils/format';
-import { latLngToS2CellId } from '../../utils/s2Helper';
+import { formatTime, compressImage } from '../../utils/format';
 
 // ─── Static sub-components (defined OUTSIDE the main component to avoid remount) ─
 
@@ -117,40 +115,6 @@ const ProviderRegistration = () => {
     profilePic: null,
   });
 
-  const [isMapOpen, setIsMapOpen] = useState(false);
-  const [detecting, setDetecting] = useState(false);
-
-  const handleDetectAddress = async () => {
-    setDetecting(true);
-    try {
-      const { latitude, longitude, address } = await detectCurrentLocation();
-      // address already has s2CellId/s2CellIdPrecise from detectCurrentLocation
-      const fields = toLegacyAddressFields({ ...address, lat: latitude, lng: longitude });
-      setFormData((prev) => ({
-        ...prev,
-        street: fields.street,
-        city: fields.city,
-        state: fields.state,
-        postalCode: fields.postalCode,
-        pincode: fields.pincode,
-        houseNumber: fields.houseNumber,
-        road: fields.road,
-        landmark: fields.landmark,
-        area: fields.area,
-        serviceArea: fields.city,
-        lat: latitude,
-        lng: longitude,
-        s2CellId: fields.s2CellId,
-        s2CellIdPrecise: fields.s2CellIdPrecise,
-        formattedAddress: fields.formattedAddress
-      }));
-      toast.success('Address auto-detected successfully!');
-    } catch (error) {
-      toast.error(error.message || 'Failed to detect location');
-    } finally {
-      setDetecting(false);
-    }
-  };
 
   const [step, setStep] = useState(1);
   const [otpSentTime, setOtpSentTime] = useState(null);
@@ -229,31 +193,6 @@ const ProviderRegistration = () => {
     }
   };
 
-  const handleStateCityChange = (stateVal, cityVal) => {
-    setFormData((prev) => {
-      const updated = { ...prev };
-      if (stateVal !== undefined) updated.state = stateVal;
-      if (cityVal !== undefined) {
-        updated.city = cityVal;
-        updated.serviceArea = cityVal;
-      }
-
-      updated.formattedAddress = smartAddressBuilder(
-        {
-          house_number: updated.houseNumber,
-          road: updated.road,
-          residential: updated.area,
-          neighbourhood: updated.area,
-          suburb: updated.area,
-          city: updated.city,
-          state: updated.state,
-          postcode: updated.pincode || updated.postalCode
-        },
-        ""
-      );
-      return updated;
-    });
-  };
 
   const handleFileChange = (field) => (e) => {
     setFormData((prev) => ({ ...prev, [field]: e.target.files[0] }));
@@ -818,128 +757,44 @@ const ProviderRegistration = () => {
 
             {/* Address Details */}
             <Section title="Address Details" icon={MapPin}>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center pb-2 border-b border-gray-150">
-                  <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Address Details</span>
-                  <button
-                    type="button"
-                    onClick={() => setIsMapOpen(true)}
-                    className="bg-red-500 hover:bg-red-600 text-white rounded-full p-2.5 shadow-lg shadow-red-500/20 active:scale-95 transition-all flex items-center justify-center"
-                    title="Select Location on Map"
-                  >
-                    <MapPin className="w-5 h-5" />
-                  </button>
-                </div>
-
-                <LocationPickerModal
-                  isOpen={isMapOpen}
-                  onClose={() => setIsMapOpen(false)}
-                  onLocationSelect={(loc) => {
-                    // loc already contains s2CellId, s2CellIdPrecise from LocationPickerModal
-                    setFormData((prev) => ({
-                      ...prev,
-                      street: loc.street,
-                      city: loc.city,
-                      state: loc.state,
-                      postalCode: loc.postalCode || loc.pincode,
-                      pincode: loc.pincode || loc.postalCode,
-                      houseNumber: loc.houseNumber || '',
-                      road: loc.road || '',
-                      landmark: loc.landmark || '',
-                      area: loc.area || '',
-                      serviceArea: loc.city,
-                      lat: loc.lat,
-                      lng: loc.lng,
-                      s2CellId: loc.s2CellId || null,
-                      s2CellIdPrecise: loc.s2CellIdPrecise || null,
-                      formattedAddress: loc.formattedAddress
-                    }));
-                    toast.success('Location & coordinates loaded successfully!');
-                  }}
-                />
-
-                {/* Row 1: House No. & Road Name */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Field label="House / Flat / Shop No. *">
-                    <input
-                      type="text"
-                      name="houseNumber"
-                      value={formData.houseNumber || ''}
-                      onChange={handleChange}
-                      placeholder="e.g. House No. 349, Flat 4B"
-                      className={inputCls}
-                      required
-                    />
-                  </Field>
-                  <Field label="Road / Street / Lane *">
-                    <input
-                      type="text"
-                      name="road"
-                      value={formData.road || ''}
-                      onChange={handleChange}
-                      placeholder="e.g. MG Road, Phase 1"
-                      className={inputCls}
-                      required
-                    />
-                  </Field>
-                </div>
-
-                {/* Row 2: Landmark & Area */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Field label="Landmark (Optional)">
-                    <input
-                      type="text"
-                      name="landmark"
-                      value={formData.landmark || ''}
-                      onChange={handleChange}
-                      placeholder="e.g. Near Shiv Temple"
-                      className={inputCls}
-                    />
-                  </Field>
-                  <Field label="Area / Locality / Sector">
-                    <input
-                      type="text"
-                      name="area"
-                      value={formData.area || ''}
-                      onChange={handleChange}
-                      placeholder="e.g. Sector 15, Vasant Kunj"
-                      className={inputCls}
-                    />
-                  </Field>
-                </div>
-
-                {/* Row 3: State & City Selector */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-1">
-                    <AddressSelector
-                      selectedState={formData.state}
-                      selectedCity={formData.city}
-                      onStateChange={(stateVal) => handleStateCityChange(stateVal, '')}
-                      onCityChange={(cityVal) => handleStateCityChange(undefined, cityVal)}
-                    />
-                  </div>
-                  <Field label="Pincode *">
-                    <input
-                      type="text"
-                      name="pincode"
-                      value={formData.pincode || formData.postalCode || ''}
-                      onChange={handleChange}
-                      placeholder="6-digit Pincode"
-                      className={`${inputCls} font-mono`}
-                      maxLength="6"
-                      required
-                    />
-                  </Field>
-                </div>
-
-                {/* Row 4: Calculated Address Preview */}
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Address Preview</label>
-                  <div className="w-full p-3 text-xs bg-gray-50 border border-gray-200 rounded-lg text-secondary font-medium leading-relaxed shadow-inner min-h-[48px] flex items-center">
-                    {formData.formattedAddress || 'Please fill House No. and Road name to construct preview...'}
-                  </div>
-                </div>
-              </div>
+              <AddressSelector
+                address={{
+                  houseNumber: formData.houseNumber,
+                  road: formData.road,
+                  landmark: formData.landmark,
+                  area: formData.area,
+                  city: formData.city,
+                  state: formData.state,
+                  pincode: formData.pincode || formData.postalCode,
+                  postalCode: formData.postalCode || formData.pincode,
+                  lat: formData.lat,
+                  lng: formData.lng,
+                  s2CellId: formData.s2CellId,
+                  s2CellIdPrecise: formData.s2CellIdPrecise,
+                  formattedAddress: formData.formattedAddress,
+                  street: formData.street,
+                }}
+                onChange={(updatedAddress) => {
+                  setFormData((prev) => ({
+                    ...prev,
+                    houseNumber: updatedAddress.houseNumber || '',
+                    road: updatedAddress.road || '',
+                    landmark: updatedAddress.landmark || '',
+                    area: updatedAddress.area || '',
+                    city: updatedAddress.city || '',
+                    state: updatedAddress.state || '',
+                    pincode: updatedAddress.pincode || updatedAddress.postalCode || '',
+                    postalCode: updatedAddress.postalCode || updatedAddress.pincode || '',
+                    street: updatedAddress.street || '',
+                    lat: updatedAddress.lat ?? prev.lat,
+                    lng: updatedAddress.lng ?? prev.lng,
+                    s2CellId: updatedAddress.s2CellId ?? prev.s2CellId,
+                    s2CellIdPrecise: updatedAddress.s2CellIdPrecise ?? prev.s2CellIdPrecise,
+                    formattedAddress: updatedAddress.formattedAddress || '',
+                    serviceArea: updatedAddress.city || prev.serviceArea,
+                  }));
+                }}
+              />
             </Section>
 
             {/* Bank Details */}

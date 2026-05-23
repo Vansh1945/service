@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { MapPin, Building, Flag, CheckCircle, ChevronDown } from 'lucide-react';
+import { MapPin, Building, ChevronDown } from 'lucide-react';
+import LocationPickerModal from './LocationPickerModal';
+import { buildAddressPreview, smartAddressBuilder } from '../utils/format';
 
 const AddressSelector = ({
-  selectedState,
-  selectedCity,
-  onStateChange,
-  onCityChange,
+  address = {},
+  onChange,
+  errors = {},
   className = ""
 }) => {
+  const [isMapModalOpen, setIsMapModalOpen] = useState(false);
   const selectedCountry = 'IN'; // Fixed to India for now
   const [states, setStates] = useState([]);
   const [cities, setCities] = useState([]);
@@ -20,9 +22,7 @@ const AddressSelector = ({
   }, [selectedCountry]);
 
   // Find state code from state name
-  const currentStateCode = states.find(s => s.name === selectedState)?.isoCode;
-  const hasSelectedStateOption = !selectedState || states.some(s => s.name === selectedState);
-  const hasSelectedCityOption = !selectedCity || cities.some(c => c.name === selectedCity);
+  const currentStateCode = states.find(s => s.name === address.state)?.isoCode;
 
   useEffect(() => {
     if (currentStateCode) {
@@ -35,16 +35,164 @@ const AddressSelector = ({
     }
   }, [selectedCountry, currentStateCode]);
 
+  const handleFieldChange = (name, value) => {
+    const updated = {
+      ...address,
+      [name]: value
+    };
+
+    // Keep postalCode and pincode in sync
+    if (name === 'postalCode') {
+      updated.pincode = value;
+    } else if (name === 'pincode') {
+      updated.postalCode = value;
+    }
+
+    // Auto-construct street if houseNumber and road are updated
+    const houseNum = updated.houseNumber || '';
+    const rd = updated.road || '';
+    updated.street = houseNum && rd ? `${houseNum}, ${rd}` : (houseNum || rd);
+    updated.addressLine = updated.street;
+
+    // Re-build formattedAddress based on the changed inputs
+    updated.formattedAddress = buildAddressPreview(updated) || smartAddressBuilder(
+      {
+        house_number: updated.houseNumber,
+        road: updated.road,
+        residential: updated.area,
+        neighbourhood: updated.area,
+        suburb: updated.area,
+        city: updated.city,
+        state: updated.state,
+        postcode: updated.pincode
+      },
+      ""
+    );
+
+    onChange(updated);
+  };
+
+  const handleStateChange = (stateName) => {
+    const updated = {
+      ...address,
+      state: stateName,
+      city: "" // Reset city on state change
+    };
+
+    updated.formattedAddress = buildAddressPreview(updated) || smartAddressBuilder(
+      {
+        house_number: updated.houseNumber,
+        road: updated.road,
+        residential: updated.area,
+        neighbourhood: updated.area,
+        suburb: updated.area,
+        city: updated.city,
+        state: updated.state,
+        postcode: updated.pincode
+      },
+      ""
+    );
+
+    onChange(updated);
+  };
+
+  const handleCityChange = (cityName) => {
+    const updated = {
+      ...address,
+      city: cityName
+    };
+
+    updated.formattedAddress = buildAddressPreview(updated) || smartAddressBuilder(
+      {
+        house_number: updated.houseNumber,
+        road: updated.road,
+        residential: updated.area,
+        neighbourhood: updated.area,
+        suburb: updated.area,
+        city: updated.city,
+        state: updated.state,
+        postcode: updated.pincode
+      },
+      ""
+    );
+
+    onChange(updated);
+  };
+
   return (
     <div className={`space-y-4 ${className}`}>
-      {/* State & City Grid */}
+      {/* Section Header with Map Selector Trigger */}
+      <div className="flex justify-between items-center pb-2 border-b border-gray-150">
+        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Address Details</span>
+        <button
+          type="button"
+          onClick={() => setIsMapModalOpen(true)}
+          className="bg-red-500 hover:bg-red-600 text-white rounded-full p-2.5 shadow-lg shadow-red-500/20 active:scale-95 transition-all flex items-center justify-center"
+          title="Select Location on Map"
+        >
+          <MapPin className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* Row 1: House No. & Road Name */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        
+        <div className="flex flex-col gap-1 w-full">
+          <label className="text-xs font-semibold text-secondary uppercase tracking-wide">House / Flat / Shop No. *</label>
+          <input
+            type="text"
+            name="houseNumber"
+            value={address.houseNumber || ''}
+            onChange={(e) => handleFieldChange('houseNumber', e.target.value)}
+            placeholder="e.g. House No. 349, Flat 4B"
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white text-secondary font-medium"
+          />
+          {errors['address.houseNumber'] && <span className="text-[10px] text-red-500 font-medium">{errors['address.houseNumber']}</span>}
+        </div>
+        <div className="flex flex-col gap-1 w-full">
+          <label className="text-xs font-semibold text-secondary uppercase tracking-wide">Road / Street / Lane *</label>
+          <input
+            type="text"
+            name="road"
+            value={address.road || ''}
+            onChange={(e) => handleFieldChange('road', e.target.value)}
+            placeholder="e.g. MG Road, Phase 1"
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white text-secondary font-medium"
+          />
+          {errors['address.road'] && <span className="text-[10px] text-red-500 font-medium">{errors['address.road']}</span>}
+        </div>
+      </div>
+
+      {/* Row 2: Landmark & Area */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="flex flex-col gap-1 w-full">
+          <label className="text-xs font-semibold text-secondary uppercase tracking-wide">Landmark (Optional)</label>
+          <input
+            type="text"
+            name="landmark"
+            value={address.landmark || ''}
+            onChange={(e) => handleFieldChange('landmark', e.target.value)}
+            placeholder="e.g. Near Shiv Temple"
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white text-secondary font-medium"
+          />
+        </div>
+        <div className="flex flex-col gap-1 w-full">
+          <label className="text-xs font-semibold text-secondary uppercase tracking-wide">Area / Locality / Sector</label>
+          <input
+            type="text"
+            name="area"
+            value={address.area || ''}
+            onChange={(e) => handleFieldChange('area', e.target.value)}
+            placeholder="e.g. Sector 15, Vasant Kunj"
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white text-secondary font-medium"
+          />
+        </div>
+      </div>
+
+      {/* Row 3: State & City & Pincode Selector */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* State Selection */}
-        <div>
-          <label htmlFor="state" className="block text-sm font-semibold text-secondary mb-1.5">
-            State *
-          </label>
+        <div className="flex flex-col gap-1 w-full">
+          <label htmlFor="state" className="text-xs font-semibold text-secondary uppercase tracking-wide">State *</label>
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <MapPin className="text-gray-400 w-4 h-4" />
@@ -52,17 +200,13 @@ const AddressSelector = ({
             <select
               id="state"
               name="state"
-              value={selectedState}
-              onChange={(e) => {
-                onStateChange(e.target.value);
-                onCityChange(""); // Clear city when state changes
-              }}
-              className="w-full pl-9 pr-10 py-2.5 bg-white border border-gray-200 rounded-lg text-sm text-secondary focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-medium appearance-none"
-              required
+              value={address.state || ''}
+              onChange={(e) => handleStateChange(e.target.value)}
+              className="w-full pl-9 pr-10 py-2 bg-white border border-gray-200 rounded-lg text-sm text-secondary focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-medium appearance-none"
             >
               <option value="">Select State</option>
-              {!hasSelectedStateOption && (
-                <option value={selectedState}>{selectedState}</option>
+              {address.state && !states.some(s => s.name === address.state) && (
+                <option value={address.state}>{address.state}</option>
               )}
               {states.map((state) => (
                 <option key={state.isoCode} value={state.name}>
@@ -77,10 +221,8 @@ const AddressSelector = ({
         </div>
 
         {/* City Selection */}
-        <div>
-          <label htmlFor="city" className="block text-sm font-semibold text-secondary mb-1.5">
-            City *
-          </label>
+        <div className="flex flex-col gap-1 w-full">
+          <label htmlFor="city" className="text-xs font-semibold text-secondary uppercase tracking-wide">City *</label>
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <Building className="text-gray-400 w-4 h-4" />
@@ -88,15 +230,14 @@ const AddressSelector = ({
             <select
               id="city"
               name="city"
-              value={selectedCity}
-              onChange={(e) => onCityChange(e.target.value)}
-              className="w-full pl-9 pr-10 py-2.5 bg-white border border-gray-200 rounded-lg text-sm text-secondary focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-medium appearance-none disabled:bg-gray-50 disabled:text-gray-400"
-              disabled={!selectedState}
-              required
+              value={address.city || ''}
+              onChange={(e) => handleCityChange(e.target.value)}
+              className="w-full pl-9 pr-10 py-2 bg-white border border-gray-200 rounded-lg text-sm text-secondary focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-medium appearance-none disabled:bg-gray-50 disabled:text-gray-400"
+              disabled={!address.state}
             >
               <option value="">Select City</option>
-              {!hasSelectedCityOption && (
-                <option value={selectedCity}>{selectedCity}</option>
+              {address.city && !cities.some(c => c.name === address.city) && (
+                <option value={address.city}>{address.city}</option>
               )}
               {cities.map((city) => (
                 <option key={city.name} value={city.name}>
@@ -109,7 +250,48 @@ const AddressSelector = ({
             </div>
           </div>
         </div>
+
+        {/* Pincode Selection */}
+        <div className="flex flex-col gap-1 w-full">
+          <label className="text-xs font-semibold text-secondary uppercase tracking-wide">Pincode *</label>
+          <input
+            type="text"
+            name="pincode"
+            value={address.pincode || address.postalCode || ''}
+            onChange={(e) => handleFieldChange('pincode', e.target.value)}
+            placeholder="6-digit Pincode"
+            maxLength="6"
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 text-secondary font-medium font-mono"
+          />
+          {(errors['address.pincode'] || errors['address.postalCode']) && (
+            <span className="text-[10px] text-red-500 font-medium">
+              {errors['address.pincode'] || errors['address.postalCode']}
+            </span>
+          )}
+        </div>
       </div>
+
+      {/* Row 4: Calculated Address Preview */}
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Address Preview</label>
+        <div className="w-full p-3 text-xs bg-gray-50 border border-gray-200 rounded-lg text-secondary font-medium leading-relaxed shadow-inner min-h-[48px] flex items-center">
+          {address.formattedAddress || 'Please fill House No. and Road name to construct preview...'}
+        </div>
+      </div>
+
+      {isMapModalOpen && (
+        <LocationPickerModal
+          isOpen={isMapModalOpen}
+          onClose={() => setIsMapModalOpen(false)}
+          onLocationSelect={(loc) => {
+            const updated = {
+              ...address,
+              ...loc
+            };
+            onChange(updated);
+          }}
+        />
+      )}
     </div>
   );
 };

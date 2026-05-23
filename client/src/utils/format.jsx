@@ -272,6 +272,7 @@ export const buildAddressPreview = (address = {}) => {
     address.office
   );
   const road = cleanPart(address.road || address.streetName || address.street || address.footway || address.path);
+  const landmark = cleanPart(address.landmark);
   const area = cleanPart(
     address.area ||
     address.locality ||
@@ -286,7 +287,7 @@ export const buildAddressPreview = (address = {}) => {
   const pincode = cleanPart(address.pincode || address.postalCode || address.postcode || address.postal_code);
 
   const parts = [];
-  for (const part of [houseNumber, road, area, city, pincode]) {
+  for (const part of [houseNumber, road, landmark, area, city, pincode]) {
     if (!part) continue;
     const partLower = part.toLowerCase();
     let duplicateIndex = -1;

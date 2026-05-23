@@ -1,22 +1,21 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { toast } from 'react-toastify';
-import { ArrowLeft, CheckCircle, Plus, Minus, Tag, Clock, Calendar, Shield, Lock, Star, IndianRupee, Truck, RotateCcw, Check, CalendarDays, CreditCard, Wallet, Navigation, MapPin } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Plus, Minus, Tag, Clock, Shield, Lock, Star, IndianRupee, Truck, RotateCcw, CalendarDays, CreditCard, Wallet } from 'lucide-react';
 import AddressSelector from '../../components/AddressSelector';
 import Loader from '../../components/Loader';
 import { getPublicServiceById } from '../../services/ServiceService';
 import { getAvailableCoupons, applyCoupon as applyCouponAPI } from '../../services/CouponService';
 import { createBooking } from '../../services/BookingService';
 import * as CustomerService from '../../services/CustomerService';
-import { formatDate, formatCurrency, detectCurrentLocation, toLegacyAddressFields, smartAddressBuilder, buildAddressPreview } from '../../utils/format';
-import LocationPickerModal from '../../components/LocationPickerModal';
+import { formatCurrency } from '../../utils/format';
 
 const BookService = () => {
   const { serviceId } = useParams();
-  const { user, token, API } = useAuth();
+  const { token } = useAuth();
   const navigate = useNavigate();
 
   // State declarations
@@ -27,26 +26,6 @@ const BookService = () => {
   const [addresses, setAddresses] = useState([]);
   const [coupons, setCoupons] = useState([]);
   const [walletBalance, setWalletBalance] = useState(0);
-  const [detecting, setDetecting] = useState(false);
-  const [isMapModalOpen, setIsMapModalOpen] = useState(false);
-
-  const handleDetectAddress = async () => {
-    setDetecting(true);
-    try {
-      const { latitude, longitude, address } = await detectCurrentLocation();
-      const fields = toLegacyAddressFields({ ...address, lat: latitude, lng: longitude });
-      setFormData((prev) => ({
-        ...prev,
-        useCustomAddress: true,
-        customAddress: { ...prev.customAddress, ...fields }
-      }));
-      toast.success('Address auto-detected successfully!');
-    } catch (error) {
-      toast.error(error.message || 'Failed to detect location');
-    } finally {
-      setDetecting(false);
-    }
-  };
 
   // Form state
   const [formData, setFormData] = useState({
@@ -78,7 +57,6 @@ const BookService = () => {
     paymentMethod: 'online'
   });
 
-  const autocompleteInputRef = useRef(null);
 
 
 
@@ -299,70 +277,7 @@ const BookService = () => {
     });
   };
 
-  const handleAddressChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => {
-      const updatedCustom = { ...prev.customAddress, [name]: value };
-      
-      // Keep postalCode and pincode in sync
-      if (name === 'postalCode') {
-        updatedCustom.pincode = value;
-      } else if (name === 'pincode') {
-        updatedCustom.postalCode = value;
-      }
-      
-      // Auto-construct street if houseNumber and road are updated
-      const houseNum = updatedCustom.houseNumber || '';
-      const rd = updatedCustom.road || '';
-      updatedCustom.street = houseNum && rd ? `${houseNum}, ${rd}` : (houseNum || rd);
 
-      // Re-build formattedAddress based on the changed inputs
-      updatedCustom.formattedAddress = buildAddressPreview(updatedCustom) || smartAddressBuilder(
-        {
-          house_number: updatedCustom.houseNumber,
-          road: updatedCustom.road,
-          residential: updatedCustom.area,
-          neighbourhood: updatedCustom.area,
-          suburb: updatedCustom.area,
-          city: updatedCustom.city,
-          state: updatedCustom.state,
-          postcode: updatedCustom.pincode
-        },
-        ""
-      );
-      
-      return {
-        ...prev,
-        customAddress: updatedCustom
-      };
-    });
-  };
-
-  const handleStateCityChange = (state, city) => {
-    setFormData(prev => {
-      const updatedCustom = { ...prev.customAddress };
-      if (state !== undefined) updatedCustom.state = state;
-      if (city !== undefined) updatedCustom.city = city;
-      
-      updatedCustom.formattedAddress = buildAddressPreview(updatedCustom) || smartAddressBuilder(
-        {
-          house_number: updatedCustom.houseNumber,
-          road: updatedCustom.road,
-          residential: updatedCustom.area,
-          neighbourhood: updatedCustom.area,
-          suburb: updatedCustom.area,
-          city: updatedCustom.city,
-          state: updatedCustom.state,
-          postcode: updatedCustom.pincode
-        },
-        ""
-      );
-      return {
-        ...prev,
-        customAddress: updatedCustom
-      };
-    });
-  };
 
   const handleDateChange = (date) => {
     setFormData(prev => ({
@@ -430,7 +345,6 @@ const BookService = () => {
 
       const formattedDate = formData.date.toISOString().split('T')[0];
       const baseAmount = service.basePrice * formData.quantity;
-      const discountAmount = calculateDiscount();
       const totalAmount = calculateTotal();
 
       const bookingData = {
@@ -669,118 +583,10 @@ const BookService = () => {
                       <div className="flex-1">
                         <p className="text-sm font-semibold text-secondary">New Address</p>
                         {formData.useCustomAddress && (
-                          <div className="mt-4 p-4 rounded-xl border border-gray-200 bg-gray-50/30 space-y-4 animate-fadeIn w-full">
-                            <div className="flex justify-between items-center pb-2 border-b border-gray-100">
-                              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Address Details</span>
-                                <button
-                                  type="button"
-                                  onClick={() => setIsMapModalOpen(true)}
-                                  className="bg-red-500 hover:bg-red-600 text-white rounded-full p-2.5 shadow-lg shadow-red-500/20 active:scale-95 transition-all flex items-center justify-center"
-                                  title="Select Location on Map"
-                                >
-                                  <MapPin className="w-5 h-5" />
-                                </button>
-                            </div>
-
-                            {/* Row 1: House No. & Road Name */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div>
-                                <label className="block text-xs font-semibold text-secondary mb-1">
-                                  House / Flat / Shop No. *
-                                </label>
-                                <input
-                                  type="text"
-                                  name="houseNumber"
-                                  placeholder="e.g. House No. 349, Flat 4B"
-                                  value={formData.customAddress.houseNumber || ''}
-                                  onChange={handleAddressChange}
-                                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
-                                  required
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-xs font-semibold text-secondary mb-1">
-                                  Road / Street / Lane *
-                                </label>
-                                <input
-                                  type="text"
-                                  name="road"
-                                  placeholder="e.g. MG Road, Phase 1"
-                                  value={formData.customAddress.road || ''}
-                                  onChange={handleAddressChange}
-                                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
-                                  required
-                                />
-                              </div>
-                            </div>
-
-                            {/* Row 2: Landmark & Area */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div>
-                                <label className="block text-xs font-semibold text-secondary mb-1">
-                                  Landmark (Optional)
-                                </label>
-                                <input
-                                  type="text"
-                                  name="landmark"
-                                  placeholder="e.g. Near Shiv Temple"
-                                  value={formData.customAddress.landmark || ''}
-                                  onChange={handleAddressChange}
-                                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-xs font-semibold text-secondary mb-1">
-                                  Area / Locality / Sector
-                                </label>
-                                <input
-                                  type="text"
-                                  name="area"
-                                  placeholder="e.g. Sector 15, Vasant Kunj"
-                                  value={formData.customAddress.area || ''}
-                                  onChange={handleAddressChange}
-                                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
-                                />
-                              </div>
-                            </div>
-
-                            {/* Row 3: State & City Selector */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div>
-                                <AddressSelector
-                                  selectedState={formData.customAddress.state}
-                                  selectedCity={formData.customAddress.city}
-                                  onStateChange={(state) => handleStateCityChange(state, '')}
-                                  onCityChange={(city) => handleStateCityChange(undefined, city)}
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-xs font-semibold text-secondary mb-1">
-                                  Pincode *
-                                </label>
-                                <input
-                                  type="text"
-                                  name="pincode"
-                                  placeholder="6-digit Pincode"
-                                  value={formData.customAddress.pincode || formData.customAddress.postalCode || ''}
-                                  onChange={handleAddressChange}
-                                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white font-mono"
-                                  maxLength="6"
-                                  required
-                                />
-                              </div>
-                            </div>
-
-                            {/* Row 4: Formatted Address (Computed Preview) */}
-                            <div>
-                              <label className="block text-xs font-semibold text-gray-400 mb-1">
-                                Address Preview
-                              </label>
-                              <div className="w-full p-3 text-xs bg-white rounded-lg border border-gray-200 text-secondary font-medium leading-relaxed shadow-inner min-h-[48px] flex items-center">
-                                {formData.customAddress.formattedAddress || 'Please fill House No. and Road name to construct preview...'}
-                              </div>
-                            </div>
-                          </div>
+                          <AddressSelector
+                            address={formData.customAddress}
+                            onChange={(updatedAddress) => setFormData(prev => ({ ...prev, customAddress: updatedAddress }))}
+                          />
                         )}
                       </div>
                     </div>
@@ -842,7 +648,7 @@ const BookService = () => {
                   <CreditCard className="w-3.5 h-3.5 text-primary" />
                   Payment Method
                 </h3>
-                
+
                 {/* Wallet Balance Indicator */}
                 <div className="mb-4 p-3 bg-teal-50/50 border border-teal-100 rounded-xl flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -888,13 +694,12 @@ const BookService = () => {
 
                   {/* Wallet Payment */}
                   <div
-                    className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-all ${
-                      walletBalance >= totalAmount
-                        ? formData.paymentMethod === 'wallet'
-                          ? 'border-primary bg-primary/5 shadow-sm'
-                          : 'border-gray-100 hover:border-gray-200'
-                        : 'opacity-50 cursor-not-allowed bg-gray-50 border-gray-100'
-                    }`}
+                    className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-all ${walletBalance >= totalAmount
+                      ? formData.paymentMethod === 'wallet'
+                        ? 'border-primary bg-primary/5 shadow-sm'
+                        : 'border-gray-100 hover:border-gray-200'
+                      : 'opacity-50 cursor-not-allowed bg-gray-50 border-gray-100'
+                      }`}
                     onClick={() => {
                       if (walletBalance >= totalAmount) {
                         setFormData(prev => ({ ...prev, paymentMethod: 'wallet' }));
@@ -920,13 +725,12 @@ const BookService = () => {
 
                   {/* Wallet + Online Mixed */}
                   <div
-                    className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-all ${
-                      walletBalance > 0
-                        ? formData.paymentMethod === 'mixed'
-                          ? 'border-primary bg-primary/5 shadow-sm'
-                          : 'border-gray-100 hover:border-gray-200'
-                        : 'opacity-50 cursor-not-allowed bg-gray-50 border-gray-100'
-                    }`}
+                    className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-all ${walletBalance > 0
+                      ? formData.paymentMethod === 'mixed'
+                        ? 'border-primary bg-primary/5 shadow-sm'
+                        : 'border-gray-100 hover:border-gray-200'
+                      : 'opacity-50 cursor-not-allowed bg-gray-50 border-gray-100'
+                      }`}
                     onClick={() => {
                       if (walletBalance > 0) {
                         setFormData(prev => ({ ...prev, paymentMethod: 'mixed' }));
@@ -1053,20 +857,7 @@ const BookService = () => {
           </div>
         </div>
       </div>
-      {isMapModalOpen && (
-        <LocationPickerModal
-          isOpen={isMapModalOpen}
-          onClose={() => setIsMapModalOpen(false)}
-          onLocationSelect={(loc) => {
-            setFormData(prev => ({
-              ...prev,
-              useCustomAddress: true,
-              customAddress: { ...prev.customAddress, ...loc }
-            }));
-            toast.success('Address picked from map!');
-          }}
-        />
-      )}
+
     </div>
   );
 };
