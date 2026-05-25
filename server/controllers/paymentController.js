@@ -503,57 +503,77 @@ const requestBulkWithdrawal = async (req, res) => {
       return res.status(429).json({ success: false, error: "Too many failed attempts. Try again later." });
     }
 
-    // STEP 2: Generate 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const otpExpires = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
-
-    // Hash OTP before storing
-    const salt = await bcrypt.genSalt(10);
-    const hashedOtp = await bcrypt.hash(otp, salt);
-
-    // Update Provider with OTP info
-    provider.withdrawalSecurity = {
-      otp: hashedOtp,
-      otpExpires,
-      attempts: 0,
-      pendingAmount: amount,
-      pendingRequestTime: new Date(),
-      isFlagged,
-      flagReason
-    };
-    await provider.save();
-
-    // STEP 3: Send OTP to phone/app first. Email is an explicit fallback from the OTP modal.
-    let notificationSent = false;
-    const hasRegisteredDevice = Array.isArray(provider.fcmTokens) && provider.fcmTokens.some(t => t?.token);
-
-    // In-app / push notification fallback
+    // STEP 2: Execute Instant Withdrawal Request (Bypassing OTP generation/sending)
+    const session = await mongoose.startSession();
     try {
-      const notification = await sendNotification(
-        providerId,
-        'provider',
-        'Withdrawal OTP Verification',
-        `Your withdrawal OTP is ${otp}. Valid for 5 minutes.`,
-        'withdrawal',
-        null
-      );
-      notificationSent = Boolean(notification);
-    } catch (e) { console.error("OTP Notification Error:", e); }
+      await session.withTransaction(async () => {
+        // Final balance check inside transaction
+        if (provider.wallet.availableBalance < amount) {
+          throw new Error("Insufficient balance");
+        }
 
-    res.json({
-      success: true,
-      message: hasRegisteredDevice
-        ? "OTP sent to your phone/app notification. Use email fallback if you do not receive it."
-        : "OTP generated. No registered phone/app device found, please use email fallback.",
-      otpExpires: 5 * 60,
-      delivery: {
-        email: false,
-        emailFallbackAvailable: Boolean(provider.email),
-        notification: notificationSent,
-        phone: hasRegisteredDevice,
-        maskedEmail: maskEmail(provider.email)
-      }
-    });
+        // Lock the pending amount immediately to prevent double-spending/withdrawals
+        provider.wallet.availableBalance -= amount;
+        provider.wallet.lastUpdated = new Date();
+
+        const paymentRecord = new PaymentRecord({
+          provider: providerId,
+          amount,
+          netAmount: amount,
+          paymentMethod: "bank_transfer",
+          paymentDetails: {
+            accountNumber: provider.bankDetails.accountNo,
+            accountName: provider.bankDetails.accountName,
+            ifscCode: provider.bankDetails.ifsc,
+            bankName: provider.bankDetails.bankName,
+          },
+          status: isFlagged ? 'under_review' : 'requested',
+          withdrawalType: 'manual_bulk',
+          notes: isFlagged ? `Flagged: ${flagReason}` : "Manual bulk withdrawal",
+          transactionReference: `WDL-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
+        });
+
+        await paymentRecord.save({ session });
+
+        // Update provider security settings (cooldown info)
+        provider.withdrawalSecurity = {
+          lastRequestTime: new Date(),
+          otp: undefined,
+          otpExpires: undefined,
+          attempts: 0,
+          pendingAmount: 0
+        };
+        await provider.save({ session });
+
+        // Notify Admin
+        if (isFlagged) {
+          notifyAdmins(
+            'Suspicious Withdrawal Alert',
+            `Provider ${provider.name} attempted suspicious withdrawal activity. Amount: ₹${amount}. Reason: ${flagReason}`,
+            'withdrawal_alert',
+            paymentRecord._id
+          );
+        } else {
+          notifyAdmins(
+            'New Withdrawal Request',
+            `Provider ${provider.name} has requested a withdrawal of ₹${amount}.`,
+            'withdrawal',
+            paymentRecord._id
+          );
+        }
+
+        res.json({
+          success: true,
+          message: isFlagged ? "Withdrawal request submitted and under security review." : "Withdrawal requested successfully",
+          data: {
+            reference: paymentRecord.transactionReference,
+            status: paymentRecord.status
+          }
+        });
+      });
+    } finally {
+      await session.endSession();
+    }
 
   } catch (error) {
     console.error("Request Withdrawal Error:", error);

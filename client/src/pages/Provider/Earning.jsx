@@ -271,39 +271,15 @@ const ProviderEarningsDashboard = () => {
       const response = await PaymentService.withdraw({ amount: parseFloat(withdrawalForm.amount) });
       const data = response.data;
       if (data.success) {
-        setOtpDelivery(data.delivery || null);
-        showToast(data.message || 'OTP sent for verification!', data.delivery?.email === false ? 'warn' : 'success');
+        showToast(data.message || 'Withdrawal requested successfully!', 'success');
         setShowWithdrawalModal(false);
-        setShowOTPModal(true);
-        setOtpTimer(300); // 5 minutes
+        setWithdrawalForm({ amount: '' });
+        refreshAll();
       } else {
         showToast(data.error || 'Withdrawal failed', 'error');
       }
     } catch (err) {
       showToast(err.response?.data?.error || err.message || 'Processing error', 'error');
-    } finally {
-      setProcessingWithdrawal(false);
-    }
-  };
-
-  const handleVerifyOTP = async () => {
-    if (!otpCode || otpCode.length !== 6) { showToast('Enter 6-digit OTP', 'error'); return; }
-    try {
-      setProcessingWithdrawal(true);
-      const response = await PaymentService.verifyWithdrawalOTP({ otp: otpCode });
-      const data = response.data;
-      if (data.success) {
-        showToast(data.message || 'Withdrawal requested successfully!', 'success');
-        setShowOTPModal(false);
-        setOtpCode('');
-        setOtpDelivery(null);
-        setWithdrawalForm({ amount: '' });
-        refreshAll();
-      } else {
-        showToast(data.error || 'Verification failed', 'error');
-      }
-    } catch (err) {
-      showToast(err.response?.data?.error || err.message || 'Verification error', 'error');
     } finally {
       setProcessingWithdrawal(false);
     }
@@ -1039,69 +1015,7 @@ const ProviderEarningsDashboard = () => {
         </div>
       )}
 
-      {/* OTP Verification Modal */}
-      {showOTPModal && (
-        <div className="fixed inset-0 bg-secondary/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-8 animate-scale-up border border-gray-100">
-            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6 text-primary">
-              <ShieldAlert className="w-8 h-8" />
-            </div>
 
-            <h3 className="text-2xl font-bold text-secondary text-center mb-2">Verify Withdrawal</h3>
-            <div className="text-sm text-secondary/50 text-center mb-8 space-y-1">
-              <p>We've sent a 6-digit verification code to your registered contact.</p>
-              {otpDelivery?.notification && (
-                <p className="text-secondary/60">Also sent as an app notification.</p>
-              )}
-            </div>
-
-            <div className="space-y-6">
-              <div>
-                <label className="block text-xs font-black text-secondary/40 uppercase tracking-widest mb-3 text-center">
-                  Enter 6-Digit OTP
-                </label>
-                <input
-                  type="text"
-                  maxLength="6"
-                  value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                  className="w-full text-center text-3xl font-bold tracking-[0.5em] py-4 bg-gray-50 border-2 border-gray-100 rounded-xl focus:outline-none focus:border-primary/30 transition-all"
-                  placeholder="••••••"
-                />
-              </div>
-
-              <div className="flex items-center justify-between text-xs font-medium">
-                <span className={otpTimer > 0 ? "text-secondary/40" : "text-red-500"}>
-                  {otpTimer > 0 ? `Expires in ${Math.floor(otpTimer / 60)}:${(otpTimer % 60).toString().padStart(2, '0')}` : "OTP Expired"}
-                </span>
-                <button
-                  onClick={() => { handleWithdrawalRequest(); setOtpCode(''); }}
-                  disabled={otpTimer > 60}
-                  className="text-primary hover:underline disabled:opacity-30"
-                >
-                  Resend Code
-                </button>
-              </div>
-
-              <div className="flex gap-4 pt-2">
-                <button
-                  onClick={() => { setShowOTPModal(false); setOtpCode(''); setOtpDelivery(null); }}
-                  className="flex-1 py-4 bg-gray-100 text-secondary/60 rounded-xl font-bold text-sm hover:bg-gray-200 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleVerifyOTP}
-                  disabled={processingWithdrawal || otpCode.length !== 6 || otpTimer === 0}
-                  className="flex-1 py-4 bg-primary text-white rounded-xl font-bold text-sm hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 disabled:shadow-none"
-                >
-                  {processingWithdrawal ? <Loader2 className="w-5 h-5 mx-auto animate-spin" /> : "Verify & Withdraw"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
