@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { cancelBooking, userUpdateBookingDateTime, getCustomerBookings } from '../../services/BookingService';
 import Pagination from '../../components/Pagination';
-import { formatDate, formatDateTime, formatCurrency } from '../../utils/format';
+import { formatDate, formatTime, formatDateTime, formatCurrency } from '../../utils/format';
 
 // ─── Pure helpers ─────────────────
 
@@ -31,8 +31,9 @@ const getStatusCfg = (status) => STATUS_CONFIG[status] || { color: 'bg-gray-100 
 
 
 const needsPayment = (b) => {
-  if (b.paymentStatus === 'paid' || b.status === 'cancelled' || b.status === 'in-progress' || b.status === 'in_progress' || b.status === 'completed') return false;
-  return b.paymentStatus !== 'paid';
+  const isPaid = ['paid', 'escrow_hold'].includes(b.paymentStatus);
+  if (isPaid || b.status === 'cancelled' || b.status === 'in-progress' || b.status === 'in_progress' || b.status === 'completed') return false;
+  return !isPaid;
 };
 const canCancel = (b) => ['pending', 'accepted'].includes(b.status);
 const canReschedule = (b) => b.status === 'pending';
@@ -231,7 +232,7 @@ const PaymentDetails = ({ booking }) => (
     <div className="space-y-2 text-sm">
       {[
         ['Method', <span className="capitalize">{booking.paymentMethod || 'N/A'}</span>],
-        ['Status', <span className={booking.paymentStatus === 'paid' ? 'text-emerald-600 font-semibold' : 'text-accent font-semibold'}>{booking.paymentStatus === 'paid' ? 'Paid' : 'Pending'}</span>],
+        ['Status', <span className={['paid', 'escrow_hold'].includes(booking.paymentStatus) ? 'text-emerald-600 font-semibold' : 'text-accent font-semibold'}>{['paid', 'escrow_hold'].includes(booking.paymentStatus) ? 'Paid' : 'Pending'}</span>],
         ['Subtotal', formatCurrency(booking.subtotal || 0)],
         ...(booking.totalDiscount > 0 ? [['Discount', <span className="text-emerald-600">-{formatCurrency(booking.totalDiscount)}</span>]] : []),
         ...(booking.couponApplied?.isValid ? [['Coupon', <span className="text-blue-600">{booking.couponApplied.code}</span>]] : []),
@@ -673,8 +674,8 @@ const BookingCard = ({ booking, onView, onPayNow, onReschedule, onCancel, onCall
               </div>
               <div className="text-right flex-shrink-0">
                 <p className="text-lg font-bold text-secondary">{formatCurrency(booking.totalAmount || 0)}</p>
-                <p className={`text-xs font-bold px-2 py-0.5 rounded-full ${booking.paymentStatus === 'paid' ? 'bg-green-100 text-green-600' : (booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service' ? 'bg-yellow-100 text-yellow-600' : 'bg-red-50 text-accent')}`}>
-                  {booking.paymentStatus === 'paid' ? `✓ Paid` : (booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service' ? 'Pay After Service' : 'Unpaid')}
+                <p className={`text-xs font-bold px-2 py-0.5 rounded-full ${['paid', 'escrow_hold'].includes(booking.paymentStatus) ? 'bg-green-100 text-green-600' : (booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service' ? 'bg-yellow-100 text-yellow-600' : 'bg-red-50 text-accent')}`}>
+                  {['paid', 'escrow_hold'].includes(booking.paymentStatus) ? `✓ Paid` : (booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service' ? 'Pay After Service' : 'Unpaid')}
                 </p>
               </div>
             </div>
@@ -685,7 +686,7 @@ const BookingCard = ({ booking, onView, onPayNow, onReschedule, onCancel, onCall
                 <Calendar className="w-3.5 h-3.5" /> {formatDate(booking.date)}
               </div>
               <div className="flex items-center gap-1 text-xs text-gray-500">
-                <Clock className="w-3.5 h-3.5" /> {booking.time || 'Not set'}
+                <Clock className="w-3.5 h-3.5" /> {booking.time ? formatTime(booking.time) : 'Not set'}
               </div>
               <StatusBadge status={booking.status} />
 

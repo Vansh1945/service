@@ -12,6 +12,26 @@ const { sendMail } = require('../utils/sendmail');
 
 const bcrypt = require('bcryptjs');
 
+// Helper to mask an email for UI responses (e.g., abcd@gmail.com -> abcd***@gmail.com)
+// Always safe to call even if email is missing/invalid.
+const maskEmail = (email) => {
+  try {
+    if (!email || typeof email !== 'string') return '';
+    const trimmed = email.trim();
+    if (!trimmed.includes('@')) return trimmed;
+
+    const [localPart, domainPart] = trimmed.split('@');
+    if (!localPart || !domainPart) return trimmed;
+
+    // Keep first 3 chars of local part, mask the rest
+    const head = localPart.slice(0, 3);
+    const maskedLocal = head + (localPart.length > 3 ? '***' : '');
+
+    return `${maskedLocal}@${domainPart}`;
+  } catch {
+    return '';
+  }
+};
 
 
 // Helper to sync earnings status based on time and disputes
@@ -497,48 +517,42 @@ const requestBulkWithdrawal = async (req, res) => {
       otpExpires,
       attempts: 0,
       pendingAmount: amount,
+      pendingRequestTime: new Date(),
       isFlagged,
       flagReason
     };
     await provider.save();
 
-    // STEP 3: Send OTP via Email + FCM
-    // Email
-    try {
-      await sendMail({
-        to: provider.email,
-        subject: "Withdrawal Verification OTP",
-        html: `
-          <div style="font-family: sans-serif; padding: 20px;">
-            <h2>Withdrawal Verification</h2>
-            <p>Your withdrawal OTP is: <strong>${otp}</strong></p>
-            <p>This OTP is valid for 5 minutes.</p>
-            <p>Amount: ₹${amount}</p>
-            <p>Do not share this OTP with anyone.</p>
-          </div>
-        `
-      });
-    } catch (e) { console.error("OTP Email Error:", e); }
+    // STEP 3: Send OTP to phone/app first. Email is an explicit fallback from the OTP modal.
+    let notificationSent = false;
+    const hasRegisteredDevice = Array.isArray(provider.fcmTokens) && provider.fcmTokens.some(t => t?.token);
 
-    // FCM
-    if (provider.fcmTokens && provider.fcmTokens.length > 0) {
-      try {
-        const lastToken = provider.fcmTokens[provider.fcmTokens.length - 1].token;
-        sendNotification(
-          providerId,
-          'provider',
-          'Withdrawal OTP Verification',
-          `Your withdrawal OTP is ${otp}. Valid for 5 minutes.`,
-          'withdrawal_otp',
-          null
-        );
-      } catch (e) { console.error("OTP FCM Error:", e); }
-    }
+    // In-app / push notification fallback
+    try {
+      const notification = await sendNotification(
+        providerId,
+        'provider',
+        'Withdrawal OTP Verification',
+        `Your withdrawal OTP is ${otp}. Valid for 5 minutes.`,
+        'withdrawal',
+        null
+      );
+      notificationSent = Boolean(notification);
+    } catch (e) { console.error("OTP Notification Error:", e); }
 
     res.json({
       success: true,
-      message: "OTP sent to your email and phone",
-      otpExpires: 5 * 60
+      message: hasRegisteredDevice
+        ? "OTP sent to your phone/app notification. Use email fallback if you do not receive it."
+        : "OTP generated. No registered phone/app device found, please use email fallback.",
+      otpExpires: 5 * 60,
+      delivery: {
+        email: false,
+        emailFallbackAvailable: Boolean(provider.email),
+        notification: notificationSent,
+        phone: hasRegisteredDevice,
+        maskedEmail: maskEmail(provider.email)
+      }
     });
 
   } catch (error) {

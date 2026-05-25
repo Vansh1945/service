@@ -30,13 +30,79 @@ const CustomerRoutes = lazy(() => import("./routes/CustomerRoutes"));
 const ProviderRoutes = lazy(() => import("./routes/ProviderRoutes"));
 
 import * as SystemService from "./services/SystemService";
+import {
+  SYSTEM_SETTINGS_CACHE_KEY,
+  SYSTEM_SETTINGS_UPDATED_EVENT,
+  getCachedTimeFormat,
+  normalizeTimeFormat,
+  readCachedSystemSettings,
+  readSystemSettingsCache,
+  writeSystemSettingsCache,
+} from "./utils/systemSettingsCache";
+
+const DATE_TIME_FORMAT_OVERRIDE_KEY = "__safevoltTimeFormatOverrideInstalled";
+
+const withConfiguredTimeFormat = (options) => {
+  if (options === null) return options;
+
+  return {
+    ...(options || {}),
+    hour12: getCachedTimeFormat() === "12h",
+  };
+};
+
+const installDateTimeFormatOverrides = () => {
+  if (Date.prototype[DATE_TIME_FORMAT_OVERRIDE_KEY]) return;
+
+  const nativeToLocaleString = Date.prototype.toLocaleString;
+  const nativeToLocaleTimeString = Date.prototype.toLocaleTimeString;
+
+  Object.defineProperty(Date.prototype, DATE_TIME_FORMAT_OVERRIDE_KEY, {
+    value: true,
+    configurable: false,
+    enumerable: false,
+  });
+
+  Date.prototype.toLocaleString = function (locales, options) {
+    return nativeToLocaleString.call(this, locales, withConfiguredTimeFormat(options));
+  };
+
+  Date.prototype.toLocaleTimeString = function (locales, options) {
+    return nativeToLocaleTimeString.call(this, locales, withConfiguredTimeFormat(options));
+  };
+};
+
+installDateTimeFormatOverrides();
+
+const updateFavicon = (favicon) => {
+  if (!favicon) return;
+
+  const faviconLink = document.querySelector("link[rel='icon']");
+  if (faviconLink) {
+    faviconLink.href = favicon;
+    return;
+  }
+
+  const newFavicon = document.createElement("link");
+  newFavicon.rel = "icon";
+  newFavicon.href = favicon;
+  document.head.appendChild(newFavicon);
+};
+
+const applyDocumentSettings = (settings) => {
+  if (settings.companyName) {
+    document.title = settings.companyName;
+  }
+
+  updateFavicon(settings.favicon);
+};
 
 const App = () => {
   const location = useLocation();
-  const { API } = useAuth();
   const [systemSettings, setSystemSettings] = useState({
     companyName: "",
     favicon: null,
+    timeFormat: getCachedTimeFormat(),
   });
 
   // Check if current route is a protected/dashboard route (Optimized: memoized)
@@ -45,29 +111,47 @@ const App = () => {
     [location.pathname]
   );
 
+  useEffect(() => {
+    document.documentElement.dataset.timeFormat = systemSettings.timeFormat;
+  }, [systemSettings.timeFormat]);
+
+  useEffect(() => {
+    const handleSystemSettingsUpdated = (event) => {
+      const updatedSettings = event?.detail || readCachedSystemSettings();
+      const normalizedSettings = {
+        ...updatedSettings,
+        timeFormat: normalizeTimeFormat(updatedSettings?.timeFormat),
+      };
+
+      setSystemSettings(prev => ({ ...prev, ...normalizedSettings }));
+      applyDocumentSettings(normalizedSettings);
+    };
+
+    const handleStorageUpdate = (event) => {
+      if (event.key && event.key !== SYSTEM_SETTINGS_CACHE_KEY) return;
+      handleSystemSettingsUpdated();
+    };
+
+    window.addEventListener(SYSTEM_SETTINGS_UPDATED_EVENT, handleSystemSettingsUpdated);
+    window.addEventListener("storage", handleStorageUpdate);
+
+    return () => {
+      window.removeEventListener(SYSTEM_SETTINGS_UPDATED_EVENT, handleSystemSettingsUpdated);
+      window.removeEventListener("storage", handleStorageUpdate);
+    };
+  }, []);
+
   // Fetch system settings and update document title and favicon with caching
   useEffect(() => {
     const fetchSystemSettings = async () => {
-      const cacheKey = 'systemSettings';
-      const cachedSettings = localStorage.getItem(cacheKey);
+      const cachedSettings = readSystemSettingsCache();
       const cacheExpiry = 24 * 60 * 60 * 1000; // 24 hours
 
       if (cachedSettings) {
-        const { data, timestamp } = JSON.parse(cachedSettings);
+        const { data, timestamp } = cachedSettings;
         if (Date.now() - timestamp < cacheExpiry) {
           setSystemSettings(data);
-          document.title = data.companyName;
-          if (data.favicon) {
-            const faviconLink = document.querySelector("link[rel='icon']");
-            if (faviconLink) {
-              faviconLink.href = data.favicon;
-            } else {
-              const newFavicon = document.createElement("link");
-              newFavicon.rel = "icon";
-              newFavicon.href = data.favicon;
-              document.head.appendChild(newFavicon);
-            }
-          }
+          applyDocumentSettings(data);
           return;
         }
       }
@@ -79,27 +163,15 @@ const App = () => {
           const settings = {
             companyName: data?.companyName || "SAFEVOLT SOLUTIONS",
             favicon: data?.favicon || null,
+            timeFormat: normalizeTimeFormat(data?.timeFormat),
           };
           setSystemSettings(settings);
 
           // Cache the settings
-          localStorage.setItem(cacheKey, JSON.stringify({ data: settings, timestamp: Date.now() }));
+          writeSystemSettingsCache(settings);
 
           // Update document title
-          document.title = settings.companyName;
-
-          // Update favicon
-          if (settings.favicon) {
-            const faviconLink = document.querySelector("link[rel='icon']");
-            if (faviconLink) {
-              faviconLink.href = settings.favicon;
-            } else {
-              const newFavicon = document.createElement("link");
-              newFavicon.rel = "icon";
-              newFavicon.href = settings.favicon;
-              document.head.appendChild(newFavicon);
-            }
-          }
+          applyDocumentSettings(settings);
         }
       } catch (error) {
         console.error("Error fetching system settings:", error);

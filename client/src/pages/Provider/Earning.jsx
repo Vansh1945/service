@@ -64,7 +64,7 @@ const Badge = ({ status }) => {
 // ── Main Dashboard Component ─────────────────────────────────────────────────
 
 const ProviderEarningsDashboard = () => {
-  const { token, API, showToast } = useAuth();
+  const { showToast } = useAuth();
 
   const tabs = [
     { id: 'dashboard', label: 'Overview', icon: BarChart3 },
@@ -102,6 +102,7 @@ const ProviderEarningsDashboard = () => {
   const [processingWithdrawal, setProcessingWithdrawal] = useState(false);
   const [showOTPModal, setShowOTPModal] = useState(false);
   const [otpCode, setOtpCode] = useState('');
+  const [otpDelivery, setOtpDelivery] = useState(null);
   const [otpTimer, setOtpTimer] = useState(0);
   const [cooldownTime, setCooldownTime] = useState(null);
 
@@ -267,10 +268,11 @@ const ProviderEarningsDashboard = () => {
 
     try {
       setProcessingWithdrawal(true);
-      const response = await API.post('/payment/withdraw', { amount: parseFloat(withdrawalForm.amount) });
+      const response = await PaymentService.withdraw({ amount: parseFloat(withdrawalForm.amount) });
       const data = response.data;
       if (data.success) {
-        showToast('OTP sent to your email and phone!', 'success');
+        setOtpDelivery(data.delivery || null);
+        showToast(data.message || 'OTP sent for verification!', data.delivery?.email === false ? 'warn' : 'success');
         setShowWithdrawalModal(false);
         setShowOTPModal(true);
         setOtpTimer(300); // 5 minutes
@@ -288,12 +290,13 @@ const ProviderEarningsDashboard = () => {
     if (!otpCode || otpCode.length !== 6) { showToast('Enter 6-digit OTP', 'error'); return; }
     try {
       setProcessingWithdrawal(true);
-      const response = await API.post('/payment/verify-withdraw-otp', { otp: otpCode });
+      const response = await PaymentService.verifyWithdrawalOTP({ otp: otpCode });
       const data = response.data;
       if (data.success) {
         showToast(data.message || 'Withdrawal requested successfully!', 'success');
         setShowOTPModal(false);
         setOtpCode('');
+        setOtpDelivery(null);
         setWithdrawalForm({ amount: '' });
         refreshAll();
       } else {
@@ -1045,9 +1048,12 @@ const ProviderEarningsDashboard = () => {
             </div>
 
             <h3 className="text-2xl font-bold text-secondary text-center mb-2">Verify Withdrawal</h3>
-            <p className="text-sm text-secondary/50 text-center mb-8">
-              We've sent a 6-digit verification code to your email and phone.
-            </p>
+            <div className="text-sm text-secondary/50 text-center mb-8 space-y-1">
+              <p>We've sent a 6-digit verification code to your registered contact.</p>
+              {otpDelivery?.notification && (
+                <p className="text-secondary/60">Also sent as an app notification.</p>
+              )}
+            </div>
 
             <div className="space-y-6">
               <div>
@@ -1079,7 +1085,7 @@ const ProviderEarningsDashboard = () => {
 
               <div className="flex gap-4 pt-2">
                 <button
-                  onClick={() => { setShowOTPModal(false); setOtpCode(''); }}
+                  onClick={() => { setShowOTPModal(false); setOtpCode(''); setOtpDelivery(null); }}
                   className="flex-1 py-4 bg-gray-100 text-secondary/60 rounded-xl font-bold text-sm hover:bg-gray-200 transition-colors"
                 >
                   Cancel

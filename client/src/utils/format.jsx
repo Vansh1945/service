@@ -3,8 +3,42 @@
  * All formatting should be done through these functions to ensure consistency.
  */
 import { latLngToS2CellId } from './s2Helper';
+import { getCachedTimeFormat } from './systemSettingsCache';
 
 const FALLBACK = "--";
+
+const parseClockTime = (time) => {
+  const match = time.trim().match(/^(\d{1,2}):(\d{1,2})(?::\d{1,2})?\s*(AM|PM)?$/i);
+  if (!match) return null;
+
+  let hour = Number(match[1]);
+  const minute = Number(match[2]);
+  const meridiem = match[3]?.toUpperCase();
+
+  if (Number.isNaN(hour) || Number.isNaN(minute) || minute > 59) return null;
+
+  if (meridiem) {
+    if (hour < 1 || hour > 12) return null;
+    if (meridiem === "PM" && hour !== 12) hour += 12;
+    if (meridiem === "AM" && hour === 12) hour = 0;
+  } else if (hour > 23) {
+    return null;
+  }
+
+  return { hour, minute };
+};
+
+const formatClockTime = ({ hour, minute }, timeFormat = getCachedTimeFormat()) => {
+  const formattedMinute = String(minute).padStart(2, "0");
+
+  if (timeFormat === "24h") {
+    return `${String(hour).padStart(2, "0")}:${formattedMinute}`;
+  }
+
+  const ampm = hour >= 12 ? "PM" : "AM";
+  const formattedHour = hour % 12 || 12;
+  return `${formattedHour}:${formattedMinute} ${ampm}`;
+};
 
 /**
  * Format date to a readable string (e.g., 15 May 2024)
@@ -27,32 +61,31 @@ export const formatDate = (date) => {
 };
 
 /**
- * Format time to 12-hour string (e.g., 10:30 AM)
+ * Format time using the configured system time format (e.g., 10:30 AM or 22:30)
  * @param {Date|string} time - The time to format
  * @returns {string} Formatted time string
  */
 export const formatTime = (time) => {
   if (!time) return FALLBACK;
   try {
+    const timeFormat = getCachedTimeFormat();
+
     // If it's a date object or ISO string
     if (time instanceof Date || (typeof time === "string" && time.includes("T"))) {
       const d = new Date(time);
       if (isNaN(d.getTime())) return FALLBACK;
       return d.toLocaleTimeString("en-IN", {
-        hour: "numeric",
+        hour: timeFormat === "24h" ? "2-digit" : "numeric",
         minute: "2-digit",
-        hour12: true,
+        hour12: timeFormat === "12h",
       });
     }
     
-    // If it's a string like "14:30" or "14:30:00"
+    // If it's a string like "14:30", "14:30:00", or "2:30 PM"
     if (typeof time === "string" && time.includes(":")) {
-      const parts = time.split(":");
-      const h = parseInt(parts[0]);
-      const m = parts[1].split(" ")[0]; // handles "14:30:00"
-      const ampm = h >= 12 ? "PM" : "AM";
-      const formattedHour = h % 12 || 12;
-      return `${formattedHour}:${m.padStart(2, "0")} ${ampm}`;
+      const parsedTime = parseClockTime(time);
+      if (!parsedTime) return FALLBACK;
+      return formatClockTime(parsedTime, timeFormat);
     }
     
     return FALLBACK;

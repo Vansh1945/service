@@ -496,7 +496,7 @@ const RefundPage = () => {
         // Apply filterStatus
         const finalData = filtered.filter(b => {
           if (filterStatus === 'all') return true;
-          if (filterStatus === 'pending') return b.paymentStatus === 'paid' && b.disputeRaised;
+          if (filterStatus === 'pending') return ['paid', 'escrow_hold'].includes(b.paymentStatus) && b.disputeRaised;
           if (filterStatus === 'completed') return b.paymentStatus === 'refunded' || b.adminRefundDecision === 'approved';
           if (filterStatus === 'rejected') return b.adminRefundDecision === 'rejected';
           if (filterStatus === 'disputed') return b.disputeStatus === 'UNDER_REVIEW' || b.disputeStatus === 'pending';

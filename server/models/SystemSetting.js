@@ -60,6 +60,11 @@ const systemConfigSchema = new mongoose.Schema(
       type: String,
       default: "Asia/Kolkata"
     },
+    timeFormat: {
+      type: String,
+      enum: ["12h", "24h"],
+      default: "12h"
+    },
     socialLinks: {
       facebook: {
         type: String,

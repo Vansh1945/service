@@ -188,7 +188,18 @@ const initSocket = (httpServer) => {
 
     io = new Server(httpServer, {
         cors: {
-            origin: [frontendUrl, 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5173'],
+            origin: function (origin, callback) {
+                const allowedOrigins = [
+                    frontendUrl,
+                    'https://rajelectricalservices.vercel.app'
+                ];
+                const isDev = process.env.NODE_ENV !== 'production';
+                if (!origin || allowedOrigins.includes(origin) || (isDev && (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')))) {
+                    callback(null, true);
+                } else {
+                    callback(new Error("Not allowed by CORS"));
+                }
+            },
             methods: ['GET', 'POST'],
             credentials: true
         },

@@ -13,8 +13,8 @@ const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
     const navigate = useNavigate();
-    const API = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api';
-    const API_URL_IMAGE = import.meta.env.VITE_BACKEND_URL ? import.meta.env.VITE_BACKEND_URL.replace('/api', '') : 'http://localhost:5000';
+    const API = import.meta.env.VITE_BACKEND_URL || (window.location.origin + "/api");
+    const API_URL_IMAGE = import.meta.env.VITE_BACKEND_URL ? import.meta.env.VITE_BACKEND_URL.replace('/api', '') : window.location.origin;
 
     // State management
     const [token, setToken] = useState(() => localStorage.getItem("token") || null);

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/auth';
 import * as SystemService from '../../services/SystemService';
+import { writeSystemSettingsCache } from '../../utils/systemSettingsCache';
 import {
   MapPin, Phone, Mail, Facebook, Instagram, Twitter, Linkedin, Youtube,
   Settings, Calendar, Wallet, Percent, Bell, Shield, Flag, AlertTriangle,
@@ -19,6 +20,7 @@ const SystemSetting = () => {
     email: '',
     defaultCurrency: 'INR',
     timezone: 'Asia/Kolkata',
+    timeFormat: '12h',
     socialLinks: {
       facebook: '',
       instagram: '',
@@ -126,6 +128,7 @@ const SystemSetting = () => {
           email: settingsData.data.email || '',
           defaultCurrency: settingsData.data.defaultCurrency || 'INR',
           timezone: settingsData.data.timezone || 'Asia/Kolkata',
+          timeFormat: settingsData.data.timeFormat || '12h',
           socialLinks: {
             facebook: settingsData.data.socialLinks?.facebook || '',
             instagram: settingsData.data.socialLinks?.instagram || '',
@@ -283,6 +286,7 @@ const SystemSetting = () => {
       formData.append('email', systemSettings.email);
       formData.append('defaultCurrency', systemSettings.defaultCurrency);
       formData.append('timezone', systemSettings.timezone);
+      formData.append('timeFormat', systemSettings.timeFormat);
 
       // Append JSON strings for nested objects
       formData.append('socialLinks', JSON.stringify(systemSettings.socialLinks));
@@ -307,6 +311,13 @@ const SystemSetting = () => {
 
       if (data.success) {
         showToast('System settings saved successfully');
+        // Update local storage settings cache directly
+        const settingsCache = {
+          companyName: data.data.companyName || "SAFEVOLT SOLUTIONS",
+          favicon: data.data.favicon || null,
+          timeFormat: data.data.timeFormat || "12h"
+        };
+        writeSystemSettingsCache(settingsCache);
         setLogoFile(null);
         setFaviconFile(null);
         fetchSystemSettings(); // Refresh data
@@ -533,6 +544,19 @@ const SystemSetting = () => {
                       <option value="UTC">UTC (GMT+0:00)</option>
                       <option value="America/New_York">America/New_York (EST)</option>
                       <option value="Europe/London">Europe/London (GMT)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-secondary mb-2 font-inter">Time Format</label>
+                    <select
+                      name="timeFormat"
+                      value={systemSettings.timeFormat}
+                      onChange={handleSystemSettingsChange}
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-inter text-secondary bg-white"
+                    >
+                      <option value="12h">12-Hour Format (AM/PM)</option>
+                      <option value="24h">24-Hour Format</option>
                     </select>
                   </div>
                 </div>

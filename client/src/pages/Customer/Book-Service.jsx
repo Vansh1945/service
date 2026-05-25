@@ -11,7 +11,7 @@ import { getPublicServiceById } from '../../services/ServiceService';
 import { getAvailableCoupons, applyCoupon as applyCouponAPI } from '../../services/CouponService';
 import { createBooking } from '../../services/BookingService';
 import * as CustomerService from '../../services/CustomerService';
-import { formatCurrency } from '../../utils/format';
+import { formatCurrency, formatTime } from '../../utils/format';
 
 const BookService = () => {
   const { serviceId } = useParams();
@@ -92,12 +92,8 @@ const BookService = () => {
     const endHour = 20;
 
     for (let hour = startHour; hour <= endHour; hour++) {
-      const period = hour >= 12 ? 'PM' : 'AM';
-      const displayHour = hour > 12 ? hour - 12 : hour;
-      const displayHour12 = displayHour === 0 ? 12 : displayHour;
-
       slots.push({
-        display: `${displayHour12}:00 ${period}`,
+        display: formatTime(`${hour.toString().padStart(2, '0')}:00`),
         value: `${hour.toString().padStart(2, '0')}:00`
       });
     }

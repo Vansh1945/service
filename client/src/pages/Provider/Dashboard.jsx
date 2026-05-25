@@ -10,7 +10,7 @@ import { useAuth } from '../../context/auth';
 import * as ProviderService from '../../services/ProviderService';
 import * as BookingService from '../../services/BookingService';
 import * as ComplaintService from '../../services/ComplaintService';
-import { formatCurrency, formatDate } from '../../utils/format';
+import { formatCurrency, formatDate, formatTime } from '../../utils/format';
 
 const PayoutStatusBadge = ({ status }) => {
   const cfg = {
@@ -540,7 +540,7 @@ const Dashboard = () => {
                           <div>
                             <h4 className="text-sm font-medium text-secondary">{booking.customer?.name || 'Customer'}</h4>
                             <p className="text-xs text-secondary/50">
-                              {formatDate(booking.date)} at {booking.time}
+                              {formatDate(booking.date)} at {formatTime(booking.time)}
                             </p>
                           </div>
                         </div>

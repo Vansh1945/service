@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
 import { useSocket } from '../../socket/SocketContext';
-import { 
+import {
   MapPin, Phone, Star, Shield, ArrowLeft, Navigation, Clock, ShieldCheck, HelpCircle, PhoneCall
 } from 'lucide-react';
 import { toast } from 'react-toastify';
@@ -18,9 +18,9 @@ const calculateHaversine = (lat1, lon1, lat2, lon2) => {
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
+    Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLon / 2) *
+    Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 };
@@ -90,7 +90,7 @@ const LiveTrackingPage = () => {
         if (res?.data?.success || res?.status === 200) {
           const b = res.data.data;
           setBooking(b);
-          
+
           if (!isProvider) {
             setProviderReached(b.providerReached || false);
             setDistance(b.liveDistance || '');
@@ -162,7 +162,7 @@ const LiveTrackingPage = () => {
       if (!initialLoc && providerDetails?.currentLocation?.coordinates?.length === 2) {
         const coords = providerDetails.currentLocation.coordinates;
         if (coords[0] !== 0 && coords[1] !== 0) {
-           initialLoc = { lat: coords[1], lng: coords[0] };
+          initialLoc = { lat: coords[1], lng: coords[0] };
         }
       }
       if (initialLoc) {
@@ -305,19 +305,19 @@ const LiveTrackingPage = () => {
             // Fallback to Provider registered DB coords if GPS fails
             const provDB = bookingRef.current?.provider || bookingRef.current?.providerDetails;
             let fbLat = 31.3260, fbLng = 75.5761; // Jalandhar default
-            
+
             if (provDB?.address?.lat != null && provDB?.address?.lng != null) {
-               const pLat = parseFloat(provDB.address.lat);
-               const pLng = parseFloat(provDB.address.lng);
-               if (!isNaN(pLat) && !isNaN(pLng) && (pLat !== 0 || pLng !== 0)) {
-                 fbLat = pLat;
-                 fbLng = pLng;
-               }
+              const pLat = parseFloat(provDB.address.lat);
+              const pLng = parseFloat(provDB.address.lng);
+              if (!isNaN(pLat) && !isNaN(pLng) && (pLat !== 0 || pLng !== 0)) {
+                fbLat = pLat;
+                fbLng = pLng;
+              }
             } else if (provDB?.currentLocation?.coordinates?.length === 2 && provDB.currentLocation.coordinates[0] !== 0) {
-               fbLat = provDB.currentLocation.coordinates[1];
-               fbLng = provDB.currentLocation.coordinates[0];
+              fbLat = provDB.currentLocation.coordinates[1];
+              fbLng = provDB.currentLocation.coordinates[0];
             }
-            
+
             handleLocationUpdate({ coords: { latitude: fbLat, longitude: fbLng } });
           },
           { enableHighAccuracy: true, timeout: 5000, maximumAge: 10000 }
@@ -376,31 +376,31 @@ const LiveTrackingPage = () => {
 
   if (loading) return <Loader />;
 
-  const otherUser = isProvider 
-    ? (booking?.customer || booking?.userDetails) 
+  const otherUser = isProvider
+    ? (booking?.customer || booking?.userDetails)
     : (booking?.provider || booking?.providerDetails);
 
   return (
     <div className="relative w-full h-screen overflow-hidden bg-secondary">
-      
+
       {/* Top Header */}
       <div className="absolute top-4 left-4 z-[1000] flex items-center gap-3">
-        <button 
+        <button
           onClick={() => navigate(isProvider ? '/provider/booking-requests' : '/customer/bookings')}
           className="flex items-center justify-center w-10 h-10 bg-white/95 backdrop-blur shadow-lg border border-gray-100 rounded-full hover:bg-gray-100 transition-colors"
         >
           <ArrowLeft className="w-5 h-5 text-secondary" />
         </button>
-        <div className="bg-white/95 backdrop-blur shadow-lg border border-gray-100 px-4 py-2 rounded-2xl flex flex-col">
-          <span className="text-[10px] font-black text-primary uppercase tracking-wider">Live Tracking</span>
-          <span className="text-xs font-bold text-secondary">
-            {isProvider ? 'En Route to Customer' : (booking?.services?.[0]?.service?.title || 'Service Delivery')}
+        <div className="bg-white/95 backdrop-blur shadow-lg border border-gray-100 px-3 py-1.5 md:px-4 md:py-2 rounded-2xl flex flex-col max-w-[170px] sm:max-w-xs md:max-w-none">
+          <span className="text-[9px] md:text-[10px] font-black text-primary uppercase tracking-wider">Live Tracking</span>
+          <span className="text-[11px] md:text-xs font-bold text-secondary truncate">
+            {isProvider ? 'En Route' : (booking?.services?.[0]?.service?.title || 'Service Delivery')}
           </span>
         </div>
       </div>
 
       {/* Shared Leaflet Map UI */}
-      <LiveTrackingMapUI 
+      <LiveTrackingMapUI
         targetLat={targetLat}
         targetLng={targetLng}
         providerLoc={providerLoc}
@@ -408,17 +408,17 @@ const LiveTrackingPage = () => {
         loadingRoute={loadingRoute}
       />
       {/* Info Card (Customer vs Provider specific layouts) */}
-      <div className="absolute bottom-0 left-0 right-0 md:top-6 md:bottom-6 md:right-6 md:left-auto w-full md:w-[420px] z-20 flex flex-col justify-end p-3 md:p-0 pointer-events-none max-h-[70vh] md:max-h-full">
-        <div className="w-full bg-white/95 backdrop-blur-md border border-gray-100 shadow-2xl rounded-3xl p-4 md:p-5 pointer-events-auto flex flex-col max-h-full overflow-hidden">
-          
+      <div className="absolute bottom-0 left-0 right-0 md:top-6 md:bottom-6 md:right-6 md:left-auto w-full md:w-[420px] z-20 flex flex-col justify-end p-3 md:p-0 pointer-events-none max-h-max h-auto md:max-h-full">
+        <div className="w-full bg-white/95 backdrop-blur-md border border-gray-100 shadow-2xl rounded-3xl p-3 md:p-5 pointer-events-auto flex flex-col h-auto overflow-hidden">
+
           {/* 1. FIXED HEADER */}
-          <div className="flex items-center justify-between gap-2 border-b border-gray-100 pb-3 shrink-0">
+          <div className="flex items-center justify-between gap-2 border-b border-gray-100 pb-2 md:pb-3 shrink-0">
             <div className="flex items-center gap-2 min-w-0">
               <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${providerReached ? 'bg-green-500 animate-ping' : 'bg-primary animate-pulse'}`} />
               <span className="text-[11px] font-black text-secondary uppercase tracking-wider truncate">
                 {isProvider ? 'LIVE NAVIGATION ACTIVE' : (
                   providerReached ? 'Arrived' :
-                  (booking.status === 'in-progress' || booking.status === 'in_progress') ? 'In Progress' : 'Professional En Route'
+                    (booking.status === 'in-progress' || booking.status === 'in_progress') ? 'In Progress' : 'Professional En Route'
                 )}
               </span>
             </div>
@@ -434,33 +434,33 @@ const LiveTrackingPage = () => {
           </div>
 
           {/* 2. SCROLLABLE MIDDLE BODY */}
-          <div className="flex-grow overflow-y-auto py-3 space-y-3 pr-0.5 pointer-events-auto scrollbar-thin">
-            
+          <div className="flex-grow overflow-hidden md:overflow-y-auto py-2.5 md:py-3 space-y-2.5 md:space-y-3 pr-0.5 pointer-events-auto">
+
             {/* Time & Distance */}
-            <div className={`grid grid-cols-2 gap-3 rounded-2xl p-3 ${isProvider ? 'bg-gray-50 border border-gray-100' : 'bg-gradient-to-r from-primary/5 to-blue-500/5 border border-primary/10'}`}>
+            <div className={`grid grid-cols-2 gap-3 rounded-2xl p-2.5 md:p-3 ${isProvider ? 'bg-gray-50 border border-gray-100' : 'bg-gradient-to-r from-primary/5 to-blue-500/5 border border-primary/10'}`}>
               <div className="flex flex-col">
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Estimated ETA</span>
-                <span className="text-lg font-black text-primary">{eta || '--'}</span>
+                <span className="text-base md:text-lg font-black text-primary">{eta || '--'}</span>
               </div>
               <div className="flex flex-col border-l border-gray-200 pl-3">
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Distance</span>
-                <span className="text-lg font-black text-secondary">{distance || '--'}</span>
+                <span className="text-base md:text-lg font-black text-secondary">{distance || '--'}</span>
               </div>
             </div>
 
             {/* Customer Specific PIN Block */}
             {!isProvider && (
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <ShieldCheck className="w-4.5 h-4.5 text-blue-600 animate-pulse" />
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl p-3 md:p-4">
+                <div className="flex items-center gap-2 mb-1.5 md:mb-2">
+                  <ShieldCheck className="w-4 md:w-4.5 h-4 md:h-4.5 text-blue-600 animate-pulse" />
                   <span className="text-xs font-bold text-secondary">
-                    {['in-progress', 'in_progress'].includes(booking?.status) ? 'Completion PIN' : 'Arrival Start PIN'}
+                    {['in-progress', 'in_progress'].includes(booking?.status) ? 'Service Completion PIN' : 'Service Start PIN'}
                   </span>
                 </div>
-                <div className="bg-white rounded-xl p-3 border border-blue-50/50 flex items-center justify-between">
+                <div className="bg-white rounded-xl p-2.5 md:p-3 border border-blue-50/50 flex items-center justify-between">
                   <div>
                     <p className="text-[9px] font-black text-blue-600/60 uppercase tracking-widest mb-0.5">Share with provider</p>
-                    <p className="text-2xl font-black text-secondary tracking-widest font-mono">
+                    <p className="text-xl md:text-2xl font-black text-secondary tracking-widest font-mono">
                       {['in-progress', 'in_progress'].includes(booking?.status) ? getCompletionPin(booking) : getStartPin(booking)}
                     </p>
                   </div>
@@ -470,17 +470,17 @@ const LiveTrackingPage = () => {
 
             {/* User Details (Provider seeing Customer OR Customer seeing Provider) */}
             {otherUser ? (
-              <div className={`flex flex-col gap-3 ${isProvider ? 'p-4 border border-gray-100 rounded-2xl bg-white shadow-sm' : 'border-t border-gray-100 pt-4'}`}>
-                <div className="flex gap-4 items-center w-full">
+              <div className={`flex flex-col gap-2.5 md:gap-3 ${isProvider ? 'p-3 md:p-4 border border-gray-100 rounded-2xl bg-white shadow-sm' : 'border-t border-gray-100 pt-3 md:pt-4'}`}>
+                <div className="flex gap-3 md:gap-4 items-center w-full">
                   <div className="relative shrink-0">
                     {isProvider ? (
-                      <div className="w-12 h-12 bg-primary/10 text-primary rounded-xl flex items-center justify-center font-bold text-base shadow-sm">
+                      <div className="w-10 h-10 md:w-12 md:h-12 bg-primary/10 text-primary rounded-xl flex items-center justify-center font-bold text-sm md:text-base shadow-sm">
                         {otherUser.name?.charAt(0).toUpperCase()}
                       </div>
                     ) : (
                       <>
-                        <img src={otherUser.profilePicUrl || 'https://placehold.co/100x100?text=Avatar'} alt={otherUser.name} className="w-14 h-14 object-cover rounded-full border-2 border-primary/20 shadow-md"/>
-                        <div className="absolute -bottom-1 -right-1 bg-green-500 w-4 h-4 rounded-full border-2 border-white flex items-center justify-center" />
+                        <img src={otherUser.profilePicUrl || 'https://placehold.co/100x100?text=Avatar'} alt={otherUser.name} className="w-10 h-10 md:w-14 md:h-14 object-cover rounded-full border-2 border-primary/20 shadow-md" />
+                        <div className="absolute -bottom-0.5 -right-0.5 bg-green-500 w-3 md:w-4.5 h-3 md:h-4.5 rounded-full border-2 border-white flex items-center justify-center" />
                       </>
                     )}
                   </div>
@@ -510,10 +510,10 @@ const LiveTrackingPage = () => {
                       </p>
                     )}
                   </div>
-                  
+
                   {otherUser.phone && (
-                    <a href={`tel:${otherUser.phone}`} className={`${isProvider ? 'px-4 py-2 bg-gray-50 text-secondary text-xs rounded-xl shadow-sm border border-gray-200 flex items-center justify-center font-bold hover:bg-gray-100 shrink-0' : 'w-11 h-11 bg-primary text-white rounded-full flex items-center justify-center shadow-md shrink-0'}`}>
-                      <PhoneCall className={isProvider ? "w-3.5 h-3.5 mr-2" : "w-5 h-5"} />
+                    <a href={`tel:${otherUser.phone}`} className={`${isProvider ? 'px-3 py-1.5 bg-gray-50 text-secondary text-xs rounded-xl shadow-sm border border-gray-200 flex items-center justify-center font-bold hover:bg-gray-100 shrink-0' : 'w-9 h-9 md:w-11 md:h-11 bg-primary text-white rounded-full flex items-center justify-center shadow-md shrink-0'}`}>
+                      <PhoneCall className={isProvider ? "w-3 h-3 mr-1.5" : "w-4 h-4 md:w-5 md:h-5"} />
                       {isProvider ? 'Call' : ''}
                     </a>
                   )}
@@ -574,8 +574,8 @@ const LiveTrackingPage = () => {
                 >
                   <Navigation className="w-4 h-4 animate-bounce" /> Open Google Maps Navigation
                 </a>
-                <button 
-                  onClick={() => navigate(isProvider ? '/provider/booking-requests' : '/customer/bookings')} 
+                <button
+                  onClick={() => navigate(isProvider ? '/provider/booking-requests' : '/customer/bookings')}
                   className="w-full py-2.5 bg-secondary text-white font-bold rounded-2xl text-xs hover:bg-secondary/90 shadow-lg transition-all"
                 >
                   Return to Dashboard

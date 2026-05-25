@@ -3,7 +3,7 @@ import { io } from 'socket.io-client';
 // Server URL without /api path
 const SERVER_URL = import.meta.env.VITE_BACKEND_URL
     ? import.meta.env.VITE_BACKEND_URL.replace('/api', '')
-    : 'http://localhost:5000';
+    : window.location.origin;
 
 let socket = null;
 

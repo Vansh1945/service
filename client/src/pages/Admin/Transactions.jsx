@@ -38,6 +38,7 @@ const getStatusColor = (status) => {
         case 'success':
         case 'completed':
         case 'paid':
+        case 'escrow_hold':
             return 'bg-green-50 text-green-700 border-green-100';
         case 'pending':
         case 'processing':
@@ -57,6 +58,7 @@ const getStatusIcon = (status) => {
         case 'success':
         case 'completed':
         case 'paid':
+        case 'escrow_hold':
             return <CheckCircle className="w-3.5 h-3.5 mr-1" />;
         case 'pending':
         case 'processing':

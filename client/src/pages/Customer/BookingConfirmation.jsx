@@ -12,7 +12,7 @@ import { getBooking, updateBookingPayment, payBooking } from '../../services/Boo
 import * as TransactionService from '../../services/TransactionService';
 import * as CustomerService from '../../services/CustomerService';
 import Loader from '../../components/Loader';
-import { formatDate, formatCurrency } from '../../utils/format';
+import { formatDate, formatTime, formatCurrency } from '../../utils/format';
 
 const BookingConfirmation = () => {
   const { bookingId } = useParams();
@@ -74,7 +74,7 @@ const BookingConfirmation = () => {
 
       const booking = response.data.data;
       // If cash booking not yet paid (Pay Now flow), default to online
-      if (booking.paymentMethod === 'cash' && booking.paymentStatus !== 'paid') {
+      if (booking.paymentMethod === 'cash' && !['paid', 'escrow_hold'].includes(booking.paymentStatus)) {
         setPaymentMethod('online');
       } else if (booking.paymentMethod) {
         setPaymentMethod(booking.paymentMethod);
@@ -135,7 +135,7 @@ const BookingConfirmation = () => {
           setServiceDetails(location.state.service);
           // If it's a cash booking not yet paid (Pay Now flow), default to online so
           // the customer can choose how to pay — 'cash' is not a valid createOrder method
-          if (b.paymentMethod === 'cash' && b.paymentStatus !== 'paid') {
+          if (b.paymentMethod === 'cash' && !['paid', 'escrow_hold'].includes(b.paymentStatus)) {
             setPaymentMethod('online');
           } else if (b.paymentMethod) {
             setPaymentMethod(b.paymentMethod);
@@ -189,26 +189,28 @@ const BookingConfirmation = () => {
   const getBookingStatusInfo = () => {
     if (!bookingDetails) return { message: 'Loading...', color: 'text-gray-500', canPay: false };
 
+    const isPaid = ['paid', 'escrow_hold'].includes(bookingDetails.paymentStatus);
+
     switch (bookingDetails.status) {
       case 'pending':
         return {
           message: 'Pending Provider Acceptance',
           color: 'text-accent',
-          canPay: bookingDetails.paymentStatus !== 'paid',
+          canPay: !isPaid,
           description: 'Complete payment to secure your booking.'
         };
       case 'accepted':
         return {
           message: 'Accepted by Provider',
           color: 'text-primary',
-          canPay: bookingDetails.paymentStatus !== 'paid',
+          canPay: !isPaid,
           description: 'Provider has accepted your booking!'
         };
       case 'confirmed':
         return {
           message: 'Booking Confirmed',
           color: 'text-primary',
-          canPay: bookingDetails.paymentStatus !== 'paid',
+          canPay: !isPaid,
           description: 'Your booking is confirmed.'
         };
       case 'in-progress':
@@ -229,7 +231,7 @@ const BookingConfirmation = () => {
         return {
           message: 'Booking Scheduled (Cash on Delivery)',
           color: 'text-yellow-600',
-          canPay: bookingDetails.paymentStatus !== 'paid',
+          canPay: !isPaid,
           description: 'You can pay now online, or pay cash when the provider arrives.'
         };
       case 'cancelled':
@@ -238,7 +240,7 @@ const BookingConfirmation = () => {
         return {
           message: bookingDetails.status || 'Unknown',
           color: 'text-gray-500',
-          canPay: bookingDetails.paymentStatus !== 'paid' && !['cancelled', 'completed', 'in-progress'].includes(bookingDetails.status),
+          canPay: !isPaid && !['cancelled', 'completed', 'in-progress'].includes(bookingDetails.status),
           description: ''
         };
     }
@@ -517,7 +519,7 @@ const BookingConfirmation = () => {
                   <Calendar className="w-4 h-4 text-primary mt-0.5" />
                   <div>
                     <p className="text-xs text-gray-500">Date & Time</p>
-                    <p className="text-sm font-medium text-secondary">{formatDate(bookingDetails.date)} {bookingDetails.time && `at ${bookingDetails.time}`}</p>
+                    <p className="text-sm font-medium text-secondary">{formatDate(bookingDetails.date)} {bookingDetails.time && `at ${formatTime(bookingDetails.time)}`}</p>
                   </div>
                 </div>
                 {bookingDetails.address && (

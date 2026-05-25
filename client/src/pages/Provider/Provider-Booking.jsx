@@ -907,7 +907,7 @@ const ProviderBooking = () => {
                   <CreditCard className="w-3 h-3" /> Paid Online
                 </span>
               )}
-              {booking.paymentStatus === 'paid' && (
+              {['paid', 'escrow_hold'].includes(booking.paymentStatus) && (
                 <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-md">
                   <CheckSquare className="w-3 h-3" /> Paid
                 </span>
@@ -951,7 +951,7 @@ const ProviderBooking = () => {
                   )}
                   {actionLoading.id === booking._id && actionLoading.type === 'accept' ? 'Accepting...' : 'Accept'}
                 </button>
-                {booking.paymentStatus !== 'paid' && (
+                {!['paid', 'escrow_hold'].includes(booking.paymentStatus) && (
                   <button
                     disabled={actionLoading.id !== null}
                     onClick={() => handleBookingAction(booking._id, 'reject', { reason: 'Provider declined' })}
@@ -973,7 +973,7 @@ const ProviderBooking = () => {
                   <Navigation className="w-3.5 h-3.5 animate-pulse" /> Navigate to Customer
                 </button>
                 <button
-                  disabled={actionLoading.id !== null || ((booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service') && booking.paymentStatus !== 'paid')}
+                  disabled={actionLoading.id !== null || ((booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service') && !['paid', 'escrow_hold'].includes(booking.paymentStatus))}
                   onClick={() => handleBookingAction(booking._id, 'start')}
                   className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white bg-primary hover:bg-primary/90 transition-colors w-full disabled:bg-gray-300 disabled:cursor-not-allowed"
                 >
@@ -984,11 +984,11 @@ const ProviderBooking = () => {
                   )}
                   {actionLoading.id === booking._id && actionLoading.type === 'start'
                     ? 'Starting...'
-                    : ((booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service') && booking.paymentStatus !== 'paid')
+                    : ((booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service') && !['paid', 'escrow_hold'].includes(booking.paymentStatus))
                       ? 'Payment Pending'
                       : 'Start Service'}
                 </button>
-                {((booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service') && booking.paymentStatus !== 'paid') && (
+                {((booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service') && !['paid', 'escrow_hold'].includes(booking.paymentStatus)) && (
                   <p className="text-[10px] text-accent font-bold mt-1 text-center leading-tight">
                     Customer payment is pending. Please ask customer to pay online.
                   </p>
@@ -1303,18 +1303,18 @@ const ProviderBooking = () => {
                       </div>
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-gray-500">Payment Status</span>
-                        <span className={`px-2 py-0.5 rounded-lg text-xs font-semibold ${selectedBooking.paymentStatus === 'paid'
+                        <span className={`px-2 py-0.5 rounded-lg text-xs font-semibold ${['paid', 'escrow_hold'].includes(selectedBooking.paymentStatus)
                           ? 'bg-primary/10 text-primary'
                           : (selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentType === 'pay_after_service')
                             ? 'bg-yellow-100 text-yellow-700'
                             : 'bg-accent/10 text-accent'
                           }`}>
-                          {selectedBooking.paymentStatus === 'paid' ? 'Paid' : (selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentType === 'pay_after_service') ? 'Pending Collection' : 'Unpaid'}
+                          {['paid', 'escrow_hold'].includes(selectedBooking.paymentStatus) ? 'Paid' : (selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentType === 'pay_after_service') ? 'Pending Collection' : 'Unpaid'}
                         </span>
                       </div>
                     </div>
 
-                    {(selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentType === 'pay_after_service') && selectedBooking.status === 'completed' && selectedBooking.paymentStatus !== 'paid' && (
+                    {(selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentType === 'pay_after_service') && selectedBooking.status === 'completed' && !['paid', 'escrow_hold'].includes(selectedBooking.paymentStatus) && (
                       <div className="p-4 border-2 border-dashed border-yellow-200 bg-yellow-50 rounded-xl text-center mb-4">
                         <div className="bg-white p-2 inline-block rounded-lg shadow-sm mb-2">
                           <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=COLLECT_CASH" alt="Collect Cash QR" className="w-20 h-20 opacity-60" />
@@ -1701,16 +1701,16 @@ const ProviderBooking = () => {
                   {selectedBooking.status === 'accepted' && (
                     <div className="flex-1 flex flex-col gap-1">
                       <button
-                        disabled={(selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentType === 'pay_after_service') && selectedBooking.paymentStatus !== 'paid'}
+                        disabled={(selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentType === 'pay_after_service') && !['paid', 'escrow_hold'].includes(selectedBooking.paymentStatus)}
                         onClick={() => handleBookingAction(selectedBooking._id, 'start')}
                         className="w-full px-4 py-3 bg-primary hover:bg-primary/90 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
                       >
                         <Play className="w-4 h-4" />
-                        {(selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentType === 'pay_after_service') && selectedBooking.paymentStatus !== 'paid'
+                        {(selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentType === 'pay_after_service') && !['paid', 'escrow_hold'].includes(selectedBooking.paymentStatus)
                           ? 'Payment Pending'
                           : 'Start Service'}
                       </button>
-                      {((selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentType === 'pay_after_service') && selectedBooking.paymentStatus !== 'paid') && (
+                      {((selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentType === 'pay_after_service') && !['paid', 'escrow_hold'].includes(selectedBooking.paymentStatus)) && (
                         <p className="text-[10px] text-accent font-bold text-center leading-tight">
                           Customer payment is pending. Ask customer to pay online.
                         </p>

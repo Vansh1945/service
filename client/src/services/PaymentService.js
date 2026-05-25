@@ -12,6 +12,10 @@ export const withdraw = (data) => {
     return axiosInstance.post("/payment/withdraw", data);
 };
 
+export const verifyWithdrawalOTP = (data) => {
+    return axiosInstance.post("/payment/verify-withdraw-otp", data);
+};
+
 export const getEarningsReport = (params) => {
     return axiosInstance.get("/payment/earnings-report", { params });
 };

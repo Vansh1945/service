@@ -33,7 +33,7 @@ const MapBoundsHelper = ({ providerLoc, targetLat, targetLng }) => {
 import * as BookingService from '../../services/BookingService';
 import * as AdminService from '../../services/AdminService';
 import Pagination from '../../components/Pagination';
-import { formatDate, formatCurrency, LIGHT_MAP_TILES, LIGHT_MAP_ATTRIBUTION } from '../../utils/format';
+import { formatDate, formatTime, formatCurrency, LIGHT_MAP_TILES, LIGHT_MAP_ATTRIBUTION } from '../../utils/format';
 import {
     Search,
     Calendar,
@@ -172,7 +172,7 @@ const BookingRow = React.memo(({ booking, onDetails, onReschedule, onAssign, onD
                     {formatDate(booking.date)}
                 </div>
                 <div className="text-sm text-gray-500">
-                    {booking.time || 'Not specified'}
+                    {booking.time ? formatTime(booking.time) : 'Not specified'}
                 </div>
             </div>
         </td>
@@ -1019,621 +1019,367 @@ const AdminBookingsView = () => {
             </div>
 
             {/* Booking Details Modal */}
-            {showModal && selectedBooking && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-                        <div className="p-6">
-                            <div className="flex justify-between items-center mb-6">
-                                <h2 className="text-xl font-bold text-secondary">Booking Details</h2>
-                                <button
-                                    onClick={() => setShowModal(false)}
-                                    className="text-gray-400 hover:text-gray-600"
-                                >
-                                    <X className="w-6 h-6" />
+            {showModal && selectedBooking && (() => {
+                const bk = selectedBooking.booking;
+                const addr = bk.address || {};
+                const pay = selectedBooking.payment || {};
+                const prov = selectedBooking.provider;
+                const InfoRow = ({ label, children, className = '' }) => (
+                    <div className={`flex items-start justify-between gap-2 py-1 ${className}`}>
+                        <span className="text-xs text-gray-500 shrink-0 w-28">{label}</span>
+                        <span className="text-xs font-semibold text-secondary text-right">{children}</span>
+                    </div>
+                );
+                const Card = ({ title, icon, children, className = '' }) => (
+                    <div className={`bg-gray-50 border border-gray-100 rounded-lg p-3 ${className}`}>
+                        {title && (
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                                {icon}{title}
+                            </p>
+                        )}
+                        {children}
+                    </div>
+                );
+                const PinBadge = ({ verified }) => (
+                    <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold border ${verified ? 'bg-green-100 text-green-800 border-green-200' : 'bg-amber-100 text-amber-800 border-amber-200'}`}>
+                        {verified ? 'Verified' : 'Pending'}
+                    </span>
+                );
+                return (
+                    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-3">
+                        <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[92vh] overflow-hidden flex flex-col animate-scale-up">
+                            {/* Modal Header */}
+                            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 shrink-0">
+                                <div className="flex items-center gap-3">
+                                    <h2 className="text-base font-bold text-secondary">Booking Details</h2>
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${getStatusColor(bk.status)}`}>
+                                        {getStatusIcon(bk.status)}
+                                        <span className="ml-1 capitalize">{bk.status}</span>
+                                    </span>
+                                    <span className="text-xs text-gray-400 font-mono">{bk.bookingId || bk._id}</span>
+                                </div>
+                                <button onClick={() => setShowModal(false)} className="p-1 rounded-md text-gray-400 hover:text-secondary hover:bg-gray-100 transition-colors">
+                                    <X className="w-5 h-5" />
                                 </button>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                {/* Left Column */}
-                                <div className="space-y-4">
-                                    {/* Booking Information */}
-                                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
-                                        <h3 className="font-semibold text-secondary mb-3">Booking Information</h3>
-                                        <div className="space-y-2">
-                                            <div>
-                                                <span className="text-sm text-gray-600">Booking ID:</span>
-                                                <p className="font-medium text-primary">{selectedBooking.booking.bookingId || selectedBooking.booking._id}</p>
-                                            </div>
-                                            <div>
-                                                <span className="text-sm text-gray-600">Date:</span>
-                                                <p className="font-medium">{formatDate(selectedBooking.booking.date)}</p>
-                                            </div>
-                                            <div>
-                                                <span className="text-sm text-gray-600">Time:</span>
-                                                <p className="font-medium">{selectedBooking.booking.time || 'Not specified'}</p>
-                                            </div>
-                                            <div>
-                                                <span className="text-sm text-gray-600">Status:</span>
-                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(selectedBooking.booking.status)}`}>
-                                                    {getStatusIcon(selectedBooking.booking.status)}
-                                                    <span className="ml-1 capitalize">{selectedBooking.booking.status}</span>
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
+                            {/* Modal Body — scrollable */}
+                            <div className="overflow-y-auto flex-1 p-4">
+                                {/* Top row: 3 equal columns on desktop */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
 
-                                    {/* S2 Geofence Telemetry */}
-                                    {(selectedBooking.booking.address?.s2CellId || selectedBooking.booking.address?.s2CellIdPrecise) && (
-                                        <div className="bg-slate-900 p-3 rounded-lg border border-slate-700">
-                                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                                                <MapPin className="w-3 h-3 text-teal-400" /> S2 Geofence Telemetry
-                                            </p>
-                                            <div className="space-y-1.5">
-                                                {selectedBooking.booking.address?.s2CellId && (
+                                    {/* ── Col 1: Booking Info ── */}
+                                    <Card title="Booking Info" icon={<Calendar className="w-3 h-3 text-primary" />}>
+                                        <InfoRow label="Date">{formatDate(bk.date)}</InfoRow>
+                                        <InfoRow label="Time">{bk.time ? formatTime(bk.time) : '—'}</InfoRow>
+                                        <InfoRow label="Created">{bk.createdAt ? new Date(bk.createdAt).toLocaleDateString() : '—'}</InfoRow>
+                                    </Card>
+
+                                    {/* ── Col 2: Customer Info ── */}
+                                    <Card title="Customer" icon={<User className="w-3 h-3 text-primary" />}>
+                                        <InfoRow label="Name">{selectedBooking.customer?.name || '—'}</InfoRow>
+                                        <InfoRow label="Email">{selectedBooking.customer?.email || '—'}</InfoRow>
+                                        <InfoRow label="Phone">{selectedBooking.customer?.phone || '—'}</InfoRow>
+                                    </Card>
+
+                                    {/* ── Col 3: Service Address ── */}
+                                    <Card title="Service Address" icon={<MapPin className="w-3 h-3 text-primary" />}>
+                                        <p className="text-xs font-semibold text-secondary leading-snug">{addr.street || '—'}</p>
+                                        <p className="text-xs text-gray-500">{[addr.city, addr.postalCode].filter(Boolean).join(', ')}</p>
+                                        <p className="text-xs text-gray-500">{[addr.state, addr.country].filter(Boolean).join(', ')}</p>
+                                        {(addr.s2CellId || addr.s2CellIdPrecise) && (
+                                            <div className="mt-1.5 pt-1.5 border-t border-gray-200 space-y-1">
+                                                {addr.s2CellId && (
                                                     <div className="flex justify-between items-center">
-                                                        <span className="text-[10px] text-slate-400 font-medium">Level 13 (≈1km²)</span>
-                                                        <span className="font-mono text-[10px] text-teal-300 bg-teal-950/50 px-2 py-0.5 rounded border border-teal-800/50">
-                                                            {selectedBooking.booking.address.s2CellId}
-                                                        </span>
+                                                        <span className="text-[9px] text-gray-400">S2 L13</span>
+                                                        <span className="font-mono text-[9px] text-teal-700 bg-teal-50 px-1.5 rounded">{addr.s2CellId}</span>
                                                     </div>
                                                 )}
-                                                {selectedBooking.booking.address?.s2CellIdPrecise && (
+                                                {addr.s2CellIdPrecise && (
                                                     <div className="flex justify-between items-center">
-                                                        <span className="text-[10px] text-slate-400 font-medium">Level 15 (≈150m²)</span>
-                                                        <span className="font-mono text-[10px] text-emerald-300 bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-800/50">
-                                                            {selectedBooking.booking.address.s2CellIdPrecise}
-                                                        </span>
+                                                        <span className="text-[9px] text-gray-400">S2 L15</span>
+                                                        <span className="font-mono text-[9px] text-emerald-700 bg-emerald-50 px-1.5 rounded">{addr.s2CellIdPrecise}</span>
                                                     </div>
                                                 )}
-                                                {selectedBooking.booking.address?.lat && selectedBooking.booking.address?.lng && (
-                                                    <div className="flex justify-between items-center pt-1 border-t border-slate-700">
-                                                        <span className="text-[10px] text-slate-500">Coordinates</span>
-                                                        <span className="font-mono text-[10px] text-slate-300">
-                                                            {parseFloat(selectedBooking.booking.address.lat).toFixed(6)}, {parseFloat(selectedBooking.booking.address.lng).toFixed(6)}
-                                                        </span>
-                                                    </div>
+                                                {addr.lat && addr.lng && (
+                                                    <p className="text-[9px] text-gray-400 font-mono text-right">{parseFloat(addr.lat).toFixed(5)}, {parseFloat(addr.lng).toFixed(5)}</p>
                                                 )}
                                             </div>
-                                        </div>
-                                    )}
-
-                                    {/* Customer Information */}
-                                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
-                                        <h3 className="font-semibold text-secondary mb-3">Customer Information</h3>
-                                        <div className="space-y-2">
-                                            <div>
-                                                <span className="text-sm text-gray-600">Name:</span>
-                                                <p className="font-medium">{selectedBooking.customer?.name || 'N/A'}</p>
-                                            </div>
-                                            <div>
-                                                <span className="text-sm text-gray-600">Email:</span>
-                                                <p className="font-medium">{selectedBooking.customer?.email || 'N/A'}</p>
-                                            </div>
-                                            <div>
-                                                <span className="text-sm text-gray-600">Phone:</span>
-                                                <p className="font-medium">{selectedBooking.customer?.phone || 'N/A'}</p>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Provider Information */}
-                                    {selectedBooking.provider && (
-                                        <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
-                                            <h3 className="font-semibold text-secondary mb-3 flex items-center">
-                                                <User className="w-4 h-4 mr-2" />
-                                                Provider Information
-                                            </h3>
-                                            <div className="space-y-3">
-                                                {/* Provider Header */}
-                                                <div className="flex items-center space-x-3 pb-3 border-b border-gray-200">
-                                                    <div className="w-12 h-12 bg-gradient-to-r from-primary to-teal-600 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0">
-                                                        {selectedBooking.provider.profilePicUrl && selectedBooking.provider.profilePicUrl !== 'default-provider.jpg' ? (
-                                                            <img
-                                                                src={selectedBooking.provider.profilePicUrl}
-                                                                alt="Provider"
-                                                                className="w-full h-full object-cover"
-                                                            />
-                                                        ) : (
-                                                            <User className="w-6 h-6 text-white" />
-                                                        )}
-                                                    </div>
-                                                    <div>
-                                                        <p className="font-semibold text-secondary">
-                                                            {selectedBooking.provider.businessName || selectedBooking.provider.name || 'N/A'}
-                                                            {selectedBooking.provider.providerId && (
-                                                                <span className="ml-2 text-xs text-gray-500 font-mono">[{selectedBooking.provider.providerId}]</span>
-                                                            )}
-                                                        </p>
-                                                        <p className="text-sm text-gray-600 flex items-center">
-                                                            <Mail className="w-3 h-3 mr-1" />
-                                                            {selectedBooking.provider.email || 'N/A'}
-                                                        </p>
-                                                    </div>
-                                                </div>
-
-                                                {/* Provider Details */}
-                                                <div className="grid grid-cols-2 gap-4">
-                                                    <div>
-                                                        <span className="text-sm text-gray-600">Phone:</span>
-                                                        <p className="font-medium flex items-center">
-                                                            <Phone className="w-3 h-3 mr-1" />
-                                                            {selectedBooking.provider.phone || 'N/A'}
-                                                        </p>
-                                                    </div>
-                                                    <div>
-                                                        <span className="text-sm text-gray-600">Experience:</span>
-                                                        <p className="font-medium">{selectedBooking.provider.experience || '0'} years</p>
-                                                    </div>
-                                                    <div>
-                                                        <span className="text-sm text-gray-600">Service Area:</span>
-                                                        <p className="font-medium">{selectedBooking.provider.serviceArea || 'N/A'}</p>
-                                                    </div>
-                                                    <div>
-                                                        <span className="text-sm text-gray-600">Rating:</span>
-                                                        <p className="font-medium flex items-center">
-                                                            <Star className="w-3 h-3 mr-1 text-yellow-500" />
-                                                            {selectedBooking.provider.rating || 'N/A'}
-                                                        </p>
-                                                    </div>
-                                                </div>
-
-                                                {/* Services Offered */}
-                                                {selectedBooking.provider.services && selectedBooking.provider.services.length > 0 && (
-                                                    <div>
-                                                        <span className="text-sm text-gray-600">Services Offered:</span>
-                                                        <div className="flex flex-wrap gap-1 mt-1">
-                                                            {selectedBooking.provider.services.slice(0, 3).map((service, index) => (
-                                                                <span key={index} className="px-2 py-1 bg-primary/10 text-primary text-xs rounded-full">
-                                                                    {service.name || service}
-                                                                </span>
-                                                            ))}
-                                                            {selectedBooking.provider.services.length > 3 && (
-                                                                <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
-                                                                    +{selectedBooking.provider.services.length - 3} more
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* Bank Verification Status */}
-                                                <div className="flex items-center justify-between pt-2 border-t border-gray-200">
-                                                    <span className="text-sm text-gray-600">Bank Verified:</span>
-                                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${selectedBooking.provider.bankDetails?.verified
-                                                        ? 'bg-green-100 text-green-800'
-                                                        : 'bg-yellow-100 text-yellow-800'
-                                                        }`}>
-                                                        {selectedBooking.provider.bankDetails?.verified ? 'Verified' : 'Pending'}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
+                                        )}
+                                    </Card>
                                 </div>
 
-                                {/* Right Column */}
-                                <div className="space-y-4">
-                                    {/* Photo Proofs Section - Enhanced Side-by-Side View */}
-                                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 shadow-inner">
-                                        <h3 className="font-bold text-secondary mb-4 flex items-center text-sm uppercase tracking-wide">
-                                            <Activity className="w-4 h-4 mr-2 text-primary" />
-                                            Service Evidence (Before vs After)
-                                        </h3>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
-                                            {/* Before Work Column */}
-                                            <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
-                                                <div className="flex justify-between items-center mb-3">
-                                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Before Service</p>
-                                                    {selectedBooking?.booking?.providerWorkProof?.startLocation && (
-                                                        <a
-                                                            href={`https://www.google.com/maps?q=${selectedBooking.booking.providerWorkProof.startLocation.latitude},${selectedBooking.booking.providerWorkProof.startLocation.longitude}`}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="text-[10px] font-bold text-primary flex items-center gap-1 hover:underline bg-primary/5 px-2 py-0.5 rounded-full"
-                                                        >
-                                                            <MapPin className="w-3 h-3" /> Map
-                                                        </a>
-                                                    )}
+                                {/* Main 2-col layout */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+
+                                    {/* ════ LEFT COLUMN ════ */}
+                                    <div className="space-y-3">
+
+                                        {/* Provider Card */}
+                                        {prov && (
+                                            <Card title="Provider" icon={<Briefcase className="w-3 h-3 text-primary" />}>
+                                                <div className="flex items-center gap-2.5 mb-2">
+                                                    <div className="w-9 h-9 bg-gradient-to-br from-primary to-teal-600 rounded-full flex items-center justify-center overflow-hidden shrink-0">
+                                                        {prov.profilePicUrl && prov.profilePicUrl !== 'default-provider.jpg'
+                                                            ? <img src={prov.profilePicUrl} alt="Provider" className="w-full h-full object-cover" />
+                                                            : <User className="w-4 h-4 text-white" />}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <p className="text-xs font-bold text-secondary truncate">
+                                                            {prov.businessName || prov.name || '—'}
+                                                            {prov.providerId && <span className="ml-1 text-[10px] text-gray-400 font-mono">[{prov.providerId}]</span>}
+                                                        </p>
+                                                        <p className="text-[10px] text-gray-500 flex items-center gap-1 truncate"><Mail className="w-2.5 h-2.5" />{prov.email || '—'}</p>
+                                                    </div>
                                                 </div>
-                                                <div className="grid grid-cols-2 gap-2">
-                                                    {selectedBooking?.booking?.providerWorkProof?.beforeImages?.length > 0 ? (
-                                                        selectedBooking.booking.providerWorkProof.beforeImages.map((img, idx) => (
-                                                            <a key={idx} href={img.url} target="_blank" rel="noopener noreferrer" className="relative aspect-square rounded-lg overflow-hidden border border-gray-100 hover:border-primary transition-all group">
-                                                                <img src={img.url} alt={`Before ${idx}`} className="w-full h-full object-cover" />
-                                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                                    <Eye className="w-4 h-4 text-white" />
-                                                                </div>
+                                                <div className="grid grid-cols-2 gap-x-3 border-t border-gray-100 pt-2">
+                                                    <InfoRow label="Phone"><span className="flex items-center gap-0.5"><Phone className="w-2.5 h-2.5" />{prov.phone || '—'}</span></InfoRow>
+                                                    <InfoRow label="Experience">{prov.experience || '0'} yrs</InfoRow>
+                                                    <InfoRow label="Service Area">{prov.serviceArea || '—'}</InfoRow>
+                                                    <InfoRow label="Rating"><span className="flex items-center gap-0.5"><Star className="w-2.5 h-2.5 text-yellow-500" />{prov.rating || '—'}</span></InfoRow>
+                                                </div>
+                                                {prov.services?.length > 0 && (
+                                                    <div className="mt-2 flex flex-wrap gap-1">
+                                                        {prov.services.slice(0, 3).map((s, i) => (
+                                                            <span key={i} className="px-1.5 py-0.5 bg-primary/10 text-primary text-[10px] rounded-full">{s.name || s}</span>
+                                                        ))}
+                                                        {prov.services.length > 3 && <span className="px-1.5 py-0.5 bg-gray-100 text-gray-500 text-[10px] rounded-full">+{prov.services.length - 3}</span>}
+                                                    </div>
+                                                )}
+                                                <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
+                                                    <span className="text-[10px] text-gray-400">Bank Status</span>
+                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${prov.bankDetails?.verified ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                        {prov.bankDetails?.verified ? 'Verified' : 'Pending'}
+                                                    </span>
+                                                </div>
+                                            </Card>
+                                        )}
+
+                                        {/* Services Booked */}
+                                        <Card title="Services Booked" icon={<Briefcase className="w-3 h-3 text-primary" />}>
+                                            {selectedBooking.services?.map((item, i) => (
+                                                <div key={i} className="flex items-center justify-between py-1 border-b border-gray-100 last:border-0">
+                                                    <div className="min-w-0">
+                                                        <p className="text-xs font-semibold text-secondary truncate">{item.service?.title || '—'}</p>
+                                                        <p className="text-[10px] text-gray-400">{item.service?.category?.name || '—'} · Qty {item.quantity || 1}</p>
+                                                    </div>
+                                                    <span className="text-xs font-bold text-secondary shrink-0 ml-2">{formatCurrency(item.price * (item.quantity || 1))}</span>
+                                                </div>
+                                            ))}
+                                        </Card>
+
+                                        {/* Status Timeline */}
+                                        <Card title="Status Timeline" icon={<Activity className="w-3 h-3 text-primary" />}>
+                                            {[
+                                                { label: 'Booking Accepted', icon: CheckCircle, activeColor: 'text-green-600', activeBg: 'bg-green-50', ts: selectedBooking.booking.statusHistory?.find(h => h.status === 'accepted')?.timestamp, fallback: 'Pending' },
+                                                { label: 'Service Started', icon: Activity, activeColor: 'text-blue-600', activeBg: 'bg-blue-50', ts: bk.serviceStartedAt, fallback: 'Not started' },
+                                                { label: 'Service Completed', icon: Award, activeColor: 'text-indigo-600', activeBg: 'bg-indigo-50', ts: bk.serviceCompletedAt, fallback: 'Not completed' },
+                                            ].map(({ label, icon: Icon, activeColor, activeBg, ts, fallback }) => (
+                                                <div key={label} className="flex items-center gap-2.5 py-1">
+                                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${ts ? activeBg : 'bg-gray-50'}`}>
+                                                        <Icon className={`w-3.5 h-3.5 ${ts ? activeColor : 'text-gray-300'}`} />
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <p className="text-xs font-semibold text-secondary">{label}</p>
+                                                        <p className="text-[10px] text-gray-400">{ts ? new Date(ts).toLocaleString() : fallback}</p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </Card>
+
+                                        {/* PIN Verification Audit */}
+                                        <Card title="PIN Verification Audit" icon={<Lock className="w-3 h-3 text-primary" />}>
+                                            <div className="grid grid-cols-2 gap-2 mb-2">
+                                                {[
+                                                    { label: 'Arrival PIN', pin: getStartPin(bk), verified: !!bk.serviceStartedAt, ts: bk.serviceStartedAt },
+                                                    { label: 'Completion PIN', pin: getCompletionPin(bk), verified: !!bk.serviceCompletedAt, ts: bk.serviceCompletedAt },
+                                                ].map(({ label, pin, verified, ts }) => (
+                                                    <div key={label} className="bg-white border border-gray-200 rounded-lg p-2.5">
+                                                        <div className="flex justify-between items-center mb-1">
+                                                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{label}</span>
+                                                            <PinBadge verified={verified} />
+                                                        </div>
+                                                        <p className="text-lg font-black text-secondary tracking-widest font-mono">{pin}</p>
+                                                        {ts && <p className="text-[9px] text-gray-400 mt-1">{new Date(ts).toLocaleString()}</p>}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            {(bk.startVerificationLocation || bk.completionVerificationLocation) && (
+                                                <div className="border-t border-gray-100 pt-2">
+                                                    {bk.startVerificationLocation && (
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-[10px] text-gray-400">Start Location</span>
+                                                            <a href={`https://www.google.com/maps?q=${bk.startVerificationLocation.latitude},${bk.startVerificationLocation.longitude}`} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5">
+                                                                <MapPin className="w-3 h-3" /> View Map
                                                             </a>
-                                                        ))
-                                                    ) : (
-                                                        <div className="col-span-2 py-4 flex flex-col items-center justify-center border border-dashed border-gray-200 rounded-lg">
-                                                            <p className="text-[10px] text-gray-400 italic">No Before Photos</p>
                                                         </div>
                                                     )}
                                                 </div>
-                                                {selectedBooking?.booking?.serviceStartedAt && (
-                                                    <p className="text-[9px] text-gray-500 mt-2 flex items-center gap-1 font-medium">
-                                                        <Clock className="w-2.5 h-2.5" /> {new Date(selectedBooking.booking.serviceStartedAt).toLocaleString()}
-                                                    </p>
-                                                )}
-                                            </div>
-
-                                            {/* After Work Column */}
-                                            <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
-                                                <div className="flex justify-between items-center mb-3">
-                                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">After Service</p>
-                                                    {selectedBooking?.booking?.providerWorkProof?.completionLocation && (
-                                                        <a
-                                                            href={`https://www.google.com/maps?q=${selectedBooking.booking.providerWorkProof.completionLocation.latitude},${selectedBooking.booking.providerWorkProof.completionLocation.longitude}`}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="text-[10px] font-bold text-emerald-600 flex items-center gap-1 hover:underline bg-emerald-50 px-2 py-0.5 rounded-full"
-                                                        >
-                                                            <MapPin className="w-3 h-3" /> Map
-                                                        </a>
-                                                    )}
+                                            )}
+                                            {bk && ['accepted', 'in-progress', 'in_progress', 'scheduled', 'arriving', 'assigned'].includes(bk.status) && (
+                                                <div className="mt-2 pt-2 border-t border-gray-100">
+                                                    <AdminLiveTrackingMap
+                                                        bookingId={bk._id}
+                                                        address={bk.address}
+                                                        status={bk.status}
+                                                        provider={prov}
+                                                        booking={bk}
+                                                    />
                                                 </div>
-                                                <div className="grid grid-cols-2 gap-2">
-                                                    {selectedBooking?.booking?.providerWorkProof?.afterImages?.length > 0 ? (
-                                                        selectedBooking.booking.providerWorkProof.afterImages.map((img, idx) => (
-                                                            <a key={idx} href={img.url} target="_blank" rel="noopener noreferrer" className="relative aspect-square rounded-lg overflow-hidden border border-gray-100 hover:border-emerald-500 transition-all group">
-                                                                <img src={img.url} alt={`After ${idx}`} className="w-full h-full object-cover" />
-                                                                <div className="absolute inset-0 bg-emerald-500/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                                    <CheckSquare className="w-4 h-4 text-white" />
-                                                                </div>
-                                                            </a>
-                                                        ))
-                                                    ) : (
-                                                        <div className="col-span-2 py-4 flex flex-col items-center justify-center border border-dashed border-gray-200 rounded-lg">
-                                                            <p className="text-[10px] text-gray-400 italic">No Completion Photos</p>
+                                            )}
+                                        </Card>
+                                    </div>
+
+                                    {/* ════ RIGHT COLUMN ════ */}
+                                    <div className="space-y-3">
+
+                                        {/* Service Evidence */}
+                                        <Card title="Service Evidence (Before vs After)" icon={<Activity className="w-3 h-3 text-primary" />}>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                {[
+                                                    { label: 'Before', images: bk.providerWorkProof?.beforeImages, loc: bk.providerWorkProof?.startLocation, ts: bk.serviceStartedAt, color: 'primary', hoverBorder: 'hover:border-primary', overlay: 'bg-black/40', overlayIcon: Eye },
+                                                    { label: 'After', images: bk.providerWorkProof?.afterImages, loc: bk.providerWorkProof?.completionLocation, ts: bk.serviceCompletedAt, color: 'emerald', hoverBorder: 'hover:border-emerald-500', overlay: 'bg-emerald-500/40', overlayIcon: CheckSquare },
+                                                ].map(({ label, images, loc, ts, color, hoverBorder, overlay, overlayIcon: OverlayIcon }) => (
+                                                    <div key={label} className="bg-white border border-gray-200 rounded-lg p-2">
+                                                        <div className="flex justify-between items-center mb-1.5">
+                                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{label}</p>
+                                                            {loc && (
+                                                                <a href={`https://www.google.com/maps?q=${loc.latitude},${loc.longitude}`} target="_blank" rel="noopener noreferrer"
+                                                                    className={`text-[9px] font-bold text-${color === 'primary' ? 'primary' : 'emerald-600'} flex items-center gap-0.5 bg-${color === 'primary' ? 'primary/5' : 'emerald-50'} px-1.5 py-0.5 rounded-full hover:underline`}>
+                                                                    <MapPin className="w-2.5 h-2.5" />Map
+                                                                </a>
+                                                            )}
                                                         </div>
-                                                    )}
-                                                </div>
-                                                {selectedBooking?.booking?.serviceCompletedAt && (
-                                                    <p className="text-[9px] text-emerald-600 font-bold mt-2 flex items-center gap-1">
-                                                        <CheckSquare className="w-2.5 h-2.5" /> {new Date(selectedBooking.booking.serviceCompletedAt).toLocaleString()}
-                                                    </p>
-                                                )}
+                                                        <div className="grid grid-cols-2 gap-1">
+                                                            {images?.length > 0 ? images.map((img, idx) => (
+                                                                <a key={idx} href={img.url} target="_blank" rel="noopener noreferrer"
+                                                                    className={`relative aspect-square rounded overflow-hidden border border-gray-100 ${hoverBorder} transition-all group`}>
+                                                                    <img src={img.url} alt={`${label} ${idx}`} className="w-full h-full object-cover" />
+                                                                    <div className={`absolute inset-0 ${overlay} opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center`}>
+                                                                        <OverlayIcon className="w-3 h-3 text-white" />
+                                                                    </div>
+                                                                </a>
+                                                            )) : (
+                                                                <div className="col-span-2 py-3 flex items-center justify-center border border-dashed border-gray-200 rounded">
+                                                                    <p className="text-[9px] text-gray-400 italic">No photos</p>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        {ts && <p className={`text-[9px] mt-1 flex items-center gap-0.5 font-medium ${color === 'primary' ? 'text-gray-400' : 'text-emerald-600'}`}><Clock className="w-2 h-2" />{new Date(ts).toLocaleString()}</p>}
+                                                    </div>
+                                                ))}
                                             </div>
 
-                                            {/* Complaint Proofs */}
-                                            <div className="bg-white p-3 rounded-lg border border-gray-200">
-                                                <p className="text-[10px] font-bold text-gray-400 uppercase mb-3 border-b border-gray-100 pb-1">Complaint & Dispute Logs</p>
-                                                {selectedBooking?.booking?.complaintProofs?.length > 0 ? (
-                                                    <div className="space-y-4">
-                                                        {selectedBooking.booking.complaintProofs.map((proof, pIdx) => (
-                                                            <div key={pIdx} className="bg-gray-50/50 p-2 rounded border border-gray-100">
-                                                                <div className="flex justify-between items-center mb-2">
-                                                                    <span className={`text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded ${proof.uploadedBy === 'customer'
-                                                                        ? 'bg-blue-100 text-blue-700'
-                                                                        : 'bg-primary/10 text-primary'
-                                                                        }`}>
+                                            {/* Complaint Logs */}
+                                            {bk.complaintProofs?.length > 0 && (
+                                                <div className="mt-2 border-t border-gray-100 pt-2">
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Complaint & Dispute Logs</p>
+                                                    <div className="space-y-2">
+                                                        {bk.complaintProofs.map((proof, pIdx) => (
+                                                            <div key={pIdx} className="bg-gray-50 p-2 rounded border border-gray-100">
+                                                                <div className="flex justify-between items-center mb-1">
+                                                                    <span className={`text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded ${proof.uploadedBy === 'customer' ? 'bg-blue-100 text-blue-700' : 'bg-primary/10 text-primary'}`}>
                                                                         {proof.uploadedBy}
                                                                     </span>
-                                                                    <span className="text-[10px] text-gray-400 font-mono">
-                                                                        {proof.createdAt ? new Date(proof.createdAt).toLocaleString() : 'Date N/A'}
-                                                                    </span>
+                                                                    <span className="text-[9px] text-gray-400 font-mono">{proof.createdAt ? new Date(proof.createdAt).toLocaleDateString() : '—'}</span>
                                                                 </div>
-                                                                <p className="text-xs text-gray-700 font-medium leading-relaxed mb-2 px-1">{proof.message}</p>
-                                                                <div className="flex flex-wrap gap-2 px-1">
-                                                                    {proof.images?.map((img, iIdx) => (
-                                                                        <a key={iIdx} href={img.url} target="_blank" rel="noopener noreferrer" className="w-14 h-14 rounded overflow-hidden border border-gray-200 hover:shadow-md transition-shadow block">
-                                                                            <img src={img.url} alt={`Proof ${iIdx}`} className="w-full h-full object-cover" />
-                                                                        </a>
-                                                                    ))}
-                                                                </div>
+                                                                <p className="text-[10px] text-gray-700 leading-snug mb-1">{proof.message}</p>
+                                                                {proof.images?.length > 0 && (
+                                                                    <div className="flex flex-wrap gap-1">
+                                                                        {proof.images.map((img, iIdx) => (
+                                                                            <a key={iIdx} href={img.url} target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded overflow-hidden border border-gray-200 block">
+                                                                                <img src={img.url} alt={`Proof ${iIdx}`} className="w-full h-full object-cover" />
+                                                                            </a>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         ))}
                                                     </div>
-                                                ) : (
-                                                    <div className="py-4 flex flex-col items-center justify-center">
-                                                        <AlertCircle className="w-5 h-5 text-gray-300 mb-1" />
-                                                        <p className="text-[10px] text-gray-400 italic">No complaint or dispute data recorded</p>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Secure PIN Verification & Geolocation Live Tracking Audit */}
-                                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 shadow-sm space-y-4">
-                                        <h3 className="font-bold text-secondary flex items-center text-sm uppercase tracking-wide border-b border-gray-200 pb-2">
-                                            <Lock className="w-4 h-4 mr-2 text-primary" />
-                                            Secure PIN Verification Audit
-                                        </h3>
-
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                            {/* Start PIN Details */}
-                                            <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
-                                                <div className="flex justify-between items-center mb-1">
-                                                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Arrival PIN</span>
-                                                    {selectedBooking.booking?.serviceStartedAt ? (
-                                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-green-100 text-green-800 border border-green-200">
-                                                            Verified
-                                                        </span>
-                                                    ) : (
-                                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                                                            Pending
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <p className="text-xl font-black text-secondary tracking-widest font-mono">
-                                                    {getStartPin(selectedBooking.booking)}
-                                                </p>
-                                                {selectedBooking.booking?.serviceStartedAt && (
-                                                    <p className="text-[9px] text-gray-500 mt-2 font-medium">
-                                                        Verified: {new Date(selectedBooking.booking.serviceStartedAt).toLocaleString()}
-                                                    </p>
-                                                )}
-                                            </div>
-
-                                            {/* Completion PIN Details */}
-                                            <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
-                                                <div className="flex justify-between items-center mb-1">
-                                                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Completion PIN</span>
-                                                    {selectedBooking.booking?.serviceCompletedAt ? (
-                                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-green-100 text-green-800 border border-green-200">
-                                                            Verified
-                                                        </span>
-                                                    ) : (
-                                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                                                            Pending
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <p className="text-xl font-black text-secondary tracking-widest font-mono">
-                                                    {getCompletionPin(selectedBooking.booking)}
-                                                </p>
-                                                {selectedBooking.booking?.serviceCompletedAt && (
-                                                    <p className="text-[9px] text-gray-500 mt-2 font-medium">
-                                                        Verified: {new Date(selectedBooking.booking.serviceCompletedAt).toLocaleString()}
-                                                    </p>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {/* Geolocation verification logs */}
-                                        {(selectedBooking.booking?.startVerificationLocation || selectedBooking.booking?.completionVerificationLocation) && (
-                                            <div className="border-t border-gray-100 pt-3 space-y-2 text-xs">
-                                                <p className="font-bold text-gray-500 uppercase tracking-wider text-[10px]">Verification Locations</p>
-                                                {selectedBooking.booking.startVerificationLocation && (
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="text-gray-400">Start Location:</span>
-                                                        <a
-                                                            href={`https://www.google.com/maps?q=${selectedBooking.booking.startVerificationLocation.latitude},${selectedBooking.booking.startVerificationLocation.longitude}`}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="text-primary font-medium hover:underline flex items-center gap-1"
-                                                        >
-                                                            <MapPin className="w-3.5 h-3.5" /> View Map Location
-                                                        </a>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-
-                                        {/* Live Google Map Tracking when booking is active */}
-                                        {selectedBooking.booking && ['accepted', 'in-progress', 'in_progress', 'scheduled', 'arriving', 'assigned'].includes(selectedBooking.booking.status) && (
-                                            <div className="mt-4 pt-2">
-                                                <AdminLiveTrackingMap
-                                                    bookingId={selectedBooking.booking._id}
-                                                    address={selectedBooking.booking.address}
-                                                    status={selectedBooking.booking.status}
-                                                    provider={selectedBooking.provider}
-                                                    booking={selectedBooking.booking}
-                                                />
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Address Information */}
-                                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
-                                        <h3 className="font-semibold text-secondary mb-3">Service Address</h3>
-                                        <div className="space-y-1">
-                                            <p className="font-medium">{selectedBooking.booking.address?.street}</p>
-                                            <p className="text-sm text-gray-600">
-                                                {selectedBooking.booking.address?.city}, {selectedBooking.booking.address?.postalCode}
-                                            </p>
-                                            <p className="text-sm text-gray-600">
-                                                {selectedBooking.booking.address?.state}, {selectedBooking.booking.address?.country}
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    {/* Payment Information */}
-                                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
-                                        <h3 className="font-semibold text-secondary mb-3">Payment & Financial Details</h3>
-                                        <div className="space-y-2">
-                                            {selectedBooking.services?.map((item, index) => (
-                                                <div key={index} className="flex justify-between">
-                                                    <span className="text-sm text-gray-600">{item.service?.title} (Qty: {item.quantity})</span>
-                                                    <span className="text-sm font-medium">{formatCurrency(item.price * item.quantity)}</span>
-                                                </div>
-                                            ))}
-                                            <div className="border-t border-gray-200 my-2"></div>
-
-                                            {/* Financial Splits */}
-                                            <div className="flex justify-between">
-                                                <span className="text-sm text-gray-600">Subtotal</span>
-                                                <span className="text-sm font-medium">{formatCurrency(selectedBooking.payment.subtotal)}</span>
-                                            </div>
-                                            {selectedBooking.payment.couponApplied && (
-                                                <div className="flex justify-between">
-                                                    <span className="text-sm text-gray-600">Discount ({selectedBooking.payment.couponApplied.code})</span>
-                                                    <span className="text-sm font-medium text-red-500">- {formatCurrency(selectedBooking.payment.totalDiscount)}</span>
                                                 </div>
                                             )}
-                                            {selectedBooking.booking?.visitingCharge > 0 && (
-                                                <div className="flex justify-between">
-                                                    <span className="text-sm text-gray-600">Visiting Charge</span>
-                                                    <span className="text-sm font-medium text-orange-600">+ {formatCurrency(selectedBooking.booking.visitingCharge)}</span>
-                                                </div>
-                                            )}
+                                        </Card>
 
-                                            <div className="border-t border-gray-200 my-2 pt-2">
-                                                {selectedBooking.payment.walletAmountUsed > 0 && (
-                                                    <div className="flex justify-between mb-1">
-                                                        <span className="text-xs text-gray-500 italic">Paid via Wallet</span>
-                                                        <span className="text-xs font-bold text-purple-600">-{formatCurrency(selectedBooking.payment.walletAmountUsed)}</span>
+                                        {/* Payment & Financial */}
+                                        <Card title="Payment & Financials" icon={<CreditCard className="w-3 h-3 text-primary" />}>
+                                            <div className="space-y-0.5 mb-2">
+                                                {selectedBooking.services?.map((item, i) => (
+                                                    <div key={i} className="flex justify-between text-[10px]">
+                                                        <span className="text-gray-500 truncate max-w-[60%]">{item.service?.title} (×{item.quantity})</span>
+                                                        <span className="font-medium text-secondary">{formatCurrency(item.price * (item.quantity || 1))}</span>
                                                     </div>
-                                                )}
-                                                {selectedBooking.payment.onlineAmountPaid > 0 && (
-                                                    <div className="flex justify-between mb-1">
-                                                        <span className="text-xs text-gray-500 italic">Paid Online</span>
-                                                        <span className="text-xs font-bold text-blue-600">-{formatCurrency(selectedBooking.payment.onlineAmountPaid)}</span>
-                                                    </div>
-                                                )}
-                                                <div className="flex justify-between items-center">
-                                                    <span className="text-sm font-bold text-secondary">Total Booking Value</span>
-                                                    <span className="font-bold text-primary text-lg">{formatCurrency(selectedBooking.payment.totalAmount)}</span>
-                                                </div>
+                                                ))}
                                             </div>
-
-                                            {/* Commission Breakdown for Admin */}
-                                            <div className="mt-3 pt-3 border-t border-dashed border-gray-200 bg-white/50 p-2 rounded-lg">
-                                                <div className="flex justify-between items-center text-xs">
-                                                    <span className="text-gray-500 font-medium">Platform Commission:</span>
-                                                    <span className="font-bold text-red-500">-{formatCurrency(selectedBooking.commission?.amount || selectedBooking.booking?.commissionAmount || 0)}</span>
-                                                </div>
-                                                <div className="flex justify-between items-center text-sm mt-1">
-                                                    <span className="text-gray-600 font-bold">Provider Net Earning:</span>
-                                                    <span className="font-black text-green-600">
-                                                        {formatCurrency(selectedBooking.booking?.providerEarnings || (selectedBooking.payment.totalAmount - (selectedBooking.commission?.amount || 0)))}
-                                                    </span>
-                                                </div>
+                                            <div className="border-t border-gray-100 pt-1.5 space-y-0.5">
+                                                <InfoRow label="Subtotal">{formatCurrency(pay.subtotal)}</InfoRow>
+                                                {pay.couponApplied && <InfoRow label={`Discount (${pay.couponApplied.code})`}><span className="text-red-500">-{formatCurrency(pay.totalDiscount)}</span></InfoRow>}
+                                                {bk.visitingCharge > 0 && <InfoRow label="Visiting Charge"><span className="text-orange-500">+{formatCurrency(bk.visitingCharge)}</span></InfoRow>}
+                                                {pay.walletAmountUsed > 0 && <InfoRow label="Wallet Paid"><span className="text-purple-600">-{formatCurrency(pay.walletAmountUsed)}</span></InfoRow>}
+                                                {pay.onlineAmountPaid > 0 && <InfoRow label="Online Paid"><span className="text-blue-600">-{formatCurrency(pay.onlineAmountPaid)}</span></InfoRow>}
                                             </div>
-
-                                            {/* Financial Statuses */}
-                                            <div className="pt-2 space-y-1.5 border-t border-gray-100 mt-2">
+                                            <div className="flex justify-between items-center border-t border-gray-200 mt-2 pt-2">
+                                                <span className="text-xs font-bold text-secondary">Total</span>
+                                                <span className="text-base font-black text-primary">{formatCurrency(pay.totalAmount)}</span>
+                                            </div>
+                                            <div className="bg-white/70 rounded-md p-2 mt-2 border border-dashed border-gray-200 space-y-0.5">
+                                                <InfoRow label="Platform Comm."><span className="text-red-500">-{formatCurrency(selectedBooking.commission?.amount || bk.commissionAmount || 0)}</span></InfoRow>
+                                                <InfoRow label="Provider Earns"><span className="text-green-600 font-black">{formatCurrency(bk.providerEarnings || (pay.totalAmount - (selectedBooking.commission?.amount || 0)))}</span></InfoRow>
+                                            </div>
+                                            <div className="border-t border-gray-100 mt-2 pt-2 space-y-1">
                                                 <div className="flex justify-between items-center">
-                                                    <span className="text-xs text-gray-600">Payment Status:</span>
-                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${selectedBooking.payment?.status === 'paid' ? 'bg-green-100 text-green-700' :
-                                                        selectedBooking.payment?.status === 'refunded' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
-                                                        }`}>
-                                                        {selectedBooking.payment?.status || 'N/A'}
+                                                    <span className="text-[10px] text-gray-500">Payment Status</span>
+                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${['paid', 'escrow_hold'].includes(pay.status) ? 'bg-green-100 text-green-700' : pay.status === 'refunded' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                        {pay.status === 'escrow_hold' ? 'Escrow Hold' : (pay.status || '—')}
                                                     </span>
                                                 </div>
                                                 {selectedBooking.refundData?.decision && (
                                                     <div className="flex justify-between items-center">
-                                                        <span className="text-xs text-gray-600">Admin Refund:</span>
-                                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${selectedBooking.refundData.decision === 'approved' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                                                            }`}>
+                                                        <span className="text-[10px] text-gray-500">Admin Refund</span>
+                                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${selectedBooking.refundData.decision === 'approved' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                                                             {selectedBooking.refundData.decision}
                                                         </span>
                                                     </div>
                                                 )}
                                                 <div className="flex justify-between items-center">
-                                                    <span className="text-xs text-gray-600">Payout Status:</span>
+                                                    <span className="text-[10px] text-gray-500">Payout Status</span>
                                                     <PayoutStatusBadge status={selectedBooking.payoutStatus} />
                                                 </div>
                                                 {selectedBooking.earningHoldStatus === 'held' && selectedBooking.payoutHoldUntil && (
-                                                    <p className="text-[9px] text-red-400 text-right italic">Hold expires {new Date(selectedBooking.payoutHoldUntil).toLocaleString()}</p>
+                                                    <p className="text-[9px] text-red-400 text-right italic">Hold until {new Date(selectedBooking.payoutHoldUntil).toLocaleDateString()}</p>
                                                 )}
-                                            </div>
-
-                                            {selectedBooking.payment.details?.transactionId ? (
-                                                <div className="flex justify-between items-center group pt-2">
-                                                    <span className="text-sm text-gray-600">Transaction ID:</span>
-                                                    <button
-                                                        onClick={() => navigateToTransaction(selectedBooking.booking.bookingId || selectedBooking.booking._id)}
-                                                        className="text-sm font-bold text-primary hover:underline flex items-center gap-1"
-                                                    >
-                                                        {selectedBooking.payment.details.transactionId}
-                                                        <ExternalLink className="w-3 h-3" />
-                                                    </button>
-                                                </div>
-                                            ) : (
-                                                selectedBooking.booking.paymentStatus === 'paid' && (
-                                                    <div className="flex justify-between items-center pt-2">
-                                                        <span className="text-sm text-gray-600">Transaction:</span>
-                                                        <button
-                                                            onClick={() => navigateToTransaction(selectedBooking.booking.bookingId || selectedBooking.booking._id)}
-                                                            className="text-sm font-bold text-primary hover:underline flex items-center gap-1"
-                                                        >
-                                                            View Transaction <ExternalLink className="w-3 h-3" />
+                                                {pay.details?.transactionId ? (
+                                                    <div className="flex justify-between items-center pt-0.5">
+                                                        <span className="text-[10px] text-gray-500">Transaction</span>
+                                                        <button onClick={() => navigateToTransaction(bk.bookingId || bk._id)} className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5">
+                                                            {pay.details.transactionId} <ExternalLink className="w-2.5 h-2.5" />
                                                         </button>
                                                     </div>
-                                                )
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Service Information */}
-                                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
-                                        <h3 className="font-semibold text-secondary mb-3">Service Information</h3>
-                                        {selectedBooking.services?.map((serviceItem, index) => (
-                                            <div key={index} className="mb-3 last:mb-0">
-                                                <div className="font-medium">{serviceItem.service?.title || 'N/A'}</div>
-                                                <div className="text-sm text-gray-600">
-                                                    Category: {serviceItem.service?.category?.name || 'N/A'}
-                                                </div>
-                                                <div className="text-sm text-gray-600">
-                                                    Quantity: {serviceItem.quantity || 1}
-                                                </div>
-                                                <div className="text-sm text-gray-600">
-                                                    Price: {formatCurrency(serviceItem.price)}
-                                                </div>
+                                                ) : ['paid', 'escrow_hold'].includes(bk.paymentStatus) && (
+                                                    <div className="flex justify-end pt-0.5">
+                                                        <button onClick={() => navigateToTransaction(bk.bookingId || bk._id)} className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5">
+                                                            View Transaction <ExternalLink className="w-2.5 h-2.5" />
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </div>
-                                        ))}
-                                    </div>
-
-                                    {/* Booking Status Flow */}
-                                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
-                                        <h3 className="font-semibold text-secondary mb-3">Booking Status Flow</h3>
-                                        <ul className="space-y-4">
-                                            <li className="flex items-start">
-                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${selectedBooking.booking.statusHistory?.find(h => h.status === 'accepted') ? 'bg-green-50' : 'bg-gray-50'}`}>
-                                                    <CheckCircle className={`w-5 h-5 ${selectedBooking.booking.statusHistory?.find(h => h.status === 'accepted') ? 'text-green-600' : 'text-gray-400'}`} />
-                                                </div>
-                                                <div className="ml-4">
-                                                    <p className="font-medium">Booking Accepted</p>
-                                                    <p className="text-sm text-gray-500">
-                                                        {selectedBooking.booking.statusHistory?.find(h => h.status === 'accepted') ? new Date(selectedBooking.booking.statusHistory.find(h => h.status === 'accepted').timestamp).toLocaleString() : 'Pending'}
-                                                    </p>
-                                                </div>
-                                            </li>
-                                            <li className="flex items-start">
-                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${selectedBooking.booking.serviceStartedAt ? 'bg-blue-50' : 'bg-gray-50'}`}>
-                                                    <Activity className={`w-5 h-5 ${selectedBooking.booking.serviceStartedAt ? 'text-blue-600' : 'text-gray-400'}`} />
-                                                </div>
-                                                <div className="ml-4">
-                                                    <p className="font-medium">Service Started</p>
-                                                    <p className="text-sm text-gray-500">
-                                                        {selectedBooking.booking.serviceStartedAt ? new Date(selectedBooking.booking.serviceStartedAt).toLocaleString() : 'Not started yet'}
-                                                    </p>
-                                                </div>
-                                            </li>
-                                            <li className="flex items-start">
-                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${selectedBooking.booking.serviceCompletedAt ? 'bg-indigo-50' : 'bg-gray-50'}`}>
-                                                    <Award className={`w-5 h-5 ${selectedBooking.booking.serviceCompletedAt ? 'text-indigo-600' : 'text-gray-400'}`} />
-                                                </div>
-                                                <div className="ml-4">
-                                                    <p className="font-medium">Service Completed</p>
-                                                    <p className="text-sm text-gray-500">
-                                                        {selectedBooking.booking.serviceCompletedAt ? new Date(selectedBooking.booking.serviceCompletedAt).toLocaleString() : 'Not completed yet'}
-                                                    </p>
-                                                </div>
-                                            </li>
-                                        </ul>
-                                    </div>
-
-
-
-                                    {/* Action Buttons */}
-                                    <div className="flex space-x-3">
-                                        <button
-                                            onClick={() => setShowModal(false)}
-                                            className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-                                        >
-                                            Close
-                                        </button>
+                                        </Card>
                                     </div>
                                 </div>
                             </div>
+
+                            {/* Modal Footer */}
+                            <div className="px-5 py-3 border-t border-gray-100 shrink-0">
+                                <button
+                                    onClick={() => setShowModal(false)}
+                                    className="px-5 py-1.5 bg-gray-100 text-secondary text-sm font-semibold rounded-lg hover:bg-gray-200 transition-colors"
+                                >
+                                    Close
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
 
             {/* Reschedule Booking Modal */}
             {showRescheduleModal && selectedBooking && (

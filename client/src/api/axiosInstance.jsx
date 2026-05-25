@@ -24,7 +24,7 @@ const getRequestKey = (config) => {
 };
 
 const api = axios.create({
-    baseURL: import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api',
+    baseURL: import.meta.env.VITE_BACKEND_URL || (window.location.origin + "/api"),
 });
 
 // Add a request interceptor to include the auth token and prevent duplicates
@@ -146,7 +146,7 @@ api.interceptors.response.use(
 
             try {
                 // Use standard axios to avoid interceptor loop
-                const { data } = await axios.post(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api'}/auth/refresh-token`, { refreshToken });
+                const { data } = await axios.post(`${import.meta.env.VITE_BACKEND_URL || (window.location.origin + "/api")}/auth/refresh-token`, { refreshToken });
                 if (data.success && data.token) {
                     localStorage.setItem("token", data.token);
                     if (data.refreshToken) localStorage.setItem("refreshToken", data.refreshToken);
