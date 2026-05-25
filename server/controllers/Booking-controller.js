@@ -1608,7 +1608,7 @@ const getBooking = async (req, res) => {
     const booking = await Booking.findById(id)
       .populate('services.service', 'title description basePrice category images duration')
       .populate('customer', 'name email phone')
-      .populate('provider', 'name email phone businessName contactPerson rating address currentLocation isOnline')
+      .populate('provider', 'name email phone businessName contactPerson rating address currentLocation isOnline profilePicUrl performanceScore completedBookings')
       .populate('feedback')
       .lean();
 

@@ -33,7 +33,8 @@ const ProviderLayout = () => {
     const [activeBookingId, setActiveBookingId] = useState(null);
     const locationRequestedRef = React.useRef(false);
 
-    // Auto-detect and update provider location on app open
+    // Auto-detect and update provider location on app open - DISABLED: Overwrites permanent registered address in profile automatically.
+    /*
     useEffect(() => {
         if (!token || !user || locationRequestedRef.current) return;
         locationRequestedRef.current = true;
@@ -61,6 +62,7 @@ const ProviderLayout = () => {
                 console.warn('Provider geolocation sync skipped:', err.message);
             });
     }, [token, user]);
+    */
 
     // Fetch active bookings to see if we need tracking
     useEffect(() => {

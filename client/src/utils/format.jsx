@@ -861,7 +861,16 @@ export const detectCurrentLocation = (options = {}) => {
               console.warn(`Best position accuracy is ${bestPos.coords.accuracy}m (target <= ${targetAccuracy}m). Resolving anyway.`);
               resolvePosition(bestPos);
             } else {
-              reject(new Error("Location request timed out. Please retry."));
+              console.log("GPS High Accuracy timed out, trying fast low-accuracy fallback...");
+              navigator.geolocation.getCurrentPosition(
+                (fallbackPos) => {
+                  resolvePosition(fallbackPos);
+                },
+                (fallbackErr) => {
+                  reject(new Error("Location request timed out. Please select your address manually."));
+                },
+                { enableHighAccuracy: false, timeout: 5000 }
+              );
             }
           }
         }
@@ -917,13 +926,24 @@ export const detectCurrentLocation = (options = {}) => {
             console.warn(`GPS error: ${err.message}. Retrying...`);
             resolve(executeDetection());
           } else {
-            const msg =
-              err.code === 1
-                ? "Location permission denied. Enable GPS in browser settings."
-                : err.code === 2
-                  ? "Location unavailable. Try again outdoors."
-                  : "Location request timed out. Please retry.";
-            reject(new Error(msg));
+            if (err.code === 2 || err.code === 3) {
+              console.log(`GPS high accuracy error ${err.code}, trying fast low-accuracy fallback...`);
+              navigator.geolocation.getCurrentPosition(
+                (fallbackPos) => {
+                  resolvePosition(fallbackPos);
+                },
+                (fallbackErr) => {
+                  reject(new Error("Location unavailable. Please select your address manually."));
+                },
+                { enableHighAccuracy: false, timeout: 5000 }
+              );
+            } else {
+              const msg =
+                err.code === 1
+                  ? "Location permission denied. Enable GPS in browser settings."
+                  : "Location unavailable. Please select your address manually.";
+              reject(new Error(msg));
+            }
           }
         },
         {

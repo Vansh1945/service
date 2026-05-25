@@ -261,7 +261,7 @@ const initSocket = (httpServer) => {
                 
                 // Fetch current booking state
                 const booking = await Booking.findById(bookingId)
-                    .populate('provider', 'name phone profilePicUrl currentLocation isOnline')
+                    .populate('provider', 'name email phone rating address currentLocation isOnline profilePicUrl performanceScore completedBookings')
                     .lean();
                 
                 if (booking) {
@@ -351,14 +351,16 @@ const initSocket = (httpServer) => {
                 let targetLat = target?.lat ?? null;
                 let targetLng = target?.lng ?? null;
 
-                let distanceText = payload.liveDistance || '';
-                let durationText = payload.liveDuration || '';
-                let routeCoords = [
-                    { lat: emitLat, lng: emitLng },
-                    ...(targetLat != null && targetLng != null
-                        ? [{ lat: targetLat, lng: targetLng }]
-                        : [])
-                ];
+                let distanceText = payload.liveDistance || booking.liveDistance || '';
+                let durationText = payload.liveDuration || booking.liveDuration || '';
+                let routeCoords = (booking.routeCoordinates && booking.routeCoordinates.length > 1)
+                    ? booking.routeCoordinates
+                    : [
+                        { lat: emitLat, lng: emitLng },
+                        ...(targetLat != null && targetLng != null
+                            ? [{ lat: targetLat, lng: targetLng }]
+                            : [])
+                    ];
 
                 if (targetLat != null && targetLng != null) {
                     const d = calculateDistance(emitLat, emitLng, targetLat, targetLng);

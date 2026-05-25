@@ -25,6 +25,8 @@ const CustomerLayout = () => {
     const { user, logoutUser, API, token, refreshUser } = useAuth();
     const locationRequestedRef = React.useRef(false);
 
+    // Auto-detect and update customer location on app open - DISABLED: Overwrites permanent registered address in profile automatically.
+    /*
     useEffect(() => {
         if (!token || !user || locationRequestedRef.current) return;
         locationRequestedRef.current = true;
@@ -49,6 +51,7 @@ const CustomerLayout = () => {
                 console.warn('Customer geolocation sync skipped:', err.message);
             });
     }, [token, user, refreshUser]);
+    */
 
     useEffect(() => {
         const fetchSystemSettings = async () => {

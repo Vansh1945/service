@@ -6,7 +6,6 @@ import 'leaflet/dist/leaflet.css';
 import { LIGHT_MAP_TILES, LIGHT_MAP_ATTRIBUTION, calculateBearing } from '../utils/format';
 import { latLngToS2CellId, s2CellIdToCorners } from '../utils/s2Helper';
 
-
 // Fix for default Leaflet marker assets in Vite using a custom divIcon
 let DefaultIcon = L.divIcon({
   html: `<div style="background-color: #3B82F6; width: 24px; height: 24px; border-radius: 50% 50% 50% 0; border: 3px solid white; transform: rotate(-45deg); box-shadow: 0 0 5px rgba(0,0,0,0.5);"></div>`,
@@ -44,7 +43,7 @@ const SmoothMarker = ({ position, children }) => {
 
   useEffect(() => {
     if (!position || !position[0] || !position[1]) return;
-    
+
     const startLat = currentPos[0];
     const startLng = currentPos[1];
     const endLat = position[0];
@@ -71,7 +70,7 @@ const SmoothMarker = ({ position, children }) => {
     const animate = (time) => {
       const elapsed = time - startTime;
       const progress = Math.min(elapsed / duration, 1);
-      
+
       // Easing curve (easeOutQuad)
       const t = progress * (2 - progress);
 
@@ -123,8 +122,20 @@ const MapBoundsHelper = ({ providerLoc, targetLat, targetLng }) => {
 };
 
 const LiveTrackingMapUI = ({ targetLat, targetLng, providerLoc, routeCoords = [], loadingRoute = false }) => {
+  const [mapStyle, setMapStyle] = useState('satellite');
   const centerLat = targetLat || 31.3260;
   const centerLng = targetLng || 75.5761;
+
+  const mapLayers = {
+    satellite: {
+      url: "https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
+      attribution: '&copy; Google Maps'
+    },
+    terrain: {
+      url: "https://mt1.google.com/vt/lyrs=p&x={x}&y={y}&z={z}",
+      attribution: '&copy; Google Maps'
+    }
+  };
 
   // Custom styling block for the premium live map animations
   const customStyles = `
@@ -159,10 +170,6 @@ const LiveTrackingMapUI = ({ targetLat, targetLng, providerLoc, routeCoords = []
 
   const providerPos = providerLoc && providerLoc.lat && providerLoc.lng ? [providerLoc.lat, providerLoc.lng] : null;
 
-  // Real-time S2 Geometry Cell calculations for visual containment geofencing
-  const customerS2CellId = targetLat && targetLng ? latLngToS2CellId(targetLat, targetLng, 20) : null;
-  const providerS2CellId = providerLoc && providerLoc.lat && providerLoc.lng ? latLngToS2CellId(providerLoc.lat, providerLoc.lng, 20) : null;
-
   return (
     <div className="w-full h-[60vh] md:h-full flex-grow relative z-10">
       <style>{customStyles}</style>
@@ -175,42 +182,38 @@ const LiveTrackingMapUI = ({ targetLat, targetLng, providerLoc, routeCoords = []
         </div>
       )}
 
-      {/* Dynamic S2 Location Telemetry overlay card */}
-      <div className="absolute top-4 left-4 z-[1000] bg-slate-900/90 backdrop-blur-md text-white p-3 rounded-xl border border-slate-700 shadow-xl max-w-xs transition-all pointer-events-none">
-        <div className="flex items-center gap-2 mb-2">
-          <div className="h-2 w-2 rounded-full bg-emerald-500 animate-ping"></div>
-          <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-400">S2 Geofence Status</span>
-        </div>
-        <div className="space-y-1.5 text-[11px] font-mono">
-          <div className="flex justify-between gap-4 border-b border-slate-800 pb-1">
-            <span className="text-slate-400 font-sans">Dest L20 Cell:</span>
-            <span className="text-red-400 font-semibold">{customerS2CellId || '—'}</span>
-          </div>
-          {providerLoc && (
-            <>
-              <div className="flex justify-between gap-4 border-b border-slate-800 pb-1">
-                <span className="text-slate-400 font-sans">Provider L20 Cell:</span>
-                <span className="text-emerald-400 font-semibold">{providerS2CellId || '—'}</span>
-              </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-slate-400 font-sans">Geofence Proximity:</span>
-                <span className={customerS2CellId === providerS2CellId ? "text-emerald-400 font-bold" : "text-amber-400 font-bold animate-pulse"}>
-                  {customerS2CellId === providerS2CellId ? "CONTAINED (0m)" : "EN ROUTE"}
-                </span>
-              </div>
-            </>
-          )}
-        </div>
+      {/* Premium Glassmorphic Map Style Switcher */}
+      <div className="absolute top-4 right-4 z-[1000] flex gap-1 bg-white/95 backdrop-blur shadow-lg border border-gray-100 p-1 rounded-2xl pointer-events-auto">
+        {[
+          { id: 'satellite', label: 'Satellite', icon: '🛰️' },
+          { id: 'terrain', label: '3D', icon: '🏔️' }
+        ].map((style) => (
+          <button
+            key={style.id}
+            onClick={() => setMapStyle(style.id)}
+            className={`px-3 py-1.5 rounded-xl text-[10px] font-black tracking-wider uppercase transition-all duration-200 flex items-center gap-1.5 select-none ${mapStyle === style.id
+                ? 'bg-primary text-white shadow-md shadow-primary/20 scale-[1.02]'
+                : 'text-secondary/70 hover:bg-gray-100 hover:text-secondary active:scale-95'
+              }`}
+          >
+            <span>{style.icon}</span>
+            <span>{style.label}</span>
+          </button>
+        ))}
       </div>
 
-      <MapContainer 
-        center={[centerLat, centerLng]} 
-        zoom={14} 
+      <MapContainer
+        center={[centerLat, centerLng]}
+        zoom={14}
         style={{ height: '100%', width: '100%', zIndex: 10 }}
         zoomControl={false}
       >
-        <TileLayer attribution={LIGHT_MAP_ATTRIBUTION} url={LIGHT_MAP_TILES} />
-        
+        <TileLayer
+          key={mapStyle}
+          attribution={mapLayers[mapStyle].attribution}
+          url={mapLayers[mapStyle].url}
+        />
+
         {/* Customer Target Pulse Ring */}
         {targetLat && targetLng && (
           <Circle
@@ -229,7 +232,7 @@ const LiveTrackingMapUI = ({ targetLat, targetLng, providerLoc, routeCoords = []
         {targetLat && targetLng && (
           <Marker position={[targetLat, targetLng]} icon={customerIcon} />
         )}
-        
+
         {/* Provider Pulse Ring */}
         {providerPos && (
           <Circle
@@ -248,24 +251,24 @@ const LiveTrackingMapUI = ({ targetLat, targetLng, providerLoc, routeCoords = []
         {providerPos && (
           <SmoothMarker position={providerPos} />
         )}
-        
+
         {/* Route Polyline path */}
         {routeCoords && routeCoords.length > 0 && (
-          <Polyline 
-            positions={routeCoords} 
-            color="#2563EB" 
-            weight={5} 
-            opacity={0.9} 
-            lineCap="round" 
+          <Polyline
+            positions={routeCoords}
+            color="#2563EB"
+            weight={5}
+            opacity={0.9}
+            lineCap="round"
             lineJoin="round"
             className="custom-route-polyline"
           />
         )}
-        
-        <MapBoundsHelper 
-          providerLoc={providerLoc} 
-          targetLat={targetLat} 
-          targetLng={targetLng} 
+
+        <MapBoundsHelper
+          providerLoc={providerLoc}
+          targetLat={targetLat}
+          targetLng={targetLng}
         />
       </MapContainer>
     </div>

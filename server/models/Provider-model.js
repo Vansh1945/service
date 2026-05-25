@@ -361,10 +361,6 @@ providerSchema.index({ 'performanceScore.rating': -1 });
 providerSchema.index({ location: '2dsphere' });
 providerSchema.index({ currentLocation: '2dsphere' });
 providerSchema.index({ createdAt: -1 });
-providerSchema.index({ s2CellId: 1 });
-providerSchema.index({ s2CellIdPrecise: 1 });
-providerSchema.index({ "address.s2CellId": 1 });
-providerSchema.index({ "address.s2CellIdPrecise": 1 });
 
 providerSchema.pre('save', async function (next) {
     // Populate S2 cell fields on creation or coordinate modifications

@@ -151,10 +151,10 @@ const NavigationModal = ({ isOpen, onClose, booking }) => {
 
   return (
     <div className="fixed inset-0 z-[70] bg-secondary flex flex-col md:flex-row h-screen w-screen overflow-hidden">
-      
+
       {/* Top Header */}
       <div className="absolute top-4 left-4 z-30 flex items-center gap-3">
-        <button 
+        <button
           onClick={onClose}
           className="flex items-center justify-center w-10 h-10 bg-white/95 backdrop-blur shadow-lg border border-gray-100 rounded-full hover:bg-gray-100 transition-colors pointer-events-auto"
         >
@@ -174,9 +174,9 @@ const NavigationModal = ({ isOpen, onClose, booking }) => {
             <p className="text-xs font-bold text-secondary mt-2 animate-pulse">Detecting GPS location...</p>
           </div>
         )}
-        <MapContainer 
-          center={[targetLat || 28.5, targetLng || 77.1]} 
-          zoom={14} 
+        <MapContainer
+          center={[targetLat || 28.5, targetLng || 77.1]}
+          zoom={14}
           style={{ height: '100%', width: '100%', zIndex: 10 }}
           zoomControl={false}
         >
@@ -194,106 +194,12 @@ const NavigationModal = ({ isOpen, onClose, booking }) => {
         </MapContainer>
       </div>
 
-      {/* Split/Bottom Info Card */}
-      <div className="w-full md:w-[420px] md:absolute md:right-6 md:top-6 md:bottom-6 z-20 flex flex-col justify-end p-4 pointer-events-none">
-        <div className="w-full bg-white/95 backdrop-blur-md border border-gray-100 shadow-2xl rounded-3xl p-5 pointer-events-auto flex flex-col space-y-4 max-h-[85vh] overflow-y-auto">
-          
-          {/* Status Alert Overlay */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse" />
-              <span className="text-xs font-black text-secondary uppercase tracking-widest">
-                Professional En Route
-              </span>
-            </div>
-            <span className="text-[10px] font-bold text-gray-400">ID: #{booking.bookingId || booking._id?.slice(-8).toUpperCase()}</span>
-          </div>
 
-          {/* Time & Distance Glass Card */}
-          <div className="grid grid-cols-2 gap-3 bg-gradient-to-r from-primary/5 to-blue-500/5 border border-primary/10 rounded-2xl p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-primary/10 border border-primary/20 rounded-xl flex items-center justify-center text-primary shrink-0">
-                <Clock className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase">Estimated ETA</p>
-                <p className="text-sm font-black text-secondary">{eta || 'Calculating...'}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 border-l border-gray-100 pl-3">
-              <div className="w-10 h-10 bg-teal-50 border border-teal-100 rounded-xl flex items-center justify-center text-teal-600 shrink-0">
-                <Navigation className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase">Distance</p>
-                <p className="text-sm font-black text-secondary">{distance || 'Calculating...'}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Secure PIN Info Box */}
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <ShieldCheck className="w-4.5 h-4.5 text-blue-600" />
-              <span className="text-xs font-bold text-secondary">
-                {['in-progress', 'in_progress'].includes(booking.status) 
-                  ? 'Ask for Completion PIN' 
-                  : 'Ask for Start PIN'}
-              </span>
-            </div>
-            <div className="bg-white rounded-xl p-3 border border-blue-50/50">
-              <p className="text-[11px] text-gray-500 leading-relaxed font-semibold">
-                {['in-progress', 'in_progress'].includes(booking.status)
-                  ? 'Ask the customer for the completion PIN code once you have fully completed the requested services.'
-                  : 'Ask the customer for their arrival START PIN code to securely initiate the service delivery.'}
-              </p>
-            </div>
-          </div>
-
-          {/* Customer Profile Details */}
-          <div className="border-t border-gray-100 pt-4 flex gap-4 items-center">
-            <div className="relative shrink-0">
-              <div className="w-14 h-14 bg-gradient-to-tr from-primary to-blue-600 rounded-full flex items-center justify-center text-white font-black text-lg shadow-md border-2 border-primary/20">
-                {booking.customer?.name?.[0]?.toUpperCase() || 'C'}
-              </div>
-              <div className="absolute -bottom-1 -right-1 bg-green-500 w-4 h-4 rounded-full border-2 border-white" />
-            </div>
-            <div className="flex-grow min-w-0">
-              <h4 className="font-black text-secondary text-sm truncate">{booking.customer?.name || 'Valued Customer'}</h4>
-              <p className="text-[10px] text-gray-400 font-bold mb-1">Customer Address</p>
-              <p className="text-xs text-gray-500 font-medium truncate flex items-center gap-1">
-                <MapPin className="w-3 h-3 text-primary shrink-0" />
-                {`${booking.address?.street || ''}, ${booking.address?.city || ''}`}
-              </p>
-            </div>
-            
-            {/* Call Customer Button */}
-            {booking.customer?.phone && (
-              <a 
-                href={`tel:${booking.customer.phone}`}
-                className="w-11 h-11 bg-primary text-white border border-primary/10 rounded-full flex items-center justify-center hover:bg-primary/95 transition-all shadow-md active:scale-95 shrink-0"
-              >
-                <PhoneCall className="w-5 h-5" />
-              </a>
-            )}
-          </div>
-
-          {/* Exit navigation button */}
-          <button 
-            onClick={onClose}
-            className="w-full py-2.5 text-xs font-bold text-white bg-red-600 hover:bg-red-700 border border-red-600 rounded-xl transition-colors flex items-center justify-center gap-2"
-          >
-            Exit Navigation
-          </button>
-
-        </div>
-      </div>
 
     </div>
   );
 };
 
-// ── Confirmation Dialog ──────────────────────────────────────────────────────
 
 // ── Confirmation Dialog ──────────────────────────────────────────────────────
 const ConfirmationDialog = ({ isOpen, onClose, onConfirm, title, message, type = 'default' }) => {
@@ -468,12 +374,12 @@ const ProofModal = ({ isOpen, onClose, onConfirm, action, loading, progress }) =
                   <>
                     <label className="aspect-square rounded-xl border-2 border-dashed border-gray-200 hover:border-primary hover:bg-primary/5 transition-all flex flex-col items-center justify-center cursor-pointer group px-1">
                       <Camera className="w-6 h-6 text-gray-400 group-hover:text-primary transition-colors" />
-                      <span className="text-[10px] font-bold text-gray-400 group-hover:text-primary mt-1 text-center leading-tight">Take Photo<br/>(Camera)</span>
+                      <span className="text-[10px] font-bold text-gray-400 group-hover:text-primary mt-1 text-center leading-tight">Take Photo<br />(Camera)</span>
                       <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileChange} />
                     </label>
                     <label className="aspect-square rounded-xl border-2 border-dashed border-gray-200 hover:border-primary hover:bg-primary/5 transition-all flex flex-col items-center justify-center cursor-pointer group px-1">
                       <DownloadCloud className="w-6 h-6 text-gray-400 group-hover:text-primary transition-colors" />
-                      <span className="text-[10px] font-bold text-gray-400 group-hover:text-primary mt-1 text-center leading-tight">Gallery<br/>(Optional)</span>
+                      <span className="text-[10px] font-bold text-gray-400 group-hover:text-primary mt-1 text-center leading-tight">Gallery<br />(Optional)</span>
                       <input type="file" multiple accept="image/*" className="hidden" onChange={handleFileChange} />
                     </label>
                   </>
@@ -513,8 +419,8 @@ const ProofModal = ({ isOpen, onClose, onConfirm, action, loading, progress }) =
                   <span>{compressing ? 'Please wait' : `${progress}%`}</span>
                 </div>
                 <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                  <div 
-                    className="bg-primary h-1.5 transition-all duration-300" 
+                  <div
+                    className="bg-primary h-1.5 transition-all duration-300"
                     style={{ width: compressing ? '50%' : `${progress}%` }}
                   ></div>
                 </div>
@@ -568,8 +474,8 @@ const getNavigationUrl = (booking) => {
     return `https://www.google.com/maps/dir/?api=1&destination=${address.lat},${address.lng}&travelmode=driving`;
   }
   const addressStr = encodeURIComponent(
-    typeof address === 'string' 
-      ? address 
+    typeof address === 'string'
+      ? address
       : [address.street, address.city, address.state, address.postalCode].filter(Boolean).join(', ')
   );
   return `https://www.google.com/maps/dir/?api=1&destination=${addressStr}&travelmode=driving`;
@@ -1076,8 +982,8 @@ const ProviderBooking = () => {
                   ) : (
                     <Play className="w-3.5 h-3.5" />
                   )}
-                  {actionLoading.id === booking._id && actionLoading.type === 'start' 
-                    ? 'Starting...' 
+                  {actionLoading.id === booking._id && actionLoading.type === 'start'
+                    ? 'Starting...'
                     : ((booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service') && booking.paymentStatus !== 'paid')
                       ? 'Payment Pending'
                       : 'Start Service'}
@@ -1799,7 +1705,7 @@ const ProviderBooking = () => {
                         onClick={() => handleBookingAction(selectedBooking._id, 'start')}
                         className="w-full px-4 py-3 bg-primary hover:bg-primary/90 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
                       >
-                        <Play className="w-4 h-4" /> 
+                        <Play className="w-4 h-4" />
                         {(selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentType === 'pay_after_service') && selectedBooking.paymentStatus !== 'paid'
                           ? 'Payment Pending'
                           : 'Start Service'}
