@@ -20,8 +20,8 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
     const Δλ = (lon2 - lon1) * Math.PI / 180;
 
     const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-              Math.cos(φ1) * Math.cos(φ2) *
-              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+        Math.cos(φ1) * Math.cos(φ2) *
+        Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
     return R * c; // meters
@@ -269,12 +269,12 @@ const initSocket = (httpServer) => {
                 if (!bookingId) return;
                 socket.join(`booking_${bookingId}`);
                 console.log(`📡 User ${userId} joined tracking room: booking_${bookingId}`);
-                
+
                 // Fetch current booking state
                 const booking = await Booking.findById(bookingId)
                     .populate('provider', 'name email phone rating address currentLocation isOnline profilePicUrl performanceScore completedBookings')
                     .lean();
-                
+
                 if (booking) {
                     socket.emit('tracking-started', {
                         bookingId,

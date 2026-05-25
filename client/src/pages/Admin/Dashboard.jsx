@@ -179,7 +179,7 @@ const AdminDashboard = () => {
               <h3 className="text-2xl font-black mt-2 text-white">{analytics?.bookingStats?.inProgress || 0}</h3>
               <p className="text-[10px] text-slate-400 mt-1">Technicians en-route or working</p>
             </div>
-            <button 
+            <button
               onClick={() => navigate('/admin/bookings')}
               className="mt-4 w-full py-1.5 bg-slate-700 text-slate-200 text-[10px] font-bold rounded-lg hover:bg-slate-600 transition-colors uppercase tracking-wider"
             >
@@ -197,9 +197,9 @@ const AdminDashboard = () => {
                 </span>
               </div>
               <h3 className="text-2xl font-black mt-2 text-white">{analytics?.providerStats?.active || 0}</h3>
-              <p className="text-[10px] text-slate-400 mt-1">Online & approved specialists</p>
+              <p className="text-[10px] text-slate-400 mt-1">Online & approved Providers</p>
             </div>
-            <button 
+            <button
               onClick={() => navigate('/admin/providers')}
               className="mt-4 w-full py-1.5 bg-slate-700 text-slate-200 text-[10px] font-bold rounded-lg hover:bg-slate-600 transition-colors uppercase tracking-wider"
             >
@@ -219,7 +219,7 @@ const AdminDashboard = () => {
               <h3 className="text-2xl font-black mt-2 text-white">{analytics?.pendingActions?.pendingDisputes || 0}</h3>
               <p className="text-[10px] text-slate-400 mt-1">Disputes requiring arbitration</p>
             </div>
-            <button 
+            <button
               onClick={() => navigate('/admin/complaints')}
               className="mt-4 w-full py-1.5 bg-slate-700 text-slate-200 text-[10px] font-bold rounded-lg hover:bg-slate-600 transition-colors uppercase tracking-wider"
             >
@@ -239,7 +239,7 @@ const AdminDashboard = () => {
               <h3 className="text-2xl font-black mt-2 text-white">₹{analytics?.revenueStats?.totalRevenue || 0}</h3>
               <p className="text-[10px] text-slate-400 mt-1">Aggregate gross sales volume</p>
             </div>
-            <button 
+            <button
               onClick={() => navigate('/admin/transactions')}
               className="mt-4 w-full py-1.5 bg-slate-700 text-slate-200 text-[10px] font-bold rounded-lg hover:bg-slate-600 transition-colors uppercase tracking-wider"
             >
@@ -260,7 +260,7 @@ const AdminDashboard = () => {
               <h3 className="text-[11px] font-extrabold mt-3 text-white uppercase tracking-wider">Geo-Monitor</h3>
               <p className="text-[9px] text-slate-300 mt-1 leading-relaxed">Density mapping & live tracking visualizer</p>
             </div>
-            <button 
+            <button
               onClick={() => navigate('/admin/live-map')}
               className="mt-4 w-full py-2 bg-primary hover:bg-teal-700 text-white text-[10px] font-black rounded-lg transition-all duration-300 shadow-md shadow-primary/30 uppercase tracking-widest relative z-10"
             >

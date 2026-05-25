@@ -66,6 +66,7 @@ const AdminLayout = () => {
     { name: 'Fraud Detection', path: '/admin/fraud', icon: <FiShield className="w-5 h-5" /> },
     { name: 'System Logs', path: '/admin/system-logs', icon: <FiTerminal className="w-5 h-5" /> },
     { name: 'Live Map Dashboard', path: '/admin/live-map', icon: <FiMapPin className="w-5 h-5" /> },
+    { name: 'Zone Management', path: '/admin/zone-management', icon: <FiLayers className="w-5 h-5" /> },
   ];
 
   const isDashboardActive = location.pathname === '/admin' || location.pathname === '/admin/dashboard';

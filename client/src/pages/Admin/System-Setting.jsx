@@ -426,8 +426,8 @@ const SystemSetting = () => {
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center gap-2.5 px-5 py-3.5 rounded-xl font-medium font-inter transition-all duration-200 border ${isActive
-                      ? 'bg-primary text-white border-primary shadow-lg shadow-primary/20 scale-[1.02]'
-                      : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:text-secondary'
+                    ? 'bg-primary text-white border-primary shadow-lg shadow-primary/20 scale-[1.02]'
+                    : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:text-secondary'
                     }`}
                 >
                   <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-gray-400'}`} />
@@ -798,7 +798,7 @@ const SystemSetting = () => {
                     min="1"
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-inter text-secondary"
                   />
-                  <p className="text-xs text-gray-500 mt-1.5 font-inter">Maximum radius distance (in kilometers) scanned around a booking to match nearby online specialists.</p>
+                  <p className="text-xs text-gray-500 mt-1.5 font-inter">Maximum radius distance (in kilometers) scanned around a booking to match nearby online Providers.</p>
                 </div>
 
                 <div>
