@@ -5,6 +5,22 @@ const { setIO: setNotifIO } = require('../utils/notificationHelper');
 const Booking = require('../models/Booking-model');
 const Provider = require('../models/Provider-model');
 
+/**
+ * Helper to get namespace-based room name for socket and tracking purposes
+ */
+const getRoomNamespace = (room) => {
+  if (room.roomType === 'provider_customer') {
+    return `provider_customer:${room.bookingId}`;
+  } else if (room.roomType === 'customer_admin') {
+    return `customer_admin:${room.customerId}`;
+  } else if (room.roomType === 'provider_admin') {
+    return `provider_admin:${room.providerId}`;
+  } else if (room.roomType === 'complaint_admin') {
+    return `complaint_admin:${room.complaintId}`;
+  }
+  return room._id.toString();
+};
+
 let io = null;
 
 const ROUTE_CACHE = new Map();
@@ -494,6 +510,208 @@ const initSocket = (httpServer) => {
                 console.log(`🔌 Provider ${userId} is now ${isOnline ? 'ONLINE' : 'OFFLINE'}`);
             } catch (err) {
                 console.error('Error toggling provider online status:', err.message);
+            }
+        });
+
+        // ─── Chat Sockets Integration ───
+
+        // 1. Join Chat Room
+        socket.on('join-chat-room', async ({ roomId }) => {
+            if (!roomId) return;
+            socket.join(roomId.toString());
+
+            // Also join the namespace-based room for this room type
+            try {
+                const ChatRoom = require('../models/ChatRoom-model');
+                const room = await ChatRoom.findById(roomId);
+                if (room) {
+                    const ns = getRoomNamespace(room);
+                    socket.join(ns);
+                    console.log(`💬 Socket user ${userId} also joined namespace room: ${ns}`);
+                }
+            } catch (err) {
+                console.error('Error joining namespace room in socket:', err.message);
+            }
+            console.log(`💬 Socket user ${userId} (${socket.userRole}) joined chat room: ${roomId}`);
+        });
+
+        // 2. Chat Send (Save & Emit)
+        socket.on('chat-send', async (payload) => {
+            try {
+                const { roomId, messageType, content, fileUrl } = payload;
+                if (!roomId) return;
+
+                const ChatRoom = require('../models/ChatRoom-model');
+                const Booking = require('../models/Booking-model');
+
+                const room = await ChatRoom.findById(roomId);
+                if (!room) return;
+
+                // Validate sender
+                const isCustomer = room.customerId && room.customerId.toString() === userId.toString() && socket.userRole === 'customer';
+                const isProvider = room.providerId && room.providerId.toString() === userId.toString() && socket.userRole === 'provider';
+                const isAdmin = socket.userRole === 'admin';
+
+                if (!isCustomer && !isProvider && !isAdmin) return;
+
+                // Check lifecycle rules ONLY for provider_customer room type
+                if (room.roomType === 'provider_customer' || (!room.roomType && room.bookingId)) {
+                    const booking = await Booking.findById(room.bookingId);
+                    if (!booking) return;
+
+                    if (booking.disputeStatus === 'resolved' && !isAdmin) return;
+
+                    const allowedStatuses = ['accepted', 'confirmed', 'scheduled', 'in-progress', 'in_progress', 'assigned', 'started', 'completed'];
+                    if (!allowedStatuses.includes(booking.status) && !isAdmin) return;
+
+                    if (booking.status === 'completed' && !isAdmin) {
+                        const completedTime = booking.serviceCompletedAt || booking.completedAt || booking.updatedAt;
+                        const diffMs = completedTime ? (Date.now() - new Date(completedTime).getTime()) : 0;
+                        if (diffMs > 24 * 60 * 60 * 1000 && !booking.hasComplaint) {
+                            return; // Lock
+                        }
+                    }
+                }
+
+                // Build message
+                const newMessage = {
+                    senderId: userId,
+                    senderRole: socket.userRole,
+                    messageType: messageType || 'text',
+                    content: messageType === 'text' || messageType === 'system' ? content : '',
+                    fileUrl: fileUrl || null,
+                    seen: false,
+                    delivered: true,
+                    createdAt: new Date()
+                };
+
+                room.messages.push(newMessage);
+                room.lastMessage = messageType === 'text' ? content : `[${messageType}]`;
+
+                // Increment unread counts
+                const isSupportRoom = ['customer_admin', 'provider_admin', 'complaint_admin'].includes(room.roomType);
+                const shouldIncrementAdmin = room.adminJoined || isSupportRoom;
+
+                if (isCustomer) {
+                    room.unreadProvider += 1;
+                    if (shouldIncrementAdmin) room.unreadAdmin += 1;
+                } else if (isProvider) {
+                    room.unreadCustomer += 1;
+                    if (shouldIncrementAdmin) room.unreadAdmin += 1;
+                } else if (isAdmin) {
+                    room.unreadCustomer += 1;
+                    room.unreadProvider += 1;
+                }
+
+                await room.save();
+                const savedMessage = room.messages[room.messages.length - 1];
+
+                // Broadcast live to both the room _id and the namespace room
+                const ns = getRoomNamespace(room);
+                io.to(roomId.toString()).to(ns).emit('chat:new-message', {
+                    roomId,
+                    message: savedMessage,
+                    lastMessage: room.lastMessage,
+                    unreadCustomer: room.unreadCustomer,
+                    unreadProvider: room.unreadProvider,
+                    unreadAdmin: room.unreadAdmin
+                });
+            } catch (err) {
+                console.error('Error in socket chat-send:', err.message);
+            }
+        });
+
+        // 3. Chat Typing Indicator Broadcast
+        socket.on('chat-typing', ({ roomId, isTyping }) => {
+            if (!roomId) return;
+            socket.to(roomId.toString()).emit('chat:typing', {
+                roomId,
+                userId,
+                userName: socket.userName,
+                role: socket.userRole,
+                isTyping: !!isTyping
+            });
+        });
+
+        // 4. Chat Seen Receipt Processing
+        socket.on('chat-seen', async ({ roomId }) => {
+            if (!roomId) return;
+            try {
+                const ChatRoom = require('../models/ChatRoom-model');
+                const room = await ChatRoom.findById(roomId);
+                if (!room) return;
+
+                let updated = false;
+                room.messages.forEach(msg => {
+                    if (msg.senderId.toString() !== userId.toString() && !msg.seen) {
+                        msg.seen = true;
+                        updated = true;
+                    }
+                });
+
+                if (socket.userRole === 'customer') {
+                    if (room.unreadCustomer > 0 || updated) {
+                        room.unreadCustomer = 0;
+                        updated = true;
+                    }
+                } else if (socket.userRole === 'provider') {
+                    if (room.unreadProvider > 0 || updated) {
+                        room.unreadProvider = 0;
+                        updated = true;
+                    }
+                } else if (socket.userRole === 'admin') {
+                    if (room.unreadAdmin > 0 || updated) {
+                        room.unreadAdmin = 0;
+                        updated = true;
+                    }
+                }
+
+                if (updated) {
+                    await room.save();
+                    io.to(roomId.toString()).emit('chat:seen', {
+                        roomId,
+                        seenBy: userId,
+                        seenRole: socket.userRole
+                    });
+                }
+            } catch (err) {
+                console.error('Error in socket chat-seen:', err.message);
+            }
+        });
+
+        // 5. Chat Admin Intervene Join
+        socket.on('chat-admin-join', async ({ roomId }) => {
+            if (socket.userRole !== 'admin' || !roomId) return;
+            try {
+                const ChatRoom = require('../models/ChatRoom-model');
+                const room = await ChatRoom.findById(roomId);
+                if (!room) return;
+
+                room.adminJoined = true;
+                const systemMessage = {
+                    senderId: userId,
+                    senderRole: 'admin',
+                    messageType: 'system',
+                    content: 'Admin joined this conversation',
+                    seen: false,
+                    delivered: true,
+                    createdAt: new Date()
+                };
+                room.messages.push(systemMessage);
+                room.lastMessage = 'Admin joined this conversation';
+                await room.save();
+
+                const savedMessage = room.messages[room.messages.length - 1];
+
+                io.to(roomId.toString()).emit('chat:new-message', {
+                    roomId,
+                    message: savedMessage,
+                    lastMessage: room.lastMessage,
+                    adminJoined: true
+                });
+                io.to(roomId.toString()).emit('chat:admin-joined', { roomId });
+            } catch (err) {
+                console.error('Error in socket chat-admin-join:', err.message);
             }
         });
 

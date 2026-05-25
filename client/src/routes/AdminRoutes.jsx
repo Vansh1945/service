@@ -27,6 +27,7 @@ const AdminFraud = lazy(() => import("../pages/Admin/fraud"));
 const SystemLogs = lazy(() => import("../pages/Admin/SystemLogs"));
 const LiveTrackingPage = lazy(() => import("../pages/Admin/LiveTrackingPage"));
 const ZoneManagement = lazy(() => import("../pages/Admin/ZoneManagement"));
+const AdminChatMonitor = lazy(() => import("../pages/Admin/AdminChatMonitor"));
 
 const AdminRoutes = () => {
     return (
@@ -58,6 +59,7 @@ const AdminRoutes = () => {
                     <Route path="system-logs" element={<SystemLogs />} />
                     <Route path="live-map" element={<LiveTrackingPage />} />
                     <Route path="zone-management" element={<ZoneManagement />} />
+                    <Route path="chat-monitor" element={<AdminChatMonitor />} />
                 </Route>
             </Route>
         </Routes>

@@ -9,13 +9,33 @@ import {
   Calendar, Clock, MapPin, User, Phone, DollarSign, CheckCircle,
   XCircle, AlertCircle, Eye, Search, CreditCard, Star, Package,
   ShoppingCart, Timer, Wrench, Activity, Edit3, ChevronLeft,
-  ChevronRight, X, ChevronDown, ChevronUp, Wallet, ShieldAlert, ShieldCheck, Home, CheckSquare
+  ChevronRight, X, ChevronDown, ChevronUp, Wallet, ShieldAlert, ShieldCheck, Home, CheckSquare, MessageSquare
 } from 'lucide-react';
 import { cancelBooking, userUpdateBookingDateTime, getCustomerBookings } from '../../services/BookingService';
 import Pagination from '../../components/Pagination';
 import { formatDate, formatTime, formatDateTime, formatCurrency } from '../../utils/format';
+import ChatModal from '../../components/chat/ChatModal';
 
 // ─── Pure helpers ─────────────────
+
+const isChatVisible = (b) => {
+  if (!b) return false;
+  if (!b.provider && !b.providerDetails) return false;
+
+  if (b.disputeStatus === 'resolved' || b.status === 'resolved') return false;
+  if (b.hasComplaint || b.disputeRaised || b.status === 'complaint') return true;
+  if (['pending', 'cancelled', 'no-show'].includes(b.status)) return false;
+
+  if (b.status === 'completed') {
+    const completedTime = b.serviceCompletedAt || b.completedAt || b.updatedAt;
+    if (completedTime) {
+      const diffMs = Date.now() - new Date(completedTime).getTime();
+      return diffMs <= 24 * 60 * 60 * 1000;
+    }
+    return true;
+  }
+  return true;
+};
 
 const STATUS_CONFIG = {
   pending: { color: 'bg-amber-50 text-amber-700 border-amber-200', bar: 'bg-amber-400', icon: Timer, label: 'Finding Provider' },
@@ -343,7 +363,7 @@ const AddressBlock = ({ address, phone }) => {
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
 
-const BookingModal = ({ booking, onClose, onPayNow, user }) => {
+const BookingModal = ({ booking, onClose, onPayNow, user, onChat }) => {
   const [previewImage, setPreviewImage] = useState(null);
   const provider = booking.provider || booking.providerDetails;
   return (
@@ -542,6 +562,29 @@ const BookingModal = ({ booking, onClose, onPayNow, user }) => {
           <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors">
             Close
           </button>
+          {['assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'in-progress'].includes(booking.status) ? (
+            <button
+              onClick={() => { onClose(); onChat(booking._id, 'provider_customer'); }}
+              className="px-4 py-2 text-sm font-bold text-white bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-500/95 hover:to-emerald-600/95 rounded-xl transition-all flex items-center gap-2 shadow-sm animate-none"
+            >
+              <MessageSquare className="w-4 h-4" /> Chat Provider
+            </button>
+          ) : (
+            <button
+              disabled
+              title="Chat available after provider accepts booking"
+              className="px-4 py-2 text-sm font-medium text-gray-400 bg-gray-100 border border-gray-200 rounded-xl cursor-not-allowed flex items-center gap-2"
+            >
+              <MessageSquare className="w-4 h-4" /> Chat available after provider accepts booking
+            </button>
+          )}
+
+          <button
+            onClick={() => { onClose(); onChat(booking._id, 'customer_admin'); }}
+            className="px-4 py-2 text-sm font-bold text-white bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-500/95 hover:to-indigo-600/95 rounded-xl transition-all flex items-center gap-2 shadow-sm"
+          >
+            <ShieldAlert className="w-4 h-4" /> Chat Admin
+          </button>
           {needsPayment(booking) && (
             <button onClick={() => { onClose(); onPayNow(booking); }} className="px-4 py-2 text-sm font-bold text-white bg-accent rounded-xl hover:bg-accent/90 transition-all flex items-center gap-2 shadow-sm">
               <CreditCard className="w-4 h-4" /> Pay Now
@@ -643,7 +686,7 @@ const CancelModal = ({ booking, onClose, onConfirm }) => {
 
 // ─── Booking Card ─────────────────────────────────────────────────────────────
 
-const BookingCard = ({ booking, onView, onPayNow, onReschedule, onCancel, onCall }) => {
+const BookingCard = ({ booking, onView, onPayNow, onReschedule, onCancel, onCall, onChat }) => {
   const navigate = useNavigate();
   const cfg = getStatusCfg(booking.status);
   const provider = booking.provider || booking.providerDetails;
@@ -740,6 +783,30 @@ const BookingCard = ({ booking, onView, onPayNow, onReschedule, onCancel, onCall
             </button>
           )}
 
+          {['assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'in-progress'].includes(booking.status) ? (
+            <button 
+              onClick={() => onChat(booking._id, 'provider_customer')} 
+              className="flex items-center gap-1.5 text-xs font-bold text-white bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-500/95 hover:to-emerald-600/95 px-3 py-1.5 rounded-lg transition-all shadow-sm active:scale-95 animate-none"
+            >
+              <MessageSquare className="w-3.5 h-3.5" /> Chat Provider
+            </button>
+          ) : (
+            <button 
+              disabled
+              title="Chat available after provider accepts booking"
+              className="flex items-center gap-1.5 text-xs font-medium text-gray-400 bg-gray-100 border border-gray-200 px-3 py-1.5 rounded-lg cursor-not-allowed"
+            >
+              <MessageSquare className="w-3.5 h-3.5" /> Chat available after provider accepts booking
+            </button>
+          )}
+
+          <button 
+            onClick={() => onChat(booking._id, 'customer_admin')} 
+            className="flex items-center gap-1.5 text-xs font-bold text-white bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-500/95 hover:to-indigo-600/95 px-3 py-1.5 rounded-lg transition-all shadow-sm active:scale-95"
+          >
+            <ShieldAlert className="w-3.5 h-3.5" /> Chat Admin
+          </button>
+
           {needsPayment(booking) && (
             <button onClick={() => onPayNow(booking)} className="flex items-center gap-1.5 text-xs font-bold text-white bg-accent hover:bg-accent/90 px-3 py-1.5 rounded-lg transition-all shadow-sm active:scale-95">
               <CreditCard className="w-3.5 h-3.5" /> Pay Now
@@ -816,6 +883,8 @@ const CustomerBookingsPage = () => {
   const [cancelReason, setCancelReason] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pagination, setPagination] = useState({});
+  const [chatBookingId, setChatBookingId] = useState(null);
+  const [chatRoomType, setChatRoomType] = useState('provider_customer');
 
   // Debounce search
   useEffect(() => {
@@ -982,6 +1051,7 @@ const CustomerBookingsPage = () => {
                   onReschedule={b => { setBookingToReschedule(b); setShowRescheduleModal(true); }}
                   onCancel={b => { setBookingToCancel(b); setShowCancelModal(true); }}
                   onCall={phone => { if (phone) window.location.href = `tel:${phone}`; else showToast('Phone not available', 'warning'); }}
+                  onChat={(id, type) => { setChatBookingId(id); setChatRoomType(type || 'provider_customer'); }}
                 />
               ))}
             </div>
@@ -1007,7 +1077,7 @@ const CustomerBookingsPage = () => {
 
       {/* Modals */}
       {showModal && selectedBooking && (
-        <BookingModal booking={selectedBooking} onClose={() => setShowModal(false)} onPayNow={handlePayNow} user={user} />
+        <BookingModal booking={selectedBooking} onClose={() => setShowModal(false)} onPayNow={handlePayNow} user={user} onChat={(id, type) => { setChatBookingId(id); setChatRoomType(type || 'provider_customer'); }} />
       )}
       {showRescheduleModal && bookingToReschedule && (
         <RescheduleModal booking={bookingToReschedule} onClose={() => setShowRescheduleModal(false)} onConfirm={handleRescheduleSubmit} />
@@ -1015,6 +1085,15 @@ const CustomerBookingsPage = () => {
       {showCancelModal && bookingToCancel && (
         <CancelModal booking={bookingToCancel} onClose={() => setShowCancelModal(false)} onConfirm={handleCancelConfirm} />
       )}
+
+      <ChatModal 
+        bookingId={chatRoomType === 'provider_customer' ? chatBookingId : null}
+        roomType={chatRoomType}
+        customerId={chatRoomType === 'customer_admin' ? user?._id : null}
+        role="customer"
+        isOpen={!!chatBookingId}
+        onClose={() => { setChatBookingId(null); setChatRoomType('provider_customer'); }}
+      />
     </div>
   );
 };

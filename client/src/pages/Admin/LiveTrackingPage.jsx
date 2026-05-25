@@ -8,9 +8,10 @@ import Loader from '../../components/Loader';
 import { MapContainer, TileLayer, Marker, Tooltip, Popup, useMap, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet.heat';
+import { useNavigate } from 'react-router-dom';
 import {
   Navigation, Search, Wifi, Layers,
-  RefreshCw, AlertCircle, Clock
+  RefreshCw, AlertCircle, Clock, MessageSquare
 } from 'lucide-react';
 
 // Fix for default Leaflet marker assets in Vite
@@ -155,6 +156,7 @@ const SmoothProviderMarker = ({ position, icon, children }) => {
 };
 
 const LiveTrackingPage = () => {
+  const navigate = useNavigate();
   const { showToast } = useAuth();
   const { socket } = useSocket();
   const [providers, setProviders] = useState([]);
@@ -411,12 +413,21 @@ const LiveTrackingPage = () => {
               </p>
             </div>
           </div>
-          <button
-            onClick={fetchData}
-            className="md:hidden p-2 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-xl transition-all"
-          >
-            <RefreshCw className="w-4 h-4 text-primary animate-spin" />
-          </button>
+          <div className="flex items-center gap-1.5 md:hidden shrink-0">
+            <button
+              onClick={() => navigate('/admin/chat-monitor')}
+              className="p-2 bg-gradient-to-r from-teal-600 to-indigo-600 hover:from-teal-700 hover:to-indigo-700 text-white rounded-xl transition-all active:scale-95 flex items-center justify-center shrink-0"
+              title="Open Chat Monitor"
+            >
+              <MessageSquare className="w-4 h-4" />
+            </button>
+            <button
+              onClick={fetchData}
+              className="p-2 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-xl transition-all flex items-center justify-center shrink-0 text-primary"
+            >
+              <RefreshCw className="w-4 h-4 text-primary animate-spin" />
+            </button>
+          </div>
         </div>
 
         {/* Global Summary Stats Widgets */}
@@ -449,6 +460,14 @@ const LiveTrackingPage = () => {
               <h3 className="text-xs font-black text-gray-800">{providers.filter(p => getProviderComputedStatus(p) === 'OFFLINE').length}</h3>
             </div>
           </div>
+          <button
+            onClick={() => navigate('/admin/chat-monitor')}
+            className="hidden md:flex items-center gap-1.5 p-2.5 bg-gradient-to-r from-teal-600 to-indigo-600 hover:from-teal-700 hover:to-indigo-700 text-white rounded-xl font-bold text-xs shadow-sm transition-all hover:scale-105 active:scale-95 shrink-0"
+            title="Open Chat Monitor"
+          >
+            <MessageSquare className="w-4 h-4" />
+            <span>Chat Monitor</span>
+          </button>
           <button
             onClick={fetchData}
             className="hidden md:block p-2.5 bg-gray-150 hover:bg-gray-200 border border-gray-200 rounded-xl transition-all hover:scale-105 active:scale-95 shrink-0"

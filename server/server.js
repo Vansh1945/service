@@ -173,6 +173,7 @@ const paymentRoutes = require('./routes/payment-routes');
 const systemSettingRoutes = require('./routes/SystemSetting-routes');
 const contactRoutes = require('./routes/Contact-routes');
 const notificationRoutes = require('./routes/notification-routes');
+const chatRoutes = require('./routes/Chat-route');
 
 // Maintenance Mode Middleware
 app.use(async (req, res, next) => {
@@ -271,6 +272,7 @@ app.use('/api/payment', paymentRoutes);
 app.use('/api/system-setting', systemSettingRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/chat', chatRoutes);
 
 // Health check endpoint
 

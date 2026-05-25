@@ -12,6 +12,7 @@ import { getBookingsByStatus } from '../../services/BookingService';
 import { getComplaint, getCustomerComplaints, submitComplaint as submitComplaintAPI, replyToComplaint } from '../../services/ComplaintService';
 import { formatDate, formatDateTime, compressImage } from '../../utils/format';
 import CDNImage from '../../components/CDNImage';
+import ChatModal from '../../components/chat/ChatModal';
 
 const SUPPORT_CATEGORIES = ["Payment", "Booking", "Account", "Other"];
 
@@ -26,6 +27,7 @@ const ProviderSupportPage = () => {
   const [openComplaintDetail, setOpenComplaintDetail] = useState(false);
   const [selectedComplaint, setSelectedComplaint] = useState(null);
   const [activeTab, setActiveTab] = useState('tickets'); // tickets, chat, faqs
+  const [chatOpen, setChatOpen] = useState(false);
 
   const [formData, setFormData] = useState({
     bookingId: '', title: '', description: '', category: '', images: [], previewImages: []
@@ -87,12 +89,12 @@ const ProviderSupportPage = () => {
   const handleImageUpload = (e) => {
     const files = Array.from(e.target.files);
     const validFiles = [], validPreviews = [];
-    
+
     if (formData.images.length + files.length > 5) {
       toast.error('You can upload a maximum of 5 screenshot proofs.');
       return;
     }
-    
+
     files.forEach(file => {
       if (!file.type.match('image.*')) { toast.error('Images only'); return; }
       if (file.size > 5 * 1024 * 1024) { toast.error('Max 5MB per image'); return; }
@@ -265,7 +267,7 @@ const ProviderSupportPage = () => {
           {[
             { icon: <FileText className="h-5 w-5 text-primary" />, label: 'FAQs', sub: 'Guidelines', action: () => setActiveTab('faqs') },
             { icon: <MessageSquare className="h-5 w-5 text-accent" />, label: 'New Ticket', sub: 'Raise issue', action: () => setOpenNewComplaint(true) },
-            { icon: <Headphones className="h-5 w-5 text-green-600" />, label: 'Chat', sub: 'Admin Help', action: () => setActiveTab('chat') },
+            { icon: <Headphones className="h-5 w-5 text-green-600" />, label: 'Chat', sub: 'Admin Help', action: () => setChatOpen(true) },
           ].map((item, i) => (
             <button
               key={i}
@@ -324,16 +326,16 @@ const ProviderSupportPage = () => {
                               <p className="text-sm font-medium text-secondary">{complaint.title}</p>
                               <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full uppercase ${s.bg} ${s.text}`}>
                                 {complaint.status === 'Solved' ? 'Resolved' :
-                                 complaint.status === 'In-Progress' ? 'In Review' :
-                                 complaint.status === 'Reopened' ? 'Reopened' :
-                                 complaint.status === 'Closed' ? 'Closed' :
-                                 complaint.status === 'submitted' ? 'Submitted' :
-                                 complaint.status === 'under_review' ? 'Under Review' :
-                                 complaint.status === 'provider_responded' ? 'Provider Responded' :
-                                 complaint.status === 'admin_review' ? 'Admin Review' :
-                                 complaint.status === 'resolved' ? 'Resolved' :
-                                 complaint.status === 'rejected' ? 'Rejected' :
-                                 complaint.status === 'refunded' ? 'Refunded' : complaint.status}
+                                  complaint.status === 'In-Progress' ? 'In Review' :
+                                    complaint.status === 'Reopened' ? 'Reopened' :
+                                      complaint.status === 'Closed' ? 'Closed' :
+                                        complaint.status === 'submitted' ? 'Submitted' :
+                                          complaint.status === 'under_review' ? 'Under Review' :
+                                            complaint.status === 'provider_responded' ? 'Provider Responded' :
+                                              complaint.status === 'admin_review' ? 'Admin Review' :
+                                                complaint.status === 'resolved' ? 'Resolved' :
+                                                  complaint.status === 'rejected' ? 'Rejected' :
+                                                    complaint.status === 'refunded' ? 'Refunded' : complaint.status}
                               </span>
                             </div>
                             <p className="text-xs text-gray-400">#{complaint.complaintId || complaint._id.slice(-8)} • {complaint.category}</p>
@@ -374,24 +376,6 @@ const ProviderSupportPage = () => {
           </div>
         )}
 
-        {activeTab === 'chat' && (
-          <div className="bg-white rounded-xl border border-gray-100 p-8 text-center space-y-4">
-            <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto text-green-600">
-              <MessageSquare className="w-8 h-8" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-secondary">Admin Chat Support</h3>
-              <p className="text-sm text-gray-400 max-w-xs mx-auto mt-1">Chat directly with our support team for any quick assistance.</p>
-            </div>
-            <button
-              onClick={() => toast.info('Real-time chat is being initialized...')}
-              className="bg-secondary text-white px-8 py-2.5 rounded-xl text-sm font-medium"
-            >
-              Start Conversation
-            </button>
-            <button onClick={() => setActiveTab('tickets')} className="block w-full text-primary text-xs font-semibold py-2">Go Back</button>
-          </div>
-        )}
       </div>
 
       {/* New Ticket Modal */}
@@ -511,16 +495,16 @@ const ProviderSupportPage = () => {
                   <span className="text-sm font-medium">Status</span>
                   <span className={`text-sm font-bold uppercase ${getStatusStyle(selectedComplaint.status).text}`}>
                     {selectedComplaint.status === 'Solved' ? '✓ Resolved' :
-                     selectedComplaint.status === 'In-Progress' ? '⏳ Being Reviewed' :
-                     selectedComplaint.status === 'Reopened' ? '↩ Reopened' :
-                     selectedComplaint.status === 'Closed' ? 'Closed' :
-                     selectedComplaint.status === 'submitted' ? 'Submitted' :
-                     selectedComplaint.status === 'under_review' ? 'Under Review' :
-                     selectedComplaint.status === 'provider_responded' ? 'Provider Responded' :
-                     selectedComplaint.status === 'admin_review' ? 'Admin Review' :
-                     selectedComplaint.status === 'resolved' ? 'Resolved' :
-                     selectedComplaint.status === 'rejected' ? 'Rejected' :
-                     selectedComplaint.status === 'refunded' ? 'Refunded' : selectedComplaint.status}
+                      selectedComplaint.status === 'In-Progress' ? '⏳ Being Reviewed' :
+                        selectedComplaint.status === 'Reopened' ? '↩ Reopened' :
+                          selectedComplaint.status === 'Closed' ? 'Closed' :
+                            selectedComplaint.status === 'submitted' ? 'Submitted' :
+                              selectedComplaint.status === 'under_review' ? 'Under Review' :
+                                selectedComplaint.status === 'provider_responded' ? 'Provider Responded' :
+                                  selectedComplaint.status === 'admin_review' ? 'Admin Review' :
+                                    selectedComplaint.status === 'resolved' ? 'Resolved' :
+                                      selectedComplaint.status === 'rejected' ? 'Rejected' :
+                                        selectedComplaint.status === 'refunded' ? 'Refunded' : selectedComplaint.status}
                   </span>
                 </div>
               </div>
@@ -534,8 +518,8 @@ const ProviderSupportPage = () => {
                 )}
                 <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mt-4 mb-2">Description</h4>
                 <p className="text-sm text-gray-600 leading-relaxed">
-                  {selectedComplaint.description?.includes(']') 
-                    ? selectedComplaint.description.split(']').slice(1).join(']').trim() 
+                  {selectedComplaint.description?.includes(']')
+                    ? selectedComplaint.description.split(']').slice(1).join(']').trim()
                     : selectedComplaint.description}
                 </p>
               </div>
@@ -591,10 +575,9 @@ const ProviderSupportPage = () => {
                     <div className="space-y-4">
                       {selectedComplaint.resolutionHistory.map((step, i) => (
                         <div key={i} className="relative">
-                          <div className={`absolute -left-[20px] top-1.5 w-2 h-2 rounded-full border-2 bg-white ${
-                            step.event.includes('Resolved') ? 'border-green-500' :
-                            step.event.includes('Replied') ? 'border-primary' : 'border-gray-300'
-                          }`} />
+                          <div className={`absolute -left-[20px] top-1.5 w-2 h-2 rounded-full border-2 bg-white ${step.event.includes('Resolved') ? 'border-green-500' :
+                              step.event.includes('Replied') ? 'border-primary' : 'border-gray-300'
+                            }`} />
                           <div className="flex justify-between items-start">
                             <p className="text-[11px] font-bold text-secondary">{step.event}</p>
                             <span className="text-[9px] text-gray-400">{formatDateTime(step.timestamp)}</span>
@@ -613,14 +596,14 @@ const ProviderSupportPage = () => {
                 <div className="border-t pt-5 mt-5">
                   <h4 className="text-[10px] font-bold uppercase tracking-wider text-primary mb-3">Submit Your Response</h4>
                   <div className="space-y-3">
-                    <textarea 
-                      value={replyText} 
+                    <textarea
+                      value={replyText}
                       onChange={(e) => setReplyText(e.target.value)}
                       placeholder="Explain your side or provide clarification..."
                       rows="3"
                       className="w-full px-3 py-2 text-sm border rounded-xl focus:ring-2 focus:ring-primary/20 outline-none resize-none"
                     />
-                    
+
                     <div className="flex items-center gap-3">
                       <label className="flex items-center gap-2 px-3 py-1.5 border border-dashed rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
                         <Upload className="w-3.5 h-3.5 text-gray-400" />
@@ -634,7 +617,7 @@ const ProviderSupportPage = () => {
                       </div>
                     </div>
 
-                    <button 
+                    <button
                       onClick={handleReplySubmit}
                       disabled={submittingReply || !replyText.trim()}
                       className="w-full py-2 bg-primary text-white rounded-xl text-sm font-bold shadow-md hover:bg-primary/90 disabled:opacity-50 flex items-center justify-center gap-2"
@@ -653,6 +636,13 @@ const ProviderSupportPage = () => {
           </div>
         </div>
       )}
+      <ChatModal
+        roomType="provider_admin"
+        providerId={user?._id}
+        role="provider"
+        isOpen={chatOpen}
+        onClose={() => setChatOpen(false)}
+      />
     </div>
   );
 };

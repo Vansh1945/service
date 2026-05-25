@@ -13,6 +13,7 @@ import { getCustomerBookings } from '../../services/BookingService';
 import { getComplaint, getCustomerComplaints, submitComplaint as submitComplaintAPI, reopenComplaint as reopenComplaintAPI } from '../../services/ComplaintService';
 import { formatDate, formatDateTime, compressImage } from '../../utils/format';
 import CDNImage from '../../components/CDNImage';
+import ChatModal from '../../components/chat/ChatModal';
 
 const COMPLAINT_CATEGORIES = ["Service issue", "Payment issue", "Refund request", "Suggestion", "Other"];
 
@@ -33,6 +34,7 @@ const ComplaintsPage = () => {
   const [reopenReason, setReopenReason] = useState('');
   const [previewImage, setPreviewImage] = useState(null);
   const [submittingComplaint, setSubmittingComplaint] = useState(false);
+  const [chatRoomInfo, setChatRoomInfo] = useState(null);
 
   useEffect(() => {
     if (!isAuthenticated) navigate('/login');
@@ -350,7 +352,7 @@ const ComplaintsPage = () => {
           {[
             { icon: <FileText className="h-5 w-5 text-primary" />, label: 'FAQs', sub: 'Coming Soon', action: () => toast.info('FAQs coming soon!') },
             { icon: <MessageSquare className="h-5 w-5 text-accent" />, label: 'New Ticket', sub: 'Report issue', action: () => setOpenNewComplaint(true) },
-            { icon: <Headphones className="h-5 w-5 text-green-600" />, label: 'Live Chat', sub: 'Coming Soon', action: () => toast.info('Support chat coming soon!') },
+            { icon: <Headphones className="h-5 w-5 text-green-600" />, label: 'Live Chat', sub: 'Chat with Admin', action: () => setChatRoomInfo({ roomType: 'customer_admin' }) },
           ].map((item, i) => (
             <button
               key={i}
@@ -408,18 +410,18 @@ const ComplaintsPage = () => {
             </div>
             <div>
               <p className="text-sm font-semibold">Still need help?</p>
-              <p className="text-xs text-gray-300">Support features coming soon</p>
+              <p className="text-xs text-gray-300">Chat directly with admin support</p>
             </div>
           </div>
           <div className="flex gap-2">
             <button
-              onClick={() => toast.info('Feature coming soon!')}
+              onClick={() => setChatRoomInfo({ roomType: 'customer_admin' })}
               className="border border-white/20 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-white/10 transition-colors"
             >
               Chat
             </button>
             <button
-              onClick={() => toast.info('Feature coming soon!')}
+              onClick={() => toast.info('Phone support hotline coming soon!')}
               className="bg-white text-secondary px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-gray-100 transition-colors"
             >
               Call
@@ -794,8 +796,21 @@ const ComplaintsPage = () => {
               )}
             </div>
 
-            <div className="px-5 py-4 border-t border-gray-100">
-              <button onClick={() => setOpenComplaintDetail(false)} className="w-full py-2 border rounded-lg text-sm font-medium hover:bg-gray-50">Close</button>
+            <div className="px-5 py-4 border-t border-gray-100 flex gap-2">
+              <button 
+                onClick={() => {
+                  setOpenComplaintDetail(false);
+                  setChatRoomInfo({ 
+                    bookingId: selectedComplaint.bookingId || selectedComplaint.booking?._id, 
+                    roomType: 'complaint_admin', 
+                    complaintId: selectedComplaint._id 
+                  });
+                }} 
+                className="flex-1 py-2 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white rounded-lg text-sm font-bold shadow-sm transition-all active:scale-95 flex items-center justify-center gap-1.5"
+              >
+                <MessageSquare className="w-4 h-4" /> Resolve with Admin
+              </button>
+              <button onClick={() => setOpenComplaintDetail(false)} className="px-4 py-2 border rounded-lg text-sm font-medium hover:bg-gray-50">Close</button>
             </div>
           </div>
         </div>
@@ -809,6 +824,15 @@ const ComplaintsPage = () => {
           <CDNImage src={previewImage} width={1600} lazy={false} className="max-w-[95vw] max-h-[90vh] object-contain rounded-lg shadow-2xl" alt="Preview" onClick={e => e.stopPropagation()} />
         </div>
       )}
+      <ChatModal 
+        bookingId={chatRoomInfo?.bookingId}
+        roomType={chatRoomInfo?.roomType || 'complaint_admin'}
+        complaintId={chatRoomInfo?.complaintId}
+        customerId={user?._id}
+        role="customer"
+        isOpen={!!chatRoomInfo}
+        onClose={() => setChatRoomInfo(null)}
+      />
     </div>
   );
 };

@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { getPublicServiceById } from '../../services/ServiceService';
 import { getBooking, updateBookingPayment, payBooking } from '../../services/BookingService';
+import axiosInstance from '../../api/axiosInstance';
 import * as TransactionService from '../../services/TransactionService';
 import * as CustomerService from '../../services/CustomerService';
 import Loader from '../../components/Loader';
@@ -264,6 +265,7 @@ const BookingConfirmation = () => {
         isLoading: false,
         autoClose: 2000
       });
+      axiosInstance.post('/chat/create-room', { bookingId: bookingDetails._id }).catch(err => console.error(err));
       setTimeout(() => navigate('/customer/bookings'), 2000);
     } catch (error) {
       console.error('Wallet payment error:', error);
@@ -315,6 +317,7 @@ const BookingConfirmation = () => {
         });
         if (!response.data?.success) throw new Error(response.data?.message || 'Payment failed');
         showToast('Payment successful! Booking confirmed.', 'success');
+        axiosInstance.post('/chat/create-room', { bookingId: bookingDetails._id }).catch(err => console.error(err));
         setTimeout(() => navigate('/customer/bookings'), 2000);
         return;
       }
@@ -356,6 +359,7 @@ const BookingConfirmation = () => {
             if (!verifyResponse.data?.success) throw new Error('Payment verification failed');
 
             showToast('Payment successful! Booking confirmed.', 'success');
+            axiosInstance.post('/chat/create-room', { bookingId: bookingDetails._id }).catch(err => console.error(err));
             setTimeout(() => navigate('/customer/bookings'), 2000);
           } catch (verificationError) {
             setIsProcessingPayment(false);
@@ -411,6 +415,7 @@ const BookingConfirmation = () => {
         bookingStatus: 'confirmed',
       });
       showToast('Booking Confirmed! Pay after service completion.', 'success');
+      axiosInstance.post('/chat/create-room', { bookingId: bookingDetails._id }).catch(err => console.error(err));
       setTimeout(() => navigate('/customer/bookings'), 2000);
     } catch (error) {
       showToast(error.response?.data?.message || 'Failed to confirm booking', 'error');

@@ -1043,3 +1043,31 @@ export const calculateBearing = (lat1, lon1, lat2, lon2) => {
     Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
   return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
 };
+
+/**
+ * Format relative time (e.g. 5 sec ago, 10 min ago, 2 hr ago, 3 d ago)
+ * @param {Date|string|number} timestamp - The timestamp to format
+ * @returns {string} Relative time string
+ */
+export const formatRelativeTime = (timestamp) => {
+  if (!timestamp) return "Never";
+  try {
+    const diffMs = Date.now() - new Date(timestamp).getTime();
+    const diffSec = Math.floor(diffMs / 1000);
+    if (diffSec < 5) return "Just now";
+    if (diffSec < 60) return `${diffSec} sec ago`;
+    
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${diffMin} min ago`;
+    
+    const diffHr = Math.floor(diffMin / 60);
+    if (diffHr < 24) return `${diffHr} hr ago`;
+    
+    const diffDay = Math.floor(diffHr / 24);
+    if (diffDay < 7) return `${diffDay} d ago`;
+    
+    return formatDate(timestamp);
+  } catch {
+    return FALLBACK;
+  }
+};

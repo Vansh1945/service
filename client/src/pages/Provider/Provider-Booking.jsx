@@ -10,7 +10,7 @@ import {
   ClipboardList, Timer, CheckCheck, HelpCircle, Copy, Zap, Wrench, Play,
   CreditCard, CheckSquare, AlertTriangle, Star, Package, Search, Activity,
   Banknote, Download, FileText, Loader, BarChart2, DownloadCloud, Navigation,
-  Home, Info, Shield, FileDigit, PhoneCall, Camera, ArrowLeft, ShieldCheck
+  Home, Info, Shield, FileDigit, PhoneCall, Camera, ArrowLeft, ShieldCheck, MessageSquare
 } from 'lucide-react';
 import LoadingSpinner from '../../components/Loader';
 import * as BookingService from '../../services/BookingService';
@@ -19,6 +19,24 @@ import { formatDate, formatTime, formatCurrency, formatDuration, compressImage, 
 import * as ComplaintService from '../../services/ComplaintService';
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
+import ChatModal from '../../components/chat/ChatModal';
+
+const isChatVisible = (b) => {
+  if (!b) return false;
+  if (b.disputeStatus === 'resolved' || b.status === 'resolved') return false;
+  if (b.hasComplaint || b.disputeRaised || b.status === 'complaint') return true;
+  if (['pending', 'cancelled', 'no-show'].includes(b.status)) return false;
+
+  if (b.status === 'completed') {
+    const completedTime = b.serviceCompletedAt || b.completedAt || b.updatedAt;
+    if (completedTime) {
+      const diffMs = Date.now() - new Date(completedTime).getTime();
+      return diffMs <= 24 * 60 * 60 * 1000;
+    }
+    return true;
+  }
+  return true;
+};
 
 const customerIcon = L.divIcon({ html: `<div style="background-color: #EF4444; width: 24px; height: 24px; border-radius: 50% 50% 50% 0; border: 3px solid white; transform: rotate(-45deg); box-shadow: 0 0 5px rgba(0,0,0,0.5);"></div>`, className: '', iconSize: [24, 24], iconAnchor: [12, 24], popupAnchor: [1, -34] });
 const providerIcon = L.divIcon({ html: `<div style="background-color: #10B981; width: 24px; height: 24px; border-radius: 50% 50% 50% 0; border: 3px solid white; transform: rotate(-45deg); box-shadow: 0 0 5px rgba(0,0,0,0.5);"></div>`, className: '', iconSize: [24, 24], iconAnchor: [12, 24], popupAnchor: [1, -34] });
@@ -501,6 +519,8 @@ const ProviderBooking = () => {
   const [downloading, setDownloading] = useState(false);
   const [showSummary, setShowSummary] = useState(true);
   const [showReports, setShowReports] = useState(false);
+  const [chatBookingId, setChatBookingId] = useState(null);
+  const [chatRoomType, setChatRoomType] = useState('provider_customer');
   const [currentPage, setCurrentPage] = useState(1);
   const [bookingsPerPage, setBookingsPerPage] = useState(10);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -936,6 +956,30 @@ const ProviderBooking = () => {
               <Eye className="w-3.5 h-3.5" /> View Details
             </button>
 
+            {booking.provider && booking.provider.toString() === user?._id?.toString() ? (
+              <button
+                onClick={() => { setChatBookingId(booking._id); setChatRoomType('provider_customer'); }}
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 w-full"
+              >
+                <MessageSquare className="w-3.5 h-3.5" /> Chat Customer
+              </button>
+            ) : (
+              <button
+                disabled
+                title="Chat is only available for the assigned provider"
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-100 border border-gray-200 text-gray-400 rounded-xl text-xs font-semibold cursor-not-allowed w-full"
+              >
+                <MessageSquare className="w-3.5 h-3.5" /> Chat Blocked
+              </button>
+            )}
+
+            <button
+              onClick={() => { setChatBookingId(booking._id); setChatRoomType('provider_admin'); }}
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-500/95 hover:to-indigo-600/95 text-white rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 w-full"
+            >
+              <Headphones className="w-3.5 h-3.5" /> Support Chat
+            </button>
+
             {/* Pending: Accept + Reject */}
             {booking.status === 'pending' && (!booking.provider || booking.provider === user?._id) && (
               <>
@@ -1358,6 +1402,36 @@ const ProviderBooking = () => {
                     </div>
                     {['accepted', 'in-progress', 'assigned'].includes(selectedBooking.status) ? (
                       <div className="bg-white rounded-xl p-4 border border-gray-100 space-y-3">
+                        {selectedBooking.provider && selectedBooking.provider.toString() === user?._id?.toString() ? (
+                          <button
+                            onClick={() => {
+                              setShowModal(false);
+                              setChatBookingId(selectedBooking._id);
+                              setChatRoomType('provider_customer');
+                            }}
+                            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white py-2 px-3 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 animate-none"
+                          >
+                            <MessageSquare className="w-4 h-4" /> Chat Customer
+                          </button>
+                        ) : (
+                          <button
+                            disabled
+                            className="w-full flex items-center justify-center gap-2 bg-gray-100 border border-gray-200 text-gray-400 py-2 px-3 rounded-xl text-xs font-semibold cursor-not-allowed"
+                          >
+                            <MessageSquare className="w-4 h-4" /> Chat Blocked (Unassigned)
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() => {
+                            setShowModal(false);
+                            setChatBookingId(selectedBooking._id);
+                            setChatRoomType('provider_admin');
+                          }}
+                          className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-500/95 hover:to-indigo-600/95 text-white py-2 px-3 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95"
+                        >
+                          <Headphones className="w-4 h-4" /> Support Chat
+                        </button>
                         <div className="flex items-center gap-3">
                           <div className="p-2 bg-primary/10 rounded-lg"><User className="w-4 h-4 text-primary" /></div>
                           <div>
@@ -1765,6 +1839,15 @@ const ProviderBooking = () => {
           <img src={previewImage} className="max-w-[95vw] max-h-[90vh] object-contain rounded-lg shadow-2xl" alt="Preview" onClick={e => e.stopPropagation()} />
         </div>
       )}
+
+      <ChatModal 
+        bookingId={chatRoomType === 'provider_customer' ? chatBookingId : null}
+        roomType={chatRoomType}
+        providerId={chatRoomType === 'provider_admin' ? user?._id : null}
+        role="provider"
+        isOpen={!!chatBookingId}
+        onClose={() => { setChatBookingId(null); setChatRoomType('provider_customer'); }}
+      />
     </div>
   );
 };
