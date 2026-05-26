@@ -189,10 +189,11 @@ exports.Login = async (req, res) => {
     }
 
     // Generate access token (15 min)
+    /* BACKUP COMMENT: Original was { expiresIn: '30d' } */
     const token = jwt.sign(
       { id: user._id, email: user.email, role: userType === 'admin' ? 'admin' : user.role || userType },
       process.env.JWT_SECRET,
-      { expiresIn: '30d' }
+      { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m' }
     );
 
     // Prepare response data
@@ -326,7 +327,8 @@ exports.verifyResetOTP = async (req, res) => {
     const normalizedEmail = email.trim().toLowerCase();
 
     // Verify OTP
-    const isValid = verifyOTP(normalizedEmail, otp);
+    /* BACKUP COMMENT: Original was: const isValid = verifyOTP(normalizedEmail, otp); */
+    const isValid = await verifyOTP(normalizedEmail, otp);
     if (!isValid) {
       return res.status(400).json({
         success: false,
@@ -371,7 +373,8 @@ exports.resetPassword = async (req, res) => {
 
     // Verify OTP before allowing password reset
     try {
-      const isValidOTP = verifyOTP(normalizedEmail, otp);
+      /* BACKUP COMMENT: Original was: const isValidOTP = verifyOTP(normalizedEmail, otp); */
+      const isValidOTP = await verifyOTP(normalizedEmail, otp);
       if (!isValidOTP) {
         return res.status(400).json({
           success: false,
@@ -423,7 +426,8 @@ exports.resetPassword = async (req, res) => {
     await user.save();
 
     // Clear OTP after successful password reset
-    clearOTP(normalizedEmail);
+    /* BACKUP COMMENT: Original was: clearOTP(normalizedEmail); */
+    await clearOTP(normalizedEmail);
 
     res.status(200).json({
       success: true,
@@ -458,7 +462,8 @@ exports.resendOTP = async (req, res) => {
       await Admin.findOne({ email: normalizedEmail });
 
     // Clear any existing OTP first
-    clearOTP(normalizedEmail);
+    /* BACKUP COMMENT: Original was: clearOTP(normalizedEmail); */
+    await clearOTP(normalizedEmail);
 
     let fcmToken = null;
     if (user && user.fcmTokens && user.fcmTokens.length > 0) {
@@ -591,10 +596,11 @@ exports.firebaseLogin = async (req, res) => {
     if (picture && !user.profilePicUrl) user.profilePicUrl = picture;
 
     // 5. Generate tokens
+    /* BACKUP COMMENT: Original was: { expiresIn: '30d' } */
     const accessToken = jwt.sign(
       { id: user._id, email: user.email, role: userType === 'provider' ? 'provider' : 'customer' },
       process.env.JWT_SECRET,
-      { expiresIn: '30d' }
+      { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m' }
     );
     const { raw: refreshTokenRaw } = user.generateRefreshToken(deviceInfo);
 
@@ -665,10 +671,11 @@ exports.refreshAccessToken = async (req, res) => {
     if (oldToken) oldToken.isValid = false;
 
     // Issue new tokens
+    /* BACKUP COMMENT: Original was: { expiresIn: '30d' } */
     const accessToken = jwt.sign(
       { id: user._id, email: user.email, role: userType === 'admin' ? 'admin' : user.role || userType },
       process.env.JWT_SECRET,
-      { expiresIn: '30d' }
+      { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m' }
     );
     const deviceInfo = extractDeviceInfo(req);
     const { raw: newRefreshRaw } = user.generateRefreshToken(deviceInfo);

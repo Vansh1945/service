@@ -513,11 +513,9 @@ bookingSchema.pre('save', async function (next) {
     }
   }
 
-  // Increment customer total bookings when booking is completed
-  if (this.isModified('status') && this.status === 'completed') {
-    const User = mongoose.model('User');
-    await User.findByIdAndUpdate(this.customer, { $inc: { totalBookings: 1 } });
-  }
+  /* BACKUP COMMENT: Removed non-atomic totalBookings pre-save increment hook.
+     Moved to transactional completeBooking block in Booking-controller.js.
+  */
 
   next();
 });

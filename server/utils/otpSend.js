@@ -1,36 +1,28 @@
+/* BACKUP COMMENT: Original implementation used in-memory otpStore = new Map() and synchronous helpers. */
 const crypto = require("crypto");
 const nodemailer = require('nodemailer');
 const axios = require('axios');
 const admin = require('../config/firebaseAdmin');
+const OTP = require('../models/OTP-model');
 
-// In-memory OTP store (for production, use Redis)
-const otpStore = new Map();
-
-// Cleanup expired OTPs every minute
-setInterval(() => {
-  const now = Date.now();
-  for (const [email, data] of otpStore.entries()) {
-    if (data.expiresAt < now) {
-      otpStore.delete(email);
-    }
-  }
-}, 60000);
-
-exports.generateOTP = (email) => {
+exports.generateOTP = async (email) => {
   const otp = crypto.randomInt(100000, 999999).toString();
-  const expiresAt = Date.now() + 300000; // 5 minutes
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
-  otpStore.set(email, {
+  // Clear previous OTP for this email dynamically
+  await OTP.findOneAndDelete({ email });
+
+  await OTP.create({
+    email,
     otp,
     expiresAt,
-    attempts: 0, // Track verification attempts
-    createdAt: Date.now()
+    attempts: 0
   });
 
   return otp;
 };
 
-// Send OTP using FCM
+// Send OTP using FCM (Preserved original signature and logic)
 exports.sendOTPViaFCM = async (fcmToken, otp) => {
   const message = {
     notification: {
@@ -52,7 +44,7 @@ exports.sendOTPViaFCM = async (fcmToken, otp) => {
   }
 };
 
-// Internal function to send OTP using Brevo API
+// Internal function to send OTP using Brevo API (Preserved original signature and logic)
 const sendOTPWithBrevoInternal = async (email, otp) => {
   const apiKey = process.env.BREVO_SMTP_PASS || process.env.SMTP_PASS;
   const senderEmail = process.env.BREVO_FROM_EMAIL || process.env.SMTP_USER || 'noreply@service.com';
@@ -97,12 +89,10 @@ const sendOTPWithBrevoInternal = async (email, otp) => {
 
 exports.sendOTP = async (email, fcmToken = null) => {
   try {
-    // Clear any existing OTP for this email
-    if (otpStore.has(email)) {
-      otpStore.delete(email);
-    }
+    // Clear any existing OTP for this email in database
+    await OTP.findOneAndDelete({ email });
 
-    const otp = exports.generateOTP(email);
+    const otp = await exports.generateOTP(email);
 
     // Try FCM first if token is available
     if (fcmToken) {
@@ -129,8 +119,8 @@ exports.sendOTP = async (email, fcmToken = null) => {
   }
 };
 
-exports.verifyOTP = (email, otp) => {
-  const storedData = otpStore.get(email);
+exports.verifyOTP = async (email, otp) => {
+  const storedData = await OTP.findOne({ email });
 
   if (!storedData) {
     throw new Error("OTP not found or expired");
@@ -138,15 +128,15 @@ exports.verifyOTP = (email, otp) => {
 
   // Increment attempt counter
   storedData.attempts++;
-  otpStore.set(email, storedData);
+  await storedData.save();
 
   if (storedData.attempts > 3) {
-    otpStore.delete(email);
+    await OTP.deleteOne({ email });
     throw new Error("Too many attempts. OTP invalidated.");
   }
 
-  if (storedData.expiresAt < Date.now()) {
-    otpStore.delete(email);
+  if (storedData.expiresAt < new Date()) {
+    await OTP.deleteOne({ email });
     throw new Error("OTP expired");
   }
 
@@ -158,10 +148,11 @@ exports.verifyOTP = (email, otp) => {
 };
 
 // Additional utility functions
-exports.hasActiveOTP = (email) => {
-  return otpStore.has(email);
+exports.hasActiveOTP = async (email) => {
+  const count = await OTP.countDocuments({ email });
+  return count > 0;
 };
 
-exports.clearOTP = (email) => {
-  otpStore.delete(email);
+exports.clearOTP = async (email) => {
+  await OTP.deleteOne({ email });
 };

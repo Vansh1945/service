@@ -179,7 +179,8 @@ exports.completeRegistration = async (req, res) => {
 
         // Verify OTP
         try {
-            verifyOTP(email, otp);
+            /* BACKUP COMMENT: Original was: verifyOTP(email, otp); */
+            await verifyOTP(email, otp);
         } catch (otpError) {
             return res.status(400).json({
                 success: false,
@@ -188,7 +189,8 @@ exports.completeRegistration = async (req, res) => {
         }
 
         // Clear OTP after successful verification
-        clearOTP(email);
+        /* BACKUP COMMENT: Original was: clearOTP(email); */
+        await clearOTP(email);
 
         // Check if provider already exists and profile is complete
         const existingCompleteProvider = await Provider.findOne({

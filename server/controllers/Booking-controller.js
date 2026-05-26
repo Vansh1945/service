@@ -334,12 +334,14 @@ const autoAssignProviderIfEnabled = async (bookingId) => {
       return cat?._id ? cat._id.toString() : cat?.toString();
     }).filter(Boolean);
 
-    const { latLngToS2CellId, getNeighbors } = require('../utils/s2Helper');
+    /* BACKUP COMMENT: Original used synchronous S2 calculations, blocking the main Event Loop. Offloading to worker threads now. */
+    const { latLngToS2CellIdAsync, getNeighborsAsync } = require('../utils/s2HelperAsync');
     let targetCell = booking.address?.s2CellId;
     if (!targetCell) {
-      targetCell = latLngToS2CellId(lat, lng, 13);
+      targetCell = await latLngToS2CellIdAsync(lat, lng, 13);
     }
-    const searchCells = [targetCell, ...getNeighbors(targetCell)];
+    const neighborCells = await getNeighborsAsync(targetCell);
+    const searchCells = [targetCell, ...neighborCells];
 
     const query = {
       role: 'provider',
@@ -2603,15 +2605,7 @@ const acceptBooking = async (req, res) => {
       });
     }
 
-    // Find the booking that matches
-    const booking = await Booking.findOne({
-      _id: id,
-      status: { $in: ['pending', 'scheduled'] },
-      $or: [
-        { provider: { $exists: false } },
-        { provider: providerId }
-      ]
-    }).populate('services.service', 'category');
+    const booking = await Booking.findById(id).populate('services.service', 'category');
 
     if (!booking) {
       return res.status(404).json({
@@ -2640,21 +2634,41 @@ const acceptBooking = async (req, res) => {
       });
     }
 
-    // Update booking status to accepted
-    booking.status = 'accepted';
-    booking.provider = providerId;
-    if (time) booking.time = time;
-    booking.updatedAt = new Date();
+    /* BACKUP COMMENT: Original acceptBooking saved non-atomically, triggering race conditions. Replacing with atomic findOneAndUpdate. */
+    const updatedBooking = await Booking.findOneAndUpdate(
+      {
+        _id: id,
+        status: { $in: ['pending', 'scheduled'] },
+        $or: [
+          { provider: { $exists: false } },
+          { provider: null }
+        ]
+      },
+      {
+        $set: {
+          status: 'accepted',
+          provider: providerId,
+          updatedAt: new Date(),
+          ...(time && { time })
+        },
+        $push: {
+          statusHistory: {
+            status: 'accepted',
+            timestamp: new Date(),
+            note: `Booking accepted atomically by provider: ${provider.name}`,
+            updatedBy: 'provider'
+          }
+        }
+      },
+      { new: true, runValidators: true }
+    );
 
-    // Add to status history
-    booking.statusHistory.push({
-      status: 'accepted',
-      timestamp: new Date(),
-      note: `Booking accepted by provider: ${provider.name}`,
-      updatedBy: 'provider'
-    });
-
-    await booking.save();
+    if (!updatedBooking) {
+      return res.status(409).json({
+        success: false,
+        message: 'This booking has already been accepted by another service provider or is unavailable.'
+      });
+    }
 
     // Sync transaction record with the new provider and calculated commission
     try {
@@ -2833,13 +2847,24 @@ const startBooking = async (req, res) => {
     const distance = calculateDistance(providerLat, providerLng, targetLoc.latitude, targetLoc.longitude);
 
     // Dual-Layer S2 Precise Geofencing Verification (Level 20)
-    const { latLngToS2CellId, getNeighbors, getLevel } = require('../utils/s2Helper');
-    const providerS2Precise = latLngToS2CellId(providerLat, providerLng, 20);
+    /* BACKUP COMMENT: Original was synchronous S2 calculations, blocking the main Event Loop. Offloading to worker threads now. */
+    const { latLngToS2CellIdAsync, getNeighborsAsync, getLevelAsync } = require('../utils/s2HelperAsync');
+    const providerS2Precise = await latLngToS2CellIdAsync(providerLat, providerLng, 20);
     let targetS2Precise = booking.address?.s2CellIdPrecise;
-    if (!targetS2Precise || targetS2Precise.length !== 16 || getLevel(BigInt('0x' + targetS2Precise)) !== 20) {
-      targetS2Precise = latLngToS2CellId(targetLoc.latitude, targetLoc.longitude, 20);
+    
+    let isTargetValid = false;
+    if (targetS2Precise && targetS2Precise.length === 16) {
+      try {
+        const lvl = await getLevelAsync('0x' + targetS2Precise);
+        if (lvl === 20) isTargetValid = true;
+      } catch (e) {}
     }
-    const acceptableCells = [targetS2Precise, ...getNeighbors(targetS2Precise)];
+    
+    if (!isTargetValid) {
+      targetS2Precise = await latLngToS2CellIdAsync(targetLoc.latitude, targetLoc.longitude, 20);
+    }
+    const neighborCells = await getNeighborsAsync(targetS2Precise);
+    const acceptableCells = [targetS2Precise, ...neighborCells];
     if (!acceptableCells.includes(providerS2Precise)) {
       await createFraudLog(booking, 'failed_login', `S2 Geofence mismatch during start verification: Provider at ${providerLat}, ${providerLng} (Cell: ${providerS2Precise}) but target at ${targetLoc.latitude}, ${targetLoc.longitude} (Cell: ${targetS2Precise})`, 25, req);
 
@@ -3259,13 +3284,24 @@ const completeBooking = async (req, res) => {
     const distance = calculateDistance(providerLat, providerLng, targetLoc.latitude, targetLoc.longitude);
 
     // Dual-Layer S2 Precise Geofencing Verification (Level 20)
-    const { latLngToS2CellId, getNeighbors, getLevel } = require('../utils/s2Helper');
-    const providerS2Precise = latLngToS2CellId(providerLat, providerLng, 20);
+    /* BACKUP COMMENT: Original S2 calculations were synchronous. Offloading to worker threads now. */
+    const { latLngToS2CellIdAsync, getNeighborsAsync, getLevelAsync } = require('../utils/s2HelperAsync');
+    const providerS2Precise = await latLngToS2CellIdAsync(providerLat, providerLng, 20);
     let targetS2Precise = booking.address?.s2CellIdPrecise;
-    if (!targetS2Precise || targetS2Precise.length !== 16 || getLevel(BigInt('0x' + targetS2Precise)) !== 20) {
-      targetS2Precise = latLngToS2CellId(targetLoc.latitude, targetLoc.longitude, 20);
+    
+    let isTargetValid = false;
+    if (targetS2Precise && targetS2Precise.length === 16) {
+      try {
+        const lvl = await getLevelAsync('0x' + targetS2Precise);
+        if (lvl === 20) isTargetValid = true;
+      } catch (e) {}
     }
-    const acceptableCells = [targetS2Precise, ...getNeighbors(targetS2Precise)];
+    
+    if (!isTargetValid) {
+      targetS2Precise = await latLngToS2CellIdAsync(targetLoc.latitude, targetLoc.longitude, 20);
+    }
+    const neighborCells = await getNeighborsAsync(targetS2Precise);
+    const acceptableCells = [targetS2Precise, ...neighborCells];
     if (!acceptableCells.includes(providerS2Precise)) {
       await createFraudLog(booking, 'failed_login', `S2 Geofence mismatch during completion verification: Provider at ${providerLat}, ${providerLng} (Cell: ${providerS2Precise}) but target at ${targetLoc.latitude}, ${targetLoc.longitude} (Cell: ${targetS2Precise})`, 25, req);
 
@@ -3345,6 +3381,11 @@ const completeBooking = async (req, res) => {
     });
 
     await booking.save({ session });
+
+    // Atomic cross-document write moved from pre-save hook into the transactional session
+    /* BACKUP COMMENT: Incrementing customer completed bookings count atomically under active session. */
+    const User = mongoose.model('User');
+    await User.findByIdAndUpdate(booking.customer._id || booking.customer, { $inc: { totalBookings: 1 } }, { session });
 
     // ------------------------------
     // Cashback logic moved outside transaction to avoid Write Conflicts
