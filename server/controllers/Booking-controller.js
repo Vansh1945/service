@@ -62,7 +62,7 @@ const runInTransactionOrSequential = async (operationsFunc) => {
 const safeAbort = async (session) => {
   if (session) {
     try {
-      await safeAbort(session);
+      await session.abortTransaction();
     } catch (err) {
       console.warn("[Transaction] abort failed:", err.message);
     }
@@ -72,7 +72,7 @@ const safeAbort = async (session) => {
 const safeCommit = async (session) => {
   if (session) {
     try {
-      await safeCommit(session);
+      await session.commitTransaction();
     } catch (err) {
       console.error("[Transaction] commit failed:", err.message);
       throw err;
@@ -83,7 +83,7 @@ const safeCommit = async (session) => {
 const safeEnd = (session) => {
   if (session) {
     try {
-      safeEnd(session);
+      session.endSession();
     } catch (err) {
       console.warn("[Transaction] end failed:", err.message);
     }
@@ -375,7 +375,7 @@ const autoAssignProviderIfEnabled = async (bookingId) => {
     const { SystemConfig } = require('../models/SystemSetting');
     let settings = await SystemConfig.findOne();
     if (!settings) {
-      settings = new SystemConfig({ companyName: 'SAFEVOLT SOLUTIONS' });
+      settings = new SystemConfig({ companyName: 'Raj Electrical Services' });
       await settings.save();
     }
 
@@ -439,19 +439,6 @@ const autoAssignProviderIfEnabled = async (bookingId) => {
     };
 
     const nearbyProviders = await Provider.find(query);
-
-    const calculateDistance = (lat1, lon1, lat2, lon2) => {
-      const R = 6371e3; // metres
-      const φ1 = lat1 * Math.PI / 180;
-      const φ2 = lat2 * Math.PI / 180;
-      const Δφ = (lat2 - lat1) * Math.PI / 180;
-      const Δλ = (lon2 - lon1) * Math.PI / 180;
-      const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-        Math.cos(φ1) * Math.cos(φ2) *
-        Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return R * c;
-    };
 
     // Sort in memory by distance
     const providersWithDistance = nearbyProviders.map(p => {
@@ -613,7 +600,7 @@ const createBooking = async (req, res) => {
         const { SystemConfig } = require('../models/SystemSetting');
         let settings = await SystemConfig.findOne();
         if (!settings) {
-          settings = new SystemConfig({ companyName: 'SAFEVOLT SOLUTIONS' });
+          settings = new SystemConfig({ companyName: 'Raj Electrical Services' });
           await settings.save(session ? { session } : {});
         }
         const allowCOD = settings?.bookingSettings?.allowCOD ?? true;
@@ -1376,7 +1363,7 @@ const updateBookingPayment = async (req, res) => {
       const { SystemConfig } = require('../models/SystemSetting');
       let settings = await SystemConfig.findOne();
       if (!settings) {
-        settings = new SystemConfig({ companyName: 'SAFEVOLT SOLUTIONS' });
+        settings = new SystemConfig({ companyName: 'Raj Electrical Services' });
         await settings.save();
       }
       const allowCOD = settings?.bookingSettings?.allowCOD ?? true;
@@ -1988,7 +1975,7 @@ const cancelBooking = async (req, res) => {
     const { SystemConfig } = require('../models/SystemSetting');
     let settings = await SystemConfig.findOne();
     if (!settings) {
-      settings = new SystemConfig({ companyName: 'SAFEVOLT SOLUTIONS' });
+      settings = new SystemConfig({ companyName: 'Raj Electrical Services' });
       await settings.save({ session });
     }
     const cancelWindowMinutes = settings?.bookingSettings?.cancellationWindowMinutes ?? 60;

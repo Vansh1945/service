@@ -21,6 +21,7 @@ const ProviderRegistration = lazy(() => import("./pages/Provider/Provider-Regist
 const Unauthorized = lazy(() => import("./pages/Unauthorized"));
 const TermsAndConditions = lazy(() => import("./pages/TermsAndConditions"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 import LoadingSpinner from "./components/Loader";
 import RefundPolicy from "./pages/RefundPolicy";
 
@@ -161,7 +162,7 @@ const App = () => {
         if (response.data?.success) {
           const data = response.data.data;
           const settings = {
-            companyName: data?.companyName || "SAFEVOLT SOLUTIONS",
+            companyName: data?.companyName || "Raj Electrical Services",
             favicon: data?.favicon || null,
             timeFormat: normalizeTimeFormat(data?.timeFormat),
           };
@@ -268,7 +269,7 @@ const App = () => {
 
 
           {/* 404 Not Found Route - should be last */}
-          <Route path="*" element={<Home />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </SocketProvider>
 

@@ -30,7 +30,7 @@ const ProviderRoutes = () => {
     return (
         <Suspense fallback={<LoadingSpinner />}>
             <Routes>
-                <Route element={<ProtectedRoute allowedRoles={["provider"]} requireApproval requireTest />}>
+                <Route element={<ProtectedRoute allowedRoles={["provider"]} requireTest />}>
                     <Route element={<ProviderLayout />}>
                         <Route index element={<ProviderDashboard />} />
                         <Route path="profile" element={<ProviderProfile />} />

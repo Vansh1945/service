@@ -115,7 +115,7 @@ const bookingSchema = new Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'accepted', 'in-progress', 'completed', 'cancelled', 'confirmed', 'scheduled', 'no-show', 'assigned'],
+    enum: ['pending', 'accepted', 'in-progress', 'started', 'completed', 'cancelled', 'confirmed', 'scheduled', 'no-show', 'assigned'],
     default: 'pending'
   },
   rating: {
@@ -494,7 +494,7 @@ bookingSchema.pre('save', async function (next) {
         const { SystemConfig } = require('./SystemSetting');
         let settings = await SystemConfig.findOne();
         if (!settings) {
-          settings = new SystemConfig({ companyName: 'SAFEVOLT SOLUTIONS' });
+          settings = new SystemConfig({ companyName: 'Raj Electrical Services' });
           await settings.save();
         }
         const defaultCommPercent = settings?.commissionSettings?.defaultCommission ?? 10;
@@ -536,6 +536,18 @@ bookingSchema.index({ provider: 1, status: 1 });
 bookingSchema.index({ status: 1 });
 bookingSchema.index({ date: 1 });
 bookingSchema.index({ createdAt: -1 });
+
+// Unique partial compound index to prevent duplicate booking creation race conditions
+bookingSchema.index(
+  { customer: 1, date: 1, time: 1, totalAmount: 1 },
+  { 
+    unique: true,
+    partialFilterExpression: { 
+      status: { $nin: ['cancelled'] }, 
+      paymentStatus: { $in: ['pending', 'processing'] } 
+    } 
+  }
+);
 
 const Booking = mongoose.model('Booking', bookingSchema);
 

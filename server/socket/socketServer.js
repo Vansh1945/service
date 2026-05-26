@@ -9,16 +9,16 @@ const Provider = require('../models/Provider-model');
  * Helper to get namespace-based room name for socket and tracking purposes
  */
 const getRoomNamespace = (room) => {
-  if (room.roomType === 'provider_customer') {
-    return `provider_customer:${room.bookingId}`;
-  } else if (room.roomType === 'customer_admin') {
-    return `customer_admin:${room.customerId}`;
-  } else if (room.roomType === 'provider_admin') {
-    return `provider_admin:${room.providerId}`;
-  } else if (room.roomType === 'complaint_admin') {
-    return `complaint_admin:${room.complaintId}`;
-  }
-  return room._id.toString();
+    if (room.roomType === 'provider_customer') {
+        return `provider_customer:${room.bookingId}`;
+    } else if (room.roomType === 'customer_admin') {
+        return `customer_admin:${room.customerId}`;
+    } else if (room.roomType === 'provider_admin') {
+        return `provider_admin:${room.providerId}`;
+    } else if (room.roomType === 'complaint_admin') {
+        return `complaint_admin:${room.complaintId}`;
+    }
+    return room._id.toString();
 };
 
 let io = null;
@@ -206,9 +206,8 @@ const initSocket = (httpServer) => {
         cors: {
             origin: function (origin, callback) {
                 const allowedOrigins = [
-                    frontendUrl,
-                    'https://rajelectricalservices.vercel.app'
-                ];
+                    frontendUrl
+                ].filter(Boolean);
                 const isDev = process.env.NODE_ENV !== 'production';
                 if (!origin || allowedOrigins.includes(origin) || (isDev && (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')))) {
                     callback(null, true);

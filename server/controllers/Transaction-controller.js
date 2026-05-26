@@ -206,7 +206,7 @@ const createOrder = async (req, res) => {
           const { SystemConfig } = require('../models/SystemSetting');
           let settings = await SystemConfig.findOne();
           if (!settings) {
-            settings = new SystemConfig({ companyName: 'SAFEVOLT SOLUTIONS' });
+            settings = new SystemConfig({ companyName: 'Raj Electrical Services' });
             await settings.save();
           }
           const defaultCommPercent = settings?.commissionSettings?.defaultCommission ?? 10;
