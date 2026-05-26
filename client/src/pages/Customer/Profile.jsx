@@ -172,7 +172,7 @@ const UserProfile = () => {
             setLoading(true);
             const res = await getCustomerBookings(new URLSearchParams({ status: 'completed' }));
             const pastBookings = res.data?.data || [];
-            
+
             const originalBooking = pastBookings.find(
                 b => (b.provider?._id || b.provider?.id || b.provider)?.toString() === fp.providerId?.toString()
             );
@@ -222,17 +222,17 @@ const UserProfile = () => {
             } else if (name === 'pincode') {
                 updatedAddress.postalCode = value;
             }
-            
+
             // Construct street address dynamically
             const parts = [];
             if (updatedAddress.houseNumber) parts.push(updatedAddress.houseNumber);
             if (updatedAddress.road) parts.push(updatedAddress.road);
             updatedAddress.street = parts.join(', ') || updatedAddress.street || '';
             updatedAddress.addressLine = updatedAddress.street;
-            
+
             // Update formatted address preview
             updatedAddress.formattedAddress = buildAddressPreview(updatedAddress);
-            
+
             return {
                 ...prev,
                 address: updatedAddress
@@ -467,9 +467,8 @@ const UserProfile = () => {
                                         <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Personal Information</h3>
                                         <button
                                             onClick={() => { setIsEditing(!isEditing); }}
-                                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${
-                                                isEditing ? 'bg-gray-100 text-gray-600 hover:bg-gray-200' : 'bg-primary text-white hover:bg-primary/90'
-                                            }`}
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${isEditing ? 'bg-gray-100 text-gray-600 hover:bg-gray-200' : 'bg-primary text-white hover:bg-primary/90'
+                                                }`}
                                         >
                                             {isEditing ? 'Cancel' : <><Edit2 className="w-3.5 h-3.5" /> Edit</>}
                                         </button>
@@ -536,9 +535,8 @@ const UserProfile = () => {
                                         <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Saved Address</h3>
                                         <button
                                             onClick={() => setIsEditingAddress(!isEditingAddress)}
-                                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${
-                                                isEditingAddress ? 'bg-gray-100 text-gray-600 hover:bg-gray-200' : 'bg-primary text-white hover:bg-primary/90'
-                                            }`}
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${isEditingAddress ? 'bg-gray-100 text-gray-600 hover:bg-gray-200' : 'bg-primary text-white hover:bg-primary/90'
+                                                }`}
                                         >
                                             {isEditingAddress ? 'Cancel' : <><Edit2 className="w-3.5 h-3.5" /> Edit Address</>}
                                         </button>
@@ -664,8 +662,8 @@ const UserProfile = () => {
                                                                     {isCredit ? '+' : '−'}{formatCurrency(entry.amount)}
                                                                 </p>
                                                                 <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full ${isCredit
-                                                                        ? 'bg-emerald-50 text-emerald-600'
-                                                                        : 'bg-red-50 text-red-500'
+                                                                    ? 'bg-emerald-50 text-emerald-600'
+                                                                    : 'bg-red-50 text-red-500'
                                                                     }`}>
                                                                     {isCredit ? 'Credit' : 'Debit'}
                                                                 </span>
@@ -732,11 +730,10 @@ const UserProfile = () => {
                                                     className="relative bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all group"
                                                 >
                                                     {/* Top color strip */}
-                                                    <div className={`h-1 w-full ${
-                                                        isFirstBooking ? 'bg-gradient-to-r from-violet-500 to-purple-500'
-                                                        : isPersonal ? 'bg-gradient-to-r from-amber-400 to-orange-400'
-                                                        : 'bg-gradient-to-r from-primary to-teal-400'
-                                                    }`} />
+                                                    <div className={`h-1 w-full ${isFirstBooking ? 'bg-gradient-to-r from-violet-500 to-purple-500'
+                                                            : isPersonal ? 'bg-gradient-to-r from-amber-400 to-orange-400'
+                                                                : 'bg-gradient-to-r from-primary to-teal-400'
+                                                        }`} />
 
                                                     <div className="p-3">
                                                         {/* Badges row */}
@@ -766,11 +763,10 @@ const UserProfile = () => {
                                                         {/* Discount amount */}
                                                         <div className="flex items-end justify-between mb-2">
                                                             <div>
-                                                                <p className={`text-xl font-black tracking-tighter ${
-                                                                    isFirstBooking ? 'text-violet-600'
-                                                                    : isPersonal ? 'text-amber-500'
-                                                                    : 'text-primary'
-                                                                }`}>
+                                                                <p className={`text-xl font-black tracking-tighter ${isFirstBooking ? 'text-violet-600'
+                                                                        : isPersonal ? 'text-amber-500'
+                                                                            : 'text-primary'
+                                                                    }`}>
                                                                     {isPercent ? `${coupon.discountValue}%` : `₹${coupon.discountValue}`}
                                                                     <span className="text-xs font-bold ml-1">OFF</span>
                                                                 </p>
@@ -943,7 +939,7 @@ const UserProfile = () => {
                                             <div key={fp.providerId} className="bg-white rounded-2xl border border-gray-100 hover:border-gray-200 hover:shadow-lg transition-all p-4 flex flex-col justify-between shadow-sm relative overflow-hidden group">
                                                 {/* Top Status Bar indicator */}
                                                 <div className={`absolute top-0 left-0 right-0 h-1 ${fp.isOnline ? 'bg-emerald-400' : 'bg-gray-200'}`} />
-                                                
+
                                                 <div className="flex gap-3.5 items-start mt-1">
                                                     {/* Avatar & Online status */}
                                                     <div className="relative shrink-0">
@@ -952,9 +948,8 @@ const UserProfile = () => {
                                                             alt={fp.providerName}
                                                             className="w-12 h-12 rounded-xl object-cover border border-gray-100"
                                                         />
-                                                        <span className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-white ${
-                                                            fp.isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300'
-                                                        }`} />
+                                                        <span className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-white ${fp.isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300'
+                                                            }`} />
                                                     </div>
 
                                                     <div className="min-w-0 flex-1">
@@ -962,13 +957,20 @@ const UserProfile = () => {
                                                         <span className="inline-block text-[10px] font-black uppercase tracking-wider text-primary bg-primary/5 px-2 py-0.5 rounded-md mt-0.5">
                                                             {fp.category}
                                                         </span>
-                                                        
-                                                        {fp.rating > 0 && (
-                                                            <div className="flex items-center gap-1 mt-1.5">
-                                                                <Star className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
-                                                                <span className="text-xs font-bold text-secondary">{fp.rating.toFixed(1)}/5</span>
+
+                                                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5">
+                                                            {fp.rating > 0 && (
+                                                                <div className="flex items-center gap-1">
+                                                                    <Star className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
+                                                                    <span className="text-xs font-bold text-secondary">{fp.rating.toFixed(1)}/5</span>
+                                                                </div>
+                                                            )}
+                                                            {fp.rating > 0 && <span className="text-gray-300 text-xs">•</span>}
+                                                            <div className="flex items-center gap-1 text-xs text-gray-500">
+                                                                <CheckCircle className="w-3.5 h-3.5 text-emerald-500 fill-emerald-50" />
+                                                                <span className="font-semibold text-secondary">{fp.completedBookings || 0} completed bookings</span>
                                                             </div>
-                                                        )}
+                                                        </div>
 
                                                         {fp.lastBookedAt && (
                                                             <p className="text-[10px] text-gray-400 mt-2 flex items-center gap-1.5 font-medium">

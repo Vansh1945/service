@@ -7,7 +7,7 @@ const path = require('path');
 const fs = require('fs');
 const compression = require("compression");
 const helmet = require("helmet");
-const mongoSanitize = require("express-mongo-sanitize");
+const mongoSanitize = require("./middlewares/mongo-sanitize");
 
 // Ensure logs directory exists
 const logDir = path.join(__dirname, 'logs');

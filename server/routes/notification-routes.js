@@ -14,7 +14,14 @@ const flexAuth = (req, res, next) => {
         req.userID = decoded.id;
         req.role = decoded.role || 'customer';
         next();
-    } catch {
+    } catch (err) {
+        if (err.name === 'TokenExpiredError') {
+            return res.status(401).json({
+                success: false,
+                tokenExpired: true,
+                message: 'Access token expired. Please refresh your session.'
+            });
+        }
         return res.status(401).json({ success: false, message: 'Invalid token' });
     }
 };

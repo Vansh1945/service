@@ -7,3 +7,5 @@ server/serviceAccountKey.json
 .DS_Store
 dist/
 build/
+FUTURE_FEATURES_PLAN.md
+AI_FEATURES_PLAN.md

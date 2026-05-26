@@ -182,7 +182,7 @@ export const AuthProvider = ({ children }) => {
             }
         } catch (error) {
             console.error("Failed to refresh session data:", error);
-            if (error.response?.status === 401 && isTokenExpired(token)) {
+            if (error.response?.status === 401) {
                 logoutUser();
             }
         }

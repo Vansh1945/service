@@ -183,9 +183,9 @@ const register = async (req, res) => {
 
     if (userExists || emailExistsInProvider || emailExistsInAdmin) {
       const errors = {};
-      
+
       const checkEmail = email.trim().toLowerCase();
-      
+
       if (userExists && userExists.email && userExists.email.toLowerCase() === checkEmail) {
         errors.email = "Email is already registered";
       } else if (emailExistsInProvider) {
@@ -193,7 +193,7 @@ const register = async (req, res) => {
       } else if (emailExistsInAdmin) {
         errors.email = "Email is already registered";
       }
-      
+
       if (userExists && userExists.phone === phone.trim().replace(/\s+/g, '')) {
         errors.phone = "Phone number is already registered";
       }
@@ -361,28 +361,39 @@ const getProfile = async (req, res) => {
       for (const fav of user.favoriteProviders) {
         try {
           const prov = await Provider.findById(fav.providerId)
-            .select('performanceScore.rating profilePicUrl isOnline isActive approved')
+            .select('performanceScore.rating profilePicUrl isOnline isActive approved services completedBookings')
+            .populate('services', 'name')
             .lean();
           if (prov) {
+            const categoryNames = prov.services && prov.services.length > 0
+              ? prov.services.map(s => s.name).join(', ')
+              : 'N/A';
+
             enrichedFavorites.push({
               ...fav,
               rating: prov.performanceScore?.rating || 0,
               profilePicUrl: prov.profilePicUrl,
               isOnline: prov.isOnline,
               isActive: prov.isActive,
-              approved: prov.approved
+              approved: prov.approved,
+              category: categoryNames,
+              completedBookings: prov.completedBookings || 0
             });
           } else {
             enrichedFavorites.push({
               ...fav,
-              rating: 0
+              rating: 0,
+              category: fav.category || 'N/A',
+              completedBookings: 0
             });
           }
         } catch (err) {
           console.error('Error fetching favorite provider details in getProfile:', err);
           enrichedFavorites.push({
             ...fav,
-            rating: 0
+            rating: 0,
+            category: fav.category || 'N/A',
+            completedBookings: 0
           });
         }
       }
@@ -453,7 +464,7 @@ const updateProfile = async (req, res) => {
         formattedAddress: address.formattedAddress ? address.formattedAddress.trim() : undefined,
         addressLine: address.addressLine ? address.addressLine.trim() : undefined
       };
-      
+
       if (typeof latVal === 'number' && typeof lngVal === 'number' && !isNaN(latVal) && !isNaN(lngVal)) {
         updates.currentLocation = {
           type: 'Point',
@@ -848,10 +859,20 @@ const toggleFavoriteProvider = async (req, res) => {
       user.favoriteProviders.splice(existingIdx, 1);
       isFavorite = false;
     } else {
+      // Find provider to get category & name
+      const prov = await Provider.findById(providerId)
+        .select('name services')
+        .populate('services', 'name')
+        .lean();
+
+      const categoryNames = prov && prov.services && prov.services.length > 0
+        ? prov.services.map(s => s.name).join(', ')
+        : 'N/A';
+
       user.favoriteProviders.push({
         providerId,
-        providerName: providerName || 'Provider',
-        category: category || 'N/A',
+        providerName: prov ? prov.name : (providerName || 'Provider'),
+        category: categoryNames,
         lastBookedAt: new Date()
       });
       isFavorite = true;
