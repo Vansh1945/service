@@ -203,7 +203,16 @@ const createOrder = async (req, res) => {
           providerEarning = netAmount || booking.totalAmount;
           commissionRuleId = rule._id;
         } else {
-          providerEarning = booking.totalAmount;
+          const { SystemConfig } = require('../models/SystemSetting');
+          let settings = await SystemConfig.findOne();
+          if (!settings) {
+            settings = new SystemConfig({ companyName: 'SAFEVOLT SOLUTIONS' });
+            await settings.save();
+          }
+          const defaultCommPercent = settings?.commissionSettings?.defaultCommission ?? 10;
+          const calculatedComm = parseFloat(((booking.totalAmount * defaultCommPercent) / 100).toFixed(2));
+          commission = calculatedComm || 0;
+          providerEarning = parseFloat((booking.totalAmount - commission).toFixed(2));
         }
       } catch (err) {
         console.error('Error calculating initial commission:', err);

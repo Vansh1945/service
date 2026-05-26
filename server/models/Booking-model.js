@@ -491,8 +491,18 @@ bookingSchema.pre('save', async function (next) {
         this.providerEarnings = netAmount || this.totalAmount;
         this.commissionRule = commissionRule._id;
       } else {
-        this.commissionAmount = 0;
-        this.providerEarnings = this.totalAmount;
+        const { SystemConfig } = require('./SystemSetting');
+        let settings = await SystemConfig.findOne();
+        if (!settings) {
+          settings = new SystemConfig({ companyName: 'SAFEVOLT SOLUTIONS' });
+          await settings.save();
+        }
+        const defaultCommPercent = settings?.commissionSettings?.defaultCommission ?? 10;
+        const commission = parseFloat(((this.totalAmount * defaultCommPercent) / 100).toFixed(2));
+        const netAmount = parseFloat((this.totalAmount - commission).toFixed(2));
+
+        this.commissionAmount = commission || 0;
+        this.providerEarnings = netAmount || this.totalAmount;
         this.commissionRule = null;
       }
     } catch (error) {

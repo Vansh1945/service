@@ -1731,9 +1731,18 @@ exports.getWalletInfo = async (req, res) => {
             status: 'completed'
         }).sort({ updatedAt: -1 }).lean();
 
+        // Fetch minimum withdrawal from system settings
+        const { SystemConfig } = require('../models/SystemSetting');
+        let settings = await SystemConfig.findOne();
+        if (!settings) {
+            settings = new SystemConfig({ companyName: 'SAFEVOLT SOLUTIONS' });
+            await settings.save();
+        }
+        const minWithdrawalLimit = settings?.walletSettings?.minWithdrawal ?? 500;
+
         // Check if provider can withdraw (has valid bank details and minimum balance)
         const canWithdraw = provider?.bankDetails?.verified &&
-            availableBalance >= 500 && // Minimum withdrawal amount
+            availableBalance >= minWithdrawalLimit && // Minimum withdrawal amount
             provider?.bankDetails?.accountNo &&
             provider?.bankDetails?.ifsc;
 

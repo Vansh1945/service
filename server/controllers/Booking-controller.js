@@ -295,7 +295,11 @@ const sanitizeStatusHistoryForProvider = (statusHistory) => {
 const autoAssignProviderIfEnabled = async (bookingId) => {
   try {
     const { SystemConfig } = require('../models/SystemSetting');
-    const settings = await SystemConfig.findOne();
+    let settings = await SystemConfig.findOne();
+    if (!settings) {
+      settings = new SystemConfig({ companyName: 'SAFEVOLT SOLUTIONS' });
+      await settings.save();
+    }
 
     // Check if auto assign is enabled
     if (!settings || !settings.bookingSettings || !settings.bookingSettings.autoAssignProvider) {
@@ -526,6 +530,25 @@ const createBooking = async (req, res) => {
         success: false,
         message: 'Payment method must be either "online", "cash", "wallet" or "mixed"'
       });
+    }
+
+    // Validate if Cash On Delivery (COD) is allowed
+    if (paymentMethod === 'cash') {
+      const { SystemConfig } = require('../models/SystemSetting');
+      let settings = await SystemConfig.findOne();
+      if (!settings) {
+        settings = new SystemConfig({ companyName: 'SAFEVOLT SOLUTIONS' });
+        await settings.save({ session });
+      }
+      const allowCOD = settings?.bookingSettings?.allowCOD ?? true;
+      if (!allowCOD) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({
+          success: false,
+          message: 'Pay after service (COD/Cash) is currently disabled by system administrator.'
+        });
+      }
     }
 
     // Check if service exists
@@ -1337,6 +1360,23 @@ const updateBookingPayment = async (req, res) => {
       });
     }
 
+    // Validate if Cash On Delivery (COD) is allowed
+    if (paymentMethod === 'cash') {
+      const { SystemConfig } = require('../models/SystemSetting');
+      let settings = await SystemConfig.findOne();
+      if (!settings) {
+        settings = new SystemConfig({ companyName: 'SAFEVOLT SOLUTIONS' });
+        await settings.save();
+      }
+      const allowCOD = settings?.bookingSettings?.allowCOD ?? true;
+      if (!allowCOD) {
+        return res.status(400).json({
+          success: false,
+          message: 'Pay after service (COD/Cash) is currently disabled by system administrator.'
+        });
+      }
+    }
+
     // Validate payment status
     if (!['pending', 'processing', 'paid', 'failed'].includes(paymentStatus)) {
       return res.status(400).json({
@@ -1920,10 +1960,29 @@ const cancelBooking = async (req, res) => {
 
     const previousStatus = booking.status;
     const isStarted = !!booking.serviceStartedAt;
+
+    // Check cancellation window dynamically from System Settings
+    const { SystemConfig } = require('../models/SystemSetting');
+    let settings = await SystemConfig.findOne();
+    if (!settings) {
+      settings = new SystemConfig({ companyName: 'SAFEVOLT SOLUTIONS' });
+      await settings.save({ session });
+    }
+    const cancelWindowMinutes = settings?.bookingSettings?.cancellationWindowMinutes ?? 60;
+
+    const now = new Date();
+    const scheduledTime = new Date(booking.date);
+    if (booking.time) {
+      const [hours, minutes] = booking.time.split(':').map(Number);
+      scheduledTime.setHours(hours, minutes, 0, 0);
+    }
+    const diffMins = (scheduledTime.getTime() - now.getTime()) / (1000 * 60);
+    const outsideCancelWindow = diffMins < cancelWindowMinutes;
+
     let refundDetails = null;
 
-    if (isStarted) {
-      // CASE 2: After serviceStartedAt but before completed
+    if (isStarted || outsideCancelWindow) {
+      // CASE 2: After serviceStartedAt or too close to scheduled time
       booking.status = 'cancelled';
       if (global.logger) global.logger.warn(`Booking cancelled: ${booking._id}`);
 
@@ -1932,7 +1991,7 @@ const cancelBooking = async (req, res) => {
 
       booking.disputeStatus = 'pending';
       booking.cancellationProgress.status = 'cancelled';
-      booking.cancellationProgress.reason = reason || 'Customer requested cancellation after start';
+      booking.cancellationProgress.reason = reason || (isStarted ? 'Customer requested cancellation after start' : `Cancellation too close to scheduled time (within ${cancelWindowMinutes} mins)`);
       booking.cancellationProgress.cancelledAt = new Date();
 
       await booking.save({ session });
@@ -1957,7 +2016,9 @@ const cancelBooking = async (req, res) => {
           userId,
           'customer',
           'Cancellation Under Review',
-          `Your cancellation for booking ${booking._id} is under review for refund as the service had already started.`,
+          isStarted
+            ? `Your cancellation for booking ${booking._id} is under review for refund as the service had already started.`
+            : `Your cancellation for booking ${booking._id} is under review for refund as it was within the ${cancelWindowMinutes}-minute window before scheduled start.`,
           'refund_processing',
           booking._id
         );
@@ -1967,7 +2028,9 @@ const cancelBooking = async (req, res) => {
       try {
         notifyAdmins(
           'Refund Dispute Raised',
-          `Booking ${booking._id} was cancelled after service started. Admin review required for refund.`,
+          isStarted
+            ? `Booking ${booking._id} was cancelled after service started. Admin review required for refund.`
+            : `Booking ${booking._id} was cancelled within the ${cancelWindowMinutes}-minute window before start. Admin review required for refund.`,
           'dispute',
           booking._id
         );
@@ -1975,7 +2038,9 @@ const cancelBooking = async (req, res) => {
 
       return res.json({
         success: true,
-        message: 'Booking cancelled. Since the service had already started, a refund dispute has been raised for admin review.',
+        message: isStarted
+          ? 'Booking cancelled. Since the service had already started, a refund dispute has been raised for admin review.'
+          : `Booking cancelled. Since the cancellation was made within the ${cancelWindowMinutes}-minute window before the scheduled time, a refund dispute has been raised for admin review.`,
         data: {
           bookingId: booking._id,
           status: booking.status,

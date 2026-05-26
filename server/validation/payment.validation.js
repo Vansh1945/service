@@ -5,8 +5,8 @@ const requestBulkWithdrawalSchema = z.object({
     const num = Number(val);
     if (isNaN(num)) throw new Error("Amount must be a valid number");
     return num;
-  }).refine(val => val >= 500, {
-    message: "Minimum withdrawal amount is ₹500"
+  }).refine(val => val > 0, {
+    message: "Withdrawal amount must be a positive number"
   })
 });
 

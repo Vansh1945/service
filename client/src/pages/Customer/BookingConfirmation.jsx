@@ -12,6 +12,7 @@ import { getBooking, updateBookingPayment, payBooking } from '../../services/Boo
 import axiosInstance from '../../api/axiosInstance';
 import * as TransactionService from '../../services/TransactionService';
 import * as CustomerService from '../../services/CustomerService';
+import * as SystemService from '../../services/SystemService';
 import Loader from '../../components/Loader';
 import { formatDate, formatTime, formatCurrency } from '../../utils/format';
 
@@ -25,6 +26,7 @@ const BookingConfirmation = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('online');
+  const [allowCOD, setAllowCOD] = useState(true);
   const [walletBalance, setWalletBalance] = useState(0);
   const [bookingDetails, setBookingDetails] = useState(null);
   const [serviceDetails, setServiceDetails] = useState(null);
@@ -128,6 +130,11 @@ const BookingConfirmation = () => {
         const profileRes = await CustomerService.getProfile().catch(() => null);
         if (profileRes?.data?.user?.wallet) {
           setWalletBalance(profileRes.data.user.wallet.availableBalance || 0);
+        }
+
+        const settingsRes = await SystemService.getSystemSetting().catch(() => null);
+        if (settingsRes?.data?.success) {
+          setAllowCOD(settingsRes.data.data?.bookingSettings?.allowCOD !== false);
         }
 
         if (location.state?.booking) {
@@ -736,6 +743,23 @@ const BookingConfirmation = () => {
                         <CreditCard className="w-3 h-3" />
                       </div>
                     </div>
+
+                    {/* Pay After Service (COD) */}
+                    {allowCOD && (
+                      <div
+                        className={`flex items-center gap-3 p-2.5 border rounded-xl cursor-pointer transition-all ${paymentMethod === 'cash' ? 'border-primary bg-primary/5 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}
+                        onClick={() => setPaymentMethod('cash')}
+                      >
+                        <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'cash' ? 'border-primary' : 'border-gray-300'}`}>
+                          {paymentMethod === 'cash' && <div className="w-1.5 h-1.5 bg-primary rounded-full" />}
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-xs font-bold text-secondary">Pay After Service (COD)</p>
+                          <p className="text-[9px] text-gray-400">Pay cash or via UPI directly to the provider</p>
+                        </div>
+                        <Wallet className="w-3.5 h-3.5 text-gray-300" />
+                      </div>
+                    )}
                   </div>
 
                   {/* Mixed payment deduction details */}
@@ -758,6 +782,8 @@ const BookingConfirmation = () => {
                       onClick={() => {
                         if (paymentMethod === 'wallet') {
                           handleWalletPayment();
+                        } else if (paymentMethod === 'cash') {
+                          setShowCashModal(true);
                         } else {
                           handleOnlineOrMixedPayment(paymentMethod);
                         }
@@ -772,25 +798,21 @@ const BookingConfirmation = () => {
                         </>
                       ) : (
                         <>
-                          <CreditCard className="w-4 h-4" />
+                          {paymentMethod === 'cash' ? (
+                            <Wallet className="w-4 h-4" />
+                          ) : (
+                            <CreditCard className="w-4 h-4" />
+                          )}
                           {paymentMethod === 'wallet'
                             ? `Pay via Wallet • ${formatCurrency(totalAmount)}`
                             : paymentMethod === 'mixed'
                               ? `Pay Remaining • ${formatCurrency(Math.max(0, totalAmount - walletBalance))}`
-                              : `Pay Online • ${formatCurrency(totalAmount)}`}
+                              : paymentMethod === 'cash'
+                                ? `Confirm Cash Booking • ${formatCurrency(totalAmount)}`
+                                : `Pay Online • ${formatCurrency(totalAmount)}`}
                         </>
                       )}
                     </button>
-                    {bookingDetails.paymentMethod === 'cash' && (
-                      <button
-                        onClick={() => setShowCashModal(true)}
-                        disabled={isProcessingPayment}
-                        className="w-full flex items-center justify-center gap-2 py-2.5 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <Wallet className="w-4 h-4" />
-                        Keep Cash / COD
-                      </button>
-                    )}
                   </div>
                   <div className="mt-3 flex justify-center gap-3 text-xs text-gray-400">
                     <div className="flex items-center gap-1"><Lock className="w-3 h-3" />Secure</div>

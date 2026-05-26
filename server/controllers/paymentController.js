@@ -417,9 +417,18 @@ const requestBulkWithdrawal = async (req, res) => {
     const providerId = req.provider._id;
     const { amount } = req.body;
 
+    // Fetch minimum withdrawal from system settings
+    const { SystemConfig } = require('../models/SystemSetting');
+    let settings = await SystemConfig.findOne();
+    if (!settings) {
+      settings = new SystemConfig({ companyName: 'SAFEVOLT SOLUTIONS' });
+      await settings.save();
+    }
+    const minWithdrawalLimit = settings?.walletSettings?.minWithdrawal ?? 500;
+
     // STEP 1: Basic Validations
-    if (!amount || isNaN(amount) || amount < 500) {
-      return res.status(400).json({ success: false, error: "Minimum withdrawal ₹500" });
+    if (!amount || isNaN(amount) || amount < minWithdrawalLimit) {
+      return res.status(400).json({ success: false, error: `Minimum withdrawal ₹${minWithdrawalLimit}` });
     }
 
     const provider = await Provider.findById(providerId)
