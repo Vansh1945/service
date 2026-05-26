@@ -2,15 +2,16 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/auth';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
-import { getProfile, updateProfile, updateprofilepic } from '../../services/CustomerService';
+import { getProfile, updateProfile, updateprofilepic, toggleFavoriteProvider } from '../../services/CustomerService';
 import AddressSelector from '../../components/AddressSelector';
 import * as NotificationService from '../../services/NotificationService';
 import {
     User, MapPin, Mail, Phone, Camera, LogOut, Shield, Bell,
     ChevronRight, ArrowLeft, CreditCard, Package, Edit2, CheckCircle, Gift, Wallet, ArrowDownLeft, RotateCcw,
-    Tag, Copy, Clock, Zap, Star
+    Tag, Copy, Clock, Zap, Star, Heart
 } from 'lucide-react';
 import { getWalletHistory } from '../../services/CustomerService';
+import { getCustomerBookings } from '../../services/BookingService';
 import { getAvailableCoupons } from '../../services/CouponService';
 import { formatCurrency, formatDate, formatDateTime, compressImage } from '../../utils/format';
 
@@ -166,6 +167,47 @@ const UserProfile = () => {
         }
     };
 
+    const handleBookAgainFavorite = async (fp) => {
+        try {
+            setLoading(true);
+            const res = await getCustomerBookings(new URLSearchParams({ status: 'completed' }));
+            const pastBookings = res.data?.data || [];
+            
+            const originalBooking = pastBookings.find(
+                b => (b.provider?._id || b.provider?.id || b.provider)?.toString() === fp.providerId?.toString()
+            );
+
+            if (originalBooking && originalBooking.services?.[0]?.service?._id) {
+                navigate(`/customer/book-service/${originalBooking.services[0].service._id}`, {
+                    state: { prefillBooking: originalBooking }
+                });
+            } else {
+                toast.info("No past booking details found for this provider. Redirecting to service page...");
+                navigate('/customer/services');
+            }
+        } catch (err) {
+            console.error(err);
+            toast.error("Failed to retrieve booking information.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleRemoveFavorite = async (providerId) => {
+        try {
+            setLoading(true);
+            const res = await toggleFavoriteProvider({ providerId });
+            if (res.data?.success) {
+                toast.success(res.data.message || 'Removed from favorites');
+                fetchProfile();
+            }
+        } catch (err) {
+            toast.error(err.response?.data?.message || err.message || 'Failed to remove favorite');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setProfile(prev => ({ ...prev, [name]: value }));
@@ -291,6 +333,7 @@ const UserProfile = () => {
                             {[
                                 { id: 'profile', label: 'My Profile', icon: <User className="w-4 h-4" /> },
                                 { id: 'payments', label: 'Wallet & Payments', icon: <Wallet className="w-4 h-4" /> },
+                                { id: 'favorites', label: 'Favorite Providers', icon: <Heart className="w-4 h-4" /> },
                                 { id: 'offers', label: 'Offers', icon: <Gift className="w-4 h-4" />, secondary: true },
                                 { id: 'settings', label: 'Notification Settings', icon: <Bell className="w-4 h-4" /> },
                                 { id: 'support', label: 'Support', icon: <Shield className="w-4 h-4" />, secondary: true, action: () => navigate('/customer/complaints') },
@@ -391,9 +434,10 @@ const UserProfile = () => {
                                 </div>
 
                                 {/* Mobile Quick Links - Only visible on small screens */}
-                                <div className="grid grid-cols-4 gap-2 mt-6 lg:hidden border-t border-gray-50 pt-4">
+                                <div className="grid grid-cols-5 gap-1 mt-6 lg:hidden border-t border-gray-50 pt-4">
                                     {[
                                         { id: 'payments', label: 'Wallet', icon: <Wallet className="w-4 h-4 text-primary" /> },
+                                        { id: 'favorites', label: 'Saved', icon: <Heart className="w-4 h-4 text-rose-500" /> },
                                         { id: 'offers', label: 'Offers', icon: <Gift className="w-4 h-4 text-accent" /> },
                                         { id: 'settings', label: 'Settings', icon: <Bell className="w-4 h-4 text-teal-600" /> },
                                         { id: 'support', label: 'Support', icon: <Shield className="w-4 h-4 text-blue-500" />, action: () => navigate('/customer/complaints') },
@@ -868,6 +912,91 @@ const UserProfile = () => {
                                         ))}
                                     </div>
                                 </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'favorites' && (
+                            <div className="space-y-4 animate-fade-in">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h3 className="text-base font-bold text-secondary">My Favorite Providers</h3>
+                                        <p className="text-xs text-gray-400 mt-0.5">Quickly rebook or manage your preferred service professionals</p>
+                                    </div>
+                                    <span className="text-[10px] font-bold bg-primary/10 text-primary px-2.5 py-1 rounded-full">
+                                        {profile.favoriteProviders?.length || 0} saved
+                                    </span>
+                                </div>
+
+                                {(!profile.favoriteProviders || profile.favoriteProviders.length === 0) ? (
+                                    <div className="bg-white rounded-xl border border-gray-100 p-12 text-center shadow-sm">
+                                        <div className="w-16 h-16 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-rose-100">
+                                            <Heart className="w-8 h-8 text-rose-500 fill-rose-100" />
+                                        </div>
+                                        <p className="text-sm font-bold text-gray-500">No favorite providers yet</p>
+                                        <p className="text-xs text-gray-400 mt-1.5 max-w-sm mx-auto">
+                                            You can save your preferred service providers by clicking "❤️ Add to Favorites" on completed booking cards!
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {profile.favoriteProviders.map((fp) => (
+                                            <div key={fp.providerId} className="bg-white rounded-2xl border border-gray-100 hover:border-gray-200 hover:shadow-lg transition-all p-4 flex flex-col justify-between shadow-sm relative overflow-hidden group">
+                                                {/* Top Status Bar indicator */}
+                                                <div className={`absolute top-0 left-0 right-0 h-1 ${fp.isOnline ? 'bg-emerald-400' : 'bg-gray-200'}`} />
+                                                
+                                                <div className="flex gap-3.5 items-start mt-1">
+                                                    {/* Avatar & Online status */}
+                                                    <div className="relative shrink-0">
+                                                        <img
+                                                            src={fp.profilePicUrl || `https://ui-avatars.com/api/?name=${fp.providerName}&background=0D9488&color=fff`}
+                                                            alt={fp.providerName}
+                                                            className="w-12 h-12 rounded-xl object-cover border border-gray-100"
+                                                        />
+                                                        <span className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-white ${
+                                                            fp.isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300'
+                                                        }`} />
+                                                    </div>
+
+                                                    <div className="min-w-0 flex-1">
+                                                        <h4 className="text-sm font-bold text-secondary truncate">{fp.providerName}</h4>
+                                                        <span className="inline-block text-[10px] font-black uppercase tracking-wider text-primary bg-primary/5 px-2 py-0.5 rounded-md mt-0.5">
+                                                            {fp.category}
+                                                        </span>
+                                                        
+                                                        {fp.rating > 0 && (
+                                                            <div className="flex items-center gap-1 mt-1.5">
+                                                                <Star className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
+                                                                <span className="text-xs font-bold text-secondary">{fp.rating.toFixed(1)}/5</span>
+                                                            </div>
+                                                        )}
+
+                                                        {fp.lastBookedAt && (
+                                                            <p className="text-[10px] text-gray-400 mt-2 flex items-center gap-1.5 font-medium">
+                                                                <Clock className="w-3 h-3 text-gray-300" />
+                                                                Last booked: {new Date(fp.lastBookedAt).toLocaleDateString()}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex gap-2 border-t border-gray-50 pt-3 mt-4">
+                                                    <button
+                                                        onClick={() => handleBookAgainFavorite(fp)}
+                                                        className="flex-1 px-3 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 rounded-lg transition-all active:scale-95 shadow-sm"
+                                                    >
+                                                        Book Again
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleRemoveFavorite(fp.providerId)}
+                                                        className="px-3 py-1.5 text-xs font-semibold text-rose-600 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-100 rounded-lg transition-colors"
+                                                    >
+                                                        Remove
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         )}
 

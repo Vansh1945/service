@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { toast } from 'react-toastify';
-import { ArrowLeft, CheckCircle, Plus, Minus, Tag, Clock, Shield, Lock, Star, IndianRupee, Truck, RotateCcw, CalendarDays, CreditCard, Wallet } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Plus, Minus, Tag, Clock, Shield, Lock, Star, IndianRupee, Truck, RotateCcw, CalendarDays, CreditCard, Wallet, MapPin } from 'lucide-react';
 import AddressSelector from '../../components/AddressSelector';
 import Loader from '../../components/Loader';
 import { getPublicServiceById } from '../../services/ServiceService';
@@ -15,8 +15,10 @@ import { formatCurrency, formatTime } from '../../utils/format';
 
 const BookService = () => {
   const { serviceId } = useParams();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const prefillBooking = location.state?.prefillBooking;
 
   // State declarations
   const [isLoading, setIsLoading] = useState(true);
@@ -26,6 +28,11 @@ const BookService = () => {
   const [addresses, setAddresses] = useState([]);
   const [coupons, setCoupons] = useState([]);
   const [walletBalance, setWalletBalance] = useState(0);
+  const [bookingPreference, setBookingPreference] = useState('auto'); // 'auto' or 'favorite'
+  const [selectedFavoriteProviderId, setSelectedFavoriteProviderId] = useState('');
+  const [favoriteProviderAvailability, setFavoriteProviderAvailability] = useState({ checked: false, available: false, message: '' });
+  const [isMapModalOpen, setIsMapModalOpen] = useState(false);
+  const [showPrefillBanner, setShowPrefillBanner] = useState(true);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -63,6 +70,33 @@ const BookService = () => {
   useEffect(() => {
     // Autocomplete disabled for Nominatim. Can type directly.
   }, [formData.useCustomAddress]);
+
+  useEffect(() => {
+    const checkAvailability = async () => {
+      if (bookingPreference === 'favorite' && selectedFavoriteProviderId) {
+        try {
+          const categoryId = service?.category?._id || service?.category;
+          const res = await CustomerService.checkFavoriteProviderAvailability(selectedFavoriteProviderId, categoryId);
+          if (res.data?.success) {
+            setFavoriteProviderAvailability({
+              checked: true,
+              available: res.data.isAvailable,
+              message: res.data.message
+            });
+          }
+        } catch (err) {
+          setFavoriteProviderAvailability({
+            checked: true,
+            available: false,
+            message: 'Error checking provider availability'
+          });
+        }
+      } else {
+        setFavoriteProviderAvailability({ checked: false, available: false, message: '' });
+      }
+    };
+    checkAvailability();
+  }, [bookingPreference, selectedFavoriteProviderId, service]);
 
   // Get next 3 days
   const getNext3Days = () => {
@@ -233,14 +267,41 @@ const BookService = () => {
           setWalletBalance(profileData.wallet.availableBalance || 0);
         }
 
-        const hasSavedAddresses = addressesData.length > 0;
-        setFormData(prev => ({
-          ...prev,
-          useCustomAddress: !hasSavedAddresses
-        }));
+        if (prefillBooking) {
+          setFormData(prev => ({
+            ...prev,
+            notes: prefillBooking.notes || '',
+            quantity: prefillBooking.quantity || 1,
+            useCustomAddress: true,
+            customAddress: {
+              ...prev.customAddress,
+              street: prefillBooking.address?.street || '',
+              city: prefillBooking.address?.city || '',
+              state: prefillBooking.address?.state || '',
+              postalCode: prefillBooking.address?.postalCode || prefillBooking.address?.pincode || '',
+              pincode: prefillBooking.address?.pincode || prefillBooking.address?.postalCode || '',
+              country: prefillBooking.address?.country || 'India',
+              houseNumber: prefillBooking.address?.houseNumber || '',
+              road: prefillBooking.address?.road || '',
+              landmark: prefillBooking.address?.landmark || '',
+              area: prefillBooking.address?.area || '',
+              formattedAddress: prefillBooking.address?.formattedAddress || '',
+              lat: prefillBooking.address?.lat || null,
+              lng: prefillBooking.address?.lng || null,
+              s2CellId: prefillBooking.address?.s2CellId || null,
+              s2CellIdPrecise: prefillBooking.address?.s2CellIdPrecise || null
+            }
+          }));
+        } else {
+          const hasSavedAddresses = addressesData.length > 0;
+          setFormData(prev => ({
+            ...prev,
+            useCustomAddress: !hasSavedAddresses
+          }));
 
-        if (!hasSavedAddresses) {
-          setIsMapModalOpen(true);
+          if (!hasSavedAddresses) {
+            setIsMapModalOpen(true);
+          }
         }
       } catch (err) {
         navigate('/services');
@@ -369,7 +430,11 @@ const BookService = () => {
         couponCode: formData.appliedCoupon?.code || null,
         paymentMethod: formData.paymentMethod,
         subtotal: baseAmount,
-        totalAmount: totalAmount
+        totalAmount: totalAmount,
+        isRebook: !!prefillBooking,
+        originalBooking: prefillBooking ? prefillBooking._id : null,
+        isFavoriteProviderBooking: bookingPreference === 'favorite' && !!selectedFavoriteProviderId,
+        preferredProviderId: (bookingPreference === 'favorite' && selectedFavoriteProviderId) ? selectedFavoriteProviderId : null
       };
 
       const response = await createBooking(bookingData);
@@ -482,6 +547,29 @@ const BookService = () => {
               </div>
             </div>
 
+            {prefillBooking && showPrefillBanner && (
+              <div className="bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3 mb-4 flex items-center justify-between gap-3 shadow-sm animate-fade-in">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-1 bg-emerald-100 rounded-lg text-emerald-700 animate-pulse">
+                    <RotateCcw className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-emerald-800">Rebooking Premium Prefill</h4>
+                    <p className="text-[11px] text-emerald-600 font-medium">
+                      Details prefilled from your previous order. Just pick a new date & time!
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPrefillBanner(false)}
+                  className="text-xs font-bold text-emerald-600 hover:text-emerald-800 p-1 hover:bg-emerald-100/50 rounded-lg transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
             {/* Booking Form Card */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
               <h3 className="text-base font-bold text-secondary mb-4 flex items-center gap-2">
@@ -547,46 +635,135 @@ const BookService = () => {
                   </div>
                 </div>
 
-                {/* Address Selection */}
-                <div>
-                  <label className="block text-sm font-semibold text-secondary mb-2">Service Address</label>
-                  <div className="space-y-2">
-                    {addresses.length > 0 && (
-                      <div className="flex items-start gap-2 p-2.5 border border-gray-200 rounded-lg cursor-pointer hover:border-primary/50 transition-colors"
-                        onClick={() => setFormData(prev => ({ ...prev, useCustomAddress: false }))}>
-                        <input
-                          type="radio"
-                          checked={!formData.useCustomAddress}
-                          readOnly
-                          className="mt-0.5 w-3.5 h-3.5 text-primary"
-                        />
-                        <div className="flex-1">
-                          <p className="text-sm font-semibold text-secondary">Saved Address</p>
-                          <p className="text-xs text-gray-500 leading-relaxed">
-                            {addresses[0]?.street}, {addresses[0]?.city}, {addresses[0]?.state} - {addresses[0]?.postalCode}
-                          </p>
-                        </div>
+                {/* Booking Assignment Preference */}
+                {user?.favoriteProviders?.length > 0 && (
+                  <div className="border-t border-gray-100 pt-4 mt-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+                      <div>
+                        <label className="block text-sm font-semibold text-secondary">Assign Professionally</label>
+                        <span className="text-[10px] text-gray-400">Match with your favorite or auto-assign instantly</span>
                       </div>
-                    )}
-                    <div className="flex items-start gap-2 p-2.5 border border-gray-200 rounded-lg cursor-pointer hover:border-primary/50 transition-colors"
-                      onClick={() => setFormData(prev => ({ ...prev, useCustomAddress: true }))}>
-                      <input
-                        type="radio"
-                        checked={formData.useCustomAddress}
-                        readOnly
-                        className="mt-0.5 w-3.5 h-3.5 text-primary"
-                      />
-                      <div className="flex-1">
-                        <p className="text-sm font-semibold text-secondary">New Address</p>
-                        {formData.useCustomAddress && (
-                          <AddressSelector
-                            address={formData.customAddress}
-                            onChange={(updatedAddress) => setFormData(prev => ({ ...prev, customAddress: updatedAddress }))}
-                          />
-                        )}
+                      <div className="flex bg-gray-100 p-0.5 rounded-lg w-max shrink-0 self-start sm:self-auto">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setBookingPreference('auto');
+                            setSelectedFavoriteProviderId('');
+                          }}
+                          className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${
+                            bookingPreference === 'auto'
+                              ? 'bg-white text-secondary shadow-sm'
+                              : 'text-gray-500 hover:text-secondary'
+                          }`}
+                        >
+                          Auto Match
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBookingPreference('favorite')}
+                          className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${
+                            bookingPreference === 'favorite'
+                              ? 'bg-white text-secondary shadow-sm'
+                              : 'text-gray-500 hover:text-secondary'
+                          }`}
+                        >
+                          My Favorite
+                        </button>
                       </div>
                     </div>
+
+                    {bookingPreference === 'favorite' && (
+                      <div className="space-y-2.5 animate-fade-in bg-gray-50/50 p-2.5 rounded-xl border border-gray-100">
+                        <select
+                          value={selectedFavoriteProviderId}
+                          onChange={(e) => setSelectedFavoriteProviderId(e.target.value)}
+                          className="w-full px-3 py-2 text-xs border border-gray-200 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-semibold text-secondary"
+                        >
+                          <option value="">Choose a Favorite Provider</option>
+                          {user.favoriteProviders.map((fp) => (
+                            <option key={fp.providerId} value={fp.providerId}>
+                              {fp.providerName} ({fp.category})
+                            </option>
+                          ))}
+                        </select>
+
+                        {selectedFavoriteProviderId && favoriteProviderAvailability.checked && (
+                          <div className="mt-1">
+                            {favoriteProviderAvailability.available ? (
+                              <div className="text-[11px] font-medium text-emerald-600 bg-emerald-50 px-2.5 py-1.5 rounded-lg border border-emerald-100 flex items-center gap-1.5">
+                                <CheckCircle className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                                <span>{favoriteProviderAvailability.message}</span>
+                              </div>
+                            ) : (
+                              <div className="p-2.5 bg-red-50 border border-red-100 rounded-lg">
+                                <p className="text-[11px] font-bold text-red-700">Provider Unavailable</p>
+                                <p className="text-[10px] text-red-600 leading-relaxed mt-0.5">
+                                  {favoriteProviderAvailability.message || 'Provider is currently offline or busy.'} We will auto-assign a professional instead.
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
+                )}
+
+                {/* Service Address Selection */}
+                <div className="border-t border-gray-100 pt-4 mt-2">
+                  <div className="flex items-center justify-between mb-3.5">
+                    <div>
+                      <label className="block text-sm font-semibold text-secondary">Service Address</label>
+                      <span className="text-[10px] text-gray-400">Where should we deliver the service?</span>
+                    </div>
+                    {addresses.length > 0 && (
+                      <div className="flex bg-gray-100 p-0.5 rounded-lg w-max shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setFormData(prev => ({ ...prev, useCustomAddress: false }))}
+                          className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${
+                            !formData.useCustomAddress
+                              ? 'bg-white text-secondary shadow-sm'
+                              : 'text-gray-500 hover:text-secondary'
+                          }`}
+                        >
+                          Saved Address
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFormData(prev => ({ ...prev, useCustomAddress: true }))}
+                          className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${
+                            formData.useCustomAddress
+                              ? 'bg-white text-secondary shadow-sm'
+                              : 'text-gray-500 hover:text-secondary'
+                          }`}
+                        >
+                          New Address
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {!formData.useCustomAddress && addresses.length > 0 ? (
+                    <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 flex items-start gap-2.5 animate-fade-in">
+                      <div className="p-1.5 bg-primary/10 rounded-lg text-primary mt-0.5 flex-shrink-0">
+                        <MapPin className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-secondary">Deliver to Saved Address</p>
+                        <p className="text-xs text-gray-500 leading-relaxed mt-0.5">
+                          {addresses[0]?.street}, {addresses[0]?.city}, {addresses[0]?.state} - {addresses[0]?.postalCode}
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3.5 bg-white border border-gray-100 rounded-xl shadow-sm animate-fade-in space-y-3">
+                      <AddressSelector
+                        address={formData.customAddress}
+                        onChange={(updatedAddress) => setFormData(prev => ({ ...prev, customAddress: updatedAddress }))}
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Notes Input */}

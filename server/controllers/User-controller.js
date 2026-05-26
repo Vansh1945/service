@@ -355,12 +355,46 @@ const getProfile = async (req, res) => {
       });
     }
 
+    // Enhance favoriteProviders with ratings and other provider details
+    let enrichedFavorites = [];
+    if (user.favoriteProviders && user.favoriteProviders.length > 0) {
+      for (const fav of user.favoriteProviders) {
+        try {
+          const prov = await Provider.findById(fav.providerId)
+            .select('performanceScore.rating profilePicUrl isOnline isActive approved')
+            .lean();
+          if (prov) {
+            enrichedFavorites.push({
+              ...fav,
+              rating: prov.performanceScore?.rating || 0,
+              profilePicUrl: prov.profilePicUrl,
+              isOnline: prov.isOnline,
+              isActive: prov.isActive,
+              approved: prov.approved
+            });
+          } else {
+            enrichedFavorites.push({
+              ...fav,
+              rating: 0
+            });
+          }
+        } catch (err) {
+          console.error('Error fetching favorite provider details in getProfile:', err);
+          enrichedFavorites.push({
+            ...fav,
+            rating: 0
+          });
+        }
+      }
+    }
+
     // Calculate total bookings dynamically
     const totalBookings = await Booking.countDocuments({ customer: req.user._id });
 
     // Update user with calculated values
     const updatedUser = {
       ...user,
+      favoriteProviders: enrichedFavorites,
       totalBookings
     };
 
@@ -789,6 +823,87 @@ const getWalletHistory = async (req, res) => {
   }
 };
 
+const toggleFavoriteProvider = async (req, res) => {
+  try {
+    const { providerId, providerName, category } = req.body;
+    if (!providerId) {
+      return res.status(400).json({ success: false, message: 'Provider ID is required' });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    if (!user.favoriteProviders) {
+      user.favoriteProviders = [];
+    }
+
+    const existingIdx = user.favoriteProviders.findIndex(
+      fp => fp.providerId.toString() === providerId.toString()
+    );
+
+    let isFavorite = false;
+    if (existingIdx > -1) {
+      user.favoriteProviders.splice(existingIdx, 1);
+      isFavorite = false;
+    } else {
+      user.favoriteProviders.push({
+        providerId,
+        providerName: providerName || 'Provider',
+        category: category || 'N/A',
+        lastBookedAt: new Date()
+      });
+      isFavorite = true;
+    }
+
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: isFavorite ? 'Added to favorites' : 'Removed from favorites',
+      isFavorite,
+      favoriteProviders: user.favoriteProviders
+    });
+  } catch (error) {
+    console.error('Error toggling favorite provider:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+const checkFavoriteProviderAvailability = async (req, res) => {
+  try {
+    const { providerId } = req.params;
+    const { categoryId } = req.query;
+
+    const providerDoc = await Provider.findById(providerId);
+    if (!providerDoc) {
+      return res.status(404).json({ success: false, isAvailable: false, message: 'Provider not found' });
+    }
+
+    // Smart rules: approved, online, active, service category matches
+    const isApproved = providerDoc.approved === true;
+    const isOnline = providerDoc.isOnline === true;
+    const isActive = providerDoc.isActive === true;
+    const isSuspended = providerDoc.isSuspended === true;
+    const blockedTill = providerDoc.blockedTill;
+    const isBlocked = blockedTill && new Date(blockedTill) > new Date();
+
+    const serviceCategoryMatch = categoryId ? providerDoc.services?.some(catId => catId.toString() === categoryId.toString()) : true;
+
+    const isAvailable = isApproved && isOnline && isActive && !isSuspended && !isBlocked && serviceCategoryMatch;
+
+    return res.status(200).json({
+      success: true,
+      isAvailable: !!isAvailable,
+      message: isAvailable ? 'Provider is available' : 'Provider is unavailable'
+    });
+  } catch (error) {
+    console.error('Error checking favorite provider availability:', error);
+    res.status(500).json({ success: false, isAvailable: false, message: 'Internal server error' });
+  }
+};
+
 
 module.exports = {
   register,
@@ -796,7 +911,9 @@ module.exports = {
   updateProfile,
   uploadProfilePicture,
   getCustomerDashboardStats,
-  getWalletHistory
+  getWalletHistory,
+  toggleFavoriteProvider,
+  checkFavoriteProviderAvailability
 };
 
 

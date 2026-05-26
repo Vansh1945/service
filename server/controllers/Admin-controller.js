@@ -1956,6 +1956,43 @@ const getDashboardAnalytics = async (req, res) => {
         const totalBookings = stats.statusDistribution.reduce((acc, curr) => acc + curr.count, 0);
         const cancelledCount = stats.statusDistribution.find(s => s._id === 'cancelled')?.count || 0;
 
+        // Rebook and Favorite Provider Analytics
+        const [totalRebooks, topRepeatedServices, mostFavoritedProviders, repeatCustomerCount, totalFavBookings] = await Promise.all([
+            Booking.countDocuments({ isRebook: true }),
+            Booking.aggregate([
+                { $match: { isRebook: true } },
+                { $unwind: "$services" },
+                { $group: { _id: "$services.service", count: { $sum: 1 } } },
+                { $sort: { count: -1 } },
+                { $limit: 3 },
+                { $lookup: { from: 'services', localField: '_id', foreignField: '_id', as: 'serviceInfo' } },
+                { $unwind: "$serviceInfo" },
+                { $project: { title: "$serviceInfo.title", count: 1 } }
+            ]),
+            User.aggregate([
+                { $unwind: "$favoriteProviders" },
+                { $group: {
+                    _id: "$favoriteProviders.providerId",
+                    name: { $first: "$favoriteProviders.providerName" },
+                    category: { $first: "$favoriteProviders.category" },
+                    count: { $sum: 1 }
+                  }
+                },
+                { $sort: { count: -1 } },
+                { $limit: 3 }
+            ]),
+            Booking.aggregate([
+                { $group: { _id: "$customer", count: { $sum: 1 } } },
+                { $match: { count: { $gt: 1 } } },
+                { $count: "count" }
+            ]),
+            Booking.countDocuments({ isFavoriteProviderBooking: true })
+        ]);
+
+        const repeatBookingRate = totalBookings > 0 ? ((totalRebooks / totalBookings) * 100).toFixed(1) : 0;
+        const providerRetentionScore = totalBookings > 0 ? ((totalFavBookings / totalBookings) * 100).toFixed(1) : 0;
+        const finalRepeatCustomerCount = repeatCustomerCount[0]?.count || 0;
+
         const result = {
             bookingStats: {
                 total: totalBookings,
@@ -1985,6 +2022,16 @@ const getDashboardAnalytics = async (req, res) => {
                 pendingVerifications: pendingProviders,
                 pendingWithdrawals: pendingWithdrawals,
                 pendingDisputes: pendingDisputes
+            },
+            rebookStats: {
+                totalRebooks,
+                repeatBookingRate,
+                topRepeatedServices
+            },
+            favoriteProviderStats: {
+                mostFavoritedProviders,
+                providerRetentionScore,
+                repeatCustomerCount: finalRepeatCustomerCount
             }
         };
 

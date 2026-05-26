@@ -9,9 +9,10 @@ import {
   Calendar, Clock, MapPin, User, Phone, DollarSign, CheckCircle,
   XCircle, AlertCircle, Eye, Search, CreditCard, Star, Package,
   ShoppingCart, Timer, Wrench, Activity, Edit3, ChevronLeft,
-  ChevronRight, X, ChevronDown, ChevronUp, Wallet, ShieldAlert, ShieldCheck, Home, CheckSquare, MessageSquare
+  ChevronRight, X, ChevronDown, ChevronUp, Wallet, ShieldAlert, ShieldCheck, Home, CheckSquare, MessageSquare, Heart
 } from 'lucide-react';
 import { cancelBooking, userUpdateBookingDateTime, getCustomerBookings } from '../../services/BookingService';
+import { toggleFavoriteProvider } from '../../services/CustomerService';
 import Pagination from '../../components/Pagination';
 import { formatDate, formatTime, formatDateTime, formatCurrency } from '../../utils/format';
 import ChatModal from '../../components/chat/ChatModal';
@@ -562,29 +563,14 @@ const BookingModal = ({ booking, onClose, onPayNow, user, onChat }) => {
           <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors">
             Close
           </button>
-          {['assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'in-progress'].includes(booking.status) ? (
+          {['assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'in-progress'].includes(booking.status) && (
             <button
               onClick={() => { onClose(); onChat(booking._id, 'provider_customer'); }}
               className="px-4 py-2 text-sm font-bold text-white bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-500/95 hover:to-emerald-600/95 rounded-xl transition-all flex items-center gap-2 shadow-sm animate-none"
             >
               <MessageSquare className="w-4 h-4" /> Chat Provider
             </button>
-          ) : (
-            <button
-              disabled
-              title="Chat available after provider accepts booking"
-              className="px-4 py-2 text-sm font-medium text-gray-400 bg-gray-100 border border-gray-200 rounded-xl cursor-not-allowed flex items-center gap-2"
-            >
-              <MessageSquare className="w-4 h-4" /> Chat available after provider accepts booking
-            </button>
           )}
-
-          <button
-            onClick={() => { onClose(); onChat(booking._id, 'customer_admin'); }}
-            className="px-4 py-2 text-sm font-bold text-white bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-500/95 hover:to-indigo-600/95 rounded-xl transition-all flex items-center gap-2 shadow-sm"
-          >
-            <ShieldAlert className="w-4 h-4" /> Chat Admin
-          </button>
           {needsPayment(booking) && (
             <button onClick={() => { onClose(); onPayNow(booking); }} className="px-4 py-2 text-sm font-bold text-white bg-accent rounded-xl hover:bg-accent/90 transition-all flex items-center gap-2 shadow-sm">
               <CreditCard className="w-4 h-4" /> Pay Now
@@ -686,7 +672,7 @@ const CancelModal = ({ booking, onClose, onConfirm }) => {
 
 // ─── Booking Card ─────────────────────────────────────────────────────────────
 
-const BookingCard = ({ booking, onView, onPayNow, onReschedule, onCancel, onCall, onChat }) => {
+const BookingCard = ({ booking, onView, onPayNow, onReschedule, onCancel, onCall, onChat, onToggleFavorite, user }) => {
   const navigate = useNavigate();
   const cfg = getStatusCfg(booking.status);
   const provider = booking.provider || booking.providerDetails;
@@ -790,7 +776,14 @@ const BookingCard = ({ booking, onView, onPayNow, onReschedule, onCancel, onCall
             >
               <MessageSquare className="w-3.5 h-3.5" /> Chat Provider
             </button>
-          ) : (
+          ) : booking.status === 'completed' && isChatVisible(booking) ? (
+            <button 
+              onClick={() => onChat(booking._id, 'provider_customer')} 
+              className="flex items-center gap-1.5 text-xs font-bold text-white bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-500/95 hover:to-emerald-600/95 px-3 py-1.5 rounded-lg transition-all shadow-sm active:scale-95 animate-none"
+            >
+              <MessageSquare className="w-3.5 h-3.5" /> Chat Provider
+            </button>
+          ) : booking.status === 'pending' ? (
             <button 
               disabled
               title="Chat available after provider accepts booking"
@@ -798,14 +791,7 @@ const BookingCard = ({ booking, onView, onPayNow, onReschedule, onCancel, onCall
             >
               <MessageSquare className="w-3.5 h-3.5" /> Chat available after provider accepts booking
             </button>
-          )}
-
-          <button 
-            onClick={() => onChat(booking._id, 'customer_admin')} 
-            className="flex items-center gap-1.5 text-xs font-bold text-white bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-500/95 hover:to-indigo-600/95 px-3 py-1.5 rounded-lg transition-all shadow-sm active:scale-95"
-          >
-            <ShieldAlert className="w-3.5 h-3.5" /> Chat Admin
-          </button>
+          ) : null}
 
           {needsPayment(booking) && (
             <button onClick={() => onPayNow(booking)} className="flex items-center gap-1.5 text-xs font-bold text-white bg-accent hover:bg-accent/90 px-3 py-1.5 rounded-lg transition-all shadow-sm active:scale-95">
@@ -828,6 +814,36 @@ const BookingCard = ({ booking, onView, onPayNow, onReschedule, onCancel, onCall
           {canCancel(booking) && (
             <button onClick={() => onCancel(booking)} className="flex items-center gap-1.5 text-xs font-semibold text-red-600 hover:text-red-800 px-3 py-1.5 rounded-lg hover:bg-red-50 border border-red-200 transition-colors ml-auto">
               <XCircle className="w-3.5 h-3.5" /> Cancel
+            </button>
+          )}
+
+          {booking.status === 'completed' && booking.services?.[0]?.service?._id && (
+            <button
+              onClick={() => navigate(`/customer/book-service/${booking.services[0].service._id}`, { state: { prefillBooking: booking } })}
+              className="flex items-center gap-1.5 text-xs font-bold text-white bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 px-3 py-1.5 rounded-lg transition-all shadow-sm active:scale-95"
+            >
+              <ShoppingCart className="w-3.5 h-3.5" /> Book Again
+            </button>
+          )}
+          {booking.status === 'completed' && (
+            <button
+              onClick={() => navigate(`/customer/complaints`, { state: { prefilledBookingId: booking._id } })}
+              className="flex items-center gap-1.5 text-xs font-semibold text-amber-600 hover:text-amber-800 px-3 py-1.5 rounded-lg hover:bg-amber-50 border border-amber-200 transition-colors"
+            >
+              <AlertCircle className="w-3.5 h-3.5" /> Raise Complaint
+            </button>
+          )}
+          {booking.status === 'completed' && provider && (
+            <button
+              onClick={() => onToggleFavorite(provider)}
+              className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors border ${
+                user?.favoriteProviders?.some(fp => fp.providerId?.toString() === (provider._id || provider.id)?.toString())
+                  ? 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100'
+                  : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+              }`}
+            >
+              <Heart className={`w-3.5 h-3.5 ${user?.favoriteProviders?.some(fp => fp.providerId?.toString() === (provider._id || provider.id)?.toString()) ? 'fill-rose-600' : ''}`} />
+              {user?.favoriteProviders?.some(fp => fp.providerId?.toString() === (provider._id || provider.id)?.toString()) ? 'Saved' : 'Add to Favorites'}
             </button>
           )}
         </div>
@@ -865,8 +881,25 @@ const SkeletonCard = () => (
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 const CustomerBookingsPage = () => {
-  const { token, API, showToast, user } = useAuth();
+  const { token, API, showToast, user, refreshUser } = useAuth();
   const navigate = useNavigate();
+
+  const handleToggleFavorite = async (provider) => {
+    if (!provider) return;
+    try {
+      const res = await toggleFavoriteProvider({
+        providerId: provider._id || provider.id,
+        providerName: provider.name,
+        category: provider.category || 'N/A'
+      });
+      if (res.data?.success) {
+        showToast(res.data.message || 'Updated favorites', 'success');
+        refreshUser(); // Updates user context favorites
+      }
+    } catch (err) {
+      showToast(err.response?.data?.message || err.message || 'Failed to update favorites', 'error');
+    }
+  };
 
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1052,6 +1085,8 @@ const CustomerBookingsPage = () => {
                   onCancel={b => { setBookingToCancel(b); setShowCancelModal(true); }}
                   onCall={phone => { if (phone) window.location.href = `tel:${phone}`; else showToast('Phone not available', 'warning'); }}
                   onChat={(id, type) => { setChatBookingId(id); setChatRoomType(type || 'provider_customer'); }}
+                  onToggleFavorite={handleToggleFavorite}
+                  user={user}
                 />
               ))}
             </div>

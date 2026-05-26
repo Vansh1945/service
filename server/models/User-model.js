@@ -196,7 +196,26 @@ const userSchema = new mongoose.Schema({
       start: { type: String, default: '22:00' },
       end: { type: String, default: '08:00' }
     }
-  }
+  },
+  favoriteProviders: [{
+    providerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Provider',
+      required: true
+    },
+    providerName: {
+      type: String,
+      required: true
+    },
+    category: {
+      type: String,
+      required: true
+    },
+    lastBookedAt: {
+      type: Date,
+      default: null
+    }
+  }]
 }, {
   timestamps: true
 });

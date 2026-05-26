@@ -6,7 +6,9 @@ const {
   updateProfile,
   uploadProfilePicture,
   getCustomerDashboardStats,
-  getWalletHistory
+  getWalletHistory,
+  toggleFavoriteProvider,
+  checkFavoriteProviderAvailability
 } = require('../controllers/User-controller');
 const { userAuthMiddleware } = require('../middlewares/User-middleware');
 const { roleMiddleware } = require('../middlewares/role-middleware');
@@ -31,5 +33,9 @@ router.post('/profile-picture',
 
 router.get('/dashboard', userAuthMiddleware, requireCustomer, getCustomerDashboardStats);
 router.get('/wallet/history', userAuthMiddleware, requireCustomer, getWalletHistory);
+
+// Favorite Providers routes
+router.post('/favorite-providers/toggle', userAuthMiddleware, requireCustomer, toggleFavoriteProvider);
+router.get('/favorite-providers/check/:providerId', userAuthMiddleware, requireCustomer, checkFavoriteProviderAvailability);
 
 module.exports = router;

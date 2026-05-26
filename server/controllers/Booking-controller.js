@@ -133,7 +133,7 @@ const recordPinFailure = async (booking, isStart, session = null) => {
   const attempts = getFailedAttempts(booking) + 1;
   const pinType = isStart ? 'START_PIN' : 'COMPLETION_PIN';
   let note = `Failed verification attempt for ${pinType}. FAILED_ATTEMPTS:${attempts}`;
-  
+
   if (attempts >= 5) {
     const cooldownMs = 15 * 60 * 1000; // 15-minute cooldown
     const lockoutUntil = Date.now() + cooldownMs;
@@ -146,7 +146,7 @@ const recordPinFailure = async (booking, isStart, session = null) => {
     note,
     updatedBy: 'system'
   });
-  
+
   await booking.save({ session });
 };
 
@@ -209,8 +209,8 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
   const Δλ = (lon2 - lon1) * Math.PI / 180;
 
   const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-            Math.cos(φ1) * Math.cos(φ2) *
-            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    Math.cos(φ1) * Math.cos(φ2) *
+    Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
   const d = R * c; // in metres
@@ -296,7 +296,7 @@ const autoAssignProviderIfEnabled = async (bookingId) => {
   try {
     const { SystemConfig } = require('../models/SystemSetting');
     const settings = await SystemConfig.findOne();
-    
+
     // Check if auto assign is enabled
     if (!settings || !settings.bookingSettings || !settings.bookingSettings.autoAssignProvider) {
       return null;
@@ -313,13 +313,13 @@ const autoAssignProviderIfEnabled = async (bookingId) => {
 
     let lat = booking.address?.lat;
     let lng = booking.address?.lng;
-    
+
     if (lat === null || lat === undefined || lng === null || lng === undefined) {
       const coords = getBookingAddressLocation(booking);
       lat = coords?.latitude;
       lng = coords?.longitude;
     }
-    
+
     if (lat === null || lat === undefined || lng === null || lng === undefined) {
       console.warn(`[AutoAssign] Skipped auto-assign for booking ${booking._id}: Coordinates missing`);
       return null;
@@ -363,8 +363,8 @@ const autoAssignProviderIfEnabled = async (bookingId) => {
       const Δφ = (lat2 - lat1) * Math.PI / 180;
       const Δλ = (lon2 - lon1) * Math.PI / 180;
       const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-                Math.cos(φ1) * Math.cos(φ2) *
-                Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+        Math.cos(φ1) * Math.cos(φ2) *
+        Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       return R * c;
     };
@@ -393,7 +393,7 @@ const autoAssignProviderIfEnabled = async (bookingId) => {
     booking.provider = nearestProvider._id;
     booking.status = 'accepted';
     booking.updatedAt = new Date();
-    
+
     booking.statusHistory.push({
       status: 'accepted',
       timestamp: new Date(),
@@ -402,7 +402,7 @@ const autoAssignProviderIfEnabled = async (bookingId) => {
     });
 
     await booking.save();
-    
+
     try {
       await Provider.findByIdAndUpdate(nearestProvider._id, {
         activeBooking: booking._id,
@@ -501,7 +501,11 @@ const createBooking = async (req, res) => {
       notes,
       couponCode,
       quantity = 1,
-      paymentMethod = 'online' // Default to online payment
+      paymentMethod = 'online', // Default to online payment
+      isRebook,
+      originalBooking,
+      isFavoriteProviderBooking,
+      preferredProviderId
     } = req.body;
 
     // Validate required fields
@@ -544,6 +548,65 @@ const createBooking = async (req, res) => {
         success: false,
         message: 'Invalid date format'
       });
+    }
+
+    // Smart rules: Rebook validation
+    if (isRebook && originalBooking) {
+      const oldBooking = await Booking.findById(originalBooking).session(session);
+      if (!oldBooking) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({
+          success: false,
+          message: 'Original booking not found'
+        });
+      }
+
+      // Rebook allowed only if previous booking is completed and not cancelled
+      if (oldBooking.status !== 'completed' || oldBooking.status === 'cancelled') {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({
+          success: false,
+          message: 'Rebooking is only allowed for completed services'
+        });
+      }
+    }
+
+    // Smart rules: Favorite provider validation
+    let assignedProviderId = null;
+    if (isFavoriteProviderBooking && preferredProviderId) {
+      const providerDoc = await Provider.findById(preferredProviderId).session(session);
+      if (!providerDoc) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({
+          success: false,
+          message: 'Preferred provider not found'
+        });
+      }
+
+      // Check smart rules: approved, online, active, service category matches
+      const isApproved = providerDoc.approved === true;
+      const isOnline = providerDoc.isOnline === true;
+      const isActive = providerDoc.isActive === true;
+      const isSuspended = providerDoc.isSuspended === true;
+      const blockedTill = providerDoc.blockedTill;
+      const isBlocked = blockedTill && new Date(blockedTill) > new Date();
+
+      const serviceCategory = service.category?.toString();
+      const serviceCategoryMatch = providerDoc.services?.some(catId => catId.toString() === serviceCategory);
+
+      if (!isApproved || !isOnline || !isActive || isSuspended || isBlocked || !serviceCategoryMatch) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({
+          success: false,
+          message: 'Provider unavailable'
+        });
+      }
+
+      assignedProviderId = providerDoc._id;
     }
 
     // Calculate amounts
@@ -663,13 +726,19 @@ const createBooking = async (req, res) => {
       subtotal,
       totalAmount,
       paymentMethod,
-      status: paymentMethod === 'cash' ? 'scheduled' : 'pending',
+      isRebook: isRebook || false,
+      originalBooking: originalBooking || null,
+      isFavoriteProviderBooking: !!assignedProviderId,
+      provider: assignedProviderId || undefined,
+      status: paymentMethod === 'cash' ? (assignedProviderId ? 'accepted' : 'pending') : 'pending',
       paymentStatus: paymentMethod === 'cash' ? 'pending' : 'processing',
       confirmedBooking: paymentMethod === 'cash',
       statusHistory: [{
-        status: paymentMethod === 'cash' ? 'scheduled' : 'pending',
+        status: paymentMethod === 'cash' ? (assignedProviderId ? 'accepted' : 'pending') : 'pending',
         timestamp: new Date(),
-        note: `Booking created. START_PIN:${startPin} COMPLETION_PIN:${completionPin}`,
+        note: assignedProviderId
+          ? `Booking created with preferred provider. START_PIN:${startPin} COMPLETION_PIN:${completionPin}`
+          : `Booking created. START_PIN:${startPin} COMPLETION_PIN:${completionPin}`,
         updatedBy: 'customer'
       }],
       metadata: {
@@ -680,6 +749,14 @@ const createBooking = async (req, res) => {
 
     // Save booking
     await booking.save({ session });
+
+    // Link active booking if directly assigned with cash payment
+    if (paymentMethod === 'cash' && assignedProviderId) {
+      await Provider.findByIdAndUpdate(assignedProviderId, {
+        activeBooking: booking._id,
+        lastUpdated: new Date()
+      }).session(session);
+    }
 
     // If paymentMethod is cash, create a transaction record
     if (paymentMethod === 'cash') {
@@ -698,21 +775,23 @@ const createBooking = async (req, res) => {
       await transaction.save({ session });
     }
 
-    // If coupon was applied, save the updated coupon
-    if (couponCode && couponDetails) {
-      await Coupon.findOneAndUpdate(
-        { code: couponCode },
-        {
-          $push: {
-            usedBy: {
-              user: req.user._id,
-              bookingValue: subtotal,
-              usedAt: new Date()
-            }
-          }
-        },
-        { session }
-      );
+    // If coupon was applied, save the updated coupon and flag user firstBookingUsed if first-booking coupon
+    if (couponCode && couponDetails && coupon) {
+      coupon.usedBy.push({
+        user: req.user._id,
+        bookingValue: subtotal,
+        usedAt: new Date()
+      });
+      if (coupon.usageLimit !== null && coupon.usedBy.length >= coupon.usageLimit) {
+        coupon.isActive = false;
+      }
+      await coupon.save({ session });
+
+      if (coupon.isFirstBooking) {
+        await User.findByIdAndUpdate(req.user._id, {
+          $set: { firstBookingUsed: true }
+        }, { session });
+      }
     }
 
     await session.commitTransaction();
@@ -957,6 +1036,14 @@ const confirmBooking = async (req, res) => {
     );
 
     await booking.save({ session });
+
+    // Link active booking for provider if assigned
+    if (booking.provider) {
+      await Provider.findByIdAndUpdate(booking.provider, {
+        activeBooking: booking._id,
+        lastUpdated: new Date()
+      }).session(session);
+    }
 
     // Increment user's total bookings
     await User.findByIdAndUpdate(userId, { $inc: { totalBookings: 1 } }, { session });
@@ -1683,7 +1770,7 @@ const logCancellationFraud = async (req, booking, userId, role) => {
   try {
     const now = new Date();
     const oneDayAgo = new Date(now - 24 * 60 * 60 * 1000);
-    
+
     // Calculate dynamic risk parameters
     const userCancellations = await mongoose.model('Booking').countDocuments({
       customer: booking.customer,
@@ -1717,7 +1804,7 @@ const logCancellationFraud = async (req, booking, userId, role) => {
         customer: booking.customer,
         status: 'cancelled'
       }).lean();
-      
+
       for (const pb of pastBookings) {
         const pbCreated = new Date(pb.createdAt);
         const pbCancelled = pb.cancellationProgress?.cancelledAt ? new Date(pb.cancellationProgress.cancelledAt) : null;
@@ -2646,7 +2733,7 @@ const startBooking = async (req, res) => {
     if (pin !== startPin) {
       await recordPinFailure(booking, true);
       await createFraudLog(booking, 'failed_login', `Incorrect START PIN entered: ${pin}`, 10, req);
-      
+
       return res.status(400).json({
         success: false,
         message: 'Invalid verification PIN'
@@ -2688,7 +2775,7 @@ const startBooking = async (req, res) => {
     const acceptableCells = [targetS2Precise, ...getNeighbors(targetS2Precise)];
     if (!acceptableCells.includes(providerS2Precise)) {
       await createFraudLog(booking, 'failed_login', `S2 Geofence mismatch during start verification: Provider at ${providerLat}, ${providerLng} (Cell: ${providerS2Precise}) but target at ${targetLoc.latitude}, ${targetLoc.longitude} (Cell: ${targetS2Precise})`, 25, req);
-      
+
       booking.statusHistory.push({
         status: booking.status,
         timestamp: new Date(),
@@ -2705,7 +2792,7 @@ const startBooking = async (req, res) => {
 
     if (distance > 150) {
       await createFraudLog(booking, 'failed_login', `Geofencing mismatch during start verification: Provider at ${providerLat}, ${providerLng} but target at ${targetLoc.latitude}, ${targetLoc.longitude} (Distance: ${Math.round(distance)}m)`, 25, req);
-      
+
       // Push warning to history
       booking.statusHistory.push({
         status: booking.status,
@@ -2917,7 +3004,7 @@ const rejectBooking = async (req, res) => {
         await refundTransaction.save({ session });
 
         booking.paymentStatus = 'refunded';
-        
+
         refundDetails = {
           amount: refundAmount,
           method: 'wallet',
@@ -3884,7 +3971,7 @@ const getBookingDetails = async (req, res) => {
     const isOnlineRefund = firstTx.paymentMethod === 'online' || firstTx.paymentMethod === 'upi';
     const refundData = transactions.length > 0 ? {
       status: firstTx.refundStatus,
-      refundedAmount: isOnlineRefund ? (firstTx.refundedAmount / 100) : firstTx.refundedAmount,
+      refundedAmount: isOnlineRefund ? (firstTx.refundedAt / 100) : firstTx.refundedAt,
       refundReason: firstTx.refundReason,
       refundedAt: firstTx.refundedAt
     } : null;
@@ -3895,7 +3982,7 @@ const getBookingDetails = async (req, res) => {
       return {
         ...tx.toObject ? tx.toObject() : tx,
         amount: isTxOnline ? (tx.amount / 100) : tx.amount,
-        refundedAmount: isTxOnline ? (tx.refundedAmount / 100) : tx.refundedAmount
+        refundedAmount: isTxOnline ? (tx.refundedAt / 100) : tx.refundedAt
       };
     });
 
@@ -4099,7 +4186,7 @@ const deleteUserBooking = async (req, res) => {
       });
     }
 
-    const service = await Service.findById(booking.service);
+    const service = await Service.findById(booking.services);
 
     await Booking.findByIdAndDelete(bookingId);
 
@@ -4370,7 +4457,7 @@ const recalculateProviderPerformance = async (providerId, session = null) => {
     const complaints = await Complaint.find({ provider: providerId }).session(session).lean();
     const complaintCount = complaints.length;
     const complaintRatio = totalAccepted > 0 ? (complaintCount / totalAccepted) * 100 : 0;
-    
+
     // Deduct for complaints
     trustScore -= complaintCount * 15;
 

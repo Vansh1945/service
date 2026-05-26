@@ -132,6 +132,22 @@ const BookingRow = React.memo(({ booking, onDetails, onReschedule, onAssign, onD
             <div className="text-sm font-medium text-secondary">
                 {booking.bookingId || `#${booking._id?.substring(booking._id.length - 8) || 'N/A'}`}
             </div>
+            <div className="flex flex-col gap-1 mt-1">
+                {booking.isRebook ? (
+                    <span className="inline-flex items-center gap-1 text-[9px] font-extrabold uppercase tracking-wider bg-teal-50 text-teal-750 border border-teal-200 px-1.5 py-0.5 rounded w-max" title={`Original Booking: ${booking.originalBooking?.bookingId || booking.originalBooking || 'N/A'}`}>
+                        🔄 Rebook
+                    </span>
+                ) : (
+                    <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded w-max">
+                        🆕 New
+                    </span>
+                )}
+                {booking.isFavoriteProviderBooking && (
+                    <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-200 px-1.5 py-0.5 rounded w-max">
+                        ❤️ Preferred
+                    </span>
+                )}
+            </div>
         </td>
         <td className="px-4 py-4 whitespace-nowrap">
             <div>
@@ -1056,6 +1072,20 @@ const AdminBookingsView = () => {
                                         {getStatusIcon(bk.status)}
                                         <span className="ml-1 capitalize">{bk.status}</span>
                                     </span>
+                                    {bk.isRebook ? (
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider bg-teal-50 text-teal-750 border border-teal-200 px-2 py-0.5 rounded-full animate-none" title={`Original Booking: ${bk.originalBooking?.bookingId || bk.originalBooking || 'N/A'}`}>
+                                            🔄 Rebook
+                                        </span>
+                                    ) : (
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full">
+                                            🆕 New
+                                        </span>
+                                    )}
+                                    {bk.isFavoriteProviderBooking && (
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 rounded-full">
+                                            ❤️ Preferred Provider Selected
+                                        </span>
+                                    )}
                                     <span className="text-xs text-gray-400 font-mono">{bk.bookingId || bk._id}</span>
                                 </div>
                                 <button onClick={() => setShowModal(false)} className="p-1 rounded-md text-gray-400 hover:text-secondary hover:bg-gray-100 transition-colors">

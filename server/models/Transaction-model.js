@@ -83,6 +83,10 @@ const transactionSchema = new Schema({
   },
   refundReason: String,
   refundedAt: Date,
+  isRupees: {
+    type: Boolean,
+    default: true
+  },
   createdAt: {
     type: Date,
     default: Date.now

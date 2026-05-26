@@ -357,6 +357,119 @@ const AdminDashboard = () => {
         </div>
       </div>
 
+      {/* REBOOK & FAVORITE PROVIDER ANALYTICS */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 animate-fade-in">
+        {/* Rebook Analytics */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-50">
+              <div className="flex items-center">
+                <div className="p-2 bg-teal-50 rounded-lg mr-3">
+                  <FiRefreshCw className="text-teal-600 animate-spin-slow" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900">Rebook & Retention Intelligence</h3>
+                  <p className="text-[10px] text-gray-500">Analysis of repeat customer service bookings</p>
+                </div>
+              </div>
+              <span className="text-xs font-bold text-teal-650 bg-teal-50 px-2 py-1 rounded">Active</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Rebooks</p>
+                <h4 className="text-2xl font-black text-gray-900 mt-1">{analytics?.rebookStats?.totalRebooks || 0}</h4>
+                <p className="text-[9px] text-gray-500 mt-0.5">Bookings created via Book Again</p>
+              </div>
+
+              <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Repeat Booking Rate</p>
+                <div className="flex items-baseline gap-1 mt-1">
+                  <h4 className="text-2xl font-black text-gray-900">{Number(analytics?.rebookStats?.repeatBookingRate || 0).toFixed(1)}%</h4>
+                  <FiTrendingUp className="text-emerald-500 w-3 h-3" />
+                </div>
+                <div className="w-full bg-gray-200 h-1 rounded-full mt-2 overflow-hidden">
+                  <div className="bg-teal-550 h-1 rounded-full" style={{ width: `${Math.min(100, Number(analytics?.rebookStats?.repeatBookingRate || 0))}%` }}></div>
+                </div>
+              </div>
+            </div>
+
+            {/* Top Repeated Services */}
+            <div>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Top Repeated Services</p>
+              <div className="space-y-2">
+                {analytics?.rebookStats?.topRepeatedServices && analytics.rebookStats.topRepeatedServices.length > 0 ? (
+                  analytics.rebookStats.topRepeatedServices.slice(0, 3).map((item, idx) => (
+                    <div key={idx} className="flex justify-between items-center text-xs p-2 bg-gray-50/50 rounded-lg hover:bg-gray-50 transition-colors">
+                      <span className="font-semibold text-gray-700 truncate max-w-[70%]">{item.serviceName}</span>
+                      <span className="font-black text-primary bg-primary/5 px-2 py-0.5 rounded-full">{item.count} Rebooks</span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-gray-400 italic">No repeated services in this period</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Favorite Provider Analytics */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-50">
+              <div className="flex items-center">
+                <div className="p-2 bg-rose-50 rounded-lg mr-3">
+                  <FiUsers className="text-rose-600" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900">Customer Loyalty & Favorites</h3>
+                  <p className="text-[10px] text-gray-500">Analysis of user-saved favorite professionals</p>
+                </div>
+              </div>
+              <span className="text-xs font-bold text-rose-600 bg-rose-50 px-2 py-1 rounded">Active</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Repeat Customers</p>
+                <h4 className="text-2xl font-black text-gray-900 mt-1">{analytics?.favoriteProviderStats?.repeatCustomerCount || 0}</h4>
+                <p className="text-[9px] text-gray-500 mt-0.5">Customers with favorite providers</p>
+              </div>
+
+              <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Provider Retention Score</p>
+                <div className="flex items-baseline gap-1 mt-1">
+                  <h4 className="text-2xl font-black text-gray-900">{Number(analytics?.favoriteProviderStats?.providerRetentionScore || 0).toFixed(1)}/10</h4>
+                </div>
+                <div className="w-full bg-gray-200 h-1 rounded-full mt-2 overflow-hidden">
+                  <div className="bg-rose-550 h-1 rounded-full" style={{ width: `${Number(analytics?.favoriteProviderStats?.providerRetentionScore || 0) * 10}%` }}></div>
+                </div>
+              </div>
+            </div>
+
+            {/* Most Favorited Providers */}
+            <div>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Most Saved Providers</p>
+              <div className="space-y-2">
+                {analytics?.favoriteProviderStats?.mostFavoritedProviders && analytics.favoriteProviderStats.mostFavoritedProviders.length > 0 ? (
+                  analytics.favoriteProviderStats.mostFavoritedProviders.slice(0, 3).map((item, idx) => (
+                    <div key={idx} className="flex justify-between items-center text-xs p-2 bg-gray-50/50 rounded-lg hover:bg-gray-50 transition-colors">
+                      <div>
+                        <span className="font-semibold text-gray-700 block truncate max-w-[150px]">{item.name}</span>
+                        <span className="text-[9px] text-gray-400 uppercase font-medium">{item.category}</span>
+                      </div>
+                      <span className="font-black text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">{item.count} Saves</span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-gray-400 italic">No saved providers in this period</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         {/* Revenue Chart */}

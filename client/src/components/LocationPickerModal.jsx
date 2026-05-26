@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { MapContainer, TileLayer, Marker, Polygon, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { X, MapPin, Navigation, Search } from 'lucide-react';
@@ -383,7 +384,7 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
       }) || structuredAddress.formattedAddress
     : '';
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col h-[90vh] max-h-[780px]">
         <div className="flex items-center justify-between p-4 border-b border-gray-100">
@@ -571,7 +572,8 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

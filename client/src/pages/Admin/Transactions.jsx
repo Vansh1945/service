@@ -71,6 +71,27 @@ const getStatusIcon = (status) => {
     }
 };
 
+const getAmountInRupees = (txn) => {
+    if (!txn) return 0;
+    return txn.isRupees || ['cash', 'wallet'].includes(txn.paymentMethod?.toLowerCase())
+        ? txn.amount
+        : txn.amount / 100;
+};
+
+const getCommissionInRupees = (txn) => {
+    if (!txn) return 0;
+    return txn.isRupees || ['cash', 'wallet'].includes(txn.paymentMethod?.toLowerCase())
+        ? (txn.commission || 0)
+        : (txn.commission || 0) / 100;
+};
+
+const getProviderEarningInRupees = (txn) => {
+    if (!txn) return 0;
+    return txn.isRupees || ['cash', 'wallet'].includes(txn.paymentMethod?.toLowerCase())
+        ? (txn.providerEarning || 0)
+        : (txn.providerEarning || 0) / 100;
+};
+
 const AdminTransactions = () => {
     const { showToast } = useAuth();
     const navigate = useNavigate();
@@ -346,16 +367,16 @@ const AdminTransactions = () => {
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex flex-col items-end">
                                                 <span className="text-sm font-bold text-secondary">
-                                                    {formatCurrency(txn.paymentMethod?.toLowerCase() === 'online' || txn.paymentMethod?.toLowerCase() === 'upi' ? txn.amount / 100 : txn.amount)}
+                                                    {formatCurrency(getAmountInRupees(txn))}
                                                 </span>
                                                 {(txn.commission > 0 || txn.provider) && (
                                                     <div className="flex flex-col items-end mt-0.5">
                                                         <span className="text-[10px] text-gray-400">
-                                                            Comm: {formatCurrency(txn.paymentMethod?.toLowerCase() === 'online' || txn.paymentMethod?.toLowerCase() === 'upi' ? (txn.commission || 0) / 100 : (txn.commission || 0))}
+                                                            Comm: {formatCurrency(getCommissionInRupees(txn))}
                                                             {txn.commissionRule?.name && <span className="ml-1 opacity-70 italic text-[9px]">({txn.commissionRule.name})</span>}
                                                         </span>
                                                         <span className="text-[10px] text-gray-400">
-                                                            Provider: {formatCurrency(txn.paymentMethod?.toLowerCase() === 'online' || txn.paymentMethod?.toLowerCase() === 'upi' ? (txn.providerEarning || 0) / 100 : (txn.providerEarning || 0))}
+                                                            Provider: {formatCurrency(getProviderEarningInRupees(txn))}
                                                         </span>
                                                     </div>
                                                 )}
@@ -430,7 +451,7 @@ const AdminTransactions = () => {
                                 <div className="p-5 rounded-2xl bg-gray-50 border border-gray-100">
                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Total Paid</span>
                                     <p className="text-3xl font-black text-secondary">
-                                        {formatCurrency(selectedTransaction.paymentMethod?.toLowerCase() === 'online' || selectedTransaction.paymentMethod?.toLowerCase() === 'upi' ? selectedTransaction.amount / 100 : selectedTransaction.amount)}
+                                        {formatCurrency(getAmountInRupees(selectedTransaction))}
                                     </p>
                                 </div>
                                 <div className="p-5 rounded-2xl bg-gray-50 border border-gray-100">
@@ -511,7 +532,7 @@ const AdminTransactions = () => {
                                     <div className="flex justify-between items-center text-sm">
                                         <span className="text-gray-500">Service Amount (Subtotal)</span>
                                         <span className="font-semibold text-secondary">
-                                            {formatCurrency(selectedTransaction.booking?.subtotal || (selectedTransaction.paymentMethod?.toLowerCase() === 'online' || selectedTransaction.paymentMethod?.toLowerCase() === 'upi' ? selectedTransaction.amount / 100 : selectedTransaction.amount))}
+                                            {formatCurrency(selectedTransaction.booking?.subtotal || getAmountInRupees(selectedTransaction))}
                                         </span>
                                     </div>
 
@@ -534,13 +555,13 @@ const AdminTransactions = () => {
                                             )}
                                         </div>
                                         <span className="font-semibold text-red-500">
-                                            -{formatCurrency(selectedTransaction.paymentMethod?.toLowerCase() === 'online' || selectedTransaction.paymentMethod?.toLowerCase() === 'upi' ? (selectedTransaction.commission || 0) / 100 : (selectedTransaction.commission || 0))}
+                                            -{formatCurrency(getCommissionInRupees(selectedTransaction))}
                                         </span>
                                     </div>
                                     <div className="pt-3 border-t border-gray-200 flex justify-between items-center">
                                         <span className="font-bold text-secondary">Provider Earning</span>
                                         <span className="text-lg font-black text-green-600">
-                                            {formatCurrency(selectedTransaction.paymentMethod?.toLowerCase() === 'online' || selectedTransaction.paymentMethod?.toLowerCase() === 'upi' ? (selectedTransaction.providerEarning || 0) / 100 : (selectedTransaction.providerEarning || 0))}
+                                            {formatCurrency(getProviderEarningInRupees(selectedTransaction))}
                                         </span>
                                     </div>
                                 </div>

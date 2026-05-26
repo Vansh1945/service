@@ -211,10 +211,10 @@ const createOrder = async (req, res) => {
       }
     }
 
-    // Store online payment values in paise for consistency with existing data
-    const finalAmount = amount;
-    const finalCommission = commission * 100;
-    const finalProviderEarning = providerEarning * 100;
+    // Store online payment values in Rupees
+    const finalAmount = booking.totalAmount - walletDeduction;
+    const finalCommission = commission;
+    const finalProviderEarning = providerEarning;
 
     // Create transaction record
     const transaction = new Transaction({
@@ -814,7 +814,9 @@ const getCustomerTransactions = async (req, res) => {
 
     for (const txn of walletTransactions) {
       const serviceTitle = txn.booking?.services?.[0]?.service?.title || 'Booking';
-      const amountInRupees = txn.amount > 1000 ? txn.amount / 100 : txn.amount; // handle paise vs rupees
+      const amountInRupees = txn.isRupees || ['cash', 'wallet'].includes(txn.paymentMethod?.toLowerCase())
+        ? txn.amount
+        : txn.amount / 100;
 
       walletActivity.push({
         _id: `wallet_pay_${txn._id}`,

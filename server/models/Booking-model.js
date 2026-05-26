@@ -373,6 +373,20 @@ const bookingSchema = new Schema({
     }
   ],
 
+  isRebook: {
+    type: Boolean,
+    default: false
+  },
+  originalBooking: {
+    type: Schema.Types.ObjectId,
+    ref: 'Booking',
+    default: null
+  },
+  isFavoriteProviderBooking: {
+    type: Boolean,
+    default: false
+  },
+
   metadata: {
     ip: String,
     userAgent: String
@@ -399,6 +413,11 @@ const bookingSchema = new Schema({
 // Pre-save hook to calculate commission and totals
 bookingSchema.pre('save', async function (next) {
   this.updatedAt = Date.now();
+
+  // If a provider is assigned and the status is pending, transition to accepted
+  if (this.provider && this.status === 'pending') {
+    this.status = 'accepted';
+  }
 
   // Populate address S2 cell fields on creation or update
   if (this.isModified('address.lat') || this.isModified('address.lng') || this.isNew) {

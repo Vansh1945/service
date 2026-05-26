@@ -19,3 +19,13 @@ export const getDashboardStats = () => {
 export const getWalletHistory = () => {
     return axiosInstance.get("/customer/wallet/history");
 };
+
+export const toggleFavoriteProvider = (data) => {
+    return axiosInstance.post("/customer/favorite-providers/toggle", data);
+};
+
+export const checkFavoriteProviderAvailability = (providerId, categoryId) => {
+    const params = categoryId ? { categoryId } : {};
+    return axiosInstance.get(`/customer/favorite-providers/check/${providerId}`, { params });
+};
+
