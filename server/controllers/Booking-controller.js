@@ -613,10 +613,11 @@ const createBooking = async (req, res) => {
     let subtotal = service.basePrice * quantity;
     let totalDiscount = 0;
     let couponDetails = null;
+    let coupon = null;
 
     // Process coupon if provided
     if (couponCode) {
-      const coupon = await Coupon.findOne({ code: couponCode }).session(session);
+      coupon = await Coupon.findOne({ code: couponCode }).session(session);
       if (!coupon) {
         await session.abortTransaction();
         session.endSession();
@@ -2832,7 +2833,7 @@ const startBooking = async (req, res) => {
     booking.statusHistory.push({
       status: 'in-progress',
       timestamp: new Date(),
-      note: 'Work proof submitted. Service started. Verification successful. FAILED_ATTEMPTS:0',
+      note: 'Work proof submitted. Service started. Verification successful.',
       updatedBy: 'provider'
     });
 
