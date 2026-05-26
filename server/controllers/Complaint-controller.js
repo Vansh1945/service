@@ -1120,12 +1120,13 @@ const reopenComplaint = async (req, res) => {
 // @desc    Add a reply/proof to a complaint
 // @route   POST /api/complaints/:id/reply
 // @access  Private (Admin, Provider)
+// PRODUCTION FIX
 const replyToComplaint = async (req, res) => {
   try {
     const { message } = req.body;
     const complaintId = req.params.id;
-    const userRole = req.user?.role || req.admin?.role || 'admin';
-    const userId = req.user?._id || req.admin?._id;
+    const userRole = req.role || req.user?.role || req.admin?.role || 'admin';
+    const userId = req.user?._id || req.admin?._id || req.adminID;
 
     const complaint = await Complaint.findById(complaintId);
     if (!complaint) {

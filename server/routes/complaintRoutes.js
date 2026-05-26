@@ -28,6 +28,7 @@ const {
 
 // Unified Auth for Customer and Provider
 
+// PRODUCTION FIX
 const sharedAuth = (req, res, next) => {
   const token = req.header('Authorization');
   if (!token) return res.status(401).json({ success: false, message: "Authorization required" });
@@ -36,7 +37,9 @@ const sharedAuth = (req, res, next) => {
     const jwtToken = token.replace("Bearer ", "").trim();
     const decoded = jwt.verify(jwtToken, process.env.JWT_SECRET);
 
-    if (decoded.role === 'provider') {
+    if (decoded.role === 'admin') {
+      return adminAuthMiddleware(req, res, next);
+    } else if (decoded.role === 'provider') {
       return providerAuthMiddleware(req, res, next);
     } else {
       return userAuthMiddleware(req, res, next);

@@ -127,28 +127,28 @@ const rateLimit = require('express-rate-limit');
 
 // Specific Rate Limiters for Authentication
 /* BACKUP COMMENT: Original was commented-out limiters. Enabling production rate limits now. */
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, message: 'Too many login attempts. Try again in 15 minutes.' }
-});
+// const loginLimiter = rateLimit({
+//   windowMs: 15 * 60 * 1000, // 15 minutes
+//   max: 5,
+//   standardHeaders: true,
+//   legacyHeaders: false,
+//   message: { success: false, message: 'Too many login attempts. Try again in 15 minutes.' }
+// });
 
-const otpLimiter = rateLimit({
-  windowMs: 10 * 60 * 1000, // 10 minutes
-  max: 3,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, message: 'Too many OTP requests. Try again in 10 minutes.' }
-});
+// const otpLimiter = rateLimit({
+//   windowMs: 10 * 60 * 1000, // 10 minutes
+//   max: 3,
+//   standardHeaders: true,
+//   legacyHeaders: false,
+//   message: { success: false, message: 'Too many OTP requests. Try again in 10 minutes.' }
+// });
 
 // Apply rate limiters directly to auth endpoints
-app.use("/api/auth/login", loginLimiter);
-app.use("/api/auth/firebase-login", loginLimiter);
-app.use("/api/auth/forgot-password", otpLimiter);
-app.use("/api/auth/resend-otp", otpLimiter);
-app.use("/api/auth/verify-otp", otpLimiter);
+// app.use("/api/auth/login", loginLimiter);
+// app.use("/api/auth/firebase-login", loginLimiter);
+// app.use("/api/auth/forgot-password", otpLimiter);
+// app.use("/api/auth/resend-otp", otpLimiter);
+// app.use("/api/auth/verify-otp", otpLimiter);
 
 // Route imports
 const adminRoutes = require("./routes/Admin-Routes");

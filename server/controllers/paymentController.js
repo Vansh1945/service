@@ -14,6 +14,48 @@ const bcrypt = require('bcryptjs');
 
 // Helper to mask an email for UI responses (e.g., abcd@gmail.com -> abcd***@gmail.com)
 // Always safe to call even if email is missing/invalid.
+// PRODUCTION FIX
+// Helper to safely start mongoose sessions with fallback support for standalone MongoDB
+const safeStartSession = async () => {
+  try {
+    const session = await mongoose.startSession();
+    return session;
+  } catch (err) {
+    console.warn("[Transaction Fallback] Standalone MongoDB detected. Session bypassed. Sequential DB operations will be executed instead.", err.message);
+    return null;
+  }
+};
+
+// PRODUCTION FIX
+const safeAbort = async (session) => {
+  if (session) {
+    try {
+      await session.abortTransaction();
+    } catch (_) {}
+  }
+};
+
+const safeCommit = async (session) => {
+  if (session) {
+    try {
+      await session.commitTransaction();
+    } catch (err) {
+      throw err;
+    }
+  }
+};
+
+const safeEnd = (session) => {
+  if (session) {
+    try {
+      session.endSession();
+    } catch (_) {}
+  }
+};
+
+
+// Helper to mask an email for UI responses (e.g., abcd@gmail.com -> abcd***@gmail.com)
+// Always safe to call even if email is missing/invalid.
 const maskEmail = (email) => {
   try {
     if (!email || typeof email !== 'string') return '';
@@ -49,29 +91,45 @@ const syncEarningsStatus = async (providerId) => {
 
   if (heldEarnings.length === 0) return;
 
-  const session = await mongoose.startSession();
+  const session = await safeStartSession();
   try {
     for (const earning of heldEarnings) {
       if (earning.booking && !earning.booking.disputeRaised && earning.booking.disputeStatus === 'none') {
-        await session.withTransaction(async () => {
+        if (session) {
+          await session.withTransaction(async () => {
+            earning.status = 'available';
+            await earning.save({ session });
+
+            await Provider.findByIdAndUpdate(
+              providerId,
+              {
+                $inc: { 'wallet.availableBalance': earning.netAmount },
+                $set: { 'wallet.lastUpdated': new Date() }
+              },
+              { session }
+            );
+          });
+        } else {
+          // PRODUCTION FIX fallback sequential flow
           earning.status = 'available';
-          await earning.save({ session });
+          await earning.save();
 
           await Provider.findByIdAndUpdate(
             providerId,
             {
               $inc: { 'wallet.availableBalance': earning.netAmount },
               $set: { 'wallet.lastUpdated': new Date() }
-            },
-            { session }
+            }
           );
-        });
+        }
       }
     }
   } catch (err) {
     console.error(`Error in syncEarningsStatus for provider ${providerId}:`, err);
   } finally {
-    await session.endSession();
+    if (session) {
+      await session.endSession();
+    }
   }
 };
 
@@ -128,118 +186,143 @@ const handleWebhook = async (req, res) => {
 };
 
 // Handle successful payment
+// PRODUCTION FIX
 const handlePaymentCaptured = async (payment) => {
-  const session = await mongoose.startSession();
+  const session = await safeStartSession();
   try {
-    await session.withTransaction(async () => {
-      // Update Transaction status
-      const existingTxn = await Transaction.findOne({ razorpayOrderId: payment.order_id }).session(session);
-
-      if (!existingTxn) {
-        console.error(`Transaction not found for order: ${payment.order_id}`);
-        throw new Error('Transaction not found');
-      }
-
-      // Check for duplicate payment success
-      if (existingTxn.paymentStatus === 'completed' || existingTxn.paymentStatus === 'success' || existingTxn.razorpayPaymentId === payment.id) {
-        console.log(`Payment already processed for order: ${payment.order_id}`);
-        try {
-          notifyAdmins(
-            'Duplicate Payment Alert',
-            `Duplicate payment success received for order ${payment.order_id}, payment ID: ${payment.id}. Already processed.`,
-            'payment_alert',
-            existingTxn._id
-          );
-        } catch (e) { }
-        return;
-      }
-
-      existingTxn.paymentStatus = 'completed';
-      existingTxn.razorpayPaymentId = payment.id;
-      existingTxn.updatedAt = new Date();
-      await existingTxn.save({ session });
-
-      // Update Booking status to confirmed
-      const booking = await Booking.findById(existingTxn.booking).session(session);
-      if (booking) {
-        booking.paymentStatus = 'escrow_hold';
-        if (booking.status !== 'accepted' && booking.status !== 'completed' && booking.status !== 'in-progress') {
-          booking.status = 'pending';
-        }
-        booking.updatedAt = new Date();
-        await booking.save({ session });
-      }
-
-      console.log(`Payment captured: ${payment.id}, Transaction: ${existingTxn._id}`);
-
-      // Notify customer
-      try {
-        if (booking && booking.customer) {
-          sendNotification(
-            booking.customer,
-            'customer',
-            'Payment Successful',
-            `Your payment for booking ${booking._id} was successful.`,
-            'payment',
-            booking._id
-          );
-        }
-      } catch (e) { }
-
-      // Invalidate dashboard caches
-      try {
-
-
-      } catch (e) { }
-    });
+    if (session) {
+      await session.withTransaction(async () => {
+        await executePaymentCapturedOperations(payment, session);
+      });
+    } else {
+      await executePaymentCapturedOperations(payment, null);
+    }
   } catch (error) {
     console.error('Error handling payment.captured:', error);
     throw error;
   } finally {
-    await session.endSession();
+    if (session) {
+      await session.endSession();
+    }
   }
 };
 
-// Handle failed payment
-const handlePaymentFailed = async (payment) => {
-  const session = await mongoose.startSession();
+const executePaymentCapturedOperations = async (payment, session) => {
+  const existingTxnQuery = Transaction.findOne({ razorpayOrderId: payment.order_id });
+  const existingTxn = session ? await existingTxnQuery.session(session) : await existingTxnQuery;
+
+  if (!existingTxn) {
+    console.error(`Transaction not found for order: ${payment.order_id}`);
+    throw new Error('Transaction not found');
+  }
+
+  // Check for duplicate payment success
+  if (existingTxn.paymentStatus === 'completed' || existingTxn.paymentStatus === 'success' || existingTxn.razorpayPaymentId === payment.id) {
+    console.log(`Payment already processed for order: ${payment.order_id}`);
+    try {
+      notifyAdmins(
+        'Duplicate Payment Alert',
+        `Duplicate payment success received for order ${payment.order_id}, payment ID: ${payment.id}. Already processed.`,
+        'payment_alert',
+        existingTxn._id
+      );
+    } catch (e) { }
+    return;
+  }
+
+  existingTxn.paymentStatus = 'completed';
+  existingTxn.razorpayPaymentId = payment.id;
+  existingTxn.updatedAt = new Date();
+  if (session) {
+    await existingTxn.save({ session });
+  } else {
+    await existingTxn.save();
+  }
+
+  // Update Booking status to confirmed
+  const bookingQuery = Booking.findById(existingTxn.booking);
+  const booking = session ? await bookingQuery.session(session) : await bookingQuery;
+  if (booking) {
+    booking.paymentStatus = 'escrow_hold';
+    if (booking.status !== 'accepted' && booking.status !== 'completed' && booking.status !== 'in-progress') {
+      booking.status = 'pending';
+    }
+    booking.updatedAt = new Date();
+    if (session) {
+      await booking.save({ session });
+    } else {
+      await booking.save();
+    }
+  }
+
+  console.log(`Payment captured: ${payment.id}, Transaction: ${existingTxn._id}`);
+
+  // Notify customer
   try {
-    await session.withTransaction(async () => {
-      // Update Transaction status to failed
-      const transaction = await Transaction.findOneAndUpdate(
-        { razorpayOrderId: payment.order_id },
-        {
-          paymentStatus: 'failed',
-          updatedAt: new Date()
-        },
-        { session, new: true }
+    if (booking && booking.customer) {
+      sendNotification(
+        booking.customer,
+        'customer',
+        'Payment Successful',
+        `Your payment for booking ${booking._id} was successful.`,
+        'payment',
+        booking._id
       );
+    }
+  } catch (e) { }
+};
 
-      if (!transaction) {
-        console.error(`Transaction not found for order: ${payment.order_id}`);
-        return;
-      }
-
-      // Rollback wallet deduction if mixed payment failed
-      const { rollbackWalletDeduction } = require('./Transaction-controller');
-      if (rollbackWalletDeduction) {
-        await rollbackWalletDeduction(transaction, session);
-      }
-
-      await Booking.findOneAndUpdate(
-        { _id: transaction.booking },
-        { paymentStatus: 'failed', updatedAt: new Date() },
-        { session }
-      );
-
-      console.log(`Payment failed: ${payment.id}, Transaction: ${transaction._id}`);
-    });
+// Handle failed payment
+// PRODUCTION FIX
+const handlePaymentFailed = async (payment) => {
+  const session = await safeStartSession();
+  try {
+    if (session) {
+      await session.withTransaction(async () => {
+        await executePaymentFailedOperations(payment, session);
+      });
+    } else {
+      await executePaymentFailedOperations(payment, null);
+    }
   } catch (error) {
     console.error('Error handling payment.failed:', error);
     throw error;
   } finally {
-    await session.endSession();
+    if (session) {
+      await session.endSession();
+    }
   }
+};
+
+const executePaymentFailedOperations = async (payment, session) => {
+  // Update Transaction status to failed
+  const transaction = await Transaction.findOneAndUpdate(
+    { razorpayOrderId: payment.order_id },
+    {
+      paymentStatus: 'failed',
+      updatedAt: new Date()
+    },
+    { session, new: true }
+  );
+
+  if (!transaction) {
+    console.error(`Transaction not found for order: ${payment.order_id}`);
+    return;
+  }
+
+  // Rollback wallet deduction if mixed payment failed
+  const { rollbackWalletDeduction } = require('./Transaction-controller');
+  if (rollbackWalletDeduction) {
+    await rollbackWalletDeduction(transaction, session);
+  }
+
+  await Booking.findOneAndUpdate(
+    { _id: transaction.booking },
+    { paymentStatus: 'failed', updatedAt: new Date() },
+    { session }
+  );
+
+  console.log(`Payment failed: ${payment.id}, Transaction: ${transaction._id}`);
 };
 
 
@@ -513,9 +596,10 @@ const requestBulkWithdrawal = async (req, res) => {
     }
 
     // STEP 2: Execute Instant Withdrawal Request (Bypassing OTP generation/sending)
-    const session = await mongoose.startSession();
+    // PRODUCTION FIX
+    const session = await safeStartSession();
     try {
-      await session.withTransaction(async () => {
+      const executeWithdrawalOps = async (currSession) => {
         // Final balance check inside transaction
         if (provider.wallet.availableBalance < amount) {
           throw new Error("Insufficient balance");
@@ -542,7 +626,11 @@ const requestBulkWithdrawal = async (req, res) => {
           transactionReference: `WDL-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
         });
 
-        await paymentRecord.save({ session });
+        if (currSession) {
+          await paymentRecord.save({ session: currSession });
+        } else {
+          await paymentRecord.save();
+        }
 
         // Update provider security settings (cooldown info)
         provider.withdrawalSecurity = {
@@ -552,7 +640,11 @@ const requestBulkWithdrawal = async (req, res) => {
           attempts: 0,
           pendingAmount: 0
         };
-        await provider.save({ session });
+        if (currSession) {
+          await provider.save({ session: currSession });
+        } else {
+          await provider.save();
+        }
 
         // Notify Admin
         if (isFlagged) {
@@ -579,9 +671,19 @@ const requestBulkWithdrawal = async (req, res) => {
             status: paymentRecord.status
           }
         });
-      });
+      };
+
+      if (session) {
+        await session.withTransaction(async () => {
+          await executeWithdrawalOps(session);
+        });
+      } else {
+        await executeWithdrawalOps(null);
+      }
     } finally {
-      await session.endSession();
+      if (session) {
+        await session.endSession();
+      }
     }
 
   } catch (error) {
@@ -591,8 +693,9 @@ const requestBulkWithdrawal = async (req, res) => {
 };
 
 // Provider - Verify Withdrawal OTP and Create Request
+// PRODUCTION FIX
 const verifyWithdrawalOTP = async (req, res) => {
-  const session = await mongoose.startSession();
+  const session = await safeStartSession();
   try {
     const providerId = req.provider._id;
     const { otp } = req.body;
@@ -627,7 +730,7 @@ const verifyWithdrawalOTP = async (req, res) => {
     }
 
     // Success - Create the withdrawal request
-    await session.withTransaction(async () => {
+    const executeWithdrawalRequest = async (currSession) => {
       const amount = security.pendingAmount;
 
       // Final balance check
@@ -656,7 +759,11 @@ const verifyWithdrawalOTP = async (req, res) => {
         transactionReference: `WDL-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
       });
 
-      await paymentRecord.save({ session });
+      if (currSession) {
+        await paymentRecord.save({ session: currSession });
+      } else {
+        await paymentRecord.save();
+      }
 
       // Clear OTP and update cooldown
       provider.withdrawalSecurity = {
@@ -666,7 +773,11 @@ const verifyWithdrawalOTP = async (req, res) => {
         attempts: 0,
         pendingAmount: 0
       };
-      await provider.save({ session });
+      if (currSession) {
+        await provider.save({ session: currSession });
+      } else {
+        await provider.save();
+      }
 
       // Notify Admin
       if (security.isFlagged) {
@@ -693,13 +804,23 @@ const verifyWithdrawalOTP = async (req, res) => {
           status: paymentRecord.status
         }
       });
-    });
+    };
+
+    if (session) {
+      await session.withTransaction(async () => {
+        await executeWithdrawalRequest(session);
+      });
+    } else {
+      await executeWithdrawalRequest(null);
+    }
 
   } catch (error) {
     console.error("Verify OTP Error:", error);
     res.status(500).json({ success: false, error: error.message });
   } finally {
-    await session.endSession();
+    if (session) {
+      await session.endSession();
+    }
   }
 };
 
@@ -1242,9 +1363,12 @@ const getAllWithdrawalRequests = async (req, res) => {
 };
 
 // Admin - Approve withdrawal request
+// PRODUCTION FIX
 const approveWithdrawalRequest = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
+  const session = await safeStartSession();
+  if (session) {
+    session.startTransaction();
+  }
 
   try {
     const { id } = req.params;
@@ -1252,44 +1376,43 @@ const approveWithdrawalRequest = async (req, res) => {
 
     // Validate required fields for approval
     if (!transactionReference) {
-      await session.abortTransaction();
-      session.endSession();
+      await safeAbort(session);
+      safeEnd(session);
       return res.status(400).json({ success: false, message: "Transaction reference is required" });
     }
 
     if (!utrNo) {
-      await session.abortTransaction();
-      session.endSession();
+      await safeAbort(session);
+      safeEnd(session);
       return res.status(400).json({ success: false, message: "UTR number is required" });
     }
 
     if (!transferDate || !transferTime) {
-      await session.abortTransaction();
-      session.endSession();
+      await safeAbort(session);
+      safeEnd(session);
       return res.status(400).json({ success: false, message: "Transfer date and time are required" });
     }
 
     // 1️⃣ Find PaymentRecord with provider populated
-    let paymentRecord = await PaymentRecord.findById(id)
-      .populate("provider")
-      .session(session);
+    let paymentRecordQuery = PaymentRecord.findById(id).populate("provider");
+    let paymentRecord = session ? await paymentRecordQuery.session(session) : await paymentRecordQuery;
 
     if (!paymentRecord) {
-      await session.abortTransaction();
-      session.endSession();
+      await safeAbort(session);
+      safeEnd(session);
       return res.status(404).json({ success: false, message: "Withdrawal request not found" });
     }
 
     // Add Safety Checks to prevent duplicate processing
     if (paymentRecord.status === 'completed' || paymentRecord.status === 'transferred') {
-      await session.abortTransaction();
-      session.endSession();
+      await safeAbort(session);
+      safeEnd(session);
       return res.status(400).json({ success: false, message: "Withdrawal has already been processed" });
     }
 
     if (!['requested', 'processing', 'under_review', 'approved'].includes(paymentRecord.status)) {
-      await session.abortTransaction();
-      session.endSession();
+      await safeAbort(session);
+      safeEnd(session);
       return res.status(400).json({ success: false, message: `Cannot approve request with status: ${paymentRecord.status}` });
     }
 
@@ -1302,7 +1425,11 @@ const approveWithdrawalRequest = async (req, res) => {
     paymentRecord.adminRemark = notes || "";
     paymentRecord.admin = req.admin._id;
     paymentRecord.completedAt = new Date();
-    await paymentRecord.save({ session });
+    if (session) {
+      await paymentRecord.save({ session });
+    } else {
+      await paymentRecord.save();
+    }
 
     // 2.5️⃣ Increment provider's totalWithdrawn (balance was already locked/deducted at OTP verification time)
     const providerDoc = paymentRecord.provider;
@@ -1312,11 +1439,15 @@ const approveWithdrawalRequest = async (req, res) => {
 
     providerDoc.wallet.totalWithdrawn += paymentRecord.amount;
     providerDoc.wallet.lastUpdated = new Date();
-    await providerDoc.save({ session });
+    if (session) {
+      await providerDoc.save({ session });
+    } else {
+      await providerDoc.save();
+    }
 
     // 3️⃣ Commit transaction
-    await session.commitTransaction();
-    session.endSession();
+    await safeCommit(session);
+    safeEnd(session);
 
     // Notify provider about approval
     try {
@@ -1337,10 +1468,8 @@ const approveWithdrawalRequest = async (req, res) => {
     });
 
   } catch (error) {
-    try {
-      await session.abortTransaction();
-    } catch (_) { }
-    session.endSession();
+    await safeAbort(session);
+    safeEnd(session);
     console.error("Error approving withdrawal:", error);
     return res.status(500).json({
       success: false,
@@ -1352,25 +1481,29 @@ const approveWithdrawalRequest = async (req, res) => {
 
 
 // Admin - Reject withdrawal request
+// PRODUCTION FIX
 const rejectWithdrawalRequest = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
+  const session = await safeStartSession();
+  if (session) {
+    session.startTransaction();
+  }
 
   try {
     const { id } = req.params;
     const { rejectionReason, adminRemark } = req.body;
 
     // Find the payment record
-    const paymentRecord = await PaymentRecord.findById(id).populate("provider").session(session);
+    let paymentRecordQuery = PaymentRecord.findById(id).populate("provider");
+    const paymentRecord = session ? await paymentRecordQuery.session(session) : await paymentRecordQuery;
     if (!paymentRecord) {
-      await session.abortTransaction();
-      session.endSession();
+      await safeAbort(session);
+      safeEnd(session);
       return res.status(404).json({ success: false, message: "Withdrawal request not found" });
     }
 
     if (!['requested', 'processing', 'under_review'].includes(paymentRecord.status)) {
-      await session.abortTransaction();
-      session.endSession();
+      await safeAbort(session);
+      safeEnd(session);
       return res.status(400).json({ success: false, message: `Cannot reject a request with status: ${paymentRecord.status}` });
     }
 
@@ -1385,7 +1518,11 @@ const rejectWithdrawalRequest = async (req, res) => {
     }
     provider.wallet.availableBalance += paymentRecord.amount;
     provider.wallet.lastUpdated = new Date();
-    await provider.save({ session });
+    if (session) {
+      await provider.save({ session });
+    } else {
+      await provider.save();
+    }
 
     // Update payment record
     paymentRecord.status = "rejected";
@@ -1393,10 +1530,14 @@ const rejectWithdrawalRequest = async (req, res) => {
     paymentRecord.adminRemark = adminRemark || "";
     paymentRecord.admin = req.admin._id;
     paymentRecord.completedAt = new Date();
-    await paymentRecord.save({ session });
+    if (session) {
+      await paymentRecord.save({ session });
+    } else {
+      await paymentRecord.save();
+    }
 
-    await session.commitTransaction();
-    session.endSession();
+    await safeCommit(session);
+    safeEnd(session);
 
     // Notify provider about rejection
     try {
@@ -1417,8 +1558,8 @@ const rejectWithdrawalRequest = async (req, res) => {
     });
 
   } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
+    await safeAbort(session);
+    safeEnd(session);
     console.error("Error rejecting withdrawal:", error);
     return res.status(500).json({
       success: false,
@@ -2278,16 +2419,19 @@ const outstandingBalanceReport = async (req, res) => {
 
 
 // Auto-release held earnings after 48 hours
+// PRODUCTION FIX
 const releaseHeldEarnings = async () => {
-  const session = await mongoose.startSession();
+  const session = await safeStartSession();
   try {
     const now = new Date();
-    await session.withTransaction(async () => {
-      // Find earnings that are held and ready to be released
-      const heldEarnings = await ProviderEarning.find({
+    
+    const executeRelease = async (currentSession) => {
+      const query = ProviderEarning.find({
         status: 'held',
         availableAfter: { $lte: now }
-      }).populate('booking').session(session);
+      }).populate('booking');
+      
+      const heldEarnings = currentSession ? await query.session(currentSession) : await query;
 
       if (heldEarnings.length === 0) return;
 
@@ -2302,21 +2446,29 @@ const releaseHeldEarnings = async () => {
           }
           if (earning.booking.paymentStatus === 'refunded' || earning.booking.adminRefundDecision === 'approved') {
             console.log(`Cancelling earning ${earning._id} - Booking refunded/approved for refund`);
-            await ProviderEarning.findOneAndUpdate(
-              { _id: earning._id, status: 'held' },
-              { $set: { status: 'cancelled' } },
-              { session }
-            );
+            if (currentSession) {
+              await ProviderEarning.findOneAndUpdate(
+                { _id: earning._id, status: 'held' },
+                { $set: { status: 'cancelled' } },
+                { session: currentSession }
+              );
+            } else {
+              await ProviderEarning.findOneAndUpdate(
+                { _id: earning._id, status: 'held' },
+                { $set: { status: 'cancelled' } }
+              );
+            }
             continue;
           }
         }
 
         // Atomically lock and update status from 'held' to 'available' to prevent race conditions
-        const updatedEarning = await ProviderEarning.findOneAndUpdate(
+        const updateQuery = ProviderEarning.findOneAndUpdate(
           { _id: earning._id, status: 'held' },
           { $set: { status: 'available' } },
-          { session, new: true }
+          { new: true }
         );
+        const updatedEarning = currentSession ? await updateQuery.session(currentSession) : await updateQuery;
 
         if (!updatedEarning) {
           console.log(`Skipping release for earning ${earning._id} - Already processed by another concurrent task.`);
@@ -2324,14 +2476,19 @@ const releaseHeldEarnings = async () => {
         }
 
         // Update provider wallet
-        const provider = await Provider.findById(earning.provider).session(session);
+        const providerQuery = Provider.findById(earning.provider);
+        const provider = currentSession ? await providerQuery.session(currentSession) : await providerQuery;
         if (provider) {
           if (!provider.wallet) {
             provider.wallet = { availableBalance: 0, totalWithdrawn: 0, lastUpdated: new Date() };
           }
           provider.wallet.availableBalance += earning.netAmount;
           provider.wallet.lastUpdated = new Date();
-          await provider.save({ session });
+          if (currentSession) {
+            await provider.save({ session: currentSession });
+          } else {
+            await provider.save();
+          }
 
           // Notify provider
           try {
@@ -2347,11 +2504,21 @@ const releaseHeldEarnings = async () => {
         }
         console.log(`Released earning ${earning._id} to provider ${earning.provider}`);
       }
-    });
+    };
+
+    if (session) {
+      await session.withTransaction(async () => {
+        await executeRelease(session);
+      });
+    } else {
+      await executeRelease(null);
+    }
   } catch (error) {
     console.error('Error in releaseHeldEarnings:', error);
   } finally {
-    await session.endSession();
+    if (session) {
+      await session.endSession();
+    }
   }
 };
 

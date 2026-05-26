@@ -4,9 +4,10 @@ require('dotenv').config();
 const connectDB = async () => {
   try {
     /* BACKUP COMMENT: Original connection was: await mongoose.connect(process.env.MONGO_URI); */
+    // PRODUCTION FIX
     const connect = await mongoose.connect(process.env.MONGO_URI, {
-      maxPoolSize: 100,
-      minPoolSize: 10,
+      maxPoolSize: 500,
+      minPoolSize: 20,
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 45000
     });

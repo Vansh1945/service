@@ -12,6 +12,84 @@ const { sendNotification, notifyAdmins } = require('../utils/notificationHelper'
 const { generateBookingId } = require('../utils/generateUniqueId');
 const { getBookingTimeline } = require('../utils/bookingHelper');
 
+// PRODUCTION FIX
+// Robust Mongoose session/transaction retry wrapper with fallback to sequential execution if transactions are unsupported
+const runInTransactionOrSequential = async (operationsFunc) => {
+  let session = null;
+  let useTransactions = true;
+
+  try {
+    session = await mongoose.startSession();
+  } catch (sessionErr) {
+    console.warn("[Transaction Fallback] Failed to start Mongoose session. Standalone MongoDB detected. Running sequential fallback.", sessionErr.message);
+    useTransactions = false;
+  }
+
+  if (!useTransactions || !session) {
+    // Non-transactional sequential fallback path
+    return await operationsFunc(null);
+  }
+
+  // Transaction path with retries and exponential backoff
+  const maxRetries = 3;
+  const backoffDelays = [100, 300, 700];
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      let result;
+      await session.withTransaction(async () => {
+        result = await operationsFunc(session);
+      });
+      return result;
+    } catch (error) {
+      const isWriteConflict = error.code === 112 || error.message?.includes("WriteConflict") || error.name === "WriteConflict";
+      const isTransient = error.errorLabels?.includes("TransientTransactionError");
+
+      if ((isWriteConflict || isTransient) && attempt < maxRetries) {
+        const delay = backoffDelays[attempt - 1] || 100;
+        console.warn(`[Transaction Retry] Write conflict or transient error detected (Attempt ${attempt}/${maxRetries}). Retrying in ${delay}ms... Error:`, error.message);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+
+      // If we exhausted retries or it's a non-retryable error, throw it
+      throw error;
+    }
+  }
+};
+
+// PRODUCTION FIX
+const safeAbort = async (session) => {
+  if (session) {
+    try {
+      await safeAbort(session);
+    } catch (err) {
+      console.warn("[Transaction] abort failed:", err.message);
+    }
+  }
+};
+
+const safeCommit = async (session) => {
+  if (session) {
+    try {
+      await safeCommit(session);
+    } catch (err) {
+      console.error("[Transaction] commit failed:", err.message);
+      throw err;
+    }
+  }
+};
+
+const safeEnd = (session) => {
+  if (session) {
+    try {
+      safeEnd(session);
+    } catch (err) {
+      console.warn("[Transaction] end failed:", err.message);
+    }
+  }
+};
+
 
 // Helper to get synchronized payout status
 const getPayoutStatus = (earning, booking) => {
@@ -494,10 +572,9 @@ const autoAssignProviderIfEnabled = async (bookingId) => {
 };
 
 // Create single service booking
+// Create single service booking
+// PRODUCTION FIX
 const createBooking = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
   try {
     const {
       serviceId,
@@ -516,8 +593,6 @@ const createBooking = async (req, res) => {
 
     // Validate required fields
     if (!serviceId || !date || !address || !paymentMethod) {
-      await session.abortTransaction();
-      session.endSession();
       return res.status(400).json({
         success: false,
         message: 'Service ID, date, address, and payment method are required'
@@ -526,338 +601,309 @@ const createBooking = async (req, res) => {
 
     // Validate payment method
     if (!['online', 'cash', 'wallet', 'mixed'].includes(paymentMethod)) {
-      await session.abortTransaction();
-      session.endSession();
       return res.status(400).json({
         success: false,
         message: 'Payment method must be either "online", "cash", "wallet" or "mixed"'
       });
     }
 
-    // Validate if Cash On Delivery (COD) is allowed
-    if (paymentMethod === 'cash') {
-      const { SystemConfig } = require('../models/SystemSetting');
-      let settings = await SystemConfig.findOne();
-      if (!settings) {
-        settings = new SystemConfig({ companyName: 'SAFEVOLT SOLUTIONS' });
-        await settings.save({ session });
+    let bookingResult = await runInTransactionOrSequential(async (session) => {
+      // Validate if Cash On Delivery (COD) is allowed
+      if (paymentMethod === 'cash') {
+        const { SystemConfig } = require('../models/SystemSetting');
+        let settings = await SystemConfig.findOne();
+        if (!settings) {
+          settings = new SystemConfig({ companyName: 'SAFEVOLT SOLUTIONS' });
+          await settings.save(session ? { session } : {});
+        }
+        const allowCOD = settings?.bookingSettings?.allowCOD ?? true;
+        if (!allowCOD) {
+          throw new Error('Pay after service (COD/Cash) is currently disabled by system administrator.');
+        }
       }
-      const allowCOD = settings?.bookingSettings?.allowCOD ?? true;
-      if (!allowCOD) {
-        await session.abortTransaction();
-        session.endSession();
-        return res.status(400).json({
-          success: false,
-          message: 'Pay after service (COD/Cash) is currently disabled by system administrator.'
-        });
-      }
-    }
 
-    // Check if service exists
-    const service = await Service.findById(serviceId).session(session);
-    if (!service) {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(404).json({
-        success: false,
-        message: 'Service not found'
+      // Check if service exists
+      const service = session 
+        ? await Service.findById(serviceId).session(session) 
+        : await Service.findById(serviceId);
+      if (!service) {
+        throw new Error('Service not found');
+      }
+
+      // Validate date
+      const bookingDate = new Date(date);
+      if (isNaN(bookingDate.getTime())) {
+        throw new Error('Invalid date format');
+      }
+
+      // Smart rules: Rebook validation
+      if (isRebook && originalBooking) {
+        const oldBooking = session 
+          ? await Booking.findById(originalBooking).session(session) 
+          : await Booking.findById(originalBooking);
+        if (!oldBooking) {
+          throw new Error('Original booking not found');
+        }
+
+        // Rebook allowed only if previous booking is completed and not cancelled
+        if (oldBooking.status !== 'completed' || oldBooking.status === 'cancelled') {
+          throw new Error('Rebooking is only allowed for completed services');
+        }
+      }
+
+      // Smart rules: Favorite provider validation
+      let assignedProviderId = null;
+      if (isFavoriteProviderBooking && preferredProviderId) {
+        const providerDoc = session 
+          ? await Provider.findById(preferredProviderId).session(session) 
+          : await Provider.findById(preferredProviderId);
+        if (!providerDoc) {
+          throw new Error('Preferred provider not found');
+        }
+
+        // Check smart rules: approved, online, active, service category matches
+        const isApproved = providerDoc.approved === true;
+        const isOnline = providerDoc.isOnline === true;
+        const isActive = providerDoc.isActive === true;
+        const isSuspended = providerDoc.isSuspended === true;
+        const blockedTill = providerDoc.blockedTill;
+        const isBlocked = blockedTill && new Date(blockedTill) > new Date();
+
+        const serviceCategory = service.category?.toString();
+        const serviceCategoryMatch = providerDoc.services?.some(catId => catId.toString() === serviceCategory);
+
+        if (!isApproved || !isOnline || !isActive || isSuspended || isBlocked || !serviceCategoryMatch) {
+          throw new Error('Provider unavailable');
+        }
+
+        assignedProviderId = providerDoc._id;
+      }
+
+      // Calculate amounts
+      let subtotal = service.basePrice * quantity;
+      let totalDiscount = 0;
+      let couponDetails = null;
+      let coupon = null;
+
+      // Process coupon if provided
+      if (couponCode) {
+        coupon = session 
+          ? await Coupon.findOne({ code: couponCode }).session(session) 
+          : await Coupon.findOne({ code: couponCode });
+        if (!coupon) {
+          throw new Error('Invalid coupon code');
+        }
+
+        // Validate coupon correctly (since usedBy is an array of objects)
+        const alreadyUsed = coupon.usedBy.some(usage => usage.user && usage.user.toString() === req.user._id.toString());
+        if (alreadyUsed) {
+          throw new Error('Coupon already used by this user');
+        }
+
+        const now = new Date();
+        if (coupon.expiryDate && new Date(coupon.expiryDate) < now) {
+          throw new Error('Coupon has expired');
+        }
+
+        if (coupon.minBookingValue && subtotal < coupon.minBookingValue) {
+          throw new Error(`Minimum order value of ${coupon.minBookingValue} required for this coupon`);
+        }
+
+        // Calculate discount
+        let discount = 0;
+        if (coupon.discountType === 'percent') {
+          discount = (subtotal * coupon.discountValue) / 100;
+        } else {
+          discount = coupon.discountValue;
+        }
+
+        totalDiscount = discount;
+        couponDetails = {
+          code: coupon.code,
+          discountType: coupon.discountType,
+          discountValue: coupon.discountValue
+        };
+      }
+
+      const totalAmount = subtotal - totalDiscount;
+
+      // CHECK FOR DUPLICATE BOOKING (Idempotency)
+      const existingQuery = Booking.findOne({
+        customer: req.user._id,
+        'services.service': serviceId,
+        date: bookingDate,
+        time: time || null,
+        totalAmount: totalAmount,
+        status: { $nin: ['cancelled'] },
+        paymentStatus: { $in: ['pending', 'processing'] }
       });
-    }
+      const existingBooking = session ? await existingQuery.session(session) : await existingQuery;
 
-    // Validate date
-    const bookingDate = new Date(date);
-    if (isNaN(bookingDate.getTime())) {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid date format'
+      if (existingBooking) {
+        return {
+          isDuplicate: true,
+          data: existingBooking.toObject(),
+          bookingId: existingBooking.bookingId || existingBooking._id,
+          _id: existingBooking._id
+        };
+      }
+
+      const startPin = Math.floor(1000 + Math.random() * 9000).toString();
+      const completionPin = Math.floor(1000 + Math.random() * 9000).toString();
+
+      // Create booking
+      const booking = new Booking({
+        bookingId: generateBookingId(),
+        customer: req.user._id,
+        services: [{
+          service: serviceId,
+          quantity,
+          price: service.basePrice,
+          discountAmount: totalDiscount,
+          serviceDetails: {
+            title: service.title,
+            description: service.description,
+            duration: service.duration,
+            category: service.category
+          }
+        }],
+        date: bookingDate,
+        time: time || null,
+        address,
+        notes: notes || null,
+        couponApplied: couponDetails,
+        totalDiscount,
+        subtotal,
+        totalAmount,
+        paymentMethod,
+        isRebook: isRebook || false,
+        originalBooking: originalBooking || null,
+        isFavoriteProviderBooking: !!assignedProviderId,
+        provider: assignedProviderId || undefined,
+        status: paymentMethod === 'cash' ? (assignedProviderId ? 'accepted' : 'pending') : 'pending',
+        paymentStatus: paymentMethod === 'cash' ? 'pending' : 'processing',
+        confirmedBooking: paymentMethod === 'cash',
+        statusHistory: [{
+          status: paymentMethod === 'cash' ? (assignedProviderId ? 'accepted' : 'pending') : 'pending',
+          timestamp: new Date(),
+          note: assignedProviderId
+            ? `Booking created with preferred provider. START_PIN:${startPin} COMPLETION_PIN:${completionPin}`
+            : `Booking created. START_PIN:${startPin} COMPLETION_PIN:${completionPin}`,
+          updatedBy: 'customer'
+        }],
+        metadata: {
+          ip: req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+          userAgent: req.headers['user-agent']
+        }
       });
-    }
 
-    // Smart rules: Rebook validation
-    if (isRebook && originalBooking) {
-      const oldBooking = await Booking.findById(originalBooking).session(session);
-      if (!oldBooking) {
-        await session.abortTransaction();
-        session.endSession();
-        return res.status(400).json({
-          success: false,
-          message: 'Original booking not found'
-        });
-      }
-
-      // Rebook allowed only if previous booking is completed and not cancelled
-      if (oldBooking.status !== 'completed' || oldBooking.status === 'cancelled') {
-        await session.abortTransaction();
-        session.endSession();
-        return res.status(400).json({
-          success: false,
-          message: 'Rebooking is only allowed for completed services'
-        });
-      }
-    }
-
-    // Smart rules: Favorite provider validation
-    let assignedProviderId = null;
-    if (isFavoriteProviderBooking && preferredProviderId) {
-      const providerDoc = await Provider.findById(preferredProviderId).session(session);
-      if (!providerDoc) {
-        await session.abortTransaction();
-        session.endSession();
-        return res.status(400).json({
-          success: false,
-          message: 'Preferred provider not found'
-        });
-      }
-
-      // Check smart rules: approved, online, active, service category matches
-      const isApproved = providerDoc.approved === true;
-      const isOnline = providerDoc.isOnline === true;
-      const isActive = providerDoc.isActive === true;
-      const isSuspended = providerDoc.isSuspended === true;
-      const blockedTill = providerDoc.blockedTill;
-      const isBlocked = blockedTill && new Date(blockedTill) > new Date();
-
-      const serviceCategory = service.category?.toString();
-      const serviceCategoryMatch = providerDoc.services?.some(catId => catId.toString() === serviceCategory);
-
-      if (!isApproved || !isOnline || !isActive || isSuspended || isBlocked || !serviceCategoryMatch) {
-        await session.abortTransaction();
-        session.endSession();
-        return res.status(400).json({
-          success: false,
-          message: 'Provider unavailable'
-        });
-      }
-
-      assignedProviderId = providerDoc._id;
-    }
-
-    // Calculate amounts
-    let subtotal = service.basePrice * quantity;
-    let totalDiscount = 0;
-    let couponDetails = null;
-    let coupon = null;
-
-    // Process coupon if provided
-    if (couponCode) {
-      coupon = await Coupon.findOne({ code: couponCode }).session(session);
-      if (!coupon) {
-        await session.abortTransaction();
-        session.endSession();
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid coupon code'
-        });
-      }
-
-      // Validate coupon correctly (since usedBy is an array of objects)
-      const alreadyUsed = coupon.usedBy.some(usage => usage.user && usage.user.toString() === req.user._id.toString());
-      if (alreadyUsed) {
-        await session.abortTransaction();
-        session.endSession();
-        return res.status(400).json({
-          success: false,
-          message: 'Coupon already used by this user'
-        });
-      }
-
-      const now = new Date();
-      if (coupon.expiryDate && new Date(coupon.expiryDate) < now) {
-        await session.abortTransaction();
-        session.endSession();
-        return res.status(400).json({
-          success: false,
-          message: 'Coupon has expired'
-        });
-      }
-
-      if (coupon.minBookingValue && subtotal < coupon.minBookingValue) {
-        await session.abortTransaction();
-        session.endSession();
-        return res.status(400).json({
-          success: false,
-          message: `Minimum order value of ${coupon.minBookingValue} required for this coupon`
-        });
-      }
-
-      // Calculate discount
-      let discount = 0;
-      if (coupon.discountType === 'percent') {
-        discount = (subtotal * coupon.discountValue) / 100;
+      // Save booking
+      if (session) {
+        await booking.save({ session });
       } else {
-        discount = coupon.discountValue;
+        await booking.save();
       }
 
-      totalDiscount = discount;
-      couponDetails = {
-        code: coupon.code,
-        discountType: coupon.discountType,
-        discountValue: coupon.discountValue
+      // Link active booking if directly assigned with cash payment
+      if (paymentMethod === 'cash' && assignedProviderId) {
+        const provUpdate = Provider.findByIdAndUpdate(assignedProviderId, {
+          activeBooking: booking._id,
+          lastUpdated: new Date()
+        });
+        if (session) await provUpdate.session(session);
+        else await provUpdate;
+      }
+
+      // If paymentMethod is cash, create a transaction record
+      if (paymentMethod === 'cash') {
+        const Transaction = mongoose.model('Transaction');
+        const transaction = new Transaction({
+          booking: booking._id,
+          bookingId: booking.bookingId || booking._id.toString(),
+          user: req.user._id,
+          customerId: req.user._id.toString(),
+          amount: booking.totalAmount,
+          paymentMethod: 'cash',
+          paymentStatus: 'pending',
+          type: 'payment',
+          description: 'Pay After Service (Cash/COD) Payment pending'
+        });
+        if (session) await transaction.save({ session });
+        else await transaction.save();
+      }
+
+      // If coupon was applied, save the updated coupon and flag user firstBookingUsed if first-booking coupon
+      if (couponCode && couponDetails && coupon) {
+        coupon.usedBy.push({
+          user: req.user._id,
+          bookingValue: subtotal,
+          usedAt: new Date()
+        });
+        if (coupon.usageLimit !== null && coupon.usedBy.length >= coupon.usageLimit) {
+          coupon.isActive = false;
+        }
+        if (session) await coupon.save({ session });
+        else await coupon.save();
+
+        if (coupon.isFirstBooking) {
+          const userUpdate = User.findByIdAndUpdate(req.user._id, {
+            $set: { firstBookingUsed: true }
+          });
+          if (session) await userUpdate.session(session);
+          else await userUpdate;
+        }
+      }
+
+      return {
+        isDuplicate: false,
+        data: booking.toObject(),
+        bookingId: booking.bookingId,
+        _id: booking._id
       };
-    }
+    });
 
-    const totalAmount = subtotal - totalDiscount;
-
-    // CHECK FOR DUPLICATE BOOKING (Idempotency)
-    const existingBooking = await Booking.findOne({
-      customer: req.user._id,
-      'services.service': serviceId,
-      date: bookingDate,
-      time: time || null,
-      totalAmount: totalAmount,
-      status: { $nin: ['cancelled'] },
-      paymentStatus: { $in: ['pending', 'processing'] }
-    }).session(session);
-
-    if (existingBooking) {
-      await session.abortTransaction();
-      session.endSession();
+    if (bookingResult.isDuplicate) {
       return res.status(200).json({
         success: true,
         message: 'Existing booking found. Returning current booking.',
-        data: existingBooking.toObject(),
-        bookingId: existingBooking.bookingId || existingBooking._id,
-        _id: existingBooking._id,
+        data: bookingResult.data,
+        bookingId: bookingResult.bookingId,
+        _id: bookingResult._id,
         isDuplicate: true
       });
     }
 
-    const startPin = Math.floor(1000 + Math.random() * 9000).toString();
-    const completionPin = Math.floor(1000 + Math.random() * 9000).toString();
-
-    // Create booking
-    const booking = new Booking({
-      bookingId: generateBookingId(),
-      customer: req.user._id,
-      services: [{
-        service: serviceId,
-        quantity,
-        price: service.basePrice,
-        discountAmount: totalDiscount,
-        serviceDetails: {
-          title: service.title,
-          description: service.description,
-          duration: service.duration,
-          category: service.category
-        }
-      }],
-      date: bookingDate,
-      time: time || null,
-      address,
-      notes: notes || null,
-      couponApplied: couponDetails,
-      totalDiscount,
-      subtotal,
-      totalAmount,
-      paymentMethod,
-      isRebook: isRebook || false,
-      originalBooking: originalBooking || null,
-      isFavoriteProviderBooking: !!assignedProviderId,
-      provider: assignedProviderId || undefined,
-      status: paymentMethod === 'cash' ? (assignedProviderId ? 'accepted' : 'pending') : 'pending',
-      paymentStatus: paymentMethod === 'cash' ? 'pending' : 'processing',
-      confirmedBooking: paymentMethod === 'cash',
-      statusHistory: [{
-        status: paymentMethod === 'cash' ? (assignedProviderId ? 'accepted' : 'pending') : 'pending',
-        timestamp: new Date(),
-        note: assignedProviderId
-          ? `Booking created with preferred provider. START_PIN:${startPin} COMPLETION_PIN:${completionPin}`
-          : `Booking created. START_PIN:${startPin} COMPLETION_PIN:${completionPin}`,
-        updatedBy: 'customer'
-      }],
-      metadata: {
-        ip: req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress,
-        userAgent: req.headers['user-agent']
-      }
-    });
-
-    // Save booking
-    await booking.save({ session });
-
-    // Link active booking if directly assigned with cash payment
-    if (paymentMethod === 'cash' && assignedProviderId) {
-      await Provider.findByIdAndUpdate(assignedProviderId, {
-        activeBooking: booking._id,
-        lastUpdated: new Date()
-      }).session(session);
-    }
-
-    // If paymentMethod is cash, create a transaction record
-    if (paymentMethod === 'cash') {
-      const Transaction = mongoose.model('Transaction');
-      const transaction = new Transaction({
-        booking: booking._id,
-        bookingId: booking.bookingId || booking._id.toString(),
-        user: req.user._id,
-        customerId: req.user._id.toString(),
-        amount: booking.totalAmount,
-        paymentMethod: 'cash',
-        paymentStatus: 'pending',
-        type: 'payment',
-        description: 'Pay After Service (Cash/COD) Payment pending'
-      });
-      await transaction.save({ session });
-    }
-
-    // If coupon was applied, save the updated coupon and flag user firstBookingUsed if first-booking coupon
-    if (couponCode && couponDetails && coupon) {
-      coupon.usedBy.push({
-        user: req.user._id,
-        bookingValue: subtotal,
-        usedAt: new Date()
-      });
-      if (coupon.usageLimit !== null && coupon.usedBy.length >= coupon.usageLimit) {
-        coupon.isActive = false;
-      }
-      await coupon.save({ session });
-
-      if (coupon.isFirstBooking) {
-        await User.findByIdAndUpdate(req.user._id, {
-          $set: { firstBookingUsed: true }
-        }, { session });
-      }
-    }
-
-    await session.commitTransaction();
-    session.endSession();
-
     res.status(201).json({
       success: true,
       message: 'Booking created successfully. Please confirm payment to complete booking.',
-      data: booking.toObject(),
-      bookingId: booking.bookingId,
-      _id: booking._id
+      data: bookingResult.data,
+      bookingId: bookingResult.bookingId,
+      _id: bookingResult._id
     });
 
     // Trigger auto-assignment if booking is confirmed immediately (cash payment method)
     if (paymentMethod === 'cash') {
-      autoAssignProviderIfEnabled(booking._id);
+      autoAssignProviderIfEnabled(bookingResult._id);
     }
 
     // Real-time notification (non-blocking)
     try {
-      // Notify provider about new booking request
-      if (booking.provider) {
-        const providerDoc = await Provider.findById(booking.provider).select('_id').lean();
+      if (bookingResult.data.provider) {
+        const providerDoc = await Provider.findById(bookingResult.data.provider).select('_id').lean();
         if (providerDoc?._id) {
           sendNotification(
             providerDoc._id,
             'provider',
             'New Booking Request',
-            `You have a new booking request for ${booking.services?.[0]?.title || 'a service'}.`,
+            `You have a new booking request for ${bookingResult.data.services?.[0]?.serviceDetails?.title || 'a service'}.`,
             'booking',
-            booking._id
+            bookingResult._id
           );
         }
       }
     } catch (e) { /* ignore notification errors */ }
 
   } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
-
     console.error('Error creating booking:', error);
     res.status(500).json({
       success: false,
@@ -868,231 +914,194 @@ const createBooking = async (req, res) => {
 };
 
 // Confirm booking and process payment 
+// PRODUCTION FIX
 const confirmBooking = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
   try {
-    // Fix: Add null check for req.body before destructuring
     const { bookingId, paymentMethod, paymentDetails } = req.body || {};
     const userId = req.user._id;
 
-    // Validate required fields
     if (!bookingId || !paymentMethod) {
-      await session.abortTransaction();
-      session.endSession();
       return res.status(400).json({
         success: false,
         message: 'Booking ID and payment method are required'
       });
     }
 
-    // Find booking with all necessary data
-    const booking = await Booking.findOne({
-      _id: bookingId,
-      customer: userId
-    })
-      .populate('services.service')
-      .session(session);
+    const confirmResult = await runInTransactionOrSequential(async (session) => {
+      const bookingQuery = Booking.findOne({
+        _id: bookingId,
+        customer: userId
+      }).populate('services.service');
+      const booking = session ? await bookingQuery.session(session) : await bookingQuery;
 
-    if (!booking) {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(404).json({
-        success: false,
-        message: 'Booking not found'
-      });
-    }
-
-    // Check booking status
-    if (booking.confirmedBooking) {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(400).json({
-        success: false,
-        message: 'Booking is already confirmed'
-      });
-    }
-
-    if (booking.status === 'cancelled') {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(400).json({
-        success: false,
-        message: 'Cannot confirm a cancelled booking'
-      });
-    }
-
-    // Process payment
-    let paymentResult;
-    switch (paymentMethod) {
-      case 'online':
-        await session.abortTransaction();
-        session.endSession();
-        return res.status(400).json({
-          success: false,
-          message: 'Direct online processing is deprecated. Please use the secure Razorpay payment flow via /api/transaction/create-order'
-        });
-
-      case 'wallet': {
-        const userWallet = await User.findById(userId).session(session);
-        const bal = userWallet.wallet?.availableBalance || 0;
-        if (bal < booking.totalAmount) {
-          await session.abortTransaction();
-          session.endSession();
-          return res.status(400).json({ success: false, message: 'Insufficient wallet balance' });
-        }
-        userWallet.wallet.availableBalance -= booking.totalAmount;
-        userWallet.wallet.walletTransactions.push({
-          type: 'debit',
-          amount: booking.totalAmount,
-          reason: 'Booking Payment',
-          booking: booking._id
-        });
-        userWallet.wallet.lastUpdated = new Date();
-        await userWallet.save({ session });
-
-        paymentResult = {
-          success: true,
-          transactionId: `TXN-WLT-${Date.now()}`,
-          paymentStatus: 'paid'
-        };
-        break;
+      if (!booking) {
+        throw new Error('Booking not found');
       }
 
-      case 'mixed': {
-        const userMixed = await User.findById(userId).session(session);
-        const walletBal = userMixed.wallet?.availableBalance || 0;
+      if (booking.confirmedBooking) {
+        throw new Error('Booking is already confirmed');
+      }
 
-        if (walletBal <= 0) {
-          await session.abortTransaction();
-          session.endSession();
-          return res.status(400).json({
-            success: false,
-            message: 'No wallet balance available for mixed payment. Please use online payment.'
-          });
-        }
+      if (booking.status === 'cancelled') {
+        throw new Error('Cannot confirm a cancelled booking');
+      }
 
-        const walletDeduction = Math.min(walletBal, booking.totalAmount);
-        const remainingAmount = booking.totalAmount - walletDeduction;
+      let paymentResult;
+      switch (paymentMethod) {
+        case 'online':
+          throw new Error('Direct online processing is deprecated. Please use the secure Razorpay payment flow via /api/transaction/create-order');
 
-        if (remainingAmount > 0) {
-          await session.abortTransaction();
-          session.endSession();
-          return res.status(400).json({
-            success: false,
-            isMixedRequired: true,
-            message: 'Partial wallet balance applied. Please complete the remaining payment via Razorpay.',
-            data: {
-              walletDeduction,
-              remainingAmount
-            }
-          });
-        } else {
-          // Full coverage by wallet
-          userMixed.wallet.availableBalance -= walletDeduction;
-          userMixed.wallet.walletTransactions.push({
+        case 'wallet': {
+          const userWalletQuery = User.findById(userId);
+          const userWallet = session ? await userWalletQuery.session(session) : await userWalletQuery;
+          const bal = userWallet.wallet?.availableBalance || 0;
+          if (bal < booking.totalAmount) {
+            throw new Error('Insufficient wallet balance');
+          }
+          userWallet.wallet.availableBalance -= booking.totalAmount;
+          userWallet.wallet.walletTransactions.push({
             type: 'debit',
-            amount: walletDeduction,
+            amount: booking.totalAmount,
             reason: 'Booking Payment',
             booking: booking._id
           });
-          userMixed.wallet.lastUpdated = new Date();
-          await userMixed.save({ session });
+          userWallet.wallet.lastUpdated = new Date();
+          if (session) await userWallet.save({ session });
+          else await userWallet.save();
 
           paymentResult = {
             success: true,
             transactionId: `TXN-WLT-${Date.now()}`,
             paymentStatus: 'paid'
           };
+          break;
         }
-        break;
+
+        case 'mixed': {
+          const userMixedQuery = User.findById(userId);
+          const userMixed = session ? await userMixedQuery.session(session) : await userMixedQuery;
+          const walletBal = userMixed.wallet?.availableBalance || 0;
+
+          if (walletBal <= 0) {
+            throw new Error('No wallet balance available for mixed payment. Please use online payment.');
+          }
+
+          const walletDeduction = Math.min(walletBal, booking.totalAmount);
+          const remainingAmount = booking.totalAmount - walletDeduction;
+
+          if (remainingAmount > 0) {
+            return {
+              isMixedRequired: true,
+              data: {
+                walletDeduction,
+                remainingAmount
+              }
+            };
+          } else {
+            userMixed.wallet.availableBalance -= walletDeduction;
+            userMixed.wallet.walletTransactions.push({
+              type: 'debit',
+              amount: walletDeduction,
+              reason: 'Booking Payment',
+              booking: booking._id
+            });
+            userMixed.wallet.lastUpdated = new Date();
+            if (session) await userMixed.save({ session });
+            else await userMixed.save();
+
+            paymentResult = {
+              success: true,
+              transactionId: `TXN-WLT-${Date.now()}`,
+              paymentStatus: 'paid'
+            };
+          }
+          break;
+        }
+
+        case 'cash':
+          paymentResult = {
+            success: true,
+            paymentStatus: 'pending'
+          };
+          break;
+
+        default:
+          throw new Error('Invalid payment method');
       }
 
-      case 'cash':
-        // Cash payment - just record it
-        paymentResult = {
-          success: true,
-          paymentStatus: 'pending'
-        };
-        break;
+      if (!paymentResult.success) {
+        throw new Error(paymentResult.message || 'Payment failed');
+      }
 
-      default:
-        await session.abortTransaction();
-        session.endSession();
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid payment method'
+      booking.paymentMethod = paymentMethod;
+      booking.paymentStatus = paymentResult.paymentStatus || 'paid';
+      booking.status = 'pending';
+      booking.confirmedBooking = true;
+
+      const transactionUpdate = Transaction.findOneAndUpdate(
+        { booking: bookingId },
+        {
+          paymentMethod,
+          paymentStatus: booking.paymentStatus,
+          transactionId: paymentResult.transactionId,
+          razorpayOrderId: paymentResult.razorpayOrderId,
+          razorpayPaymentId: paymentResult.razorpayPaymentId,
+          amount: booking.totalAmount,
+          completedAt: new Date(),
+          user: userId,
+          customerId: userId.toString(),
+          bookingId: booking.bookingId,
+          provider: booking.provider,
+          providerId: booking.provider ? booking.provider.toString() : undefined
+        },
+        { new: true, upsert: true }
+      );
+      const transaction = session ? await transactionUpdate.session(session) : await transactionUpdate;
+
+      if (session) await booking.save({ session });
+      else await booking.save();
+
+      if (booking.provider) {
+        const provUpdate = Provider.findByIdAndUpdate(booking.provider, {
+          activeBooking: booking._id,
+          lastUpdated: new Date()
         });
-    }
+        if (session) await provUpdate.session(session);
+        else await provUpdate;
+      }
 
-    if (!paymentResult.success) {
-      await session.abortTransaction();
-      session.endSession();
+      const userUpdate = User.findByIdAndUpdate(userId, { $inc: { totalBookings: 1 } });
+      if (session) await userUpdate.session(session);
+      else await userUpdate;
+
+      return {
+        success: true,
+        booking,
+        transaction
+      };
+    });
+
+    if (confirmResult.isMixedRequired) {
       return res.status(400).json({
         success: false,
-        message: paymentResult.message || 'Payment failed'
+        isMixedRequired: true,
+        message: 'Partial wallet balance applied. Please complete the remaining payment via Razorpay.',
+        data: confirmResult.data
       });
     }
-
-    // Update booking status
-    booking.paymentMethod = paymentMethod;
-    booking.paymentStatus = paymentResult.paymentStatus || 'paid';
-    booking.status = 'pending';
-    booking.confirmedBooking = true;
-
-    // Update or create transaction
-    const transaction = await Transaction.findOneAndUpdate(
-      { booking: bookingId },
-      {
-        paymentMethod,
-        paymentStatus: booking.paymentStatus,
-        transactionId: paymentResult.transactionId,
-        razorpayOrderId: paymentResult.razorpayOrderId,
-        razorpayPaymentId: paymentResult.razorpayPaymentId,
-        amount: booking.totalAmount,
-        completedAt: new Date(),
-        user: userId,
-        customerId: userId.toString(),
-        bookingId: booking.bookingId,
-        provider: booking.provider,
-        providerId: booking.provider ? booking.provider.toString() : undefined
-      },
-      { new: true, upsert: true, session }
-    );
-
-    await booking.save({ session });
-
-    // Link active booking for provider if assigned
-    if (booking.provider) {
-      await Provider.findByIdAndUpdate(booking.provider, {
-        activeBooking: booking._id,
-        lastUpdated: new Date()
-      }).session(session);
-    }
-
-    // Increment user's total bookings
-    await User.findByIdAndUpdate(userId, { $inc: { totalBookings: 1 } }, { session });
-
-    await session.commitTransaction();
-    session.endSession();
 
     res.status(200).json({
       success: true,
       message: 'Booking confirmed successfully',
       data: {
-        booking,
-        transaction
+        booking: confirmResult.booking,
+        transaction: confirmResult.transaction
       }
     });
 
-    // Trigger auto-assignment upon successful online or wallet payment confirmation
-    autoAssignProviderIfEnabled(booking._id);
+    autoAssignProviderIfEnabled(confirmResult.booking._id);
 
   } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
-
     console.error('Error confirming booking:', error);
     res.status(500).json({
       success: false,
@@ -1469,8 +1478,14 @@ const updateBookingPayment = async (req, res) => {
 
 // Convert COD to Online Payment
 const payBooking = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
+  let session = null;
+  try {
+    session = await mongoose.startSession();
+    session.startTransaction();
+  } catch (err) {
+    console.warn("[Transaction Fallback] Session start failed. Standalone MongoDB detected. Running sequential fallback.", err.message);
+    session = null;
+  }
   try {
     const { id } = req.params;
     const { paymentDetails } = req.body;
@@ -1478,20 +1493,20 @@ const payBooking = async (req, res) => {
 
     const booking = await Booking.findOne({ _id: id, customer: userId }).session(session);
     if (!booking) {
-      await session.abortTransaction();
-      session.endSession();
+      await safeAbort(session);
+      safeEnd(session);
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
     if (['in-progress', 'in_progress', 'completed', 'cancelled'].includes(booking.status)) {
-      await session.abortTransaction();
-      session.endSession();
+      await safeAbort(session);
+      safeEnd(session);
       return res.status(400).json({ success: false, message: 'Cannot pay for a booking that is in progress, completed, or cancelled' });
     }
 
     if (booking.paymentStatus === 'paid' || booking.paymentStatus === 'escrow_hold') {
-      await session.abortTransaction();
-      session.endSession();
+      await safeAbort(session);
+      safeEnd(session);
       return res.status(400).json({ success: false, message: 'Booking already paid' });
     }
 
@@ -1503,8 +1518,8 @@ const payBooking = async (req, res) => {
       }
       const bal = userWallet.wallet.availableBalance || 0;
       if (bal < booking.totalAmount || booking.totalAmount <= 0) {
-        await session.abortTransaction();
-        session.endSession();
+        await safeAbort(session);
+        safeEnd(session);
         return res.status(400).json({ success: false, message: 'Insufficient wallet balance' });
       }
       userWallet.wallet.availableBalance -= booking.totalAmount;
@@ -1526,8 +1541,8 @@ const payBooking = async (req, res) => {
     } else if (paymentDetails?.paymentMethod === 'mixed') {
       const { razorpay_payment_id, razorpay_order_id, razorpay_signature } = paymentDetails;
       if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
-        await session.abortTransaction();
-        session.endSession();
+        await safeAbort(session);
+        safeEnd(session);
         return res.status(400).json({ success: false, message: 'Razorpay payment details are required' });
       }
 
@@ -1539,8 +1554,8 @@ const payBooking = async (req, res) => {
         .digest('hex');
 
       if (generatedSignature !== razorpay_signature) {
-        await session.abortTransaction();
-        session.endSession();
+        await safeAbort(session);
+        safeEnd(session);
         return res.status(400).json({ success: false, message: 'Invalid payment signature' });
       }
 
@@ -1571,8 +1586,8 @@ const payBooking = async (req, res) => {
     } else if (paymentDetails?.paymentMethod === 'online') {
       const { razorpay_payment_id, razorpay_order_id, razorpay_signature } = paymentDetails;
       if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
-        await session.abortTransaction();
-        session.endSession();
+        await safeAbort(session);
+        safeEnd(session);
         return res.status(400).json({ success: false, message: 'Razorpay payment details are required' });
       }
 
@@ -1584,8 +1599,8 @@ const payBooking = async (req, res) => {
         .digest('hex');
 
       if (generatedSignature !== razorpay_signature) {
-        await session.abortTransaction();
-        session.endSession();
+        await safeAbort(session);
+        safeEnd(session);
         return res.status(400).json({ success: false, message: 'Invalid payment signature' });
       }
 
@@ -1598,14 +1613,14 @@ const payBooking = async (req, res) => {
       };
       booking.paymentMethod = 'online';
     } else {
-      await session.abortTransaction();
-      session.endSession();
+      await safeAbort(session);
+      safeEnd(session);
       return res.status(400).json({ success: false, message: 'Invalid payment method' });
     }
 
     if (!paymentResult.success) {
-      await session.abortTransaction();
-      session.endSession();
+      await safeAbort(session);
+      safeEnd(session);
       return res.status(400).json({ success: false, message: paymentResult.message || 'Payment failed' });
     }
 
@@ -1640,8 +1655,8 @@ const payBooking = async (req, res) => {
       { upsert: true, new: true, session }
     );
 
-    await session.commitTransaction();
-    session.endSession();
+    await safeCommit(session);
+    safeEnd(session);
 
     res.status(200).json({
       success: true,
@@ -1649,8 +1664,8 @@ const payBooking = async (req, res) => {
       data: booking
     });
   } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
+    await safeAbort(session);
+    safeEnd(session);
     console.error('Error in payBooking:', error);
     res.status(500).json({ success: false, message: error.message || 'Failed to process payment' });
   }
@@ -1912,8 +1927,14 @@ const logCancellationFraud = async (req, booking, userId, role) => {
 
 // Cancel booking with e-commerce style progress tracking
 const cancelBooking = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
+  let session = null;
+  try {
+    session = await mongoose.startSession();
+    session.startTransaction();
+  } catch (err) {
+    console.warn("[Transaction Fallback] Session start failed. Standalone MongoDB detected. Running sequential fallback.", err.message);
+    session = null;
+  }
 
   try {
     const { id } = req.params;
@@ -1923,8 +1944,8 @@ const cancelBooking = async (req, res) => {
 
     const booking = await Booking.findOne({ _id: id, customer: userId }).session(session);
     if (!booking) {
-      await session.abortTransaction();
-      session.endSession();
+      await safeAbort(session);
+      safeEnd(session);
       return res.status(404).json({
         success: false,
         message: 'Booking not found'
@@ -1932,8 +1953,8 @@ const cancelBooking = async (req, res) => {
     }
 
     if (booking.status === 'completed') {
-      await session.abortTransaction();
-      session.endSession();
+      await safeAbort(session);
+      safeEnd(session);
       return res.status(400).json({
         success: false,
         message: 'Cannot cancel completed booking. Please file a complaint for refund requests.'
@@ -1941,8 +1962,8 @@ const cancelBooking = async (req, res) => {
     }
 
     if (booking.status === 'cancelled') {
-      await session.abortTransaction();
-      session.endSession();
+      await safeAbort(session);
+      safeEnd(session);
       return res.status(400).json({
         success: false,
         message: 'Booking is already cancelled'
@@ -1952,8 +1973,8 @@ const cancelBooking = async (req, res) => {
     // --- NEW STRICT EARNING STATUS CHECKS ---
     const earning = await ProviderEarning.findOne({ booking: booking._id }).session(session);
     if (earning && (earning.status === 'available' || earning.status === 'withdrawn' || earning.status === 'paid')) {
-      await session.abortTransaction();
-      session.endSession();
+      await safeAbort(session);
+      safeEnd(session);
       return res.status(400).json({
         success: false,
         message: `Cancellation with automatic refund is blocked because the payout is already ${earning.status}. Please contact support.`
@@ -2006,8 +2027,8 @@ const cancelBooking = async (req, res) => {
         await recalculateProviderPerformance(booking.provider, session);
       }
 
-      await session.commitTransaction();
-      session.endSession();
+      await safeCommit(session);
+      safeEnd(session);
 
       // Track cancellation fraud in background (non-blocking)
       logCancellationFraud(req, booking, userId, 'customer');
@@ -2162,8 +2183,8 @@ const cancelBooking = async (req, res) => {
         await recalculateProviderPerformance(booking.provider, session);
       }
 
-      await session.commitTransaction();
-      session.endSession();
+      await safeCommit(session);
+      safeEnd(session);
 
       // Track cancellation fraud in background (non-blocking)
       logCancellationFraud(req, booking, userId, 'customer');
@@ -2202,8 +2223,8 @@ const cancelBooking = async (req, res) => {
     } catch (e) { }
 
   } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
+    await safeAbort(session);
+    safeEnd(session);
 
     console.error('Error cancelling booking:', error);
     res.status(500).json({
@@ -2976,8 +2997,14 @@ const startBooking = async (req, res) => {
  * @access  Private/Provider
  */
 const rejectBooking = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
+  let session = null;
+  try {
+    session = await mongoose.startSession();
+    session.startTransaction();
+  } catch (err) {
+    console.warn("[Transaction Fallback] Session start failed. Standalone MongoDB detected. Running sequential fallback.", err.message);
+    session = null;
+  }
 
   try {
     const { id } = req.params;
@@ -2986,8 +3013,8 @@ const rejectBooking = async (req, res) => {
 
     // Validate booking ID format
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      await session.abortTransaction();
-      session.endSession();
+      await safeAbort(session);
+      safeEnd(session);
       return res.status(400).json({
         success: false,
         message: 'Invalid booking ID format'
@@ -3007,8 +3034,8 @@ const rejectBooking = async (req, res) => {
       .populate('services.service', 'title description');
 
     if (!booking) {
-      await session.abortTransaction();
-      session.endSession();
+      await safeAbort(session);
+      safeEnd(session);
       return res.status(404).json({
         success: false,
         message: 'Booking not found or not available for rejection'
@@ -3110,8 +3137,8 @@ const rejectBooking = async (req, res) => {
     // Recalculate provider stats and trust score dynamically inside the same transaction session
     await recalculateProviderPerformance(providerId, session);
 
-    await session.commitTransaction();
-    session.endSession();
+    await safeCommit(session);
+    safeEnd(session);
 
     // Track cancellation fraud in background (non-blocking)
     logCancellationFraud(req, booking, providerId, 'provider');
@@ -3132,8 +3159,8 @@ const rejectBooking = async (req, res) => {
     });
 
   } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
+    await safeAbort(session);
+    safeEnd(session);
     console.error('Error rejecting booking:', error);
     res.status(500).json({
       success: false,
@@ -3154,8 +3181,14 @@ const completeBooking = async (req, res) => {
   const { id } = req.params;
   const providerId = req.provider._id;
 
-  const session = await mongoose.startSession();
-  session.startTransaction();
+  let session = null;
+  try {
+    session = await mongoose.startSession();
+    session.startTransaction();
+  } catch (err) {
+    console.warn("[Transaction Fallback] Session start failed. Standalone MongoDB detected. Running sequential fallback.", err.message);
+    session = null;
+  }
 
   try {
     const provider = await Provider.findById(providerId)
@@ -3192,8 +3225,8 @@ const completeBooking = async (req, res) => {
       const currentBooking = await Booking.findById(id).select('status commissionProcessed').lean();
 
       if (currentBooking && currentBooking.status === 'completed') {
-        await session.commitTransaction();
-        session.endSession();
+        await safeCommit(session);
+        safeEnd(session);
         return res.json({
           success: true,
           message: 'Booking already completed.'
@@ -3204,8 +3237,8 @@ const completeBooking = async (req, res) => {
 
     // Prevent duplicate commission
     if (booking.commissionProcessed) {
-      await session.commitTransaction();
-      session.endSession();
+      await safeCommit(session);
+      safeEnd(session);
       return res.status(409).json({
         success: false,
         message: 'Commission already processed for this booking.'
@@ -3214,8 +3247,8 @@ const completeBooking = async (req, res) => {
 
     // Handle after-work proof images (Required: min 1)
     if (!req.files || req.files.length === 0) {
-      await session.abortTransaction();
-      session.endSession();
+      await safeAbort(session);
+      safeEnd(session);
       return res.status(400).json({
         success: false,
         message: 'Completion proof images are required before completing service'
@@ -3226,8 +3259,8 @@ const completeBooking = async (req, res) => {
 
     // 1. Check PIN presence
     if (!pin) {
-      await session.abortTransaction();
-      session.endSession();
+      await safeAbort(session);
+      safeEnd(session);
       return res.status(400).json({
         success: false,
         message: 'Completion verification PIN is required to complete the service'
@@ -3238,8 +3271,8 @@ const completeBooking = async (req, res) => {
     const lockoutTime = getLockoutTime(booking);
     if (lockoutTime && lockoutTime > new Date()) {
       const remainingMinutes = Math.ceil((lockoutTime - new Date()) / (60 * 1000));
-      await session.abortTransaction();
-      session.endSession();
+      await safeAbort(session);
+      safeEnd(session);
       return res.status(403).json({
         success: false,
         message: `Too many failed attempts. Verification is locked. Try again in ${remainingMinutes} minutes.`
@@ -3252,8 +3285,8 @@ const completeBooking = async (req, res) => {
       await recordPinFailure(booking, false, session);
       await createFraudLog(booking, 'failed_login', `Incorrect COMPLETION PIN entered: ${pin}`, 15, req);
 
-      await session.abortTransaction();
-      session.endSession();
+      await safeAbort(session);
+      safeEnd(session);
       return res.status(400).json({
         success: false,
         message: 'Invalid verification PIN'
@@ -3262,8 +3295,8 @@ const completeBooking = async (req, res) => {
 
     // 4. Verify Coordinates
     if (!latitude || !longitude) {
-      await session.abortTransaction();
-      session.endSession();
+      await safeAbort(session);
+      safeEnd(session);
       return res.status(400).json({
         success: false,
         message: 'GPS coordinates are required to complete the service'
@@ -3313,8 +3346,8 @@ const completeBooking = async (req, res) => {
       });
       await booking.save({ session });
 
-      await session.abortTransaction();
-      session.endSession();
+      await safeAbort(session);
+      safeEnd(session);
       return res.status(400).json({
         success: false,
         message: `S2 Geofencing verification failed. You are outside the precise geofence boundary of the service location.`
@@ -3333,8 +3366,8 @@ const completeBooking = async (req, res) => {
       });
       await booking.save({ session });
 
-      await session.abortTransaction();
-      session.endSession();
+      await safeAbort(session);
+      safeEnd(session);
       return res.status(400).json({
         success: false,
         message: `Geofencing verification failed. You must be within 300 meters of the service location. Current distance: ${Math.round(distance)}m`
@@ -3452,8 +3485,8 @@ const completeBooking = async (req, res) => {
     );
 
     if (providerEarningResult.lastErrorObject && providerEarningResult.lastErrorObject.updatedExisting) {
-      await session.abortTransaction();
-      session.endSession();
+      await safeAbort(session);
+      safeEnd(session);
       return res.status(409).json({
         success: false,
         message: 'Earning already recorded for this booking!'
@@ -3473,8 +3506,8 @@ const completeBooking = async (req, res) => {
     if (booking.paymentMethod === "cash") {
       // Cash Booking Commission Logic
       if (provider.wallet.availableBalance < commission) {
-        await session.commitTransaction();
-        session.endSession();
+        await safeCommit(session);
+        safeEnd(session);
         return res.status(400).json({
           success: false,
           message: "Insufficient wallet balance to cover commission for this cash booking. Please recharge your wallet."
@@ -3510,8 +3543,8 @@ const completeBooking = async (req, res) => {
     await recalculateProviderPerformance(providerId, session);
 
 
-    await session.commitTransaction();
-    session.endSession();
+    await safeCommit(session);
+    safeEnd(session);
 
     // Real-time notifications for customer and admins
     try {
@@ -3555,8 +3588,8 @@ const completeBooking = async (req, res) => {
     });
 
   } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
+    await safeAbort(session);
+    safeEnd(session);
     console.error("Complete Booking Error:", error);
     res.status(500).json({
       success: false,

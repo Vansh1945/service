@@ -44,6 +44,7 @@
     "nodemailer": "^8.0.4",
     "otp-generator": "^4.0.1",
     "pdfkit": "^0.17.1",
+    "piscina": "^5.1.4",
     "puppeteer": "^24.15.0",
     "qrcode": "^1.5.4",
     "razorpay": "^2.9.6",

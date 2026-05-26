@@ -26,7 +26,8 @@ const refreshAnalytics = async () => {
         ] = await Promise.all([
             Booking.countDocuments(),
             Booking.countDocuments({ createdAt: { $gte: today } }),
-            Provider.countDocuments({ approved: false }),
+            // PRODUCTION FIX
+            Provider.countDocuments({ approved: false, isDeleted: false }),
             User.countDocuments({ role: 'customer' }),
             Complaint.aggregate([
                 { $group: { _id: "$status", count: { $sum: 1 } } }
