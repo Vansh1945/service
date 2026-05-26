@@ -10,7 +10,7 @@ import {
   ClipboardList, Timer, CheckCheck, HelpCircle, Copy, Zap, Wrench, Play,
   CreditCard, CheckSquare, AlertTriangle, Star, Package, Search, Activity,
   Banknote, Download, FileText, Loader, BarChart2, DownloadCloud, Navigation,
-  Home, Info, Shield, FileDigit, PhoneCall, Camera, ArrowLeft, ShieldCheck, MessageSquare
+  Home, Info, Shield, FileDigit, PhoneCall, Camera, ArrowLeft, ShieldCheck, MessageSquare, Headphones
 } from 'lucide-react';
 import LoadingSpinner from '../../components/Loader';
 import * as BookingService from '../../services/BookingService';
@@ -282,10 +282,11 @@ const ProofModal = ({ isOpen, onClose, onConfirm, action, loading, progress }) =
           setGettingLocation(false);
         },
         (err) => {
-          console.error('Location error:', err);
+          console.warn('Geolocation capture failed, using fallback:', err.message);
+
           setGettingLocation(false);
         },
-        { timeout: 10000 }
+        { enableHighAccuracy: false, timeout: 3000, maximumAge: 300000 }
       );
     } else {
       setGettingLocation(false);
@@ -869,203 +870,240 @@ const ProviderBooking = () => {
     <div key={booking._id} className="bg-white rounded-2xl border border-gray-100 hover:shadow-md transition-all duration-200">
       <div className="p-4 sm:p-5">
 
-        {/* ── Card body: LEFT info + RIGHT buttons ── */}
-        <div className="flex items-start gap-4">
+        {/* Booking Info */}
+        <div className="flex-1 min-w-0">
+          {/* Status + ID + Amount */}
+          <div className="flex items-center gap-2 flex-wrap mb-3">
+            <StatusBadge status={booking.status} />
+            <span className="text-xs text-gray-400 bg-gray-50 px-2 py-1 rounded-lg font-mono">
+              #{booking.bookingId || booking._id.slice(-8)}
+            </span>
+            <button
+              onClick={() => navigator.clipboard.writeText(booking.bookingId || booking._id)}
+              className="p-1 text-gray-300 hover:text-secondary transition-colors"
+              title="Copy ID"
+            >
+              <Copy className="w-3.5 h-3.5" />
+            </button>
+            <span className="ml-auto text-sm font-bold text-secondary shrink-0">
+              {formatCurrency(booking.totalAmount)}
+            </span>
+          </div>
 
-          {/* LEFT: Booking Info */}
-          <div className="flex-1 min-w-0">
-            {/* Status + ID + Amount */}
-            <div className="flex items-center gap-2 flex-wrap mb-3">
-              <StatusBadge status={booking.status} />
-              <span className="text-xs text-gray-400 bg-gray-50 px-2 py-1 rounded-lg font-mono">
-                #{booking.bookingId || booking._id.slice(-8)}
-              </span>
-              <button
-                onClick={() => navigator.clipboard.writeText(booking.bookingId || booking._id)}
-                className="p-1 text-gray-300 hover:text-secondary transition-colors"
-                title="Copy ID"
-              >
-                <Copy className="w-3.5 h-3.5" />
-              </button>
-              <span className="ml-auto text-sm font-bold text-secondary shrink-0">
-                {formatCurrency(booking.totalAmount)}
-              </span>
-            </div>
-
-            {/* Service & Address */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-primary/10 rounded-lg shrink-0">
-                  {getServiceIcon(booking.services?.[0]?.service?.category)}
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[10px] text-gray-400 leading-none mb-0.5">Service</p>
-                  <p className="text-sm font-medium text-secondary truncate">
-                    {booking.services?.map(s => s.service?.title).join(', ') || 'Service'}
-                  </p>
-                </div>
+          {/* Service & Address */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-primary/10 rounded-lg shrink-0">
+                {getServiceIcon(booking.services?.[0]?.service?.category)}
               </div>
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-accent/10 rounded-lg shrink-0">
-                  <MapPin className="w-4 h-4 text-accent" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[10px] text-gray-400 leading-none mb-0.5">Address</p>
-                  <p className="text-sm font-medium text-secondary truncate">{formatAddress(booking.address)}</p>
-                </div>
+              <div className="min-w-0">
+                <p className="text-[10px] text-gray-400 leading-none mb-0.5">Service</p>
+                <p className="text-sm font-medium text-secondary truncate">
+                  {booking.services?.map(s => s.service?.title).join(', ') || 'Service'}
+                </p>
               </div>
             </div>
-
-            {/* Payment tags */}
-            <div className="flex items-center gap-2 flex-wrap">
-              {(booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service') ? (
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-yellow-700 bg-yellow-50 border border-yellow-200 px-2 py-0.5 rounded-md">
-                  <Banknote className="w-3 h-3" /> Pay After Service
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-md">
-                  <CreditCard className="w-3 h-3" /> Paid Online
-                </span>
-              )}
-              {['paid', 'escrow_hold'].includes(booking.paymentStatus) && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-md">
-                  <CheckSquare className="w-3 h-3" /> Paid
-                </span>
-              )}
-              {/* Dispute / Hold Badges */}
-              {booking.disputeRaised && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded-md">
-                  <AlertTriangle className="w-3 h-3" /> Under Review
-                </span>
-              )}
-              {booking.payoutHoldUntil && new Date(booking.payoutHoldUntil) > new Date() && !booking.disputeRaised && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase text-orange-700 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-md">
-                  <AlertCircle className="w-3 h-3" /> Payout On Hold
-                </span>
-              )}
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-accent/10 rounded-lg shrink-0">
+                <MapPin className="w-4 h-4 text-accent" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] text-gray-400 leading-none mb-0.5">Address</p>
+                <p className="text-sm font-medium text-secondary truncate">{formatAddress(booking.address)}</p>
+              </div>
             </div>
           </div>
 
-          {/* RIGHT: Action Buttons — vertical stack */}
-          <div className="flex flex-col gap-2 shrink-0 w-[130px]">
+          {/* Payment tags */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {(booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service') ? (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-yellow-700 bg-yellow-50 border border-yellow-200 px-2 py-0.5 rounded-md">
+                <Banknote className="w-3 h-3" /> Pay After Service
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-md">
+                <CreditCard className="w-3 h-3" /> Paid Online
+              </span>
+            )}
+            {['paid', 'escrow_hold'].includes(booking.paymentStatus) && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-md">
+                <CheckSquare className="w-3 h-3" /> Paid
+              </span>
+            )}
+            {/* Dispute / Hold Badges */}
+            {booking.disputeRaised && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded-md">
+                <AlertTriangle className="w-3 h-3" /> Under Review
+              </span>
+            )}
+            {booking.payoutHoldUntil && new Date(booking.payoutHoldUntil) > new Date() && !booking.disputeRaised && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase text-orange-700 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-md">
+                <AlertCircle className="w-3 h-3" /> Payout On Hold
+              </span>
+            )}
+          </div>
+
+          {/* Payment Warning */}
+          {booking.status === 'accepted' && (booking.paymentMethod !== 'cash' && booking.paymentType !== 'pay_after_service' && !['paid', 'escrow_hold'].includes(booking.paymentStatus)) && (
+            <p className="text-xs text-accent font-bold mt-2.5 p-3 bg-red-50/50 rounded-xl border border-red-100 leading-normal flex items-center gap-1.5 shadow-sm">
+              <AlertCircle className="w-4 h-4 text-accent shrink-0 animate-bounce" />
+              Customer payment is pending. Please ask customer to pay online.
+            </p>
+          )}
+        </div>
+
+        {/* Action Buttons Row */}
+        {booking.status === 'pending' ? (
+          <div className="flex gap-2 mt-4 pt-4 border-t border-gray-100">
             {/* View Details — always visible */}
             <button
               onClick={() => getBookingDetails(booking._id)}
-              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 border border-gray-200 rounded-xl text-xs font-semibold text-secondary bg-white hover:bg-gray-50 transition-colors w-full"
+              className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold text-secondary bg-white hover:bg-gray-50 transition-colors"
+              title="View Details"
             >
-              <Eye className="w-3.5 h-3.5" /> View Details
+              <Eye className="w-3.5 h-3.5" />
+              <span>Details</span>
             </button>
 
-            {booking.provider && booking.provider.toString() === user?._id?.toString() ? (
+            {/* Accept Request */}
+            {(!booking.provider || booking.provider === user?._id) && (
               <button
-                onClick={() => { setChatBookingId(booking._id); setChatRoomType('provider_customer'); }}
-                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 w-full"
+                disabled={actionLoading.id !== null}
+                onClick={() => handleBookingAction(booking._id, 'accept')}
+                className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-primary hover:bg-primary/90 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed shadow-md shadow-primary/10"
               >
-                <MessageSquare className="w-3.5 h-3.5" /> Chat Customer
-              </button>
-            ) : (
-              <button
-                disabled
-                title="Chat is only available for the assigned provider"
-                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-100 border border-gray-200 text-gray-400 rounded-xl text-xs font-semibold cursor-not-allowed w-full"
-              >
-                <MessageSquare className="w-3.5 h-3.5" /> Chat Blocked
-              </button>
-            )}
-
-            <button
-              onClick={() => { setChatBookingId(booking._id); setChatRoomType('provider_admin'); }}
-              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-500/95 hover:to-indigo-600/95 text-white rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 w-full"
-            >
-              <Headphones className="w-3.5 h-3.5" /> Support Chat
-            </button>
-
-            {/* Pending: Accept + Reject */}
-            {booking.status === 'pending' && (!booking.provider || booking.provider === user?._id) && (
-              <>
-                <button
-                  disabled={actionLoading.id !== null}
-                  onClick={() => handleBookingAction(booking._id, 'accept')}
-                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white bg-primary hover:bg-primary/90 transition-colors w-full disabled:bg-gray-300 disabled:cursor-not-allowed"
-                >
-                  {actionLoading.id === booking._id && actionLoading.type === 'accept' ? (
-                    <Loader className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Check className="w-3.5 h-3.5" />
-                  )}
-                  {actionLoading.id === booking._id && actionLoading.type === 'accept' ? 'Accepting...' : 'Accept'}
-                </button>
-                {!['paid', 'escrow_hold'].includes(booking.paymentStatus) && (
-                  <button
-                    disabled={actionLoading.id !== null}
-                    onClick={() => handleBookingAction(booking._id, 'reject', { reason: 'Provider declined' })}
-                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white bg-accent hover:bg-accent/90 transition-colors w-full disabled:bg-gray-300 disabled:cursor-not-allowed"
-                  >
-                    <X className="w-3.5 h-3.5" /> Reject
-                  </button>
+                {actionLoading.id === booking._id && actionLoading.type === 'accept' ? (
+                  <Loader className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Check className="w-3.5 h-3.5" />
                 )}
-              </>
-            )}
-
-            {/* Accepted: Start Service */}
-            {booking.status === 'accepted' && (
-              <>
-                <button
-                  onClick={() => navigate(`/provider/track/${booking._id}`)}
-                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 transition-all w-full shadow-sm active:scale-95 text-center mb-1.5"
-                >
-                  <Navigation className="w-3.5 h-3.5 animate-pulse" /> Navigate to Customer
-                </button>
-                <button
-                  disabled={actionLoading.id !== null || ((booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service') && !['paid', 'escrow_hold'].includes(booking.paymentStatus))}
-                  onClick={() => handleBookingAction(booking._id, 'start')}
-                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white bg-primary hover:bg-primary/90 transition-colors w-full disabled:bg-gray-300 disabled:cursor-not-allowed"
-                >
-                  {actionLoading.id === booking._id && actionLoading.type === 'start' ? (
-                    <Loader className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Play className="w-3.5 h-3.5" />
-                  )}
-                  {actionLoading.id === booking._id && actionLoading.type === 'start'
-                    ? 'Starting...'
-                    : ((booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service') && !['paid', 'escrow_hold'].includes(booking.paymentStatus))
-                      ? 'Payment Pending'
-                      : 'Start Service'}
-                </button>
-                {((booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service') && !['paid', 'escrow_hold'].includes(booking.paymentStatus)) && (
-                  <p className="text-[10px] text-accent font-bold mt-1 text-center leading-tight">
-                    Customer payment is pending. Please ask customer to pay online.
-                  </p>
-                )}
-              </>
-            )}
-
-            {/* In-Progress: Complete */}
-            {booking.status === 'in-progress' && (
-              <>
-                <button
-                  onClick={() => navigate(`/provider/track/${booking._id}`)}
-                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 transition-all w-full shadow-sm active:scale-95 text-center mb-1.5"
-                >
-                  <Navigation className="w-3.5 h-3.5 animate-pulse" /> Navigate to Customer
-                </button>
-                <button
-                  disabled={actionLoading.id !== null}
-                  onClick={() => handleBookingAction(booking._id, 'complete')}
-                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white bg-primary hover:bg-primary/90 transition-colors w-full disabled:bg-gray-300 disabled:cursor-not-allowed"
-                >
-                  {actionLoading.id === booking._id && actionLoading.type === 'complete' ? (
-                    <Loader className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Check className="w-3.5 h-3.5" />
-                  )}
-                  {actionLoading.id === booking._id && actionLoading.type === 'complete' ? 'Completing...' : 'Complete'}
-                </button>
-              </>
+                {actionLoading.id === booking._id && actionLoading.type === 'accept' ? 'Accepting...' : 'Accept request'}
+              </button>
             )}
           </div>
+        ) : (
+          <div className="flex flex-col gap-2 md:flex-row md:items-center mt-4 pt-4 border-t border-gray-100">
+            {/* Row 1: Utilities & Communication */}
+            <div className="grid grid-cols-4 gap-2 flex-grow md:flex md:flex-row md:gap-2 md:flex-[4]">
+              {/* View Details — always visible */}
+              <button
+                onClick={() => getBookingDetails(booking._id)}
+                className="inline-flex items-center justify-center gap-1 py-2 border border-gray-200 rounded-xl text-[10px] sm:text-xs font-semibold text-secondary bg-white hover:bg-gray-50 transition-colors w-full md:flex-1"
+                title="View Details"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">View Details</span>
+                <span className="sm:hidden">Details</span>
+              </button>
 
-        </div>
+              {/* Chat Customer */}
+              {booking.provider && booking.provider.toString() === user?._id?.toString() ? (
+                <button
+                  onClick={() => { setChatBookingId(booking._id); setChatRoomType('provider_customer'); }}
+                  className="inline-flex items-center justify-center gap-1 py-2 bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white rounded-xl text-[10px] sm:text-xs font-bold transition-all shadow-sm active:scale-95 w-full md:flex-1"
+                  title="Chat Customer"
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span>Chat</span>
+                </button>
+              ) : (
+                <button
+                  disabled
+                  title="Chat is only available for the assigned provider"
+                  className="inline-flex items-center justify-center gap-1 py-2 bg-gray-100 border border-gray-200 text-gray-400 rounded-xl text-[10px] sm:text-xs font-semibold cursor-not-allowed w-full md:flex-1"
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span>Chat</span>
+                </button>
+              )}
+
+              {/* Navigate to Customer */}
+              {['accepted', 'in-progress'].includes(booking.status) ? (
+                <button
+                  onClick={() => navigate(`/provider/track/${booking._id}`)}
+                  className="inline-flex items-center justify-center gap-1 py-2 rounded-xl text-[10px] sm:text-xs font-bold text-white bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 transition-all w-full shadow-sm active:scale-95 md:flex-1"
+                  title="Navigate to Customer"
+                >
+                  <Navigation className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Navigate</span>
+                  <span className="sm:hidden">Map</span>
+                </button>
+              ) : (
+                <button
+                  disabled
+                  title="Navigation is only available once request is accepted"
+                  className="inline-flex items-center justify-center gap-1 py-2 bg-gray-100 border border-gray-200 text-gray-400 rounded-xl text-[10px] sm:text-xs font-semibold cursor-not-allowed w-full md:flex-1"
+                >
+                  <Navigation className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Navigate</span>
+                  <span className="sm:hidden">Map</span>
+                </button>
+              )}
+
+              {/* Call Customer */}
+              {booking.customer?.phone ? (
+                <a
+                  href={`tel:${booking.customer.phone}`}
+                  className="inline-flex items-center justify-center gap-1 py-2 border border-primary/20 rounded-xl text-[10px] sm:text-xs font-semibold text-primary bg-primary/5 hover:bg-primary/10 transition-colors w-full md:flex-1"
+                  title="Call Customer"
+                >
+                  <Phone className="w-3.5 h-3.5" />
+                  <span>Call</span>
+                </a>
+              ) : (
+                <button
+                  disabled
+                  title="Customer phone is not available"
+                  className="inline-flex items-center justify-center gap-1 py-2 bg-gray-100 border border-gray-200 text-gray-400 rounded-xl text-[10px] sm:text-xs font-semibold cursor-not-allowed w-full md:flex-1"
+                >
+                  <Phone className="w-3.5 h-3.5" />
+                  <span>Call</span>
+                </button>
+              )}
+            </div>
+
+            {/* Row 2: State-Transition Actions */}
+            {['accepted', 'in-progress'].includes(booking.status) && (
+              <div className="w-full md:w-auto md:flex-1 flex mt-0 md:mt-0">
+                {/* Accepted: Start Service */}
+                {booking.status === 'accepted' && (
+                  <button
+                    disabled={actionLoading.id !== null || (booking.paymentMethod !== 'cash' && booking.paymentType !== 'pay_after_service' && !['paid', 'escrow_hold'].includes(booking.paymentStatus))}
+                    onClick={() => handleBookingAction(booking._id, 'start')}
+                    className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white bg-primary hover:bg-primary/90 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed shadow-md shadow-primary/10"
+                  >
+                    {actionLoading.id === booking._id && actionLoading.type === 'start' ? (
+                      <Loader className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Play className="w-3.5 h-3.5" />
+                    )}
+                    {actionLoading.id === booking._id && actionLoading.type === 'start'
+                      ? 'Starting...'
+                      : (booking.paymentMethod !== 'cash' && booking.paymentType !== 'pay_after_service' && !['paid', 'escrow_hold'].includes(booking.paymentStatus))
+                        ? 'Payment Pending'
+                        : 'Start Service'}
+                  </button>
+                )}
+
+                {/* In-Progress: Complete */}
+                {booking.status === 'in-progress' && (
+                  <button
+                    disabled={actionLoading.id !== null}
+                    onClick={() => handleBookingAction(booking._id, 'complete')}
+                    className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white bg-primary hover:bg-primary/90 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed shadow-md shadow-primary/10"
+                  >
+                    {actionLoading.id === booking._id && actionLoading.type === 'complete' ? (
+                      <Loader className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Check className="w-3.5 h-3.5" />
+                    )}
+                    {actionLoading.id === booking._id && actionLoading.type === 'complete' ? 'Completing...' : 'Complete Work'}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Footer */}
@@ -1422,16 +1460,6 @@ const ProviderBooking = () => {
                           </button>
                         )}
 
-                        <button
-                          onClick={() => {
-                            setShowModal(false);
-                            setChatBookingId(selectedBooking._id);
-                            setChatRoomType('provider_admin');
-                          }}
-                          className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-500/95 hover:to-indigo-600/95 text-white py-2 px-3 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95"
-                        >
-                          <Headphones className="w-4 h-4" /> Support Chat
-                        </button>
                         <div className="flex items-center gap-3">
                           <div className="p-2 bg-primary/10 rounded-lg"><User className="w-4 h-4 text-primary" /></div>
                           <div>
@@ -1439,7 +1467,7 @@ const ProviderBooking = () => {
                             <p className="font-medium text-secondary text-sm">{selectedBooking.customer?.name || 'Not specified'}</p>
                           </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="flex flex-col gap-3 sm:grid sm:grid-cols-2">
                           <div className="flex items-center gap-2">
                             <PhoneCall className="w-4 h-4 text-gray-400" />
                             <div>
@@ -1447,11 +1475,11 @@ const ProviderBooking = () => {
                               <p className="font-medium text-sm text-secondary">{selectedBooking.customer?.phone}</p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <Mail className="w-4 h-4 text-gray-400" />
-                            <div>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Mail className="w-4 h-4 text-gray-400 shrink-0" />
+                            <div className="min-w-0 flex-1">
                               <p className="text-xs text-gray-400">Email</p>
-                              <p className="font-medium text-sm text-secondary truncate">{selectedBooking.customer?.email || 'N/A'}</p>
+                              <p className="font-medium text-sm text-secondary break-all">{selectedBooking.customer?.email || 'N/A'}</p>
                             </div>
                           </div>
                         </div>
@@ -1763,28 +1791,23 @@ const ProviderBooking = () => {
               <div className="mt-6 pt-5 border-t border-gray-100">
                 <div className="flex flex-col sm:flex-row gap-3">
                   {selectedBooking.status === 'pending' && (
-                    <>
-                      <button onClick={() => handleBookingAction(selectedBooking._id, 'accept')} className="flex-1 px-4 py-3 bg-primary hover:bg-primary/90 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors">
-                        <Check className="w-4 h-4" /> Accept Booking
-                      </button>
-                      <button onClick={() => handleBookingAction(selectedBooking._id, 'reject', { reason: 'Provider declined' })} className="flex-1 px-4 py-3 bg-accent hover:bg-accent/90 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors">
-                        <X className="w-4 h-4" /> Reject Booking
-                      </button>
-                    </>
+                    <button onClick={() => handleBookingAction(selectedBooking._id, 'accept')} className="flex-1 px-4 py-3 bg-primary hover:bg-primary/90 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors">
+                      <Check className="w-4 h-4" /> Accept Booking
+                    </button>
                   )}
                   {selectedBooking.status === 'accepted' && (
                     <div className="flex-1 flex flex-col gap-1">
                       <button
-                        disabled={(selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentType === 'pay_after_service') && !['paid', 'escrow_hold'].includes(selectedBooking.paymentStatus)}
+                        disabled={actionLoading.id !== null || (selectedBooking.paymentMethod !== 'cash' && selectedBooking.paymentType !== 'pay_after_service' && !['paid', 'escrow_hold'].includes(selectedBooking.paymentStatus))}
                         onClick={() => handleBookingAction(selectedBooking._id, 'start')}
                         className="w-full px-4 py-3 bg-primary hover:bg-primary/90 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
                       >
                         <Play className="w-4 h-4" />
-                        {(selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentType === 'pay_after_service') && !['paid', 'escrow_hold'].includes(selectedBooking.paymentStatus)
+                        {(selectedBooking.paymentMethod !== 'cash' && selectedBooking.paymentType !== 'pay_after_service' && !['paid', 'escrow_hold'].includes(selectedBooking.paymentStatus))
                           ? 'Payment Pending'
                           : 'Start Service'}
                       </button>
-                      {((selectedBooking.paymentMethod === 'cash' || selectedBooking.paymentType === 'pay_after_service') && !['paid', 'escrow_hold'].includes(selectedBooking.paymentStatus)) && (
+                      {(selectedBooking.paymentMethod !== 'cash' && selectedBooking.paymentType !== 'pay_after_service' && !['paid', 'escrow_hold'].includes(selectedBooking.paymentStatus)) && (
                         <p className="text-[10px] text-accent font-bold text-center leading-tight">
                           Customer payment is pending. Ask customer to pay online.
                         </p>
@@ -1840,7 +1863,7 @@ const ProviderBooking = () => {
         </div>
       )}
 
-      <ChatModal 
+      <ChatModal
         bookingId={chatRoomType === 'provider_customer' ? chatBookingId : null}
         roomType={chatRoomType}
         providerId={chatRoomType === 'provider_admin' ? user?._id : null}

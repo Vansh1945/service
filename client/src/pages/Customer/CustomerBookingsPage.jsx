@@ -755,15 +755,18 @@ const BookingCard = ({ booking, onView, onPayNow, onReschedule, onCancel, onCall
         )}
 
         {/* Actions */}
-        <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-100">
-          <button onClick={() => onView(booking._id)} className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 px-3 py-1.5 rounded-lg hover:bg-blue-50 border border-blue-200 transition-colors">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-2 mt-4 pt-4 border-t border-gray-100">
+          <button 
+            onClick={() => onView(booking._id)} 
+            className="flex items-center justify-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 px-3 py-2 rounded-xl hover:bg-blue-50 border border-blue-200 transition-colors w-full sm:w-auto"
+          >
             <Eye className="w-3.5 h-3.5" /> View Details
           </button>
 
           {provider && ['accepted', 'in_progress', 'in-progress', 'arriving'].includes(booking.status) && (
             <button 
               onClick={() => navigate(`/customer/track/${booking._id}`)} 
-              className="flex items-center gap-1.5 text-xs font-bold text-white bg-gradient-to-r from-primary to-blue-600 hover:from-primary/95 hover:to-blue-600/95 px-3 py-1.5 rounded-lg transition-all shadow-md active:scale-95 animate-pulse"
+              className="flex items-center justify-center gap-1.5 text-xs font-bold text-white bg-gradient-to-r from-primary to-blue-600 hover:from-primary/95 hover:to-blue-600/95 px-3 py-2 rounded-xl transition-all shadow-md active:scale-95 animate-pulse w-full sm:w-auto"
             >
               <MapPin className="w-3.5 h-3.5" /> Track En Route
             </button>
@@ -772,47 +775,51 @@ const BookingCard = ({ booking, onView, onPayNow, onReschedule, onCancel, onCall
           {['assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'in-progress'].includes(booking.status) ? (
             <button 
               onClick={() => onChat(booking._id, 'provider_customer')} 
-              className="flex items-center gap-1.5 text-xs font-bold text-white bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-500/95 hover:to-emerald-600/95 px-3 py-1.5 rounded-lg transition-all shadow-sm active:scale-95 animate-none"
+              className="flex items-center justify-center gap-1.5 text-xs font-bold text-white bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-500/95 hover:to-emerald-600/95 px-3 py-2 rounded-xl transition-all shadow-sm active:scale-95 animate-none w-full sm:w-auto"
             >
               <MessageSquare className="w-3.5 h-3.5" /> Chat Provider
             </button>
           ) : booking.status === 'completed' && isChatVisible(booking) ? (
             <button 
               onClick={() => onChat(booking._id, 'provider_customer')} 
-              className="flex items-center gap-1.5 text-xs font-bold text-white bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-500/95 hover:to-emerald-600/95 px-3 py-1.5 rounded-lg transition-all shadow-sm active:scale-95 animate-none"
+              className="flex items-center justify-center gap-1.5 text-xs font-bold text-white bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-500/95 hover:to-emerald-600/95 px-3 py-2 rounded-xl transition-all shadow-sm active:scale-95 animate-none w-full sm:w-auto"
             >
               <MessageSquare className="w-3.5 h-3.5" /> Chat Provider
-            </button>
-          ) : booking.status === 'pending' ? (
-            <button 
-              disabled
-              title="Chat available after provider accepts booking"
-              className="flex items-center gap-1.5 text-xs font-medium text-gray-400 bg-gray-100 border border-gray-200 px-3 py-1.5 rounded-lg cursor-not-allowed"
-            >
-              <MessageSquare className="w-3.5 h-3.5" /> Chat available after provider accepts booking
             </button>
           ) : null}
 
           {needsPayment(booking) && (
-            <button onClick={() => onPayNow(booking)} className="flex items-center gap-1.5 text-xs font-bold text-white bg-accent hover:bg-accent/90 px-3 py-1.5 rounded-lg transition-all shadow-sm active:scale-95">
+            <button 
+              onClick={() => onPayNow(booking)} 
+              className="flex items-center justify-center gap-1.5 text-xs font-bold text-white bg-accent hover:bg-accent/90 px-3 py-2 rounded-xl transition-all shadow-sm active:scale-95 w-full sm:w-auto"
+            >
               <CreditCard className="w-3.5 h-3.5" /> Pay Now
             </button>
           )}
 
           {canReschedule(booking) && (
-            <button onClick={() => onReschedule(booking)} className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 px-3 py-1.5 rounded-lg hover:bg-blue-50 border border-blue-200 transition-colors">
+            <button 
+              onClick={() => onReschedule(booking)} 
+              className="flex items-center justify-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 px-3 py-2 rounded-xl hover:bg-blue-50 border border-blue-200 transition-colors w-full sm:w-auto"
+            >
               <Edit3 className="w-3.5 h-3.5" /> Reschedule
             </button>
           )}
 
           {provider?.phone && !['completed', 'pending', 'cancelled'].includes(booking.status) && (
-            <button onClick={() => onCall(provider.phone)} className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/80 px-3 py-1.5 rounded-lg hover:bg-primary/5 border border-primary/20 transition-colors">
+            <button 
+              onClick={() => onCall(provider.phone)} 
+              className="flex items-center justify-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/80 px-3 py-2 rounded-xl hover:bg-primary/5 border border-primary/20 transition-colors w-full sm:w-auto"
+            >
               <Phone className="w-3.5 h-3.5" /> Call
             </button>
           )}
 
           {canCancel(booking) && (
-            <button onClick={() => onCancel(booking)} className="flex items-center gap-1.5 text-xs font-semibold text-red-600 hover:text-red-800 px-3 py-1.5 rounded-lg hover:bg-red-50 border border-red-200 transition-colors ml-auto">
+            <button 
+              onClick={() => onCancel(booking)} 
+              className="flex items-center justify-center gap-1.5 text-xs font-semibold text-red-600 hover:text-red-800 px-3 py-2 rounded-xl hover:bg-red-50 border border-red-200 transition-colors w-full sm:w-auto sm:ml-auto"
+            >
               <XCircle className="w-3.5 h-3.5" /> Cancel
             </button>
           )}
@@ -820,7 +827,7 @@ const BookingCard = ({ booking, onView, onPayNow, onReschedule, onCancel, onCall
           {booking.status === 'completed' && booking.services?.[0]?.service?._id && (
             <button
               onClick={() => navigate(`/customer/book-service/${booking.services[0].service._id}`, { state: { prefillBooking: booking } })}
-              className="flex items-center gap-1.5 text-xs font-bold text-white bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 px-3 py-1.5 rounded-lg transition-all shadow-sm active:scale-95"
+              className="flex items-center justify-center gap-1.5 text-xs font-bold text-white bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 px-3 py-2 rounded-xl transition-all shadow-sm active:scale-95 w-full sm:w-auto"
             >
               <ShoppingCart className="w-3.5 h-3.5" /> Book Again
             </button>
@@ -828,7 +835,7 @@ const BookingCard = ({ booking, onView, onPayNow, onReschedule, onCancel, onCall
           {booking.status === 'completed' && (
             <button
               onClick={() => navigate(`/customer/complaints`, { state: { prefilledBookingId: booking._id } })}
-              className="flex items-center gap-1.5 text-xs font-semibold text-amber-600 hover:text-amber-800 px-3 py-1.5 rounded-lg hover:bg-amber-50 border border-amber-200 transition-colors"
+              className="flex items-center justify-center gap-1.5 text-xs font-semibold text-amber-600 hover:text-amber-800 px-3 py-2 rounded-xl hover:bg-amber-50 border border-amber-200 transition-colors w-full sm:w-auto"
             >
               <AlertCircle className="w-3.5 h-3.5" /> Raise Complaint
             </button>
@@ -836,7 +843,7 @@ const BookingCard = ({ booking, onView, onPayNow, onReschedule, onCancel, onCall
           {booking.status === 'completed' && provider && (
             <button
               onClick={() => onToggleFavorite(provider)}
-              className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors border ${
+              className={`flex items-center justify-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl transition-colors border w-full sm:w-auto ${
                 user?.favoriteProviders?.some(fp => fp.providerId?.toString() === (provider._id || provider.id)?.toString())
                   ? 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100'
                   : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'

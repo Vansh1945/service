@@ -2692,8 +2692,9 @@ const startBooking = async (req, res) => {
       });
     }
 
-    // STEP 4 — PAYMENT BEFORE SERVICE START (Accepts either paid or escrow_hold)
-    if (booking.paymentStatus !== 'paid' && booking.paymentStatus !== 'escrow_hold') {
+    // STEP 4 — PAYMENT BEFORE SERVICE START (Accepts either paid, escrow_hold, or cash payment method)
+    const isCashOrPayAfterService = booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service';
+    if (!isCashOrPayAfterService && booking.paymentStatus !== 'paid' && booking.paymentStatus !== 'escrow_hold') {
       return res.status(400).json({
         success: false,
         message: "Customer payment pending. Service cannot start."
