@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { useAuth } from '../../context/auth';
@@ -504,6 +504,8 @@ const getNavigationUrl = (booking) => {
 const ProviderBooking = () => {
   const navigate = useNavigate();
   const { API, user, token, logout, showToast } = useAuth();
+  const [searchParams] = useSearchParams();
+  const entityId = searchParams.get('entityId') || searchParams.get('bookingId');
 
   const [bookings, setBookings] = useState({ pending: [], accepted: [], 'in-progress': [], completed: [], cancelled: [] });
   const [selectedBooking, setSelectedBooking] = useState(null);
@@ -762,6 +764,12 @@ const ProviderBooking = () => {
       setShowModal(false);
     }
   }, [showToast]);
+
+  useEffect(() => {
+    if (entityId) {
+      getBookingDetails(entityId);
+    }
+  }, [entityId, getBookingDetails]);
 
   const handleDisputeReply = async () => {
     if (!disputeResponseText.trim()) {

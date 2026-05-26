@@ -137,7 +137,6 @@ const AdminPayout = () => {
 
   return (
     <div className="min-h-screen p-4 md:p-8">
-      <ToastContainer position="top-right" autoClose={3000} />
       <div className="max-w-7xl mx-auto space-y-6">
 
         {/* ── Header ── */}

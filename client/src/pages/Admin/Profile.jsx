@@ -437,7 +437,6 @@ const AdminProfile = () => {
 
   return (
     <div className="min-h-screen">
-      <ToastContainer position="top-right" autoClose={3000} />
 
       {/* Main Content */}
       <div className="max-w-4xl mx-auto py-4 sm:py-8 px-3 sm:px-6 lg:px-8">

@@ -60,6 +60,7 @@ self.addEventListener('notificationclick', (event) => {
     const data = event.notification.data || {};
     const route = data.route || data.url || '/';
     const role = data.role || null;
+    const entityId = data.entityId || null;
     const urlToOpen = self.location.origin + route;
 
     event.waitUntil(
@@ -67,15 +68,16 @@ self.addEventListener('notificationclick', (event) => {
             // If app is already open, navigate it to the deep-link route
             for (const client of clientList) {
                 if (client.url.startsWith(self.location.origin) && 'focus' in client) {
-                    client.postMessage({ type: 'NAVIGATE', url: route, role: role });
+                    client.postMessage({ type: 'NAVIGATE', url: route, role: role, entityId: entityId });
                     return client.focus();
                 }
             }
-            // On cold start, we pass route and role via search params so the app can pick them up
+            // On cold start, we pass route, role and entityId via search params so the app can pick them up
             if (clients.openWindow) {
                 const searchParams = new URLSearchParams();
                 searchParams.append('route', route);
                 if (role) searchParams.append('role', role);
+                if (entityId) searchParams.append('entityId', entityId);
                 return clients.openWindow(`${self.location.origin}?${searchParams.toString()}`);
             }
         })

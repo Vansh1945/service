@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
 import { useSocket } from '../../socket/SocketContext';
 import Loader from '../../components/Loader';
@@ -412,6 +412,8 @@ const AdminBookingsView = () => {
     const { token, API, showToast } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
+    const [searchParams] = useSearchParams();
+    const entityId = searchParams.get('entityId') || searchParams.get('bookingId');
     const [bookings, setBookings] = useState([]);
     const [selectedBooking, setSelectedBooking] = useState(null);
     const [showModal, setShowModal] = useState(false);
@@ -532,6 +534,12 @@ const AdminBookingsView = () => {
             setActionLoading(false);
         }
     }, [showToast]);
+
+    useEffect(() => {
+        if (entityId) {
+            fetchBookingDetails(entityId);
+        }
+    }, [entityId, fetchBookingDetails]);
 
     // Delete booking
     const handleDeleteBooking = useCallback(async (bookingId) => {

@@ -4,14 +4,14 @@ import DatePicker from 'react-datepicker';
 import TimePicker from 'react-time-picker';
 import 'react-datepicker/dist/react-datepicker.css';
 import 'react-time-picker/dist/TimePicker.css';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Calendar, Clock, MapPin, User, Phone, DollarSign, CheckCircle,
   XCircle, AlertCircle, Eye, Search, CreditCard, Star, Package,
   ShoppingCart, Timer, Wrench, Activity, Edit3, ChevronLeft,
   ChevronRight, X, ChevronDown, ChevronUp, Wallet, ShieldAlert, ShieldCheck, Home, CheckSquare, MessageSquare, Heart
 } from 'lucide-react';
-import { cancelBooking, userUpdateBookingDateTime, getCustomerBookings } from '../../services/BookingService';
+import { cancelBooking, userUpdateBookingDateTime, getCustomerBookings, getBooking } from '../../services/BookingService';
 import { toggleFavoriteProvider } from '../../services/CustomerService';
 import Pagination from '../../components/Pagination';
 import { formatDate, formatTime, formatDateTime, formatCurrency } from '../../utils/format';
@@ -890,6 +890,8 @@ const SkeletonCard = () => (
 const CustomerBookingsPage = () => {
   const { token, API, showToast, user, refreshUser } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const entityId = searchParams.get('entityId') || searchParams.get('bookingId');
 
   const handleToggleFavorite = async (provider) => {
     if (!provider) return;
@@ -933,6 +935,25 @@ const CustomerBookingsPage = () => {
   }, [searchTerm]);
 
   useEffect(() => { fetchBookings(); }, [statusFilter, timeFilter, debouncedSearch, currentPage]);
+
+  useEffect(() => {
+    if (entityId) {
+      const existing = bookings.find(b => b._id === entityId);
+      if (existing) {
+        setSelectedBooking(existing);
+        setShowModal(true);
+      } else {
+        getBooking(entityId).then(res => {
+          if (res.data?.success && res.data?.data) {
+            setSelectedBooking(res.data.data);
+            setShowModal(true);
+          }
+        }).catch(err => {
+          console.error("Error fetching single booking on deep link:", err);
+        });
+      }
+    }
+  }, [entityId, bookings]);
 
   const fetchBookings = useCallback(async () => {
     try {

@@ -81,11 +81,14 @@ export const NotificationProvider = ({ children }) => {
             if (event.data && event.data.type === 'NAVIGATE' && event.data.url) {
                 const targetRoute = event.data.url;
                 const requiredRole = event.data.role;
+                const entityId = event.data.entityId;
                 
                 setIsDeepLink?.(true);
 
+                const targetRouteWithEntity = targetRoute + (entityId ? (targetRoute.includes('?') ? '&' : '?') + 'entityId=' + entityId : '');
+
                 if (!isAuthenticated) {
-                    setIntendedRoute?.(targetRoute);
+                    setIntendedRoute?.(targetRouteWithEntity);
                     navigate('/login');
                     return;
                 }
@@ -97,7 +100,7 @@ export const NotificationProvider = ({ children }) => {
                     return;
                 }
 
-                navigate(targetRoute, { state: { fromNotification: true } });
+                navigate(targetRouteWithEntity, { state: { fromNotification: true } });
             }
         };
 
@@ -121,12 +124,15 @@ export const NotificationProvider = ({ children }) => {
             const body = payload.notification?.body || payload.data?.body || '';
             const targetRoute = payload.data?.route || payload.data?.url || '/';
             const requiredRole = payload.data?.role;
+            const entityId = payload.data?.entityId;
 
             const handleNavigation = () => {
                 setIsDeepLink?.(true);
+
+                const targetRouteWithEntity = targetRoute + (entityId ? (targetRoute.includes('?') ? '&' : '?') + 'entityId=' + entityId : '');
                 
                 if (!isAuthenticated) {
-                    setIntendedRoute?.(targetRoute);
+                    setIntendedRoute?.(targetRouteWithEntity);
                     navigate('/login');
                     return;
                 }
@@ -138,7 +144,7 @@ export const NotificationProvider = ({ children }) => {
                     return;
                 }
 
-                navigate(targetRoute, { state: { fromNotification: true } });
+                navigate(targetRouteWithEntity, { state: { fromNotification: true } });
             };
 
             // Role-based filtering: only show notifications intended for the current user's role
@@ -155,7 +161,7 @@ export const NotificationProvider = ({ children }) => {
                     body: body,
                     icon: '/icon-192.png',
                     badge: '/icon-192.png',
-                    data: { url: targetRoute, role: requiredRole }
+                    data: { url: targetRoute, role: requiredRole, entityId: entityId }
                 });
 
                 notif.onclick = () => {

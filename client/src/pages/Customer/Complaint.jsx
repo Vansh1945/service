@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/auth';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import {
@@ -20,6 +20,9 @@ const COMPLAINT_CATEGORIES = ["Service issue", "Payment issue", "Refund request"
 const ComplaintsPage = () => {
   const { token, user, logoutUser, isAuthenticated, API, API_URL_IMAGE } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const entityId = searchParams.get('entityId') || searchParams.get('complaintId');
+
   const [complaints, setComplaints] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -35,6 +38,12 @@ const ComplaintsPage = () => {
   const [previewImage, setPreviewImage] = useState(null);
   const [submittingComplaint, setSubmittingComplaint] = useState(false);
   const [chatRoomInfo, setChatRoomInfo] = useState(null);
+
+  useEffect(() => {
+    if (entityId) {
+      viewComplaintDetails(entityId);
+    }
+  }, [entityId]);
 
   useEffect(() => {
     if (!isAuthenticated) navigate('/login');

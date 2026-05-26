@@ -204,6 +204,7 @@ const App = () => {
     const params = new URLSearchParams(window.location.search);
     const route = params.get('route');
     const role = params.get('role');
+    const entityId = params.get('entityId');
 
     if (route) {
       setIsDeepLink(true);
@@ -211,8 +212,10 @@ const App = () => {
       const newUrl = window.location.pathname + window.location.hash;
       window.history.replaceState({}, '', newUrl);
 
+      const targetRouteWithEntity = route + (entityId ? (route.includes('?') ? '&' : '?') + 'entityId=' + entityId : '');
+
       if (!isAuthenticated) {
-        setIntendedRoute(route);
+        setIntendedRoute(targetRouteWithEntity);
         navigate_fn('/login');
         return;
       }
@@ -224,7 +227,7 @@ const App = () => {
         return;
       }
 
-      navigate_fn(route, { state: { fromNotification: true } });
+      navigate_fn(targetRouteWithEntity, { state: { fromNotification: true } });
     }
   }, [isAuthenticated, userRole, isAdmin, navigate_fn, setIsDeepLink, setIntendedRoute]);
 

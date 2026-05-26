@@ -1,6 +1,7 @@
 // src/pages/admin/ComplaintsPage.jsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/auth';
+import { useSearchParams } from 'react-router-dom';
 import * as ComplaintService from '../../services/ComplaintService';
 import * as AdminService from '../../services/AdminService';
 import {
@@ -876,6 +877,8 @@ const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => 
 // ── Main Page ─────────────────────────────────────────────────
 const ComplaintsPage = () => {
   const { token, API, showToast } = useAuth();
+  const [searchParams] = useSearchParams();
+  const entityId = searchParams.get('entityId') || searchParams.get('complaintId');
   const [complaints, setComplaints] = useState([]);
   const [selectedComplaint, setSelectedComplaint] = useState(null);
   const [showModal, setShowModal] = useState(false);
@@ -970,6 +973,12 @@ const ComplaintsPage = () => {
   };
 
   useEffect(() => { fetchComplaints(); }, [filters, pagination.page]);
+
+  useEffect(() => {
+    if (entityId) {
+      fetchComplaintDetails(entityId);
+    }
+  }, [entityId]);
 
   // ── Derived stats ──
   const customerCount = complaints.filter(c => c.userType === 'customer').length;
