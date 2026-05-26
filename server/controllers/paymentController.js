@@ -12,6 +12,9 @@ const { sendMail } = require('../utils/sendmail');
 
 const bcrypt = require('bcryptjs');
 
+const withdrawalLocks = new Set();
+
+
 // Helper to mask an email for UI responses (e.g., abcd@gmail.com -> abcd***@gmail.com)
 // Always safe to call even if email is missing/invalid.
 // PRODUCTION FIX
@@ -496,8 +499,16 @@ const getEarningsSummary = async (req, res) => {
 
 // Provider - Request bulk withdrawal (Initiate OTP)
 const requestBulkWithdrawal = async (req, res) => {
+  const providerId = req.provider._id;
+  const lockKey = providerId.toString();
+
+  if (withdrawalLocks.has(lockKey)) {
+    return res.status(429).json({ success: false, error: "A withdrawal request is already in progress. Please wait." });
+  }
+
+  withdrawalLocks.add(lockKey);
+
   try {
-    const providerId = req.provider._id;
     const { amount } = req.body;
 
     // Fetch minimum withdrawal from system settings
@@ -689,6 +700,8 @@ const requestBulkWithdrawal = async (req, res) => {
   } catch (error) {
     console.error("Request Withdrawal Error:", error);
     res.status(500).json({ success: false, error: error.message });
+  } finally {
+    withdrawalLocks.delete(lockKey);
   }
 };
 

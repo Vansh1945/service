@@ -147,8 +147,8 @@ const ZoneManagement = () => {
     return saved ? JSON.parse(saved) : defaultZones;
   });
 
-  const [providers, setProviders] = useState(mockProviders);
-  const [bookings, setBookings] = useState(mockBookings);
+  const [providers, setProviders] = useState([]);
+  const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(false);
 
   // Search, Filter and Collapse States
