@@ -488,430 +488,381 @@ const AdminProviders = () => {
 
         {/* View Provider Modal */}
         {showViewModal && selectedProvider && (
-          <Modal
-            isOpen={showViewModal}
+          <ProviderModal
+            provider={selectedProvider}
             onClose={() => setShowViewModal(false)}
-            title="Provider Details"
-            size="xlarge"
-          >
-            <div className="space-y-6">
-              {/* Active restriction alert banner */}
-              {selectedProvider.performanceScore?.restrictionsActive && (
-                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-xl flex items-start gap-3 shadow-sm">
-                  <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-bold text-red-800 text-sm">Provider Account Restricted</p>
-                    <p className="text-red-700 text-xs mt-1 leading-relaxed">
-                      This provider's account is restricted from accepting new bookings due to poor performance or excessive complaints.
-                      {selectedProvider.performanceScore.restrictionReason && <span className="block mt-1 font-semibold">Reason: {selectedProvider.performanceScore.restrictionReason}</span>}
-                      {selectedProvider.performanceScore.restrictedUntil && <span className="block mt-0.5">Restricted Until: {new Date(selectedProvider.performanceScore.restrictedUntil).toLocaleDateString()} at {new Date(selectedProvider.performanceScore.restrictedUntil).toLocaleTimeString()}</span>}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Header Section */}
-              <div className="bg-gradient-to-br from-teal-50 to-teal-100 p-6 rounded-xl border border-teal-200">
-                <div className="flex flex-col md:flex-row items-start gap-6">
-                  <div className="flex-shrink-0">
-                    <img
-                      className="h-24 w-24 rounded-full object-cover border-4 border-white shadow-md"
-                      src={selectedProvider.profilePicUrl || '/default-avatar.png'}
-                      alt={selectedProvider.name}
-                      onError={(e) => {
-                        e.target.src = '/default-avatar.png';
-                      }}
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                      <div>
-                        <h3 className="text-2xl md:text-3xl font-bold text-secondary">{selectedProvider.name}</h3>
-                        <div className="flex items-center mt-2">
-                          {getStatusBadge(selectedProvider)}
-                          {selectedProvider.averageRating > 0 && (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 ml-2">
-                              <Star className="w-3 h-3 mr-1 fill-yellow-400" />
-                              {selectedProvider.averageRating.toFixed(1)}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm text-gray-600">Member since</p>
-                        <p className="font-medium text-gray-900">{formatDate(selectedProvider.registrationDate || selectedProvider.createdAt)}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Stats Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                  <div className="flex items-center mb-2">
-                    <Briefcase className="w-5 h-5 text-gray-600 mr-2" />
-                    <span className="text-sm font-medium text-gray-700">Experience</span>
-                  </div>
-                  <p className="text-lg font-semibold text-gray-900">
-                    {selectedProvider.experience || 0} years
-                  </p>
-                </div>
-
-                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                  <div className="flex items-center mb-2">
-                    <CheckCircle className="w-5 h-5 text-gray-600 mr-2" />
-                    <span className="text-sm font-medium text-gray-700">Completed Jobs</span>
-                  </div>
-                  <p className="text-lg font-semibold text-gray-900">
-                    {selectedProvider.completedBookings || 0}
-                  </p>
-                </div>
-
-                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                  <div className="flex items-center mb-2">
-                    <XCircle className="w-5 h-5 text-gray-600 mr-2" />
-                    <span className="text-sm font-medium text-gray-700">Canceled Jobs</span>
-                  </div>
-                  <p className="text-lg font-semibold text-gray-900">
-                    {selectedProvider.canceledBookings || 0}
-                  </p>
-                </div>
-
-                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                  <div className="flex items-center mb-2">
-                    <Star className="w-5 h-5 text-gray-600 mr-2" />
-                    <span className="text-sm font-medium text-gray-700">Performance & Trust</span>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <p className="text-md font-semibold text-gray-900">
-                      ⭐ {selectedProvider.performanceScore?.rating > 0 ? selectedProvider.performanceScore.rating.toFixed(1) : 'No ratings yet'}
-                    </p>
-                    <p className="text-xs text-gray-600">⏱ On-Time: {selectedProvider.performanceScore?.onTimePercentage?.toFixed(1) || '0.0'}%</p>
-                    <p className="text-xs text-gray-600">✔ Completion: {selectedProvider.performanceScore?.completionPercentage?.toFixed(1) || '0.0'}%</p>
-                    <div className="h-px bg-gray-100 my-1" />
-                    <p className="text-xs font-bold text-secondary flex items-center">
-                      <TrendingUp className="w-3.5 h-3.5 mr-1 text-primary animate-pulse" />
-                      Trust Score: <span className={`ml-1 font-extrabold ${selectedProvider.performanceScore?.trustScore < 60 ? 'text-red-600 font-black animate-pulse' : selectedProvider.performanceScore?.trustScore < 80 ? 'text-amber-600' : 'text-green-600'}`}>{selectedProvider.performanceScore?.trustScore !== undefined ? selectedProvider.performanceScore.trustScore.toFixed(0) : '100'}%</span>
-                    </p>
-                    <p className="text-[10px] text-gray-500">❌ Cancel Ratio: {selectedProvider.performanceScore?.cancellationRatio?.toFixed(1) || '0.0'}%</p>
-                    <p className="text-[10px] text-gray-500">⚠️ Complaint Ratio: {selectedProvider.performanceScore?.complaintRatio?.toFixed(1) || '0.0'}%</p>
-                    <p className="text-[10px] text-gray-500">💳 COD Risk: <span className={`font-bold ${selectedProvider.performanceScore?.codAbuseRisk === 'HIGH' ? 'text-red-600 font-extrabold' : selectedProvider.performanceScore?.codAbuseRisk === 'MEDIUM' ? 'text-amber-600' : 'text-green-600'}`}>{selectedProvider.performanceScore?.codAbuseRisk || 'LOW'}</span></p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Contact Information */}
-              <div className="bg-white p-5 rounded-xl border border-gray-200">
-                <h4 className="text-lg font-semibold text-secondary mb-4">Contact Information</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex items-center">
-                    <Mail className="w-5 h-5 text-gray-600 mr-3" />
-                    <div>
-                      <p className="text-sm font-medium text-gray-700">Email</p>
-                      <p className="text-sm text-gray-900">{selectedProvider.email}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center">
-                    <Phone className="w-5 h-5 text-gray-600 mr-3" />
-                    <div>
-                      <p className="text-sm font-medium text-gray-700">Phone</p>
-                      <p className="text-sm text-gray-900">{selectedProvider.phone || 'N/A'}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center">
-                    <MapPin className="w-5 h-5 text-gray-600 mr-3" />
-                    <div>
-                      <p className="text-sm font-medium text-gray-700">Address</p>
-                      <p className="text-sm text-gray-900">{formatAddress(selectedProvider.address)}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center">
-                    <Calendar className="w-5 h-5 text-gray-600 mr-3" />
-                    <div>
-                      <p className="text-sm font-medium text-gray-700">Date of Birth</p>
-                      <p className="text-sm text-gray-900">{formatDate(selectedProvider.dateOfBirth)}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* S2 Geofence Telemetry */}
-                {(selectedProvider.address?.s2CellId || selectedProvider.address?.s2CellIdPrecise) && (
-                  <div className="mt-4 bg-slate-900 p-3 rounded-lg border border-slate-700">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                      <MapPin className="w-3 h-3 text-teal-400" /> S2 Geofence Telemetry
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      {selectedProvider.address?.s2CellId && (
-                        <div className="flex justify-between items-center bg-slate-950/50 p-2 rounded border border-slate-800">
-                          <span className="text-[10px] text-slate-400 font-medium">Level 13 (≈1km²)</span>
-                          <span className="font-mono text-[10px] text-teal-300">
-                            {selectedProvider.address.s2CellId}
-                          </span>
-                        </div>
-                      )}
-                      {selectedProvider.address?.s2CellIdPrecise && (
-                        <div className="flex justify-between items-center bg-slate-950/50 p-2 rounded border border-slate-800">
-                          <span className="text-[10px] text-slate-400 font-medium">Level 15 (≈150m²)</span>
-                          <span className="font-mono text-[10px] text-emerald-300">
-                            {selectedProvider.address.s2CellIdPrecise}
-                          </span>
-                        </div>
-                      )}
-                      {selectedProvider.address?.lat && selectedProvider.address?.lng && (
-                        <div className="flex justify-between items-center bg-slate-950/50 p-2 rounded border border-slate-800">
-                          <span className="text-[10px] text-slate-400 font-medium">Coordinates</span>
-                          <span className="font-mono text-[10px] text-slate-300">
-                            {parseFloat(selectedProvider.address.lat).toFixed(6)}, {parseFloat(selectedProvider.address.lng).toFixed(6)}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Professional Information */}
-              <div className="bg-white p-5 rounded-xl border border-gray-200">
-                <h4 className="text-lg font-semibold text-secondary mb-4">Professional Information</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm font-medium text-gray-700 mb-2">Services Offered</p>
-                    <div className="flex flex-wrap gap-2">
-                      {getServiceBadges(selectedProvider.services)}
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-700 mb-2">Service Area</p>
-                    <p className="text-sm text-gray-900">{selectedProvider.serviceArea || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-700 mb-2">KYC Status</p>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${selectedProvider.kycStatus === 'approved'
-                      ? 'bg-green-100 text-green-800'
-                      : selectedProvider.kycStatus === 'pending'
-                        ? 'bg-yellow-100 text-yellow-800'
-                        : 'bg-red-100 text-red-800'
-                      }`}>
-                      {selectedProvider.kycStatus?.charAt(0).toUpperCase() + selectedProvider.kycStatus?.slice(1) || 'N/A'}
-                    </span>
-                    {selectedProvider.rejectionReason && (
-                      <p className="text-sm text-red-600 mt-1">
-                        Reason: {selectedProvider.rejectionReason}
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-700 mb-2">Test Status</p>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${selectedProvider.testPassed
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-gray-100 text-gray-800'
-                      }`}>
-                      {selectedProvider.testPassed ? 'Passed' : 'Not Passed'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Bank Details */}
-              {selectedProvider.bankDetails && (
-                <div className="bg-white p-5 rounded-xl border border-gray-200">
-                  <h4 className="text-lg font-semibold text-secondary mb-4">Bank Details</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-sm font-medium text-gray-700">Account Name</p>
-                      <p className="text-sm text-gray-900">{selectedProvider.bankDetails.accountName || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-700">Account Number</p>
-                      <p className="text-sm text-gray-900 font-mono">{selectedProvider.bankDetails.accountNo || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-700">Bank Name</p>
-                      <p className="text-sm text-gray-900">{selectedProvider.bankDetails.bankName || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-700">IFSC Code</p>
-                      <p className="text-sm text-gray-900 font-mono">{selectedProvider.bankDetails.ifsc || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-700">Verification Status</p>
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${selectedProvider.bankDetails.verified
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-yellow-100 text-yellow-800'
-                        }`}>
-                        {selectedProvider.bankDetails.verified ? 'Verified' : 'Pending Verification'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Bank Verification Actions */}
-              {selectedProvider.bankDetails && !selectedProvider.bankDetails.verified && selectedProvider.bankDetails.accountNo && (
-                <div className="bg-yellow-50 p-5 rounded-xl border border-yellow-200 mt-6">
-                  <h4 className="text-lg font-semibold text-yellow-800 mb-4 flex items-center">
-                    <AlertCircle className="w-5 h-5 mr-2" />
-                    Verify Bank Details
-                  </h4>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Remarks (Optional for approval, required for rejection)
-                      </label>
-                      <textarea
-                        value={approvalRemarks}
-                        onChange={(e) => setApprovalRemarks(e.target.value)}
-                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                        placeholder="Enter remarks..."
-                        rows="3"
-                      ></textarea>
-                    </div>
-                    <div className="flex gap-4">
-                      <button
-                        onClick={() => handleStatusUpdate('approved')}
-                        disabled={processingAction}
-                        className="flex-1 flex items-center justify-center px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all font-semibold disabled:opacity-50"
-                      >
-                        {processingAction === 'approved' ? 'Verifying...' : 'Verify Bank Details'}
-                      </button>
-                      <button
-                        onClick={() => handleStatusUpdate('rejected')}
-                        disabled={processingAction}
-                        className="flex-1 flex items-center justify-center px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all font-semibold disabled:opacity-50"
-                      >
-                        {processingAction === 'rejected' ? 'Rejecting...' : 'Reject Bank Details'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Manual Provider Account Controls */}
-              <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 mt-6 space-y-4">
-                <h4 className="text-lg font-bold text-secondary flex items-center gap-2">
-                  <Shield className="w-5 h-5 text-teal-600" />
-                  Manual Provider Account Controls
-                </h4>
-                <p className="text-xs text-slate-500">
-                  Manually control this provider's access, restrictions, and suspension status.
-                </p>
-
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Action Remarks / Reason (Required for Restrict, Suspend, Reject)
-                    </label>
-                    <textarea
-                      value={approvalRemarks}
-                      onChange={(e) => setApprovalRemarks(e.target.value)}
-                      className="w-full p-2.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white"
-                      placeholder="Enter remarks or justification reason..."
-                      rows="2"
-                    ></textarea>
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    <button
-                      onClick={() => handleStatusUpdate('active')}
-                      disabled={processingAction}
-                      className="px-3 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-all disabled:opacity-50"
-                    >
-                      {processingAction === 'active' ? 'Activating...' : '✓ Reactivate / Approve'}
-                    </button>
-                    <button
-                      onClick={() => {
-                        const days = prompt("Enter restriction duration in days (leave empty for indefinite):");
-                        handleStatusUpdate('restricted', days ? Number(days) : null);
-                      }}
-                      disabled={processingAction}
-                      className="px-3 py-2 bg-amber-500 text-white text-xs font-bold rounded-lg hover:bg-amber-600 transition-all disabled:opacity-50"
-                    >
-                      {processingAction === 'restricted' ? 'Restricting...' : '⚠️ Restrict Account'}
-                    </button>
-                    <button
-                      onClick={() => handleStatusUpdate('suspended')}
-                      disabled={processingAction}
-                      className="px-3 py-2 bg-rose-500 text-white text-xs font-bold rounded-lg hover:bg-rose-600 transition-all disabled:opacity-50"
-                    >
-                      {processingAction === 'suspended' ? 'Suspending...' : '🚫 Suspend Account'}
-                    </button>
-                    <button
-                      onClick={() => {
-                        const days = prompt("Enter block duration in days (leave empty for permanent):");
-                        handleStatusUpdate('blocked', days ? Number(days) : null);
-                      }}
-                      disabled={processingAction}
-                      className="px-3 py-2 bg-red-700 text-white text-xs font-bold rounded-lg hover:bg-red-800 transition-all disabled:opacity-50 col-span-2 sm:col-span-1"
-                    >
-                      {processingAction === 'blocked' ? 'Blocking...' : '❌ Block Account'}
-                    </button>
-                    <button
-                      onClick={() => handleStatusUpdate('pending_review')}
-                      disabled={processingAction}
-                      className="px-3 py-2 bg-slate-500 text-white text-xs font-bold rounded-lg hover:bg-slate-600 transition-all disabled:opacity-50"
-                    >
-                      {processingAction === 'pending_review' ? 'Updating...' : '⏳ Set Pending Review'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
-                <button
-                  onClick={() => setShowViewModal(false)}
-                  className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </Modal>
+            approvalRemarks={approvalRemarks}
+            setApprovalRemarks={setApprovalRemarks}
+            processingAction={processingAction}
+            handleStatusUpdate={handleStatusUpdate}
+          />
         )}
       </div>
     </div>
   );
 };
 
-// Reusable Modal Component
-const Modal = ({ isOpen, onClose, title, children, size = 'medium' }) => {
-  if (!isOpen) return null;
+// ─── Provider Detail Modal ──────────────────────────────────────────────────
+const InfoRow = ({ label, value, mono = false }) => (
+  <div className="flex flex-col gap-0.5">
+    <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{label}</span>
+    <span className={`text-sm font-medium text-gray-800 break-all ${mono ? 'font-mono' : ''}`}>{value || 'N/A'}</span>
+  </div>
+);
 
-  const sizeClasses = {
-    medium: 'sm:max-w-lg',
-    large: 'sm:max-w-2xl',
-    xlarge: 'sm:max-w-4xl'
-  };
+const SectionCard = ({ title, icon: Icon, iconColor = 'text-teal-600', bgColor = 'bg-white', children }) => (
+  <div className={`${bgColor} rounded-2xl border border-gray-100 shadow-sm overflow-hidden`}>
+    <div className="flex items-center gap-2.5 px-5 py-4 border-b border-gray-100">
+      {Icon && <Icon className={`w-4.5 h-4.5 ${iconColor}`} size={18} />}
+      <h4 className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">{title}</h4>
+    </div>
+    <div className="p-5">{children}</div>
+  </div>
+);
+
+const StatPill = ({ label, value, color }) => (
+  <div className={`flex flex-col items-center justify-center rounded-xl p-3 ${color}`}>
+    <span className="text-lg font-extrabold leading-none">{value}</span>
+    <span className="text-[10px] font-semibold mt-1 opacity-80 text-center leading-tight">{label}</span>
+  </div>
+);
+
+const ProviderModal = ({
+  provider,
+  onClose,
+  approvalRemarks,
+  setApprovalRemarks,
+  processingAction,
+  handleStatusUpdate
+}) => {
+  if (!provider) return null;
+
+  const ps = provider.performanceScore || {};
+  const bd = provider.bankDetails || {};
+  const trustColor = ps.trustScore < 60 ? 'text-red-600' : ps.trustScore < 80 ? 'text-amber-500' : 'text-emerald-600';
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-        <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-          <div className="absolute inset-0 bg-gray-500 opacity-75" onClick={onClose}></div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
+      />
+
+      {/* Modal Panel */}
+      <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden">
+
+        {/* ── Gradient Header ── */}
+        <div className="relative bg-gradient-to-br from-teal-600 via-teal-500 to-emerald-400 px-6 pt-6 pb-16 flex-shrink-0">
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center bg-white/20 hover:bg-white/30 text-white rounded-full transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          <p className="text-xs font-bold text-teal-100 uppercase tracking-widest mb-1">Provider Details</p>
+          <h2 className="text-2xl font-extrabold text-white">{provider.name}</h2>
+          {provider.providerId && (
+            <p className="text-xs text-teal-100 font-mono mt-0.5">{provider.providerId}</p>
+          )}
         </div>
 
-        <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-
-        <div className={`inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle ${sizeClasses[size]} sm:w-full`}>
-          <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-            <div className="sm:flex sm:items-start">
-              <div className="mt-3 text-center sm:mt-0 sm:text-left w-full">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg leading-6 font-medium text-secondary">{title}</h3>
-                  <button
-                    onClick={onClose}
-                    className="text-gray-400 hover:text-gray-600 transition-colors duration-200"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-                {children}
+        {/* ── Floating Profile Card ── */}
+        <div className="relative px-6 -mt-10 flex-shrink-0">
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-4 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <img
+              src={provider.profilePicUrl || '/default-avatar.png'}
+              alt={provider.name}
+              onError={(e) => { e.target.src = '/default-avatar.png'; }}
+              className="w-16 h-16 rounded-xl object-cover border-2 border-teal-100 shadow flex-shrink-0"
+            />
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-2 mb-1">
+                {getStatusBadge(provider)}
+                {ps.restrictionsActive && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700">
+                    <Shield size={10} /> Restricted
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 mt-1">
+                <span className="flex items-center gap-1"><Mail size={11} />{provider.email}</span>
+                {provider.phone && <span className="flex items-center gap-1"><Phone size={11} />{provider.phone}</span>}
+                <span className="flex items-center gap-1"><Calendar size={11} />Joined {formatDate(provider.registrationDate || provider.createdAt)}</span>
               </div>
             </div>
+            <div className="text-right flex-shrink-0">
+              {provider.averageRating > 0 && (
+                <div className="flex items-center gap-1 justify-end">
+                  <Star size={14} className="text-yellow-400 fill-yellow-400" />
+                  <span className="text-lg font-extrabold text-gray-800">{provider.averageRating.toFixed(1)}</span>
+                </div>
+              )}
+              <p className="text-[10px] text-gray-400 mt-0.5">Avg Rating</p>
+            </div>
           </div>
+        </div>
+
+        {/* ── Scrollable Content ── */}
+        <div className="flex-1 overflow-y-auto px-6 pb-6 pt-4 space-y-4">
+
+          {/* Restriction Alert */}
+          {ps.restrictionsActive && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+              <AlertCircle size={16} className="text-red-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-bold text-red-700">Account Restricted</p>
+                <p className="text-xs text-red-600 mt-0.5">
+                  {ps.restrictionReason || 'Restricted due to poor performance or excessive complaints.'}
+                </p>
+                {ps.restrictedUntil && (
+                  <p className="text-xs text-red-500 mt-0.5">
+                    Until: {new Date(ps.restrictedUntil).toLocaleString()}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Performance Stats Row */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <StatPill
+              label="Completed Jobs"
+              value={provider.completedBookings || 0}
+              color="bg-emerald-50 text-emerald-700"
+            />
+            <StatPill
+              label="Cancelled Jobs"
+              value={provider.canceledBookings || 0}
+              color="bg-rose-50 text-rose-600"
+            />
+            <StatPill
+              label="Experience"
+              value={`${provider.experience || 0}y`}
+              color="bg-blue-50 text-blue-600"
+            />
+            <StatPill
+              label="Trust Score"
+              value={`${ps.trustScore !== undefined ? ps.trustScore.toFixed(0) : 100}%`}
+              color={ps.trustScore < 60 ? 'bg-red-50 text-red-600' : ps.trustScore < 80 ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-700'}
+            />
+          </div>
+
+          {/* Performance Metrics */}
+          <SectionCard title="Performance Metrics" icon={TrendingUp} iconColor="text-teal-600">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              <InfoRow label="Rating" value={ps.rating > 0 ? `⭐ ${ps.rating.toFixed(1)}` : 'No ratings yet'} />
+              <InfoRow label="On-Time %" value={`${ps.onTimePercentage?.toFixed(1) || '0.0'}%`} />
+              <InfoRow label="Completion %" value={`${ps.completionPercentage?.toFixed(1) || '0.0'}%`} />
+              <InfoRow label="Cancellation Ratio" value={`${ps.cancellationRatio?.toFixed(1) || '0.0'}%`} />
+              <InfoRow label="Complaint Ratio" value={`${ps.complaintRatio?.toFixed(1) || '0.0'}%`} />
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">COD Risk</span>
+                <span className={`text-sm font-bold ${
+                  ps.codAbuseRisk === 'HIGH' ? 'text-red-600' :
+                  ps.codAbuseRisk === 'MEDIUM' ? 'text-amber-500' : 'text-emerald-600'
+                }`}>{ps.codAbuseRisk || 'LOW'}</span>
+              </div>
+            </div>
+          </SectionCard>
+
+          {/* Contact Information */}
+          <SectionCard title="Contact Information" icon={Mail} iconColor="text-blue-500">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <InfoRow label="Email" value={provider.email} />
+              <InfoRow label="Phone" value={provider.phone} />
+              <InfoRow label="Date of Birth" value={formatDate(provider.dateOfBirth)} />
+              <InfoRow label="Address" value={formatAddress(provider.address)} />
+            </div>
+            {(provider.address?.s2CellId || provider.address?.s2CellIdPrecise) && (
+              <div className="mt-4 bg-slate-900 p-3 rounded-xl">
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                  <MapPin size={10} className="text-teal-400" /> S2 Geofence Telemetry
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {provider.address?.s2CellId && (
+                    <div className="flex justify-between items-center bg-slate-800 p-2 rounded-lg">
+                      <span className="text-[10px] text-slate-400">Level 13 (≈1km²)</span>
+                      <span className="font-mono text-[10px] text-teal-300">{provider.address.s2CellId}</span>
+                    </div>
+                  )}
+                  {provider.address?.s2CellIdPrecise && (
+                    <div className="flex justify-between items-center bg-slate-800 p-2 rounded-lg">
+                      <span className="text-[10px] text-slate-400">Level 15 (≈150m²)</span>
+                      <span className="font-mono text-[10px] text-emerald-300">{provider.address.s2CellIdPrecise}</span>
+                    </div>
+                  )}
+                  {provider.address?.lat && provider.address?.lng && (
+                    <div className="flex justify-between items-center bg-slate-800 p-2 rounded-lg">
+                      <span className="text-[10px] text-slate-400">Coords</span>
+                      <span className="font-mono text-[10px] text-slate-300">
+                        {parseFloat(provider.address.lat).toFixed(5)}, {parseFloat(provider.address.lng).toFixed(5)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </SectionCard>
+
+          {/* Professional Information */}
+          <SectionCard title="Professional Information" icon={Briefcase} iconColor="text-purple-500">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide block mb-2">Services Offered</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {getServiceBadges(provider.services) || <span className="text-sm text-gray-500">N/A</span>}
+                </div>
+              </div>
+              <InfoRow label="Service Area" value={provider.serviceArea} />
+              <div>
+                <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide block mb-1.5">KYC Status</span>
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                  provider.kycStatus === 'approved' ? 'bg-green-100 text-green-800' :
+                  provider.kycStatus === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                  'bg-red-100 text-red-800'
+                }`}>
+                  {provider.kycStatus?.charAt(0).toUpperCase() + provider.kycStatus?.slice(1) || 'N/A'}
+                </span>
+                {provider.rejectionReason && (
+                  <p className="text-xs text-red-500 mt-1">Reason: {provider.rejectionReason}</p>
+                )}
+              </div>
+              <div>
+                <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide block mb-1.5">Test Status</span>
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                  provider.testPassed ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
+                }`}>
+                  {provider.testPassed ? '✓ Passed' : 'Not Passed'}
+                </span>
+              </div>
+            </div>
+          </SectionCard>
+
+          {/* Bank Details */}
+          {provider.bankDetails && (
+            <SectionCard title="Bank Details" icon={Banknote} iconColor="text-emerald-600">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <InfoRow label="Account Name" value={bd.accountName} />
+                <InfoRow label="Account Number" value={bd.accountNo} mono />
+                <InfoRow label="Bank Name" value={bd.bankName} />
+                <InfoRow label="IFSC Code" value={bd.ifsc} mono />
+                <div className="sm:col-span-2">
+                  <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide block mb-1.5">Verification Status</span>
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${
+                    bd.verified ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {bd.verified ? '✓ Verified' : '⏳ Pending Verification'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Bank Verify Actions */}
+              {!bd.verified && bd.accountNo && (
+                <div className="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-4">
+                  <p className="text-xs font-bold text-amber-700 mb-3 flex items-center gap-1.5">
+                    <AlertCircle size={13} /> Verify or Reject these bank details
+                  </p>
+                  <textarea
+                    value={approvalRemarks}
+                    onChange={(e) => setApprovalRemarks(e.target.value)}
+                    className="w-full p-2.5 text-sm border border-amber-200 rounded-lg focus:ring-2 focus:ring-amber-400 focus:border-transparent bg-white mb-3 resize-none"
+                    placeholder="Remarks (optional for approval, required for rejection)..."
+                    rows="2"
+                  />
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => handleStatusUpdate('approved')}
+                      disabled={processingAction}
+                      className="flex-1 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {processingAction === 'approved' ? 'Verifying…' : '✓ Verify Bank'}
+                    </button>
+                    <button
+                      onClick={() => handleStatusUpdate('rejected')}
+                      disabled={processingAction}
+                      className="flex-1 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {processingAction === 'rejected' ? 'Rejecting…' : '✕ Reject Bank'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </SectionCard>
+          )}
+
+          {/* Account Controls */}
+          <SectionCard title="Account Controls" icon={Shield} iconColor="text-slate-600" bgColor="bg-slate-50">
+            <p className="text-xs text-slate-500 mb-4">Manually manage this provider's account access and status.</p>
+            <div className="mb-3">
+              <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                Remarks / Reason <span className="text-red-400">(Required for Restrict, Suspend, Reject)</span>
+              </label>
+              <textarea
+                value={approvalRemarks}
+                onChange={(e) => setApprovalRemarks(e.target.value)}
+                className="w-full p-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-teal-400 focus:border-transparent bg-white resize-none"
+                placeholder="Enter justification..."
+                rows="2"
+              />
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+              <button
+                onClick={() => handleStatusUpdate('active')}
+                disabled={processingAction}
+                className="py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
+              >
+                {processingAction === 'active' ? 'Activating…' : '✓ Reactivate'}
+              </button>
+              <button
+                onClick={() => {
+                  const days = prompt('Restriction duration in days (blank = indefinite):');
+                  handleStatusUpdate('restricted', days ? Number(days) : null);
+                }}
+                disabled={processingAction}
+                className="py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
+              >
+                {processingAction === 'restricted' ? 'Restricting…' : '⚠ Restrict'}
+              </button>
+              <button
+                onClick={() => handleStatusUpdate('suspended')}
+                disabled={processingAction}
+                className="py-2.5 bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
+              >
+                {processingAction === 'suspended' ? 'Suspending…' : '🚫 Suspend'}
+              </button>
+              <button
+                onClick={() => {
+                  const days = prompt('Block duration in days (blank = permanent):');
+                  handleStatusUpdate('blocked', days ? Number(days) : null);
+                }}
+                disabled={processingAction}
+                className="py-2.5 bg-red-700 hover:bg-red-800 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50 col-span-2 sm:col-span-1"
+              >
+                {processingAction === 'blocked' ? 'Blocking…' : '❌ Block'}
+              </button>
+              <button
+                onClick={() => handleStatusUpdate('pending_review')}
+                disabled={processingAction}
+                className="py-2.5 bg-slate-500 hover:bg-slate-600 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
+              >
+                {processingAction === 'pending_review' ? 'Updating…' : '⏳ Pending Review'}
+              </button>
+            </div>
+          </SectionCard>
+
+        </div>{/* end scrollable */}
+
+        {/* ── Sticky Footer ── */}
+        <div className="flex-shrink-0 px-6 py-4 border-t border-gray-100 bg-white flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-6 py-2 text-sm font-semibold text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>

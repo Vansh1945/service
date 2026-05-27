@@ -1229,7 +1229,7 @@ const getUserBookings = async (req, res) => {
       })
       .populate({
         path: 'provider',
-        select: 'name email phone completedBookings performanceScore providerId'
+        select: 'name email phone completedBookings performanceScore providerId profilePicUrl'
       })
       .populate('customer', 'name email phone')
       .sort({ createdAt: -1 })
