@@ -132,8 +132,17 @@ export const AuthProvider = ({ children }) => {
         const currentRefreshToken = localStorage.getItem("refreshToken");
         const currentFcmToken = localStorage.getItem("fcmToken");
 
-        // Immediately clear storage and states for an instantaneous UI update
+        // Selective clear to preserve device identity
+        const persistentDeviceId = localStorage.getItem("persistentDeviceId");
+        const tempFcmToken = localStorage.getItem("tempFcmToken");
         localStorage.clear();
+        if (persistentDeviceId) {
+            localStorage.setItem("persistentDeviceId", persistentDeviceId);
+        }
+        if (tempFcmToken) {
+            localStorage.setItem("tempFcmToken", tempFcmToken);
+        }
+
         setToken(null);
         setRefreshToken(null);
         setRole(null);

@@ -187,11 +187,30 @@ const saveToken = async (req, res) => {
         const { token, deviceId: bodyDeviceId, platform, appVersion } = req.body;
         const userId = req.userID;
         const role = req.role;
-        const deviceId = bodyDeviceId || req.headers['x-device-id'] || req.headers['user-agent'] || 'unknown_device';
 
-        if (!token) {
-            return res.status(400).json({ success: false, message: 'Token is required' });
+        // Input Sanitization and Token Format/Length Validation
+        if (!token || typeof token !== 'string') {
+            return res.status(400).json({ success: false, message: 'Invalid or missing FCM token' });
         }
+
+        const cleanToken = token.trim();
+        const fcmTokenRegex = /^[a-zA-Z0-9_\-:]+$/;
+        if (cleanToken.length < 100 || cleanToken.length > 500 || !fcmTokenRegex.test(cleanToken)) {
+            return res.status(400).json({ success: false, message: 'Malformed FCM token rejected' });
+        }
+
+        // Sanitize deviceId
+        let rawDeviceId = bodyDeviceId || req.headers['x-device-id'] || req.headers['user-agent'] || 'unknown_device';
+        if (typeof rawDeviceId !== 'string') {
+            rawDeviceId = String(rawDeviceId);
+        }
+        const cleanDeviceId = rawDeviceId.replace(/[^\w\-\s.:()\[\]\/]/g, '').trim().slice(0, 300);
+
+        if (!cleanDeviceId || cleanDeviceId.length < 5) {
+            return res.status(400).json({ success: false, message: 'Invalid or malformed deviceId rejected' });
+        }
+
+        const deviceId = cleanDeviceId;
 
         let Model;
         if (role === 'admin') Model = Admin;
@@ -200,9 +219,9 @@ const saveToken = async (req, res) => {
 
         // 1. Pull this token from all other users in all collections to avoid duplicate registration
         await Promise.all([
-            User.updateMany({ _id: { $ne: userId } }, { $pull: { fcmDevices: { token } } }),
-            Provider.updateMany({ _id: { $ne: userId } }, { $pull: { fcmDevices: { token } } }),
-            Admin.updateMany({ _id: { $ne: userId } }, { $pull: { fcmDevices: { token } } })
+            User.updateMany({ _id: { $ne: userId } }, { $pull: { fcmDevices: { token: cleanToken } } }),
+            Provider.updateMany({ _id: { $ne: userId } }, { $pull: { fcmDevices: { token: cleanToken } } }),
+            Admin.updateMany({ _id: { $ne: userId } }, { $pull: { fcmDevices: { token: cleanToken } } })
         ]);
 
         // Find the user document
@@ -215,12 +234,13 @@ const saveToken = async (req, res) => {
             user.fcmDevices = [];
         }
 
-        const deviceIndex = user.fcmDevices.findIndex(d => d.deviceId === deviceId);
+        const deviceIndex = user.fcmDevices.findIndex(d => d.deviceId === deviceId || d.token === cleanToken);
 
         if (deviceIndex > -1) {
             // Found existing device entry
             const existing = user.fcmDevices[deviceIndex];
-            existing.token = token; // CASE 1 & CASE 2: Set/overwrite token
+            existing.token = cleanToken; // Overwrite token
+            existing.deviceId = deviceId; // Sync deviceId if matched on token
             existing.lastActive = new Date();
             existing.isActive = true;
             if (platform) existing.platform = platform;
@@ -228,7 +248,7 @@ const saveToken = async (req, res) => {
         } else {
             // CASE 3: New device
             user.fcmDevices.push({
-                token,
+                token: cleanToken,
                 deviceId,
                 platform: platform || 'Web',
                 appVersion: appVersion || '1.0.0',

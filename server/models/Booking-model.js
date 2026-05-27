@@ -510,10 +510,10 @@ bookingSchema.pre('save', async function (next) {
         const { SystemConfig } = require('./SystemSetting');
         let settings = await SystemConfig.findOne();
         if (!settings) {
-          settings = new SystemConfig({ companyName: 'Raj Electrical Services' });
+          settings = new SystemConfig({ companyName: process.env.COMPANY_NAME || 'Raj Electrical Services' });
           await settings.save();
         }
-        const defaultCommPercent = settings?.commissionSettings?.defaultCommission ?? 10;
+        const defaultCommPercent = settings?.commissionSettings?.defaultCommission ?? parseFloat(process.env.DEFAULT_COMMISSION || 10);
         const commission = parseFloat(((this.totalAmount * defaultCommPercent) / 100).toFixed(2));
         const netAmount = parseFloat((this.totalAmount - commission).toFixed(2));
 

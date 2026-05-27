@@ -375,7 +375,7 @@ const autoAssignProviderIfEnabled = async (bookingId) => {
     const { SystemConfig } = require('../models/SystemSetting');
     let settings = await SystemConfig.findOne();
     if (!settings) {
-      settings = new SystemConfig({ companyName: 'Raj Electrical Services' });
+      settings = new SystemConfig({ companyName: process.env.COMPANY_NAME || 'Raj Electrical Services' });
       await settings.save();
     }
 
@@ -600,7 +600,7 @@ const createBooking = async (req, res) => {
         const { SystemConfig } = require('../models/SystemSetting');
         let settings = await SystemConfig.findOne();
         if (!settings) {
-          settings = new SystemConfig({ companyName: 'Raj Electrical Services' });
+          settings = new SystemConfig({ companyName: process.env.COMPANY_NAME || 'Raj Electrical Services' });
           await settings.save(session ? { session } : {});
         }
         const allowCOD = settings?.bookingSettings?.allowCOD ?? true;

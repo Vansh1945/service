@@ -14,19 +14,19 @@ const ProtectedRoute = ({ allowedRoles, requireTest }) => {
     return <Navigate to="/unauthorized" replace />;
   }
 
-  // Provider: test passed check
-  // Allow access to /provider/test, /provider/dashboard, /provider/profile without testPassed
-  if (
-    requireTest &&
-    role === 'provider' &&
-    user &&
-    user.approved &&
-    !user.testPassed
-  ) {
-    const allowedPaths = ['/provider/test', '/provider/dashboard', '/provider/profile'];
-    const isAllowed = allowedPaths.some(p => location.pathname.startsWith(p));
-    if (!isAllowed) {
-      return <Navigate to="/provider/test" replace />;
+  // Provider: approval check and qualification test check
+  if (requireTest && role === 'provider' && user) {
+    // 1. Enforce approval validation
+    if (!user.approved) {
+      return <Navigate to="/unauthorized" replace />;
+    }
+    // 2. Enforce qualification test validation
+    if (!user.testPassed) {
+      const allowedPaths = ['/provider/test'];
+      const isAllowed = allowedPaths.some(p => location.pathname.startsWith(p));
+      if (!isAllowed) {
+        return <Navigate to="/provider/test" replace />;
+      }
     }
   }
 

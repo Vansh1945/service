@@ -699,8 +699,14 @@ exports.logout = async (req, res) => {
   try {
     const { refreshToken, fcmToken, allDevices = false } = req.body;
 
-    // Logout preserves PWA FCM tokens for offline push support.
-    // Clean up local session / refresh tokens only.
+    // Pull FCM token to prevent private notification leaks post-logout
+    if (fcmToken) {
+      await Promise.all([
+        User.updateMany({}, { $pull: { fcmDevices: { token: fcmToken } } }),
+        Provider.updateMany({}, { $pull: { fcmDevices: { token: fcmToken } } }),
+        Admin.updateMany({}, { $pull: { fcmDevices: { token: fcmToken } } })
+      ]);
+    }
 
     if (!refreshToken) {
       // Still clear client – just return success

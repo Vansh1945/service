@@ -105,7 +105,7 @@ adminSchema.methods.generateJWT = function () {
   return jwt.sign(
     { id: this._id, email: this.email, isAdmin: this.isAdmin, role: 'admin' },
     process.env.JWT_SECRET,
-    { expiresIn: '30d' }
+    { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m' }
   );
 };
 

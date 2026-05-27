@@ -139,7 +139,11 @@ api.interceptors.response.use(
             if (!refreshToken) {
                 isRefreshing = false;
                 // No refresh token -> logout
+                const persistentDeviceId = localStorage.getItem("persistentDeviceId");
+                const tempFcmToken = localStorage.getItem("tempFcmToken");
                 localStorage.clear();
+                if (persistentDeviceId) localStorage.setItem("persistentDeviceId", persistentDeviceId);
+                if (tempFcmToken) localStorage.setItem("tempFcmToken", tempFcmToken);
                 window.location.href = '/login';
                 return Promise.reject(error);
             }
@@ -162,7 +166,11 @@ api.interceptors.response.use(
                 processQueue(err, null);
                 isRefreshing = false;
                 // If refresh fails, they must login again
+                const persistentDeviceId = localStorage.getItem("persistentDeviceId");
+                const tempFcmToken = localStorage.getItem("tempFcmToken");
                 localStorage.clear();
+                if (persistentDeviceId) localStorage.setItem("persistentDeviceId", persistentDeviceId);
+                if (tempFcmToken) localStorage.setItem("tempFcmToken", tempFcmToken);
                 window.location.href = '/login';
                 return Promise.reject(err);
             }
