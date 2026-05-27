@@ -235,22 +235,22 @@ const systemConfigSchema = new mongoose.Schema(
       }]
     },
     customerBranding: {
-      appName: { type: String, default: "SafeVolt Customer" },
-      shortName: { type: String, default: "SafeVolt" },
+      appName: { type: String, default: "Raj Electrical Service" },
+      shortName: { type: String, default: "Raj Service" },
       logo: { type: String, default: "" },
       icon: { type: String, default: "" },
       splashScreen: { type: String, default: "" },
-      browserTitle: { type: String, default: "SafeVolt - Book certified electricians near you" },
-      description: { type: String, default: "Book certified electricians near you" }
+      browserTitle: { type: String, default: "Raj Electrical Service | Book Trusted Electricians Near You" },
+      description: { type: String, default: "Book certified electricians for home and commercial electrical repairs, installations, and maintenance. Fast, reliable, and affordable electrician service at your doorstep." }
     },
     providerBranding: {
-      appName: { type: String, default: "SafeVolt Provider" },
-      shortName: { type: String, default: "Provider" },
+      appName: { type: String, default: "Raj Provider" },
+      shortName: { type: String, default: "Raj Partner" },
       logo: { type: String, default: "" },
       icon: { type: String, default: "" },
       splashScreen: { type: String, default: "" },
-      browserTitle: { type: String, default: "SafeVolt Provider App" },
-      description: { type: String, default: "Provide electrical services on SafeVolt" }
+      browserTitle: { type: String, default: "Raj Electrical Partner | Earn as a Certified Electrician" },
+      description: { type: String, default: "Join Raj Electrical Service as a certified partner. Accept electrical repair and installation bookings and grow your earnings." }
     },
     adminBranding: {
       appName: { type: String, default: "SafeVolt Admin" },

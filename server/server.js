@@ -316,6 +316,51 @@ const startServer = async () => {
   try {
     await connectDB();
 
+    // Auto-migrate branding from SafeVolt to Raj Electrical Service for instant Google SEO!
+    try {
+      const { SystemConfig } = require('./models/SystemSetting');
+      const existingConfig = await SystemConfig.findOne();
+      if (existingConfig) {
+        let modified = false;
+        if (existingConfig.companyName === 'Default Company' || existingConfig.companyName === 'SafeVolt Solutions') {
+          existingConfig.companyName = 'Raj Electrical Service';
+          modified = true;
+        }
+        if (existingConfig.customerBranding?.appName === 'SafeVolt Customer' || !existingConfig.customerBranding?.appName) {
+          existingConfig.customerBranding = {
+            appName: 'Raj Electrical Service',
+            shortName: 'Raj Service',
+            browserTitle: 'Raj Electrical Service | Book Trusted Electricians Near You',
+            description: 'Book certified electricians for home and commercial electrical repairs, installations, and maintenance. Fast, reliable, and affordable electrician service at your doorstep.',
+            logo: existingConfig.customerBranding?.logo || '',
+            icon: existingConfig.customerBranding?.icon || '',
+            splashScreen: existingConfig.customerBranding?.splashScreen || ''
+          };
+          modified = true;
+        }
+        if (existingConfig.providerBranding?.appName === 'SafeVolt Provider' || !existingConfig.providerBranding?.appName) {
+          existingConfig.providerBranding = {
+            appName: 'Raj Provider',
+            shortName: 'Raj Partner',
+            browserTitle: 'Raj Electrical Partner | Earn as a Certified Electrician',
+            description: 'Join Raj Electrical Service as a certified partner. Accept electrical repair and installation bookings and grow your earnings.',
+            logo: existingConfig.providerBranding?.logo || '',
+            icon: existingConfig.providerBranding?.icon || '',
+            splashScreen: existingConfig.providerBranding?.splashScreen || ''
+          };
+          modified = true;
+        }
+        if (modified) {
+          existingConfig.markModified('customerBranding');
+          existingConfig.markModified('providerBranding');
+          await existingConfig.save();
+          console.log('[SEO Migration] Successfully migrated database branding defaults from SafeVolt to Raj Electrical Service!');
+        }
+      }
+    } catch (migError) {
+      console.error('[SEO Migration] Failed to auto-migrate database branding:', migError);
+    }
+
     // Initialize background tasks
     const { releaseHeldEarnings } = require('./controllers/paymentController');
     // Run every hour

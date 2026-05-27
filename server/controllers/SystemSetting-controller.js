@@ -484,17 +484,29 @@ const publishBrandingUpdate = async (req, res) => {
       config = new SystemConfig({ companyName: 'SafeVolt Solutions' });
     }
 
-    // Step 1: Save branding changes
-    const brandingKey = `${role}Branding`;
-    if (!config[brandingKey]) {
-      config[brandingKey] = {};
-    }
+    const { 
+      releaseNotes, 
+      forceRefresh = true, 
+      sendNotification = true, 
+      broadcastOnly = false 
+    } = req.body;
 
-    const fieldsToUpdate = req.body;
-    for (const key of Object.keys(fieldsToUpdate)) {
-      if (key !== 'themeColor' && key !== 'backgroundColor') {
-        config[brandingKey][key] = fieldsToUpdate[key];
+    const brandingKey = `${role}Branding`;
+
+    // Step 1: Save branding changes if NOT a standalone broadcast-only trigger
+    if (!broadcastOnly) {
+      if (!config[brandingKey]) {
+        config[brandingKey] = {};
       }
+
+      const fieldsToUpdate = req.body;
+      const ignoreFields = ['themeColor', 'backgroundColor', 'releaseNotes', 'forceRefresh', 'sendNotification', 'broadcastOnly'];
+      for (const key of Object.keys(fieldsToUpdate)) {
+        if (!ignoreFields.includes(key)) {
+          config[brandingKey][key] = fieldsToUpdate[key];
+        }
+      }
+      config.markModified(brandingKey);
     }
 
     // Step 2: Increment existing appVersion inside SystemSettings
@@ -508,7 +520,6 @@ const publishBrandingUpdate = async (req, res) => {
     }
     config.lastPublished[role] = new Date();
 
-    config.markModified(brandingKey);
     config.markModified('appVersions');
     config.markModified('lastPublished');
     await config.save();
@@ -546,17 +557,18 @@ const publishBrandingUpdate = async (req, res) => {
 
     const uniqueTokens = [...new Set(tokens.filter(t => t && t.trim()))];
     
-    if (uniqueTokens.length > 0) {
+    if (sendNotification && uniqueTokens.length > 0) {
       try {
         const { sendPushNotification } = require('../utils/notificationService');
         const payload = {
           title: 'App Update Available',
-          body: 'A new app update is available. Tap to update now.',
+          body: releaseNotes || 'A new version is available. Tap to update now.',
           data: {
+            type: 'app_update',
             version: String(newVersion),
             role: role,
-            updateType: 'branding_update',
-            forceRefresh: 'true'
+            updateUrl: role === 'admin' ? '/admin/dashboard' : role === 'provider' ? '/provider/dashboard' : '/',
+            forceRefresh: String(forceRefresh)
           }
         };
         await sendPushNotification(uniqueTokens, payload);
@@ -583,7 +595,7 @@ const publishBrandingUpdate = async (req, res) => {
       success: true,
       message: `${role.charAt(0).toUpperCase() + role.slice(1)} branding changes published and version incremented successfully`,
       data: {
-        ...config[brandingKey].toObject?.() || config[brandingKey],
+        ...config[brandingKey]?.toObject?.() || config[brandingKey] || {},
         appVersion: newVersion,
         lastPublished: config.lastPublished[role],
         installedUsersCount: installedUsersCount
@@ -643,7 +655,7 @@ const uploadBrandingAsset = async (req, res) => {
   }
 };
 
-// 17. Dynamically generate PWA manifest based on role branding in DB (no custom theme colors)
+// 17. Dynamically generate PWA manifest based on role branding in DB
 const getBrandingManifest = async (req, res) => {
   try {
     const { role } = req.params;
@@ -654,11 +666,36 @@ const getBrandingManifest = async (req, res) => {
     const config = await SystemConfig.findOne();
     const branding = config ? config[`${role}Branding`] : null;
 
+    // Detect client origin from Referer header to resolve relative assets properly
+    let clientOrigin = '';
+    if (req.headers.referer) {
+      try {
+        const refUrl = new URL(req.headers.referer);
+        clientOrigin = refUrl.origin;
+      } catch (err) {
+        // Fallback silently if referer parsing fails
+      }
+    }
+
+    const formatIconUrl = (url) => {
+      if (!url) return '';
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        return url;
+      }
+      if (clientOrigin) {
+        return `${clientOrigin}${url.startsWith('/') ? '' : '/'}${url}`;
+      }
+      return url;
+    };
+
     const appName = branding?.appName || (role === 'admin' ? 'SafeVolt Admin' : role === 'provider' ? 'SafeVolt Provider' : 'SafeVolt Customer');
     const shortName = branding?.shortName || (role === 'admin' ? 'Admin' : role === 'provider' ? 'Provider' : 'SafeVolt');
     const description = branding?.description || (role === 'admin' ? 'SafeVolt Control Panel' : `${shortName} App`);
-    const themeColor = '#0D9488'; // SafeVolt standard primary color
-    const backgroundColor = '#ffffff';
+    
+    // Support custom branding colors if defined in the DB, fallback to SafeVolt/role defaults
+    const themeColor = branding?.themeColor || '#0D9488';
+    const backgroundColor = branding?.backgroundColor || '#ffffff';
+    
     const logoUrl = branding?.logo || '/icon-192.png';
     const iconUrl = branding?.icon || logoUrl;
 
@@ -672,13 +709,13 @@ const getBrandingManifest = async (req, res) => {
       orientation: "portrait",
       icons: [
         {
-          src: iconUrl,
+          src: formatIconUrl(iconUrl),
           sizes: "192x192",
           type: "image/png",
           purpose: "any maskable"
         },
         {
-          src: branding?.splashScreen || iconUrl,
+          src: formatIconUrl(branding?.splashScreen || iconUrl),
           sizes: "512x512",
           type: "image/png",
           purpose: "any maskable"
@@ -688,7 +725,9 @@ const getBrandingManifest = async (req, res) => {
       id: `com.safevolt.${role}`
     };
 
+    // Set JSON content type and wide CORS headers for PWA browser update compliance
     res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Access-Control-Allow-Origin', '*');
     res.status(200).send(JSON.stringify(manifest, null, 2));
   } catch (error) {
     res.status(500).json({

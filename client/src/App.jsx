@@ -1,5 +1,6 @@
 import React, { useEffect, useState, Suspense, lazy } from "react";
 import { Routes, Route, useLocation, useNavigate } from "react-router-dom";
+import { FiRefreshCw } from "react-icons/fi";
 import "./index.css";
 import { useAuth } from "./context/auth";
 
@@ -131,51 +132,70 @@ const applyDocumentSettings = (settings) => {
     }
   }
 };
-const generateManifestDataUri = (role, data) => {
-  const appName = data?.appName || (role === 'admin' ? 'SafeVolt Admin' : role === 'provider' ? 'SafeVolt Provider' : 'SafeVolt Customer');
-  const shortName = data?.shortName || (role === 'admin' ? 'Admin' : role === 'provider' ? 'Provider' : 'SafeVolt');
-  const description = data?.description || (role === 'admin' ? 'SafeVolt Control Panel' : `${shortName} App`);
-  const themeColor = data?.themeColor || (role === 'admin' ? '#4f46e5' : role === 'provider' ? '#10b981' : '#3b82f6');
-  const backgroundColor = data?.backgroundColor || '#ffffff';
-  const icon = data?.icon || data?.logo || '/icon-192.png';
-
-  const manifestObj = {
-    name: appName,
-    short_name: shortName,
-    start_url: role === 'admin' ? '/admin/dashboard' : role === 'provider' ? '/provider/dashboard' : '/',
-    display: "standalone",
-    background_color: backgroundColor,
-    theme_color: themeColor,
-    orientation: "portrait",
-    icons: [
-      {
-        src: icon,
-        sizes: "192x192",
-        type: "image/png",
-        purpose: "any maskable"
-      },
-      {
-        src: data?.splashScreen || icon,
-        sizes: "512x512",
-        type: "image/png",
-        purpose: "any maskable"
-      }
-    ],
-    description: description,
-    id: `com.safevolt.${role}`
-  };
-
-  try {
-    const manifestStr = JSON.stringify(manifestObj);
-    return 'data:application/manifest+json;base64,' + btoa(unescape(encodeURIComponent(manifestStr)));
-  } catch (e) {
-    console.error('Failed to generate base64 manifest Data URI:', e);
-    return '/manifest.json';
-  }
+const generateManifestUrl = (role, data) => {
+  const apiBase = import.meta.env.VITE_BACKEND_URL || (window.location.origin + "/api");
+  const version = data?.appVersion || data?.updatedAt || Date.now();
+  return `${apiBase}/system-setting/settings/branding/${role}/manifest?v=${version}`;
 };
 
 const App = () => {
   const location = useLocation();
+  const [showUpdatePrompt, setShowUpdatePrompt] = useState(false);
+  const [updateNotes, setUpdateNotes] = useState('');
+
+  const triggerCacheClearAndPrompt = async (data) => {
+    console.log('[PWA Update] Triggering asset clear and upgrade flow...');
+
+    // 1. Invalidate caches
+    if ('caches' in window) {
+      try {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+        console.log('[PWA Update] Browser caches cleared successfully.');
+      } catch (err) {
+        console.error('[PWA Update] Cache clear error:', err);
+      }
+    }
+
+    // 2. Clear role branding local storage
+    const roles = ['customer', 'provider', 'admin'];
+    roles.forEach(r => localStorage.removeItem(`branding_${r}`));
+
+    // 3. Clear service worker version markers
+    if ('serviceWorker' in navigator) {
+      try {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (const reg of registrations) {
+          await reg.update();
+          if (reg.waiting) {
+            reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+          }
+        }
+      } catch (swErr) {
+        console.error('[PWA Update] SW registration update failed:', swErr);
+      }
+    }
+
+    // 4. Force refresh prompt or soft update
+    const isHardUpdate = data?.forceRefresh === 'true' || data?.forceRefresh === true || data?.forceRefresh === 'force';
+    if (isHardUpdate) {
+      setUpdateNotes(data?.body || data?.releaseNotes || 'New update installed. Reload now.');
+      setShowUpdatePrompt(true);
+    } else {
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    }
+  };
+
+  useEffect(() => {
+    const handleUpdateReceived = (e) => {
+      triggerCacheClearAndPrompt(e.detail);
+    };
+    window.addEventListener('appUpdateReceived', handleUpdateReceived);
+    return () => window.removeEventListener('appUpdateReceived', handleUpdateReceived);
+  }, []);
+
   const [systemSettings, setSystemSettings] = useState({
     companyName: "",
     favicon: null,
@@ -277,7 +297,7 @@ const App = () => {
     };
 
     const applyBrandingData = (role, data) => {
-      const manifestUrl = generateManifestDataUri(role, data);
+      const manifestUrl = generateManifestUrl(role, data);
       
       // Favicon cache bust timestamp
       const faviconUrl = data?.favicon || data?.logo || null;
@@ -318,7 +338,7 @@ const App = () => {
 
       if (e.detail?.role === currentRole) {
         const data = e.detail.data;
-        const manifestUrl = generateManifestDataUri(currentRole, data);
+        const manifestUrl = generateManifestUrl(currentRole, data);
 
         const faviconUrl = data?.favicon || data?.logo || null;
         const busterFavicon = faviconUrl ? `${faviconUrl}?v=${Date.now()}` : null;
@@ -362,12 +382,15 @@ const App = () => {
     const updateType = params.get('updateType');
     const forceRefresh = params.get('forceRefresh');
 
-    if (updateType === 'branding_update' || forceRefresh === 'true') {
+    if (updateType === 'app_update' || updateType === 'branding_update' || forceRefresh === 'true') {
       // Clear URL params to avoid loops
       const newUrl = window.location.pathname + window.location.hash;
       window.history.replaceState({}, '', newUrl);
-      console.log('[PWA Cold Start] Branding update detected. Reloading...');
-      window.location.reload();
+      console.log('[PWA Cold Start] Branding or app update detected. Initializing clear...');
+      triggerCacheClearAndPrompt({
+        forceRefresh: forceRefresh || 'true',
+        body: params.get('body') || params.get('releaseNotes') || 'New update installed. Reload now.'
+      });
       return;
     }
 
@@ -443,6 +466,29 @@ const App = () => {
 
       {/* Show Footer for public routes and customer dashboard */}
       {(!isDashboardRoute || location.pathname === '/customer/services') && <Footer />}
+
+      {/* 🔔 Premium Hard Update Reload Prompt Banner Dialog */}
+      {showUpdatePrompt && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[9999] w-[92%] max-w-md bg-slate-900 border border-slate-800 text-white rounded-2xl shadow-2xl p-4 flex items-center justify-between gap-4 animate-in slide-in-from-top-6 duration-300">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl bg-teal-500/10 flex items-center justify-center flex-shrink-0 text-teal-400">
+              <FiRefreshCw className="w-5 h-5 animate-spin" />
+            </div>
+            <div className="space-y-0.5">
+              <span className="text-xs font-black uppercase tracking-wider text-teal-400">PWA System Update</span>
+              <p className="text-[10.5px] text-slate-300 leading-tight font-medium">
+                {updateNotes || "New update installed. Reload now."}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-teal-500 hover:bg-teal-400 text-slate-950 font-black text-xs rounded-xl shadow-md transition-all flex-shrink-0 whitespace-nowrap active:scale-95"
+          >
+            Reload Now
+          </button>
+        </div>
+      )}
     </Suspense>
   );
 };

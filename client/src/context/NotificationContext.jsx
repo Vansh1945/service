@@ -79,9 +79,9 @@ export const NotificationProvider = ({ children }) => {
 
         const handleSWMessage = (event) => {
             if (event.data && event.data.type === 'NAVIGATE') {
-                if (event.data.updateType === 'branding_update' || event.data.forceRefresh === 'true') {
-                    console.log('[FCM Notification Click] Branding update message received from SW. Reloading app...');
-                    window.location.reload();
+                if (event.data.updateType === 'app_update' || event.data.updateType === 'branding_update' || event.data.forceRefresh === 'true') {
+                    console.log('[FCM Notification Click] App update trigger received from SW:', event.data);
+                    window.dispatchEvent(new CustomEvent('appUpdateReceived', { detail: event.data }));
                     return;
                 }
 
@@ -130,6 +130,20 @@ export const NotificationProvider = ({ children }) => {
 
             const title = payload.notification?.title || payload.data?.title || 'New Notification';
             const body = payload.notification?.body || payload.data?.body || '';
+            
+            // Foreground App Update Interceptor
+            if (payload.data?.type === 'app_update') {
+                console.log('[FCM Foreground Intercept] App update notification detected.');
+                window.dispatchEvent(new CustomEvent('appUpdateReceived', { 
+                    detail: { 
+                        forceRefresh: payload.data?.forceRefresh, 
+                        body: body,
+                        releaseNotes: body
+                    } 
+                }));
+                return;
+            }
+
             const targetRoute = payload.data?.route || payload.data?.url || '/';
             const requiredRole = payload.data?.role;
             const entityId = payload.data?.entityId;
