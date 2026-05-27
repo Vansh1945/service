@@ -50,7 +50,7 @@ const PayoutStatusBadge = ({ status }) => {
     'Dispute Hold': 'bg-red-100 text-red-700 border-red-200',
     'Not Processed': 'bg-gray-50 text-gray-400 border-gray-100',
   };
-  
+
   return (
     <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${cfg[status] || 'bg-gray-100 text-gray-500 border-gray-200'}`}>
       {status === 'Payout On Hold' || status === 'Dispute Hold' ? <Lock size={10} /> : <Unlock size={10} />}
@@ -62,7 +62,7 @@ const PayoutStatusBadge = ({ status }) => {
 const RefundCaseTypeBadge = ({ booking }) => {
   const isComplaint = booking.complaint || booking.disputeRaised || (booking.disputeStatus && booking.disputeStatus !== 'none');
   const isCancellation = booking.status === 'cancelled';
-  
+
   if (isComplaint) {
     return (
       <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-red-100 text-red-800 border border-red-200">
@@ -129,7 +129,7 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 md:p-6 animate-fade-in" onClick={onClose}>
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[92vh] overflow-hidden flex flex-col animate-scale-up" onClick={e => e.stopPropagation()}>
-        
+
         {/* Header */}
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-white shrink-0">
           <div className="flex items-center gap-3">
@@ -146,7 +146,7 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
               <div className="flex items-center gap-3 mt-0.5">
                 <p className="text-xs text-gray-400 font-mono">ID: {booking.bookingId || `#${booking._id?.slice(-8).toUpperCase()}`}</p>
                 <span className="w-1.5 h-1.5 rounded-full bg-gray-200" />
-                <button 
+                <button
                   onClick={() => window.open(`/admin/bookings?search=${booking.bookingId || booking._id}`, '_blank')}
                   className="text-[10px] bg-blue-50 hover:bg-blue-100 text-blue-600 hover:text-blue-700 px-2 py-0.5 rounded font-semibold transition-colors flex items-center gap-1"
                 >
@@ -155,8 +155,8 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
               </div>
             </div>
           </div>
-          <button 
-            onClick={onClose} 
+          <button
+            onClick={onClose}
             className="p-1.5 rounded-lg text-gray-400 hover:text-secondary hover:bg-gray-100 transition-colors"
           >
             <X className="w-5 h-5" />
@@ -165,10 +165,10 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
 
         {/* Modal Split Columns */}
         <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
-          
+
           {/* Left Area (60% width) - Detailed Info & Evidence Locker */}
           <div className="lg:w-7/12 flex-1 overflow-y-auto p-5 space-y-5 border-r border-gray-100">
-            
+
             {/* User Profile Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Customer */}
@@ -182,7 +182,7 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
                   <p className="text-xs text-gray-500 font-medium truncate max-w-[180px]">{booking.customer?.email}</p>
                 </div>
               </div>
-              
+
               {/* Provider */}
               <div className="bg-gray-50 p-3 rounded-lg border border-gray-150 flex items-start gap-3">
                 <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-sm border border-blue-150/50">
@@ -223,13 +223,12 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
                 { id: 'timeline', label: 'Case Timeline' },
                 { id: 'financials', label: 'Gateway & Ledger' }
               ].map(t => (
-                <button 
+                <button
                   key={t.id} onClick={() => setActiveTab(t.id)}
-                  className={`pb-3 text-sm font-semibold transition-all duration-200 border-b-2 flex items-center gap-1.5 ${
-                    activeTab === t.id 
-                      ? 'border-primary text-primary font-bold' 
-                      : 'border-transparent text-gray-450 hover:text-gray-600'
-                  }`}
+                  className={`pb-3 text-sm font-semibold transition-all duration-200 border-b-2 flex items-center gap-1.5 ${activeTab === t.id
+                    ? 'border-primary text-primary font-bold'
+                    : 'border-transparent text-gray-450 hover:text-gray-600'
+                    }`}
                 >
                   {t.label}
                   {t.count > 0 && (
@@ -380,7 +379,7 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
                 ].filter(t => t.date).map((item, i) => (
                   <div key={i} className="relative flex items-center gap-4 group text-gray-700">
                     <div className="absolute -left-[21px] w-2.5 h-2.5 rounded-full bg-white border-2 border-gray-300 group-hover:border-primary transition-colors" />
-                    
+
                     <div className={`w-9 h-9 rounded-lg flex items-center justify-center border shadow-sm ${item.color}`}>
                       <item.icon size={15} />
                     </div>
@@ -396,7 +395,7 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
             {/* Tab content 3: Gateway & Ledger */}
             {activeTab === 'financials' && booking.fullData && (
               <div className="space-y-4 animate-fade-in py-1">
-                
+
                 {/* Hold status info card */}
                 <div className="bg-gray-50 rounded-lg p-3 border border-gray-100">
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2.5 flex items-center gap-2">
@@ -425,11 +424,10 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
                         <div key={idx} className="bg-white p-3 rounded border border-gray-200 flex flex-col gap-2">
                           <div className="flex justify-between items-center border-b border-gray-50 pb-1.5">
                             <span className="text-xs font-mono font-bold text-secondary">{tx.transactionId || 'No Gateway ID'}</span>
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase ${
-                              tx.paymentStatus === 'refunded' 
-                                ? 'bg-red-50 text-red-650 border-red-100' 
-                                : 'bg-green-50 text-green-755 border-green-100'
-                            }`}>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase ${tx.paymentStatus === 'refunded'
+                              ? 'bg-red-50 text-red-650 border-red-100'
+                              : 'bg-green-50 text-green-755 border-green-100'
+                              }`}>
                               {tx.paymentStatus}
                             </span>
                           </div>
@@ -458,9 +456,9 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
 
           {/* Right Area (40% width) - Interactive Action Panel / Control Center */}
           <div className="lg:w-5/12 bg-gray-50/50 p-5 flex flex-col justify-between overflow-y-auto space-y-5">
-            
+
             <div className="space-y-5">
-              
+
               {/* Box Header */}
               <div>
                 <h4 className="text-sm font-bold text-secondary flex items-center gap-2">
@@ -476,18 +474,21 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
                   <RefundStatusBadge status={booking.paymentStatus} />
                 </div>
                 <div className="flex justify-between items-center">
+                  <span className="text-gray-455 font-semibold">Refund Type:</span>
+                  <RefundCaseTypeBadge booking={booking} />
+                </div>
+                <div className="flex justify-between items-center">
                   <span className="text-gray-455 font-semibold">Dispute Claim:</span>
                   <DisputeStatusBadge status={booking.disputeStatus} />
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-gray-455 font-semibold">Escrow Earnings:</span>
-                  <span className={`font-mono text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
-                    booking.earningHoldStatus === 'cancelled' || booking.payoutStatus === 'Refund Adjusted'
-                      ? 'bg-red-50 text-red-700 border-red-100'
-                      : booking.earningHoldStatus === 'available' || booking.payoutStatus === 'Payout Ready'
+                  <span className={`font-mono text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${booking.earningHoldStatus === 'cancelled' || booking.payoutStatus === 'Refund Adjusted'
+                    ? 'bg-red-50 text-red-700 border-red-100'
+                    : booking.earningHoldStatus === 'available' || booking.payoutStatus === 'Payout Ready'
                       ? 'bg-green-50 text-green-700 border-green-150'
                       : 'bg-yellow-50 text-yellow-705 border-yellow-150'
-                  }`}>
+                    }`}>
                     {booking.payoutStatus || 'Not Adjusted'}
                   </span>
                 </div>
@@ -503,17 +504,17 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
                     {booking.adminRefundDecision === 'approved'
                       ? 'Full Approved'
                       : booking.adminRefundDecision === 'partial'
-                      ? 'Partial Approved'
-                      : booking.adminRefundDecision === 'rejected'
-                      ? 'Dispute Denied'
-                      : 'Awaiting Judgment'}
+                        ? 'Partial Approved'
+                        : booking.adminRefundDecision === 'rejected'
+                          ? 'Dispute Denied'
+                          : 'Awaiting Judgment'}
                   </span>
                 </div>
               </div>
 
               {/* Action Form */}
               <div className="space-y-3.5">
-                
+
                 {/* Decision Type Buttons Cards */}
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Select Judgment Option</label>
@@ -537,9 +538,8 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
                               setRefundAmount(booking.totalAmount);
                             }
                           }}
-                          className={`py-2 px-1 rounded-lg border text-xs font-bold transition-all duration-200 text-center cursor-pointer ${
-                            decisionType === opt.id ? opt.activeColor : `bg-white ${opt.color}`
-                          }`}
+                          className={`py-2 px-1 rounded-lg border text-xs font-bold transition-all duration-200 text-center cursor-pointer ${decisionType === opt.id ? opt.activeColor : `bg-white ${opt.color}`
+                            }`}
                         >
                           {opt.label}
                         </button>
@@ -557,8 +557,8 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
                     </label>
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-sm">₹</span>
-                      <input 
-                        type="number" 
+                      <input
+                        type="number"
                         value={refundAmount}
                         max={booking.totalAmount}
                         onChange={e => {
@@ -579,7 +579,7 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
                 {/* Notes Input Area */}
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Resolution Remarks / Remark Log</label>
-                  <textarea 
+                  <textarea
                     value={resolutionNotes}
                     onChange={e => setResolutionNotes(e.target.value)}
                     disabled={isFullyRefunded}
@@ -594,9 +594,9 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
 
             {/* Form actions and controls buttons */}
             <div className="space-y-3 pt-3 border-t border-gray-100">
-              
+
               {/* Submit Main Action button */}
-              <button 
+              <button
                 onClick={() => {
                   if (decisionType === 'refund_full') handleAction('refund', 'full');
                   else if (decisionType === 'refund_partial') handleAction('refund', 'partial');
@@ -617,14 +617,14 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
                     <span className="text-[10px] text-gray-400 block mt-0.5">Freeze or release vendor's escrow payout immediately.</span>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <button 
+                    <button
                       onClick={() => handleAction('hold', 'held')}
                       disabled={updating || booking.earningHoldStatus === 'held'}
                       className="py-1.5 bg-orange-50 border border-orange-100 hover:bg-orange-100 text-orange-700 disabled:opacity-40 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer"
                     >
                       <Lock size={10} /> Hold Escrow
                     </button>
-                    <button 
+                    <button
                       onClick={() => handleAction('hold', 'available')}
                       disabled={updating || booking.earningHoldStatus === 'available'}
                       className="py-1.5 bg-green-50 border border-green-100 hover:bg-green-100 text-green-700 disabled:opacity-40 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer"
@@ -655,8 +655,8 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
       {selectedPreviewImage && (
         <div className="fixed inset-0 bg-black/90 z-[60] flex items-center justify-center p-4 animate-fade-in" onClick={() => setSelectedPreviewImage(null)}>
           <div className="absolute top-4 right-4">
-            <button 
-              onClick={() => setSelectedPreviewImage(null)} 
+            <button
+              onClick={() => setSelectedPreviewImage(null)}
               className="w-10 h-10 flex items-center justify-center bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors"
             >
               <X className="w-5 h-5" />
@@ -670,7 +670,6 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
   );
 };
 
-// ── Main Page (Premium Admin Panel) ───────────────────────────
 const RefundPage = () => {
   const { showToast } = useAuth();
   const [bookings, setBookings] = useState([]);
@@ -679,48 +678,46 @@ const RefundPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, pages: 1 });
+  const [statsSummary, setStatsSummary] = useState({ processedRefunds: 0, escrowHolds: 0, activeDisputes: 0 });
 
   const fetchRefundBookings = async () => {
     setLoading(true);
     try {
-      // Fetch bookings that have either disputeRaised: true or paymentStatus: 'refunded'
       const params = {
         page: pagination.page,
         limit: pagination.limit,
         search: searchTerm,
-        forRefunds: true
+        forRefunds: true,
+        refundStatus: filterStatus
       };
-      
+
       const res = await BookingService.getAllBookings(params);
       if (res.data?.success) {
-        // Filter for refund-related bookings on frontend
-        const filtered = res.data.data.filter(b => 
-          b.complaint ||
-          b.disputeRaised || 
-          b.paymentStatus === 'refunded' || 
-          b.disputeStatus !== 'none' ||
-          (b.paymentMethod === 'online' && b.paymentStatus === 'paid' && b.status === 'cancelled')
-        );
-        
-        // Apply filterStatus
-        const finalData = filtered.filter(b => {
-          if (filterStatus === 'all') return true;
-          if (filterStatus === 'pending') return ['paid', 'escrow_hold'].includes(b.paymentStatus) && b.disputeRaised;
-          if (filterStatus === 'completed') return b.paymentStatus === 'refunded' || b.adminRefundDecision === 'approved';
-          if (filterStatus === 'rejected') return b.adminRefundDecision === 'rejected';
-          if (filterStatus === 'disputed') return b.disputeStatus === 'UNDER_REVIEW' || b.disputeStatus === 'pending';
-          if (filterStatus === 'held') return b.earningHoldStatus === 'held' || b.payoutHoldUntil;
-          return true;
-        });
-
-        setBookings(finalData);
-        setPagination(p => ({ ...p, total: finalData.length, pages: res.data.pages }));
+        setBookings(res.data.data || []);
+        setPagination(p => ({
+          ...p,
+          total: res.data.total || 0,
+          pages: res.data.pages || 1
+        }));
+        if (res.data.refundStats) {
+          setStatsSummary(res.data.refundStats);
+        }
       }
     } catch (err) {
       showToast('Failed to fetch refund cases', 'error');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSearchChange = (val) => {
+    setSearchTerm(val);
+    setPagination(p => ({ ...p, page: 1 }));
+  };
+
+  const handleFilterChange = (status) => {
+    setFilterStatus(status);
+    setPagination(p => ({ ...p, page: 1 }));
   };
 
   const handleViewDetails = async (id) => {
@@ -744,14 +741,14 @@ const RefundPage = () => {
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-6">
       <div className="max-w-7xl mx-auto space-y-6">
-        
+
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-secondary">Refunds & Escrow Ledger</h1>
             <p className="text-sm text-gray-550 mt-1">Audit dispute claims, process customer wallet refunds, and resolve vendor escrow lockouts.</p>
           </div>
-          <button 
+          <button
             onClick={fetchRefundBookings}
             className="flex items-center justify-center gap-2 px-4 py-2 bg-white text-secondary hover:text-primary border border-gray-300 rounded-lg shadow-sm hover:shadow-md transition-all font-semibold text-sm cursor-pointer shrink-0"
           >
@@ -764,9 +761,9 @@ const RefundPage = () => {
           {/* Card 1: Total Refunds */}
           <div className="bg-white rounded-xl shadow-md p-4 md:p-6 border-l-4 border-emerald-500 flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500">Processed Refunds</p>
+              <p className="text-sm font-medium text-gray-550">Processed Refunds</p>
               <p className="text-2xl md:text-3xl font-bold text-secondary mt-1">
-                {bookings.filter(b => b.paymentStatus === 'refunded' || b.adminRefundDecision === 'approved').length}
+                {statsSummary.processedRefunds}
               </p>
             </div>
             <div className="p-2 md:p-3 bg-emerald-50 rounded-full">
@@ -779,7 +776,7 @@ const RefundPage = () => {
             <div>
               <p className="text-sm font-medium text-gray-550">Active Escrow Holds</p>
               <p className="text-2xl md:text-3xl font-bold text-secondary mt-1">
-                {bookings.filter(b => b.earningHoldStatus === 'held' || b.payoutHoldUntil).length}
+                {statsSummary.escrowHolds}
               </p>
             </div>
             <div className="p-2 md:p-3 bg-yellow-50 rounded-full">
@@ -790,9 +787,9 @@ const RefundPage = () => {
           {/* Card 3: Dispute Cases */}
           <div className="bg-white rounded-xl shadow-md p-4 md:p-6 border-l-4 border-red-500 flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-550">Active Claims & Disputes</p>
+              <p className="text-sm font-medium text-gray-555">Active Claims & Disputes</p>
               <p className="text-2xl md:text-3xl font-bold text-secondary mt-1">
-                {bookings.filter(b => b.disputeRaised || b.disputeStatus !== 'none').length}
+                {statsSummary.activeDisputes}
               </p>
             </div>
             <div className="p-2 md:p-3 bg-red-50 rounded-full">
@@ -803,19 +800,19 @@ const RefundPage = () => {
 
         {/* Console Filter deck */}
         <div className="bg-white p-4 rounded-xl shadow-md border border-gray-100 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          
+
           {/* Search Bar */}
           <div className="relative flex-1 max-w-xl">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-            <input 
-              type="text" 
+            <input
+              type="text"
               placeholder="Search by Booking ID, Customer or Provider..."
               value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
+              onChange={e => handleSearchChange(e.target.value)}
               className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-primary focus:border-transparent focus:bg-white transition-all text-xs font-semibold text-gray-705"
             />
           </div>
-          
+
           {/* Filter Deck Pills */}
           <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
             {[
@@ -827,12 +824,11 @@ const RefundPage = () => {
               { id: 'held', label: 'Escrow Frozen', icon: Lock },
             ].map(f => (
               <button
-                key={f.id} onClick={() => setFilterStatus(f.id)}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all duration-200 cursor-pointer ${
-                  filterStatus === f.id 
-                    ? 'bg-secondary text-white shadow-sm' 
-                    : 'bg-gray-50 text-gray-550 hover:bg-gray-100 border border-gray-200 hover:text-gray-705'
-                }`}
+                key={f.id} onClick={() => handleFilterChange(f.id)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all duration-200 cursor-pointer ${filterStatus === f.id
+                  ? 'bg-secondary text-white shadow-sm'
+                  : 'bg-gray-550 text-gray-550 hover:bg-gray-100 border border-gray-200 hover:text-gray-705'
+                  }`}
               >
                 <f.icon size={13} className="stroke-[2.5]" /> {f.label}
               </button>
@@ -848,92 +844,112 @@ const RefundPage = () => {
               <thead className="bg-gray-50 border-b border-gray-100">
                 <tr>
                   {[
-                    'Booking ID', 'Customer Profile', 'Provider Assigned', 'Escrow Value', 
-                    'Refund Status', 'Dispute Status', 'Payout Control', 'Registered On', 'Actions'
+                    'Booking ID', 'Refund Type', 'Service', 'Customer', 'Provider', 'Amount',
+                    'Status', 'Date', 'Action'
                   ].map(h => (
-                    <th key={h} className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    <th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">
                       {h}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-150">
+              <tbody className="divide-y divide-gray-100">
                 {loading ? (
-                   Array.from({ length: 5 }).map((_, i) => (
+                  // Skeleton rows — varied widths make it look realistic
+                  Array.from({ length: 8 }).map((_, i) => (
                     <tr key={i} className="animate-pulse">
-                      {Array.from({ length: 9 }).map((_, j) => (
-                        <td key={j} className="px-6 py-4.5">
-                          <div className="h-4 bg-gray-100 rounded w-20" />
-                        </td>
-                      ))}
+                      <td className="px-4 py-3.5"><div className="h-3.5 bg-gray-100 rounded w-20" /></td>
+                      <td className="px-4 py-3.5"><div className="h-5 bg-gray-100 rounded-full w-24" /></td>
+                      <td className="px-4 py-3.5"><div className="h-3.5 bg-gray-100 rounded w-28" /></td>
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 bg-gray-100 rounded-lg shrink-0" />
+                          <div className="h-3.5 bg-gray-100 rounded w-20" />
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5"><div className="h-3.5 bg-gray-100 rounded w-20" /></td>
+                      <td className="px-4 py-3.5"><div className="h-3.5 bg-gray-100 rounded w-12" /></td>
+                      <td className="px-4 py-3.5"><div className="h-5 bg-gray-100 rounded-full w-16" /></td>
+                      <td className="px-4 py-3.5"><div className="h-5 bg-gray-100 rounded-full w-16" /></td>
+                      <td className="px-4 py-3.5"><div className="h-5 bg-gray-100 rounded-full w-20" /></td>
+                      <td className="px-4 py-3.5"><div className="h-3.5 bg-gray-100 rounded w-16" /></td>
+                      <td className="px-4 py-3.5"><div className="w-6 h-6 bg-gray-100 rounded-full" /></td>
                     </tr>
                   ))
                 ) : bookings.length === 0 ? (
                   <tr>
-                    <td colSpan="9" className="px-6 py-16 text-center text-gray-400">
+                    <td colSpan="11" className="px-6 py-16 text-center text-gray-400">
                       <div className="w-12 h-12 bg-gray-50 text-gray-300 rounded-lg flex items-center justify-center mx-auto mb-3 border border-gray-100">
                         <Inbox size={22} className="stroke-[2]" />
                       </div>
                       <p className="font-bold text-sm text-secondary">No matching refund cases found</p>
-                      <p className="text-xs text-gray-500 mt-1">Refine your active search criteria or toggle the filter status pills.</p>
+                      <p className="text-xs text-gray-550 mt-1">Refine your active search criteria or toggle the filter status pills.</p>
                     </td>
                   </tr>
                 ) : (
                   bookings.map((b) => (
                     <tr key={b._id} className="hover:bg-gray-50/40 transition-colors group">
-                      {/* ID */}
-                      <td className="px-6 py-4">
-                        <span className="text-xs font-mono font-bold text-secondary">#{b.bookingId || b._id?.slice(-8).toUpperCase()}</span>
+
+                      {/* Booking ID */}
+                      <td className="px-4 py-3.5">
+                        <span className="text-xs font-semibold text-secondary truncate max-w-[130px] block">
+                          #{b.bookingId || b._id?.slice(-8).toUpperCase()}
+                        </span>
                       </td>
-                      
+
+                      {/* Refund Type — NEW COLUMN */}
+                      <td className="px-4 py-3.5">
+                        <RefundCaseTypeBadge booking={b} />
+                      </td>
+
+                      {/* Service Name — NEW COLUMN */}
+                      <td className="px-4 py-3.5">
+                        <span className="text-xs font-semibold text-secondary truncate max-w-[130px] block" title={b.services?.[0]?.service?.title}>
+                          {b.services?.[0]?.service?.title || <span className="text-gray-400 italic text-[10px]">—</span>}
+                        </span>
+                      </td>
+
                       {/* Customer */}
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center font-bold text-[11px] border border-teal-100/50">
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-teal-50 text-teal-650 flex items-center justify-center font-bold text-[11px] border border-teal-100/50 shrink-0">
                             {b.customer?.name?.charAt(0) || <User size={10} />}
                           </div>
-                          <span className="text-xs font-semibold text-secondary truncate max-w-[120px]">{b.customer?.name}</span>
+                          <div>
+                            <p className="text-xs font-semibold text-secondary truncate max-w-[100px]">{b.customer?.name || '—'}</p>
+                            <p className="text-[9px] text-gray-400 truncate max-w-[100px]">{b.customer?.email}</p>
+                          </div>
                         </div>
                       </td>
 
                       {/* Provider */}
-                      <td className="px-6 py-4">
-                        <span className="text-xs font-medium text-gray-550">{b.provider?.name || 'Unassigned'}</span>
+                      <td className="px-4 py-3.5">
+                        <span className="text-xs font-medium text-gray-600 truncate max-w-[110px] block">{b.provider?.name || <span className="text-gray-350 italic text-[10px]">Unassigned</span>}</span>
                       </td>
 
-                      {/* Escrow Value */}
-                      <td className="px-6 py-4">
-                        <span className="text-xs font-bold text-secondary">₹{b.totalAmount}</span>
+                      {/* Amount */}
+                      <td className="px-4 py-3.5">
+                        <span className="text-sm font-bold text-secondary">₹{b.totalAmount}</span>
                       </td>
 
-                      {/* Refund Badges */}
-                      <td className="px-6 py-4">
+                      {/* Payment / Refund Status */}
+                      <td className="px-4 py-3.5">
                         <RefundStatusBadge status={b.paymentStatus} />
                       </td>
 
-                      {/* Dispute Badges */}
-                      <td className="px-6 py-4">
-                        <DisputeStatusBadge status={b.disputeStatus} />
-                      </td>
-
-                      {/* Payout Status Badges */}
-                      <td className="px-6 py-4">
-                        <PayoutStatusBadge status={b.payoutStatus} />
-                      </td>
-
-                      {/* Created date */}
-                      <td className="px-6 py-4 text-xs text-gray-400 font-semibold">
+                      {/* Date */}
+                      <td className="px-4 py-3.5 text-[10px] text-gray-400 font-semibold whitespace-nowrap">
                         {formatDate(b.createdAt)}
                       </td>
 
                       {/* Actions */}
-                      <td className="px-6 py-4">
-                        <button 
+                      <td className="px-4 py-3.5">
+                        <button
                           onClick={() => handleViewDetails(b._id)}
-                          className="p-1 text-primary hover:text-teal-850 transition-colors"
+                          className="p-1.5 rounded-lg text-primary hover:bg-primary/10 transition-colors"
                           title="View Details"
                         >
-                          <Eye size={16} />
+                          <Eye size={15} />
                         </button>
                       </td>
                     </tr>
@@ -943,7 +959,7 @@ const RefundPage = () => {
             </table>
           </div>
 
-          <Pagination 
+          <Pagination
             currentPage={pagination.page}
             totalPages={pagination.pages}
             totalItems={pagination.total}
@@ -955,9 +971,9 @@ const RefundPage = () => {
 
       {/* Modal */}
       {selectedBooking && (
-        <RefundDetailsModal 
-          booking={selectedBooking} 
-          onClose={() => setSelectedBooking(null)} 
+        <RefundDetailsModal
+          booking={selectedBooking}
+          onClose={() => setSelectedBooking(null)}
           onAction={fetchRefundBookings}
         />
       )}

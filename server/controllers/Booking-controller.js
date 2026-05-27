@@ -3752,6 +3752,8 @@ const getAllBookings = async (req, res) => {
       match.$or = [
         { complaint: { $exists: true, $ne: null } },
         { disputeRaised: true },
+        { paymentStatus: 'refunded' },
+        { disputeStatus: { $exists: true, $ne: 'none' } },
         {
           paymentMethod: 'online',
           paymentStatus: { $in: ['paid', 'refunded'] },
@@ -3961,6 +3963,30 @@ const getAllBookings = async (req, res) => {
       }
     });
 
+    // Inject late match for refundStatus filter if forRefunds is true
+    if (req.query.forRefunds === 'true' && req.query.refundStatus && req.query.refundStatus !== 'all') {
+      const refundMatch = {};
+      if (req.query.refundStatus === 'pending') {
+        refundMatch.paymentStatus = { $in: ['paid', 'escrow_hold'] };
+        refundMatch.disputeRaised = true;
+      } else if (req.query.refundStatus === 'completed') {
+        refundMatch.$or = [
+          { paymentStatus: 'refunded' },
+          { adminRefundDecision: 'approved' }
+        ];
+      } else if (req.query.refundStatus === 'rejected') {
+        refundMatch.adminRefundDecision = 'rejected';
+      } else if (req.query.refundStatus === 'disputed') {
+        refundMatch.disputeStatus = { $in: ['UNDER_REVIEW', 'pending'] };
+      } else if (req.query.refundStatus === 'held') {
+        refundMatch.$or = [
+          { earningStatus: 'held' },
+          { payoutHoldUntil: { $ne: null } }
+        ];
+      }
+      pipeline.push({ $match: refundMatch });
+    }
+
     // Stats Pipeline (independent of search and pagination)
     const statsPipeline = [
       { $match: statsMatch },
@@ -3991,10 +4017,78 @@ const getAllBookings = async (req, res) => {
     pipeline.push({ $skip: skip });
     pipeline.push({ $limit: limit });
 
-    const [bookings, totalResult, statsResult] = await Promise.all([
+    // Setup concurrent promise for refund wide statistics
+    let refundStatsPromise = Promise.resolve(null);
+    if (req.query.forRefunds === 'true') {
+      const statsMatchForRefunds = {
+        $or: [
+          { complaint: { $exists: true, $ne: null } },
+          { disputeRaised: true },
+          { paymentStatus: 'refunded' },
+          { disputeStatus: { $exists: true, $ne: 'none' } },
+          {
+            paymentMethod: 'online',
+            paymentStatus: { $in: ['paid', 'refunded'] },
+            status: 'cancelled'
+          }
+        ]
+      };
+      
+      refundStatsPromise = Booking.aggregate([
+        { $match: statsMatchForRefunds },
+        {
+          $lookup: {
+            from: 'providerearnings',
+            localField: '_id',
+            foreignField: 'booking',
+            as: 'earning'
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            processedRefunds: {
+              $sum: {
+                $cond: [
+                  { $or: [{ $eq: ['$paymentStatus', 'refunded'] }, { $eq: ['$adminRefundDecision', 'approved'] }] },
+                  1,
+                  0
+                ]
+              }
+            },
+            activeDisputes: {
+              $sum: {
+                $cond: [
+                  { $or: [{ $eq: ['$disputeRaised', true] }, { $ne: [{ $ifNull: ['$disputeStatus', 'none'] }, 'none'] }] },
+                  1,
+                  0
+                ]
+              }
+            },
+            escrowHolds: {
+              $sum: {
+                $cond: [
+                  {
+                    $or: [
+                      { $eq: [{ $arrayElemAt: ['$earning.status', 0] }, 'held'] },
+                      { $ne: [{ $ifNull: ['$payoutHoldUntil', null] }, null] }
+                    ]
+                  },
+                  1,
+                  0
+                ]
+              }
+            }
+          }
+        }
+      ]);
+    }
+
+    const [bookings, totalResult, statsResult, refundStatsResult] = await Promise.all([
       Booking.aggregate(pipeline),
       Booking.aggregate(countPipeline),
-      Booking.aggregate(statsPipeline)
+      Booking.aggregate(statsPipeline),
+      refundStatsPromise
     ]);
 
     const total = totalResult.length > 0 ? totalResult[0].total : 0;
@@ -4008,6 +4102,12 @@ const getAllBookings = async (req, res) => {
       revenue: 0
     };
 
+    const refundStats = (refundStatsResult && refundStatsResult.length > 0) ? refundStatsResult[0] : {
+      processedRefunds: 0,
+      activeDisputes: 0,
+      escrowHolds: 0
+    };
+
     res.status(200).json({
       success: true,
       count: bookings.length,
@@ -4015,6 +4115,7 @@ const getAllBookings = async (req, res) => {
       pages,
       total,
       stats,
+      refundStats,
       data: bookings
     });
 
