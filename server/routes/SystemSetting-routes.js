@@ -77,6 +77,13 @@ router.put('/settings/branding/:role', adminAuthMiddleware, systemSettingControl
 router.post('/settings/branding/:role/upload', adminAuthMiddleware, uploadBrandingSettings, handleUploadErrors, systemSettingController.uploadBrandingAsset);
 router.post('/settings/branding/:role/publish', adminAuthMiddleware, systemSettingController.publishBrandingUpdate);
 
+// EMAIL TEMPLATE MANAGEMENT ROUTES (Admin protected)
+router.get('/settings/email-templates', adminAuthMiddleware, systemSettingController.getEmailTemplates);
+router.put('/settings/email-templates/:type', adminAuthMiddleware, systemSettingController.updateEmailTemplate);
+router.post('/settings/email-templates/preview', adminAuthMiddleware, systemSettingController.previewEmailTemplate);
+router.post('/settings/email-templates/test', adminAuthMiddleware, systemSettingController.testSendEmailTemplate);
+router.post('/settings/email-templates/restore', adminAuthMiddleware, systemSettingController.restoreDefaultTemplate);
+
 // ADMIN ROUTES (protected by adminAuth middleware)
 router.use('/admin', adminAuthMiddleware);
 

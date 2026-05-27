@@ -427,7 +427,6 @@ const bookingSchema = new Schema({
   timestamps: false
 });
 
-// Pre-save hook to calculate commission and totals
 bookingSchema.pre('save', async function (next) {
   this.updatedAt = Date.now();
 
@@ -565,6 +564,7 @@ bookingSchema.index(
     } 
   }
 );
+
 
 const Booking = mongoose.model('Booking', bookingSchema);
 

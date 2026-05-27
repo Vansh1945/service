@@ -5,7 +5,7 @@ import {
   FiDollarSign, FiTag, FiPlus, FiTool, FiAlertCircle, FiChevronDown,
   FiLogOut, FiUser, FiBell, FiSettings, FiCreditCard, FiActivity, FiFileText,
   FiMessageSquare, FiHelpCircle, FiLayers, FiLayout, FiPhoneCall, FiShield, FiTerminal,
-  FiMapPin
+  FiMapPin, FiMail
 } from 'react-icons/fi';
 import { useAuth } from '../context/auth';
 import NotificationBell from '../components/NotificationBell';
@@ -182,6 +182,14 @@ const AdminLayout = () => {
               <FiLayout className="w-5 h-5 mr-3" />
               Branding Management
             </Link>
+            <Link
+              to="/admin/email-templates"
+              className={`flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${location.pathname === '/admin/email-templates' ? 'bg-primary text-white shadow-lg' : 'text-secondary hover:bg-primary/10 hover:text-primary'}`}
+              onClick={() => setSidebarOpen(false)}
+            >
+              <FiMail className="w-5 h-5 mr-3" />
+              Email Templates
+            </Link>
           </nav>
         </div>
       </div>
@@ -240,6 +248,13 @@ const AdminLayout = () => {
             >
               <FiLayout className="w-5 h-5 mr-3" />
               Branding Management
+            </Link>
+            <Link
+              to="/admin/email-templates"
+              className="flex items-center px-4 py-3 text-sm font-medium text-secondary hover:bg-primary/10 hover:text-primary rounded-xl transition-all duration-200"
+            >
+              <FiMail className="w-5 h-5 mr-3" />
+              Email Templates
             </Link>
           </div>
         </div>

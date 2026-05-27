@@ -21,6 +21,7 @@ const AdminPayout = lazy(() => import("../pages/Admin/Payout"));
 const CategoryBanner = lazy(() => import("../pages/Admin/CategoryBanner"));
 const SystemSetting = lazy(() => import("../pages/Admin/System-Setting"));
 const Branding = lazy(() => import("../pages/Admin/Branding"));
+const EmailTemplate = lazy(() => import("../pages/Admin/EmailTemplate"));
 const UserContacts = lazy(() => import("../pages/Admin/User-Contacts"));
 const AdminNotification = lazy(() => import("../pages/Admin/AdminNotification"));
 const AdminTransactions = lazy(() => import("../pages/Admin/Transactions"));
@@ -54,6 +55,7 @@ const AdminRoutes = () => {
                     <Route path="category-banner" element={<CategoryBanner />} />
                     <Route path="settings" element={<SystemSetting />} />
                     <Route path="branding" element={<Branding />} />
+                    <Route path="email-templates" element={<EmailTemplate />} />
                     <Route path="user-contacts" element={<UserContacts />} />
                     <Route path="notifications" element={<AdminNotification />} />
                     <Route path="transactions" element={<AdminTransactions />} />

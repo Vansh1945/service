@@ -125,7 +125,7 @@ exports.initiateRegistration = async (req, res) => {
 
 
         // Send OTP to email
-        await sendOTP(email);
+        await sendOTP(email, null, 'providerRegistrationOtp');
 
         res.status(200).json({
             success: true,

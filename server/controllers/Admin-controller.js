@@ -270,19 +270,13 @@ const approveProvider = async (req, res) => {
             try {
                 await sendMail({
                     to: provider.email,
-                    subject: 'Congratulations! Your Provider Account is Active',
-                    html: `
-                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-                            <h2 style="color: #2c3e50; text-align: center;">Account Active!</h2>
-                            <p>Dear ${provider.name},</p>
-                            <p>Your provider account has been manually activated and approved by the administrator.</p>
-                            <p>Your Provider ID is: <strong>${provider.providerId}</strong></p>
-                            ${finalRemarks ? `<p><strong>Admin Remarks:</strong> ${finalRemarks}</p>` : ''}
-                            <div style="text-align: center; margin-top: 30px;">
-                                <a href="${process.env.FRONTEND_URL}/login" style="background-color: #0D9488; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">Login to Dashboard</a>
-                            </div>
-                        </div>
-                    `
+                    templateType: 'providerApproval',
+                    variables: {
+                        name: provider.name,
+                        providerName: provider.providerId,
+                        reason: finalRemarks,
+                        email: `${process.env.FRONTEND_URL}/login`
+                    }
                 });
             } catch (mailError) {}
 
@@ -317,15 +311,11 @@ const approveProvider = async (req, res) => {
             try {
                 await sendMail({
                     to: provider.email,
-                    subject: 'Update Regarding Your Provider Account',
-                    html: `
-                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-                            <h2 style="color: #c0392b; text-align: center;">Account Update</h2>
-                            <p>Dear ${provider.name},</p>
-                            <p>We regret to inform you that your provider account application has been <strong>Rejected</strong>.</p>
-                            <p><strong>Reason for Rejection:</strong> ${provider.rejectionReason}</p>
-                        </div>
-                    `
+                    templateType: 'providerRejection',
+                    variables: {
+                        name: provider.name,
+                        reason: provider.rejectionReason
+                    }
                 });
             } catch (mailError) {}
 

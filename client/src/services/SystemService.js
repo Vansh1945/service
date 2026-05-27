@@ -75,4 +75,22 @@ export const uploadBrandingAsset = (role, formData) => {
         }
     });
 };
+export const getEmailTemplates = () => {
+    return axiosInstance.get("/system-setting/settings/email-templates");
+};
 
+export const updateEmailTemplate = (type, data) => {
+    return axiosInstance.put(`/system-setting/settings/email-templates/${type}`, data);
+};
+
+export const previewEmailTemplate = (data) => {
+    return axiosInstance.post("/system-setting/settings/email-templates/preview", data);
+};
+
+export const testSendEmailTemplate = (data) => {
+    return axiosInstance.post("/system-setting/settings/email-templates/test", data);
+};
+
+export const restoreDefaultTemplate = (data) => {
+    return axiosInstance.post("/system-setting/settings/email-templates/restore", data);
+};

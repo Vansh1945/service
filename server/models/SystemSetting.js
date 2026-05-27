@@ -23,6 +23,17 @@ const bannerSchema = new mongoose.Schema(
   }
 );
 
+const emailTemplateSchema = new mongoose.Schema(
+  {
+    subject: { type: String, required: true },
+    body: { type: String, required: true },
+    isActive: { type: Boolean, default: true },
+    allowedVariables: [{ type: String }],
+    updatedAt: { type: Date, default: Date.now }
+  },
+  { _id: false }
+);
+
 const systemConfigSchema = new mongoose.Schema(
   {
     companyName: {
@@ -271,6 +282,20 @@ const systemConfigSchema = new mongoose.Schema(
       customer: { type: Date, default: Date.now },
       provider: { type: Date, default: Date.now },
       admin: { type: Date, default: Date.now }
+    },
+    emailTemplates: {
+      forgotPasswordOtp: { type: emailTemplateSchema },
+      providerRegistrationOtp: { type: emailTemplateSchema },
+      providerApproval: { type: emailTemplateSchema },
+      providerRejection: { type: emailTemplateSchema },
+      contactReply: { type: emailTemplateSchema },
+      withdrawApproved: { type: emailTemplateSchema },
+      withdrawRejected: { type: emailTemplateSchema },
+      complaintResponse: { type: emailTemplateSchema }
+    },
+    metadata: {
+      updatedBy: { type: String },
+      updatedAt: { type: Date }
     }
   },
   { timestamps: true }

@@ -1472,6 +1472,16 @@ const approveWithdrawalRequest = async (req, res) => {
         'withdrawal',
         paymentRecord._id
       );
+      await sendMail({
+        to: paymentRecord.provider.email,
+        templateType: 'withdrawApproved',
+        variables: {
+          name: paymentRecord.provider.name,
+          withdrawAmount: paymentRecord.netAmount,
+          remark: notes || '',
+          date: new Date().toLocaleDateString()
+        }
+      });
     } catch (err) { /* ignore */ }
 
     return res.status(200).json({
@@ -1562,6 +1572,16 @@ const rejectWithdrawalRequest = async (req, res) => {
         'withdrawal',
         paymentRecord._id
       );
+      await sendMail({
+        to: provider.email,
+        templateType: 'withdrawRejected',
+        variables: {
+          name: provider.name,
+          withdrawAmount: paymentRecord.amount,
+          reason: paymentRecord.rejectionReason,
+          date: new Date().toLocaleDateString()
+        }
+      });
     } catch (err) { /* ignore */ }
 
     return res.status(200).json({
