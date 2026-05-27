@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   FiSmartphone, FiMonitor, FiUploadCloud, FiImage, FiSettings, 
   FiRefreshCw, FiSave, FiEye, FiCheckCircle, FiInfo, FiTrash2,
-  FiLayout
+  FiLayout, FiSend, FiLayers, FiActivity
 } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import * as SystemService from '../../services/SystemService';
@@ -14,65 +14,73 @@ const Branding = () => {
   const [showManifestModal, setShowManifestModal] = useState(false);
   const [manifestData, setManifestData] = useState(null);
 
-  // States for role branding fields
+  // States for role branding fields (strictly NO themeColor/backgroundColor controls)
   const [formData, setFormData] = useState({
     customer: {
       appName: 'SafeVolt Customer',
       shortName: 'SafeVolt',
+      browserTitle: 'SafeVolt - Book certified electricians near you',
       logo: '',
       icon: '',
       splashScreen: '',
-      themeColor: '#0D9488', // Default to tailwind config primary teal
-      backgroundColor: '#FFFFFF',
-      description: 'Book certified electricians near you for repairs, wiring, and installations.'
+      description: 'Book certified electricians near you for repairs, wiring, and installations.',
+      appVersion: 1,
+      lastPublished: null,
+      installedUsersCount: 0
     },
     provider: {
       appName: 'SafeVolt Provider',
       shortName: 'Provider',
+      browserTitle: 'SafeVolt Provider App',
       logo: '',
       icon: '',
       splashScreen: '',
-      themeColor: '#0D9488',
-      backgroundColor: '#FFFFFF',
-      description: 'Accept requests and provide certified electrical services on SafeVolt.'
+      description: 'Accept requests and provide certified electrical services on SafeVolt.',
+      appVersion: 1,
+      lastPublished: null,
+      installedUsersCount: 0
     },
     admin: {
       appName: 'SafeVolt Admin',
       shortName: 'Admin',
+      browserTitle: 'SafeVolt Admin Panel',
       logo: '',
       icon: '',
+      splashScreen: '',
       favicon: '',
-      themeColor: '#0D9488',
-      backgroundColor: '#FFFFFF',
-      dashboardTitle: 'SafeVolt Control Panel'
+      description: 'SafeVolt Control Panel',
+      appVersion: 1,
+      lastPublished: null,
+      installedUsersCount: 0
     }
   });
 
   // Fetch initial branding settings for all roles on load
-  useEffect(() => {
-    const fetchAllBranding = async () => {
-      setLoading(true);
-      try {
-        const roles = ['customer', 'provider', 'admin'];
-        const newFormData = { ...formData };
-        
-        for (const role of roles) {
-          const response = await SystemService.getBrandingSettings(role);
-          if (response.data?.success && response.data.data) {
-            newFormData[role] = {
-              ...newFormData[role],
-              ...response.data.data
-            };
-          }
+  const fetchAllBranding = async () => {
+    setLoading(true);
+    try {
+      const roles = ['customer', 'provider', 'admin'];
+      const newFormData = { ...formData };
+      
+      for (const role of roles) {
+        const response = await SystemService.getBrandingSettings(role);
+        if (response.data?.success && response.data.data) {
+          newFormData[role] = {
+            ...newFormData[role],
+            ...response.data.data
+          };
         }
-        setFormData(newFormData);
-      } catch (error) {
-        console.error('Failed to load branding settings:', error);
-        toast.error('Failed to load branding settings.');
-      } finally {
-        setLoading(false);
       }
-    };
+      setFormData(newFormData);
+    } catch (error) {
+      console.error('Failed to load branding settings:', error);
+      toast.error('Failed to load branding settings.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchAllBranding();
   }, []);
 
@@ -91,8 +99,8 @@ const Branding = () => {
     const file = e.target.files[0];
     if (!file) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-      toast.warning('File size must be under 5MB');
+    if (file.size > 10 * 1024 * 1024) {
+      toast.warning('File size must be under 10MB');
       return;
     }
 
@@ -104,7 +112,7 @@ const Branding = () => {
       const response = await SystemService.uploadBrandingAsset(role, fd);
       if (response.data?.success) {
         handleInputChange(role, field, response.data.url);
-        toast.success(`${field.charAt(0).toUpperCase() + field.slice(1)} uploaded successfully!`);
+        toast.success(`${field.charAt(0).toUpperCase() + field.slice(1)} asset uploaded successfully!`);
       } else {
         toast.error('Upload failed. Please try again.');
       }
@@ -121,15 +129,46 @@ const Branding = () => {
     handleInputChange(role, field, '');
   };
 
-  // Save branding changes to the database
-  const handleSave = async (role) => {
+  // Save branding changes as draft to the database
+  const handleSaveDraft = async (role) => {
     setLoading(true);
     try {
-      const response = await SystemService.updateBrandingSettings(role, formData[role]);
+      // Exclude metadata counters
+      const { appVersion, lastPublished, installedUsersCount, ...brandingFields } = formData[role];
+      const response = await SystemService.updateBrandingSettings(role, brandingFields);
       if (response.data?.success) {
-        toast.success(`${role.charAt(0).toUpperCase() + role.slice(1)} branding saved successfully!`);
+        toast.success(`${role.charAt(0).toUpperCase() + role.slice(1)} branding saved as draft successfully!`);
         
-        // Notify dynamic client hook in App.jsx
+        // Notify dynamic client hook
+        window.dispatchEvent(
+          new CustomEvent('brandingUpdated', { 
+            detail: { role, data: response.data.data } 
+          })
+        );
+        
+        localStorage.setItem(`branding_${role}`, JSON.stringify(response.data.data));
+        
+        // Refresh values from backend
+        await fetchAllBranding();
+      }
+    } catch (error) {
+      console.error('Failed to save branding draft:', error);
+      toast.error('Failed to save draft changes.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Save changes, BUMP version, and broadcast FCM update push
+  const handlePublishUpdate = async (role) => {
+    setLoading(true);
+    try {
+      const { appVersion, lastPublished, installedUsersCount, ...brandingFields } = formData[role];
+      const response = await SystemService.publishBrandingSettings(role, brandingFields);
+      if (response.data?.success) {
+        toast.success(`🎉 ${role.charAt(0).toUpperCase() + role.slice(1)} branding published successfully! PWA version bumped to v${response.data.data.appVersion}`);
+        
+        // Notify dynamic client hook
         window.dispatchEvent(
           new CustomEvent('brandingUpdated', { 
             detail: { role, data: response.data.data } 
@@ -138,14 +177,12 @@ const Branding = () => {
         
         localStorage.setItem(`branding_${role}`, JSON.stringify(response.data.data));
 
-        toast.info(
-          'Installed PWA users may need browser refresh or reinstall to see branding updates.',
-          { autoClose: 8000 }
-        );
+        // Refresh all values
+        await fetchAllBranding();
       }
     } catch (error) {
-      console.error('Failed to update branding settings:', error);
-      toast.error('Failed to save branding changes.');
+      console.error('Failed to publish branding update:', error);
+      toast.error('Failed to publish system update.');
     } finally {
       setLoading(false);
     }
@@ -157,40 +194,41 @@ const Branding = () => {
       customer: {
         appName: 'SafeVolt Customer',
         shortName: 'SafeVolt',
+        browserTitle: 'SafeVolt - Book certified electricians near you',
         logo: '',
         icon: '',
         splashScreen: '',
-        themeColor: '#0D9488',
-        backgroundColor: '#FFFFFF',
         description: 'Book certified electricians near you for repairs, wiring, and installations.'
       },
       provider: {
         appName: 'SafeVolt Provider',
         shortName: 'Provider',
+        browserTitle: 'SafeVolt Provider App',
         logo: '',
         icon: '',
         splashScreen: '',
-        themeColor: '#0D9488',
-        backgroundColor: '#FFFFFF',
         description: 'Accept requests and provide certified electrical services on SafeVolt.'
       },
       admin: {
         appName: 'SafeVolt Admin',
         shortName: 'Admin',
+        browserTitle: 'SafeVolt Admin Panel',
         logo: '',
         icon: '',
+        splashScreen: '',
         favicon: '',
-        themeColor: '#0D9488',
-        backgroundColor: '#FFFFFF',
-        dashboardTitle: 'SafeVolt Control Panel'
+        description: 'SafeVolt Control Panel'
       }
     };
 
     setFormData(prev => ({
       ...prev,
-      [role]: defaults[role]
+      [role]: {
+        ...prev[role],
+        ...defaults[role]
+      }
     }));
-    toast.info('Fields reset to defaults. Click "Save Environment Settings" to apply.');
+    toast.info('Fields reset to defaults locally. Save or Publish to apply to database.');
   };
 
   // Open raw manifest preview modal
@@ -201,8 +239,8 @@ const Branding = () => {
       short_name: roleData.shortName,
       start_url: role === 'admin' ? '/admin/dashboard' : role === 'provider' ? '/provider/dashboard' : '/',
       display: 'standalone',
-      background_color: roleData.backgroundColor,
-      theme_color: roleData.themeColor,
+      background_color: '#ffffff',
+      theme_color: '#0D9488',
       orientation: 'portrait',
       icons: [
         {
@@ -229,50 +267,52 @@ const Branding = () => {
   const currentBranding = formData[activeTab];
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 font-inter text-secondary">
+    <div className="max-w-7xl mx-auto space-y-6 font-inter text-gray-800 pb-12">
+      
       {/* Header section - Clean design aligned with tailwind.config.js */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-6 rounded-xl border border-gray-200 shadow-sm gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-6 rounded-2xl border border-gray-100 shadow-sm gap-4">
         <div>
-          <h1 className="text-2xl font-bold font-poppins text-primary flex items-center gap-2">
-            <FiLayout /> Branding Settings
+          <h1 className="text-2xl font-bold font-poppins text-gray-900 flex items-center gap-2">
+            <FiLayout className="text-teal-600 w-7 h-7" /> Branding & Identity Management
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Configure dynamic app identity, primary themes, and PWA assets for each user environment.
+            Configure dynamic app identity, SEO parameters, and PWA visual assets with instant service worker push deployment.
           </p>
         </div>
         <button 
           onClick={() => handlePreviewManifest(activeTab)}
-          className="flex items-center gap-2 px-4 py-2 border border-gray-300 hover:border-primary text-secondary hover:text-primary font-medium text-xs rounded-lg transition-all bg-white"
+          className="flex items-center gap-2 px-4 py-2 border border-gray-200 hover:border-teal-500 text-gray-600 hover:text-teal-600 font-semibold text-xs rounded-xl transition-all bg-white shadow-sm hover:shadow-md"
         >
-          <FiEye /> View PWA Manifest
+          <FiEye className="w-4 h-4" /> View Dynamic PWA Manifest
         </button>
       </div>
 
-      {/* Segmented Tab Switcher */}
-      <div className="flex bg-gray-100 p-1 rounded-lg max-w-md">
+      {/* Role Segmented Switcher */}
+      <div className="flex bg-gray-100 p-1.5 rounded-2xl max-w-md shadow-inner">
         {['customer', 'provider', 'admin'].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`flex-1 py-2 text-center text-xs font-semibold capitalize rounded-md transition-all ${
+            className={`flex-1 py-2.5 text-center text-xs font-bold capitalize rounded-xl transition-all duration-300 ${
               activeTab === tab 
-                ? 'bg-white text-primary shadow-sm'
-                : 'text-gray-500 hover:text-secondary'
+                ? 'bg-white text-teal-600 shadow-md font-extrabold transform scale-[1.02]'
+                : 'text-gray-500 hover:text-gray-900'
             }`}
           >
-            {tab} app
+            {tab} application
           </button>
         ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
         {/* Settings Form Column */}
-        <div className="lg:col-span-7 bg-white border border-gray-200 shadow-sm rounded-xl p-6 space-y-6">
+        <div className="lg:col-span-7 bg-white border border-gray-100 shadow-sm rounded-2xl p-6 space-y-6">
           
           {/* Identity Section */}
           <div className="space-y-4">
-            <h3 className="text-sm font-bold text-primary uppercase tracking-wider border-b border-gray-150 pb-2 flex items-center gap-2">
-              <FiSettings /> Identity
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider border-b border-gray-100 pb-2 flex items-center gap-2">
+              <FiSettings className="text-teal-600 w-4 h-4" /> Brand Identity
             </h3>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -282,8 +322,8 @@ const Branding = () => {
                   type="text"
                   value={currentBranding.appName}
                   onChange={(e) => handleInputChange(activeTab, 'appName', e.target.value)}
-                  className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:border-primary transition-colors text-secondary font-medium"
-                  placeholder="App title name"
+                  className="w-full px-4 py-2.5 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all text-gray-800 font-medium bg-gray-50/50"
+                  placeholder="App brand name"
                 />
               </div>
               <div className="space-y-1">
@@ -292,60 +332,63 @@ const Branding = () => {
                   type="text"
                   value={currentBranding.shortName}
                   onChange={(e) => handleInputChange(activeTab, 'shortName', e.target.value)}
-                  className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:border-primary transition-colors text-secondary font-medium"
+                  className="w-full px-4 py-2.5 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all text-gray-800 font-medium bg-gray-50/50"
                   placeholder="Short launcher name"
                 />
               </div>
             </div>
 
-            {activeTab === 'admin' ? (
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-gray-500">Dashboard Navbar Title</label>
-                <input
-                  type="text"
-                  value={currentBranding.dashboardTitle}
-                  onChange={(e) => handleInputChange(activeTab, 'dashboardTitle', e.target.value)}
-                  className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:border-primary transition-colors text-secondary font-medium"
-                />
-              </div>
-            ) : (
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-gray-500">Meta Description</label>
-                <textarea
-                  rows={2}
-                  value={currentBranding.description}
-                  onChange={(e) => handleInputChange(activeTab, 'description', e.target.value)}
-                  className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:border-primary transition-colors text-secondary font-medium resize-none"
-                  placeholder="Enter app description for SEO and manifest..."
-                />
-              </div>
-            )}
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-500">Browser / SEO Title</label>
+              <input
+                type="text"
+                value={currentBranding.browserTitle}
+                onChange={(e) => handleInputChange(activeTab, 'browserTitle', e.target.value)}
+                className="w-full px-4 py-2.5 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all text-gray-800 font-medium bg-gray-50/50"
+                placeholder="Browser tab header name"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-500">Meta Description</label>
+              <textarea
+                rows={3}
+                value={currentBranding.description}
+                onChange={(e) => handleInputChange(activeTab, 'description', e.target.value)}
+                className="w-full px-4 py-2.5 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all text-gray-800 font-medium bg-gray-50/50 resize-none"
+                placeholder="Enter app description for SEO index and manifest..."
+              />
+            </div>
           </div>
 
           {/* Visual Assets Upload Section */}
           <div className="space-y-4">
-            <h3 className="text-sm font-bold text-primary uppercase tracking-wider border-b border-gray-150 pb-2 flex items-center gap-2">
-              <FiImage /> Visual Assets
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider border-b border-gray-100 pb-2 flex items-center gap-2">
+              <FiImage className="text-teal-600 w-4 h-4" /> Branding Visual Assets
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              
               {/* Logo Box */}
-              <div className="p-4 border border-gray-200 bg-gray-50 rounded-xl flex flex-col items-center justify-between text-center min-h-36 relative overflow-hidden">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Logo URL</span>
+              <div className="p-4 border border-gray-200 bg-gray-55 rounded-2xl flex flex-col items-center justify-between text-center min-h-[170px] relative overflow-hidden group">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Logo Upload</span>
                 {currentBranding.logo ? (
-                  <div className="space-y-2">
-                    <img src={currentBranding.logo} alt="Logo" className="h-10 w-auto object-contain mx-auto" />
+                  <div className="space-y-3 w-full px-2">
+                    <div className="h-16 w-full bg-white rounded-xl border border-gray-100 flex items-center justify-center p-2 shadow-sm">
+                      <img src={currentBranding.logo} alt="Logo" className="max-h-full max-w-full object-contain" />
+                    </div>
                     <button 
                       onClick={() => removeAsset(activeTab, 'logo')}
-                      className="text-red-500 hover:text-red-700 text-xs font-bold flex items-center gap-1 mx-auto"
+                      className="text-red-500 hover:text-red-700 text-xs font-bold flex items-center gap-1.5 mx-auto bg-red-50 hover:bg-red-100/50 px-3 py-1 rounded-lg transition-all"
                     >
-                      <FiTrash2 /> Remove
+                      <FiTrash2 className="w-3.5 h-3.5" /> Remove Logo
                     </button>
                   </div>
                 ) : (
-                  <label className="cursor-pointer flex flex-col items-center justify-center p-2 hover:bg-gray-100 w-full h-full rounded-lg transition-all">
-                    <FiUploadCloud className="w-6 h-6 text-gray-400 mb-1" />
-                    <span className="text-xs font-bold text-primary">Upload Logo</span>
+                  <label className="cursor-pointer flex flex-col items-center justify-center p-4 hover:bg-teal-50/50 border-2 border-dashed border-gray-200 hover:border-teal-400 w-full h-full rounded-xl transition-all">
+                    <FiUploadCloud className="w-8 h-8 text-gray-400 mb-2 group-hover:text-teal-500 transition-colors" />
+                    <span className="text-xs font-bold text-teal-600">Upload Image Logo</span>
+                    <span className="text-[9px] text-gray-400 mt-1">Recommended: PNG / SVG</span>
                     <input 
                       type="file" 
                       onChange={(e) => handleAssetUpload(activeTab, 'logo', e)} 
@@ -356,29 +399,33 @@ const Branding = () => {
                   </label>
                 )}
                 {uploadingField === 'logo' && (
-                  <div className="absolute inset-0 bg-white/90 flex items-center justify-center">
-                    <FiRefreshCw className="w-5 h-5 text-primary animate-spin" />
+                  <div className="absolute inset-0 bg-white/95 flex flex-col items-center justify-center gap-2">
+                    <FiRefreshCw className="w-6 h-6 text-teal-600 animate-spin" />
+                    <span className="text-[10px] font-bold text-teal-600">Uploading logo...</span>
                   </div>
                 )}
               </div>
 
               {/* Launcher Icon Box */}
-              <div className="p-4 border border-gray-200 bg-gray-50 rounded-xl flex flex-col items-center justify-between text-center min-h-36 relative overflow-hidden">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Launcher Icon</span>
+              <div className="p-4 border border-gray-200 bg-gray-55 rounded-2xl flex flex-col items-center justify-between text-center min-h-[170px] relative overflow-hidden group">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">PWA Icon (Launcher)</span>
                 {currentBranding.icon ? (
-                  <div className="space-y-2">
-                    <img src={currentBranding.icon} alt="Icon" className="w-10 h-10 object-cover mx-auto rounded border border-gray-200" />
+                  <div className="space-y-3 w-full px-2">
+                    <div className="h-16 w-full flex items-center justify-center">
+                      <img src={currentBranding.icon} alt="PWA Icon" className="w-16 h-16 object-cover rounded-2xl border border-gray-100 shadow-sm" />
+                    </div>
                     <button 
                       onClick={() => removeAsset(activeTab, 'icon')}
-                      className="text-red-500 hover:text-red-700 text-xs font-bold flex items-center gap-1 mx-auto"
+                      className="text-red-500 hover:text-red-700 text-xs font-bold flex items-center gap-1.5 mx-auto bg-red-50 hover:bg-red-100/50 px-3 py-1 rounded-lg transition-all"
                     >
-                      <FiTrash2 /> Remove
+                      <FiTrash2 className="w-3.5 h-3.5" /> Remove Icon
                     </button>
                   </div>
                 ) : (
-                  <label className="cursor-pointer flex flex-col items-center justify-center p-2 hover:bg-gray-100 w-full h-full rounded-lg transition-all">
-                    <FiUploadCloud className="w-6 h-6 text-gray-400 mb-1" />
-                    <span className="text-xs font-bold text-primary">Upload Icon</span>
+                  <label className="cursor-pointer flex flex-col items-center justify-center p-4 hover:bg-teal-50/50 border-2 border-dashed border-gray-200 hover:border-teal-400 w-full h-full rounded-xl transition-all">
+                    <FiUploadCloud className="w-8 h-8 text-gray-400 mb-2 group-hover:text-teal-500 transition-colors" />
+                    <span className="text-xs font-bold text-teal-600">Upload PWA Icon</span>
+                    <span className="text-[9px] text-gray-400 mt-1">Required: Square PNG (512x512)</span>
                     <input 
                       type="file" 
                       onChange={(e) => handleAssetUpload(activeTab, 'icon', e)} 
@@ -389,65 +436,71 @@ const Branding = () => {
                   </label>
                 )}
                 {uploadingField === 'icon' && (
-                  <div className="absolute inset-0 bg-white/90 flex items-center justify-center">
-                    <FiRefreshCw className="w-5 h-5 text-primary animate-spin" />
+                  <div className="absolute inset-0 bg-white/95 flex flex-col items-center justify-center gap-2">
+                    <FiRefreshCw className="w-6 h-6 text-teal-600 animate-spin" />
+                    <span className="text-[10px] font-bold text-teal-600">Uploading icon...</span>
                   </div>
                 )}
               </div>
 
-              {/* Splash Image Box (Customer / Provider) */}
-              {activeTab !== 'admin' && (
-                <div className="p-4 border border-gray-200 bg-gray-50 rounded-xl flex flex-col items-center justify-between text-center min-h-36 relative overflow-hidden md:col-span-2">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Splash Screen / Banner</span>
-                  {currentBranding.splashScreen ? (
-                    <div className="space-y-2 w-full">
-                      <img src={currentBranding.splashScreen} alt="Splash Screen" className="h-16 w-full object-cover mx-auto rounded border border-gray-200" />
-                      <button 
-                        onClick={() => removeAsset(activeTab, 'splashScreen')}
-                        className="text-red-500 hover:text-red-700 text-xs font-bold flex items-center gap-1 mx-auto"
-                      >
-                        <FiTrash2 /> Remove
-                      </button>
+              {/* Splash Image Box */}
+              <div className="p-4 border border-gray-200 bg-gray-55 rounded-2xl flex flex-col items-center justify-between text-center min-h-[170px] relative overflow-hidden group md:col-span-2">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Splash Screen Overlay</span>
+                {currentBranding.splashScreen ? (
+                  <div className="space-y-3 w-full px-2">
+                    <div className="h-16 w-full bg-white rounded-xl border border-gray-100 flex items-center justify-center overflow-hidden shadow-sm">
+                      <img src={currentBranding.splashScreen} alt="Splash Screen" className="h-full w-full object-cover" />
                     </div>
-                  ) : (
-                    <label className="cursor-pointer flex flex-col items-center justify-center p-2 hover:bg-gray-100 w-full h-full rounded-lg transition-all">
-                      <FiUploadCloud className="w-6 h-6 text-gray-400 mb-1" />
-                      <span className="text-xs font-bold text-primary">Upload Splash Image</span>
-                      <input 
-                        type="file" 
-                        onChange={(e) => handleAssetUpload(activeTab, 'splashScreen', e)} 
-                        className="hidden" 
-                        accept="image/*"
-                        disabled={uploadingField !== null}
-                      />
-                    </label>
-                  )}
-                  {uploadingField === 'splashScreen' && (
-                    <div className="absolute inset-0 bg-white/90 flex items-center justify-center">
-                      <FiRefreshCw className="w-5 h-5 text-primary animate-spin" />
-                    </div>
-                  )}
-                </div>
-              )}
+                    <button 
+                      onClick={() => removeAsset(activeTab, 'splashScreen')}
+                      className="text-red-500 hover:text-red-700 text-xs font-bold flex items-center gap-1.5 mx-auto bg-red-50 hover:bg-red-100/50 px-3 py-1 rounded-lg transition-all"
+                    >
+                      <FiTrash2 className="w-3.5 h-3.5" /> Remove Splash Screen
+                    </button>
+                  </div>
+                ) : (
+                  <label className="cursor-pointer flex flex-col items-center justify-center p-4 hover:bg-teal-50/50 border-2 border-dashed border-gray-200 hover:border-teal-400 w-full h-full rounded-xl transition-all">
+                    <FiUploadCloud className="w-8 h-8 text-gray-400 mb-2 group-hover:text-teal-500 transition-colors" />
+                    <span className="text-xs font-bold text-teal-600">Upload Splash Screen</span>
+                    <span className="text-[9px] text-gray-400 mt-1">Recommended: 1080x1920 PNG</span>
+                    <input 
+                      type="file" 
+                      onChange={(e) => handleAssetUpload(activeTab, 'splashScreen', e)} 
+                      className="hidden" 
+                      accept="image/*"
+                      disabled={uploadingField !== null}
+                    />
+                  </label>
+                )}
+                {uploadingField === 'splashScreen' && (
+                  <div className="absolute inset-0 bg-white/95 flex flex-col items-center justify-center gap-2">
+                    <FiRefreshCw className="w-6 h-6 text-teal-600 animate-spin" />
+                    <span className="text-[10px] font-bold text-teal-600">Uploading splash...</span>
+                  </div>
+                )}
+              </div>
 
               {/* Favicon Box (Admin Only) */}
               {activeTab === 'admin' && (
-                <div className="p-4 border border-gray-200 bg-gray-50 rounded-xl flex flex-col items-center justify-between text-center min-h-36 relative overflow-hidden md:col-span-2">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Browser Favicon</span>
+                <div className="p-4 border border-gray-200 bg-gray-55 rounded-2xl flex flex-col items-center justify-between text-center min-h-[170px] relative overflow-hidden group md:col-span-2 animate-in slide-in-from-top-4 duration-300">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Browser Favicon (Admin only)</span>
                   {currentBranding.favicon ? (
-                    <div className="space-y-2">
-                      <img src={currentBranding.favicon} alt="Favicon" className="w-6 h-6 object-contain mx-auto" />
+                    <div className="space-y-3 w-full px-2">
+                      <div className="h-16 w-full flex items-center justify-center">
+                        <img src={currentBranding.favicon} alt="Favicon" className="w-10 h-10 object-contain" />
+                      </div>
                       <button 
                         onClick={() => removeAsset(activeTab, 'favicon')}
-                        className="text-red-500 hover:text-red-700 text-xs font-bold flex items-center gap-1 mx-auto"
+                        className="text-red-500 hover:text-red-700 text-xs font-bold flex items-center gap-1.5 mx-auto bg-red-50 hover:bg-red-100/50 px-3 py-1 rounded-lg transition-all"
                       >
-                        <FiTrash2 /> Remove
+                        <FiTrash2 className="w-3.5 h-3.5" /> Remove Favicon
                       </button>
                     </div>
                   ) : (
-                    <label className="cursor-pointer flex flex-col items-center justify-center p-2 hover:bg-gray-100 w-full h-full rounded-lg transition-all">
-                      <FiUploadCloud className="w-6 h-6 text-gray-400 mb-1" />
-                      <span className="text-xs font-bold text-primary">Upload Favicon</span>
+                    <label className="cursor-pointer flex flex-col items-center justify-center p-4 hover:bg-teal-50/50 border-2 border-dashed border-gray-200 hover:border-teal-400 w-full h-full rounded-xl transition-all">
+                      <FiUploadCloud className="w-8 h-8 text-gray-400 mb-2 group-hover:text-teal-500 transition-colors" />
+                      <span className="text-xs font-bold text-teal-600">Upload Tab Favicon</span>
+                      <span className="text-[9px] text-gray-400 mt-1">Recommended: 32x32 ICO or PNG</span>
                       <input 
                         type="file" 
                         onChange={(e) => handleAssetUpload(activeTab, 'favicon', e)} 
@@ -458,236 +511,243 @@ const Branding = () => {
                     </label>
                   )}
                   {uploadingField === 'favicon' && (
-                    <div className="absolute inset-0 bg-white/90 flex items-center justify-center">
-                      <FiRefreshCw className="w-5 h-5 text-primary animate-spin" />
+                    <div className="absolute inset-0 bg-white/95 flex flex-col items-center justify-center gap-2">
+                      <FiRefreshCw className="w-6 h-6 text-teal-600 animate-spin" />
+                      <span className="text-[10px] font-bold text-teal-600">Uploading favicon...</span>
                     </div>
                   )}
                 </div>
               )}
-            </div>
-          </div>
 
-          {/* Color Settings */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-bold text-primary uppercase tracking-wider border-b border-gray-150 pb-2 flex items-center gap-2">
-              <FiSmartphone /> Color Theme
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex items-center gap-4 p-3 border border-gray-200 rounded-xl bg-white">
-                <input
-                  type="color"
-                  value={currentBranding.themeColor}
-                  onChange={(e) => handleInputChange(activeTab, 'themeColor', e.target.value)}
-                  className="w-10 h-10 rounded cursor-pointer border-none bg-transparent"
-                />
-                <div>
-                  <span className="block text-[10px] font-bold text-gray-400 uppercase">Primary Theme Color</span>
-                  <span className="font-bold text-xs text-secondary">{currentBranding.themeColor}</span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-4 p-3 border border-gray-200 rounded-xl bg-white">
-                <input
-                  type="color"
-                  value={currentBranding.backgroundColor}
-                  onChange={(e) => handleInputChange(activeTab, 'backgroundColor', e.target.value)}
-                  className="w-10 h-10 rounded cursor-pointer border-none bg-transparent"
-                />
-                <div>
-                  <span className="block text-[10px] font-bold text-gray-400 uppercase">Background Color</span>
-                  <span className="font-bold text-xs text-secondary">{currentBranding.backgroundColor}</span>
-                </div>
-              </div>
             </div>
           </div>
 
           {/* Form Actions */}
-          <div className="flex justify-end gap-3 pt-4 border-t border-gray-150">
+          <div className="flex justify-end gap-3 pt-6 border-t border-gray-100">
             <button 
               type="button" 
               onClick={() => handleReset(activeTab)}
-              className="px-4 py-2 border border-gray-300 hover:bg-gray-50 text-secondary rounded-lg font-bold text-xs transition-all"
+              className="px-5 py-2.5 border border-gray-200 hover:bg-gray-50 text-gray-600 rounded-xl font-bold text-xs transition-all shadow-sm"
               disabled={loading}
             >
-              Reset to Defaults
+              Reset Inputs
             </button>
             <button 
               type="button" 
-              onClick={() => handleSave(activeTab)}
-              className="px-4 py-2 bg-primary hover:bg-teal-700 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm"
+              onClick={() => handleSaveDraft(activeTab)}
+              className="px-5 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm hover:shadow"
               disabled={loading}
             >
               {loading ? <FiRefreshCw className="w-3.5 h-3.5 animate-spin" /> : <FiSave className="w-3.5 h-3.5" />}
-              Save Environment Settings
+              Save Draft
+            </button>
+            <button 
+              type="button" 
+              onClick={() => handlePublishUpdate(activeTab)}
+              className="px-6 py-2.5 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white rounded-xl font-extrabold text-xs flex items-center gap-2 transition-all shadow-md hover:shadow-lg transform active:scale-95"
+              disabled={loading}
+            >
+              {loading ? <FiRefreshCw className="w-3.5 h-3.5 animate-spin" /> : <FiSend className="w-3.5 h-3.5" />}
+              Publish Live Update
             </button>
           </div>
 
         </div>
 
-        {/* Minimal Live Previews Column */}
+        {/* Live Previews and Version Panel Column */}
         <div className="lg:col-span-5 space-y-6 lg:sticky lg:top-6">
-          <div className="bg-white border border-gray-200 shadow-sm rounded-xl p-6 space-y-6">
-            <h3 className="text-sm font-bold text-primary uppercase tracking-wider border-b border-gray-150 pb-2 flex items-center gap-2">
-              <FiEye /> Live Preview
+          
+          {/* PWA Deployment and Stats Card */}
+          <div className="bg-gradient-to-br from-slate-900 to-slate-950 text-white shadow-xl rounded-2xl p-6 space-y-5 border border-slate-800">
+            <div className="flex items-center gap-2 pb-3 border-b border-slate-800">
+              <FiActivity className="text-teal-400 w-5 h-5 animate-pulse" />
+              <span className="font-bold text-xs uppercase tracking-widest text-slate-400">Live Release Status</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-slate-800/40 p-3.5 rounded-xl border border-slate-800/60">
+                <span className="block text-[10px] text-slate-400 font-semibold uppercase tracking-wider">PWA Version</span>
+                <span className="text-xl font-black text-teal-400 block mt-1">v{currentBranding.appVersion || 1}</span>
+              </div>
+              <div className="bg-slate-800/40 p-3.5 rounded-xl border border-slate-800/60">
+                <span className="block text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Installed Users</span>
+                <span className="text-xl font-black text-white block mt-1 flex items-center gap-1.5">
+                  <FiSmartphone className="text-slate-400 w-4 h-4" />
+                  {currentBranding.installedUsersCount || 0}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-1 pt-1">
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Last Broadcast Publication</span>
+              <span className="text-xs font-semibold text-slate-200 block bg-slate-800/20 px-3 py-2 rounded-lg border border-slate-800/35">
+                {currentBranding.lastPublished 
+                  ? new Date(currentBranding.lastPublished).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) 
+                  : 'Never published to users'}
+              </span>
+            </div>
+
+            <button
+              onClick={() => handlePublishUpdate(activeTab)}
+              className="w-full py-3 bg-teal-500 hover:bg-teal-400 text-slate-950 font-black text-xs rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 uppercase tracking-wider transform hover:translate-y-[-1px] active:translate-y-[1px]"
+            >
+              <FiSend className="w-4 h-4" /> Publish New Version Now
+            </button>
+          </div>
+
+          {/* Live Preview Panel */}
+          <div className="bg-white border border-gray-100 shadow-sm rounded-2xl p-6 space-y-6">
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider border-b border-gray-100 pb-2 flex items-center gap-2">
+              <FiEye className="text-teal-600 w-4 h-4" /> Responsive Live Previews
             </h3>
 
-            {/* A. Customer App Preview */}
-            {activeTab === 'customer' && (
-              <div className="space-y-3">
-                <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Customer App Install UI</span>
-                <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
-                  <div className="flex gap-3">
-                    <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-white border border-gray-200 overflow-hidden shadow-sm">
-                      {currentBranding.icon ? (
-                        <img src={currentBranding.icon} alt="App Icon" className="w-full h-full object-cover" />
+            {/* A. Browser Tab Mockup Preview */}
+            <div className="space-y-2.5">
+              <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider flex items-center gap-1">
+                <FiMonitor className="w-3.5 h-3.5" /> Browser Title & Favicon Tab
+              </span>
+              <div className="bg-gray-100/70 border border-gray-200 rounded-xl p-2.5 pt-3 space-y-1">
+                {/* Simulated browser navigation tab */}
+                <div className="flex items-end gap-1 px-2 border-b border-gray-200/50 pb-2">
+                  <div className="bg-white text-gray-700 px-3 py-1.5 rounded-t-lg border-t border-x border-gray-200 flex items-center gap-2 max-w-[190px] shadow-sm transform translate-y-[9px] relative z-10">
+                    <div className="w-3.5 h-3.5 bg-gray-50 flex items-center justify-center overflow-hidden rounded-sm flex-shrink-0">
+                      {currentBranding.favicon ? (
+                        <img src={currentBranding.favicon} alt="Fav" className="w-full h-full object-contain" />
                       ) : (
-                        <div className="w-5 h-5 rounded bg-gray-100 flex items-center justify-center font-bold text-xs" style={{ color: currentBranding.themeColor }}>
+                        currentBranding.logo ? (
+                          <img src={currentBranding.logo} alt="Fav" className="w-full h-full object-contain" />
+                        ) : (
+                          <span className="text-[7px] text-teal-600 font-black">SV</span>
+                        )
+                      )}
+                    </div>
+                    <span className="text-[9px] font-bold truncate max-w-[130px]">
+                      {currentBranding.browserTitle || currentBranding.appName}
+                    </span>
+                    <span className="text-[8px] text-gray-400 ml-1">✕</span>
+                  </div>
+                  <div className="text-[18px] text-gray-400 px-2 py-1 select-none font-light leading-none">+</div>
+                </div>
+                <div className="bg-white h-7 rounded-b-lg border border-gray-200/60 shadow-inner flex items-center px-3 gap-2">
+                  <div className="flex gap-1.5">
+                    <span className="w-1.5 h-1.5 bg-gray-300 rounded-full" />
+                    <span className="w-1.5 h-1.5 bg-gray-300 rounded-full" />
+                    <span className="w-1.5 h-1.5 bg-gray-300 rounded-full" />
+                  </div>
+                  <div className="bg-gray-50 border border-gray-150 rounded-md flex-1 text-[8px] text-gray-400 py-1 px-2 font-mono truncate">
+                    https://safevolt.com/{activeTab === 'customer' ? '' : activeTab}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* B. Install app preview (Mobile Prompt) */}
+            <div className="space-y-2.5">
+              <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider flex items-center gap-1">
+                <FiSmartphone className="w-3.5 h-3.5" /> PWA Application Installer
+              </span>
+              <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 space-y-3.5">
+                <div className="flex gap-3">
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-white border border-gray-150 overflow-hidden shadow-sm">
+                    {currentBranding.icon ? (
+                      <img src={currentBranding.icon} alt="App Icon" className="w-full h-full object-cover" />
+                    ) : (
+                      currentBranding.logo ? (
+                        <img src={currentBranding.logo} alt="App Logo Icon" className="w-full h-full object-contain p-1" />
+                      ) : (
+                        <div className="w-full h-full bg-teal-50 flex items-center justify-center font-black text-teal-600 text-sm">
                           SV
                         </div>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-bold text-xs truncate text-secondary">{currentBranding.appName}</h4>
-                      <p className="text-[10px] text-gray-400 truncate">{currentBranding.shortName || 'SafeVolt'}</p>
-                    </div>
+                      )
+                    )}
                   </div>
-                  
-                  <p className="text-[10px] text-gray-500 leading-normal line-clamp-2">
-                    {currentBranding.description || 'App Description will load here.'}
-                  </p>
-                  
-                  <button 
-                    className="w-full py-2 rounded-lg font-bold text-xs text-white transition-all text-center"
-                    style={{ backgroundColor: currentBranding.themeColor }}
-                  >
-                    Install PWA App
-                  </button>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-extrabold text-xs text-gray-900 truncate">{currentBranding.appName}</h4>
+                    <p className="text-[10px] text-teal-600 font-bold truncate mt-0.5">{currentBranding.shortName || 'SafeVolt'}</p>
+                  </div>
                 </div>
+                
+                <p className="text-[10px] text-gray-500 leading-relaxed font-medium line-clamp-2">
+                  {currentBranding.description || 'Provide an app identity description to hook visitors...'}
+                </p>
+                
+                <button 
+                  className="w-full py-2.5 bg-teal-600 hover:bg-teal-700 rounded-xl font-bold text-xs text-white transition-all text-center shadow-md shadow-teal-600/10"
+                >
+                  Install Application
+                </button>
               </div>
-            )}
+            </div>
 
-            {/* B. Provider App Preview */}
-            {activeTab === 'provider' && (
-              <div className="space-y-3">
-                <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Provider Dashboard UI</span>
-                <div className="bg-gray-50 border border-gray-200 rounded-xl overflow-hidden flex flex-col">
-                  {/* Header */}
-                  <div className="px-3 py-2 flex items-center justify-between border-b border-gray-200 bg-white">
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-5 h-5 rounded bg-gray-50 flex items-center justify-center overflow-hidden border border-gray-200">
-                        {currentBranding.logo ? (
-                          <img src={currentBranding.logo} alt="Logo" className="w-full h-full object-contain" />
-                        ) : (
-                          <span className="text-[7px] font-bold" style={{ color: currentBranding.themeColor }}>P</span>
-                        )}
+            {/* C. App Launcher Mockup */}
+            <div className="space-y-2.5">
+              <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider flex items-center gap-1">
+                <FiLayers className="w-3.5 h-3.5" /> Smartphone Launcher Mockup
+              </span>
+              <div className="bg-slate-100 rounded-2xl p-4 py-6 flex flex-col items-center justify-center gap-1 border border-gray-200/50">
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-white border border-gray-200/80 overflow-hidden shadow-md transform hover:scale-105 transition-all">
+                  {currentBranding.icon ? (
+                    <img src={currentBranding.icon} alt="App Icon" className="w-full h-full object-cover" />
+                  ) : (
+                    currentBranding.logo ? (
+                      <img src={currentBranding.logo} alt="App Icon" className="w-full h-full object-contain p-1" />
+                    ) : (
+                      <div className="w-full h-full bg-teal-50 flex items-center justify-center font-extrabold text-teal-600 text-base">
+                        SV
                       </div>
-                      <span className="font-bold text-[10px] truncate max-w-28 text-secondary">{currentBranding.appName}</span>
-                    </div>
-                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: currentBranding.themeColor }} />
-                  </div>
-
-                  {/* Body Content */}
-                  <div className="p-3 space-y-2">
-                    <div className="p-2 bg-white rounded-lg space-y-1 border border-gray-200">
-                      <span className="text-[8px] text-gray-400 font-bold uppercase">Weekly Earnings</span>
-                      <div className="text-sm font-bold" style={{ color: currentBranding.themeColor }}>₹ 4,850.00</div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button className="py-1.5 rounded font-semibold text-[8px] text-gray-600 bg-white border border-gray-200 hover:bg-gray-50">
-                        Decline
-                      </button>
-                      <button 
-                        className="py-1.5 rounded font-bold text-[8px] text-white"
-                        style={{ backgroundColor: currentBranding.themeColor }}
-                      >
-                        Accept Booking
-                      </button>
-                    </div>
-                  </div>
+                    )
+                  )}
                 </div>
+                <span className="text-[9px] font-extrabold text-slate-800 truncate max-w-[80px] drop-shadow-sm mt-1">
+                  {currentBranding.shortName || 'App Launcher'}
+                </span>
               </div>
-            )}
-
-            {/* C. Admin Dashboard Preview */}
-            {activeTab === 'admin' && (
-              <div className="space-y-3">
-                <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Admin Header UI</span>
-                <div className="bg-gray-50 border border-gray-200 rounded-xl overflow-hidden flex flex-col">
-                  {/* Header Row */}
-                  <div className="bg-white px-3 py-2.5 flex items-center justify-between border-b border-gray-200">
-                    <div className="flex items-center gap-1.5">
-                      {currentBranding.logo && (
-                        <img src={currentBranding.logo} alt="Logo" className="h-5 w-auto object-contain" />
-                      )}
-                      <span className="font-bold text-[10px] bg-gradient-to-r bg-clip-text text-transparent" style={{ backgroundImage: `linear-gradient(to right, ${currentBranding.themeColor}, #0D9488)` }}>
-                        {currentBranding.appName}
-                      </span>
-                    </div>
-                    <div className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white shadow-sm" style={{ backgroundColor: currentBranding.themeColor }}>
-                      A
-                    </div>
-                  </div>
-
-                  {/* Body area */}
-                  <div className="p-3 flex gap-2">
-                    <div className="w-1/3 bg-white rounded-lg p-2 flex flex-col gap-1 text-[7px] text-gray-400 font-bold border border-gray-200">
-                      <div className="px-1 py-0.5 rounded bg-gray-50 flex items-center gap-1" style={{ color: currentBranding.themeColor }}>
-                        <span className="w-1 h-1 rounded-full animate-pulse" style={{ backgroundColor: currentBranding.themeColor }} /> Dashboard
-                      </div>
-                      <div className="px-1 py-0.5 hover:text-secondary">System Settings</div>
-                    </div>
-                    <div className="flex-1 bg-white rounded-lg p-2 border border-gray-200">
-                      <span className="text-[6px] text-gray-400 font-bold uppercase block">Control Panel Title</span>
-                      <h5 className="font-bold text-[9px] text-secondary mt-0.5">{currentBranding.dashboardTitle}</h5>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
+            </div>
 
             {/* General dynamic info box */}
-            <div className="bg-teal-50/50 p-4 border border-teal-100 rounded-xl flex items-start gap-2 text-xs">
-              <FiInfo className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
+            <div className="bg-teal-50/50 p-4 border border-teal-100 rounded-xl flex items-start gap-2.5 text-xs animate-in fade-in duration-300">
+              <FiInfo className="w-4 h-4 text-teal-600 flex-shrink-0 mt-0.5 animate-bounce" />
               <div className="space-y-1">
-                <h5 className="font-bold text-primary text-xs">PWA Cache Notice</h5>
-                <p className="text-[10px] text-gray-500 leading-normal">
-                  Branding configurations are saved directly to the database. Client apps update dynamically, but service-worker browser settings might require a refresh.
+                <h5 className="font-bold text-teal-800 text-xs">PWA Update System Notice</h5>
+                <p className="text-[10px] text-gray-500 leading-relaxed font-medium">
+                  When you **Publish Live Update**, the system immediately increments the live PWA index version and issues an FCM push update directly to all active app instances.
                 </p>
               </div>
             </div>
+
           </div>
         </div>
+
       </div>
 
       {/* Manifest Preview Modal */}
       {showManifestModal && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-gray-200 w-full max-w-xl rounded-xl overflow-hidden flex flex-col shadow-lg animate-in fade-in zoom-in duration-200">
-            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
-              <h3 className="font-bold text-sm text-secondary flex items-center gap-2">
-                <FiLayout className="text-primary" /> Manifest JSON Preview ({activeTab})
+          <div className="bg-white border border-gray-150 w-full max-w-xl rounded-2xl overflow-hidden flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+              <h3 className="font-bold text-sm text-gray-900 flex items-center gap-2">
+                <FiLayout className="text-teal-600" /> Manifest JSON Structure ({activeTab})
               </h3>
               <button 
                 onClick={() => setShowManifestModal(false)}
-                className="text-gray-400 hover:text-gray-600 text-sm font-semibold"
+                className="text-gray-400 hover:text-gray-600 text-sm font-semibold p-1 hover:bg-gray-100 rounded-lg transition-all"
               >
                 ✕
               </button>
             </div>
             
-            <div className="p-6 overflow-y-auto max-h-[50vh] font-mono text-[11px] text-secondary leading-relaxed bg-gray-50 border-b border-gray-150">
-              <pre>{JSON.stringify(manifestData, null, 2)}</pre>
+            <div className="p-6 overflow-y-auto max-h-[50vh] font-mono text-[11px] text-gray-700 leading-relaxed bg-gray-50 border-b border-gray-100 shadow-inner">
+              <pre className="whitespace-pre-wrap">{JSON.stringify(manifestData, null, 2)}</pre>
             </div>
 
-            <div className="px-6 py-4 bg-gray-50 flex justify-between items-center text-[10px] text-gray-500">
-              <div className="flex items-center gap-1.5">
-                <FiCheckCircle className="text-primary w-3.5 h-3.5" />
-                <span>Generated dynamically from MongoDB model</span>
+            <div className="px-6 py-4 bg-gray-50/50 flex justify-between items-center text-[10px] text-gray-500">
+              <div className="flex items-center gap-1.5 font-medium">
+                <FiCheckCircle className="text-teal-600 w-4 h-4" />
+                <span>Generated dynamically on requests</span>
               </div>
               <button 
                 onClick={() => setShowManifestModal(false)}
-                className="px-3 py-1.5 bg-primary hover:bg-teal-700 text-white rounded font-bold text-xs transition-colors"
+                className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold text-xs transition-colors shadow-sm"
               >
                 Close Preview
               </button>
@@ -695,6 +755,7 @@ const Branding = () => {
           </div>
         </div>
       )}
+
     </div>
   );
 };

@@ -78,29 +78,37 @@ export const NotificationProvider = ({ children }) => {
         if (!('serviceWorker' in navigator)) return;
 
         const handleSWMessage = (event) => {
-            if (event.data && event.data.type === 'NAVIGATE' && event.data.url) {
-                const targetRoute = event.data.url;
-                const requiredRole = event.data.role;
-                const entityId = event.data.entityId;
-                
-                setIsDeepLink?.(true);
-
-                const targetRouteWithEntity = targetRoute + (entityId ? (targetRoute.includes('?') ? '&' : '?') + 'entityId=' + entityId : '');
-
-                if (!isAuthenticated) {
-                    setIntendedRoute?.(targetRouteWithEntity);
-                    navigate('/login');
+            if (event.data && event.data.type === 'NAVIGATE') {
+                if (event.data.updateType === 'branding_update' || event.data.forceRefresh === 'true') {
+                    console.log('[FCM Notification Click] Branding update message received from SW. Reloading app...');
+                    window.location.reload();
                     return;
                 }
 
-                if (requiredRole && requiredRole !== userRole && !(requiredRole === 'admin' && isAdmin)) {
-                    if (userRole === 'admin' || isAdmin) navigate('/admin/dashboard');
-                    else if (userRole === 'provider') navigate('/provider/dashboard');
-                    else navigate('/customer/services');
-                    return;
-                }
+                if (event.data.url) {
+                    const targetRoute = event.data.url;
+                    const requiredRole = event.data.role;
+                    const entityId = event.data.entityId;
+                    
+                    setIsDeepLink?.(true);
 
-                navigate(targetRouteWithEntity, { state: { fromNotification: true } });
+                    const targetRouteWithEntity = targetRoute + (entityId ? (targetRoute.includes('?') ? '&' : '?') + 'entityId=' + entityId : '');
+
+                    if (!isAuthenticated) {
+                        setIntendedRoute?.(targetRouteWithEntity);
+                        navigate('/login');
+                        return;
+                    }
+
+                    if (requiredRole && requiredRole !== userRole && !(requiredRole === 'admin' && isAdmin)) {
+                        if (userRole === 'admin' || isAdmin) navigate('/admin/dashboard');
+                        else if (userRole === 'provider') navigate('/provider/dashboard');
+                        else navigate('/customer/services');
+                        return;
+                    }
+
+                    navigate(targetRouteWithEntity, { state: { fromNotification: true } });
+                }
             }
         };
 

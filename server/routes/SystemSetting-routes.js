@@ -75,6 +75,7 @@ router.get('/settings/branding/:role', systemSettingController.getBrandingSettin
 router.get('/settings/branding/:role/manifest', systemSettingController.getBrandingManifest);
 router.put('/settings/branding/:role', adminAuthMiddleware, systemSettingController.updateBrandingSettings);
 router.post('/settings/branding/:role/upload', adminAuthMiddleware, uploadBrandingSettings, handleUploadErrors, systemSettingController.uploadBrandingAsset);
+router.post('/settings/branding/:role/publish', adminAuthMiddleware, systemSettingController.publishBrandingUpdate);
 
 // ADMIN ROUTES (protected by adminAuth middleware)
 router.use('/admin', adminAuthMiddleware);

@@ -381,9 +381,35 @@ const getBrandingSettings = async (req, res) => {
     const brandingKey = `${role}Branding`;
     const brandingData = config[brandingKey] || {};
 
+    const version = config.appVersions?.[role] || 1;
+    const lastPublished = config.lastPublished?.[role] || config.updatedAt;
+
+    // Count installed users with at least one active FCM token
+    let installedUsersCount = 0;
+    try {
+      const User = require('../models/User-model');
+      const Provider = require('../models/Provider-model');
+      const Admin = require('../models/Admin-model');
+
+      if (role === 'customer') {
+        installedUsersCount = await User.countDocuments({ role: 'customer', 'fcmTokens.0': { $exists: true } });
+      } else if (role === 'provider') {
+        installedUsersCount = await Provider.countDocuments({ isDeleted: { $ne: true }, 'fcmTokens.0': { $exists: true } });
+      } else if (role === 'admin') {
+        installedUsersCount = await Admin.countDocuments({ isActive: true, 'fcmTokens.0': { $exists: true } });
+      }
+    } catch (countError) {
+      console.error('Failed to count installed PWA users:', countError);
+    }
+
     res.status(200).json({
       success: true,
-      data: brandingData
+      data: {
+        ...brandingData.toObject?.() || brandingData,
+        appVersion: version,
+        lastPublished: lastPublished,
+        installedUsersCount: installedUsersCount
+      }
     });
   } catch (error) {
     res.status(500).json({
@@ -394,7 +420,7 @@ const getBrandingSettings = async (req, res) => {
   }
 };
 
-// 15. Update branding settings for a specific role (Admin only)
+// 15. Update branding settings for a specific role (Admin only - Draft Mode)
 const updateBrandingSettings = async (req, res) => {
   try {
     const { role } = req.params;
@@ -414,22 +440,159 @@ const updateBrandingSettings = async (req, res) => {
 
     const fieldsToUpdate = req.body;
     for (const key of Object.keys(fieldsToUpdate)) {
-      config[brandingKey][key] = fieldsToUpdate[key];
+      // Exclude any inadvertent theme colors
+      if (key !== 'themeColor' && key !== 'backgroundColor') {
+        config[brandingKey][key] = fieldsToUpdate[key];
+      }
     }
 
     // Mark as modified so Mongoose tracks nested changes
     config.markModified(brandingKey);
     await config.save();
 
+    const version = config.appVersions?.[role] || 1;
+    const lastPublished = config.lastPublished?.[role] || config.updatedAt;
+
     res.status(200).json({
       success: true,
-      message: `${role.charAt(0).toUpperCase() + role.slice(1)} branding updated successfully`,
-      data: config[brandingKey]
+      message: `${role.charAt(0).toUpperCase() + role.slice(1)} branding saved successfully (Draft)`,
+      data: {
+        ...config[brandingKey].toObject?.() || config[brandingKey],
+        appVersion: version,
+        lastPublished: lastPublished
+      }
     });
   } catch (error) {
     res.status(500).json({
       success: false,
       message: 'Failed to update branding settings',
+      error: error.message
+    });
+  }
+};
+
+// 15.5 Publish branding settings and send FCM update (Admin only)
+const publishBrandingUpdate = async (req, res) => {
+  try {
+    const { role } = req.params;
+    if (!['customer', 'provider', 'admin'].includes(role)) {
+      return res.status(400).json({ success: false, message: 'Invalid role' });
+    }
+
+    let config = await SystemConfig.findOne();
+    if (!config) {
+      config = new SystemConfig({ companyName: 'SafeVolt Solutions' });
+    }
+
+    // Step 1: Save branding changes
+    const brandingKey = `${role}Branding`;
+    if (!config[brandingKey]) {
+      config[brandingKey] = {};
+    }
+
+    const fieldsToUpdate = req.body;
+    for (const key of Object.keys(fieldsToUpdate)) {
+      if (key !== 'themeColor' && key !== 'backgroundColor') {
+        config[brandingKey][key] = fieldsToUpdate[key];
+      }
+    }
+
+    // Step 2: Increment existing appVersion inside SystemSettings
+    if (!config.appVersions) {
+      config.appVersions = { customer: 1, provider: 1, admin: 1 };
+    }
+    config.appVersions[role] = (config.appVersions[role] || 1) + 1;
+
+    if (!config.lastPublished) {
+      config.lastPublished = { customer: new Date(), provider: new Date(), admin: new Date() };
+    }
+    config.lastPublished[role] = new Date();
+
+    config.markModified(brandingKey);
+    config.markModified('appVersions');
+    config.markModified('lastPublished');
+    await config.save();
+
+    const newVersion = config.appVersions[role];
+
+    // Step 3: Send FCM push notification to all installed app users
+    let tokens = [];
+    const User = require('../models/User-model');
+    const Provider = require('../models/Provider-model');
+    const Admin = require('../models/Admin-model');
+
+    if (role === 'customer') {
+      const users = await User.find({ role: 'customer' }, 'fcmTokens');
+      users.forEach(u => {
+        if (u.fcmTokens) {
+          u.fcmTokens.forEach(t => { if (t.token) tokens.push(t.token); });
+        }
+      });
+    } else if (role === 'provider') {
+      const providers = await Provider.find({ isDeleted: { $ne: true } }, 'fcmTokens');
+      providers.forEach(p => {
+        if (p.fcmTokens) {
+          p.fcmTokens.forEach(t => { if (t.token) tokens.push(t.token); });
+        }
+      });
+    } else if (role === 'admin') {
+      const admins = await Admin.find({ isActive: true }, 'fcmTokens');
+      admins.forEach(a => {
+        if (a.fcmTokens) {
+          a.fcmTokens.forEach(t => { if (t.token) tokens.push(t.token); });
+        }
+      });
+    }
+
+    const uniqueTokens = [...new Set(tokens.filter(t => t && t.trim()))];
+    
+    if (uniqueTokens.length > 0) {
+      try {
+        const { sendPushNotification } = require('../utils/notificationService');
+        const payload = {
+          title: 'App Update Available',
+          body: 'A new app update is available. Tap to update now.',
+          data: {
+            version: String(newVersion),
+            role: role,
+            updateType: 'branding_update',
+            forceRefresh: 'true'
+          }
+        };
+        await sendPushNotification(uniqueTokens, payload);
+      } catch (fcmError) {
+        console.error('Failed to send FCM branding update notifications:', fcmError);
+      }
+    }
+
+    // Count installed users with at least one active FCM token
+    let installedUsersCount = 0;
+    try {
+      if (role === 'customer') {
+        installedUsersCount = await User.countDocuments({ role: 'customer', 'fcmTokens.0': { $exists: true } });
+      } else if (role === 'provider') {
+        installedUsersCount = await Provider.countDocuments({ isDeleted: { $ne: true }, 'fcmTokens.0': { $exists: true } });
+      } else if (role === 'admin') {
+        installedUsersCount = await Admin.countDocuments({ isActive: true, 'fcmTokens.0': { $exists: true } });
+      }
+    } catch (countError) {
+      console.error('Failed to count installed PWA users on publish:', countError);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `${role.charAt(0).toUpperCase() + role.slice(1)} branding changes published and version incremented successfully`,
+      data: {
+        ...config[brandingKey].toObject?.() || config[brandingKey],
+        appVersion: newVersion,
+        lastPublished: config.lastPublished[role],
+        installedUsersCount: installedUsersCount
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to publish branding settings update',
       error: error.message
     });
   }
@@ -480,7 +643,7 @@ const uploadBrandingAsset = async (req, res) => {
   }
 };
 
-// 17. Dynamically generate PWA manifest based on role branding in DB
+// 17. Dynamically generate PWA manifest based on role branding in DB (no custom theme colors)
 const getBrandingManifest = async (req, res) => {
   try {
     const { role } = req.params;
@@ -494,8 +657,8 @@ const getBrandingManifest = async (req, res) => {
     const appName = branding?.appName || (role === 'admin' ? 'SafeVolt Admin' : role === 'provider' ? 'SafeVolt Provider' : 'SafeVolt Customer');
     const shortName = branding?.shortName || (role === 'admin' ? 'Admin' : role === 'provider' ? 'Provider' : 'SafeVolt');
     const description = branding?.description || (role === 'admin' ? 'SafeVolt Control Panel' : `${shortName} App`);
-    const themeColor = branding?.themeColor || (role === 'admin' ? '#4f46e5' : role === 'provider' ? '#10b981' : '#3b82f6');
-    const backgroundColor = branding?.backgroundColor || '#ffffff';
+    const themeColor = '#0D9488'; // SafeVolt standard primary color
+    const backgroundColor = '#ffffff';
     const logoUrl = branding?.logo || '/icon-192.png';
     const iconUrl = branding?.icon || logoUrl;
 
@@ -553,6 +716,7 @@ module.exports = {
   deleteBanner,
   getBrandingSettings,
   updateBrandingSettings,
+  publishBrandingUpdate,
   uploadBrandingAsset,
   getBrandingManifest
 };

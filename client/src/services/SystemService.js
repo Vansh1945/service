@@ -64,6 +64,10 @@ export const updateBrandingSettings = (role, data) => {
     return axiosInstance.put(`/system-setting/settings/branding/${role}`, data);
 };
 
+export const publishBrandingSettings = (role, data) => {
+    return axiosInstance.post(`/system-setting/settings/branding/${role}/publish`, data);
+};
+
 export const uploadBrandingAsset = (role, formData) => {
     return axiosInstance.post(`/system-setting/settings/branding/${role}/upload`, formData, {
         headers: {

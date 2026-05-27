@@ -240,8 +240,7 @@ const systemConfigSchema = new mongoose.Schema(
       logo: { type: String, default: "" },
       icon: { type: String, default: "" },
       splashScreen: { type: String, default: "" },
-      themeColor: { type: String, default: "#3b82f6" },
-      backgroundColor: { type: String, default: "#ffffff" },
+      browserTitle: { type: String, default: "SafeVolt - Book certified electricians near you" },
       description: { type: String, default: "Book certified electricians near you" }
     },
     providerBranding: {
@@ -250,8 +249,7 @@ const systemConfigSchema = new mongoose.Schema(
       logo: { type: String, default: "" },
       icon: { type: String, default: "" },
       splashScreen: { type: String, default: "" },
-      themeColor: { type: String, default: "#10b981" },
-      backgroundColor: { type: String, default: "#ffffff" },
+      browserTitle: { type: String, default: "SafeVolt Provider App" },
       description: { type: String, default: "Provide electrical services on SafeVolt" }
     },
     adminBranding: {
@@ -259,10 +257,20 @@ const systemConfigSchema = new mongoose.Schema(
       shortName: { type: String, default: "Admin" },
       logo: { type: String, default: "" },
       icon: { type: String, default: "" },
+      splashScreen: { type: String, default: "" },
       favicon: { type: String, default: "" },
-      themeColor: { type: String, default: "#4f46e5" },
-      backgroundColor: { type: String, default: "#f3f4f6" },
-      dashboardTitle: { type: String, default: "SafeVolt Control Panel" }
+      browserTitle: { type: String, default: "SafeVolt Control Panel" },
+      description: { type: String, default: "SafeVolt Control Panel" }
+    },
+    appVersions: {
+      customer: { type: Number, default: 1 },
+      provider: { type: Number, default: 1 },
+      admin: { type: Number, default: 1 }
+    },
+    lastPublished: {
+      customer: { type: Date, default: Date.now },
+      provider: { type: Date, default: Date.now },
+      admin: { type: Date, default: Date.now }
     }
   },
   { timestamps: true }

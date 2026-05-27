@@ -68,16 +68,27 @@ self.addEventListener('notificationclick', (event) => {
             // If app is already open, navigate it to the deep-link route
             for (const client of clientList) {
                 if (client.url.startsWith(self.location.origin) && 'focus' in client) {
-                    client.postMessage({ type: 'NAVIGATE', url: route, role: role, entityId: entityId });
+                    client.postMessage({ 
+                        type: 'NAVIGATE', 
+                        url: route, 
+                        role: role, 
+                        entityId: entityId,
+                        updateType: data.updateType || null,
+                        version: data.version || null,
+                        forceRefresh: data.forceRefresh || null
+                    });
                     return client.focus();
                 }
             }
-            // On cold start, we pass route, role and entityId via search params so the app can pick them up
+            // On cold start, we pass route, role, entityId, etc. via search params
             if (clients.openWindow) {
                 const searchParams = new URLSearchParams();
                 searchParams.append('route', route);
                 if (role) searchParams.append('role', role);
                 if (entityId) searchParams.append('entityId', entityId);
+                if (data.updateType) searchParams.append('updateType', data.updateType);
+                if (data.version) searchParams.append('version', data.version);
+                if (data.forceRefresh) searchParams.append('forceRefresh', data.forceRefresh);
                 return clients.openWindow(`${self.location.origin}?${searchParams.toString()}`);
             }
         })
@@ -91,4 +102,10 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
     event.waitUntil(clients.claim());
+});
+
+self.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'SKIP_WAITING') {
+        self.skipWaiting();
+    }
 });

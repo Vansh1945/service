@@ -240,6 +240,36 @@ const App = () => {
           const brandingData = response.data.data;
           localStorage.setItem(`branding_${currentRole}`, JSON.stringify(brandingData));
           applyBrandingData(currentRole, brandingData);
+
+          // PWA Check: Compare local version with server version
+          const serverVersion = brandingData.appVersion;
+          if (serverVersion) {
+            const localVersionKey = `app_version_${currentRole}`;
+            const localVersion = parseInt(localStorage.getItem(localVersionKey) || '1', 10);
+            
+            if (serverVersion > localVersion) {
+              console.log(`[PWA Update] Server version ${serverVersion} is newer than local version ${localVersion}. Upgrading...`);
+              
+              localStorage.setItem(localVersionKey, serverVersion.toString());
+              
+              if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then((registrations) => {
+                  for (const registration of registrations) {
+                    registration.update().catch(err => console.error('SW update failed:', err));
+                    if (registration.waiting) {
+                      registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+                    } else if (registration.active) {
+                      registration.active.postMessage({ type: 'SKIP_WAITING' });
+                    }
+                  }
+                });
+              }
+              
+              setTimeout(() => {
+                window.location.reload();
+              }, 800);
+            }
+          }
         }
       } catch (error) {
         console.error("Error fetching dynamic branding:", error);
@@ -323,12 +353,23 @@ const App = () => {
     }
   }, [isAuthenticated, userRole, user, location.pathname, navigate_fn]);
 
-  // 🔔 Handle Cold Start Deep Linking
+  // 🔔 Handle Cold Start Deep Linking & PWA Update Redirects
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const route = params.get('route');
     const role = params.get('role');
     const entityId = params.get('entityId');
+    const updateType = params.get('updateType');
+    const forceRefresh = params.get('forceRefresh');
+
+    if (updateType === 'branding_update' || forceRefresh === 'true') {
+      // Clear URL params to avoid loops
+      const newUrl = window.location.pathname + window.location.hash;
+      window.history.replaceState({}, '', newUrl);
+      console.log('[PWA Cold Start] Branding update detected. Reloading...');
+      window.location.reload();
+      return;
+    }
 
     if (route) {
       setIsDeepLink(true);
