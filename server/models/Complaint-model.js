@@ -112,6 +112,10 @@ const complaintSchema = new mongoose.Schema(
     resolutionNotes: {
       type: String,
       default: null
+    },
+    resolution: {
+      type: String,
+      default: null
     }
   },
   {

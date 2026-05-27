@@ -154,6 +154,14 @@ const userSchema = new mongoose.Schema({
           type: String,
           required: true
         },
+        source: {
+          type: String,
+          default: null
+        },
+        status: {
+          type: String,
+          default: 'success'
+        },
         booking: {
           type: mongoose.Schema.Types.ObjectId,
           ref: 'Booking',

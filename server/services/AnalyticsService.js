@@ -34,7 +34,7 @@ const refreshAnalytics = async () => {
             ]),
             Booking.aggregate([
                 { $match: { status: 'completed', createdAt: { $gte: startOfMonth } } },
-                { $group: { _id: null, monthlyRevenue: { $sum: '$totalAmount' } } }
+                { $group: { _id: null, monthlyRevenue: { $sum: { $subtract: ["$totalAmount", { $ifNull: ["$cancellationProgress.refundAmount", 0] }] } } } }
             ])
         ]);
 

@@ -4,23 +4,23 @@ import { useAuth } from '../../context/auth';
 import * as AdminService from '../../services/AdminService';
 import * as BookingService from '../../services/BookingService';
 import {
-  FiSearch, FiRefreshCw, FiEye, FiCheckCircle, FiAlertTriangle,
-  FiUser, FiTool, FiClock, FiX, FiFilter, FiCalendar, FiInbox,
-  FiDollarSign, FiSlash, FiLock, FiUnlock, FiChevronRight, FiChevronLeft
-} from 'react-icons/fi';
+  Search, RefreshCw, Eye, CheckCircle, AlertCircle,
+  User, Briefcase, Clock, X, Filter, Calendar, Inbox,
+  DollarSign, XCircle, Lock, Unlock, ChevronRight, ChevronLeft
+} from 'lucide-react';
 import Pagination from '../../components/Pagination';
 import { formatDate, formatDateTime } from '../../utils/format';
 
-// ── Status Badges ──────────────────────────────────────────────
+// ── Status Badges (Standardized Clean Designs) ────────────────────────
 const RefundStatusBadge = ({ status }) => {
   const cfg = {
-    pending: 'bg-amber-100 text-amber-700 border-amber-200',
-    processing: 'bg-blue-100 text-blue-700 border-blue-200',
-    refunded: 'bg-green-100 text-green-700 border-green-200',
-    failed: 'bg-red-100 text-red-700 border-red-200',
+    pending: 'bg-yellow-50 text-yellow-800 border-yellow-200',
+    processing: 'bg-blue-50 text-blue-800 border-blue-200',
+    refunded: 'bg-green-50 text-green-800 border-green-200',
+    failed: 'bg-red-50 text-red-800 border-red-200',
   };
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${cfg[status] || 'bg-gray-100 text-gray-500 border-gray-200'}`}>
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${cfg[status] || 'bg-gray-50 text-gray-500 border-gray-200'}`}>
       {status}
     </span>
   );
@@ -28,14 +28,14 @@ const RefundStatusBadge = ({ status }) => {
 
 const DisputeStatusBadge = ({ status }) => {
   const cfg = {
-    none: 'bg-gray-100 text-gray-400 border-gray-200',
-    pending: 'bg-amber-100 text-amber-700 border-amber-200',
-    UNDER_REVIEW: 'bg-blue-100 text-blue-700 border-blue-200',
-    resolved: 'bg-green-100 text-green-700 border-green-200',
-    refunded: 'bg-green-100 text-green-700 border-green-200',
+    none: 'bg-gray-50 text-gray-400 border-gray-100',
+    pending: 'bg-yellow-50 text-yellow-800 border-yellow-200',
+    UNDER_REVIEW: 'bg-blue-50 text-blue-800 border-blue-200',
+    resolved: 'bg-green-50 text-green-800 border-green-200',
+    refunded: 'bg-green-50 text-green-800 border-green-200',
   };
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${cfg[status] || 'bg-gray-100 text-gray-500 border-gray-200'}`}>
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${cfg[status] || 'bg-gray-50 text-gray-500 border-gray-250'}`}>
       {status?.replace('_', ' ')}
     </span>
   );
@@ -53,20 +53,45 @@ const PayoutStatusBadge = ({ status }) => {
   
   return (
     <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${cfg[status] || 'bg-gray-100 text-gray-500 border-gray-200'}`}>
-      {status === 'Payout On Hold' || status === 'Dispute Hold' ? <FiLock size={10} /> : <FiUnlock size={10} />}
+      {status === 'Payout On Hold' || status === 'Dispute Hold' ? <Lock size={10} /> : <Unlock size={10} />}
       {status || 'Unknown'}
     </span>
   );
 };
 
-// ── Refund Details Modal ───────────────────────────────────────
+const RefundCaseTypeBadge = ({ booking }) => {
+  const isComplaint = booking.complaint || booking.disputeRaised || (booking.disputeStatus && booking.disputeStatus !== 'none');
+  const isCancellation = booking.status === 'cancelled';
+  
+  if (isComplaint) {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-red-100 text-red-800 border border-red-200">
+        Dispute Case
+      </span>
+    );
+  } else if (isCancellation) {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-800 border border-blue-200">
+        Cancelled Booking
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-650 border border-gray-200">
+      General Refund
+    </span>
+  );
+};
+
+// ── Refund Details Modal (Overhauled Split-Screen View) ────────
 const RefundDetailsModal = ({ booking, onClose, onAction }) => {
   const { showToast } = useAuth();
-  const [activeTab, setActiveTab] = useState('images');
+  const [activeTab, setActiveTab] = useState('images'); // 'images', 'timeline', 'financials'
   const [resolutionNotes, setResolutionNotes] = useState('');
   const [refundAmount, setRefundAmount] = useState(booking?.totalAmount || 0);
-  const [decisionType, setDecisionType] = useState('');
+  const [decisionType, setDecisionType] = useState(''); // 'refund_full', 'refund_partial', 'reject'
   const [updating, setUpdating] = useState(false);
+  const [selectedPreviewImage, setSelectedPreviewImage] = useState(null);
 
   if (!booking) return null;
 
@@ -90,7 +115,7 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
       }
 
       if (res?.data?.success) {
-        showToast(res.data.message || 'Action completed', 'success');
+        showToast(res.data.message || 'Action completed successfully', 'success');
         onAction();
         onClose();
       }
@@ -102,369 +127,550 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] overflow-hidden flex flex-col animate-scale-up" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 md:p-6 animate-fade-in" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[92vh] overflow-hidden flex flex-col animate-scale-up" onClick={e => e.stopPropagation()}>
+        
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-white">
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-white shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
-              <FiDollarSign size={20} />
+            <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center text-primary">
+              <DollarSign size={20} className="stroke-[2.5]" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-secondary">{booking.services?.[0]?.service?.title || 'Dispute Details'}</h3>
-              <div className="flex items-center gap-2">
-                <p className="text-xs text-gray-400">Booking ID: {booking.bookingId || `#${booking._id?.slice(-8).toUpperCase()}`}</p>
+              <div className="flex items-center gap-2.5">
+                <h3 className="text-base font-bold text-secondary">
+                  {booking.services?.[0]?.service?.title || 'Refund Case Details'}
+                </h3>
+                <RefundCaseTypeBadge booking={booking} />
+              </div>
+              <div className="flex items-center gap-3 mt-0.5">
+                <p className="text-xs text-gray-400 font-mono">ID: {booking.bookingId || `#${booking._id?.slice(-8).toUpperCase()}`}</p>
+                <span className="w-1.5 h-1.5 rounded-full bg-gray-200" />
                 <button 
                   onClick={() => window.open(`/admin/bookings?search=${booking.bookingId || booking._id}`, '_blank')}
-                  className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded hover:bg-blue-100 font-bold"
+                  className="text-[10px] bg-blue-50 hover:bg-blue-100 text-blue-600 hover:text-blue-700 px-2 py-0.5 rounded font-semibold transition-colors flex items-center gap-1"
                 >
-                  View in Bookings
+                  Inspect Booking <ChevronRight size={10} />
                 </button>
               </div>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-xl transition-colors">
-            <FiX className="w-5 h-5 text-gray-400" />
+          <button 
+            onClick={onClose} 
+            className="p-1.5 rounded-lg text-gray-400 hover:text-secondary hover:bg-gray-100 transition-colors"
+          >
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Modal Split Columns */}
+        <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
+          
+          {/* Left Area (60% width) - Detailed Info & Evidence Locker */}
+          <div className="lg:w-7/12 flex-1 overflow-y-auto p-5 space-y-5 border-r border-gray-100">
             
-            {/* Left Column: Details & Images */}
-            <div className="lg:col-span-2 space-y-6">
-              
-              {/* Summary Cards */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                  <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Customer</p>
+            {/* User Profile Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Customer */}
+              <div className="bg-gray-50 p-3 rounded-lg border border-gray-150 flex items-start gap-3">
+                <div className="w-10 h-10 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center font-bold text-sm border border-teal-150/50">
+                  {booking.customer?.name?.charAt(0) || <User size={16} />}
+                </div>
+                <div className="space-y-0.5">
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-gray-400">Customer Details</span>
                   <p className="text-sm font-bold text-secondary">{booking.customer?.name}</p>
-                  <p className="text-xs text-gray-400">{booking.customer?.email}</p>
-                </div>
-                <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                  <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Provider</p>
-                  <p className="text-sm font-bold text-secondary">{booking.provider?.name || 'N/A'}</p>
-                  <p className="text-xs text-gray-400">{booking.provider?.email || ''}</p>
+                  <p className="text-xs text-gray-500 font-medium truncate max-w-[180px]">{booking.customer?.email}</p>
                 </div>
               </div>
+              
+              {/* Provider */}
+              <div className="bg-gray-50 p-3 rounded-lg border border-gray-150 flex items-start gap-3">
+                <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-sm border border-blue-150/50">
+                  {booking.provider?.name?.charAt(0) || <Briefcase size={16} />}
+                </div>
+                <div className="space-y-0.5">
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-gray-400">Provider Details</span>
+                  <p className="text-sm font-bold text-secondary">{booking.provider?.name || 'Unassigned'}</p>
+                  <p className="text-xs text-gray-500 font-medium truncate max-w-[180px]">{booking.provider?.email || 'No email registered'}</p>
+                </div>
+              </div>
+            </div>
 
-              {/* Amount Info */}
-              <div className="bg-primary/5 p-4 rounded-2xl border border-primary/10 flex justify-between items-center">
+            {/* Financial Status Summary banner */}
+            <div className="bg-teal-50/20 p-4 rounded-lg border border-teal-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <span className="text-[10px] uppercase font-bold tracking-wider text-primary">Transaction Value</span>
+                <p className="text-2xl font-bold text-primary mt-1">₹{booking.totalAmount}</p>
+              </div>
+              <div className="flex gap-6 text-xs font-semibold">
                 <div>
-                  <p className="text-[10px] font-bold text-primary uppercase mb-1">Total Booking Amount</p>
-                  <p className="text-2xl font-black text-primary">₹{booking.totalAmount}</p>
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-gray-400 block mb-0.5">Payment Method</span>
+                  <span className="text-secondary font-bold uppercase tracking-wider bg-white px-2 py-0.5 rounded border border-gray-200 text-[11px] inline-block">{booking.paymentMethod}</span>
                 </div>
-                <div className="text-right">
-                  <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Payment Method</p>
-                  <p className="text-sm font-bold text-secondary uppercase tracking-wider">{booking.paymentMethod}</p>
-                </div>
+                {isFullyRefunded && (
+                  <div>
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-purple-400 block mb-0.5">Refund Channel</span>
+                    <span className="text-purple-600 font-bold uppercase tracking-wider bg-purple-50 px-2 py-0.5 rounded border border-purple-100 text-[11px] inline-block">Wallet</span>
+                  </div>
+                )}
               </div>
+            </div>
 
-              {/* Tabs for Images/Timeline/Financials */}
-              <div className="flex gap-4 border-b border-gray-100">
-                {['images', 'timeline', 'financials'].map(t => (
-                  <button 
-                    key={t} onClick={() => setActiveTab(t)}
-                    className={`pb-3 text-sm font-bold capitalize transition-all border-b-2 ${activeTab === t ? 'border-primary text-primary' : 'border-transparent text-gray-400'}`}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
+            {/* Navigation Tabs */}
+            <div className="flex gap-6 border-b border-gray-100">
+              {[
+                { id: 'images', label: 'Evidence Locker', count: (booking.providerWorkProof?.beforeImages?.length || 0) + (booking.providerWorkProof?.afterImages?.length || 0) + (booking.complaintProofs?.length || 0) },
+                { id: 'timeline', label: 'Case Timeline' },
+                { id: 'financials', label: 'Gateway & Ledger' }
+              ].map(t => (
+                <button 
+                  key={t.id} onClick={() => setActiveTab(t.id)}
+                  className={`pb-3 text-sm font-semibold transition-all duration-200 border-b-2 flex items-center gap-1.5 ${
+                    activeTab === t.id 
+                      ? 'border-primary text-primary font-bold' 
+                      : 'border-transparent text-gray-450 hover:text-gray-600'
+                  }`}
+                >
+                  {t.label}
+                  {t.count > 0 && (
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${activeTab === t.id ? 'bg-primary/10 text-primary font-bold' : 'bg-gray-100 text-gray-400'}`}>
+                      {t.count}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
 
-              {activeTab === 'images' && (
-                <div className="space-y-6 animate-fade-in">
-                  {/* Before Images */}
-                  <div>
-                    <h4 className="text-xs font-bold text-gray-400 uppercase mb-3 flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500" /> Before Service Proof
+            {/* Tab content 1: Images & Evidence Gallery */}
+            {activeTab === 'images' && (
+              <div className="space-y-5 animate-fade-in">
+                {/* Proof comparison grids */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Before */}
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-sm" /> Before Service Proof
                     </h4>
-                    <div className="grid grid-cols-3 gap-3">
-                      {booking.providerWorkProof?.beforeImages?.map((img, i) => (
-                        <img 
-                          key={i} src={img.url} alt="Before" 
-                          className="w-full h-24 object-cover rounded-xl cursor-pointer hover:scale-105 transition-all shadow-sm"
-                          onClick={() => window.open(img.url, '_blank')}
-                        />
-                      )) || <p className="text-xs text-gray-300 italic">No before images uploaded</p>}
-                    </div>
-                  </div>
-
-                  {/* After Images */}
-                  <div>
-                    <h4 className="text-xs font-bold text-gray-400 uppercase mb-3 flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-green-500" /> After Service Proof
-                    </h4>
-                    <div className="grid grid-cols-3 gap-3">
-                      {booking.providerWorkProof?.afterImages?.map((img, i) => (
-                        <img 
-                          key={i} src={img.url} alt="After" 
-                          className="w-full h-24 object-cover rounded-xl cursor-pointer hover:scale-105 transition-all shadow-sm"
-                          onClick={() => window.open(img.url, '_blank')}
-                        />
-                      )) || <p className="text-xs text-gray-300 italic">No after images uploaded</p>}
-                    </div>
-                  </div>
-
-                  {/* Complaint Proofs */}
-                  <div>
-                    <h4 className="text-xs font-bold text-gray-400 uppercase mb-3 flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-red-500" /> Complaint Evidence
-                    </h4>
-                    <div className="space-y-4">
-                      {booking.complaintProofs?.filter(p => p.uploadedBy === 'customer').map((proof, i) => (
-                        <div key={i} className="bg-gray-50 p-3 rounded-xl border border-gray-100">
-                          <p className="text-[10px] font-bold text-secondary mb-2 flex justify-between">
-                            <span>Uploaded by {proof.uploadedBy}</span>
-                            <span className="text-gray-400 font-normal">{formatDateTime(proof.createdAt)}</span>
-                          </p>
-                          <div className="grid grid-cols-3 gap-2 mb-2">
-                            {proof.images?.map((img, j) => (
-                              <img key={j} src={img.url} alt="Proof" className="w-full h-20 object-cover rounded-lg cursor-pointer hover:scale-105 transition-all shadow-sm" onClick={() => window.open(img.url, '_blank')} />
-                            ))}
-                          </div>
-                          <p className="text-xs text-gray-500 italic">"{proof.message}"</p>
-                        </div>
-                      ))}
-                      {(!booking.complaintProofs || booking.complaintProofs.filter(p => p.uploadedBy === 'customer').length === 0) && (
-                        <p className="text-xs text-gray-300 italic">No complaint proofs available</p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Provider Responses */}
-                  <div className="pt-4">
-                    <h4 className="text-xs font-bold text-gray-400 uppercase mb-3 flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-purple-500" /> Provider Response
-                    </h4>
-                    <div className="space-y-4">
-                      {booking.complaintProofs?.filter(p => p.uploadedBy === 'provider').map((proof, i) => (
-                        <div key={i} className="bg-gray-50 p-3 rounded-xl border border-gray-100">
-                          <p className="text-[10px] font-bold text-secondary mb-2 flex justify-between">
-                            <span>Provider Response</span>
-                            <span className="text-gray-400 font-normal">{formatDateTime(proof.createdAt)}</span>
-                          </p>
-                          <div className="grid grid-cols-3 gap-2 mb-2">
-                            {proof.images?.map((img, j) => (
-                              <img key={j} src={img.url} alt="Proof" className="w-full h-20 object-cover rounded-lg cursor-pointer hover:scale-105 transition-all shadow-sm" onClick={() => window.open(img.url, '_blank')} />
-                            ))}
-                          </div>
-                          <p className="text-xs text-gray-500 italic">"{proof.message}"</p>
-                        </div>
-                      ))}
-                      {(!booking.complaintProofs || booking.complaintProofs.filter(p => p.uploadedBy === 'provider').length === 0) && (
-                        <p className="text-xs text-gray-300 italic">No provider response</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {activeTab === 'timeline' && (
-                <div className="space-y-6 animate-fade-in pl-4 border-l-2 border-gray-100 ml-2 py-2">
-                  {[
-                    { label: 'Booking Created', date: booking.createdAt, icon: FiClock, color: 'text-gray-400' },
-                    { label: 'Service Started', date: booking.serviceStartedAt || booking.startedAt, icon: FiTool, color: 'text-blue-500' },
-                    { label: 'Service Completed', date: booking.serviceCompletedAt || booking.completedAt, icon: FiCheckCircle, color: 'text-green-500' },
-                    { label: 'Complaint Raised', date: booking.complaintProofs?.find(p => p.uploadedBy === 'customer')?.createdAt || booking.complaint?.createdAt, icon: FiAlertTriangle, color: 'text-red-500' },
-                    { label: 'Provider Response', date: booking.complaintProofs?.find(p => p.uploadedBy === 'provider')?.createdAt, icon: FiUser, color: 'text-purple-500' },
-                    { label: 'Admin Decision', date: booking.cancellationProgress?.refundCompletedAt, icon: FiDollarSign, color: 'text-primary' },
-                    { label: 'Payout Released', date: (booking.fullData?.earningHoldStatus === 'available' || booking.fullData?.earningHoldStatus === 'paid' || booking.fullData?.earningHoldStatus === 'withdrawn') ? (booking.fullData?.payoutHoldUntil || booking.updatedAt) : null, icon: FiUnlock, color: 'text-green-600' },
-                  ].filter(t => t.date).map((item, i) => (
-                    <div key={i} className="relative flex items-center gap-4">
-                      <div className={`absolute -left-[25px] w-4 h-4 rounded-full bg-white border-2 border-current ${item.color}`} />
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center bg-gray-50 ${item.color}`}>
-                        <item.icon size={14} />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-secondary">{item.label}</p>
-                        <p className="text-[10px] text-gray-400">{formatDateTime(item.date)}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {activeTab === 'financials' && booking.fullData && (
-                <div className="space-y-6 animate-fade-in py-2">
-                  <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
-                    <h4 className="text-xs font-bold text-gray-400 uppercase mb-3 flex items-center gap-2">
-                      <FiLock className="text-amber-500" /> Provider Payout Status
-                    </h4>
-                    <div className="grid grid-cols-2 gap-4 text-sm font-bold text-secondary">
-                      <div>
-                        <p className="text-[10px] text-gray-400 uppercase">Earning Status</p>
-                        <p>{booking.fullData.earningHoldStatus}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-gray-400 uppercase">Payout Hold Until</p>
-                        <p>{booking.fullData.payoutHoldUntil ? formatDateTime(booking.fullData.payoutHoldUntil) : 'N/A'}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
-                    <h4 className="text-xs font-bold text-gray-400 uppercase mb-3 flex items-center gap-2">
-                      <FiDollarSign className="text-green-500" /> Transaction History
-                    </h4>
-                    {booking.fullData.transactions?.length > 0 ? (
-                      <div className="space-y-3">
-                        {booking.fullData.transactions.map((tx, idx) => (
-                          <div key={idx} className="bg-white p-3 rounded-xl border border-gray-100 flex flex-col gap-1">
-                            <div className="flex justify-between items-center">
-                              <span className="text-xs font-bold text-secondary">{tx.transactionId || 'No TX ID'}</span>
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${tx.paymentStatus === 'refunded' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                                {tx.paymentStatus}
-                              </span>
-                            </div>
-                            <div className="flex justify-between items-center text-[10px] text-gray-400">
-                              <span>{tx.paymentMethod}</span>
-                              <span>₹{tx.isRupees || ['cash', 'wallet'].includes(tx.paymentMethod?.toLowerCase()) ? tx.amount : tx.amount / 100}</span>
-                            </div>
-                            {tx.refundStatus && tx.refundStatus !== 'none' && (
-                              <div className="mt-2 pt-2 border-t border-gray-100 flex justify-between items-center text-[10px] text-gray-500">
-                                <span>Refund: <span className="font-bold">{tx.refundStatus}</span></span>
-                                {tx.refundedAmount > 0 && <span>₹{tx.refundedAmount}</span>}
+                    <div className="bg-gray-50 border border-gray-100 rounded-lg p-3 min-h-[120px] flex items-center justify-center">
+                      {booking.providerWorkProof?.beforeImages?.length > 0 ? (
+                        <div className="grid grid-cols-3 gap-2 w-full">
+                          {booking.providerWorkProof.beforeImages.map((img, i) => (
+                            <div key={i} className="relative group overflow-hidden rounded-lg h-20 bg-black/5 border border-gray-100 cursor-pointer" onClick={() => setSelectedPreviewImage(img.url)}>
+                              <img src={img.url} alt="Before" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
+                              <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity duration-200">
+                                <Eye size={14} />
                               </div>
-                            )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-gray-400 italic">No before images uploaded</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* After */}
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-sm" /> After Service Proof
+                    </h4>
+                    <div className="bg-gray-50 border border-gray-100 rounded-lg p-3 min-h-[120px] flex items-center justify-center">
+                      {booking.providerWorkProof?.afterImages?.length > 0 ? (
+                        <div className="grid grid-cols-3 gap-2 w-full">
+                          {booking.providerWorkProof.afterImages.map((img, i) => (
+                            <div key={i} className="relative group overflow-hidden rounded-lg h-20 bg-black/5 border border-gray-100 cursor-pointer" onClick={() => setSelectedPreviewImage(img.url)}>
+                              <img src={img.url} alt="After" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
+                              <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity duration-200">
+                                <Eye size={14} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-gray-400 italic">No after images uploaded</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Complaint Proof evidence list */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-sm" /> Customer Claims & Evidence
+                  </h4>
+                  <div className="space-y-3">
+                    {booking.complaintProofs?.filter(p => p.uploadedBy === 'customer').map((proof, i) => (
+                      <div key={i} className="bg-red-50/20 border border-red-100/40 p-3 rounded-lg space-y-3">
+                        <div className="flex justify-between items-center text-[10px] font-bold text-gray-400 border-b border-red-100/25 pb-2">
+                          <span className="text-red-600 bg-red-50 px-2 py-0.5 rounded">Uploaded by Customer</span>
+                          <span>{formatDateTime(proof.createdAt)}</span>
+                        </div>
+                        {proof.images?.length > 0 && (
+                          <div className="grid grid-cols-4 gap-2">
+                            {proof.images.map((img, j) => (
+                              <div key={j} className="relative group overflow-hidden rounded-lg h-16 bg-black/5 border border-gray-100 cursor-pointer" onClick={() => setSelectedPreviewImage(img.url)}>
+                                <img src={img.url} alt="Complaint Proof" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
+                                <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity duration-200">
+                                  <Eye size={12} />
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                        ))}
+                        )}
+                        <p className="text-xs text-gray-600 bg-white/70 p-2.5 rounded border border-gray-100/50 leading-relaxed italic">"{proof.message}"</p>
                       </div>
-                    ) : (
-                      <p className="text-xs text-gray-400 italic">No transactions found</p>
+                    ))}
+                    {(!booking.complaintProofs || booking.complaintProofs.filter(p => p.uploadedBy === 'customer').length === 0) && (
+                      <div className="bg-gray-50 border border-gray-100 rounded-lg p-3 text-center text-xs text-gray-400 italic">
+                        No customer dispute evidence uploaded
+                      </div>
                     )}
                   </div>
                 </div>
-              )}
-            </div>
 
-            {/* Right Column: Actions */}
-            <div className="space-y-6">
-              <div className="bg-gray-50 rounded-2xl p-5 border border-gray-100 space-y-4">
+                {/* Provider Responses list */}
+                <div className="space-y-3 pt-1">
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-sm" /> Provider Response Counter-Claims
+                  </h4>
+                  <div className="space-y-3">
+                    {booking.complaintProofs?.filter(p => p.uploadedBy === 'provider').map((proof, i) => (
+                      <div key={i} className="bg-purple-50/20 border border-purple-100/40 p-3 rounded-lg space-y-3">
+                        <div className="flex justify-between items-center text-[10px] font-bold text-gray-400 border-b border-purple-100/25 pb-2">
+                          <span className="text-purple-600 bg-purple-50 px-2 py-0.5 rounded">Uploaded by Provider</span>
+                          <span>{formatDateTime(proof.createdAt)}</span>
+                        </div>
+                        {proof.images?.length > 0 && (
+                          <div className="grid grid-cols-4 gap-2">
+                            {proof.images.map((img, j) => (
+                              <div key={j} className="relative group overflow-hidden rounded-lg h-16 bg-black/5 border border-gray-100 cursor-pointer" onClick={() => setSelectedPreviewImage(img.url)}>
+                                <img src={img.url} alt="Provider Response Proof" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
+                                <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity duration-200">
+                                  <Eye size={12} />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <p className="text-xs text-gray-600 bg-white/70 p-2.5 rounded border border-gray-100/50 leading-relaxed italic">"{proof.message}"</p>
+                      </div>
+                    ))}
+                    {(!booking.complaintProofs || booking.complaintProofs.filter(p => p.uploadedBy === 'provider').length === 0) && (
+                      <div className="bg-gray-50 border border-gray-100 rounded-lg p-3 text-center text-xs text-gray-400 italic">
+                        No response counter-claims uploaded by provider
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+              </div>
+            )}
+
+            {/* Tab content 2: Case Timeline */}
+            {activeTab === 'timeline' && (
+              <div className="space-y-6 animate-fade-in pl-4 border-l border-gray-100 ml-3 py-2">
+                {[
+                  { label: 'Booking Registered', date: booking.createdAt, icon: Clock, color: 'text-gray-450 bg-gray-50 border-gray-200' },
+                  { label: 'Provider Commenced Service', date: booking.serviceStartedAt || booking.startedAt, icon: Briefcase, color: 'text-blue-500 bg-blue-50 border-blue-200' },
+                  { label: 'Job Marked Completed', date: booking.serviceCompletedAt || booking.completedAt, icon: CheckCircle, color: 'text-green-500 bg-green-50 border-green-200' },
+                  { label: 'Dispute / Claim Registered', date: booking.complaintProofs?.find(p => p.uploadedBy === 'customer')?.createdAt || booking.complaint?.createdAt, icon: AlertCircle, color: 'text-red-500 bg-red-50 border-red-200' },
+                  { label: 'Provider Countersued', date: booking.complaintProofs?.find(p => p.uploadedBy === 'provider')?.createdAt, icon: User, color: 'text-purple-500 bg-purple-50 border-purple-200' },
+                  { label: 'Admin Refund Action', date: booking.cancellationProgress?.refundCompletedAt, icon: DollarSign, color: 'text-primary bg-primary/10 border-primary/20' },
+                  { label: 'Escrow Earnings Adjustment', date: (booking.fullData?.earningHoldStatus === 'available' || booking.fullData?.earningHoldStatus === 'paid' || booking.fullData?.earningHoldStatus === 'withdrawn') ? (booking.fullData?.payoutHoldUntil || booking.updatedAt) : null, icon: Unlock, color: 'text-blue-500 bg-blue-50 border-blue-200' },
+                ].filter(t => t.date).map((item, i) => (
+                  <div key={i} className="relative flex items-center gap-4 group text-gray-700">
+                    <div className="absolute -left-[21px] w-2.5 h-2.5 rounded-full bg-white border-2 border-gray-300 group-hover:border-primary transition-colors" />
+                    
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center border shadow-sm ${item.color}`}>
+                      <item.icon size={15} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-secondary">{item.label}</p>
+                      <p className="text-[10px] text-gray-400 font-semibold">{formatDateTime(item.date)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Tab content 3: Gateway & Ledger */}
+            {activeTab === 'financials' && booking.fullData && (
+              <div className="space-y-4 animate-fade-in py-1">
+                
+                {/* Hold status info card */}
+                <div className="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2.5 flex items-center gap-2">
+                    <Lock className="text-amber-500 w-3.5 h-3.5" /> Payout Holding Summary
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-semibold text-secondary">
+                    <div className="bg-white p-2.5 rounded border border-gray-200/50">
+                      <span className="text-[10px] text-gray-400 uppercase block mb-1">Escrow Earning Status</span>
+                      <span className="font-bold text-sm capitalize">{booking.fullData.earningHoldStatus}</span>
+                    </div>
+                    <div className="bg-white p-2.5 rounded border border-gray-200/50">
+                      <span className="text-[10px] text-gray-400 uppercase block mb-1">Payout Lock Release Date</span>
+                      <span className="font-bold text-sm">{booking.fullData.payoutHoldUntil ? formatDateTime(booking.fullData.payoutHoldUntil) : 'No lock date set'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Transactions breakdown */}
+                <div className="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2.5 flex items-center gap-2">
+                    <DollarSign className="text-green-600 w-3.5 h-3.5" /> Payment & Transaction Ledger
+                  </h4>
+                  {booking.fullData.transactions?.length > 0 ? (
+                    <div className="space-y-2">
+                      {booking.fullData.transactions.map((tx, idx) => (
+                        <div key={idx} className="bg-white p-3 rounded border border-gray-200 flex flex-col gap-2">
+                          <div className="flex justify-between items-center border-b border-gray-50 pb-1.5">
+                            <span className="text-xs font-mono font-bold text-secondary">{tx.transactionId || 'No Gateway ID'}</span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase ${
+                              tx.paymentStatus === 'refunded' 
+                                ? 'bg-red-50 text-red-650 border-red-100' 
+                                : 'bg-green-50 text-green-755 border-green-100'
+                            }`}>
+                              {tx.paymentStatus}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center text-xs font-medium text-gray-500">
+                            <span className="uppercase tracking-wider text-[10px] bg-gray-50 px-2 py-0.5 rounded border border-gray-100">{tx.paymentMethod}</span>
+                            <span className="font-bold text-secondary text-sm">₹{tx.isRupees || ['cash', 'wallet'].includes(tx.paymentMethod?.toLowerCase()) ? tx.amount : tx.amount / 100}</span>
+                          </div>
+                          {tx.refundStatus && tx.refundStatus !== 'none' && (
+                            <div className="mt-1 pt-1.5 border-t border-gray-100 flex justify-between items-center text-[10px] text-gray-400 font-semibold">
+                              <span>Refund State: <span className="font-bold text-red-500 uppercase">{tx.refundStatus}</span></span>
+                              {tx.refundedAmount > 0 && <span className="text-gray-650">Refunded: <span className="font-bold text-secondary">₹{tx.refundedAmount}</span></span>}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="bg-white p-5 rounded border border-gray-200/50 text-center text-xs text-gray-400 italic">
+                      No transaction records registered.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Right Area (40% width) - Interactive Action Panel / Control Center */}
+          <div className="lg:w-5/12 bg-gray-50/50 p-5 flex flex-col justify-between overflow-y-auto space-y-5">
+            
+            <div className="space-y-5">
+              
+              {/* Box Header */}
+              <div>
                 <h4 className="text-sm font-bold text-secondary flex items-center gap-2">
-                  <FiAlertTriangle className="text-amber-500" /> Admin Resolution
+                  <AlertCircle className="text-accent w-4 h-4" /> Case Resolution Controls
                 </h4>
+                <p className="text-xs text-gray-450 mt-0.5">Determine the refund eligibility and update status instantly.</p>
+              </div>
 
-                <div className="space-y-3">
-                  <p className="text-[10px] font-bold text-gray-400 uppercase">Resolution Note / Reason</p>
-                  <textarea 
-                    value={resolutionNotes}
-                    onChange={e => setResolutionNotes(e.target.value)}
-                    disabled={isFullyRefunded}
-                    className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary resize-none h-24 disabled:bg-gray-50 disabled:text-gray-400"
-                    placeholder="Describe the reason for your decision..."
-                  />
+              {/* Status Spec Grid */}
+              <div className="bg-white rounded-lg p-4 border border-gray-100 shadow-sm space-y-3 text-xs">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-455 font-semibold">Payment Status:</span>
+                  <RefundStatusBadge status={booking.paymentStatus} />
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-455 font-semibold">Dispute Claim:</span>
+                  <DisputeStatusBadge status={booking.disputeStatus} />
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-455 font-semibold">Escrow Earnings:</span>
+                  <span className={`font-mono text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
+                    booking.earningHoldStatus === 'cancelled' || booking.payoutStatus === 'Refund Adjusted'
+                      ? 'bg-red-50 text-red-700 border-red-100'
+                      : booking.earningHoldStatus === 'available' || booking.payoutStatus === 'Payout Ready'
+                      ? 'bg-green-50 text-green-700 border-green-150'
+                      : 'bg-yellow-50 text-yellow-705 border-yellow-150'
+                  }`}>
+                    {booking.payoutStatus || 'Not Adjusted'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center pt-2 border-t border-gray-100">
+                  <span className="text-gray-455 font-semibold">Refund Channel:</span>
+                  <span className="font-bold text-purple-650">
+                    {booking.refundMode === 'wallet' || booking.paymentStatus === 'refunded' ? 'Wallet System' : 'None / Razorpay Disabled'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-455 font-semibold">System Decision:</span>
+                  <span className="font-bold text-primary">
+                    {booking.adminRefundDecision === 'approved'
+                      ? 'Full Approved'
+                      : booking.adminRefundDecision === 'partial'
+                      ? 'Partial Approved'
+                      : booking.adminRefundDecision === 'rejected'
+                      ? 'Dispute Denied'
+                      : 'Awaiting Judgment'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Action Form */}
+              <div className="space-y-3.5">
+                
+                {/* Decision Type Buttons Cards */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Select Judgment Option</label>
+                  {isFullyRefunded ? (
+                    <div className="bg-green-50 border border-green-100 p-3 rounded-lg text-center text-xs font-semibold text-green-700">
+                      This case has already been resolved and refunded. No additional decisions can be made.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { id: 'refund_full', label: 'Full Refund', color: 'border-green-200 text-green-600 hover:bg-green-50/50', activeColor: 'bg-green-50 border-green-500 text-green-700' },
+                        { id: 'refund_partial', label: 'Partial', color: 'border-primary/20 text-primary hover:bg-primary/5', activeColor: 'bg-primary/10 border-primary text-primary' },
+                        { id: 'reject', label: 'Reject Claim', color: 'border-red-200 text-red-650 hover:bg-red-50/50', activeColor: 'bg-red-50 border-red-500 text-red-700' }
+                      ].map(opt => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => {
+                            setDecisionType(opt.id);
+                            if (opt.id === 'refund_full') {
+                              setRefundAmount(booking.totalAmount);
+                            }
+                          }}
+                          className={`py-2 px-1 rounded-lg border text-xs font-bold transition-all duration-200 text-center cursor-pointer ${
+                            decisionType === opt.id ? opt.activeColor : `bg-white ${opt.color}`
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
-                <div className="space-y-3">
-                  <p className="text-[10px] font-bold text-gray-400 uppercase">Decision Type</p>
-                  <select
-                    value={decisionType}
-                    onChange={e => setDecisionType(e.target.value)}
-                    disabled={isFullyRefunded}
-                    className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary disabled:bg-gray-50 disabled:text-gray-400"
-                  >
-                    <option value="">Select Action</option>
-                    <option value="refund_full">Approve Full Refund</option>
-                    <option value="refund_partial">Approve Partial Refund</option>
-                    <option value="reject">Reject Refund Request</option>
-                  </select>
-                </div>
-
-                {decisionType === 'refund_partial' && (
-                  <div className="space-y-3 pt-2">
-                    <p className="text-[10px] font-bold text-gray-400 uppercase">Refund Amount</p>
-                    <div className="flex gap-2">
+                {/* Partial Refund Input fields */}
+                {decisionType === 'refund_partial' && !isFullyRefunded && (
+                  <div className="space-y-1 animate-slide-up">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex justify-between">
+                      <span>Refund Amount (₹)</span>
+                      <span className="text-gray-500">Max: ₹{booking.totalAmount}</span>
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-sm">₹</span>
                       <input 
-                        type="number" value={refundAmount}
-                        onChange={e => setRefundAmount(e.target.value)}
-                        disabled={isFullyRefunded}
-                        className="flex-1 p-2 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-gray-50 disabled:text-gray-400"
-                        placeholder="Amount"
+                        type="number" 
+                        value={refundAmount}
+                        max={booking.totalAmount}
+                        onChange={e => {
+                          const val = Number(e.target.value);
+                          if (val > booking.totalAmount) {
+                            setRefundAmount(booking.totalAmount);
+                          } else {
+                            setRefundAmount(val);
+                          }
+                        }}
+                        className="w-full pl-8 pr-4 py-2 bg-white border border-gray-300 rounded-lg text-xs font-bold outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                        placeholder="Amount to refund"
                       />
                     </div>
                   </div>
                 )}
 
-                <button 
-                  onClick={() => {
-                    if (decisionType === 'refund_full') handleAction('refund', 'full');
-                    else if (decisionType === 'refund_partial') handleAction('refund', 'partial');
-                    else if (decisionType === 'reject') handleAction('reject');
-                  }}
-                  disabled={updating || !decisionType || isFullyRefunded}
-                  className="w-full py-2.5 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary/90 disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {updating && <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>}
-                  {updating ? 'Processing...' : (isFullyRefunded ? 'Refund Already Completed' : 'Submit Decision')}
-                </button>
+                {/* Notes Input Area */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Resolution Remarks / Remark Log</label>
+                  <textarea 
+                    value={resolutionNotes}
+                    onChange={e => setResolutionNotes(e.target.value)}
+                    disabled={isFullyRefunded}
+                    className="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all resize-none h-24 disabled:bg-gray-100 disabled:text-gray-400"
+                    placeholder="Provide professional auditing rationale for this decision..."
+                  />
+                </div>
 
-                <div className="pt-4 border-t border-gray-200 space-y-3">
-                  <p className="text-[10px] font-bold text-orange-600 uppercase">Payout Control</p>
+              </div>
+
+            </div>
+
+            {/* Form actions and controls buttons */}
+            <div className="space-y-3 pt-3 border-t border-gray-100">
+              
+              {/* Submit Main Action button */}
+              <button 
+                onClick={() => {
+                  if (decisionType === 'refund_full') handleAction('refund', 'full');
+                  else if (decisionType === 'refund_partial') handleAction('refund', 'partial');
+                  else if (decisionType === 'reject') handleAction('reject');
+                }}
+                disabled={updating || !decisionType || isFullyRefunded}
+                className="w-full py-2.5 bg-primary text-white text-xs font-bold uppercase tracking-wider rounded-lg hover:bg-teal-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {updating && <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>}
+                {updating ? 'Recording Decision...' : (isFullyRefunded ? 'Resolved & Closed' : 'Execute System Decision')}
+              </button>
+
+              {/* Provider Payout hold toggles switch */}
+              {!isFullyRefunded && (
+                <div className="bg-gray-50 border border-gray-100 p-3 rounded-lg space-y-2">
+                  <div>
+                    <span className="text-[10px] font-bold text-orange-600 uppercase tracking-wider block">Security Escalation Control</span>
+                    <span className="text-[10px] text-gray-400 block mt-0.5">Freeze or release vendor's escrow payout immediately.</span>
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
                     <button 
                       onClick={() => handleAction('hold', 'held')}
                       disabled={updating || booking.earningHoldStatus === 'held'}
-                      className="py-2 bg-orange-100 text-orange-700 text-[10px] font-bold rounded-xl hover:bg-orange-200"
+                      className="py-1.5 bg-orange-50 border border-orange-100 hover:bg-orange-100 text-orange-700 disabled:opacity-40 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer"
                     >
-                      Hold Payout
+                      <Lock size={10} /> Hold Escrow
                     </button>
                     <button 
                       onClick={() => handleAction('hold', 'available')}
                       disabled={updating || booking.earningHoldStatus === 'available'}
-                      className="py-2 bg-green-100 text-green-700 text-[10px] font-bold rounded-xl hover:bg-green-200"
+                      className="py-1.5 bg-green-50 border border-green-100 hover:bg-green-100 text-green-700 disabled:opacity-40 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer"
                     >
-                      Release
+                      <Unlock size={10} /> Release Escrow
                     </button>
                   </div>
                 </div>
-              </div>
+              )}
 
-              {/* Status Summary */}
-              <div className="bg-secondary p-5 rounded-2xl text-white space-y-3">
-                <p className="text-[10px] font-bold text-gray-400 uppercase">Current Case Status</p>
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center text-xs">
-                    <span>Payment:</span>
-                    <RefundStatusBadge status={booking.paymentStatus} />
-                  </div>
-                  <div className="flex justify-between items-center text-xs">
-                    <span>Dispute:</span>
-                    <DisputeStatusBadge status={booking.disputeStatus} />
-                  </div>
-                  {booking.complaint && (
-                    <div className="flex justify-between items-center text-xs">
-                      <span>Complaint:</span>
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase border ${booking.complaint.status === 'Closed' ? 'bg-gray-100 text-gray-500 border-gray-200' : 'bg-red-100 text-red-700 border-red-200'}`}>
-                        {booking.complaint.status === 'Closed' ? 'Complaint Closed' : booking.complaint.status}
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex justify-between items-center text-xs">
-                    <span>Earning:</span>
-                    <PayoutStatusBadge status={booking.payoutStatus} />
-                  </div>
-                  {booking.adminRemark && (
-                    <div className="pt-2 border-t border-white/10">
-                      <p className="text-[10px] text-gray-400 uppercase mb-1">Financial Log</p>
-                      <p className="text-[10px] leading-relaxed opacity-80 bg-white/5 p-2 rounded-lg italic">
-                        {booking.adminRemark}
-                      </p>
-                    </div>
-                  )}
+              {/* Display admin remarks logs if available */}
+              {booking.adminRemark && (
+                <div className="bg-gray-105 p-3 rounded-lg border border-gray-200/50 space-y-1">
+                  <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Audit Log Remarks</span>
+                  <p className="text-[10px] italic leading-relaxed text-gray-500 font-medium">"{booking.adminRemark}"</p>
                 </div>
-              </div>
+              )}
+
             </div>
 
           </div>
+
         </div>
+
       </div>
+
+      {/* Media zoom preview lightbox */}
+      {selectedPreviewImage && (
+        <div className="fixed inset-0 bg-black/90 z-[60] flex items-center justify-center p-4 animate-fade-in" onClick={() => setSelectedPreviewImage(null)}>
+          <div className="absolute top-4 right-4">
+            <button 
+              onClick={() => setSelectedPreviewImage(null)} 
+              className="w-10 h-10 flex items-center justify-center bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <img src={selectedPreviewImage} alt="Zoom Preview" className="max-w-full max-h-[88vh] object-contain rounded-lg shadow-2xl animate-scale-up" onClick={e => e.stopPropagation()} />
+        </div>
+      )}
+
     </div>
   );
 };
 
-// ── Main Page ─────────────────────────────────────────────────
+// ── Main Page (Premium Admin Panel) ───────────────────────────
 const RefundPage = () => {
   const { showToast } = useAuth();
   const [bookings, setBookings] = useState([]);
@@ -482,15 +688,18 @@ const RefundPage = () => {
         page: pagination.page,
         limit: pagination.limit,
         search: searchTerm,
+        forRefunds: true
       };
       
       const res = await BookingService.getAllBookings(params);
       if (res.data?.success) {
         // Filter for refund-related bookings on frontend
         const filtered = res.data.data.filter(b => 
+          b.complaint ||
           b.disputeRaised || 
           b.paymentStatus === 'refunded' || 
-          b.disputeStatus !== 'none'
+          b.disputeStatus !== 'none' ||
+          (b.paymentMethod === 'online' && b.paymentStatus === 'paid' && b.status === 'cancelled')
         );
         
         // Apply filterStatus
@@ -533,169 +742,198 @@ const RefundPage = () => {
   }, [pagination.page, searchTerm, filterStatus]);
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8 font-inter">
+    <div className="min-h-screen bg-gray-50 p-4 md:p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 animate-fade-in">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-black text-secondary font-poppins flex items-center gap-3">
-              <span className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary">
-                <FiDollarSign size={24} />
-              </span>
-              Refund & Dispute Management
-            </h1>
-            <p className="text-sm text-gray-400 mt-1">Process customer refunds, handle disputes and manage payout holds</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-secondary">Refunds & Escrow Ledger</h1>
+            <p className="text-sm text-gray-550 mt-1">Audit dispute claims, process customer wallet refunds, and resolve vendor escrow lockouts.</p>
           </div>
           <button 
             onClick={fetchRefundBookings}
-            className="flex items-center gap-2 px-4 py-2 bg-white text-secondary border border-gray-100 rounded-xl shadow-sm hover:shadow-md transition-all font-bold text-sm"
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-white text-secondary hover:text-primary border border-gray-300 rounded-lg shadow-sm hover:shadow-md transition-all font-semibold text-sm cursor-pointer shrink-0"
           >
-            <FiRefreshCw size={14} /> Refresh Data
+            <RefreshCw size={14} className="stroke-[2.5]" /> Sync Data
           </button>
         </div>
 
-        {/* Stats Section */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-slide-up">
-          <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-4">
-            <div className="w-12 h-12 bg-green-100 rounded-2xl flex items-center justify-center text-green-600">
-              <FiDollarSign size={24} />
-            </div>
+        {/* Stats Section with dynamic card deck */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-slide-up">
+          {/* Card 1: Total Refunds */}
+          <div className="bg-white rounded-xl shadow-md p-4 md:p-6 border-l-4 border-emerald-500 flex items-center justify-between">
             <div>
-              <p className="text-sm font-bold text-gray-400">Total Refunds</p>
-              <p className="text-2xl font-black text-secondary">
+              <p className="text-sm font-medium text-gray-500">Processed Refunds</p>
+              <p className="text-2xl md:text-3xl font-bold text-secondary mt-1">
                 {bookings.filter(b => b.paymentStatus === 'refunded' || b.adminRefundDecision === 'approved').length}
               </p>
             </div>
-          </div>
-          <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-4">
-            <div className="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center text-red-600">
-              <FiLock size={24} />
+            <div className="p-2 md:p-3 bg-emerald-50 rounded-full">
+              <DollarSign className="w-6 h-6 text-emerald-600" />
             </div>
+          </div>
+
+          {/* Card 2: Held Payouts */}
+          <div className="bg-white rounded-xl shadow-md p-4 md:p-6 border-l-4 border-yellow-500 flex items-center justify-between">
             <div>
-              <p className="text-sm font-bold text-gray-400">Held Payouts</p>
-              <p className="text-2xl font-black text-secondary">
+              <p className="text-sm font-medium text-gray-550">Active Escrow Holds</p>
+              <p className="text-2xl md:text-3xl font-bold text-secondary mt-1">
                 {bookings.filter(b => b.earningHoldStatus === 'held' || b.payoutHoldUntil).length}
               </p>
             </div>
-          </div>
-          <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-4">
-            <div className="w-12 h-12 bg-amber-100 rounded-2xl flex items-center justify-center text-amber-600">
-              <FiAlertTriangle size={24} />
+            <div className="p-2 md:p-3 bg-yellow-50 rounded-full">
+              <Lock className="w-6 h-6 text-yellow-600" />
             </div>
+          </div>
+
+          {/* Card 3: Dispute Cases */}
+          <div className="bg-white rounded-xl shadow-md p-4 md:p-6 border-l-4 border-red-500 flex items-center justify-between">
             <div>
-              <p className="text-sm font-bold text-gray-400">Disputes Count</p>
-              <p className="text-2xl font-black text-secondary">
+              <p className="text-sm font-medium text-gray-550">Active Claims & Disputes</p>
+              <p className="text-2xl md:text-3xl font-bold text-secondary mt-1">
                 {bookings.filter(b => b.disputeRaised || b.disputeStatus !== 'none').length}
               </p>
+            </div>
+            <div className="p-2 md:p-3 bg-red-50 rounded-full">
+              <AlertCircle className="w-6 h-6 text-red-655" />
             </div>
           </div>
         </div>
 
-        {/* Filters & Search */}
-        <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-50 flex flex-col md:flex-row gap-4 animate-fade-in delay-100">
-          <div className="relative flex-1">
-            <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+        {/* Console Filter deck */}
+        <div className="bg-white p-4 rounded-xl shadow-md border border-gray-100 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          
+          {/* Search Bar */}
+          <div className="relative flex-1 max-w-xl">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
             <input 
               type="text" 
               placeholder="Search by Booking ID, Customer or Provider..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-primary focus:bg-white transition-all text-sm"
+              className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-primary focus:border-transparent focus:bg-white transition-all text-xs font-semibold text-gray-705"
             />
           </div>
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0">
+          
+          {/* Filter Deck Pills */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
             {[
-              { id: 'all', label: 'All Cases', icon: FiInbox },
-              { id: 'pending', label: 'Refund Pending', icon: FiClock },
-              { id: 'disputed', label: 'Disputed', icon: FiAlertTriangle },
-              { id: 'completed', label: 'Approved', icon: FiCheckCircle },
-              { id: 'rejected', label: 'Rejected', icon: FiSlash },
-              { id: 'held', label: 'Payout Held', icon: FiLock },
+              { id: 'all', label: 'All Cases', icon: Inbox },
+              { id: 'pending', label: 'Pending Refund', icon: Clock },
+              { id: 'disputed', label: 'Disputes Only', icon: AlertCircle },
+              { id: 'completed', label: 'Approved Claims', icon: CheckCircle },
+              { id: 'rejected', label: 'Rejected Claims', icon: XCircle },
+              { id: 'held', label: 'Escrow Frozen', icon: Lock },
             ].map(f => (
               <button
                 key={f.id} onClick={() => setFilterStatus(f.id)}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${filterStatus === f.id ? 'bg-secondary text-white shadow-lg' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all duration-200 cursor-pointer ${
+                  filterStatus === f.id 
+                    ? 'bg-secondary text-white shadow-sm' 
+                    : 'bg-gray-50 text-gray-550 hover:bg-gray-100 border border-gray-200 hover:text-gray-705'
+                }`}
               >
-                <f.icon size={14} /> {f.label}
+                <f.icon size={13} className="stroke-[2.5]" /> {f.label}
               </button>
             ))}
           </div>
+
         </div>
 
-        {/* Table */}
-        <div className="bg-white rounded-3xl shadow-xl border border-gray-50 overflow-hidden animate-slide-up">
+        {/* Data Grid table */}
+        <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1000px]">
-              <thead className="bg-gray-50/50">
+            <table className="w-full min-w-[1000px] border-collapse">
+              <thead className="bg-gray-50 border-b border-gray-100">
                 <tr>
                   {[
-                    'Booking ID', 'Customer', 'Provider', 'Amount', 
-                    'Refund', 'Dispute', 'Payout', 'Created Date', 'Action'
+                    'Booking ID', 'Customer Profile', 'Provider Assigned', 'Escrow Value', 
+                    'Refund Status', 'Dispute Status', 'Payout Control', 'Registered On', 'Actions'
                   ].map(h => (
-                    <th key={h} className="px-6 py-4 text-left text-[11px] font-black text-gray-400 uppercase tracking-widest">
+                    <th key={h} className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                       {h}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-gray-150">
                 {loading ? (
                    Array.from({ length: 5 }).map((_, i) => (
                     <tr key={i} className="animate-pulse">
                       {Array.from({ length: 9 }).map((_, j) => (
-                        <td key={j} className="px-6 py-5">
-                          <div className="h-4 bg-gray-100 rounded-full w-24" />
+                        <td key={j} className="px-6 py-4.5">
+                          <div className="h-4 bg-gray-100 rounded w-20" />
                         </td>
                       ))}
                     </tr>
                   ))
                 ) : bookings.length === 0 ? (
                   <tr>
-                    <td colSpan="9" className="px-6 py-20 text-center text-gray-400">
-                      <FiInbox size={48} className="mx-auto mb-4 opacity-10" />
-                      <p className="font-bold">No refund cases found</p>
-                      <p className="text-xs">Adjust your search or filters to see more results</p>
+                    <td colSpan="9" className="px-6 py-16 text-center text-gray-400">
+                      <div className="w-12 h-12 bg-gray-50 text-gray-300 rounded-lg flex items-center justify-center mx-auto mb-3 border border-gray-100">
+                        <Inbox size={22} className="stroke-[2]" />
+                      </div>
+                      <p className="font-bold text-sm text-secondary">No matching refund cases found</p>
+                      <p className="text-xs text-gray-500 mt-1">Refine your active search criteria or toggle the filter status pills.</p>
                     </td>
                   </tr>
                 ) : (
-                  bookings.map((b, i) => (
-                    <tr key={b._id} className="hover:bg-gray-50/50 transition-colors group">
-                      <td className="px-6 py-5">
-                        <span className="text-xs font-mono font-bold text-gray-400">#{b.bookingId || b._id?.slice(-8)}</span>
+                  bookings.map((b) => (
+                    <tr key={b._id} className="hover:bg-gray-50/40 transition-colors group">
+                      {/* ID */}
+                      <td className="px-6 py-4">
+                        <span className="text-xs font-mono font-bold text-secondary">#{b.bookingId || b._id?.slice(-8).toUpperCase()}</span>
                       </td>
-                      <td className="px-6 py-5">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-black text-[10px]">
-                            {b.customer?.name?.charAt(0)}
+                      
+                      {/* Customer */}
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-7 h-7 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center font-bold text-[11px] border border-teal-100/50">
+                            {b.customer?.name?.charAt(0) || <User size={10} />}
                           </div>
-                          <span className="text-sm font-bold text-secondary truncate max-w-[120px]">{b.customer?.name}</span>
+                          <span className="text-xs font-semibold text-secondary truncate max-w-[120px]">{b.customer?.name}</span>
                         </div>
                       </td>
-                      <td className="px-6 py-5">
-                        <span className="text-sm font-medium text-gray-500">{b.provider?.name || 'Unassigned'}</span>
+
+                      {/* Provider */}
+                      <td className="px-6 py-4">
+                        <span className="text-xs font-medium text-gray-550">{b.provider?.name || 'Unassigned'}</span>
                       </td>
-                      <td className="px-6 py-5">
-                        <span className="text-sm font-black text-secondary">₹{b.totalAmount}</span>
+
+                      {/* Escrow Value */}
+                      <td className="px-6 py-4">
+                        <span className="text-xs font-bold text-secondary">₹{b.totalAmount}</span>
                       </td>
-                      <td className="px-6 py-5">
+
+                      {/* Refund Badges */}
+                      <td className="px-6 py-4">
                         <RefundStatusBadge status={b.paymentStatus} />
                       </td>
-                      <td className="px-6 py-5">
+
+                      {/* Dispute Badges */}
+                      <td className="px-6 py-4">
                         <DisputeStatusBadge status={b.disputeStatus} />
                       </td>
-                      <td className="px-6 py-5">
+
+                      {/* Payout Status Badges */}
+                      <td className="px-6 py-4">
                         <PayoutStatusBadge status={b.payoutStatus} />
                       </td>
-                      <td className="px-6 py-5 text-xs text-gray-400">
+
+                      {/* Created date */}
+                      <td className="px-6 py-4 text-xs text-gray-400 font-semibold">
                         {formatDate(b.createdAt)}
                       </td>
-                      <td className="px-6 py-5">
+
+                      {/* Actions */}
+                      <td className="px-6 py-4">
                         <button 
                           onClick={() => handleViewDetails(b._id)}
-                          className="p-2 bg-primary/10 text-primary rounded-lg hover:bg-primary hover:text-white transition-all shadow-sm hover:shadow-primary/30"
+                          className="p-1 text-primary hover:text-teal-850 transition-colors"
+                          title="View Details"
                         >
-                          <FiEye size={16} />
+                          <Eye size={16} />
                         </button>
                       </td>
                     </tr>
@@ -728,3 +966,4 @@ const RefundPage = () => {
 };
 
 export default RefundPage;
+

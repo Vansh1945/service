@@ -3748,6 +3748,18 @@ const getAllBookings = async (req, res) => {
 
     const match = {};
 
+    if (req.query.forRefunds === 'true') {
+      match.$or = [
+        { complaint: { $exists: true, $ne: null } },
+        { disputeRaised: true },
+        {
+          paymentMethod: 'online',
+          paymentStatus: { $in: ['paid', 'refunded'] },
+          status: 'cancelled'
+        }
+      ];
+    }
+
     // 1. Time Range Filter
     if (req.query.timeRange) {
       const now = new Date();
