@@ -143,9 +143,9 @@ export const AuthProvider = ({ children }) => {
 
         // Execute backend logout API in the background without blocking the UI
         if (currentRefreshToken || currentFcmToken) {
-            AuthService.logoutApi({ 
+            AuthService.logoutApi({
                 refreshToken: currentRefreshToken,
-                fcmToken: currentFcmToken 
+                fcmToken: currentFcmToken
             }).catch(e => {
                 console.warn("Backend background logout failed:", e);
             });

@@ -94,11 +94,11 @@ const updateFavicon = (favicon) => {
 const applyDocumentSettings = (settings) => {
   if (settings.companyName) {
     document.title = settings.companyName;
-    
+
     // Update Open Graph and Twitter SEO titles
     const ogTitle = document.querySelector("meta[property='og:title']");
     if (ogTitle) ogTitle.setAttribute("content", settings.companyName);
-    
+
     const twitterTitle = document.querySelector("meta[name='twitter:title']");
     if (twitterTitle) twitterTitle.setAttribute("content", settings.companyName);
   }
@@ -106,7 +106,7 @@ const applyDocumentSettings = (settings) => {
   if (settings.description) {
     const metaDesc = document.querySelector("meta[name='description']");
     if (metaDesc) metaDesc.setAttribute("content", settings.description);
-    
+
     const ogDesc = document.querySelector("meta[property='og:description']");
     if (ogDesc) ogDesc.setAttribute("content", settings.description);
   }
@@ -115,7 +115,7 @@ const applyDocumentSettings = (settings) => {
     // Meta tag
     const metaTheme = document.querySelector("meta[name='theme-color']");
     if (metaTheme) metaTheme.setAttribute("content", settings.themeColor);
-    
+
     // Dynamically apply primary color styles so buttons, layouts, and components instantly adapt!
     document.documentElement.style.setProperty('--color-primary', settings.themeColor);
     document.documentElement.style.setProperty('--primary', settings.themeColor);
@@ -266,12 +266,12 @@ const App = () => {
           if (serverVersion) {
             const localVersionKey = `app_version_${currentRole}`;
             const localVersion = parseInt(localStorage.getItem(localVersionKey) || '1', 10);
-            
+
             if (serverVersion > localVersion) {
               console.log(`[PWA Update] Server version ${serverVersion} is newer than local version ${localVersion}. Upgrading...`);
-              
+
               localStorage.setItem(localVersionKey, serverVersion.toString());
-              
+
               if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.getRegistrations().then((registrations) => {
                   for (const registration of registrations) {
@@ -284,7 +284,7 @@ const App = () => {
                   }
                 });
               }
-              
+
               setTimeout(() => {
                 window.location.reload();
               }, 800);
@@ -298,7 +298,7 @@ const App = () => {
 
     const applyBrandingData = (role, data) => {
       const manifestUrl = generateManifestUrl(role, data);
-      
+
       // Favicon cache bust timestamp
       const faviconUrl = data?.favicon || data?.logo || null;
       const busterFavicon = faviconUrl ? `${faviconUrl}?v=${data?.updatedAt || Date.now()}` : null;

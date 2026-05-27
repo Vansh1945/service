@@ -305,19 +305,19 @@ const LoginPage = () => {
                   </button>
                 </form>
 
-              <div className="text-center pt-2">
-                <p className="text-sm text-gray-500">
-                  Don't have an account?{' '}
-                  <Link to="/register" className="text-accent font-semibold hover:underline">
-                    Create an account
-                  </Link>
-                </p>
+                <div className="text-center pt-2">
+                  <p className="text-sm text-gray-500">
+                    Don't have an account?{' '}
+                    <Link to="/register" className="text-accent font-semibold hover:underline">
+                      Create an account
+                    </Link>
+                  </p>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
     </div >
   );
 };

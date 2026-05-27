@@ -484,11 +484,11 @@ const publishBrandingUpdate = async (req, res) => {
       config = new SystemConfig({ companyName: 'SafeVolt Solutions' });
     }
 
-    const { 
-      releaseNotes, 
-      forceRefresh = true, 
-      sendNotification = true, 
-      broadcastOnly = false 
+    const {
+      releaseNotes,
+      forceRefresh = true,
+      sendNotification = true,
+      broadcastOnly = false
     } = req.body;
 
     const brandingKey = `${role}Branding`;
@@ -556,7 +556,7 @@ const publishBrandingUpdate = async (req, res) => {
     }
 
     const uniqueTokens = [...new Set(tokens.filter(t => t && t.trim()))];
-    
+
     if (sendNotification && uniqueTokens.length > 0) {
       try {
         const { sendPushNotification } = require('../utils/notificationService');
@@ -691,11 +691,11 @@ const getBrandingManifest = async (req, res) => {
     const appName = branding?.appName || (role === 'admin' ? 'SafeVolt Admin' : role === 'provider' ? 'SafeVolt Provider' : 'SafeVolt Customer');
     const shortName = branding?.shortName || (role === 'admin' ? 'Admin' : role === 'provider' ? 'Provider' : 'SafeVolt');
     const description = branding?.description || (role === 'admin' ? 'SafeVolt Control Panel' : `${shortName} App`);
-    
+
     // Support custom branding colors if defined in the DB, fallback to SafeVolt/role defaults
     const themeColor = branding?.themeColor || '#0D9488';
     const backgroundColor = branding?.backgroundColor || '#ffffff';
-    
+
     const logoUrl = branding?.logo || '/icon-192.png';
     const iconUrl = branding?.icon || logoUrl;
 
