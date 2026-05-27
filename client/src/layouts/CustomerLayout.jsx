@@ -56,14 +56,25 @@ const CustomerLayout = () => {
     useEffect(() => {
         const fetchSystemSettings = async () => {
             try {
-                const response = await SystemService.getSystemSetting();
-                if (response.data?.success) {
-                    const data = response.data;
+                const cached = localStorage.getItem('branding_customer');
+                if (cached) {
+                    const data = JSON.parse(cached);
                     setSystemSettings({
-                        companyName: data.data?.companyName || '',
-                        logo: data.data?.logo,
-                        tagline: data.data?.tagline || ''
+                        companyName: data.appName || 'SAFEVOLT SOLUTIONS',
+                        logo: data.logo || null,
+                        tagline: data.description || ''
                     });
+                }
+
+                const response = await SystemService.getBrandingSettings('customer');
+                if (response.data?.success) {
+                    const data = response.data.data;
+                    setSystemSettings({
+                        companyName: data.appName || 'SAFEVOLT SOLUTIONS',
+                        logo: data.logo || null,
+                        tagline: data.description || ''
+                    });
+                    localStorage.setItem('branding_customer', JSON.stringify(data));
                 }
             } catch (error) {
                 console.error('Failed to fetch system settings:', error);
@@ -74,6 +85,21 @@ const CustomerLayout = () => {
             fetchSystemSettings();
         }
     }, [token]);
+
+    useEffect(() => {
+        const handleBrandingUpdate = (e) => {
+            if (e.detail?.role === 'customer') {
+                const data = e.detail.data;
+                setSystemSettings({
+                    companyName: data.appName || 'SAFEVOLT SOLUTIONS',
+                    logo: data.logo || null,
+                    tagline: data.description || ''
+                });
+            }
+        };
+        window.addEventListener('brandingUpdated', handleBrandingUpdate);
+        return () => window.removeEventListener('brandingUpdated', handleBrandingUpdate);
+    }, []);
 
     const navigationItems = [
         { name: 'Services', path: '/customer/services', icon: <FiShoppingBag className="w-5 h-5" /> },

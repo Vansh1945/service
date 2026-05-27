@@ -52,8 +52,23 @@ export const createBanner = (data) => {
 export const updateBanner = (id, data) => {
     return axiosInstance.put(`/system-setting/admin/banners/${id}`, data);
 };
-
 export const deleteBanner = (id) => {
     return axiosInstance.delete(`/system-setting/admin/banners/${id}`);
+};
+
+export const getBrandingSettings = (role) => {
+    return axiosInstance.get(`/system-setting/settings/branding/${role}`);
+};
+
+export const updateBrandingSettings = (role, data) => {
+    return axiosInstance.put(`/system-setting/settings/branding/${role}`, data);
+};
+
+export const uploadBrandingAsset = (role, formData) => {
+    return axiosInstance.post(`/system-setting/settings/branding/${role}/upload`, formData, {
+        headers: {
+            "Content-Type": "multipart/form-data"
+        }
+    });
 };
 

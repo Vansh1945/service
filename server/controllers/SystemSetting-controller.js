@@ -364,6 +364,179 @@ const deleteBanner = async (req, res) => {
 };
 
 
+// 14. Get branding settings for a specific role
+const getBrandingSettings = async (req, res) => {
+  try {
+    const { role } = req.params;
+    if (!['customer', 'provider', 'admin'].includes(role)) {
+      return res.status(400).json({ success: false, message: 'Invalid role' });
+    }
+
+    let config = await SystemConfig.findOne();
+    if (!config) {
+      config = new SystemConfig({ companyName: 'SafeVolt Solutions' });
+      await config.save();
+    }
+
+    const brandingKey = `${role}Branding`;
+    const brandingData = config[brandingKey] || {};
+
+    res.status(200).json({
+      success: true,
+      data: brandingData
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch branding settings',
+      error: error.message
+    });
+  }
+};
+
+// 15. Update branding settings for a specific role (Admin only)
+const updateBrandingSettings = async (req, res) => {
+  try {
+    const { role } = req.params;
+    if (!['customer', 'provider', 'admin'].includes(role)) {
+      return res.status(400).json({ success: false, message: 'Invalid role' });
+    }
+
+    let config = await SystemConfig.findOne();
+    if (!config) {
+      config = new SystemConfig({ companyName: 'SafeVolt Solutions' });
+    }
+
+    const brandingKey = `${role}Branding`;
+    if (!config[brandingKey]) {
+      config[brandingKey] = {};
+    }
+
+    const fieldsToUpdate = req.body;
+    for (const key of Object.keys(fieldsToUpdate)) {
+      config[brandingKey][key] = fieldsToUpdate[key];
+    }
+
+    // Mark as modified so Mongoose tracks nested changes
+    config.markModified(brandingKey);
+    await config.save();
+
+    res.status(200).json({
+      success: true,
+      message: `${role.charAt(0).toUpperCase() + role.slice(1)} branding updated successfully`,
+      data: config[brandingKey]
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update branding settings',
+      error: error.message
+    });
+  }
+};
+
+// 16. Upload branding visual asset for a specific role (Admin only)
+const uploadBrandingAsset = async (req, res) => {
+  try {
+    const { role } = req.params;
+    if (!['customer', 'provider', 'admin'].includes(role)) {
+      return res.status(400).json({ success: false, message: 'Invalid role' });
+    }
+
+    if (!req.files && !req.file) {
+      return res.status(400).json({ success: false, message: 'No asset file uploaded' });
+    }
+
+    let fileUrl = null;
+    let fieldName = null;
+
+    if (req.file) {
+      fileUrl = req.file.path;
+      fieldName = req.file.fieldname;
+    } else if (req.files) {
+      const keys = Object.keys(req.files);
+      if (keys.length > 0 && req.files[keys[0]][0]) {
+        fileUrl = req.files[keys[0]][0].path;
+        fieldName = keys[0];
+      }
+    }
+
+    if (!fileUrl) {
+      return res.status(400).json({ success: false, message: 'Asset upload failed' });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Branding asset uploaded successfully',
+      url: fileUrl,
+      field: fieldName
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to upload branding asset',
+      error: error.message
+    });
+  }
+};
+
+// 17. Dynamically generate PWA manifest based on role branding in DB
+const getBrandingManifest = async (req, res) => {
+  try {
+    const { role } = req.params;
+    if (!['customer', 'provider', 'admin'].includes(role)) {
+      return res.status(400).json({ success: false, message: 'Invalid role' });
+    }
+
+    const config = await SystemConfig.findOne();
+    const branding = config ? config[`${role}Branding`] : null;
+
+    const appName = branding?.appName || (role === 'admin' ? 'SafeVolt Admin' : role === 'provider' ? 'SafeVolt Provider' : 'SafeVolt Customer');
+    const shortName = branding?.shortName || (role === 'admin' ? 'Admin' : role === 'provider' ? 'Provider' : 'SafeVolt');
+    const description = branding?.description || (role === 'admin' ? 'SafeVolt Control Panel' : `${shortName} App`);
+    const themeColor = branding?.themeColor || (role === 'admin' ? '#4f46e5' : role === 'provider' ? '#10b981' : '#3b82f6');
+    const backgroundColor = branding?.backgroundColor || '#ffffff';
+    const logoUrl = branding?.logo || '/icon-192.png';
+    const iconUrl = branding?.icon || logoUrl;
+
+    const manifest = {
+      name: appName,
+      short_name: shortName,
+      start_url: role === 'admin' ? '/admin/dashboard' : role === 'provider' ? '/provider/dashboard' : '/',
+      display: "standalone",
+      background_color: backgroundColor,
+      theme_color: themeColor,
+      orientation: "portrait",
+      icons: [
+        {
+          src: iconUrl,
+          sizes: "192x192",
+          type: "image/png",
+          purpose: "any maskable"
+        },
+        {
+          src: branding?.splashScreen || iconUrl,
+          sizes: "512x512",
+          type: "image/png",
+          purpose: "any maskable"
+        }
+      ],
+      description: description,
+      id: `com.safevolt.${role}`
+    };
+
+    res.setHeader('Content-Type', 'application/json');
+    res.status(200).send(JSON.stringify(manifest, null, 2));
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate manifest',
+      error: error.message
+    });
+  }
+};
+
+
 module.exports = {
   getSystemSetting,
   updateSystemSetting,
@@ -377,5 +550,9 @@ module.exports = {
   createBanner,
   getAllBannersAdmin,
   updateBanner,
-  deleteBanner
+  deleteBanner,
+  getBrandingSettings,
+  updateBrandingSettings,
+  uploadBrandingAsset,
+  getBrandingManifest
 };

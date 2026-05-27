@@ -26,13 +26,23 @@ const AdminLayout = () => {
   useEffect(() => {
     const fetchSystemSettings = async () => {
       try {
-        const response = await SystemService.getSystemSetting();
-        if (response.data?.success) {
-          const data = response.data;
+        const cached = localStorage.getItem('branding_admin');
+        if (cached) {
+          const data = JSON.parse(cached);
           setSystemSettings({
-            companyName: data.data?.companyName || '',
-            logo: data.data?.logo
+            companyName: data.appName || data.dashboardTitle || 'SAFEVOLT SOLUTIONS',
+            logo: data.logo || null
           });
+        }
+
+        const response = await SystemService.getBrandingSettings('admin');
+        if (response.data?.success) {
+          const data = response.data.data;
+          setSystemSettings({
+            companyName: data.appName || data.dashboardTitle || 'SAFEVOLT SOLUTIONS',
+            logo: data.logo || null
+          });
+          localStorage.setItem('branding_admin', JSON.stringify(data));
         }
       } catch (error) {
         console.error('Failed to fetch system settings:', error);
@@ -43,6 +53,20 @@ const AdminLayout = () => {
       fetchSystemSettings();
     }
   }, [token]);
+
+  useEffect(() => {
+    const handleBrandingUpdate = (e) => {
+      if (e.detail?.role === 'admin') {
+        const data = e.detail.data;
+        setSystemSettings({
+          companyName: data.appName || data.dashboardTitle || 'SAFEVOLT SOLUTIONS',
+          logo: data.logo || null
+        });
+      }
+    };
+    window.addEventListener('brandingUpdated', handleBrandingUpdate);
+    return () => window.removeEventListener('brandingUpdated', handleBrandingUpdate);
+  }, []);
 
   const menuItems = [
     { name: 'Dashboard', path: '/admin/dashboard', icon: <FiHome className="w-5 h-5" /> },
@@ -140,6 +164,24 @@ const AdminLayout = () => {
                 </Link>
               );
             })}
+            
+            <hr className="my-2 border-gray-100" />
+            <Link
+              to="/admin/settings"
+              className={`flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${location.pathname === '/admin/settings' ? 'bg-primary text-white shadow-lg' : 'text-secondary hover:bg-primary/10 hover:text-primary'}`}
+              onClick={() => setSidebarOpen(false)}
+            >
+              <FiSettings className="w-5 h-5 mr-3" />
+              Settings
+            </Link>
+            <Link
+              to="/admin/branding"
+              className={`flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${location.pathname === '/admin/branding' ? 'bg-primary text-white shadow-lg' : 'text-secondary hover:bg-primary/10 hover:text-primary'}`}
+              onClick={() => setSidebarOpen(false)}
+            >
+              <FiLayout className="w-5 h-5 mr-3" />
+              Branding Management
+            </Link>
           </nav>
         </div>
       </div>
@@ -184,13 +226,20 @@ const AdminLayout = () => {
           </nav>
 
           {/* Desktop sidebar footer */}
-          <div className="px-4 py-4 border-t border-gray-200">
+          <div className="px-4 py-4 border-t border-gray-200 space-y-1">
             <Link
               to="/admin/settings"
               className="flex items-center px-4 py-3 text-sm font-medium text-secondary hover:bg-primary/10 hover:text-primary rounded-xl transition-all duration-200"
             >
               <FiSettings className="w-5 h-5 mr-3" />
               Settings
+            </Link>
+            <Link
+              to="/admin/branding"
+              className="flex items-center px-4 py-3 text-sm font-medium text-secondary hover:bg-primary/10 hover:text-primary rounded-xl transition-all duration-200"
+            >
+              <FiLayout className="w-5 h-5 mr-3" />
+              Branding Management
             </Link>
           </div>
         </div>

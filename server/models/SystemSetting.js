@@ -233,6 +233,36 @@ const systemConfigSchema = new mongoose.Schema(
       allowedImageFormats: [{
         type: String
       }]
+    },
+    customerBranding: {
+      appName: { type: String, default: "SafeVolt Customer" },
+      shortName: { type: String, default: "SafeVolt" },
+      logo: { type: String, default: "" },
+      icon: { type: String, default: "" },
+      splashScreen: { type: String, default: "" },
+      themeColor: { type: String, default: "#3b82f6" },
+      backgroundColor: { type: String, default: "#ffffff" },
+      description: { type: String, default: "Book certified electricians near you" }
+    },
+    providerBranding: {
+      appName: { type: String, default: "SafeVolt Provider" },
+      shortName: { type: String, default: "Provider" },
+      logo: { type: String, default: "" },
+      icon: { type: String, default: "" },
+      splashScreen: { type: String, default: "" },
+      themeColor: { type: String, default: "#10b981" },
+      backgroundColor: { type: String, default: "#ffffff" },
+      description: { type: String, default: "Provide electrical services on SafeVolt" }
+    },
+    adminBranding: {
+      appName: { type: String, default: "SafeVolt Admin" },
+      shortName: { type: String, default: "Admin" },
+      logo: { type: String, default: "" },
+      icon: { type: String, default: "" },
+      favicon: { type: String, default: "" },
+      themeColor: { type: String, default: "#4f46e5" },
+      backgroundColor: { type: String, default: "#f3f4f6" },
+      dashboardTitle: { type: String, default: "SafeVolt Control Panel" }
     }
   },
   { timestamps: true }

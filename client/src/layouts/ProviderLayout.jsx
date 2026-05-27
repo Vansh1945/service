@@ -149,14 +149,25 @@ const ProviderLayout = () => {
     useEffect(() => {
         const fetchSystemSettings = async () => {
             try {
-                const response = await SystemService.getSystemSetting();
-                if (response.data?.success) {
-                    const data = response.data;
+                const cached = localStorage.getItem('branding_provider');
+                if (cached) {
+                    const data = JSON.parse(cached);
                     setSystemSettings({
-                        companyName: data.data?.companyName || '',
-                        logo: data.data?.logo,
-                        tagline: data.data?.tagline || ''
+                        companyName: data.appName || 'SAFEVOLT SOLUTIONS',
+                        logo: data.logo || null,
+                        tagline: data.description || ''
                     });
+                }
+
+                const response = await SystemService.getBrandingSettings('provider');
+                if (response.data?.success) {
+                    const data = response.data.data;
+                    setSystemSettings({
+                        companyName: data.appName || 'SAFEVOLT SOLUTIONS',
+                        logo: data.logo || null,
+                        tagline: data.description || ''
+                    });
+                    localStorage.setItem('branding_provider', JSON.stringify(data));
                 }
             } catch (error) {
                 console.error('Failed to fetch system settings:', error);
@@ -167,6 +178,21 @@ const ProviderLayout = () => {
             fetchSystemSettings();
         }
     }, [token]);
+
+    useEffect(() => {
+        const handleBrandingUpdate = (e) => {
+            if (e.detail?.role === 'provider') {
+                const data = e.detail.data;
+                setSystemSettings({
+                    companyName: data.appName || 'SAFEVOLT SOLUTIONS',
+                    logo: data.logo || null,
+                    tagline: data.description || ''
+                });
+            }
+        };
+        window.addEventListener('brandingUpdated', handleBrandingUpdate);
+        return () => window.removeEventListener('brandingUpdated', handleBrandingUpdate);
+    }, []);
 
     const allMenuItems = [
         { name: 'Dashboard', path: '/provider/dashboard', icon: <FiHome className="w-5 h-5" />, requireTest: false },

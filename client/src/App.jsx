@@ -93,9 +93,85 @@ const updateFavicon = (favicon) => {
 const applyDocumentSettings = (settings) => {
   if (settings.companyName) {
     document.title = settings.companyName;
+    
+    // Update Open Graph and Twitter SEO titles
+    const ogTitle = document.querySelector("meta[property='og:title']");
+    if (ogTitle) ogTitle.setAttribute("content", settings.companyName);
+    
+    const twitterTitle = document.querySelector("meta[name='twitter:title']");
+    if (twitterTitle) twitterTitle.setAttribute("content", settings.companyName);
   }
 
-  updateFavicon(settings.favicon);
+  if (settings.description) {
+    const metaDesc = document.querySelector("meta[name='description']");
+    if (metaDesc) metaDesc.setAttribute("content", settings.description);
+    
+    const ogDesc = document.querySelector("meta[property='og:description']");
+    if (ogDesc) ogDesc.setAttribute("content", settings.description);
+  }
+
+  if (settings.themeColor) {
+    // Meta tag
+    const metaTheme = document.querySelector("meta[name='theme-color']");
+    if (metaTheme) metaTheme.setAttribute("content", settings.themeColor);
+    
+    // Dynamically apply primary color styles so buttons, layouts, and components instantly adapt!
+    document.documentElement.style.setProperty('--color-primary', settings.themeColor);
+    document.documentElement.style.setProperty('--primary', settings.themeColor);
+  }
+
+  if (settings.favicon) {
+    updateFavicon(settings.favicon);
+  }
+
+  if (settings.manifestUrl) {
+    const manifestLink = document.querySelector("link[rel='manifest']");
+    if (manifestLink) {
+      manifestLink.setAttribute("href", settings.manifestUrl);
+    }
+  }
+};
+const generateManifestDataUri = (role, data) => {
+  const appName = data?.appName || (role === 'admin' ? 'SafeVolt Admin' : role === 'provider' ? 'SafeVolt Provider' : 'SafeVolt Customer');
+  const shortName = data?.shortName || (role === 'admin' ? 'Admin' : role === 'provider' ? 'Provider' : 'SafeVolt');
+  const description = data?.description || (role === 'admin' ? 'SafeVolt Control Panel' : `${shortName} App`);
+  const themeColor = data?.themeColor || (role === 'admin' ? '#4f46e5' : role === 'provider' ? '#10b981' : '#3b82f6');
+  const backgroundColor = data?.backgroundColor || '#ffffff';
+  const icon = data?.icon || data?.logo || '/icon-192.png';
+
+  const manifestObj = {
+    name: appName,
+    short_name: shortName,
+    start_url: role === 'admin' ? '/admin/dashboard' : role === 'provider' ? '/provider/dashboard' : '/',
+    display: "standalone",
+    background_color: backgroundColor,
+    theme_color: themeColor,
+    orientation: "portrait",
+    icons: [
+      {
+        src: icon,
+        sizes: "192x192",
+        type: "image/png",
+        purpose: "any maskable"
+      },
+      {
+        src: data?.splashScreen || icon,
+        sizes: "512x512",
+        type: "image/png",
+        purpose: "any maskable"
+      }
+    ],
+    description: description,
+    id: `com.safevolt.${role}`
+  };
+
+  try {
+    const manifestStr = JSON.stringify(manifestObj);
+    return 'data:application/manifest+json;base64,' + btoa(unescape(encodeURIComponent(manifestStr)));
+  } catch (e) {
+    console.error('Failed to generate base64 manifest Data URI:', e);
+    return '/manifest.json';
+  }
 };
 
 const App = () => {
@@ -142,45 +218,93 @@ const App = () => {
     };
   }, []);
 
-  // Fetch system settings and update document title and favicon with caching
+  // Fetch dynamic branding settings and apply dynamically based on current route context
   useEffect(() => {
-    const fetchSystemSettings = async () => {
-      const cachedSettings = readSystemSettingsCache();
-      const cacheExpiry = 24 * 60 * 60 * 1000; // 24 hours
+    let currentRole = "customer";
+    if (location.pathname.startsWith("/admin")) {
+      currentRole = "admin";
+    } else if (location.pathname.startsWith("/provider")) {
+      currentRole = "provider";
+    }
 
-      if (cachedSettings) {
-        const { data, timestamp } = cachedSettings;
-        if (Date.now() - timestamp < cacheExpiry) {
-          setSystemSettings(data);
-          applyDocumentSettings(data);
-          return;
-        }
-      }
-
+    const fetchBranding = async () => {
       try {
-        const response = await SystemService.getSystemSetting();
+        const cached = localStorage.getItem(`branding_${currentRole}`);
+        if (cached) {
+          const brandingData = JSON.parse(cached);
+          applyBrandingData(currentRole, brandingData);
+        }
+
+        const response = await SystemService.getBrandingSettings(currentRole);
         if (response.data?.success) {
-          const data = response.data.data;
-          const settings = {
-            companyName: data?.companyName || "Raj Electrical Services",
-            favicon: data?.favicon || null,
-            timeFormat: normalizeTimeFormat(data?.timeFormat),
-          };
-          setSystemSettings(settings);
-
-          // Cache the settings
-          writeSystemSettingsCache(settings);
-
-          // Update document title
-          applyDocumentSettings(settings);
+          const brandingData = response.data.data;
+          localStorage.setItem(`branding_${currentRole}`, JSON.stringify(brandingData));
+          applyBrandingData(currentRole, brandingData);
         }
       } catch (error) {
-        console.error("Error fetching system settings:", error);
+        console.error("Error fetching dynamic branding:", error);
       }
     };
 
-    fetchSystemSettings();
-  }, []);
+    const applyBrandingData = (role, data) => {
+      const manifestUrl = generateManifestDataUri(role, data);
+      
+      // Favicon cache bust timestamp
+      const faviconUrl = data?.favicon || data?.logo || null;
+      const busterFavicon = faviconUrl ? `${faviconUrl}?v=${data?.updatedAt || Date.now()}` : null;
+
+      const settings = {
+        companyName: data?.appName || (role === 'admin' ? 'SafeVolt Admin' : role === 'provider' ? 'SafeVolt Provider' : 'SafeVolt Customer'),
+        favicon: busterFavicon,
+        description: data?.description || "",
+        themeColor: data?.themeColor || (role === 'admin' ? '#4f46e5' : role === 'provider' ? '#10b981' : '#3b82f6'),
+        manifestUrl: manifestUrl
+      };
+
+      setSystemSettings(prev => ({
+        ...prev,
+        companyName: settings.companyName,
+        favicon: settings.favicon
+      }));
+
+      applyDocumentSettings(settings);
+
+      // Notify any listening components
+      window.dispatchEvent(new CustomEvent("brandingUpdated", { detail: { role, data } }));
+    };
+
+    fetchBranding();
+  }, [location.pathname]);
+
+  // Live branding listener to apply instant changes when saving settings
+  useEffect(() => {
+    const handleBrandingChange = (e) => {
+      let currentRole = "customer";
+      if (location.pathname.startsWith("/admin")) {
+        currentRole = "admin";
+      } else if (location.pathname.startsWith("/provider")) {
+        currentRole = "provider";
+      }
+
+      if (e.detail?.role === currentRole) {
+        const data = e.detail.data;
+        const manifestUrl = generateManifestDataUri(currentRole, data);
+
+        const faviconUrl = data?.favicon || data?.logo || null;
+        const busterFavicon = faviconUrl ? `${faviconUrl}?v=${Date.now()}` : null;
+
+        applyDocumentSettings({
+          companyName: data?.appName || (currentRole === 'admin' ? 'SafeVolt Admin' : currentRole === 'provider' ? 'SafeVolt Provider' : 'SafeVolt Customer'),
+          favicon: busterFavicon,
+          description: data?.description || "",
+          themeColor: data?.themeColor || "",
+          manifestUrl: manifestUrl
+        });
+      }
+    };
+    window.addEventListener("brandingUpdated", handleBrandingChange);
+    return () => window.removeEventListener("brandingUpdated", handleBrandingChange);
+  }, [location.pathname]);
 
   const { isDeepLink, setIsDeepLink, isAuthenticated, role: userRole, isAdmin, setIntendedRoute, resetDeepLink, user } = useAuth();
   const navigate_fn = useNavigate();
