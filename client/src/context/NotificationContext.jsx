@@ -8,6 +8,15 @@ import * as NotificationService from '../services/NotificationService';
 
 const NotificationContext = createContext(null);
 
+const getPersistentDeviceId = () => {
+    let deviceId = localStorage.getItem('persistentDeviceId');
+    if (!deviceId) {
+        deviceId = 'device_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        localStorage.setItem('persistentDeviceId', deviceId);
+    }
+    return deviceId;
+};
+
 export const NotificationProvider = ({ children }) => {
     const { token, isAuthenticated, role: userRole, isAdmin, setIsDeepLink, setIntendedRoute, API } = useAuth();
     const navigate = useNavigate();
@@ -19,13 +28,13 @@ export const NotificationProvider = ({ children }) => {
     const saveTokenToBackend = async (newToken, authToken) => {
         if (!newToken || !authToken) return;
         
-        if (localStorage.getItem("fcmToken") === newToken) return;
-        if (savedTokenRef.current === newToken) return;
-
-        savedTokenRef.current = newToken;
-
         try {
-            const res = await NotificationService.saveToken({ token: newToken });
+            const res = await NotificationService.saveToken({
+                token: newToken,
+                deviceId: getPersistentDeviceId(),
+                platform: /Mobi|Android|iPhone/i.test(navigator.userAgent) ? 'Mobile Web' : 'Desktop Web',
+                appVersion: '1.0.0'
+            });
             if (res.data?.success) {
                 localStorage.setItem("fcmToken", newToken);
                 console.log('[FCM] Token saved to backend successfully.');
@@ -36,7 +45,6 @@ export const NotificationProvider = ({ children }) => {
                 return;
             }
             console.error('[FCM] Failed to save token to backend:', err);
-            savedTokenRef.current = null; // Reset on error to allow retrying
         }
     };
 
@@ -53,7 +61,12 @@ export const NotificationProvider = ({ children }) => {
 
             if (currentToken) {
                 setFcmToken(currentToken);
-                await saveTokenToBackend(currentToken, authToken);
+                if (authToken) {
+                    await saveTokenToBackend(currentToken, authToken);
+                } else {
+                    // Anonymous support: cache locally until user logs in
+                    localStorage.setItem('tempFcmToken', currentToken);
+                }
             } else {
                 console.warn('[FCM] No token available.');
             }
@@ -117,13 +130,55 @@ export const NotificationProvider = ({ children }) => {
     }, [navigate]);
 
     useEffect(() => {
-        if (!isAuthenticated || !token) return;
-
         if (Notification.permission === 'granted') {
             initFCMToken(token);
         } else if (Notification.permission === 'default') {
             requestPermission();
         }
+    }, [isAuthenticated, token]);
+
+    // Attach anonymous token to user account post-login
+    useEffect(() => {
+        if (isAuthenticated && token) {
+            const tempToken = localStorage.getItem('tempFcmToken') || fcmToken;
+            if (tempToken) {
+                saveTokenToBackend(tempToken, token);
+                localStorage.removeItem('tempFcmToken');
+            }
+        }
+    }, [isAuthenticated, token, fcmToken]);
+
+    // Handle PWA cold start deep-linking from search parameters
+    useEffect(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const route = urlParams.get('route');
+        const requiredRole = urlParams.get('role');
+        const entityId = urlParams.get('entityId');
+
+        if (route) {
+            console.log('[FCM Cold Start] Routing query param detected:', route);
+            // Clean up the URL search params so they do not persist
+            window.history.replaceState({}, document.title, window.location.pathname);
+
+            const targetRouteWithEntity = route + (entityId ? (route.includes('?') ? '&' : '?') + 'entityId=' + entityId : '');
+
+            if (!isAuthenticated) {
+                setIntendedRoute?.(targetRouteWithEntity);
+                navigate('/login');
+            } else {
+                if (requiredRole && requiredRole !== userRole && !(requiredRole === 'admin' && isAdmin)) {
+                    if (userRole === 'admin' || isAdmin) navigate('/admin/dashboard');
+                    else if (userRole === 'provider') navigate('/provider/dashboard');
+                    else navigate('/customer/services');
+                } else {
+                    navigate(targetRouteWithEntity, { state: { fromNotification: true } });
+                }
+            }
+        }
+    }, [isAuthenticated, userRole, isAdmin]);
+
+    useEffect(() => {
+        if (!token) return;
 
         const unsubscribe = onMessage(messaging, (payload) => {
             console.log('[FCM] Foreground message received:', payload);

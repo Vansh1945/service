@@ -272,8 +272,8 @@ exports.forgotPassword = async (req, res) => {
 
     // Get FCM token if provider
     let fcmToken = null;
-    if (user.fcmTokens && user.fcmTokens.length > 0) {
-      fcmToken = user.fcmTokens[0].token;
+    if (user.fcmDevices && user.fcmDevices.length > 0) {
+      fcmToken = user.fcmDevices[0].token;
     }
 
     const otpResponse = await sendOTP(normalizedEmail, fcmToken);
@@ -466,8 +466,8 @@ exports.resendOTP = async (req, res) => {
     await clearOTP(normalizedEmail);
 
     let fcmToken = null;
-    if (user && user.fcmTokens && user.fcmTokens.length > 0) {
-      fcmToken = user.fcmTokens[0].token;
+    if (user && user.fcmDevices && user.fcmDevices.length > 0) {
+      fcmToken = user.fcmDevices[0].token;
     }
 
     // Send new OTP
@@ -699,16 +699,8 @@ exports.logout = async (req, res) => {
   try {
     const { refreshToken, fcmToken, allDevices = false } = req.body;
 
-    // 1. Revoke FCM Token if provided to prevent stale notifications on logout
-    if (fcmToken) {
-      try {
-        await User.updateMany({}, { $pull: { fcmTokens: { token: fcmToken } } });
-        await Provider.updateMany({}, { $pull: { fcmTokens: { token: fcmToken } } });
-        await Admin.updateMany({}, { $pull: { fcmTokens: { token: fcmToken } } });
-      } catch (fcmPullErr) {
-        console.error('Error pulling FCM token on logout:', fcmPullErr);
-      }
-    }
+    // Logout preserves PWA FCM tokens for offline push support.
+    // Clean up local session / refresh tokens only.
 
     if (!refreshToken) {
       // Still clear client – just return success

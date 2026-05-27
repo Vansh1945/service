@@ -65,3 +65,7 @@ export const getAnalytics = (id) => {
 export const markClicked = (id) => {
     return axiosInstance.patch(`/notifications/clicked/${id}`);
 };
+
+export const getAdminDashboardStats = () => {
+    return axiosInstance.get("/notifications/admin/dashboard-stats");
+};

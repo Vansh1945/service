@@ -91,6 +91,34 @@ const AdminNotification = () => {
     useAuth();
     const { socket } = useSocket();
 
+    const [stats, setStats] = useState({
+        totalActiveDevices: 0,
+        customerDevices: 0,
+        providerDevices: 0,
+        adminDevices: 0,
+        invalidTokenCleanupCount: 0,
+        lastNotificationDeliverySuccess: 'N/A'
+    });
+    const [loadingStats, setLoadingStats] = useState(true);
+
+    const fetchStats = async () => {
+        try {
+            setLoadingStats(true);
+            const res = await NotificationService.getAdminDashboardStats();
+            if (res.data?.success) {
+                setStats(res.data.data);
+            }
+        } catch (error) {
+            console.error('[AdminNotification] Failed to fetch stats:', error);
+        } finally {
+            setLoadingStats(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchStats();
+    }, []);
+
     useEffect(() => {
         if (socket) {
             socket.on('broadcast_stats_updated', (data) => {
@@ -250,6 +278,7 @@ const AdminNotification = () => {
                 toast.success(data.message || 'Sent successfully!');
                 setResult(data.data);
                 fetchHistory(); // Refresh history
+                fetchStats(); // Refresh stats
                 resetForm();
             } else {
                 setStatus('error');
@@ -341,6 +370,91 @@ const AdminNotification = () => {
                         <FiBell className="text-primary" /> Broadcast Notification
                     </h1>
                     <p className="text-gray-600 mt-1">Send real-time push notifications to your users via Firebase Cloud Messaging.</p>
+                </div>
+            </div>
+
+            {/* ── Dashboard Stats ── */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+                {/* Total Active Devices */}
+                <div className="bg-white rounded-xl shadow-sm border p-4 flex flex-col justify-between hover:shadow-md transition-all duration-200">
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Active Devices</span>
+                    {loadingStats ? (
+                        <FiLoader className="animate-spin text-primary mt-2" size={16} />
+                    ) : (
+                        <div className="mt-2 flex items-baseline gap-2">
+                            <span className="text-2xl font-black text-gray-900">{stats.totalActiveDevices}</span>
+                            <span className="text-[10px] text-green-600 font-bold bg-green-50 px-1.5 py-0.5 rounded">Online</span>
+                        </div>
+                    )}
+                </div>
+
+                {/* Customer Devices */}
+                <div className="bg-white rounded-xl shadow-sm border p-4 flex flex-col justify-between hover:shadow-md transition-all duration-200">
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Customer Devices</span>
+                    {loadingStats ? (
+                        <FiLoader className="animate-spin text-primary mt-2" size={16} />
+                    ) : (
+                        <div className="mt-2">
+                            <span className="text-2xl font-black text-primary">{stats.customerDevices}</span>
+                        </div>
+                    )}
+                </div>
+
+                {/* Provider Devices */}
+                <div className="bg-white rounded-xl shadow-sm border p-4 flex flex-col justify-between hover:shadow-md transition-all duration-200">
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Provider Devices</span>
+                    {loadingStats ? (
+                        <FiLoader className="animate-spin text-primary mt-2" size={16} />
+                    ) : (
+                        <div className="mt-2">
+                            <span className="text-2xl font-black text-teal-600">{stats.providerDevices}</span>
+                        </div>
+                    )}
+                </div>
+
+                {/* Admin Devices */}
+                <div className="bg-white rounded-xl shadow-sm border p-4 flex flex-col justify-between hover:shadow-md transition-all duration-200">
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Admin Devices</span>
+                    {loadingStats ? (
+                        <FiLoader className="animate-spin text-primary mt-2" size={16} />
+                    ) : (
+                        <div className="mt-2">
+                            <span className="text-2xl font-black text-purple-600">{stats.adminDevices}</span>
+                        </div>
+                    )}
+                </div>
+
+                {/* Cleanup Count */}
+                <div className="bg-white rounded-xl shadow-sm border p-4 flex flex-col justify-between hover:shadow-md transition-all duration-200">
+                    <div className="flex justify-between items-center">
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Cleanup Count</span>
+                        <span className="text-[10px] text-red-500 font-extrabold bg-red-50 px-1 py-0.5 rounded">AUTO</span>
+                    </div>
+                    {loadingStats ? (
+                        <FiLoader className="animate-spin text-primary mt-2" size={16} />
+                    ) : (
+                        <div className="mt-2 flex items-baseline gap-1">
+                            <span className="text-2xl font-black text-red-600">{stats.invalidTokenCleanupCount}</span>
+                            <span className="text-[9px] text-gray-400 font-semibold">tokens</span>
+                        </div>
+                    )}
+                </div>
+
+                {/* Last Delivery Success */}
+                <div className="bg-white rounded-xl shadow-sm border p-4 flex flex-col justify-between hover:shadow-md transition-all duration-200">
+                    <div className="flex justify-between items-center">
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Last Delivery</span>
+                        <button onClick={fetchStats} className="p-1 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-primary" title="Refresh Stats">
+                            <FiRefreshCw size={12} />
+                        </button>
+                    </div>
+                    {loadingStats ? (
+                        <FiLoader className="animate-spin text-primary mt-2" size={16} />
+                    ) : (
+                        <div className="mt-2">
+                            <span className="text-sm font-black text-gray-800 break-all">{stats.lastNotificationDeliverySuccess}</span>
+                        </div>
+                    )}
                 </div>
             </div>
 

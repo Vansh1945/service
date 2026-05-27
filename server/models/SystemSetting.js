@@ -283,6 +283,10 @@ const systemConfigSchema = new mongoose.Schema(
       provider: { type: Date, default: Date.now },
       admin: { type: Date, default: Date.now }
     },
+    invalidTokenCleanupCount: {
+      type: Number,
+      default: 0
+    },
     emailTemplates: {
       forgotPasswordOtp: { type: emailTemplateSchema },
       providerRegistrationOtp: { type: emailTemplateSchema },

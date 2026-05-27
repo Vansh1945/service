@@ -392,11 +392,11 @@ const getBrandingSettings = async (req, res) => {
       const Admin = require('../models/Admin-model');
 
       if (role === 'customer') {
-        installedUsersCount = await User.countDocuments({ role: 'customer', 'fcmTokens.0': { $exists: true } });
+        installedUsersCount = await User.countDocuments({ role: 'customer', 'fcmDevices.0': { $exists: true } });
       } else if (role === 'provider') {
-        installedUsersCount = await Provider.countDocuments({ isDeleted: { $ne: true }, 'fcmTokens.0': { $exists: true } });
+        installedUsersCount = await Provider.countDocuments({ isDeleted: { $ne: true }, 'fcmDevices.0': { $exists: true } });
       } else if (role === 'admin') {
-        installedUsersCount = await Admin.countDocuments({ isActive: true, 'fcmTokens.0': { $exists: true } });
+        installedUsersCount = await Admin.countDocuments({ isActive: true, 'fcmDevices.0': { $exists: true } });
       }
     } catch (countError) {
       console.error('Failed to count installed PWA users:', countError);
@@ -533,24 +533,24 @@ const publishBrandingUpdate = async (req, res) => {
     const Admin = require('../models/Admin-model');
 
     if (role === 'customer') {
-      const users = await User.find({ role: 'customer' }, 'fcmTokens');
+      const users = await User.find({ role: 'customer' }, 'fcmDevices');
       users.forEach(u => {
-        if (u.fcmTokens) {
-          u.fcmTokens.forEach(t => { if (t.token) tokens.push(t.token); });
+        if (u.fcmDevices) {
+          u.fcmDevices.forEach(t => { if (t.token && t.isActive !== false) tokens.push(t.token); });
         }
       });
     } else if (role === 'provider') {
-      const providers = await Provider.find({ isDeleted: { $ne: true } }, 'fcmTokens');
+      const providers = await Provider.find({ isDeleted: { $ne: true } }, 'fcmDevices');
       providers.forEach(p => {
-        if (p.fcmTokens) {
-          p.fcmTokens.forEach(t => { if (t.token) tokens.push(t.token); });
+        if (p.fcmDevices) {
+          p.fcmDevices.forEach(t => { if (t.token && t.isActive !== false) tokens.push(t.token); });
         }
       });
     } else if (role === 'admin') {
-      const admins = await Admin.find({ isActive: true }, 'fcmTokens');
+      const admins = await Admin.find({ isActive: true }, 'fcmDevices');
       admins.forEach(a => {
-        if (a.fcmTokens) {
-          a.fcmTokens.forEach(t => { if (t.token) tokens.push(t.token); });
+        if (a.fcmDevices) {
+          a.fcmDevices.forEach(t => { if (t.token && t.isActive !== false) tokens.push(t.token); });
         }
       });
     }
@@ -581,11 +581,11 @@ const publishBrandingUpdate = async (req, res) => {
     let installedUsersCount = 0;
     try {
       if (role === 'customer') {
-        installedUsersCount = await User.countDocuments({ role: 'customer', 'fcmTokens.0': { $exists: true } });
+        installedUsersCount = await User.countDocuments({ role: 'customer', 'fcmDevices.0': { $exists: true } });
       } else if (role === 'provider') {
-        installedUsersCount = await Provider.countDocuments({ isDeleted: { $ne: true }, 'fcmTokens.0': { $exists: true } });
+        installedUsersCount = await Provider.countDocuments({ isDeleted: { $ne: true }, 'fcmDevices.0': { $exists: true } });
       } else if (role === 'admin') {
-        installedUsersCount = await Admin.countDocuments({ isActive: true, 'fcmTokens.0': { $exists: true } });
+        installedUsersCount = await Admin.countDocuments({ isActive: true, 'fcmDevices.0': { $exists: true } });
       }
     } catch (countError) {
       console.error('Failed to count installed PWA users on publish:', countError);

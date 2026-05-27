@@ -299,10 +299,13 @@ const providerSchema = new mongoose.Schema({
 
     // Wallet Information
     wallet: walletSchema,
-    fcmTokens: [{
+    fcmDevices: [{
         token: { type: String, required: true },
         deviceId: { type: String, required: true },
-        lastActive: { type: Date, default: Date.now }
+        platform: { type: String },
+        lastActive: { type: Date, default: Date.now },
+        isActive: { type: Boolean, default: true },
+        appVersion: { type: String }
     }],
     withdrawalSecurity: {
         otp: String,

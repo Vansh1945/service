@@ -526,7 +526,7 @@ const requestBulkWithdrawal = async (req, res) => {
     }
 
     const provider = await Provider.findById(providerId)
-      .select("bankDetails name email wallet approved kycStatus withdrawalSecurity fcmTokens isSuspended blockedTill performanceScore");
+      .select("bankDetails name email wallet approved kycStatus withdrawalSecurity fcmDevices isSuspended blockedTill performanceScore");
 
     if (!provider) return res.status(404).json({ success: false, error: "Provider not found." });
 

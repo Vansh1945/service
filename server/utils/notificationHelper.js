@@ -96,7 +96,7 @@ const sendNotification = async (userId, role, title, message, type = 'system', r
             else if (role === 'provider') Model = Provider;
             else Model = User;
 
-            const recipient = await Model.findById(userId).select('notificationPreferences fcmTokens');
+            const recipient = await Model.findById(userId).select('notificationPreferences fcmDevices');
             if (!recipient) {
                 console.warn(`[Security Alert] Suppressed notification dispatch: User ${userId} is not a valid ${role}`);
                 return null;

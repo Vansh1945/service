@@ -184,10 +184,10 @@ const getUnreadCount = async (req, res) => {
  */
 const saveToken = async (req, res) => {
     try {
-        const { token } = req.body;
+        const { token, deviceId: bodyDeviceId, platform, appVersion } = req.body;
         const userId = req.userID;
         const role = req.role;
-        const deviceId = req.headers['user-agent'] || 'unknown_device';
+        const deviceId = bodyDeviceId || req.headers['x-device-id'] || req.headers['user-agent'] || 'unknown_device';
 
         if (!token) {
             return res.status(400).json({ success: false, message: 'Token is required' });
@@ -200,31 +200,51 @@ const saveToken = async (req, res) => {
 
         // 1. Pull this token from all other users in all collections to avoid duplicate registration
         await Promise.all([
-            User.updateMany({ _id: { $ne: userId } }, { $pull: { fcmTokens: { token } } }),
-            Provider.updateMany({ _id: { $ne: userId } }, { $pull: { fcmTokens: { token } } }),
-            Admin.updateMany({ _id: { $ne: userId } }, { $pull: { fcmTokens: { token } } })
+            User.updateMany({ _id: { $ne: userId } }, { $pull: { fcmDevices: { token } } }),
+            Provider.updateMany({ _id: { $ne: userId } }, { $pull: { fcmDevices: { token } } }),
+            Admin.updateMany({ _id: { $ne: userId } }, { $pull: { fcmDevices: { token } } })
         ]);
 
-        // 2. Remove any existing entry for this token or this device on the current user to prevent duplicates
-        await Model.updateOne(
-            { _id: userId },
-            { $pull: { fcmTokens: { $or: [{ token }, { deviceId }] } } }
-        );
+        // Find the user document
+        const user = await Model.findById(userId);
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
 
-        // 3. Atomically append the new token and cap array to last 3 entries
-        await Model.updateOne(
-            { _id: userId },
-            {
-                $push: {
-                    fcmTokens: {
-                        $each: [{ token, deviceId, lastActive: new Date() }],
-                        $slice: -3
-                    }
-                }
-            }
-        );
+        if (!user.fcmDevices) {
+            user.fcmDevices = [];
+        }
 
-        return res.status(200).json({ success: true, message: 'Token saved' });
+        const deviceIndex = user.fcmDevices.findIndex(d => d.deviceId === deviceId);
+
+        if (deviceIndex > -1) {
+            // Found existing device entry
+            const existing = user.fcmDevices[deviceIndex];
+            existing.token = token; // CASE 1 & CASE 2: Set/overwrite token
+            existing.lastActive = new Date();
+            existing.isActive = true;
+            if (platform) existing.platform = platform;
+            if (appVersion) existing.appVersion = appVersion;
+        } else {
+            // CASE 3: New device
+            user.fcmDevices.push({
+                token,
+                deviceId,
+                platform: platform || 'Web',
+                appVersion: appVersion || '1.0.0',
+                lastActive: new Date(),
+                isActive: true
+            });
+        }
+
+        // Cap array to last 10 entries (increased from 3 to support multi-device)
+        if (user.fcmDevices.length > 10) {
+            user.fcmDevices = user.fcmDevices.slice(-10);
+        }
+
+        await user.save();
+
+        return res.status(200).json({ success: true, message: 'Token saved successfully' });
     } catch (error) {
         if (global.logger) {
             global.logger.error('saveToken error:', error);
@@ -255,7 +275,7 @@ const removeToken = async (req, res) => {
 
         await Model.updateOne(
             { _id: userId },
-            { $pull: { fcmTokens: { token } } }
+            { $pull: { fcmDevices: { token } } }
         );
 
         return res.status(200).json({ success: true, message: 'Token removed' });
@@ -746,6 +766,7 @@ const markClicked = async (req, res) => {
     try {
         const { id } = req.params;
         const userId = req.userID || req.body.userId;
+        const { token, deviceId } = req.body;
 
         const notification = await Notification.findOne({ _id: id, userId });
         if (!notification) {
@@ -767,10 +788,103 @@ const markClicked = async (req, res) => {
             emitStatsUpdate(notification.broadcast_id);
         }
 
+        // Update device activity tracking (lastActive) on notification interaction
+        if (userId && req.role) {
+            let Model;
+            if (req.role === 'admin') Model = Admin;
+            else if (req.role === 'provider') Model = Provider;
+            else Model = User;
+
+            if (token) {
+                await Model.updateOne(
+                    { _id: userId, 'fcmDevices.token': token },
+                    { $set: { 'fcmDevices.$.lastActive': new Date() } }
+                );
+            } else if (deviceId) {
+                await Model.updateOne(
+                    { _id: userId, 'fcmDevices.deviceId': deviceId },
+                    { $set: { 'fcmDevices.$.lastActive': new Date() } }
+                );
+            }
+        }
+
         return res.status(200).json({ success: true, message: 'Click tracked' });
     } catch (error) {
         console.error('markClicked error:', error);
         return res.status(500).json({ success: false, message: 'Failed to track click' });
+    }
+};
+
+/**
+ * GET /api/notifications/admin/dashboard-stats
+ * Admin-only: Get comprehensive FCM notification statistics
+ */
+const getAdminDashboardStats = async (req, res) => {
+    try {
+        const User = require('../models/User-model');
+        const Provider = require('../models/Provider-model');
+        const Admin = require('../models/Admin-model');
+        const { SystemConfig } = require('../models/SystemSetting');
+
+        // Query active devices count in fcmDevices (where isActive is true)
+        const customerDevices = await User.aggregate([
+            { $unwind: '$fcmDevices' },
+            { $match: { 'fcmDevices.isActive': true } },
+            { $count: 'count' }
+        ]);
+
+        const providerDevices = await Provider.aggregate([
+            { $unwind: '$fcmDevices' },
+            { $match: { 'fcmDevices.isActive': true } },
+            { $count: 'count' }
+        ]);
+
+        const adminDevices = await Admin.aggregate([
+            { $unwind: '$fcmDevices' },
+            { $match: { 'fcmDevices.isActive': true } },
+            { $count: 'count' }
+        ]);
+
+        const customerCount = customerDevices[0]?.count || 0;
+        const providerCount = providerDevices[0]?.count || 0;
+        const adminCount = adminDevices[0]?.count || 0;
+        const totalCount = customerCount + providerCount + adminCount;
+
+        // Cleanup Count from SystemConfig
+        const config = await SystemConfig.findOne();
+        const cleanupCount = config?.invalidTokenCleanupCount || 0;
+
+        // Last Notification Delivery Success
+        // Find the latest broadcast or notification that was sent (status: 'sent' or 'delivered')
+        const latestNotif = await Notification.findOne({
+            status: { $in: ['sent', 'delivered'] }
+        }).sort({ createdAt: -1 });
+
+        let lastDeliverySuccess = 'N/A';
+        if (latestNotif) {
+            const total = latestNotif.totalSent || 0;
+            const success = latestNotif.successCount || latestNotif.deliveredCount || 0;
+            if (total > 0) {
+                lastDeliverySuccess = `${success}/${total} (${((success / total) * 100).toFixed(1)}%)`;
+            } else {
+                lastDeliverySuccess = latestNotif.status === 'delivered' ? 'Success' : 'Sent';
+            }
+        }
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                totalActiveDevices: totalCount,
+                customerDevices: customerCount,
+                providerDevices: providerCount,
+                adminDevices: adminCount,
+                invalidTokenCleanupCount: cleanupCount,
+                lastNotificationDeliverySuccess: lastDeliverySuccess
+            }
+        });
+    } catch (error) {
+        console.error('getAdminDashboardStats error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to fetch dashboard stats' });
     }
 };
 
@@ -850,5 +964,6 @@ module.exports = {
     resendNotification,
     markClicked,
     getAdminAnalytics,
-    emitStatsUpdate
+    emitStatsUpdate,
+    getAdminDashboardStats
 };

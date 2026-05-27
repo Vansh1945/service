@@ -89,10 +89,12 @@ const sendPushNotification = async (tokens, payload) => {
             // Cleanup invalid tokens async from all collections
             if (failedTokens.length > 0) {
                 console.log(`[NotificationService] Cleaning up ${failedTokens.length} invalid tokens...`);
+                const { SystemConfig } = require('../models/SystemSetting');
                 Promise.all([
-                    User.updateMany({}, { $pull: { fcmTokens: { token: { $in: failedTokens } } } }),
-                    Provider.updateMany({}, { $pull: { fcmTokens: { token: { $in: failedTokens } } } }),
-                    Admin.updateMany({}, { $pull: { fcmTokens: { token: { $in: failedTokens } } } })
+                    User.updateMany({}, { $pull: { fcmDevices: { token: { $in: failedTokens } } } }),
+                    Provider.updateMany({}, { $pull: { fcmDevices: { token: { $in: failedTokens } } } }),
+                    Admin.updateMany({}, { $pull: { fcmDevices: { token: { $in: failedTokens } } } }),
+                    SystemConfig.updateOne({}, { $inc: { invalidTokenCleanupCount: failedTokens.length } })
                 ]).catch(err => console.error('[NotificationService] Clean up error:', err));
             }
         }
@@ -117,10 +119,10 @@ const notifyUser = async (userId, role, payload) => {
             user = await User.findById(userId);
         }
 
-        if (user && user.fcmTokens && user.fcmTokens.length > 0) {
-            // Collect unique tokens
-            const tokens = [...new Set(user.fcmTokens.map(t => t.token))];
-            console.log(`[NotificationService] Sending to ${tokens.length} tokens for user ${userId} (${role})`);
+        if (user && user.fcmDevices && user.fcmDevices.length > 0) {
+            // Collect unique active tokens
+            const tokens = [...new Set(user.fcmDevices.filter(d => d.isActive !== false && d.token).map(t => t.token))];
+            console.log(`[NotificationService] Sending to ${tokens.length} active tokens for user ${userId} (${role})`);
             await sendPushNotification(tokens, payload);
         } else {
             console.log(`[NotificationService] User ${userId} (${role}) has NO active FCM tokens`);
@@ -139,8 +141,12 @@ const notifyAllAdmins = async (payload) => {
 
         let allTokens = [];
         admins.forEach(a => {
-            if (a.fcmTokens && a.fcmTokens.length > 0) {
-                a.fcmTokens.forEach(t => allTokens.push(t.token));
+            if (a.fcmDevices && a.fcmDevices.length > 0) {
+                a.fcmDevices.forEach(t => {
+                    if (t.isActive !== false && t.token) {
+                        allTokens.push(t.token);
+                    }
+                });
             }
         });
 
@@ -196,7 +202,7 @@ const sendBroadcastNotification = async (audience, payload, filters = {}, broadc
             if (city) userQuery['address.city'] = new RegExp(city, 'i');
             if (minBookings > 0) userQuery.totalBookings = { $gte: minBookings };
 
-            users = await User.find(userQuery, '_id fcmTokens notificationPreferences');
+            users = await User.find(userQuery, '_id fcmDevices notificationPreferences');
             users.forEach(u => {
                 // Filter out users who disabled promotional/broadcast notifications
                 if (u.notificationPreferences && u.notificationPreferences.promotional === false) {
@@ -227,8 +233,12 @@ const sendBroadcastNotification = async (audience, payload, filters = {}, broadc
                     }
                 }
 
-                if (pushAllowed && u.fcmTokens && u.fcmTokens.length > 0) {
-                    u.fcmTokens.forEach(t => allTokens.push(t.token));
+                if (pushAllowed && u.fcmDevices && u.fcmDevices.length > 0) {
+                    u.fcmDevices.forEach(t => {
+                        if (t.isActive !== false && t.token) {
+                            allTokens.push(t.token);
+                        }
+                    });
                 }
             });
         }
@@ -240,7 +250,7 @@ const sendBroadcastNotification = async (audience, payload, filters = {}, broadc
             if (category) providerQuery.services = category; // category ID
             if (minBookings > 0) providerQuery.completedBookings = { $gte: minBookings };
 
-            providers = await Provider.find(providerQuery, '_id fcmTokens notificationPreferences');
+            providers = await Provider.find(providerQuery, '_id fcmDevices notificationPreferences');
             providers.forEach(p => {
                 // Filter out providers who disabled promotional/broadcast notifications
                 if (p.notificationPreferences && p.notificationPreferences.promotional === false) {
@@ -271,8 +281,12 @@ const sendBroadcastNotification = async (audience, payload, filters = {}, broadc
                     }
                 }
 
-                if (pushAllowed && p.fcmTokens && p.fcmTokens.length > 0) {
-                    p.fcmTokens.forEach(t => allTokens.push(t.token));
+                if (pushAllowed && p.fcmDevices && p.fcmDevices.length > 0) {
+                    p.fcmDevices.forEach(t => {
+                        if (t.isActive !== false && t.token) {
+                            allTokens.push(t.token);
+                        }
+                    });
                 }
             });
         }
@@ -294,16 +308,16 @@ const sendBroadcastNotification = async (audience, payload, filters = {}, broadc
         const tokenToNotifMap = new Map();
         users.forEach(u => {
             const notif = userNotifMap.get(u._id.toString());
-            if (notif && u.fcmTokens) {
-                u.fcmTokens.forEach(t => {
+            if (notif && u.fcmDevices) {
+                u.fcmDevices.forEach(t => {
                     if (t.token) tokenToNotifMap.set(t.token, notif);
                 });
             }
         });
         providers.forEach(p => {
             const notif = userNotifMap.get(p._id.toString());
-            if (notif && p.fcmTokens) {
-                p.fcmTokens.forEach(t => {
+            if (notif && p.fcmDevices) {
+                p.fcmDevices.forEach(t => {
                     if (t.token) tokenToNotifMap.set(t.token, notif);
                 });
             }
@@ -454,8 +468,8 @@ cron.schedule('* * * * *', async () => {
                     else userModel = User;
 
                     const user = await userModel.findById(notif.userId);
-                    if (user && user.fcmTokens && user.fcmTokens.length > 0) {
-                        const tokens = [...new Set(user.fcmTokens.map(t => t.token))];
+                    if (user && user.fcmDevices && user.fcmDevices.length > 0) {
+                        const tokens = [...new Set(user.fcmDevices.filter(t => t.isActive !== false && t.token).map(t => t.token))];
                         result = await sendPushNotification(tokens, {
                             title: notif.title,
                             body: notif.message,

@@ -34,10 +34,13 @@ const adminSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
-  fcmTokens: [{
+  fcmDevices: [{
     token: { type: String, required: true },
     deviceId: { type: String, required: true },
-    lastActive: { type: Date, default: Date.now }
+    platform: { type: String },
+    lastActive: { type: Date, default: Date.now },
+    isActive: { type: Boolean, default: true },
+    appVersion: { type: String }
   }],
   refreshTokens: [{
     tokenHash:  { type: String, required: true },

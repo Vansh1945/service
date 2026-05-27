@@ -124,10 +124,13 @@ const userSchema = new mongoose.Schema({
     min: 0,
     max: 100
   },
-  fcmTokens: [{
+  fcmDevices: [{
     token: { type: String, required: true },
     deviceId: { type: String, required: true },
-    lastActive: { type: Date, default: Date.now }
+    platform: { type: String },
+    lastActive: { type: Date, default: Date.now },
+    isActive: { type: Boolean, default: true },
+    appVersion: { type: String }
   }],
   wallet: {
     availableBalance: {

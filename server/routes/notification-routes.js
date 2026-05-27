@@ -67,6 +67,9 @@ router.post('/send-broadcast', flexAuth, adminOnly, notificationController.sendB
 // GET /api/notifications/history — Admin only
 router.get('/history', flexAuth, adminOnly, notificationController.getBroadcastHistory);
 
+// GET /api/notifications/admin/dashboard-stats — Admin only dashboard stats
+router.get('/admin/dashboard-stats', flexAuth, adminOnly, notificationController.getAdminDashboardStats);
+
 // PATCH /api/notifications/admin/:id — Edit (Admin only)
 router.patch('/admin/:id', flexAuth, adminOnly, notificationController.updateNotification);
 

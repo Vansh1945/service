@@ -1,6 +1,7 @@
 import { Routes, Route } from "react-router-dom";
-import { lazy } from "react";
+import { lazy, Suspense } from "react";
 import ProtectedRoute from "../components/ProtectedRoute";
+import LoadingSpinner from "../components/Loader";
 
 const CustomerLayout = lazy(() => import("../layouts/CustomerLayout"));
 const ServiceListingPage = lazy(() => import("../pages/Customer/Services"));
@@ -15,22 +16,24 @@ const LiveTrackingPage = lazy(() => import("../pages/Shared/LiveTrackingPage"));
 
 const CustomerRoutes = () => {
     return (
-        <Routes>
-            <Route element={<ProtectedRoute allowedRoles={["customer"]} />}>
-                <Route element={<CustomerLayout />}>
-                    <Route index element={<ServiceListingPage />} />
-                    <Route path="profile" element={<UserProfile />} />
-                    <Route path="services" element={<ServiceListingPage />} />
-                    <Route path="services/:id" element={<ServiceDetailPage />} />
-                    <Route path="book-service/:serviceId" element={<BookService />} />
-                    <Route path="bookings" element={<CustomerBookingsPage />} />
-                    <Route path="booking-confirm/:bookingId" element={<BookingConfirmation />} />
-                    <Route path="feedback" element={<FeedbackManagement />} />
-                    <Route path="complaints" element={<ComplaintsPage />} />
+        <Suspense fallback={<LoadingSpinner />}>
+            <Routes>
+                <Route element={<ProtectedRoute allowedRoles={["customer"]} />}>
+                    <Route element={<CustomerLayout />}>
+                        <Route index element={<ServiceListingPage />} />
+                        <Route path="profile" element={<UserProfile />} />
+                        <Route path="services" element={<ServiceListingPage />} />
+                        <Route path="services/:id" element={<ServiceDetailPage />} />
+                        <Route path="book-service/:serviceId" element={<BookService />} />
+                        <Route path="bookings" element={<CustomerBookingsPage />} />
+                        <Route path="booking-confirm/:bookingId" element={<BookingConfirmation />} />
+                        <Route path="feedback" element={<FeedbackManagement />} />
+                        <Route path="complaints" element={<ComplaintsPage />} />
+                    </Route>
+                    <Route path="track/:bookingId" element={<LiveTrackingPage />} />
                 </Route>
-                <Route path="track/:bookingId" element={<LiveTrackingPage />} />
-            </Route>
-        </Routes>
+            </Routes>
+        </Suspense>
     );
 }
 
