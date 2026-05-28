@@ -18,40 +18,12 @@ const CustomerLayout = () => {
     const [systemSettings, setSystemSettings] = useState({
         companyName: '',
         logo: null,
-        tagline: ''
+        // tagline: ''
     });
     const location = useLocation();
     const navigate = useNavigate();
     const { user, logoutUser, API, token, refreshUser } = useAuth();
     const locationRequestedRef = React.useRef(false);
-
-    // Auto-detect and update customer location on app open - DISABLED: Overwrites permanent registered address in profile automatically.
-    /*
-    useEffect(() => {
-        if (!token || !user || locationRequestedRef.current) return;
-        locationRequestedRef.current = true;
-
-        detectCurrentLocation({ maximumAge: 60000 })
-            .then(async ({ latitude, longitude, address }) => {
-                const fields = toLegacyAddressFields({ ...address, lat: latitude, lng: longitude });
-                await CustomerService.updateProfile({
-                    name: user.name,
-                    phone: user.phone,
-                    address: {
-                        ...fields,
-                        street: fields.street || user.address?.street || '',
-                        city: fields.city || user.address?.city || '',
-                        state: fields.state || user.address?.state || '',
-                        postalCode: fields.postalCode || user.address?.postalCode || ''
-                    }
-                });
-                await refreshUser();
-            })
-            .catch((err) => {
-                console.warn('Customer geolocation sync skipped:', err.message);
-            });
-    }, [token, user, refreshUser]);
-    */
 
     useEffect(() => {
         const fetchSystemSettings = async () => {
@@ -62,7 +34,7 @@ const CustomerLayout = () => {
                     setSystemSettings({
                         companyName: data.appName || 'SAFEVOLT SOLUTIONS',
                         logo: data.logo || null,
-                        tagline: data.description || ''
+                        // tagline: data.description || ''
                     });
                 }
 
@@ -72,7 +44,7 @@ const CustomerLayout = () => {
                     setSystemSettings({
                         companyName: data.appName || 'SAFEVOLT SOLUTIONS',
                         logo: data.logo || null,
-                        tagline: data.description || ''
+                        // tagline: data.description || ''
                     });
                     localStorage.setItem('branding_customer', JSON.stringify(data));
                 }
@@ -141,19 +113,12 @@ const CustomerLayout = () => {
                                         className="flex-shrink-0 h-8 md:h-10 lg:h-12 w-auto object-contain mr-1 md:mr-2"
                                     />
                                 ) : (
-                                    <div className="flex-shrink-0 flex items-center justify-center h-8 w-8 lg:h-10 lg:w-10 rounded-full bg-primary shadow-lg">
-                                        <FaBolt className="h-4 w-4 lg:h-5 lg:w-5 text-accent" />
-                                    </div>
+                                    <FaBolt className="h-8 md:h-10 lg:h-12 w-auto text-primary" />
                                 )}
                                 <div className="flex flex-col min-w-0">
                                     <span className="font-bold text-sm sm:text-base md:text-lg lg:text-2xl bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent truncate">
                                         {systemSettings.companyName || 'SAFEVOLT SOLUTIONS'}
                                     </span>
-                                    {systemSettings.tagline && (
-                                        <span className="hidden sm:block text-[10px] sm:text-xs lg:text-sm text-gray-600 font-medium leading-tight truncate">
-                                            {systemSettings.tagline}
-                                        </span>
-                                    )}
                                 </div>
                             </Link>
                         </div>
