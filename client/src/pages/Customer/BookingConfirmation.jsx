@@ -346,7 +346,7 @@ const BookingConfirmation = () => {
         key: import.meta.env.VITE_RAZORPAY_KEY || key,
         amount: order.amount,
         currency: order.currency || 'INR',
-        name: 'SAFEVOLT SOLUTIONS',
+        name: 'Raj Electrical Services',
         description: isMixed
           ? `Mixed Payment: Wallet (₹${walletDeduction}) + Razorpay`
           : `Payment for ${getServiceInfo().title}`,

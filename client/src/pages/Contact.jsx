@@ -32,7 +32,7 @@ const Contact = () => {
     primaryPhone: systemData?.phone || '+91 9625333919',
     emergencyPhone: systemData?.phone || '+91 9625333919',
     ctaPhone: systemData?.phone || '+91 9625333919',
-    email: systemData?.email || 'info@safevolt.com',
+    email: systemData?.email || 'info@rajelectricalservices.com',
     address: systemData?.address || 'Himachal Pradesh & Punjab, India',
     businessHours: {
       weekdays: '8:00 AM - 6:00 PM',

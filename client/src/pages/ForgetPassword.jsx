@@ -206,7 +206,7 @@ const ForgotPassword = () => {
           <span className="text-xs font-bold text-primary">Secure Account Recovery</span>
         </div>
         <h1 className="text-4xl font-bold text-secondary leading-tight">
-          Recover <span className="text-primary">SafeVolt</span>
+          Recover <span className="text-primary">Your Account</span>
         </h1>
         <p className="mt-3 text-sm text-secondary/60 leading-relaxed max-w-sm mx-auto">
           Quickly reset your password and regain access to your account with our secure OTP verification.
@@ -241,7 +241,7 @@ const ForgotPassword = () => {
 
       <div className="bg-background border border-secondary/10 rounded-xl p-5 shadow-sm">
         <h3 className="text-sm font-bold text-secondary mb-3 flex items-center gap-2">
-          <Award className="w-4 h-4 text-primary" /> Why SafeVolt?
+          <Award className="w-4 h-4 text-primary" /> Why Raj Electrical Services?
         </h3>
         <div className="space-y-2.5">
           {[
@@ -375,7 +375,7 @@ const ForgotPassword = () => {
             <span className="text-xs font-bold text-primary">Secure Recovery</span>
           </div>
           <h1 className="text-2xl font-bold text-secondary leading-tight">
-            Recover <span className="text-primary">SafeVolt</span>
+            Recover <span className="text-primary">Your Account</span>
           </h1>
         </div>
 

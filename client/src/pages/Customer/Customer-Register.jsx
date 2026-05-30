@@ -182,7 +182,7 @@ const CustomerRegistration = () => {
 
     try {
       const response = await register(formData);
-      showToast(response.data.message || 'Registration successful! Welcome to SafeVolt.');
+      showToast(response.data.message || 'Registration successful! Welcome to Raj Electrical Services.');
       navigate('/login');
     } catch (err) {
       const errorData = err.response?.data;
@@ -265,7 +265,7 @@ const CustomerRegistration = () => {
           <span className="text-xs font-bold text-primary">Trusted by 10,000+ Customers</span>
         </div>
         <h1 className="text-4xl font-bold text-secondary leading-tight">
-          Join <span className="text-primary">SafeVolt</span> today
+          Join <span className="text-primary">Raj Electrical Services</span> today
         </h1>
         <p className="mt-3 text-sm text-secondary/60 leading-relaxed max-w-sm mx-auto">
           Experience premium electrical services with verified professionals at your doorstep.
@@ -444,7 +444,7 @@ const CustomerRegistration = () => {
             <span className="text-xs font-bold text-primary">Join 10,000+ Happy Customers</span>
           </div>
           <h1 className="text-2xl font-bold text-secondary leading-tight">
-            Join <span className="text-primary">SafeVolt</span> today
+            Join <span className="text-primary">Raj Electrical Services</span> today
           </h1>
         </div>
 

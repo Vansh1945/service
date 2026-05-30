@@ -50,7 +50,7 @@ const Branding = () => {
       logo: '',
       favicon: '',
       browserTitle: 'Raj Electrical Admin Panel',
-      description: 'SafeVolt Control Panel',
+      description: 'Raj Electrical Services Control Panel',
       appVersion: 1,
       lastPublished: null,
       installedUsersCount: 0
@@ -249,7 +249,7 @@ const Branding = () => {
         logo: '',
         favicon: '',
         browserTitle: 'Raj Electrical Admin Panel',
-        description: 'SafeVolt Control Panel'
+        description: 'Raj Electrical Services Control Panel'
       }
     };
 
@@ -288,8 +288,8 @@ const Branding = () => {
           purpose: 'any maskable'
         }
       ],
-      description: role === 'admin' ? 'SafeVolt Control Panel' : `${roleData.shortName} App`,
-      id: `com.safevolt.${role}`
+      description: role === 'admin' ? 'Raj Electrical Services Control Panel' : `${roleData.shortName} App`,
+      id: `com.rajelectrical.${role}`
     };
 
     setManifestData(manifest);
@@ -724,7 +724,7 @@ const Branding = () => {
                     <span className="w-1.5 h-1.5 bg-gray-300 rounded-full" />
                   </div>
                   <div className="bg-gray-50 border border-gray-150 rounded-md flex-1 text-[8px] text-gray-400 py-1 px-2 font-mono truncate">
-                    https://safevolt.com/{activeTab === 'customer' ? '' : activeTab}
+                    https://rajelectricalservices.vercel.app/{activeTab === 'customer' ? '' : activeTab}
                   </div>
                 </div>
               </div>
@@ -752,7 +752,7 @@ const Branding = () => {
                   </div>
                   <div className="flex-1 min-w-0">
                     <h4 className="font-extrabold text-xs text-gray-900 truncate">{currentBranding.appName}</h4>
-                    <p className="text-[10px] text-teal-600 font-bold truncate mt-0.5">{currentBranding.shortName || 'SafeVolt'}</p>
+                    <p className="text-[10px] text-teal-600 font-bold truncate mt-0.5">{currentBranding.shortName || 'Raj'}</p>
                   </div>
                 </div>
                 

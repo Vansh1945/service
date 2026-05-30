@@ -891,7 +891,7 @@ const BookService = () => {
                           <span className="text-[9px] text-red-500 bg-red-50 px-1.5 py-0.5 rounded">Insufficient</span>
                         )}
                       </div>
-                      <p className="text-[10px] text-gray-400">Pay 100% from your SafeVolt Wallet</p>
+                      <p className="text-[10px] text-gray-400">Pay 100% from your Raj Wallet</p>
                     </div>
                     <Wallet className="w-4 h-4 text-gray-300" />
                   </div>

@@ -135,10 +135,10 @@ const LoginPage = () => {
       <div className="text-center flex flex-col items-center">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 rounded-full mb-4 mt-6">
           <Sparkles className="w-3.5 h-3.5 text-primary" />
-          <span className="text-xs font-bold text-primary">Welcome Back to SafeVolt</span>
+          <span className="text-xs font-bold text-primary">Welcome Back to Raj Electrical Services</span>
         </div>
         <h1 className="text-4xl font-bold text-secondary leading-tight">
-          Login to <span className="text-primary">SafeVolt</span>
+          Login to <span className="text-primary">Raj Electrical Services</span>
         </h1>
         <p className="mt-3 text-sm text-gray-500 leading-relaxed max-w-sm mx-auto">
           Access your dashboard, manage bookings, and stay connected with our premium services.
@@ -202,7 +202,7 @@ const LoginPage = () => {
             <span className="text-xs font-bold text-primary">Secure Access</span>
           </div>
           <h1 className="text-2xl font-bold text-secondary leading-tight">
-            Login to <span className="text-primary">SafeVolt</span>
+            Login to <span className="text-primary">Raj Electrical Services</span>
           </h1>
         </div>
 

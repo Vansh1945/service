@@ -114,12 +114,12 @@ const Navbar = () => {
                 {systemSettings.logo && (
                   <img
                     src={systemSettings.logo}
-                    alt={systemSettings.companyName || 'SAFEVOLT SOLUTIONS'}
+                    alt={systemSettings.companyName || 'Raj Electrical Services'}
                     className="flex-shrink-0 h-8 md:h-10 lg:h-12 w-auto object-contain mr-2 md:mr-3"
                   />
                 )}
                 <span className="font-extrabold text-lg md:text-2xl lg:text-3xl bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter tracking-tight truncate">
-                  {systemSettings.companyName || 'SAFEVOLT SOLUTIONS'}
+                  {systemSettings.companyName || 'Raj Electrical Services'}
                 </span>
               </div>
             </Link>

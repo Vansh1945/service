@@ -184,7 +184,7 @@ const ProviderLayout = () => {
             if (e.detail?.role === 'provider') {
                 const data = e.detail.data;
                 setSystemSettings({
-                    companyName: data.appName || 'SAFEVOLT SOLUTIONS',
+                    companyName: data.appName || 'Raj Electrical Services',
                     logo: data.logo || null,
                     tagline: data.description || ''
                 });

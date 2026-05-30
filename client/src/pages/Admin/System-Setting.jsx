@@ -313,7 +313,7 @@ const SystemSetting = () => {
         showToast('System settings saved successfully');
         // Update local storage settings cache directly
         const settingsCache = {
-          companyName: data.data.companyName || "SAFEVOLT SOLUTIONS",
+          companyName: data.data.companyName || "Raj Electrical Services",
           favicon: data.data.favicon || null,
           timeFormat: data.data.timeFormat || "12h"
         };

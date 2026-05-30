@@ -918,7 +918,7 @@ const ProviderRegistration = () => {
         </div>
         <h1 className="text-4xl font-bold text-secondary leading-tight">
           Become a{' '}
-          <span className="text-primary">SafeVolt</span>{' '}
+          <span className="text-primary">Raj Electrical Services</span>{' '}
           Provider
         </h1>
         <p className="mt-3 text-sm text-secondary/60 leading-relaxed">
@@ -979,7 +979,7 @@ const ProviderRegistration = () => {
 
       <div className="bg-background border border-gray-200 rounded-xl p-5">
         <h3 className="text-sm font-bold text-secondary mb-3 flex items-center gap-2">
-          <Users className="w-4 h-4 text-accent" /> Why Providers Trust SafeVolt
+          <Users className="w-4 h-4 text-accent" /> Why Providers Trust Raj Electrical Services
         </h3>
         <div className="space-y-2.5">
           {[
@@ -1065,7 +1065,7 @@ const ProviderRegistration = () => {
               <span className="text-xs font-bold text-primary">Join 2,000+ Trusted Providers</span>
             </div>
             <h1 className="text-2xl font-bold text-secondary leading-tight">
-              Become a <span className="text-primary">SafeVolt</span> Provider
+              Become a <span className="text-primary">Raj Electrical Services</span> Provider
             </h1>
             <p className="text-xs text-gray-500 mt-1">
               Verified electrical professionals earning more every day
