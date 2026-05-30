@@ -51,12 +51,7 @@ const TEMPLATE_METADATA = {
     icon: <FiX className="w-5 h-5" />,
     variables: ['name', 'withdrawAmount', 'reason', 'date']
   },
-  complaintResponse: {
-    name: 'Complaint Resolution',
-    description: 'Official response sent to users on complaint submission status or final resolutions.',
-    icon: <FiHelpCircle className="w-5 h-5" />,
-    variables: ['name', 'bookingId', 'status', 'remark']
-  }
+
 };
 
 const EmailTemplate = () => {

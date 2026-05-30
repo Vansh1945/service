@@ -4,7 +4,6 @@ const User = require('../models/User-model');
 const mongoose = require('mongoose');
 const { notifyAdmins } = require('../utils/notificationHelper');
 const { generateComplaintId } = require('../utils/generateUniqueId');
-const { sendMail } = require('../utils/sendmail');
 
 const checkAndAutoEscalate = async (complaintId) => {
   try {
@@ -880,24 +879,7 @@ const resolveComplaint = async (req, res) => {
 
     } catch (e) { }
 
-    try {
-      const emailTo = complaint.customer?.email || complaint.userId?.email || complaint.provider?.email || complaint.providerId?.email;
-      const nameOfUser = complaint.customer?.name || complaint.userId?.name || complaint.provider?.name || complaint.providerId?.name || 'User';
-      if (emailTo) {
-        await sendMail({
-          to: emailTo,
-          templateType: 'complaintResponse',
-          variables: {
-            name: nameOfUser,
-            bookingId: complaint.booking?.bookingId || 'N/A',
-            status: resolvedStatus,
-            remark: resolutionNotes
-          }
-        });
-      }
-    } catch (mailError) {
-      console.error('Failed to send complaint response email:', mailError.message);
-    }
+
 
     res.json({ success: true, message: 'Complaint resolved successfully', data: complaint });
   } catch (error) {
