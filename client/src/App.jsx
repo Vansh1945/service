@@ -42,7 +42,7 @@ import {
   writeSystemSettingsCache,
 } from "./utils/systemSettingsCache";
 
-const DATE_TIME_FORMAT_OVERRIDE_KEY = "__safevoltTimeFormatOverrideInstalled";
+const DATE_TIME_FORMAT_OVERRIDE_KEY = "__rajelectricalTimeFormatOverrideInstalled";
 
 const withConfiguredTimeFormat = (options) => {
   if (options === null) return options;
@@ -304,7 +304,7 @@ const App = () => {
       const busterFavicon = faviconUrl ? `${faviconUrl}?v=${data?.updatedAt || Date.now()}` : null;
 
       const settings = {
-        companyName: data?.appName || (role === 'admin' ? 'SafeVolt Admin' : role === 'provider' ? 'SafeVolt Provider' : 'SafeVolt Customer'),
+        companyName: data?.appName || (role === 'admin' ? 'Raj Electrical Admin' : role === 'provider' ? 'Raj Electrical Provider' : 'Raj Electrical Customer'),
         favicon: busterFavicon,
         description: data?.description || "",
         themeColor: data?.themeColor || (role === 'admin' ? '#4f46e5' : role === 'provider' ? '#10b981' : '#3b82f6'),
@@ -344,7 +344,7 @@ const App = () => {
         const busterFavicon = faviconUrl ? `${faviconUrl}?v=${Date.now()}` : null;
 
         applyDocumentSettings({
-          companyName: data?.appName || (currentRole === 'admin' ? 'SafeVolt Admin' : currentRole === 'provider' ? 'SafeVolt Provider' : 'SafeVolt Customer'),
+          companyName: data?.appName || (currentRole === 'admin' ? 'Raj Electrical Admin' : currentRole === 'provider' ? 'Raj Electrical Provider' : 'Raj Electrical Customer'),
           favicon: busterFavicon,
           description: data?.description || "",
           themeColor: data?.themeColor || "",

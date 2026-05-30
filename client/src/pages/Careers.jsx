@@ -1,4 +1,5 @@
 import React from 'react';
+import { Helmet } from 'react-helmet-async';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import {
@@ -73,6 +74,17 @@ const CareersPage = () => {
 
   return (
     <div className="min-h-screen bg-white">
+      <Helmet>
+        <title>Careers | Raj Electrical Services | Join as an Electrical Partner</title>
+        <meta name="description" content="Join Raj Electrical Services in North India as a certified electrical partner. Connect with local clients, earn weekly payouts, and grow your service business." />
+        <meta name="keywords" content="careers at Raj Electrical, electrician jobs in North India, join electrical network, trusted electrical solutions" />
+        <link rel="canonical" href="https://rajelectricalservices.vercel.app/careers" />
+        <meta property="og:title" content="Careers | Raj Electrical Services | Join as an Electrical Partner" />
+        <meta property="og:description" content="Join Raj Electrical Services in North India as a certified electrical partner. Connect with local clients, earn weekly payouts, and grow your service business." />
+        <meta property="og:url" content="https://rajelectricalservices.vercel.app/careers" />
+        <meta property="og:type" content="website" />
+      </Helmet>
+
       {/* Hero Section - Matching AboutPage style */}
       <section className="relative bg-gradient-to-br from-gray-50 to-white pt-20 pb-8 md:pt-28 md:pb-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -290,6 +302,55 @@ const CareersPage = () => {
                 />
               </div>
             </motion.div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Supplementary SEO Sections ── */}
+
+      {/* Trust & Reliability Section */}
+      <section className="py-16 bg-gray-50 border-t border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid md:grid-cols-2 gap-12 items-center">
+            <div>
+              <span className="text-xs uppercase tracking-[0.2em] font-extrabold text-primary bg-primary/10 px-4 py-1.5 rounded-full">
+                Partner Support
+              </span>
+              <h2 className="text-2xl md:text-3xl font-extrabold text-secondary mt-4 mb-4 font-poppins">
+                Built on Trust & Reliability
+              </h2>
+              <p className="text-gray-500 text-xs font-semibold leading-relaxed mb-6">
+                Our partners are the heart of Raj Electrical Services. We work continuously to provide a platform that protects your earnings, simplifies your schedules, and respects your professional expertise.
+              </p>
+
+              <div className="space-y-4">
+                {[
+                  { title: "Weekly & Secure Payouts", desc: "No delays. Completed job payouts are settled securely and credited to your bank account every week." },
+                  { title: "Partner Insurance Coverage", desc: "We provide comprehensive on-job accidental coverage to guarantee peace of mind for you and your family." },
+                  { title: "Skill-Up Onboarding", desc: "Receive technical training, smart tools integration, and professional customer care guidance free of charge." }
+                ].map((item, idx) => (
+                  <div key={idx} className="flex gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 text-primary">
+                      <Handshake className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-secondary font-poppins">{item.title}</h4>
+                      <p className="text-[11px] text-gray-500 font-medium">{item.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="relative">
+              <div className="rounded-2xl overflow-hidden shadow-lg border border-gray-200">
+                <img 
+                  src="https://images.unsplash.com/photo-1621905251189-08b45d6a269e?q=80&w=800&auto=format&fit=crop" 
+                  alt="On-job expert support" 
+                  className="w-full h-[320px] object-cover"
+                />
+              </div>
+            </div>
           </div>
         </div>
       </section>

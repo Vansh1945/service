@@ -118,7 +118,7 @@ const Footer = () => {
                 </div>
               )}
               <span className="text-xl font-bold tracking-tight bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                {systemData?.companyName || "SafeVolt"}
+                {systemData?.companyName || "Raj Electrical Services"}
               </span>
             </Link>
 
@@ -167,7 +167,7 @@ const Footer = () => {
             <ul className="space-y-4">
               <li className="flex items-start gap-3 text-sm group">
                 <MapPin className="w-5 h-5 text-primary shrink-0 mt-0.5 group-hover:scale-110 transition-transform duration-300" />
-                <span className="text-gray-400 leading-relaxed">{systemData?.address || "Jalandhar, Punjab, India"}</span>
+                <span className="text-gray-400 leading-relaxed">{systemData?.address || "Punjab & Himachal Pradesh, North India"}</span>
               </li>
               <li className="flex items-center gap-3 text-sm group">
                 <Phone className="w-5 h-5 text-primary shrink-0 group-hover:scale-110 transition-transform duration-300" />
@@ -178,7 +178,7 @@ const Footer = () => {
               <li className="flex items-center gap-3 text-sm group">
                 <Mail className="w-5 h-5 text-primary shrink-0 group-hover:scale-110 transition-transform duration-300" />
                 <a href={`mailto:${systemData?.email}`} className="text-gray-400 hover:text-primary transition-colors duration-300 break-all">
-                  {systemData?.email || "info@safevolt.com"}
+                  {systemData?.email || "info@rajelectricalservices.com"}
                 </a>
               </li>
             </ul>
@@ -233,7 +233,7 @@ const Footer = () => {
           <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-gray-500">
             {/* Copyright */}
             <p className="text-center md:text-left">
-              © {currentYear} {systemData?.companyName || "SafeVolt"}. All rights reserved.
+              © {currentYear} {systemData?.companyName || "Raj Electrical Services"}. All rights reserved.
             </p>
 
             {/* Legal Links */}

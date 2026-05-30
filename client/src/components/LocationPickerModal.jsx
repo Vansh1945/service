@@ -536,7 +536,7 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
                 type="text"
                 value={city}
                 onChange={(e) => setCity(e.target.value)}
-                placeholder="e.g. Jalandhar"
+                placeholder="e.g. Mohali"
                 className="w-full bg-transparent text-secondary font-medium text-xs focus:outline-none border-none p-0 mt-0.5"
               />
             </div>
@@ -546,7 +546,7 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
                 type="text"
                 value={pincode}
                 onChange={(e) => setPincode(e.target.value)}
-                placeholder="e.g. 144005"
+                placeholder="e.g. 160062"
                 className="w-full bg-transparent text-secondary font-medium text-xs focus:outline-none border-none p-0 mt-0.5"
               />
             </div>

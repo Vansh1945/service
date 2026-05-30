@@ -153,7 +153,7 @@ const ProviderLayout = () => {
                 if (cached) {
                     const data = JSON.parse(cached);
                     setSystemSettings({
-                        companyName: data.appName || 'SAFEVOLT SOLUTIONS',
+                        companyName: data.appName || 'RAJ ELECTRICAL SERVICES',
                         logo: data.logo || null,
                         tagline: data.description || ''
                     });
@@ -163,7 +163,7 @@ const ProviderLayout = () => {
                 if (response.data?.success) {
                     const data = response.data.data;
                     setSystemSettings({
-                        companyName: data.appName || 'SAFEVOLT SOLUTIONS',
+                        companyName: data.appName || 'RAJ ELECTRICAL SERVICES',
                         logo: data.logo || null,
                         tagline: data.description || ''
                     });
@@ -251,7 +251,7 @@ const ProviderLayout = () => {
                                 />
                             )}
                             <span className="text-lg font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter truncate">
-                                {systemSettings.companyName || 'SAFEVOLT SOLUTIONS'}
+                                {systemSettings.companyName || 'RAJ ELECTRICAL SERVICES'}
                             </span>
                         </div>
                         <button
@@ -299,7 +299,7 @@ const ProviderLayout = () => {
                                 />
                             )}
                             <span className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter">
-                                {systemSettings.companyName || 'SAFEVOLT SOLUTIONS'}
+                                {systemSettings.companyName || 'RAJ ELECTRICAL SERVICES'}
                             </span>
                         </div>
                     </div>

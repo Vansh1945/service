@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { motion } from 'framer-motion';
 import { 
   FileText, 
@@ -15,7 +16,6 @@ import { formatDate } from '../utils/format';
 
 const TermsAndConditions = () => {
   useEffect(() => {
-    document.title = "Terms & Conditions | SAFEVOLT SOLUTIONS";
     window.scrollTo(0, 0);
   }, []);
 
@@ -109,6 +109,17 @@ const TermsAndConditions = () => {
 
   return (
     <div className="min-h-screen bg-white font-inter">
+      <Helmet>
+        <title>Terms & Conditions | Raj Electrical Services</title>
+        <meta name="description" content="Read the official terms and conditions for booking electrical repair, installations, and home maintenance services with Raj Electrical Services in North India." />
+        <meta name="keywords" content="terms and conditions, user agreement, electrical services North India, Raj Electrical Services terms" />
+        <link rel="canonical" href="https://rajelectricalservices.vercel.app/terms-and-conditions" />
+        <meta property="og:title" content="Terms & Conditions | Raj Electrical Services" />
+        <meta property="og:description" content="Read the official terms and conditions for booking electrical repair, installations, and home maintenance services with Raj Electrical Services in North India." />
+        <meta property="og:url" content="https://rajelectricalservices.vercel.app/terms-and-conditions" />
+        <meta property="og:type" content="website" />
+      </Helmet>
+
       {/* Header Section */}
       <section className="bg-gray-50 border-b border-gray-100 pt-20 pb-12 md:pt-32 md:pb-16">
         <div className="max-w-4xl mx-auto px-4 text-center">

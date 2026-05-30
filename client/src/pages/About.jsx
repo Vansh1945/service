@@ -1,4 +1,5 @@
 import React from 'react';
+import { Helmet } from 'react-helmet-async';
 import { motion } from 'framer-motion';
 import {
   Zap, Award, Shield, MapPin, Phone, Users, CheckCircle,
@@ -46,6 +47,17 @@ const AboutPage = () => {
 
   return (
     <div className="min-h-screen bg-white">
+      <Helmet>
+        <title>About Us | Raj Electrical Services | Premium Electricians in North India</title>
+        <meta name="description" content="Learn about Raj Electrical Services, the leading provider of professional electrical repair, home electrical maintenance, and residential & commercial support across North India." />
+        <meta name="keywords" content="electrical services in North India, professional electrical repair, home electrical maintenance, trusted electrical solutions, about Raj Electrical" />
+        <link rel="canonical" href="https://rajelectricalservices.vercel.app/about" />
+        <meta property="og:title" content="About Us | Raj Electrical Services | Premium Electricians in North India" />
+        <meta property="og:description" content="Learn about Raj Electrical Services, the leading provider of professional electrical repair, home electrical maintenance, and residential & commercial support across North India." />
+        <meta property="og:url" content="https://rajelectricalservices.vercel.app/about" />
+        <meta property="og:type" content="website" />
+      </Helmet>
+
       {/* Hero Section */}
       <section className="relative bg-gradient-to-br from-gray-50 to-white pt-20 pb-8 md:pt-28 md:pb-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -275,6 +287,101 @@ const AboutPage = () => {
           </div>
         </div>
       </section> */}
+
+      {/* ── Supplementary SEO Sections ── */}
+
+      {/* Professional Electrical Solutions Section */}
+      <section className="py-16 bg-white border-t border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <span className="text-xs uppercase tracking-[0.2em] font-extrabold text-primary bg-primary/10 px-4 py-1.5 rounded-full">
+              Enterprise Care
+            </span>
+            <h2 className="text-2xl md:text-3xl font-extrabold text-secondary mt-3 mb-2 font-poppins">
+              Professional Electrical Solutions
+            </h2>
+            <p className="text-gray-500 text-sm max-w-xl mx-auto font-medium">
+              We cater to both domestic maintenance demands and heavy-duty commercial/industrial electrical infrastructures.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8">
+            {[
+              {
+                title: "Residential Installations",
+                features: ["Smart switches & lighting design", "Comprehensive safety audits", "Full-scale house wiring & rewiring"]
+              },
+              {
+                title: "Commercial Maintenance",
+                features: ["Panel upgrades & phase balancing", "Server room electrical backups", "Industrial compliance checking"]
+              },
+              {
+                title: "24/7 Diagnostics & Repairs",
+                features: ["Short circuit thermal scanning", "Leakage current protection installs", "Appliance overloading diagnostics"]
+              }
+            ].map((sol, index) => (
+              <div key={index} className="bg-gray-50 p-8 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                <h3 className="text-lg font-bold text-secondary mb-4 font-poppins">{sol.title}</h3>
+                <ul className="space-y-3">
+                  {sol.features.map((feat, idx) => (
+                    <li key={idx} className="flex items-center gap-2 text-xs text-gray-500 font-medium">
+                      <CheckCircle className="w-4 h-4 text-primary shrink-0" />
+                      {feat}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Safety & Quality Standards Section */}
+      <section className="py-16 bg-gray-50 border-t border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid md:grid-cols-2 gap-12 items-center">
+            <div>
+              <span className="text-xs uppercase tracking-[0.2em] font-extrabold text-primary bg-primary/10 px-4 py-1.5 rounded-full">
+                Zero Compromise
+              </span>
+              <h2 className="text-2xl md:text-3xl font-extrabold text-secondary mt-4 mb-4 font-poppins">
+                Our Rigid Safety & Quality Standards
+              </h2>
+              <p className="text-gray-500 text-xs font-semibold leading-relaxed mb-6">
+                Electricity is a powerful element. We treat it with the absolute respect it demands by enforcing strict code compliance, premium materials inspection, and regular skill recalibration for all our certified North India technicians.
+              </p>
+
+              <div className="space-y-4">
+                {[
+                  { title: "Calibrated Diagnostic Gear", desc: "Our teams use top-grade insulation testers and advanced digital multimeters." },
+                  { title: "Compulsory Safety Gear", desc: "No technician operates without insulated gloves, rubber-sole safety shoes, and protective goggles." },
+                  { title: "Quality Checklists", desc: "Every wiring and repair task is validated against a rigorous multi-point testing checklist." }
+                ].map((item, idx) => (
+                  <div key={idx} className="flex gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 text-primary">
+                      <Shield className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-secondary font-poppins">{item.title}</h4>
+                      <p className="text-[11px] text-gray-500 font-medium">{item.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="relative">
+              <div className="rounded-2xl overflow-hidden shadow-lg border border-gray-200">
+                <img 
+                  src="https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?auto=format&fit=crop&q=80&w=800" 
+                  alt="Safety audit checking" 
+                  className="w-full h-[320px] object-cover"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* CTA Section */}
       <section className="pt-8 md:pt-10 pb-12">

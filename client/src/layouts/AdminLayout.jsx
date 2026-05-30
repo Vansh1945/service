@@ -30,7 +30,7 @@ const AdminLayout = () => {
         if (cached) {
           const data = JSON.parse(cached);
           setSystemSettings({
-            companyName: data.appName || data.dashboardTitle || 'SAFEVOLT SOLUTIONS',
+            companyName: data.appName || data.dashboardTitle || 'RAJ ELECTRICAL SERVICES',
             logo: data.logo || null
           });
         }
@@ -39,7 +39,7 @@ const AdminLayout = () => {
         if (response.data?.success) {
           const data = response.data.data;
           setSystemSettings({
-            companyName: data.appName || data.dashboardTitle || 'SAFEVOLT SOLUTIONS',
+            companyName: data.appName || data.dashboardTitle || 'RAJ ELECTRICAL SERVICES',
             logo: data.logo || null
           });
           localStorage.setItem('branding_admin', JSON.stringify(data));
@@ -59,7 +59,7 @@ const AdminLayout = () => {
       if (e.detail?.role === 'admin') {
         const data = e.detail.data;
         setSystemSettings({
-          companyName: data.appName || data.dashboardTitle || 'SAFEVOLT SOLUTIONS',
+          companyName: data.appName || data.dashboardTitle || 'RAJ ELECTRICAL SERVICES',
           logo: data.logo || null
         });
       }
@@ -134,7 +134,7 @@ const AdminLayout = () => {
                 />
               )}
               <span className="text-lg font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter truncate">
-                {systemSettings.companyName || 'SAFEVOLT SOLUTIONS'}
+                {systemSettings.companyName || 'RAJ ELECTRICAL SERVICES'}
               </span>
             </div>
             <button
@@ -208,7 +208,7 @@ const AdminLayout = () => {
                 />
               )}
               <span className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter">
-                {systemSettings.companyName || 'SAFEVOLT SOLUTIONS'}
+                {systemSettings.companyName || 'RAJ ELECTRICAL SERVICES'}
               </span>
             </div>
           </div>

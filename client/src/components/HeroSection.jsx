@@ -20,7 +20,7 @@ const HeroSection = ({ noMargin = false }) => {
     image: ServiceImg,
     title: "Power Your Home & Business with Reliable Electrical Services",
     subtitle:
-      "Expert wiring, repair, and maintenance for homes & industries in Jalandhar, Punjab.",
+      "Expert wiring, repair, and maintenance for homes & industries across North India.",
   };
 
   useEffect(() => {

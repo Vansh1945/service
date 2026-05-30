@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { motion } from 'framer-motion';
 import {
   Phone,
@@ -108,6 +109,17 @@ const Contact = () => {
 
   return (
     <div className="min-h-screen bg-white">
+      <Helmet>
+        <title>Contact Us | Raj Electrical Services | 24/7 North India Support</title>
+        <meta name="description" content="Reach our professional electrical support desk. Book emergency electrical support, home maintenance, and residential & commercial wiring services across North India." />
+        <meta name="keywords" content="contact Raj Electrical, electrical services in North India, home electrical maintenance, emergency electrical repair, trusted electrical solutions" />
+        <link rel="canonical" href="https://rajelectricalservices.vercel.app/contact" />
+        <meta property="og:title" content="Contact Us | Raj Electrical Services | 24/7 North India Support" />
+        <meta property="og:description" content="Reach our professional electrical support desk. Book emergency electrical support, home maintenance, and residential & commercial wiring services across North India." />
+        <meta property="og:url" content="https://rajelectricalservices.vercel.app/contact" />
+        <meta property="og:type" content="website" />
+      </Helmet>
+
       {/* Hero Section - Matching other pages */}
       <section className="relative bg-gradient-to-br from-gray-50 to-white pt-20 pb-8 md:pt-28 md:pb-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -365,7 +377,7 @@ const Contact = () => {
                   <h3 className="text-xl font-bold">Emergency Services</h3>
                 </div>
                 <p className="text-white/90 mb-4 leading-relaxed">
-                  Electrical emergencies can happen at any time. Our 24/7 emergency service is currently available in Jalandhar.
+                  Electrical emergencies can happen at any time. Our 24/7 emergency service is currently available across North India.
                 </p>
                 <div className="flex items-center justify-between">
                   <div>
@@ -378,6 +390,53 @@ const Contact = () => {
                 </div>
               </div>
             </motion.div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Supplementary SEO Sections ── */}
+
+      {/* North India Service Hubs Section */}
+      <section className="py-16 bg-gray-50 border-t border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <span className="text-xs uppercase tracking-[0.2em] font-extrabold text-primary bg-primary/10 px-4 py-1.5 rounded-full">
+              Regional Availability
+            </span>
+            <h2 className="text-2xl md:text-3xl font-extrabold text-secondary mt-3 mb-2 font-poppins">
+              North India Service Hubs
+            </h2>
+            <p className="text-gray-500 text-sm max-w-xl mx-auto font-medium">
+              We operate localized dispatch units across major regions in North India to ensure quick response and safety.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {[
+              {
+                region: "Punjab Hubs",
+                desc: "Full coverage for residential wiring, emergency short circuit isolation, and luxe commercial setups.",
+                time: "20-Min Avg Dispatch"
+              },
+              {
+                region: "Himachal Pradesh Hubs",
+                desc: "Hill-optimized transport units for fast dispatch to domestic maintenance needs and local businesses.",
+                time: "35-Min Avg Dispatch"
+              },
+              {
+                region: "Haryana & J&K Hubs",
+                desc: "Advanced industrial support teams and compliance safety auditors for large enterprises and households.",
+                time: "30-Min Avg Dispatch"
+              }
+            ].map((hub, index) => (
+              <div key={index} className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                <span className="text-[10px] uppercase tracking-widest font-black bg-primary/10 text-primary px-3 py-1 rounded-lg">
+                  {hub.time}
+                </span>
+                <h3 className="text-lg font-bold text-secondary mt-4 mb-2 font-poppins">{hub.region}</h3>
+                <p className="text-xs text-gray-500 leading-relaxed font-normal">{hub.desc}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>

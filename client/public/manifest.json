@@ -1,6 +1,6 @@
 {
-  "name": "SafeVolt Solutions",
-  "short_name": "SafeVolt",
+  "name": "Raj Electrical Services",
+  "short_name": "Raj Electrical",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
@@ -20,6 +20,6 @@
       "purpose": "any maskable"
     }
   ],
-  "description": "SafeVolt - Premium Electrical Services",
-  "id": "com.safevolt.app"
+  "description": "Raj Electrical Services - Premium Electrical Services in North India",
+  "id": "com.rajelectrical.app"
 }

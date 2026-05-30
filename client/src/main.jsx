@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from "./App";
 import { AuthProvider } from "../src/context/auth";
 import { NotificationProvider } from "../src/context/NotificationContext";
+import { HelmetProvider } from "react-helmet-async";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "./index.css";
@@ -29,7 +30,9 @@ root.render(
       <BrowserRouter>
         <AuthProvider>
           <NotificationProvider>
-            <App />
+            <HelmetProvider>
+              <App />
+            </HelmetProvider>
             <ToastContainer
               position="top-right"
               autoClose={3000}

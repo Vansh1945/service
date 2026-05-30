@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import {
@@ -18,7 +19,6 @@ import { formatDate } from '../utils/format';
 
 const PrivacyPolicy = () => {
   useEffect(() => {
-    document.title = "Privacy Policy | SAFEVOLT SOLUTIONS";
     window.scrollTo(0, 0);
   }, []);
 
@@ -98,6 +98,17 @@ const PrivacyPolicy = () => {
 
   return (
     <div className="min-h-screen bg-white font-inter">
+      <Helmet>
+        <title>Privacy Policy | Raj Electrical Services</title>
+        <meta name="description" content="Understand how Raj Electrical Services collects, protects, and utilizes your user data for booking electrical services in North India." />
+        <meta name="keywords" content="privacy policy, data protection, security, Raj Electrical Services privacy" />
+        <link rel="canonical" href="https://rajelectricalservices.vercel.app/privacy-policy" />
+        <meta property="og:title" content="Privacy Policy | Raj Electrical Services" />
+        <meta property="og:description" content="Understand how Raj Electrical Services collects, protects, and utilizes your user data for booking electrical services in North India." />
+        <meta property="og:url" content="https://rajelectricalservices.vercel.app/privacy-policy" />
+        <meta property="og:type" content="website" />
+      </Helmet>
+
       {/* Header Section */}
       <section className="bg-gradient-to-br from-gray-50 to-white pt-24 pb-16 md:pt-32 md:pb-20">
         <div className="max-w-5xl mx-auto px-4 text-center">

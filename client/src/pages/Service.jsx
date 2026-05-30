@@ -1,4 +1,5 @@
 import React from 'react';
+import { Helmet } from 'react-helmet-async';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -86,6 +87,17 @@ const ServicesPage = () => {
 
     return (
         <div className="min-h-screen bg-white">
+            <Helmet>
+                <title>Our Services | Raj Electrical Services | Professional Electrical Repair</title>
+                <meta name="description" content="Explore residential and commercial electrical services in North India. Book Raj Electrical Services for certified house wiring, luxe lighting, panel upgrades, and smart home systems." />
+                <meta name="keywords" content="electrical services in North India, professional electrical repair, home electrical maintenance, residential and commercial electrical services, trusted electrical solutions" />
+                <link rel="canonical" href="https://rajelectricalservices.vercel.app/services" />
+                <meta property="og:title" content="Our Services | Raj Electrical Services | Professional Electrical Repair" />
+                <meta property="og:description" content="Explore residential and commercial electrical services in North India. Book Raj Electrical Services for certified house wiring, luxe lighting, panel upgrades, and smart home systems." />
+                <meta property="og:url" content="https://rajelectricalservices.vercel.app/services" />
+                <meta property="og:type" content="website" />
+            </Helmet>
+
             {/* Hero Section - Matching AboutPage style */}
             <section className="relative bg-gradient-to-br from-gray-50 to-white pt-20 pb-8 md:pt-28 md:pb-12">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -241,6 +253,116 @@ const ServicesPage = () => {
                                 </motion.div>
                             );
                         })}
+                    </div>
+                </div>
+            </section>
+
+            {/* ── Supplementary SEO Sections ── */}
+
+            {/* Residential & Commercial Support Section */}
+            <section className="py-16 bg-white border-t border-gray-100">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="text-center mb-12">
+                        <span className="text-xs uppercase tracking-[0.2em] font-extrabold text-primary bg-primary/10 px-4 py-1.5 rounded-full">
+                            Complete Utility
+                        </span>
+                        <h2 className="text-2xl md:text-3xl font-extrabold text-secondary mt-3 mb-2 font-poppins">
+                            Residential & Commercial Support
+                        </h2>
+                        <p className="text-gray-500 text-sm max-w-xl mx-auto font-medium">
+                            Whether you need delicate smart switch wiring for your living room or a high-capacity phase load balance for a production floor, we have you covered.
+                        </p>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-8">
+                        {/* Residential */}
+                        <div className="bg-gray-50 p-8 rounded-3xl border border-gray-100 relative group overflow-hidden">
+                            <h3 className="text-xl font-bold text-secondary mb-4 font-poppins">Home Electrical Support</h3>
+                            <p className="text-gray-500 text-xs font-semibold leading-relaxed mb-6">
+                                Standardized and highly insulated domestic support built around family safety, code compliance, and power efficiency.
+                            </p>
+                            <ul className="space-y-3">
+                                {[
+                                    "Complete home electrical diagnostic checks",
+                                    "Eco-efficient luxury LED lighting plans",
+                                    "Leakage breaker installations to prevent shock risk",
+                                    "Smart home and smart switch configuration"
+                                ].map((item, idx) => (
+                                    <li key={idx} className="flex items-center gap-2 text-xs text-gray-500 font-medium">
+                                        <CheckCircle className="w-4 h-4 text-primary shrink-0" />
+                                        {item}
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+
+                        {/* Commercial */}
+                        <div className="bg-gray-50 p-8 rounded-3xl border border-gray-100 relative group overflow-hidden">
+                            <h3 className="text-xl font-bold text-secondary mb-4 font-poppins">Commercial & Office Solutions</h3>
+                            <p className="text-gray-500 text-xs font-semibold leading-relaxed mb-6">
+                                Minimize office downtime. Dedicated commercial contracts, heavy-load cabling, phase balancing, and commercial compliance checking.
+                            </p>
+                            <ul className="space-y-3">
+                                {[
+                                    "Server room dedicated UPS wiring and backups",
+                                    "Distribution board upgrading and safety thermal testing",
+                                    "Energy usage diagnostics for cost cutting",
+                                    "Periodic compliance safety certifications"
+                                ].map((item, idx) => (
+                                    <li key={idx} className="flex items-center gap-2 text-xs text-gray-500 font-medium">
+                                        <CheckCircle className="w-4 h-4 text-primary shrink-0" />
+                                        {item}
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {/* Emergency Electrical Support Section */}
+            <section className="py-16 bg-gray-900 text-white border-t border-gray-800">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="grid md:grid-cols-2 gap-12 items-center">
+                        <div>
+                            <span className="text-xs uppercase tracking-[0.2em] font-extrabold text-accent bg-accent/10 px-4 py-1.5 rounded-full">
+                                Instant Dispatch
+                            </span>
+                            <h2 className="text-2xl md:text-3xl font-extrabold text-white mt-4 mb-4 font-poppins">
+                                Emergency Electrical Support in North India
+                            </h2>
+                            <p className="text-gray-400 text-xs font-semibold leading-relaxed mb-6">
+                                Sparking wires, a completely dead phase, or constant circuit breaker trips require immediate, safe attention. Do not attempt DIY. Our active emergency support dispatch team is operational 24/7.
+                            </p>
+
+                            <div className="space-y-4">
+                                {[
+                                    { title: "20-Minute Dispatch Window", desc: "Our nearest available certified electrical expert is immediately routed to your coordinates." },
+                                    { title: "Hazard Containment Tools", desc: "Equipped with diagnostic insulation gear and certified materials to isolate faults immediately." },
+                                    { title: "24/7 Hotline Service", desc: "Always online. Reach our North India dispatch hub anytime for immediate help." }
+                                ].map((item, idx) => (
+                                    <div key={idx} className="flex gap-3">
+                                        <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center shrink-0 text-accent">
+                                            <Zap className="w-4 h-4" />
+                                        </div>
+                                        <div>
+                                            <h4 className="text-sm font-bold text-white font-poppins">{item.title}</h4>
+                                            <p className="text-[11px] text-gray-400 font-medium">{item.desc}</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="relative">
+                            <div className="rounded-2xl overflow-hidden shadow-2xl border border-white/10">
+                                <img 
+                                    src="https://images.unsplash.com/photo-1621905251918-48416bd8575a?auto=format&fit=crop&q=80&w=800" 
+                                    alt="Emergency repair backup" 
+                                    className="w-full h-[320px] object-cover"
+                                />
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>

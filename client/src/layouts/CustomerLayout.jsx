@@ -32,7 +32,7 @@ const CustomerLayout = () => {
                 if (cached) {
                     const data = JSON.parse(cached);
                     setSystemSettings({
-                        companyName: data.appName || 'SAFEVOLT SOLUTIONS',
+                        companyName: data.appName || 'RAJ ELECTRICAL SERVICES',
                         logo: data.logo || null,
                         // tagline: data.description || ''
                     });
@@ -42,7 +42,7 @@ const CustomerLayout = () => {
                 if (response.data?.success) {
                     const data = response.data.data;
                     setSystemSettings({
-                        companyName: data.appName || 'SAFEVOLT SOLUTIONS',
+                        companyName: data.appName || 'RAJ ELECTRICAL SERVICES',
                         logo: data.logo || null,
                         // tagline: data.description || ''
                     });
@@ -63,7 +63,7 @@ const CustomerLayout = () => {
             if (e.detail?.role === 'customer') {
                 const data = e.detail.data;
                 setSystemSettings({
-                    companyName: data.appName || 'SAFEVOLT SOLUTIONS',
+                    companyName: data.appName || 'RAJ ELECTRICAL SERVICES',
                     logo: data.logo || null,
                     tagline: data.description || ''
                 });
@@ -117,7 +117,7 @@ const CustomerLayout = () => {
                                 )}
                                 <div className="flex flex-col min-w-0">
                                     <span className="font-bold text-sm sm:text-base md:text-lg lg:text-2xl bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent truncate">
-                                        {systemSettings.companyName || 'SAFEVOLT SOLUTIONS'}
+                                        {systemSettings.companyName || 'RAJ ELECTRICAL SERVICES'}
                                     </span>
                                 </div>
                             </Link>

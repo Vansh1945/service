@@ -1,4 +1,4 @@
-const CACHE_NAME = 'safevolt-v1';
+const CACHE_NAME = 'rajelectrical-v1';
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(['/', '/index.html', '/manifest.json', '/icon-192.png'])));
   self.skipWaiting();
