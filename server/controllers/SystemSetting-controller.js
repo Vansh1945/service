@@ -383,6 +383,7 @@ const getBrandingSettings = async (req, res) => {
 
     const version = config.appVersions?.[role] || 1;
     const lastPublished = config.lastPublished?.[role] || config.updatedAt;
+    const timezone = config.timezone || 'UTC';
 
     // Count installed users with at least one active FCM token
     let installedUsersCount = 0;
@@ -408,6 +409,7 @@ const getBrandingSettings = async (req, res) => {
         ...brandingData.toObject?.() || brandingData,
         appVersion: version,
         lastPublished: lastPublished,
+        timezone: timezone,
         installedUsersCount: installedUsersCount
       }
     });
@@ -598,6 +600,7 @@ const publishBrandingUpdate = async (req, res) => {
         ...config[brandingKey]?.toObject?.() || config[brandingKey] || {},
         appVersion: newVersion,
         lastPublished: config.lastPublished[role],
+        timezone: config.timezone || 'UTC',
         installedUsersCount: installedUsersCount
       }
     });

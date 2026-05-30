@@ -164,7 +164,7 @@ const AdminLayout = () => {
                 </Link>
               );
             })}
-            
+
             <hr className="my-2 border-gray-100" />
             <Link
               to="/admin/settings"

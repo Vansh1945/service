@@ -335,6 +335,65 @@ const Branding = () => {
         ))}
       </div>
 
+      {/* Installed Devices Overview - All 3 apps at a glance */}
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { role: 'customer', label: 'Customer App', icon: '👥', color: 'teal' },
+          { role: 'provider', label: 'Provider App', icon: '🔧', color: 'emerald' },
+          { role: 'admin', label: 'Admin Panel', icon: '🛡️', color: 'indigo' }
+        ].map(({ role, label, icon, color }) => {
+          const isActive = activeTab === role;
+          const count = formData[role]?.installedUsersCount || 0;
+          const colorMap = {
+            teal: {
+              border: isActive ? 'border-teal-400' : 'border-gray-100',
+              bg: isActive ? 'bg-gradient-to-br from-teal-50 to-teal-100/60' : 'bg-white',
+              badge: 'bg-teal-100 text-teal-700',
+              num: 'text-teal-600',
+              dot: 'bg-teal-500'
+            },
+            emerald: {
+              border: isActive ? 'border-emerald-400' : 'border-gray-100',
+              bg: isActive ? 'bg-gradient-to-br from-emerald-50 to-emerald-100/60' : 'bg-white',
+              badge: 'bg-emerald-100 text-emerald-700',
+              num: 'text-emerald-600',
+              dot: 'bg-emerald-500'
+            },
+            indigo: {
+              border: isActive ? 'border-indigo-400' : 'border-gray-100',
+              bg: isActive ? 'bg-gradient-to-br from-indigo-50 to-indigo-100/60' : 'bg-white',
+              badge: 'bg-indigo-100 text-indigo-700',
+              num: 'text-indigo-600',
+              dot: 'bg-indigo-500'
+            }
+          };
+          const c = colorMap[color];
+          return (
+            <button
+              key={role}
+              onClick={() => setActiveTab(role)}
+              className={`relative flex flex-col gap-2 p-4 rounded-2xl border-2 shadow-sm transition-all duration-200 hover:shadow-md text-left ${c.border} ${c.bg} ${isActive ? 'scale-[1.02] shadow-md' : 'hover:scale-[1.01]'}`}
+            >
+              {isActive && (
+                <span className={`absolute top-2.5 right-2.5 w-2 h-2 rounded-full ${c.dot} animate-pulse`} />
+              )}
+              <div className="flex items-center gap-2">
+                <span className="text-base">{icon}</span>
+                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{label}</span>
+              </div>
+              <div className="flex items-end gap-1.5">
+                <span className={`text-2xl font-black ${c.num}`}>{count}</span>
+                <span className="text-[10px] text-gray-400 font-semibold pb-0.5">devices</span>
+              </div>
+              <span className={`self-start text-[9px] font-bold px-2 py-0.5 rounded-full ${c.badge}`}>
+                <FiSmartphone className="inline w-2.5 h-2.5 mr-0.5 -mt-px" />
+                Installed
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
         {/* Settings Form Column */}
@@ -644,7 +703,7 @@ const Branding = () => {
               <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Last Broadcast Publication</span>
               <span className="text-xs font-semibold text-slate-200 block bg-slate-800/20 px-3 py-2 rounded-lg border border-slate-800/35">
                 {currentBranding.lastPublished
-                  ? new Date(currentBranding.lastPublished).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
+                  ? new Date(currentBranding.lastPublished).toLocaleString('en-IN', { timeZone: currentBranding.timezone || 'UTC' })
                   : 'Never published to users'}
               </span>
             </div>
