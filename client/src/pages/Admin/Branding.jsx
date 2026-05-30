@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  FiSmartphone, FiMonitor, FiUploadCloud, FiImage, FiSettings, 
+import {
+  FiSmartphone, FiMonitor, FiUploadCloud, FiImage, FiSettings,
   FiRefreshCw, FiSave, FiEye, FiCheckCircle, FiInfo, FiTrash2,
   FiLayout, FiSend, FiLayers, FiActivity, FiAlertCircle
 } from 'react-icons/fi';
@@ -63,7 +63,7 @@ const Branding = () => {
     try {
       const roles = ['customer', 'provider', 'admin'];
       const newFormData = { ...formData };
-      
+
       for (const role of roles) {
         const response = await SystemService.getBrandingSettings(role);
         if (response.data?.success && response.data.data) {
@@ -140,16 +140,16 @@ const Branding = () => {
       const response = await SystemService.updateBrandingSettings(role, brandingFields);
       if (response.data?.success) {
         toast.success(`${role.charAt(0).toUpperCase() + role.slice(1)} branding saved as draft successfully!`);
-        
+
         // Notify dynamic client hook
         window.dispatchEvent(
-          new CustomEvent('brandingUpdated', { 
-            detail: { role, data: response.data.data } 
+          new CustomEvent('brandingUpdated', {
+            detail: { role, data: response.data.data }
           })
         );
-        
+
         localStorage.setItem(`branding_${role}`, JSON.stringify(response.data.data));
-        
+
         // Refresh values from backend
         await fetchAllBranding();
       }
@@ -164,7 +164,7 @@ const Branding = () => {
   // Save changes, BUMP version, and broadcast FCM update push
   const handlePublishUpdate = async (role) => {
     const confirmBroadcast = window.confirm("Send update notification to installed users?");
-    
+
     setLoading(true);
     try {
       const { appVersion, lastPublished, installedUsersCount, ...brandingFields } = formData[role];
@@ -176,14 +176,14 @@ const Branding = () => {
       });
       if (response.data?.success) {
         toast.success(`🎉 ${role.charAt(0).toUpperCase() + role.slice(1)} branding published successfully! Version bumped to v${response.data.data.appVersion}`);
-        
+
         // Notify dynamic client hook
         window.dispatchEvent(
-          new CustomEvent('brandingUpdated', { 
-            detail: { role, data: response.data.data } 
+          new CustomEvent('brandingUpdated', {
+            detail: { role, data: response.data.data }
           })
         );
-        
+
         localStorage.setItem(`branding_${role}`, JSON.stringify(response.data.data));
         setReleaseNotes('');
 
@@ -300,7 +300,7 @@ const Branding = () => {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 font-inter text-gray-800 pb-12">
-      
+
       {/* Header section - Clean design aligned with tailwind.config.js */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-6 rounded-2xl border border-gray-100 shadow-sm gap-4">
         <div>
@@ -311,7 +311,7 @@ const Branding = () => {
             Configure dynamic app identity, visual launcher parameters, and broadcast instant app version pushes.
           </p>
         </div>
-        <button 
+        <button
           onClick={() => handlePreviewManifest(activeTab)}
           className="flex items-center gap-2 px-4 py-2 border border-gray-200 hover:border-teal-500 text-gray-600 hover:text-teal-600 font-semibold text-xs rounded-xl transition-all bg-white shadow-sm hover:shadow-md"
         >
@@ -325,11 +325,10 @@ const Branding = () => {
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`flex-1 py-2.5 text-center text-xs font-bold capitalize rounded-xl transition-all duration-300 ${
-              activeTab === tab 
+            className={`flex-1 py-2.5 text-center text-xs font-bold capitalize rounded-xl transition-all duration-300 ${activeTab === tab
                 ? 'bg-white text-teal-600 shadow-md font-extrabold transform scale-[1.02]'
                 : 'text-gray-500 hover:text-gray-900'
-            }`}
+              }`}
           >
             {tab} application
           </button>
@@ -337,16 +336,16 @@ const Branding = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
+
         {/* Settings Form Column */}
         <div className="lg:col-span-7 bg-white border border-gray-100 shadow-sm rounded-2xl p-6 space-y-6">
-          
+
           {/* Identity Section */}
           <div className="space-y-4">
             <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider border-b border-gray-100 pb-2 flex items-center gap-2">
               <FiSettings className="text-teal-600 w-4 h-4" /> Brand Identity
             </h3>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-gray-500">App Name</label>
@@ -419,7 +418,7 @@ const Branding = () => {
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              
+
               {/* Logo Box (Common) */}
               <div className="p-4 border border-gray-200 bg-gray-55 rounded-2xl flex flex-col items-center justify-between text-center min-h-[170px] relative overflow-hidden group">
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Logo Asset</span>
@@ -429,7 +428,7 @@ const Branding = () => {
                     <div className="h-16 w-full bg-white rounded-xl border border-gray-100 flex items-center justify-center p-2 shadow-sm">
                       <img src={currentBranding.logo} alt="Logo" className="max-h-full max-w-full object-contain" />
                     </div>
-                    <button 
+                    <button
                       type="button"
                       onClick={() => removeAsset(activeTab, 'logo')}
                       className="text-red-500 hover:text-red-700 text-xs font-bold flex items-center gap-1.5 mx-auto bg-red-50 hover:bg-red-100/50 px-3 py-1 rounded-lg transition-all"
@@ -442,10 +441,10 @@ const Branding = () => {
                     <FiUploadCloud className="w-8 h-8 text-gray-400 mb-2 group-hover:text-teal-500 transition-colors" />
                     <span className="text-xs font-bold text-teal-600">Upload Image Logo</span>
                     <span className="text-[9px] text-gray-400 mt-1">Recommended: PNG / SVG</span>
-                    <input 
-                      type="file" 
-                      onChange={(e) => handleAssetUpload(activeTab, 'logo', e)} 
-                      className="hidden" 
+                    <input
+                      type="file"
+                      onChange={(e) => handleAssetUpload(activeTab, 'logo', e)}
+                      className="hidden"
                       accept="image/*"
                       disabled={uploadingField !== null}
                     />
@@ -469,7 +468,7 @@ const Branding = () => {
                       <div className="h-16 w-full flex items-center justify-center">
                         <img src={currentBranding.icon} alt="PWA Icon" className="w-16 h-16 object-cover rounded-2xl border border-gray-100 shadow-sm" />
                       </div>
-                      <button 
+                      <button
                         type="button"
                         onClick={() => removeAsset(activeTab, 'icon')}
                         className="text-red-500 hover:text-red-700 text-xs font-bold flex items-center gap-1.5 mx-auto bg-red-50 hover:bg-red-100/50 px-3 py-1 rounded-lg transition-all"
@@ -482,10 +481,10 @@ const Branding = () => {
                       <FiUploadCloud className="w-8 h-8 text-gray-400 mb-2 group-hover:text-teal-500 transition-colors" />
                       <span className="text-xs font-bold text-teal-600">Upload PWA Icon</span>
                       <span className="text-[9px] text-gray-400 mt-1">Required: Square PNG (512x512)</span>
-                      <input 
-                        type="file" 
-                        onChange={(e) => handleAssetUpload(activeTab, 'icon', e)} 
-                        className="hidden" 
+                      <input
+                        type="file"
+                        onChange={(e) => handleAssetUpload(activeTab, 'icon', e)}
+                        className="hidden"
                         accept="image/png"
                         disabled={uploadingField !== null}
                       />
@@ -510,7 +509,7 @@ const Branding = () => {
                       <div className="h-16 w-full bg-white rounded-xl border border-gray-100 flex items-center justify-center overflow-hidden shadow-sm">
                         <img src={currentBranding.splashScreen} alt="Splash Screen" className="h-full w-full object-cover" />
                       </div>
-                      <button 
+                      <button
                         type="button"
                         onClick={() => removeAsset(activeTab, 'splashScreen')}
                         className="text-red-500 hover:text-red-700 text-xs font-bold flex items-center gap-1.5 mx-auto bg-red-50 hover:bg-red-100/50 px-3 py-1 rounded-lg transition-all"
@@ -523,80 +522,80 @@ const Branding = () => {
                       <FiUploadCloud className="w-8 h-8 text-gray-400 mb-2 group-hover:text-teal-500 transition-colors" />
                       <span className="text-xs font-bold text-teal-600">Upload Splash Screen</span>
                       <span className="text-[9px] text-gray-400 mt-1">Recommended: 1080x1920 PNG</span>
-                      <input 
-                      type="file" 
-                      onChange={(e) => handleAssetUpload(activeTab, 'splashScreen', e)} 
-                      className="hidden" 
-                      accept="image/*"
-                      disabled={uploadingField !== null}
-                    />
-                  </label>
-                )}
-                {uploadingField === 'splashScreen' && (
-                  <div className="absolute inset-0 bg-white/95 flex flex-col items-center justify-center gap-2">
-                    <FiRefreshCw className="w-6 h-6 text-teal-600 animate-spin" />
-                    <span className="text-[10px] font-bold text-teal-600">Uploading splash...</span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Favicon Box (Admin Only) */}
-            {activeTab === 'admin' && (
-              <div className="p-4 border border-gray-200 bg-gray-55 rounded-2xl flex flex-col items-center justify-between text-center min-h-[170px] relative overflow-hidden group md:col-span-2 animate-in slide-in-from-top-4 duration-300">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Browser Favicon</span>
-                <span className="text-[9px] text-gray-400 mb-2">Browser tab mein left side wala chota icon (32×32)</span>
-                {currentBranding.favicon ? (
-                  <div className="space-y-3 w-full px-2">
-                    <div className="h-16 w-full flex items-center justify-center">
-                      <img src={currentBranding.favicon} alt="Favicon" className="w-10 h-10 object-contain" />
+                      <input
+                        type="file"
+                        onChange={(e) => handleAssetUpload(activeTab, 'splashScreen', e)}
+                        className="hidden"
+                        accept="image/*"
+                        disabled={uploadingField !== null}
+                      />
+                    </label>
+                  )}
+                  {uploadingField === 'splashScreen' && (
+                    <div className="absolute inset-0 bg-white/95 flex flex-col items-center justify-center gap-2">
+                      <FiRefreshCw className="w-6 h-6 text-teal-600 animate-spin" />
+                      <span className="text-[10px] font-bold text-teal-600">Uploading splash...</span>
                     </div>
-                    <button 
-                      type="button"
-                      onClick={() => removeAsset(activeTab, 'favicon')}
-                      className="text-red-500 hover:text-red-700 text-xs font-bold flex items-center gap-1.5 mx-auto bg-red-50 hover:bg-red-100/50 px-3 py-1 rounded-lg transition-all"
-                    >
-                      <FiTrash2 className="w-3.5 h-3.5" /> Remove Favicon
-                    </button>
-                  </div>
-                ) : (
-                  <label className="cursor-pointer flex flex-col items-center justify-center p-4 hover:bg-teal-50/50 border-2 border-dashed border-gray-200 hover:border-teal-400 w-full h-full rounded-xl transition-all">
-                    <FiUploadCloud className="w-8 h-8 text-gray-400 mb-2 group-hover:text-teal-500 transition-colors" />
-                    <span className="text-xs font-bold text-teal-600">Upload Tab Favicon</span>
-                    <span className="text-[9px] text-gray-400 mt-1">Recommended: 32x32 ICO or PNG</span>
-                    <input 
-                      type="file" 
-                      onChange={(e) => handleAssetUpload(activeTab, 'favicon', e)} 
-                      className="hidden" 
-                      accept="image/*"
-                      disabled={uploadingField !== null}
-                    />
-                  </label>
-                )}
-                {uploadingField === 'favicon' && (
-                  <div className="absolute inset-0 bg-white/95 flex flex-col items-center justify-center gap-2">
-                    <FiRefreshCw className="w-6 h-6 text-teal-600 animate-spin" />
-                    <span className="text-[10px] font-bold text-teal-600">Uploading favicon...</span>
-                  </div>
-                )}
-              </div>
-            )}
+                  )}
+                </div>
+              )}
+
+              {/* Favicon Box (Admin Only) */}
+              {activeTab === 'admin' && (
+                <div className="p-4 border border-gray-200 bg-gray-55 rounded-2xl flex flex-col items-center justify-between text-center min-h-[170px] relative overflow-hidden group md:col-span-2 animate-in slide-in-from-top-4 duration-300">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Browser Favicon</span>
+                  <span className="text-[9px] text-gray-400 mb-2">Browser tab mein left side wala chota icon (32×32)</span>
+                  {currentBranding.favicon ? (
+                    <div className="space-y-3 w-full px-2">
+                      <div className="h-16 w-full flex items-center justify-center">
+                        <img src={currentBranding.favicon} alt="Favicon" className="w-10 h-10 object-contain" />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeAsset(activeTab, 'favicon')}
+                        className="text-red-500 hover:text-red-700 text-xs font-bold flex items-center gap-1.5 mx-auto bg-red-50 hover:bg-red-100/50 px-3 py-1 rounded-lg transition-all"
+                      >
+                        <FiTrash2 className="w-3.5 h-3.5" /> Remove Favicon
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="cursor-pointer flex flex-col items-center justify-center p-4 hover:bg-teal-50/50 border-2 border-dashed border-gray-200 hover:border-teal-400 w-full h-full rounded-xl transition-all">
+                      <FiUploadCloud className="w-8 h-8 text-gray-400 mb-2 group-hover:text-teal-500 transition-colors" />
+                      <span className="text-xs font-bold text-teal-600">Upload Tab Favicon</span>
+                      <span className="text-[9px] text-gray-400 mt-1">Recommended: 32x32 ICO or PNG</span>
+                      <input
+                        type="file"
+                        onChange={(e) => handleAssetUpload(activeTab, 'favicon', e)}
+                        className="hidden"
+                        accept="image/*"
+                        disabled={uploadingField !== null}
+                      />
+                    </label>
+                  )}
+                  {uploadingField === 'favicon' && (
+                    <div className="absolute inset-0 bg-white/95 flex flex-col items-center justify-center gap-2">
+                      <FiRefreshCw className="w-6 h-6 text-teal-600 animate-spin" />
+                      <span className="text-[10px] font-bold text-teal-600">Uploading favicon...</span>
+                    </div>
+                  )}
+                </div>
+              )}
 
             </div>
           </div>
 
           {/* Form Actions */}
           <div className="flex justify-end gap-3 pt-6 border-t border-gray-100">
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={() => handleReset(activeTab)}
               className="px-5 py-2.5 border border-gray-200 hover:bg-gray-50 text-gray-600 rounded-xl font-bold text-xs transition-all shadow-sm bg-white"
               disabled={loading}
             >
               Reset Inputs
             </button>
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={() => handleSaveDraft(activeTab)}
               className="px-5 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm hover:shadow"
               disabled={loading}
@@ -604,8 +603,8 @@ const Branding = () => {
               {loading ? <FiRefreshCw className="w-3.5 h-3.5 animate-spin" /> : <FiSave className="w-3.5 h-3.5" />}
               Save Draft
             </button>
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={() => handlePublishUpdate(activeTab)}
               className="px-6 py-2.5 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white rounded-xl font-extrabold text-xs flex items-center gap-2 transition-all shadow-md hover:shadow-lg transform active:scale-95 animate-pulse"
               disabled={loading}
@@ -619,7 +618,7 @@ const Branding = () => {
 
         {/* Live Previews and Version Panel Column */}
         <div className="lg:col-span-5 space-y-6 lg:sticky lg:top-6">
-          
+
           {/* PWA Deployment and Stats Card */}
           <div className="bg-gradient-to-br from-slate-900 to-slate-950 text-white shadow-xl rounded-2xl p-6 space-y-5 border border-slate-800">
             <div className="flex items-center gap-2 pb-3 border-b border-slate-800">
@@ -644,8 +643,8 @@ const Branding = () => {
             <div className="space-y-1 pt-1">
               <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Last Broadcast Publication</span>
               <span className="text-xs font-semibold text-slate-200 block bg-slate-800/20 px-3 py-2 rounded-lg border border-slate-800/35">
-                {currentBranding.lastPublished 
-                  ? new Date(currentBranding.lastPublished).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) 
+                {currentBranding.lastPublished
+                  ? new Date(currentBranding.lastPublished).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
                   : 'Never published to users'}
               </span>
             </div>
@@ -679,11 +678,11 @@ const Branding = () => {
                   </div>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
-                  <input 
-                    type="checkbox" 
+                  <input
+                    type="checkbox"
                     checked={forceRefresh}
                     onChange={(e) => setForceRefresh(e.target.checked)}
-                    className="sr-only peer" 
+                    className="sr-only peer"
                   />
                   <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
                 </label>
@@ -772,12 +771,12 @@ const Branding = () => {
                     <p className="text-[10px] text-teal-600 font-bold truncate mt-0.5">{currentBranding.shortName || 'Raj'}</p>
                   </div>
                 </div>
-                
+
                 <p className="text-[10px] text-gray-500 leading-relaxed font-medium line-clamp-2">
                   Dynamic installation prompt preview for {currentBranding.shortName || 'PWA'}.
                 </p>
-                
-                <button 
+
+                <button
                   className="w-full py-2.5 bg-teal-600 hover:bg-teal-700 rounded-xl font-bold text-xs text-white transition-all text-center shadow-md shadow-teal-600/10"
                 >
                   Install Application
@@ -834,14 +833,14 @@ const Branding = () => {
               <h3 className="font-bold text-sm text-gray-900 flex items-center gap-2">
                 <FiLayout className="text-teal-600" /> Manifest JSON Structure ({activeTab})
               </h3>
-              <button 
+              <button
                 onClick={() => setShowManifestModal(false)}
                 className="text-gray-400 hover:text-gray-600 text-sm font-semibold p-1 hover:bg-gray-100 rounded-lg transition-all"
               >
                 ✕
               </button>
             </div>
-            
+
             <div className="p-6 overflow-y-auto max-h-[50vh] font-mono text-[11px] text-gray-700 leading-relaxed bg-gray-50 border-b border-gray-100 shadow-inner">
               <pre className="whitespace-pre-wrap">{JSON.stringify(manifestData, null, 2)}</pre>
             </div>
@@ -851,7 +850,7 @@ const Branding = () => {
                 <FiCheckCircle className="text-teal-600 w-4 h-4" />
                 <span>Generated dynamically on requests</span>
               </div>
-              <button 
+              <button
                 onClick={() => setShowManifestModal(false)}
                 className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold text-xs transition-colors shadow-sm"
               >

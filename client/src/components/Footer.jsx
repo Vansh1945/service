@@ -22,25 +22,12 @@ import { getSystemSetting } from '../services/SystemService';
 const Footer = () => {
   const [systemData, setSystemData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [email, setEmail] = useState('');
   const [newsletterStatus, setNewsletterStatus] = useState(null);
 
-  useEffect(() => {
-    const handleBIP = (e) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    };
-    window.addEventListener('beforeinstallprompt', handleBIP);
-    return () => window.removeEventListener('beforeinstallprompt', handleBIP);
-  }, []);
-
-  const handleInstallClick = async (e) => {
+  const handleInstallClick = (e) => {
     e.preventDefault();
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') setDeferredPrompt(null);
+    window.dispatchEvent(new CustomEvent('triggerPwaInstall'));
   };
 
   useEffect(() => {

@@ -132,20 +132,32 @@ export const AuthProvider = ({ children }) => {
         const currentRefreshToken = localStorage.getItem("refreshToken");
         const currentFcmToken = localStorage.getItem("fcmToken");
 
-        // Selective clear to preserve device identity
-        const persistentDeviceId = localStorage.getItem("persistentDeviceId");
-        const tempFcmToken = localStorage.getItem("tempFcmToken");
-        const fcmToken = localStorage.getItem("fcmToken");
+        // Selective clear to preserve device identity and PWA branding/installation keys
+        const preserved = {};
+        const keysToPreserve = [
+            "persistentDeviceId",
+            "tempFcmToken",
+            "fcmToken",
+            "installMode",
+            "installRole",
+            "system_settings_cache"
+        ];
+
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && (keysToPreserve.includes(key) || key.startsWith("app_version_") || key.startsWith("branding_"))) {
+                preserved[key] = localStorage.getItem(key);
+            }
+        }
+
         localStorage.clear();
-        if (persistentDeviceId) {
-            localStorage.setItem("persistentDeviceId", persistentDeviceId);
-        }
-        if (tempFcmToken) {
-            localStorage.setItem("tempFcmToken", tempFcmToken);
-        }
-        if (fcmToken) {
-            localStorage.setItem("fcmToken", fcmToken);
-        }
+
+        // Restore preserved keys
+        Object.entries(preserved).forEach(([k, v]) => {
+            if (v !== null && v !== undefined) {
+                localStorage.setItem(k, v);
+            }
+        });
 
         setToken(null);
         setRefreshToken(null);

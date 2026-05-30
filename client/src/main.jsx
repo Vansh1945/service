@@ -51,8 +51,16 @@ root.render(
   </React.StrictMode>
 );
 // PWA Service Worker Registration
+const getBrandingVersion = () => {
+  const custVer = localStorage.getItem("app_version_customer") || "1";
+  const provVer = localStorage.getItem("app_version_provider") || "1";
+  const adminVer = localStorage.getItem("app_version_admin") || "1";
+  return `${custVer}_${provVer}_${adminVer}`;
+};
+
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(err => console.error('SW registration failed:', err));
+    const version = getBrandingVersion();
+    navigator.serviceWorker.register(`/sw.js?v=${version}`).catch(err => console.error('SW registration failed:', err));
   });
 }

@@ -1,6 +1,9 @@
-const CACHE_NAME = 'rajelectrical-v1';
+const urlParams = new URL(self.location.href).searchParams;
+const version = urlParams.get('v') || '1';
+const CACHE_NAME = `rajelectrical-v${version}`;
+
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(['/', '/index.html', '/manifest.json', '/icon-192.png'])));
+  e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(['/', '/index.html'])));
   self.skipWaiting();
 });
 self.addEventListener('activate', (e) => {

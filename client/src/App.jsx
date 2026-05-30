@@ -3,6 +3,7 @@ import { Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import { FiRefreshCw } from "react-icons/fi";
 import "./index.css";
 import { useAuth } from "./context/auth";
+import AppInstall from "./components/AppInstall";
 
 // Components
 import Navbar from "./components/Navbar";
@@ -103,6 +104,18 @@ const applyDocumentSettings = (settings) => {
     if (twitterTitle) twitterTitle.setAttribute("content", settings.companyName);
   }
 
+  if (settings.shortName) {
+    const appleTitle = document.querySelector("meta[name='apple-mobile-web-app-title']");
+    if (appleTitle) {
+      appleTitle.setAttribute("content", settings.shortName);
+    } else {
+      const meta = document.createElement("meta");
+      meta.name = "apple-mobile-web-app-title";
+      meta.content = settings.shortName;
+      document.head.appendChild(meta);
+    }
+  }
+
   if (settings.description) {
     const metaDesc = document.querySelector("meta[name='description']");
     if (metaDesc) metaDesc.setAttribute("content", settings.description);
@@ -123,6 +136,30 @@ const applyDocumentSettings = (settings) => {
 
   if (settings.favicon) {
     updateFavicon(settings.favicon);
+  }
+
+  if (settings.icon) {
+    const appleIcon = document.querySelector("link[rel='apple-touch-icon']");
+    if (appleIcon) {
+      appleIcon.setAttribute("href", settings.icon);
+    } else {
+      const link = document.createElement("link");
+      link.rel = "apple-touch-icon";
+      link.href = settings.icon;
+      document.head.appendChild(link);
+    }
+  }
+
+  if (settings.splashScreen) {
+    const appleSplash = document.querySelector("link[rel='apple-touch-startup-image']");
+    if (appleSplash) {
+      appleSplash.setAttribute("href", settings.splashScreen);
+    } else {
+      const link = document.createElement("link");
+      link.rel = "apple-touch-startup-image";
+      link.href = settings.splashScreen;
+      document.head.appendChild(link);
+    }
   }
 
   if (settings.manifestUrl) {
@@ -240,11 +277,24 @@ const App = () => {
 
   // Fetch dynamic branding settings and apply dynamically based on current route context
   useEffect(() => {
-    let currentRole = "customer";
+    // Detect standalone display mode and persist install role if missing
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    if (isStandalone && !localStorage.getItem("installRole")) {
+      const detectedRole = location.pathname.startsWith("/provider") ? "provider" : "customer";
+      localStorage.setItem("installRole", detectedRole);
+      localStorage.setItem("installMode", "standalone");
+    }
+
+    let currentRole = localStorage.getItem("installRole");
     if (location.pathname.startsWith("/admin")) {
       currentRole = "admin";
-    } else if (location.pathname.startsWith("/provider")) {
-      currentRole = "provider";
+    }
+    if (!currentRole || !["customer", "provider", "admin"].includes(currentRole)) {
+      if (location.pathname.startsWith("/provider")) {
+        currentRole = "provider";
+      } else {
+        currentRole = "customer";
+      }
     }
 
     const fetchBranding = async () => {
@@ -304,11 +354,14 @@ const App = () => {
       const busterFavicon = faviconUrl ? `${faviconUrl}?v=${data?.updatedAt || Date.now()}` : null;
 
       const settings = {
-        companyName: data?.appName || (role === 'admin' ? 'Raj Electrical Admin' : role === 'provider' ? 'Raj Electrical Provider' : 'Raj Electrical Customer'),
+        companyName: data?.browserTitle || data?.appName || (role === 'admin' ? 'Raj Electrical Admin' : role === 'provider' ? 'Raj Electrical Provider' : 'Raj Electrical Customer'),
+        shortName: data?.shortName || (role === 'admin' ? 'Admin' : role === 'provider' ? 'Provider' : 'Raj Service'),
         favicon: busterFavicon,
         description: data?.description || "",
         themeColor: data?.themeColor || (role === 'admin' ? '#4f46e5' : role === 'provider' ? '#10b981' : '#3b82f6'),
-        manifestUrl: manifestUrl
+        manifestUrl: manifestUrl,
+        icon: data?.icon || data?.logo || null,
+        splashScreen: data?.splashScreen || null
       };
 
       setSystemSettings(prev => ({
@@ -329,11 +382,16 @@ const App = () => {
   // Live branding listener to apply instant changes when saving settings
   useEffect(() => {
     const handleBrandingChange = (e) => {
-      let currentRole = "customer";
+      let currentRole = localStorage.getItem("installRole");
       if (location.pathname.startsWith("/admin")) {
         currentRole = "admin";
-      } else if (location.pathname.startsWith("/provider")) {
-        currentRole = "provider";
+      }
+      if (!currentRole || !["customer", "provider", "admin"].includes(currentRole)) {
+        if (location.pathname.startsWith("/provider")) {
+          currentRole = "provider";
+        } else {
+          currentRole = "customer";
+        }
       }
 
       if (e.detail?.role === currentRole) {
@@ -344,11 +402,14 @@ const App = () => {
         const busterFavicon = faviconUrl ? `${faviconUrl}?v=${Date.now()}` : null;
 
         applyDocumentSettings({
-          companyName: data?.appName || (currentRole === 'admin' ? 'Raj Electrical Admin' : currentRole === 'provider' ? 'Raj Electrical Provider' : 'Raj Electrical Customer'),
+          companyName: data?.browserTitle || data?.appName || (currentRole === 'admin' ? 'Raj Electrical Admin' : currentRole === 'provider' ? 'Raj Electrical Provider' : 'Raj Electrical Customer'),
+          shortName: data?.shortName || (currentRole === 'admin' ? 'Admin' : currentRole === 'provider' ? 'Provider' : 'Raj Service'),
           favicon: busterFavicon,
           description: data?.description || "",
-          themeColor: data?.themeColor || "",
-          manifestUrl: manifestUrl
+          themeColor: data?.themeColor || (currentRole === 'admin' ? '#4f46e5' : currentRole === 'provider' ? '#10b981' : '#3b82f6'),
+          manifestUrl: manifestUrl,
+          icon: data?.icon || data?.logo || null,
+          splashScreen: data?.splashScreen || null
         });
       }
     };
@@ -489,6 +550,7 @@ const App = () => {
           </button>
         </div>
       )}
+      <AppInstall />
     </Suspense>
   );
 };

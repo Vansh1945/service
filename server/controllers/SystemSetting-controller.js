@@ -640,9 +640,24 @@ const uploadBrandingAsset = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Asset upload failed' });
     }
 
+    // Auto-persist uploaded asset URL to the database immediately
+    let config = await SystemConfig.findOne();
+    if (!config) {
+      config = new SystemConfig({ companyName: 'Raj Electrical Service' });
+    }
+
+    const brandingKey = `${role}Branding`;
+    if (!config[brandingKey]) {
+      config[brandingKey] = {};
+    }
+
+    config[brandingKey][fieldName] = fileUrl;
+    config.markModified(brandingKey);
+    await config.save();
+
     res.status(200).json({
       success: true,
-      message: 'Branding asset uploaded successfully',
+      message: 'Branding asset uploaded and auto-saved successfully',
       url: fileUrl,
       field: fieldName
     });
@@ -679,21 +694,22 @@ const getBrandingManifest = async (req, res) => {
 
     const formatIconUrl = (url) => {
       if (!url) return '';
+      let formatted = url;
       if (url.startsWith('http://') || url.startsWith('https://')) {
-        return url;
+        formatted = url;
+      } else if (clientOrigin) {
+        formatted = `${clientOrigin}${url.startsWith('/') ? '' : '/'}${url}`;
       }
-      if (clientOrigin) {
-        return `${clientOrigin}${url.startsWith('/') ? '' : '/'}${url}`;
-      }
-      return url;
+      const version = config?.appVersions?.[role] || 1;
+      return formatted.includes('?') ? `${formatted}&v=${version}` : `${formatted}?v=${version}`;
     };
 
-    const appName = branding?.appName || (role === 'admin' ? 'SafeVolt Admin' : role === 'provider' ? 'SafeVolt Provider' : 'SafeVolt Customer');
-    const shortName = branding?.shortName || (role === 'admin' ? 'Admin' : role === 'provider' ? 'Provider' : 'SafeVolt');
-    const description = branding?.description || (role === 'admin' ? 'SafeVolt Control Panel' : `${shortName} App`);
+    const appName = branding?.appName || (role === 'admin' ? 'Raj Electrical Admin' : role === 'provider' ? 'Raj Electrical Provider' : 'Raj Electrical Customer');
+    const shortName = branding?.shortName || (role === 'admin' ? 'Admin' : role === 'provider' ? 'Provider' : 'Raj Service');
+    const description = branding?.description || (role === 'admin' ? 'Raj Electrical Admin Panel' : `${shortName} App`);
 
-    // Support custom branding colors if defined in the DB, fallback to SafeVolt/role defaults
-    const themeColor = branding?.themeColor || '#0D9488';
+    // Support custom branding colors if defined in the DB, fallback to defaults
+    const themeColor = branding?.themeColor || (role === 'admin' ? '#4f46e5' : role === 'provider' ? '#10b981' : '#3b82f6');
     const backgroundColor = branding?.backgroundColor || '#ffffff';
 
     const logoUrl = branding?.logo || '/icon-192.png';
@@ -702,7 +718,7 @@ const getBrandingManifest = async (req, res) => {
     const manifest = {
       name: appName,
       short_name: shortName,
-      start_url: role === 'admin' ? '/admin/dashboard' : role === 'provider' ? '/provider/dashboard' : '/',
+      start_url: role === 'admin' ? '/admin/dashboard' : role === 'provider' ? '/provider/dashboard' : '/customer/services',
       display: "standalone",
       background_color: backgroundColor,
       theme_color: themeColor,
@@ -712,17 +728,29 @@ const getBrandingManifest = async (req, res) => {
           src: formatIconUrl(iconUrl),
           sizes: "192x192",
           type: "image/png",
-          purpose: "any maskable"
+          purpose: "any"
         },
         {
-          src: formatIconUrl(branding?.splashScreen || iconUrl),
+          src: formatIconUrl(iconUrl),
           sizes: "512x512",
           type: "image/png",
-          purpose: "any maskable"
+          purpose: "any"
+        },
+        {
+          src: formatIconUrl(iconUrl),
+          sizes: "192x192",
+          type: "image/png",
+          purpose: "maskable"
+        },
+        {
+          src: formatIconUrl(iconUrl),
+          sizes: "512x512",
+          type: "image/png",
+          purpose: "maskable"
         }
       ],
       description: description,
-      id: `com.safevolt.${role}`
+      id: `com.rajelectrical.${role}`
     };
 
     // Set JSON content type and wide CORS headers for PWA browser update compliance
