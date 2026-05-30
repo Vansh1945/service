@@ -357,6 +357,9 @@ const Branding = () => {
                   className="w-full px-4 py-2.5 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all text-gray-800 font-medium bg-gray-55"
                   placeholder="App brand name"
                 />
+                <p className="text-[10px] text-gray-400 flex items-center gap-1 mt-1">
+                  <span className="text-teal-500 font-bold">Shows on:</span> PWA install dialog, Android app switcher
+                </p>
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-gray-500">Short Name</label>
@@ -365,8 +368,11 @@ const Branding = () => {
                   value={currentBranding.shortName}
                   onChange={(e) => handleInputChange(activeTab, 'shortName', e.target.value)}
                   className="w-full px-4 py-2.5 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all text-gray-800 font-medium bg-gray-55"
-                  placeholder="Short launcher name"
+                  placeholder="Short launcher name (max 12 chars)"
                 />
+                <p className="text-[10px] text-gray-400 flex items-center gap-1 mt-1">
+                  <span className="text-teal-500 font-bold">Shows on:</span> Phone home screen icon ke neeche
+                </p>
               </div>
             </div>
 
@@ -382,6 +388,10 @@ const Branding = () => {
                 className="w-full px-4 py-2.5 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all text-gray-800 font-medium bg-gray-55"
                 placeholder={activeTab === 'admin' ? 'Dashboard header title' : 'E.g. Raj Electrical Service | Book Trusted Electricians Near You'}
               />
+              <p className="text-[10px] text-gray-400 flex items-center gap-1 mt-1">
+                <span className="text-teal-500 font-bold">Shows on:</span>
+                {activeTab === 'admin' ? 'Admin panel browser tab' : 'Browser tab (ऊपर) aur Google search result heading mein'}
+              </p>
             </div>
 
             {/* Meta Description (Only for Customer and Provider tabs) */}
@@ -395,6 +405,9 @@ const Branding = () => {
                   className="w-full px-4 py-2.5 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all text-gray-800 font-medium bg-gray-55 resize-none"
                   placeholder="Enter high-ranking electrician search keywords description..."
                 />
+                <p className="text-[10px] text-gray-400 flex items-center gap-1 mt-1">
+                  <span className="text-teal-500 font-bold">Shows on:</span> Google search result mein title ke neeche, WhatsApp/Facebook link preview mein
+                </p>
               </div>
             )}
           </div>
@@ -409,7 +422,8 @@ const Branding = () => {
               
               {/* Logo Box (Common) */}
               <div className="p-4 border border-gray-200 bg-gray-55 rounded-2xl flex flex-col items-center justify-between text-center min-h-[170px] relative overflow-hidden group">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Logo Asset</span>
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Logo Asset</span>
+                <span className="text-[9px] text-gray-400 mb-2">Navbar, email header, favicon fallback</span>
                 {currentBranding.logo ? (
                   <div className="space-y-3 w-full px-2">
                     <div className="h-16 w-full bg-white rounded-xl border border-gray-100 flex items-center justify-center p-2 shadow-sm">
@@ -448,7 +462,8 @@ const Branding = () => {
               {/* Launcher Icon Box (Customer & Provider only) */}
               {(activeTab === 'customer' || activeTab === 'provider') && (
                 <div className="p-4 border border-gray-200 bg-gray-55 rounded-2xl flex flex-col items-center justify-between text-center min-h-[170px] relative overflow-hidden group animate-in zoom-in-95 duration-200">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">PWA Icon (Launcher)</span>
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">PWA Icon (Launcher)</span>
+                  <span className="text-[9px] text-gray-400 mb-2">Phone home screen par app icon (512×512 PNG)</span>
                   {currentBranding.icon ? (
                     <div className="space-y-3 w-full px-2">
                       <div className="h-16 w-full flex items-center justify-center">
@@ -488,7 +503,8 @@ const Branding = () => {
               {/* Splash Image Box (Customer & Provider only) */}
               {(activeTab === 'customer' || activeTab === 'provider') && (
                 <div className="p-4 border border-gray-200 bg-gray-55 rounded-2xl flex flex-col items-center justify-between text-center min-h-[170px] relative overflow-hidden group md:col-span-2 animate-in zoom-in-95 duration-200">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Splash Screen Overlay</span>
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Splash Screen Overlay</span>
+                  <span className="text-[9px] text-gray-400 mb-2">App open hote waqt 1-2 sec ke liye dikhe wali full-screen image</span>
                   {currentBranding.splashScreen ? (
                     <div className="space-y-3 w-full px-2">
                       <div className="h-16 w-full bg-white rounded-xl border border-gray-100 flex items-center justify-center overflow-hidden shadow-sm">
@@ -528,7 +544,8 @@ const Branding = () => {
             {/* Favicon Box (Admin Only) */}
             {activeTab === 'admin' && (
               <div className="p-4 border border-gray-200 bg-gray-55 rounded-2xl flex flex-col items-center justify-between text-center min-h-[170px] relative overflow-hidden group md:col-span-2 animate-in slide-in-from-top-4 duration-300">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Browser Favicon</span>
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Browser Favicon</span>
+                <span className="text-[9px] text-gray-400 mb-2">Browser tab mein left side wala chota icon (32×32)</span>
                 {currentBranding.favicon ? (
                   <div className="space-y-3 w-full px-2">
                     <div className="h-16 w-full flex items-center justify-center">
