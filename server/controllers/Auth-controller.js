@@ -699,14 +699,7 @@ exports.logout = async (req, res) => {
   try {
     const { refreshToken, fcmToken, allDevices = false } = req.body;
 
-    // Pull FCM token to prevent private notification leaks post-logout
-    if (fcmToken) {
-      await Promise.all([
-        User.updateMany({}, { $pull: { fcmDevices: { token: fcmToken } } }),
-        Provider.updateMany({}, { $pull: { fcmDevices: { token: fcmToken } } }),
-        Admin.updateMany({}, { $pull: { fcmDevices: { token: fcmToken } } })
-      ]);
-    }
+    // Logout must NOT remove FCM device token (Persistent Multi-Device FCM Notification Architecture)
 
     if (!refreshToken) {
       // Still clear client – just return success

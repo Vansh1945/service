@@ -135,12 +135,16 @@ export const AuthProvider = ({ children }) => {
         // Selective clear to preserve device identity
         const persistentDeviceId = localStorage.getItem("persistentDeviceId");
         const tempFcmToken = localStorage.getItem("tempFcmToken");
+        const fcmToken = localStorage.getItem("fcmToken");
         localStorage.clear();
         if (persistentDeviceId) {
             localStorage.setItem("persistentDeviceId", persistentDeviceId);
         }
         if (tempFcmToken) {
             localStorage.setItem("tempFcmToken", tempFcmToken);
+        }
+        if (fcmToken) {
+            localStorage.setItem("fcmToken", fcmToken);
         }
 
         setToken(null);

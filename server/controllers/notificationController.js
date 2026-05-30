@@ -234,19 +234,32 @@ const saveToken = async (req, res) => {
             user.fcmDevices = [];
         }
 
-        const deviceIndex = user.fcmDevices.findIndex(d => d.deviceId === deviceId || d.token === cleanToken);
+        const deviceIndex = user.fcmDevices.findIndex(d => d.deviceId === deviceId);
 
         if (deviceIndex > -1) {
-            // Found existing device entry
             const existing = user.fcmDevices[deviceIndex];
-            existing.token = cleanToken; // Overwrite token
-            existing.deviceId = deviceId; // Sync deviceId if matched on token
-            existing.lastActive = new Date();
-            existing.isActive = true;
-            if (platform) existing.platform = platform;
-            if (appVersion) existing.appVersion = appVersion;
+            if (existing.token === cleanToken) {
+                // CASE 1: Same deviceId + same token
+                existing.lastActive = new Date();
+                existing.isActive = true;
+                if (platform) existing.platform = platform;
+                if (appVersion) existing.appVersion = appVersion;
+            } else {
+                // CASE 2: Same deviceId + different token
+                existing.token = cleanToken;
+                existing.lastActive = new Date();
+                existing.isActive = true;
+                if (platform) existing.platform = platform;
+                if (appVersion) existing.appVersion = appVersion;
+            }
         } else {
             // CASE 3: New device
+            // Remove any other entry in user's list that has the same token to prevent duplicates
+            const tokenIndex = user.fcmDevices.findIndex(d => d.token === cleanToken);
+            if (tokenIndex > -1) {
+                user.fcmDevices.splice(tokenIndex, 1);
+            }
+            
             user.fcmDevices.push({
                 token: cleanToken,
                 deviceId,

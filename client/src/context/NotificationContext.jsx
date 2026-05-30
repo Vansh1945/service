@@ -107,6 +107,12 @@ export const NotificationProvider = ({ children }) => {
 
                     const targetRouteWithEntity = targetRoute + (entityId ? (targetRoute.includes('?') ? '&' : '?') + 'entityId=' + entityId : '');
 
+                    if (event.data.notificationId) {
+                        NotificationService.markClicked(event.data.notificationId).catch(err => {
+                            console.error('[FCM Context] Click event tracking failed:', err);
+                        });
+                    }
+
                     if (!isAuthenticated) {
                         setIntendedRoute?.(targetRouteWithEntity);
                         navigate('/login');
@@ -154,6 +160,7 @@ export const NotificationProvider = ({ children }) => {
         const route = urlParams.get('route');
         const requiredRole = urlParams.get('role');
         const entityId = urlParams.get('entityId');
+        const notificationId = urlParams.get('notificationId');
 
         if (route) {
             console.log('[FCM Cold Start] Routing query param detected:', route);
@@ -161,6 +168,12 @@ export const NotificationProvider = ({ children }) => {
             window.history.replaceState({}, document.title, window.location.pathname);
 
             const targetRouteWithEntity = route + (entityId ? (route.includes('?') ? '&' : '?') + 'entityId=' + entityId : '');
+
+            if (notificationId) {
+                NotificationService.markClicked(notificationId).catch(err => {
+                    console.error('[FCM Cold Start] Click event tracking failed:', err);
+                });
+            }
 
             if (!isAuthenticated) {
                 setIntendedRoute?.(targetRouteWithEntity);
@@ -238,10 +251,15 @@ export const NotificationProvider = ({ children }) => {
                     body: body,
                     icon: '/icon-192.png',
                     badge: '/icon-192.png',
-                    data: { url: targetRoute, role: requiredRole, entityId: entityId }
+                    data: { url: targetRoute, role: requiredRole, entityId: entityId, notificationId: payload.data?.notificationId || null }
                 });
 
                 notif.onclick = () => {
+                    if (payload.data?.notificationId) {
+                        NotificationService.markClicked(payload.data.notificationId).catch(err => {
+                            console.error('[FCM Foreground] Click event tracking failed:', err);
+                        });
+                    }
                     handleNavigation();
                     notif.close();
                 };

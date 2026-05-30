@@ -77,9 +77,15 @@ const sendPushNotification = async (tokens, payload) => {
             response.responses.forEach((resp, idx) => {
                 if (!resp.success) {
                     console.error(`[NotificationService] Token[${idx}] failed:`, resp.error?.code, resp.error?.message);
+                    const errCode = resp.error?.code || '';
+                    const errMsg = resp.error?.message || '';
                     if (
-                        resp.error?.code === 'messaging/invalid-registration-token' ||
-                        resp.error?.code === 'messaging/registration-token-not-registered'
+                        errCode === 'messaging/invalid-registration-token' ||
+                        errCode === 'messaging/registration-token-not-registered' ||
+                        errCode.includes('registration-token-not-registered') ||
+                        errCode.includes('invalid-registration-token') ||
+                        errMsg.includes('registration-token-not-registered') ||
+                        errMsg.includes('invalid-registration-token')
                     ) {
                         failedTokens.push(validTokens[idx]);
                     }

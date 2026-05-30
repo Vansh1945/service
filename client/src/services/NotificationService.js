@@ -63,7 +63,9 @@ export const getAnalytics = (id) => {
 };
 
 export const markClicked = (id) => {
-    return axiosInstance.patch(`/notifications/clicked/${id}`);
+    const token = localStorage.getItem('fcmToken');
+    const deviceId = localStorage.getItem('persistentDeviceId');
+    return axiosInstance.patch(`/notifications/clicked/${id}`, { token, deviceId });
 };
 
 export const getAdminDashboardStats = () => {

@@ -61,6 +61,7 @@ self.addEventListener('notificationclick', (event) => {
     const route = data.route || data.url || '/';
     const role = data.role || null;
     const entityId = data.entityId || null;
+    const notificationId = data.notificationId || null;
     const urlToOpen = self.location.origin + route;
 
     event.waitUntil(
@@ -73,6 +74,7 @@ self.addEventListener('notificationclick', (event) => {
                         url: route, 
                         role: role, 
                         entityId: entityId,
+                        notificationId: notificationId,
                         updateType: data.updateType || null,
                         version: data.version || null,
                         forceRefresh: data.forceRefresh || null
@@ -86,6 +88,7 @@ self.addEventListener('notificationclick', (event) => {
                 searchParams.append('route', route);
                 if (role) searchParams.append('role', role);
                 if (entityId) searchParams.append('entityId', entityId);
+                if (notificationId) searchParams.append('notificationId', notificationId);
                 if (data.updateType) searchParams.append('updateType', data.updateType);
                 if (data.version) searchParams.append('version', data.version);
                 if (data.forceRefresh) searchParams.append('forceRefresh', data.forceRefresh);
