@@ -1128,7 +1128,11 @@ const downloadWithdrawalReport = async (req, res) => {
       filter.createdAt = { $gte: start, $lte: end };
     }
 
-    const records = await PaymentRecord.find(filter).sort({ createdAt: -1 }).lean();
+      const records = await PaymentRecord.find(filter)
+        .sort({ createdAt: -1 })
+        .populate('provider', 'providerId')
+        .populate('booking', 'bookingId')
+        .lean();
 
     if (!records.length) {
       return res.status(200).json({ success: true, message: "No withdrawal records found", records: [] });
@@ -1151,6 +1155,8 @@ const downloadWithdrawalReport = async (req, res) => {
         { header: "Status", key: "status", width: 15 },
         { header: "Requested Date", key: "requestedDate", width: 20 },
         { header: "Processed Date", key: "processedDate", width: 25 },
+        { header: "Provider ID", key: "providerId", width: 25 },
+        { header: "Booking ID", key: "bookingId", width: 25 },
         { header: "Admin Remark / Rejection", key: "remark", width: 40 },
       ];
 
@@ -1171,6 +1177,8 @@ const downloadWithdrawalReport = async (req, res) => {
           ifscCode: record.paymentDetails?.ifscCode || "N/A",
           bankName: record.paymentDetails?.bankName || "N/A",
           status: record.status,
+          providerId: record.provider?.providerId || "N/A",
+          bookingId: record.booking?.bookingId || "N/A",
           requestedDate: record.createdAt.toLocaleString('en-IN'),
           processedDate: record.completedAt ? record.completedAt.toLocaleString('en-IN') : "N/A",
           remark: record.adminRemark || record.rejectionReason || "N/A",
@@ -1716,20 +1724,23 @@ const generateWithdrawalReport = async (req, res) => {
 // Admin - Provider Wise Earnings Report
 const generateProviderEarningsReport = async (req, res) => {
   try {
-    const { fromDate, toDate, providerId } = req.query;
+    let { fromDate, toDate, providerId } = req.query;
 
-    // Validate dates
-    if (!fromDate || !toDate) {
-      return res.status(400).json({
-        success: false,
-        message: "Both fromDate and toDate are required",
-      });
+    // Provide default date range (last 30 days) if not supplied
+    const now = new Date();
+    if (!fromDate) {
+      const defaultFrom = new Date(now);
+      defaultFrom.setDate(defaultFrom.getDate() - 30);
+      fromDate = defaultFrom.toISOString().split('T')[0];
+    }
+    if (!toDate) {
+      toDate = now.toISOString().split('T')[0];
     }
 
+    // Parse dates
     const start = new Date(fromDate);
     const end = new Date(toDate);
-
-    // Validate min 7 days, max 2 months
+    // Ensure proper range limits (7-62 days)
     const diffDays = (end - start) / (1000 * 60 * 60 * 24);
     if (diffDays < 7 || diffDays > 62) {
       return res.status(400).json({
@@ -1738,7 +1749,9 @@ const generateProviderEarningsReport = async (req, res) => {
       });
     }
 
-    // Fetch providers
+    // Duplicate date parsing removed
+
+    // Fetch providers – if providerId is supplied filter accordingly, otherwise get all active providers
     const providerFilter = { isDeleted: false };
     if (providerId) {
       if (mongoose.isValidObjectId(providerId)) {
@@ -1748,6 +1761,9 @@ const generateProviderEarningsReport = async (req, res) => {
       }
     }
     const providers = await Provider.find(providerFilter).lean();
+    if (!providers.length) {
+      return res.status(200).json({ success: true, message: "No providers found for the given criteria" });
+    }
 
     if (!providers.length) {
       return res.status(200).json({

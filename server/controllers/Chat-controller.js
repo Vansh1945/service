@@ -395,6 +395,52 @@ const sendMessage = async (req, res) => {
 };
 
 /**
+ * 9. Admin fetch messages for any room (read‑only)
+ * Admins bypass participant checks and can view full history.
+ */
+const adminGetMessages = async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+
+    if (!roomId) {
+      return res.status(400).json({ success: false, message: 'Room ID is required' });
+    }
+
+    // Ensure requester is admin (middleware already enforces, but double‑check)
+    if (req.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Only admin can access this endpoint' });
+    }
+
+    const room = await ChatRoom.findById(roomId);
+    if (!room) {
+      return res.status(404).json({ success: false, message: 'Chat room not found' });
+    }
+
+    // Pagination – same logic as getMessages
+    const totalMessages = room.messages.length;
+    const startIndex = Math.max(0, totalMessages - (page * limit));
+    const endIndex = totalMessages - ((page - 1) * limit);
+    const paginatedMessages = room.messages.slice(startIndex, endIndex);
+
+    res.status(200).json({
+      success: true,
+      data: paginatedMessages,
+      pagination: {
+        total: totalMessages,
+        page,
+        limit,
+        pages: Math.ceil(totalMessages / limit)
+      }
+    });
+  } catch (error) {
+    console.error('Error in adminGetMessages:', error);
+    res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
+  }
+};
+
+/**
  * 3. Get messages for a room (Paginated)
  */
 const getMessages = async (req, res) => {
@@ -667,6 +713,7 @@ const uploadChatFile = async (req, res) => {
 };
 
 module.exports = {
+  adminGetMessages,
   createRoom,
   sendMessage,
   getMessages,

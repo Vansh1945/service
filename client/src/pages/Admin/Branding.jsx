@@ -326,8 +326,8 @@ const Branding = () => {
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={`flex-1 py-2.5 text-center text-xs font-bold capitalize rounded-xl transition-all duration-300 ${activeTab === tab
-                ? 'bg-white text-teal-600 shadow-md font-extrabold transform scale-[1.02]'
-                : 'text-gray-500 hover:text-gray-900'
+              ? 'bg-white text-teal-600 shadow-md font-extrabold transform scale-[1.02]'
+              : 'text-gray-500 hover:text-gray-900'
               }`}
           >
             {tab} application

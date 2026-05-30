@@ -57,6 +57,7 @@ const { uploadComplaintImage, handleUploadErrors } = require('../middlewares/upl
 // Admin-specific endpoints
 router.get('/admin-monitor', adminAuthMiddleware, requireAdmin, chatController.adminMonitor);
 router.post('/admin-join/:roomId', adminAuthMiddleware, requireAdmin, chatController.joinAdmin);
+router.get('/admin/chat/:roomId', adminAuthMiddleware, requireAdmin, chatController.adminGetMessages);
 
 // Upload endpoint
 router.post('/upload', sharedChatAuth, requireCustomerOrProviderOrAdmin, uploadComplaintImage.single('file'), handleUploadErrors, chatController.uploadChatFile);
