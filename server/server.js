@@ -172,6 +172,7 @@ const systemSettingRoutes = require('./routes/SystemSetting-routes');
 const contactRoutes = require('./routes/Contact-routes');
 const notificationRoutes = require('./routes/notification-routes');
 const chatRoutes = require('./routes/Chat-route');
+const zoneRoutes = require('./routes/zone.routes');
 
 // Maintenance Mode Middleware
 app.use(async (req, res, next) => {
@@ -271,6 +272,7 @@ app.use('/api/system-setting', systemSettingRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/zones', zoneRoutes);
 
 // Health check endpoint
 

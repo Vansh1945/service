@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '../../context/auth';
 import * as AdminService from '../../services/AdminService';
 import * as BookingService from '../../services/BookingService';
+import * as ZoneService from '../../services/ZoneService';
 import Loader from '../../components/Loader';
 import { MapContainer, TileLayer, Polygon, Polyline, Circle, Marker, Popup, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
@@ -49,6 +50,32 @@ const getPolygonCenter = (coordinates) => {
   return [latSum / coordinates.length, lngSum / coordinates.length];
 };
 
+const generateApproximatedPolygon = (lat, lng, radiusKm = 2) => {
+  const points = [];
+  const numberOfSides = 12; // 12-sided polygon approximation
+  const earthRadius = 6371; // km
+  const latRad = (lat * Math.PI) / 180;
+  const lngRad = (lng * Math.PI) / 180;
+  const d = radiusKm / earthRadius;
+
+  for (let i = 0; i < numberOfSides; i++) {
+    const angle = (i * 2 * Math.PI) / numberOfSides;
+    const pointLatRad = Math.asin(
+      Math.sin(latRad) * Math.cos(d) +
+      Math.cos(latRad) * Math.sin(d) * Math.cos(angle)
+    );
+    const pointLngRad = lngRad + Math.atan2(
+      Math.sin(angle) * Math.sin(d) * Math.cos(latRad),
+      Math.cos(d) - Math.sin(latRad) * Math.sin(pointLatRad)
+    );
+    points.push([
+      (pointLatRad * 180) / Math.PI,
+      (pointLngRad * 180) / Math.PI
+    ]);
+  }
+  return points;
+};
+
 // Helper component to smoothly center Leaflet map
 const MapCenterer = ({ center, zoom }) => {
   const map = useMap();
@@ -71,60 +98,6 @@ const MapDrawingEvents = ({ isDrawing, onMapClick }) => {
   return null;
 };
 
-const defaultZones = [
-  {
-    id: 'zone-jalandhar',
-    name: 'Jalandhar City Center',
-    city: 'Jalandhar',
-    status: 'active',
-    priority: 'high',
-    maxProviders: 40,
-    serviceRadius: 5,
-    coordinates: [
-      [31.340, 75.560],
-      [31.350, 75.595],
-      [31.315, 75.605],
-      [31.305, 75.565]
-    ],
-    createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'zone-nakodar',
-    name: 'Nakodar Junction Area',
-    city: 'Nakodar',
-    status: 'active',
-    priority: 'medium',
-    maxProviders: 15,
-    serviceRadius: 7,
-    coordinates: [
-      [31.140, 75.460],
-      [31.155, 75.495],
-      [31.120, 75.505],
-      [31.110, 75.465]
-    ],
-    createdAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'zone-phagwara',
-    name: 'Phagwara Hub East',
-    city: 'Phagwara',
-    status: 'inactive',
-    priority: 'low',
-    maxProviders: 25,
-    serviceRadius: 6,
-    coordinates: [
-      [31.230, 75.760],
-      [31.245, 75.790],
-      [31.215, 75.795],
-      [31.200, 75.765]
-    ],
-    createdAt: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString(),
-    updatedAt: new Date().toISOString()
-  }
-];
-
 const mockProviders = [
   { _id: 'p-1', name: 'Amrinder Singh', serviceCategory: 'Electrician', isOnline: true, status: 'available', coords: [31.330, 75.580] },
   { _id: 'p-2', name: 'Rajesh Kumar', serviceCategory: 'Plumber', isOnline: true, status: 'busy', coords: [31.325, 75.572] },
@@ -132,23 +105,15 @@ const mockProviders = [
   { _id: 'p-4', name: 'Priya Sharma', serviceCategory: 'Cleaning', isOnline: true, status: 'available', coords: [31.135, 75.480] },
   { _id: 'p-5', name: 'Amit Verma', serviceCategory: 'Appliance Repair', isOnline: true, status: 'busy', coords: [31.220, 75.775] }
 ];
-
-const mockBookings = [
-  { _id: 'b-1', customer: { name: 'Manpreet Kaur' }, lat: 31.332, lng: 75.578, amount: 1500 },
-  { _id: 'b-2', customer: { name: 'Sunil Dutt' }, lat: 31.328, lng: 75.582, amount: 800 },
-  { _id: 'b-3', customer: { name: 'Karan Johar' }, lat: 31.130, lng: 75.485, amount: 2200 },
-  { _id: 'b-4', customer: { name: 'Asha Rani' }, lat: 31.225, lng: 75.780, amount: 1200 }
-];
+const defaultZones = [];
 
 const ZoneManagement = () => {
   const { showToast } = useAuth();
-  const [zones, setZones] = useState(() => {
-    const saved = localStorage.getItem('service_dispatch_zones');
-    return saved ? JSON.parse(saved) : defaultZones;
-  });
+  const [zones, setZones] = useState([]);
 
   const [providers, setProviders] = useState([]);
   const [bookings, setBookings] = useState([]);
+  const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(false);
 
   // Search, Filter and Collapse States
@@ -157,12 +122,15 @@ const ZoneManagement = () => {
   const [filterStatus, setFilterStatus] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [activeTab, setActiveTab] = useState('list'); // 'list' or 'map'
 
   // Drawing and Form States
   const [isDrawing, setIsDrawing] = useState(false);
   const [drawPoints, setDrawPoints] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editingZoneId, setEditingZoneId] = useState(null);
+  const [geoQuery, setGeoQuery] = useState('');
+  const [autoGenerating, setAutoGenerating] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -178,18 +146,54 @@ const ZoneManagement = () => {
   const [mapCenter, setMapCenter] = useState([31.3260, 75.5762]);
   const [mapZoom, setMapZoom] = useState(12);
 
-  // Save zones to local storage on changes
-  useEffect(() => {
-    localStorage.setItem('service_dispatch_zones', JSON.stringify(zones));
-  }, [zones]);
+  // Fetch zones from server
+  const fetchZones = async () => {
+    try {
+      setLoading(true);
+      const response = await ZoneService.getAllZones({ limit: 1000 });
+      if (response && response.data && response.data.success) {
+        const dbZones = response.data.data.map(z => {
+          let coords = [];
+          if (z.polygon && z.polygon.coordinates && z.polygon.coordinates[0]) {
+            coords = z.polygon.coordinates[0].map(coord => [coord[1], coord[0]]);
+            if (coords.length > 1 && coords[0][0] === coords[coords.length - 1][0] && coords[0][1] === coords[coords.length - 1][1]) {
+              coords.pop();
+            }
+          }
+          return {
+            id: z._id,
+            _id: z._id,
+            name: z.name,
+            city: z.city || 'Jalandhar',
+            status: z.status,
+            priority: z.priority,
+            maxProviders: z.maxProviders,
+            serviceRadius: z.serviceRadius,
+            coordinates: coords,
+            createdAt: z.createdAt,
+            updatedAt: z.updatedAt
+          };
+        });
+        setZones(dbZones.length > 0 ? dbZones : defaultZones);
+      } else {
+        setZones(defaultZones);
+      }
+    } catch (err) {
+      console.error("Error fetching zones from backend:", err);
+      setZones(defaultZones);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Fetch provider and booking spatial coordinates from server
   const fetchTelemetry = async () => {
     try {
       setLoading(true);
-      const [provRes, bookRes] = await Promise.all([
+      const [provRes, bookRes, custRes] = await Promise.all([
         AdminService.getAllProviders().catch(() => null),
-        BookingService.getAllBookings({ limit: 1000 }).catch(() => null)
+        BookingService.getAllBookings({ limit: 1000 }).catch(() => null),
+        AdminService.getAllCustomers().catch(() => null)
       ]);
 
       if (provRes && provRes.data) {
@@ -221,6 +225,20 @@ const ZoneManagement = () => {
           if (mapped.length > 0) setBookings(mapped);
         }
       }
+
+      if (custRes && custRes.data) {
+        const allCustomers = Array.isArray(custRes.data.users)
+          ? custRes.data.users
+          : (Array.isArray(custRes.data.data) ? custRes.data.data : (Array.isArray(custRes.data) ? custRes.data : []));
+        if (allCustomers.length > 0) {
+          const mapped = allCustomers.map(c => ({
+            ...c,
+            lat: c.address?.lat || (c.currentLocation?.coordinates?.length === 2 ? c.currentLocation.coordinates[1] : null),
+            lng: c.address?.lng || (c.currentLocation?.coordinates?.length === 2 ? c.currentLocation.coordinates[0] : null)
+          })).filter(c => c.lat !== null && c.lat !== 0);
+          if (mapped.length > 0) setCustomers(mapped);
+        }
+      }
     } catch (err) {
       console.error("Telemetry fetch error:", err);
     } finally {
@@ -229,6 +247,7 @@ const ZoneManagement = () => {
   };
 
   useEffect(() => {
+    fetchZones();
     fetchTelemetry();
   }, []);
 
@@ -236,7 +255,7 @@ const ZoneManagement = () => {
   const getZoneStats = (coordinates) => {
     let provCount = 0;
     let activeJobs = 0;
-    let totalEtaSum = 0;
+    let customerCount = 0;
 
     providers.forEach(p => {
       if (p.coords && isPointInPolygon(p.coords[0], p.coords[1], coordinates)) {
@@ -247,39 +266,40 @@ const ZoneManagement = () => {
     bookings.forEach(b => {
       if (isPointInPolygon(b.lat, b.lng, coordinates)) {
         activeJobs++;
-        // Calculate mock response time
-        totalEtaSum += 12; // 12 min default base response time
       }
     });
 
-    const avgEta = activeJobs > 0 ? Math.round(totalEtaSum / activeJobs) : 10;
+    customers.forEach(c => {
+      if (isPointInPolygon(c.lat, c.lng, coordinates)) {
+        customerCount++;
+      }
+    });
 
     return {
       providersCount: provCount,
       activeBookingsCount: activeJobs,
-      avgResponseTime: avgEta
+      customerCount: customerCount
     };
   };
 
   // Color mapping based on Priority and Status
   const getZoneStyle = (status, priority) => {
     if (status === 'inactive') {
-      return { color: '#9ca3af', fillColor: '#9ca3af', fillOpacity: 0.2, weight: 2 }; // Inactive zone = Gray
+      return { color: '#9ca3af', fillColor: '#9ca3af', fillOpacity: 0.2, weight: 2 };
     }
-    // Active zone colors based on demand/priority levels
     if (priority === 'high') {
-      return { color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.25, weight: 2.5 }; // High demand = Red
+      return { color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.25, weight: 2.5 };
     }
     if (priority === 'medium') {
-      return { color: '#eab308', fillColor: '#eab308', fillOpacity: 0.2, weight: 2 }; // Medium = Yellow
+      return { color: '#eab308', fillColor: '#eab308', fillOpacity: 0.2, weight: 2 };
     }
-    return { color: '#22c55e', fillColor: '#22c55e', fillOpacity: 0.2, weight: 2 }; // Low/Active default = Green
+    return { color: '#22c55e', fillColor: '#22c55e', fillOpacity: 0.2, weight: 2 };
   };
 
   const getProviderMarkerIcon = (status) => {
-    let color = '#22c55e'; // Green Available
-    if (status === 'busy') color = '#eab308'; // Yellow busy
-    else if (status === 'overloaded') color = '#ef4444'; // Red overloaded
+    let color = '#22c55e';
+    if (status === 'busy') color = '#eab308';
+    else if (status === 'overloaded') color = '#ef4444';
 
     return L.divIcon({
       className: 'bg-transparent',
@@ -344,8 +364,60 @@ const ZoneManagement = () => {
     setDrawPoints([]);
   };
 
+  const handleAutoGenerateBoundary = async () => {
+    if (!geoQuery.trim()) {
+      if (showToast) showToast('Please enter a Pincode or Area Name', 'warning');
+      return;
+    }
+    setAutoGenerating(true);
+    try {
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(geoQuery)}&format=json&polygon_geojson=1&countrycodes=in`);
+      const data = await response.json();
+
+      if (!data || data.length === 0) {
+        if (showToast) showToast('Location not found. Please try a different query.', 'error');
+        return;
+      }
+
+      const result = data[0];
+      const lat = parseFloat(result.lat);
+      const lng = parseFloat(result.lon);
+
+      if (result.geojson && (result.geojson.type === 'Polygon' || result.geojson.type === 'MultiPolygon')) {
+        let polygonCoords = [];
+        if (result.geojson.type === 'Polygon') {
+          polygonCoords = result.geojson.coordinates[0];
+        } else {
+          polygonCoords = result.geojson.coordinates[0][0];
+        }
+
+        const leafletCoords = polygonCoords.map(coord => [coord[1], coord[0]]);
+        if (leafletCoords.length > 1 && leafletCoords[0][0] === leafletCoords[leafletCoords.length - 1][0] && leafletCoords[0][1] === leafletCoords[leafletCoords.length - 1][1]) {
+          leafletCoords.pop();
+        }
+
+        setDrawPoints(leafletCoords);
+        setMapCenter([lat, lng]);
+        setMapZoom(14);
+        if (showToast) showToast('Successfully generated exact polygon from boundary data!', 'success');
+      } else {
+        const radius = Number(formData.serviceRadius) || 5;
+        const generatedCoords = generateApproximatedPolygon(lat, lng, radius);
+        setDrawPoints(generatedCoords);
+        setMapCenter([lat, lng]);
+        setMapZoom(13);
+        if (showToast) showToast(`Generated approximated polygon using ${radius} km radius around ${result.display_name.split(',')[0]}`, 'success');
+      }
+    } catch (err) {
+      console.error("Error geocoding location:", err);
+      if (showToast) showToast('Failed to auto-generate boundary. Please draw manually.', 'error');
+    } finally {
+      setAutoGenerating(false);
+    }
+  };
+
   // Save new or updated zone
-  const handleSaveZone = (e) => {
+  const handleSaveZone = async (e) => {
     e.preventDefault();
     if (!formData.name.trim()) {
       if (showToast) showToast('Please enter a valid Zone Name', 'warning');
@@ -356,31 +428,43 @@ const ZoneManagement = () => {
       return;
     }
 
+    const geoCoords = drawPoints.map(p => [p[1], p[0]]);
+    geoCoords.push([drawPoints[0][1], drawPoints[0][0]]); // Close the loop
+
     const payload = {
-      id: editingZoneId || 'zone-' + Date.now(),
       name: formData.name,
       city: formData.city,
+      polygon: {
+        type: "Polygon",
+        coordinates: [geoCoords]
+      },
       status: formData.status,
       priority: formData.priority,
       maxProviders: Number(formData.maxProviders),
-      serviceRadius: Number(formData.serviceRadius),
-      coordinates: drawPoints,
-      updatedAt: new Date().toISOString()
+      serviceRadius: Number(formData.serviceRadius)
     };
 
-    if (editingZoneId) {
-      setZones(prev => prev.map(z => z.id === editingZoneId ? { ...z, ...payload } : z));
-      if (showToast) showToast('Service zone boundary updated successfully.', 'success');
-    } else {
-      payload.createdAt = new Date().toISOString();
-      setZones(prev => [payload, ...prev]);
-      if (showToast) showToast('New service zone deployed successfully.', 'success');
+    setLoading(true);
+    try {
+      if (editingZoneId) {
+        await ZoneService.updateZone(editingZoneId, payload);
+        if (showToast) showToast('Service zone boundary updated successfully.', 'success');
+      } else {
+        await ZoneService.createZone(payload);
+        if (showToast) showToast('New service zone deployed successfully.', 'success');
+      }
+      setIsDrawing(false);
+      setDrawPoints([]);
+      setShowForm(false);
+      setEditingZoneId(null);
+      fetchZones();
+    } catch (err) {
+      console.error("Error saving zone:", err);
+      const errMsg = err.response?.data?.message || 'Failed to save service zone';
+      if (showToast) showToast(errMsg, 'error');
+    } finally {
+      setLoading(false);
     }
-
-    setIsDrawing(false);
-    setDrawPoints([]);
-    setShowForm(false);
-    setEditingZoneId(null);
   };
 
   // Trigger Zone Editing
@@ -403,18 +487,35 @@ const ZoneManagement = () => {
   };
 
   // Quick enable/disable status toggle from card
-  const handleToggleStatus = (id, currentStatus) => {
-    const nextStatus = currentStatus === 'active' ? 'inactive' : 'active';
-    setZones(prev => prev.map(z => z.id === id ? { ...z, status: nextStatus, updatedAt: new Date().toISOString() } : z));
-    if (showToast) showToast(`Zone is now ${nextStatus.toUpperCase()}`, 'success');
+  const handleToggleStatus = async (id, currentStatus) => {
+    try {
+      setLoading(true);
+      await ZoneService.toggleZoneStatus(id);
+      if (showToast) showToast(`Zone status toggled successfully`, 'success');
+      fetchZones();
+    } catch (err) {
+      console.error("Error toggling zone status:", err);
+      if (showToast) showToast('Failed to toggle status', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Delete Zone Handler
-  const handleDeleteZone = () => {
+  const handleDeleteZone = async () => {
     if (!deleteConfirmId) return;
-    setZones(prev => prev.filter(z => z.id !== deleteConfirmId));
-    if (showToast) showToast('Service zone deleted successfully.', 'success');
-    setDeleteConfirmId(null);
+    try {
+      setLoading(true);
+      await ZoneService.deleteZone(deleteConfirmId);
+      if (showToast) showToast('Service zone deactivated successfully.', 'success');
+      setDeleteConfirmId(null);
+      fetchZones();
+    } catch (err) {
+      console.error("Error deleting zone:", err);
+      if (showToast) showToast('Failed to deactivate zone', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Center/Zoom map to specific zone
@@ -475,7 +576,28 @@ const ZoneManagement = () => {
   }, [zones, providers]);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-150px)] text-gray-850 font-sans relative select-none overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-150px)] text-gray-850 font-sans relative overflow-hidden">
+      {/* Mobile view Tab Selectors */}
+      <div className="flex lg:hidden bg-gray-100 p-1.5 rounded-xl mb-4 shrink-0 shadow-sm border border-gray-200">
+        <button
+          onClick={() => setActiveTab('list')}
+          className={`flex-1 py-2.5 text-xs font-black uppercase tracking-wider rounded-lg transition-all ${activeTab === 'list' ? 'bg-primary text-white shadow-sm font-extrabold' : 'text-gray-500 hover:text-gray-900'
+            }`}
+        >
+          Zone List & Details
+        </button>
+        <button
+          onClick={() => {
+            setActiveTab('map');
+            if (showToast) showToast('Switch to Map: Tap anywhere to place boundary coordinates.', 'info');
+          }}
+          className={`flex-1 py-2.5 text-xs font-black uppercase tracking-wider rounded-lg transition-all ${activeTab === 'map' ? 'bg-primary text-white shadow-sm font-extrabold' : 'text-gray-500 hover:text-gray-900'
+            }`}
+        >
+          Interactive Map View
+        </button>
+      </div>
+
       {/* Analytics Counter Header */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4 shrink-0">
         <div className="bg-white border border-gray-250 p-4 rounded-2xl flex flex-col justify-between hover:border-primary/40 hover:shadow-md transition-all shadow-sm">
@@ -510,21 +632,14 @@ const ZoneManagement = () => {
           <h3 className="text-2xl font-black mt-2 text-gray-900">{stats.coverage}%</h3>
           <p className="text-[9px] text-gray-400 mt-1 uppercase tracking-wider">Operational Density</p>
         </div>
-        <div className="col-span-2 md:col-span-1 bg-white border border-gray-250 p-4 rounded-2xl flex flex-col justify-between hover:border-primary/40 hover:shadow-md transition-all shadow-sm">
-          <div className="flex justify-between items-center text-gray-400">
-            <span className="text-[10px] font-black uppercase tracking-wider">Avg Response Time</span>
-            <Clock className="w-4 h-4 text-rose-500" />
-          </div>
-          <h3 className="text-2xl font-black mt-2 text-gray-900">{stats.avgResponse} mins</h3>
-          <p className="text-[9px] text-gray-400 mt-1 uppercase tracking-wider">Dispatch Latency</p>
-        </div>
       </div>
 
       {/* Main Panel Content Area */}
-      <div className="flex-1 flex flex-col lg:flex-row gap-4 relative overflow-hidden">
+      <div className="flex-1 flex flex-col lg:flex-row gap-4 relative min-h-0 overflow-hidden">
         {/* Left Side Sidebar Panel - Controls & Zone lists */}
-        <div className={`${sidebarOpen ? 'w-full lg:w-96' : 'w-0 lg:w-0'} bg-white border border-gray-200 rounded-2xl flex flex-col overflow-hidden transition-all duration-300 relative z-[2] shadow-sm`}>
-          <div className="p-4 border-b border-gray-100 space-y-3 shrink-0">
+        <div className={`${sidebarOpen ? 'w-full lg:w-96' : 'w-0 lg:w-0'} ${activeTab === 'list' ? 'flex' : 'hidden lg:flex'
+          } bg-white border border-gray-200 rounded-2xl flex flex-col min-h-0 overflow-hidden transition-all duration-300 relative z-[2] shadow-sm`}>
+          <div className="p-4 border-b border-gray-100 space-y-3 shrink-0 max-h-[70vh] overflow-y-auto">
             <div className="flex justify-between items-center">
               <div className="flex items-center space-x-2">
                 <div className="p-2 bg-primary/10 border border-primary/20 rounded-lg">
@@ -546,91 +661,147 @@ const ZoneManagement = () => {
 
             {/* Form Input Display Area */}
             {showForm && (
-              <form onSubmit={handleSaveZone} className="bg-gray-50 border border-gray-200 p-3 rounded-xl space-y-2.5 animate-slide-up">
-                <div className="flex justify-between items-center">
-                  <span className="text-[9px] text-primary font-extrabold uppercase tracking-wider">
-                    {editingZoneId ? '✏️ Edit Zone Coordinates' : '📐 Drawing Mode Active'}
+              <form onSubmit={handleSaveZone} className="bg-gray-50 border border-gray-200 p-3 rounded-xl space-y-3 animate-slide-up shadow-inner">
+                <div className="flex justify-between items-center border-b border-gray-200 pb-1.5">
+                  <span className="text-[10px] text-primary font-black uppercase tracking-wider">
+                    {editingZoneId ? '✏️ Edit Zone Configuration' : '📐 New Zone Boundary'}
                   </span>
-                  <span className="px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-600 text-[8px] font-black uppercase">
+                  <span className="px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-600 text-[8px] font-black uppercase" title="Number of boundary points drawn on the map">
                     {drawPoints.length} Vertices
                   </span>
                 </div>
-                <input
-                  type="text"
-                  placeholder="Zone Name (e.g. Jalandhar East)"
-                  value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full px-2.5 py-1.5 bg-white border border-gray-250 rounded-lg text-xs outline-none focus:ring-1 focus:ring-primary text-gray-900 placeholder-gray-400"
-                  required
-                />
-                <div className="grid grid-cols-2 gap-2">
-                  <select
-                    value={formData.city}
-                    onChange={(e) => setFormData(prev => ({ ...prev, city: e.target.value }))}
-                    className="px-2.5 py-1.5 bg-white border border-gray-250 text-gray-900 rounded-lg text-[10px] outline-none"
-                  >
-                    <option value="Jalandhar">Jalandhar</option>
-                    <option value="Nakodar">Nakodar</option>
-                    <option value="Phagwara">Phagwara</option>
-                  </select>
-                  <select
-                    value={formData.priority}
-                    onChange={(e) => setFormData(prev => ({ ...prev, priority: e.target.value }))}
-                    className="px-2.5 py-1.5 bg-white border border-gray-250 text-gray-900 rounded-lg text-[10px] outline-none"
-                  >
-                    <option value="low">Low Priority</option>
-                    <option value="medium">Medium Priority</option>
-                    <option value="high">High Priority</option>
-                  </select>
+
+                {/* AUTO-GENERATE FROM PINCODE / AREA FEATURE */}
+                <div className="bg-primary/5 p-2 rounded-lg border border-primary/25 space-y-1.5">
+                  <label className="text-[8px] font-black uppercase text-primary tracking-wider block">⚡ Auto-Generate Boundary</label>
+                  <p className="text-[7.5px] text-gray-500 font-medium leading-relaxed">Enter a pincode (e.g. 144001) or area name (e.g. Model Town Jalandhar) to auto-draw the zone boundary on the map.</p>
+                  <div className="flex gap-1">
+                    <input
+                      type="text"
+                      placeholder="e.g. 144001 or Model Town Jalandhar"
+                      value={geoQuery}
+                      onChange={(e) => setGeoQuery(e.target.value)}
+                      className="flex-1 px-2 py-1.5 bg-white border border-gray-250 rounded text-[11px] outline-none font-semibold text-gray-900 placeholder-gray-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAutoGenerateBoundary}
+                      disabled={autoGenerating}
+                      className="px-2.5 py-1.5 bg-primary hover:bg-teal-700 active:scale-95 text-white rounded text-[9px] font-black uppercase tracking-wider disabled:opacity-50 transition-all cursor-pointer flex items-center justify-center min-w-[70px]"
+                    >
+                      {autoGenerating ? 'Searching...' : 'Generate'}
+                    </button>
+                  </div>
+                  <p className="text-[7px] text-gray-400 font-semibold">Uses OpenStreetMap data. If exact boundary not found, creates a circular approximation using the radius below.</p>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <select
-                    value={formData.status}
-                    onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value }))}
-                    className="px-2.5 py-1.5 bg-white border border-gray-250 text-gray-900 rounded-lg text-[10px] outline-none"
-                  >
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                  </select>
+
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black uppercase text-gray-500 tracking-wider block">Zone Name <span className="text-red-400">*</span></label>
                   <input
-                    type="number"
-                    placeholder="Max Providers"
-                    value={formData.maxProviders}
-                    onChange={(e) => setFormData(prev => ({ ...prev, maxProviders: e.target.value }))}
-                    className="px-2.5 py-1.5 bg-white border border-gray-250 rounded-lg text-[10px] text-gray-900 placeholder-gray-400"
-                    min="1"
-                    title="Max Providers"
+                    type="text"
+                    placeholder="e.g. Jalandhar City Center"
+                    value={formData.name}
+                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                    className="w-full px-2.5 py-1.5 bg-white border border-gray-250 rounded-lg text-xs outline-none focus:ring-1 focus:ring-primary text-gray-900 placeholder-gray-400 font-semibold"
+                    required
                   />
+                  <p className="text-[7.5px] text-gray-400 font-medium">Unique name for this zone. Must be unique per city.</p>
                 </div>
-                <div className="w-full">
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase text-gray-500 tracking-wider block">City</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Jalandhar"
+                      value={formData.city}
+                      onChange={(e) => setFormData(prev => ({ ...prev, city: e.target.value }))}
+                      className="w-full px-2 py-1.5 bg-white border border-gray-250 text-gray-900 rounded-lg text-[11px] outline-none font-semibold"
+                      required
+                    />
+                    <p className="text-[7.5px] text-gray-400 font-medium">City this zone belongs to.</p>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase text-gray-500 tracking-wider block">Priority Level</label>
+                    <select
+                      value={formData.priority}
+                      onChange={(e) => setFormData(prev => ({ ...prev, priority: e.target.value }))}
+                      className="w-full px-2 py-1.5 bg-white border border-gray-250 text-gray-900 rounded-lg text-[11px] outline-none font-semibold cursor-pointer"
+                    >
+                      <option value="low">🟢 Low</option>
+                      <option value="medium">🟡 Medium</option>
+                      <option value="high">🔴 High</option>
+                    </select>
+                    <p className="text-[7.5px] text-gray-400 font-medium">High = faster dispatch, surge pricing applies.</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase text-gray-500 tracking-wider block">Status</label>
+                    <select
+                      value={formData.status}
+                      onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value }))}
+                      className="w-full px-2 py-1.5 bg-white border border-gray-250 text-gray-900 rounded-lg text-[11px] outline-none font-semibold cursor-pointer"
+                    >
+                      <option value="active">✅ Active</option>
+                      <option value="inactive">⏸️ Inactive</option>
+                    </select>
+                    <p className="text-[7.5px] text-gray-400 font-medium">Active = zone is live and enforcing dispatch rules.</p>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase text-gray-500 tracking-wider block">Max Providers</label>
+                    <input
+                      type="number"
+                      placeholder="e.g. 20"
+                      value={formData.maxProviders}
+                      onChange={(e) => setFormData(prev => ({ ...prev, maxProviders: e.target.value }))}
+                      className="w-full px-2 py-1.5 bg-white border border-gray-250 rounded-lg text-[11px] text-gray-900 placeholder-gray-400 font-semibold"
+                      min="0"
+                    />
+                    <p className="text-[7.5px] text-gray-400 font-medium">Maximum providers allowed to operate in this zone.</p>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black uppercase text-gray-500 tracking-wider block">Service Radius (KM)</label>
                   <input
                     type="number"
-                    placeholder="Service Radius (km)"
+                    placeholder="e.g. 5"
                     value={formData.serviceRadius}
                     onChange={(e) => setFormData(prev => ({ ...prev, serviceRadius: e.target.value }))}
-                    className="w-full px-2.5 py-1.5 bg-white border border-gray-250 rounded-lg text-[10px] text-gray-900 placeholder-gray-400"
+                    className="w-full px-2 py-1.5 bg-white border border-gray-250 rounded-lg text-[11px] text-gray-900 placeholder-gray-400 font-semibold"
                     min="1"
-                    title="Service Radius"
                   />
+                  <p className="text-[7.5px] text-gray-400 font-medium">Max distance (km) within which providers are matched to customers. Also used as fallback radius for auto-generated boundaries.</p>
                 </div>
-                <div className="grid grid-cols-3 gap-1 text-[8px] font-black uppercase tracking-wider">
+
+                <div className="bg-amber-50 rounded-lg p-2.5 border border-amber-500/20 text-[8.5px] text-amber-800 font-medium leading-relaxed space-y-1">
+                  <p className="font-black text-amber-950 text-[9px]">🗺️ How to create a zone boundary:</p>
+                  <p><strong>Option A:</strong> Enter a Pincode or Area name above → click Generate. The boundary will be auto-drawn.</p>
+                  <p><strong>Option B:</strong> Switch to Map tab → click on the map to place vertices one by one. Min 3 points needed.</p>
+                  <p><strong>Editing:</strong> Drag any vertex to reposition. Click a vertex to delete it.</p>
+                  <p className="text-amber-600 font-bold">When done → fill all fields above → click "Save Boundary".</p>
+                </div>
+
+                <div className="flex gap-2 pt-1.5">
                   <button
                     type="submit"
-                    className="py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-md transition-all font-black text-center"
+                    className="flex-1 w-full py-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-lg transition-all font-black text-center shadow-md cursor-pointer"
                   >
-                    Save Zone
+                    Save Boundary
                   </button>
                   <button
                     type="button"
                     onClick={handleClearDrawing}
-                    className="py-1.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-md transition-all font-black text-center"
+                    className="flex-1 py-2 bg-white border border-gray-200 hover:bg-gray-50 active:scale-95 text-gray-700 rounded-lg transition-all font-black text-center shadow-sm cursor-pointer"
                   >
                     Clear Map
                   </button>
                   <button
                     type="button"
                     onClick={handleCancelForm}
-                    className="py-1.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-md transition-all font-black text-center"
+                    className="flex-1 py-2 bg-white border border-gray-200 hover:bg-gray-50 active:scale-95 text-gray-700 rounded-lg transition-all font-black text-center shadow-sm cursor-pointer"
                   >
                     Cancel
                   </button>
@@ -658,9 +829,9 @@ const ZoneManagement = () => {
                     className="w-full bg-gray-50 border border-gray-200 rounded-lg p-1 text-gray-600"
                   >
                     <option value="">All Cities</option>
-                    <option value="Jalandhar">Jalandhar</option>
-                    <option value="Nakodar">Nakodar</option>
-                    <option value="Phagwara">Phagwara</option>
+                    {Array.from(new Set(zones.map(z => z.city).filter(Boolean))).sort().map(city => (
+                      <option key={city} value={city}>{city}</option>
+                    ))}
                   </select>
                   <select
                     value={filterStatus}
@@ -694,70 +865,83 @@ const ZoneManagement = () => {
                 return (
                   <div
                     key={zone.id}
-                    className="p-3 bg-white border border-gray-150 rounded-xl space-y-2 hover:border-gray-300 hover:shadow-sm shadow-sm transition-all flex flex-col relative group"
+                    className="p-3 bg-white border border-gray-150 rounded-xl space-y-2.5 hover:border-gray-300 hover:shadow-md shadow-sm transition-all flex flex-col relative group select-text"
                   >
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center space-x-1.5">
-                        <span className="w-1.5 h-3.5 bg-primary rounded-full"></span>
-                        <h4 className="text-[11px] font-black text-gray-900 uppercase tracking-wider">{zone.name}</h4>
+                    {/* Header row */}
+                    <div className="flex justify-between items-start">
+                      <div className="flex items-center space-x-1.5 min-w-0 flex-1">
+                        <span className={`w-1.5 h-3.5 rounded-full shrink-0 ${zone.status === 'active' ? 'bg-emerald-500' : 'bg-gray-400'}`}></span>
+                        <h4 className="text-[11px] font-black text-gray-900 uppercase tracking-wider truncate cursor-text" title={zone.name}>{zone.name}</h4>
                       </div>
-                      <div className="flex items-center space-x-1">
+                      <div className="flex items-center space-x-1 shrink-0 ml-2">
                         <button
                           onClick={() => handleToggleStatus(zone.id, zone.status)}
+                          title={zone.status === 'active' ? 'Click to deactivate this zone' : 'Click to activate this zone'}
                           className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase transition-all tracking-wider ${zone.status === 'active'
-                              ? 'bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100'
-                              : 'bg-gray-100 border border-gray-200 text-gray-500 hover:bg-gray-200'
+                            ? 'bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+                            : 'bg-gray-100 border border-gray-200 text-gray-500 hover:bg-gray-200'
                             }`}
                         >
-                          {zone.status === 'active' ? 'Active' : 'Disabled'}
+                          {zone.status === 'active' ? '● Active' : '○ Disabled'}
                         </button>
+
                         <button
                           onClick={() => handleEditZone(zone)}
                           className="p-1 bg-gray-50 border border-gray-200 rounded-lg text-gray-550 hover:text-gray-900 hover:bg-gray-150 transition-all"
-                          title="Edit Boundary Parameters"
+                          title="Edit zone boundary and settings"
                         >
                           <Edit className="w-3 h-3" />
                         </button>
                         <button
                           onClick={() => setDeleteConfirmId(zone.id)}
                           className="p-1 bg-gray-50 border border-gray-200 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all"
-                          title="Delete Zone"
+                          title="Permanently delete this zone"
                         >
                           <Trash2 className="w-3 h-3" />
                         </button>
                       </div>
                     </div>
 
-                    <div className="flex items-center space-x-2 text-[9px] text-gray-400 uppercase tracking-widest font-bold">
-                      <span className="flex items-center gap-0.5"><MapPin className="w-3 h-3 text-primary" /> {zone.city}</span>
-                      <span>•</span>
-                      <span className={`font-black ${zone.priority === 'high' ? 'text-red-600' :
-                          zone.priority === 'medium' ? 'text-yellow-600' : 'text-emerald-600'
-                        }`}>{zone.priority} Priority</span>
+                    {/* Zone meta info */}
+                    <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-[9px] text-gray-500 font-semibold">
+                      <span className="flex items-center gap-0.5 cursor-text" title="City this zone belongs to"><MapPin className="w-3 h-3 text-primary" /> {zone.city}</span>
+                      <span className="text-gray-300">|</span>
+                      <span className={`font-black cursor-text ${zone.priority === 'high' ? 'text-red-600' :
+                        zone.priority === 'medium' ? 'text-yellow-600' : 'text-emerald-600'
+                        }`} title={`Priority: ${zone.priority} — affects dispatch speed and surge pricing`}>{zone.priority} Priority</span>
+                      <span className="text-gray-300">|</span>
+                      <span className="cursor-text" title="Max providers limit for this zone">Max: {zone.maxProviders} providers</span>
+                      <span className="text-gray-300">|</span>
+                      <span className="cursor-text" title="Service matching radius in kilometers">Radius: {zone.serviceRadius} km</span>
                     </div>
 
-                    {/* Statistical details panel */}
-                    <div className="grid grid-cols-3 gap-1.5 pt-1 text-[9px]">
-                      <div className="bg-gray-55 p-1.5 rounded-lg border border-gray-100/85 flex flex-col justify-center">
-                        <span className="text-[7px] text-gray-450 font-bold uppercase">Providers</span>
-                        <span className="text-gray-800 font-black text-xs mt-0.5">{zoneStats.providersCount}</span>
+                    {/* Stats grid */}
+                    <div className="grid grid-cols-3 gap-1.5 text-[9px]">
+                      <div className="bg-blue-50/60 p-1.5 rounded-lg border border-blue-100 flex flex-col justify-center" title="Total active providers inside this zone">
+                        <span className="text-[7px] text-blue-400 font-bold uppercase">Providers</span>
+                        <span className="text-blue-700 font-black text-xs mt-0.5 cursor-text">{zoneStats.providersCount}</span>
                       </div>
-                      <div className="bg-gray-55 p-1.5 rounded-lg border border-gray-100/85 flex flex-col justify-center">
-                        <span className="text-[7px] text-gray-450 font-bold uppercase">Active Jobs</span>
-                        <span className="text-gray-800 font-black text-xs mt-0.5">{zoneStats.activeBookingsCount}</span>
+                      <div className="bg-purple-50/60 p-1.5 rounded-lg border border-purple-100 flex flex-col justify-center" title="Total customers saved addresses inside this zone">
+                        <span className="text-[7px] text-purple-400 font-bold uppercase">Customers</span>
+                        <span className="text-purple-700 font-black text-xs mt-0.5 cursor-text">{zoneStats.customerCount}</span>
                       </div>
-                      <div className="bg-gray-55 p-1.5 rounded-lg border border-gray-100/85 flex flex-col justify-center">
-                        <span className="text-[7px] text-gray-450 font-bold uppercase">Avg ETA</span>
-                        <span className="text-primary font-black text-xs mt-0.5">{zoneStats.avgResponseTime} min</span>
+                      <div className="bg-amber-50/60 p-1.5 rounded-lg border border-amber-100 flex flex-col justify-center" title="Active bookings/jobs happening inside this zone right now">
+                        <span className="text-[7px] text-amber-500 font-bold uppercase">Active Jobs</span>
+                        <span className="text-amber-700 font-black text-xs mt-0.5 cursor-text">{zoneStats.activeBookingsCount}</span>
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => handleFocusZone(zone.coordinates)}
-                      className="w-full py-1 bg-gray-50 hover:bg-gray-100 text-gray-700 text-[8px] font-black rounded-lg transition-all uppercase tracking-widest border border-gray-200 mt-1 flex items-center justify-center gap-1 shadow-sm"
-                    >
-                      <Eye className="w-3.5 h-3.5" /> Center & Preview Map
-                    </button>
+                    {/* Action buttons */}
+                    <div className="flex gap-1.5">
+                      <button
+                        onClick={() => handleFocusZone(zone.coordinates)}
+                        className="flex-1 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-700 text-[8px] font-black rounded-lg transition-all uppercase tracking-widest border border-gray-200 flex items-center justify-center gap-1 shadow-sm"
+                        title="Center the map on this zone and zoom in"
+                      >
+                        <Eye className="w-3.5 h-3.5" /> View on Map
+                      </button>
+
+                    </div>
                   </div>
                 );
               })
@@ -778,7 +962,8 @@ const ZoneManagement = () => {
         </button>
 
         {/* Leaflet Map Drawing Canvas */}
-        <div className="flex-1 bg-gray-100 border border-gray-200 rounded-2xl overflow-hidden relative min-h-[350px] shadow-sm">
+        <div className={`flex-1 ${activeTab === 'map' ? 'block' : 'hidden lg:block'
+          } bg-gray-100 border border-gray-200 rounded-2xl overflow-hidden relative min-h-[350px] shadow-sm`}>
           {/* Custom Drawing Guidance Box */}
           {isDrawing && (
             <div className="absolute top-4 left-4 z-[1000] bg-white border border-amber-500/40 rounded-xl p-3 shadow-xl max-w-xs animate-slide-up">
@@ -861,8 +1046,8 @@ const ZoneManagement = () => {
                     <div className="p-2.5 font-sans text-gray-800 bg-white rounded-xl">
                       <div className="flex items-center space-x-1.5 border-b border-gray-150 pb-2 mb-2">
                         <span className={`w-2.5 h-2.5 rounded-full ${zone.status === 'inactive' ? 'bg-gray-400' :
-                            zone.priority === 'high' ? 'bg-red-500' :
-                              zone.priority === 'medium' ? 'bg-yellow-500' : 'bg-emerald-500'
+                          zone.priority === 'high' ? 'bg-red-500' :
+                            zone.priority === 'medium' ? 'bg-yellow-500' : 'bg-emerald-500'
                           }`}></span>
                         <h3 className="font-black text-xs uppercase tracking-wider text-gray-900">{zone.name}</h3>
                       </div>
@@ -872,8 +1057,8 @@ const ZoneManagement = () => {
                         <p className="flex justify-between"><span className="text-gray-400 font-semibold">Max Providers:</span> <span className="font-black text-gray-800">{zone.maxProviders}</span></p>
                         <p className="flex justify-between"><span className="text-gray-400 font-semibold">Radius Limit:</span> <span className="font-black text-gray-800">{zone.serviceRadius} KM</span></p>
                         <p className="flex justify-between border-t border-gray-150 pt-2 mt-2"><span className="text-gray-400 font-semibold">Providers inside:</span> <span className="font-black text-blue-600">{zoneDetails.providersCount}</span></p>
+                        <p className="flex justify-between"><span className="text-gray-400 font-semibold font-black text-purple-600">Customers:</span> <span className="font-black text-purple-600 text-xs">{zoneDetails.customerCount}</span></p>
                         <p className="flex justify-between"><span className="text-gray-400 font-semibold font-black text-amber-600">Total Bookings:</span> <span className="font-black text-amber-600 text-xs">{zoneDetails.activeBookingsCount}</span></p>
-                        <p className="flex justify-between"><span className="text-gray-400 font-semibold">Response ETA:</span> <span className="font-black text-teal-600">{zoneDetails.avgResponseTime} min</span></p>
                       </div>
                     </div>
                   </Popup>
