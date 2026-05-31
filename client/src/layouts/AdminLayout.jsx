@@ -77,6 +77,7 @@ const AdminLayout = () => {
     { name: 'Transactions', path: '/admin/transactions', icon: <FiActivity className="w-5 h-5" /> },
     { name: 'Commission Settings', path: '/admin/commission', icon: <FiDollarSign className="w-5 h-5" /> },
     { name: 'Coupons', path: '/admin/coupons', icon: <FiTag className="w-5 h-5" /> },
+    { name: 'Surge Surcharges', path: '/admin/surge', icon: <FiAlertCircle className="w-5 h-5" /> },
     { name: 'Test', path: '/admin/add-questions', icon: <FiHelpCircle className="w-5 h-5" /> },
     { name: 'Add Services', path: '/admin/add-services', icon: <FiLayers className="w-5 h-5" /> },
     { name: 'Complaint', path: '/admin/complaints', icon: <FiAlertCircle className="w-5 h-5" /> },

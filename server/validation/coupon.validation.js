@@ -35,7 +35,8 @@ const createCouponSchema = z.object({
     if (!val) return null;
     const num = Number(val);
     return isNaN(num) ? null : num;
-  }).optional().nullable()
+  }).optional().nullable(),
+  applicableZones: z.array(z.string()).optional()
 });
 
 const updateCouponSchema = z.object({
@@ -74,7 +75,8 @@ const updateCouponSchema = z.object({
   isActive: z.union([z.boolean(), z.string()]).transform((val) => {
     if (typeof val === 'string') return val === 'true';
     return !!val;
-  }).optional()
+  }).optional(),
+  applicableZones: z.array(z.string()).optional()
 });
 
 const applyCouponSchema = z.object({

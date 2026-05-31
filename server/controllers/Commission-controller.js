@@ -11,15 +11,42 @@ const Admin = require('../models/Admin-model');
 // Get all commission rules (for admin)
 exports.listCommissionRules = async (req, res) => {
   try {
-    const { page = 1, limit = 10, isActive, applyTo } = req.query;
+    const { page = 1, limit = 10, isActive, applyTo, priorityTier, performanceScore, zoneIds } = req.query;
     const query = {};
 
-    if (isActive !== undefined) {
+    if (isActive !== undefined && isActive !== '') {
       query.isActive = isActive === 'true';
     }
 
     if (applyTo) {
       query.applyTo = applyTo;
+    }
+
+    // Priority Tier Filter
+    if (priorityTier) {
+      if (priorityTier === 'global') {
+        query.zoneId = null;
+      } else if (priorityTier === 'zone') {
+        query.zoneId = { $ne: null };
+      } else if (priorityTier === 'performance') {
+        query.applyTo = 'performanceScore';
+      } else if (priorityTier === 'provider') {
+        query.applyTo = 'specificProvider';
+      }
+    }
+
+    // Performance Score Filter
+    if (performanceScore) {
+      query.performanceScore = performanceScore;
+      query.applyTo = 'performanceScore';
+    }
+
+    // Zone IDs Filter
+    if (zoneIds) {
+      const ids = Array.isArray(zoneIds) ? zoneIds : zoneIds.split(',').filter(Boolean);
+      if (ids.length > 0) {
+        query.zoneId = { $in: ids };
+      }
     }
 
     const rules = await CommissionRule.find(query)

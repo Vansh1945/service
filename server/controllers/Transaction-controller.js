@@ -195,7 +195,7 @@ const createOrder = async (req, res) => {
 
     if (commission === 0 && providerEarning === 0) {
       try {
-        const rule = await CommissionRule.getCommissionForProvider(booking.provider || null);
+        const rule = await CommissionRule.getCommissionForProvider(booking.provider || null, booking.zoneId);
 
         if (rule) {
           const { commission: calculatedComm, netAmount } = CommissionRule.calculateCommission(booking.totalAmount, rule);

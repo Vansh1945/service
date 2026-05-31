@@ -15,6 +15,7 @@ const Complaint = require('../models/Complaint-model');
 const User = require('../models/User-model');
 const Admin = require('../models/Admin-model');
 const { latLngToS2CellId } = require('../utils/s2Helper');
+const Zone = require('../models/Zone-model');
 
 // Helper to get synchronized payout status
 const getPayoutStatus = (earning, booking) => {
@@ -572,6 +573,15 @@ exports.completeProfile = async (req, res) => {
             };
             provider.s2CellId = addrS2CellId;
             provider.s2CellIdPrecise = addrS2CellIdPrecise;
+            // Auto-detect zone from provider address coordinates
+            try {
+                const detectedZone = await Zone.findZoneByCoordinates(addrLat, addrLng);
+                provider.currentZone = detectedZone ? detectedZone._id : null;
+            } catch (zoneErr) {
+                console.error('Zone detection error during provider profile completion:', zoneErr);
+                provider.currentZone = null;
+            }
+            provider.zoneUpdatedAt = new Date();
         }
 
         // Update bank details
@@ -935,6 +945,14 @@ exports.updateProviderProfile = async (req, res) => {
                     };
                     updates.s2CellId = newS2CellId;
                     updates.s2CellIdPrecise = newS2CellIdPrecise;
+        // Resolve zone based on new coordinates
+        if (newLat && newLng) {
+            const zone = await Zone.findZoneByCoordinates(newLat, newLng);
+            if (zone) {
+                updates.currentZone = zone._id;
+                updates.zoneUpdatedAt = new Date();
+            }
+        }
                 }
             }
         }

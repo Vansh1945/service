@@ -88,6 +88,11 @@ const notificationSchema = new mongoose.Schema({
         type: String,
         default: null
     },
+    targetZones: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Zone',
+        default: []
+    }],
     targetProviderCategory: {
         type: String,
         default: null

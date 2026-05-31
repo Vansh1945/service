@@ -45,6 +45,21 @@ const zoneSchema = new mongoose.Schema({
   description: {
     type: String
   },
+  // New hierarchical fields
+  zoneLevel: {
+    type: String,
+    enum: ['state', 'city', 'micro'],
+    default: 'city'
+  },
+  parentZone: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Zone',
+    default: null
+  },
+  adjacentZones: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Zone'
+  }],
   createdBy: {
     type: mongoose.Schema.Types.ObjectId
   }

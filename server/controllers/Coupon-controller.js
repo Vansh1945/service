@@ -6,7 +6,7 @@ const User = require('../models/User-model');
 // Create new coupon
 const createCoupon = async (req, res) => {
   try {
-    const { code, discountType, discountValue, expiryDate, minBookingValue, isGlobal, isFirstBooking, assignedTo, usageLimit } = req.body;
+    const { code, discountType, discountValue, expiryDate, minBookingValue, isGlobal, isFirstBooking, assignedTo, usageLimit, applicableZones } = req.body;
 
     if (isFirstBooking) {
       const existingFirstBookingCoupon = await Coupon.findOne({ isFirstBooking: true, isActive: true });
@@ -37,7 +37,8 @@ const createCoupon = async (req, res) => {
       isGlobal,
       isFirstBooking,
       assignedTo,
-      usageLimit: usageLimit || null
+      usageLimit: usageLimit || null,
+      applicableZones: applicableZones || []
     });
 
     res.status(201).json({
@@ -276,10 +277,23 @@ const hardDeleteCoupon = async (req, res) => {
 // Validate and apply coupon
 const applyCoupon = async (req, res) => {
   try {
-    const { code, bookingValue } = req.body;
+    const { code, bookingValue, bookingData } = req.body;
     const userId = req.user.id;
 
-    const coupon = await Coupon.validateCoupon(userId, code, bookingValue);
+    let bookingZoneId = null;
+    if (bookingData) {
+      if (bookingData.zoneId) {
+        bookingZoneId = bookingData.zoneId;
+      } else if (bookingData.address && typeof bookingData.address.lat === 'number' && typeof bookingData.address.lng === 'number') {
+        const Zone = require('../models/Zone-model');
+        const detectedZone = await Zone.findZoneByCoordinates(bookingData.address.lat, bookingData.address.lng);
+        if (detectedZone) {
+          bookingZoneId = detectedZone._id;
+        }
+      }
+    }
+
+    const coupon = await Coupon.validateCoupon(userId, code, bookingValue, bookingZoneId);
     const discountDetails = coupon.applyCoupon(bookingValue);
 
     res.json({
@@ -293,7 +307,8 @@ const applyCoupon = async (req, res) => {
           formattedDiscount: coupon.formattedDiscount
         },
         discountAmount: discountDetails.discount,
-        finalAmount: discountDetails.finalAmount
+        finalAmount: discountDetails.finalAmount,
+        appliedZoneId: coupon.matchedZoneId || bookingZoneId || null
       }
     });
   } catch (error) {

@@ -6,6 +6,27 @@ const Admin = require('../models/Admin-model');
 const { sendBroadcastNotification, scheduleNotification } = require('../utils/notificationService');
 
 /**
+ * Helper to fetch zone and all its ancestors recursively
+ */
+const getZoneAncestorsAndSelf = async (zoneId) => {
+    if (!zoneId) return [];
+    const zones = [];
+    let currentId = zoneId;
+    for (let i = 0; i < 10; i++) {
+        const zone = await mongoose.model('Zone').findById(currentId).lean();
+        if (!zone) break;
+        zones.push(zone._id.toString());
+        if (zone.parentZone) {
+            currentId = zone.parentZone;
+        } else {
+            break;
+        }
+    }
+    return zones;
+};
+
+
+/**
  * Emit real-time broadcast stats update to all admins via Socket.io
  */
 const emitStatsUpdate = async (broadcastId) => {
@@ -64,14 +85,33 @@ const getNotifications = async (req, res) => {
         const limit = parseInt(req.query.limit) || 20;
         const skip = (page - 1) * limit;
 
+        const query = { userId };
+
+        // Fetch user/provider currentZone
+        let recipient;
+        if (req.role === 'provider') {
+            recipient = await Provider.findById(userId).select('currentZone');
+        } else {
+            recipient = await User.findById(userId).select('currentZone');
+        }
+
+        if (recipient) {
+            const ancestorZoneIds = await getZoneAncestorsAndSelf(recipient.currentZone);
+            query.$or = [
+                { targetZones: { $exists: false } },
+                { targetZones: { $size: 0 } },
+                { targetZones: { $in: ancestorZoneIds } }
+            ];
+        }
+
         const [notifications, total, unreadCount] = await Promise.all([
-            Notification.find({ userId })
+            Notification.find(query)
                 .sort({ createdAt: -1 })
                 .skip(skip)
                 .limit(limit)
                 .lean(),
-            Notification.countDocuments({ userId }),
-            Notification.countDocuments({ userId, isRead: false })
+            Notification.countDocuments(query),
+            Notification.countDocuments({ ...query, isRead: false })
         ]);
 
         return res.status(200).json({
@@ -131,7 +171,25 @@ const markAllRead = async (req, res) => {
     try {
         const userId = req.userID || req.body.userId;
 
-        const unreadNotifications = await Notification.find({ userId, isRead: false });
+        const query = { userId, isRead: false };
+
+        let recipient;
+        if (req.role === 'provider') {
+            recipient = await Provider.findById(userId).select('currentZone');
+        } else {
+            recipient = await User.findById(userId).select('currentZone');
+        }
+
+        if (recipient) {
+            const ancestorZoneIds = await getZoneAncestorsAndSelf(recipient.currentZone);
+            query.$or = [
+                { targetZones: { $exists: false } },
+                { targetZones: { $size: 0 } },
+                { targetZones: { $in: ancestorZoneIds } }
+            ];
+        }
+
+        const unreadNotifications = await Notification.find(query);
         if (unreadNotifications.length > 0) {
             const ids = unreadNotifications.map(n => n._id);
             await Notification.updateMany(
@@ -171,7 +229,26 @@ const markAllRead = async (req, res) => {
 const getUnreadCount = async (req, res) => {
     try {
         const userId = req.userID || req.query.userId;
-        const count = await Notification.countDocuments({ userId, isRead: false });
+        
+        const query = { userId, isRead: false };
+
+        let recipient;
+        if (req.role === 'provider') {
+            recipient = await Provider.findById(userId).select('currentZone');
+        } else {
+            recipient = await User.findById(userId).select('currentZone');
+        }
+
+        if (recipient) {
+            const ancestorZoneIds = await getZoneAncestorsAndSelf(recipient.currentZone);
+            query.$or = [
+                { targetZones: { $exists: false } },
+                { targetZones: { $size: 0 } },
+                { targetZones: { $in: ancestorZoneIds } }
+            ];
+        }
+
+        const count = await Notification.countDocuments(query);
         return res.status(200).json({ success: true, count });
     } catch (error) {
         console.error('getUnreadCount error:', error);
@@ -476,6 +553,7 @@ const sendBroadcast = async (req, res) => {
                 type,
                 scheduledTime: finalScheduledTime,
                 targetCity: finalCity,
+                targetZones: req.body.targetZones || [],
                 targetProviderCategory: finalCategory,
                 minBookings
             });
@@ -499,6 +577,7 @@ const sendBroadcast = async (req, res) => {
             deliveredCount: 0,
             failureCount: 0,
             targetCity: finalCity,
+            targetZones: req.body.targetZones || [],
             targetProviderCategory: finalCategory,
             minBookings,
             status: 'sent',
@@ -508,6 +587,7 @@ const sendBroadcast = async (req, res) => {
         // Immediate Send
         const filters = {
             city: finalCity,
+            targetZones: req.body.targetZones || [],
             category: finalCategory,
             minBookings
         };
@@ -598,6 +678,7 @@ const getAdminNotifications = async (req, res) => {
                     scheduledFor: 1,
                     isScheduled: 1,
                     targetCity: 1,
+                    targetZones: 1,
                     targetProviderCategory: 1,
                     minBookings: 1,
                     isDeletedByAdmin: 1,
@@ -635,6 +716,16 @@ const getAdminNotifications = async (req, res) => {
             }
         ]);
 
+        await Notification.populate(notifications, {
+            path: 'targetZones',
+            populate: {
+                path: 'parentZone',
+                populate: {
+                    path: 'parentZone'
+                }
+            }
+        });
+
         return res.status(200).json({
             success: true,
             data: notifications,
@@ -658,7 +749,7 @@ const getAdminNotifications = async (req, res) => {
 const updateNotification = async (req, res) => {
     try {
         const { id } = req.params;
-        const { title, message, url, scheduledTime } = req.body;
+        const { title, message, url, scheduledTime, targetZones } = req.body;
 
         const notification = await Notification.findById(id);
         if (!notification) {
@@ -668,10 +759,12 @@ const updateNotification = async (req, res) => {
         if (notification.status === 'sent') {
             notification.title = title || notification.title;
             notification.message = message || notification.message;
+            if (targetZones !== undefined) notification.targetZones = targetZones;
         } else if (notification.status === 'pending') {
             notification.title = title || notification.title;
             notification.message = message || notification.message;
             notification.url = url || notification.url;
+            if (targetZones !== undefined) notification.targetZones = targetZones;
             if (scheduledTime) {
                 notification.scheduledFor = new Date(scheduledTime);
             }
@@ -761,6 +854,7 @@ const resendNotification = async (req, res) => {
             successCount: 0,
             deliveredCount: 0,
             failureCount: 0,
+            targetZones: notification.targetZones || [],
             status: 'sent',
             sentAt: new Date()
         });
@@ -770,7 +864,9 @@ const resendNotification = async (req, res) => {
             body: notification.message,
             url: notification.url,
             data: { type: notification.type, url: notification.url }
-        }, {}, newParent._id);
+        }, {
+            targetZones: notification.targetZones || []
+        }, newParent._id);
 
         newParent.totalSent = result.total || 0;
         newParent.successCount = result.sent || 0;

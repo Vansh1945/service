@@ -886,6 +886,15 @@ const ProviderBooking = () => {
             <span className="text-xs text-gray-400 bg-gray-50 px-2 py-1 rounded-lg font-mono">
               #{booking.bookingId || booking._id.slice(-8)}
             </span>
+            {booking.zoneRelation && (
+              <span className={`inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wide px-2 py-1 rounded-lg ${
+                booking.zoneRelation === 'Same Zone Booking'
+                  ? 'bg-teal-50 text-teal-750 border border-teal-200'
+                  : 'bg-blue-50 text-blue-750 border border-blue-200'
+              }`}>
+                📍 {booking.zoneRelation}
+              </span>
+            )}
             <button
               onClick={() => navigator.clipboard.writeText(booking.bookingId || booking._id)}
               className="p-1 text-gray-300 hover:text-secondary transition-colors"

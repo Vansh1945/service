@@ -374,7 +374,7 @@ const getBrandingSettings = async (req, res) => {
 
     let config = await SystemConfig.findOne();
     if (!config) {
-      config = new SystemConfig({ companyName: 'SafeVolt Solutions' });
+      config = new SystemConfig({ companyName: 'Raj Electrical Services' });
       await config.save();
     }
 
@@ -432,7 +432,7 @@ const updateBrandingSettings = async (req, res) => {
 
     let config = await SystemConfig.findOne();
     if (!config) {
-      config = new SystemConfig({ companyName: 'SafeVolt Solutions' });
+      config = new SystemConfig({ companyName: 'Raj Electrical Services' });
     }
 
     const brandingKey = `${role}Branding`;
@@ -483,7 +483,7 @@ const publishBrandingUpdate = async (req, res) => {
 
     let config = await SystemConfig.findOne();
     if (!config) {
-      config = new SystemConfig({ companyName: 'SafeVolt Solutions' });
+      config = new SystemConfig({ companyName: 'Raj Electrical Services' });
     }
 
     const {

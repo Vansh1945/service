@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const zoneController = require("../controllers/zone.controller");
+const zoneController = require("../controllers/Zone-controller");
 
 router.post("/create", zoneController.createZone);
 router.get("/all", zoneController.getAllZones);

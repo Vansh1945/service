@@ -77,7 +77,11 @@ const couponSchema = new Schema({
     type: Schema.Types.ObjectId,
     ref: 'Admin',
     required: true
-  }
+  },
+  applicableZones: [{
+    type: Schema.Types.ObjectId,
+    ref: 'Zone'
+  }]
 }, {
   timestamps: true,
   toJSON: { virtuals: true },
@@ -146,7 +150,7 @@ couponSchema.statics.listAllCoupons = async function (adminId, filters = {}) {
 };
 
 // -------------------- User Methods --------------------
-couponSchema.statics.validateCoupon = async function (userId, couponCode, serviceAmount) {
+couponSchema.statics.validateCoupon = async function (userId, couponCode, serviceAmount, bookingZoneId = null) {
   const coupon = await this.findOne({ code: couponCode.toUpperCase() });
 
   if (!coupon) throw new Error('Coupon not found');
@@ -162,6 +166,35 @@ couponSchema.statics.validateCoupon = async function (userId, couponCode, servic
   // Check if user has already used this coupon
   const alreadyUsed = coupon.usedBy.some(usage => usage.user && usage.user.toString() === userId.toString());
   if (alreadyUsed) throw new Error('You have already used this coupon');
+
+  // STEP 3, 4 & 5: Hierarchical Zone Applicability Validation
+  if (!coupon.isGlobal) {
+    if (!bookingZoneId || !coupon.applicableZones || coupon.applicableZones.length === 0) {
+      throw new Error('This coupon is not applicable in your service area');
+    }
+
+    let currentZoneId = bookingZoneId;
+    let matched = false;
+    let matchedZoneId = null;
+
+    const Zone = mongoose.model('Zone');
+    while (currentZoneId) {
+      if (coupon.applicableZones.some(az => az.toString() === currentZoneId.toString())) {
+        matched = true;
+        matchedZoneId = currentZoneId;
+        break;
+      }
+      const currentZone = await Zone.findById(currentZoneId).select('parentZone');
+      currentZoneId = currentZone ? currentZone.parentZone : null;
+    }
+
+    if (!matched) {
+      throw new Error('This coupon is not applicable in your service area');
+    }
+
+    // Temporarily attach the matched zone ID for controllers/booking use
+    coupon.matchedZoneId = matchedZoneId;
+  }
 
   return coupon;
 };

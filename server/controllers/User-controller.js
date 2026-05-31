@@ -13,6 +13,7 @@ const { uploadProfilePic } = require('../middlewares/upload');
 const path = require('path');
 const fs = require('fs');
 const { latLngToS2CellId } = require('../utils/s2Helper');
+const Zone = require('../models/Zone-model');
 
 /**
  * Register a new user
@@ -249,6 +250,17 @@ const register = async (req, res) => {
           type: 'Point',
           coordinates: [userData.address.lng, userData.address.lat]
         };
+
+        // Auto-detect zone from address coordinates during registration
+        try {
+          const detectedZone = await Zone.findZoneByCoordinates(userData.address.lat, userData.address.lng);
+          userData.currentZone = detectedZone ? detectedZone._id : null;
+          userData.zoneUpdatedAt = new Date();
+        } catch (zoneErr) {
+          console.error('Zone detection error during registration:', zoneErr);
+          userData.currentZone = null;
+          userData.zoneUpdatedAt = new Date();
+        }
       }
     }
 
@@ -441,6 +453,15 @@ const updateProfile = async (req, res) => {
       const address = req.body.address;
       const latVal = typeof address.lat === 'number' ? address.lat : (address.lat ? parseFloat(address.lat) : 0);
       const lngVal = typeof address.lng === 'number' ? address.lng : (address.lng ? parseFloat(address.lng) : 0);
+      // Resolve zone based on coordinates using existing Zone model helper
+      let zone = null;
+      if (latVal && lngVal && !isNaN(latVal) && !isNaN(lngVal)) {
+        try {
+          zone = await Zone.findZoneByCoordinates(latVal, lngVal);
+        } catch (err) {
+          console.error('Zone resolution error:', err);
+        }
+      }
 
       // Compute S2 Cell IDs explicitly (findByIdAndUpdate bypasses pre-save hooks)
       const s2CellId = (latVal && lngVal && !isNaN(latVal) && !isNaN(lngVal)) ? latLngToS2CellId(latVal, lngVal, 13) : (address.s2CellId || null);
@@ -465,17 +486,10 @@ const updateProfile = async (req, res) => {
         addressLine: address.addressLine ? address.addressLine.trim() : undefined
       };
 
-      if (typeof latVal === 'number' && typeof lngVal === 'number' && !isNaN(latVal) && !isNaN(lngVal)) {
-        updates.currentLocation = {
-          type: 'Point',
-          coordinates: [lngVal, latVal],
-          s2CellId,
-          s2CellIdPrecise,
-          lastUpdated: new Date()
-        };
-      }
+      // Always update zone fields — set to detected zone or null if not found
+      updates.currentZone = zone ? zone._id : null;
+      updates.zoneUpdatedAt = new Date();
     }
-
     const user = await User.findByIdAndUpdate(
       req.user._id,
       updates,

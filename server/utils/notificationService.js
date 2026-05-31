@@ -196,17 +196,53 @@ const isInQuietHours = (pref) => {
     }
 };
 
+/**
+ * Helper to fetch zone and all its descendant zones recursively up to 2 levels
+ */
+const getZoneAndDescendants = async (targetZoneIds) => {
+    if (!targetZoneIds || targetZoneIds.length === 0) return [];
+    
+    const mongoose = require('mongoose');
+    const Zone = mongoose.model('Zone');
+    
+    let matchedZoneIds = new Set(targetZoneIds.map(id => id.toString()));
+    
+    // Level 1: Find children of targetZoneIds
+    const level1Children = await Zone.find({
+        parentZone: { $in: Array.from(matchedZoneIds) }
+    }, '_id').lean();
+    
+    const level1Ids = level1Children.map(c => c._id.toString());
+    level1Ids.forEach(id => matchedZoneIds.add(id));
+    
+    if (level1Ids.length > 0) {
+        // Level 2: Find children of level 1 children
+        const level2Children = await Zone.find({
+            parentZone: { $in: level1Ids }
+        }, '_id').lean();
+        level2Children.map(c => c._id.toString()).forEach(id => matchedZoneIds.add(id));
+    }
+    
+    return Array.from(matchedZoneIds).map(id => new mongoose.Types.ObjectId(id));
+};
+
+
 const sendBroadcastNotification = async (audience, payload, filters = {}, broadcastId = null) => {
     try {
         let allTokens = [];
         let notificationsToSave = [];
-        const { city, category, minBookings = 0 } = filters;
+        const { city, targetZones = [], category, minBookings = 0 } = filters;
 
         let users = [];
         if (audience === 'all' || audience === 'customer') {
             const userQuery = { role: 'customer' };
             if (city) userQuery['address.city'] = new RegExp(city, 'i');
             if (minBookings > 0) userQuery.totalBookings = { $gte: minBookings };
+
+            if (targetZones && targetZones.length > 0) {
+                const eligibleZoneIds = await getZoneAndDescendants(targetZones);
+                userQuery.currentZone = { $in: eligibleZoneIds };
+            }
 
             users = await User.find(userQuery, '_id fcmDevices notificationPreferences');
             users.forEach(u => {
@@ -226,6 +262,7 @@ const sendBroadcastNotification = async (audience, payload, filters = {}, broadc
                     isRead: false,
                     isScheduled: payload.isScheduled || false,
                     broadcast_id: broadcastId,
+                    targetZones: targetZones,
                     sentAt: new Date()
                 });
 
@@ -256,6 +293,11 @@ const sendBroadcastNotification = async (audience, payload, filters = {}, broadc
             if (category) providerQuery.services = category; // category ID
             if (minBookings > 0) providerQuery.completedBookings = { $gte: minBookings };
 
+            if (targetZones && targetZones.length > 0) {
+                const eligibleZoneIds = await getZoneAndDescendants(targetZones);
+                providerQuery.currentZone = { $in: eligibleZoneIds };
+            }
+
             providers = await Provider.find(providerQuery, '_id fcmDevices notificationPreferences');
             providers.forEach(p => {
                 // Filter out providers who disabled promotional/broadcast notifications
@@ -274,6 +316,7 @@ const sendBroadcastNotification = async (audience, payload, filters = {}, broadc
                     isRead: false,
                     isScheduled: payload.isScheduled || false,
                     broadcast_id: broadcastId,
+                    targetZones: targetZones,
                     sentAt: new Date()
                 });
 
@@ -411,6 +454,7 @@ const scheduleNotification = async (payload) => {
             scheduledFor: new Date(scheduledTime),
             isScheduled: true,
             targetCity: payload.targetCity || null,
+            targetZones: payload.targetZones || [],
             targetProviderCategory: payload.targetProviderCategory || null,
             minBookings: payload.minBookings || 0,
             status: 'pending',
@@ -461,6 +505,7 @@ cron.schedule('* * * * *', async () => {
                         data: { type: notif.type, url: notif.url, route: notif.url, role: notif.audience === 'all' ? null : notif.audience, notificationId: notif._id }
                     }, {
                         city: notif.targetCity,
+                        targetZones: notif.targetZones || [],
                         category: notif.targetProviderCategory,
                         minBookings: notif.minBookings
                     }, notif._id);

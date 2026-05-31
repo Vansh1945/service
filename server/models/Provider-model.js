@@ -60,37 +60,37 @@ const providerSchema = new mongoose.Schema({
     },
     // Refresh token sessions (max 5)
     refreshTokens: [{
-        tokenHash:  { type: String, required: true },
-        deviceId:   { type: String },
-        fingerprint:{ type: String },
-        ipHash:     { type: String },
-        userAgent:  { type: String },
-        createdAt:  { type: Date, default: Date.now },
-        expiresAt:  { type: Date, required: true },
-        isValid:    { type: Boolean, default: true }
+        tokenHash: { type: String, required: true },
+        deviceId: { type: String },
+        fingerprint: { type: String },
+        ipHash: { type: String },
+        userAgent: { type: String },
+        createdAt: { type: Date, default: Date.now },
+        expiresAt: { type: Date, required: true },
+        isValid: { type: Boolean, default: true }
     }],
     // Known devices
     deviceIds: [{
-        deviceId:    { type: String },
+        deviceId: { type: String },
         fingerprint: { type: String },
-        platform:    { type: String },
-        userAgent:   { type: String },
-        firstSeen:   { type: Date, default: Date.now },
-        lastSeen:    { type: Date, default: Date.now },
-        isTrusted:   { type: Boolean, default: true }
+        platform: { type: String },
+        userAgent: { type: String },
+        firstSeen: { type: Date, default: Date.now },
+        lastSeen: { type: Date, default: Date.now },
+        isTrusted: { type: Boolean, default: true }
     }],
     // Login history (last 20)
     loginHistory: [{
-        timestamp:     { type: Date, default: Date.now },
-        ip:            { type: String },
-        userAgent:     { type: String },
-        deviceId:      { type: String },
-        method:        { type: String, enum: ['email', 'google', 'phone', 'refresh'] },
-        success:       { type: Boolean, default: true },
-        suspiciousFlag:{ type: Boolean, default: false }
+        timestamp: { type: Date, default: Date.now },
+        ip: { type: String },
+        userAgent: { type: String },
+        deviceId: { type: String },
+        method: { type: String, enum: ['email', 'google', 'phone', 'refresh'] },
+        success: { type: Boolean, default: true },
+        suspiciousFlag: { type: Boolean, default: false }
     }],
-    lastLoginIp:     { type: String },
-    lastLoginAt:     { type: Date },
+    lastLoginIp: { type: String },
+    lastLoginAt: { type: Date },
     suspiciousScore: { type: Number, default: 0 },
 
     dateOfBirth: {
@@ -158,7 +158,7 @@ const providerSchema = new mongoose.Schema({
         },
         coordinates: {
             type: [Number],
-            default: [0,0]
+            default: [0, 0]
         },
         s2CellId: { type: String, index: true, default: null },
         s2CellIdPrecise: { type: String, index: true, default: null },
@@ -166,6 +166,15 @@ const providerSchema = new mongoose.Schema({
             type: Date,
             default: Date.now
         }
+    },
+    // Zone tracking fields
+    currentZone: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Zone', default: null
+    },
+    zoneUpdatedAt: {
+        type: Date,
+        default: null
     },
 
     s2CellId: {
@@ -363,6 +372,7 @@ providerSchema.index({ isActive: 1, approved: 1 });
 providerSchema.index({ 'performanceScore.rating': -1 });
 providerSchema.index({ location: '2dsphere' });
 providerSchema.index({ currentLocation: '2dsphere' });
+providerSchema.index({ currentZone: 1 });
 providerSchema.index({ createdAt: -1 });
 
 providerSchema.pre('save', async function (next) {
@@ -451,10 +461,10 @@ providerSchema.methods.generateRefreshToken = function (deviceInfo = {}) {
 
     this.refreshTokens.push({
         tokenHash,
-        deviceId:    deviceInfo.deviceId || '',
+        deviceId: deviceInfo.deviceId || '',
         fingerprint: deviceInfo.fingerprint || '',
-        ipHash:      deviceInfo.ipHash || '',
-        userAgent:   deviceInfo.userAgent || '',
+        ipHash: deviceInfo.ipHash || '',
+        userAgent: deviceInfo.userAgent || '',
         expiresAt,
         isValid: true
     });

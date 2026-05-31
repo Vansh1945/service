@@ -264,14 +264,14 @@ const systemConfigSchema = new mongoose.Schema(
       description: { type: String, default: "Join Raj Electrical Service as a certified partner. Accept electrical repair and installation bookings and grow your earnings." }
     },
     adminBranding: {
-      appName: { type: String, default: "SafeVolt Admin" },
+      appName: { type: String, default: "Raj Electrical Services Admin" },
       shortName: { type: String, default: "Admin" },
       logo: { type: String, default: "" },
       icon: { type: String, default: "" },
       splashScreen: { type: String, default: "" },
       favicon: { type: String, default: "" },
-      browserTitle: { type: String, default: "SafeVolt Control Panel" },
-      description: { type: String, default: "SafeVolt Control Panel" }
+      browserTitle: { type: String, default: "Raj Electrical Services Control Panel" },
+      description: { type: String, default: "Raj Electrical Services Control Panel" }
     },
     appVersions: {
       customer: { type: Number, default: 1 },

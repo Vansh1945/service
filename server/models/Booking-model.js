@@ -96,6 +96,16 @@ const bookingSchema = new Schema({
     type: Schema.Types.ObjectId,
     ref: 'Provider',
   },
+  zoneId: {
+    type: Schema.Types.ObjectId,
+    ref: 'Zone',
+    default: null
+  },
+  assignmentSource: {
+    type: String,
+    enum: ['Same Zone', 'Adjacent Zone', 'Parent City', 'Parent State', 'Distance-based Fallback', null],
+    default: null
+  },
   services: [serviceItemSchema],
   date: {
     type: Date,
@@ -239,7 +249,8 @@ const bookingSchema = new Schema({
     code: { type: String, trim: true },
     discountType: { type: String, trim: true },
     discountValue: { type: Number, min: [0, 'Discount cannot be negative'] },
-    maxDiscount: { type: Number, min: [0, 'Max discount cannot be negative'], default: null }
+    maxDiscount: { type: Number, min: [0, 'Max discount cannot be negative'], default: null },
+    appliedZone: { type: Schema.Types.ObjectId, ref: 'Zone', default: null }
   },
   // Optional customer notes for the booking
   notes: {
@@ -442,9 +453,18 @@ bookingSchema.pre('save', async function (next) {
       if (this.address && typeof this.address.lat === 'number' && typeof this.address.lng === 'number') {
         this.address.s2CellId = latLngToS2CellId(this.address.lat, this.address.lng, 13);
         this.address.s2CellIdPrecise = latLngToS2CellId(this.address.lat, this.address.lng, 20);
+
+        // Populate booking.zoneId if not present (only for new bookings)
+        if (this.isNew && !this.zoneId) {
+          const Zone = mongoose.model('Zone');
+          const detectedZone = await Zone.findZoneByCoordinates(this.address.lat, this.address.lng);
+          if (detectedZone) {
+            this.zoneId = detectedZone._id;
+          }
+        }
       }
     } catch (s2Err) {
-      console.error('Error computing address S2 cells in pre-save:', s2Err);
+      console.error('Error computing address S2 cells and resolving zone in pre-save:', s2Err);
     }
   }
 
@@ -495,11 +515,11 @@ bookingSchema.pre('save', async function (next) {
     });
   }
 
-  // Commission calculation
-  if (this.provider && (this.isModified('transaction') || this.isModified('provider') || this.isNew || this.isModified('totalAmount'))) {
+  // Commission calculation (only for new bookings to preserve existing commissions on edits/updates)
+  if (this.isNew && this.provider && (this.isModified('transaction') || this.isModified('provider') || this.isNew || this.isModified('totalAmount'))) {
     try {
       const CommissionRule = mongoose.model('CommissionRule');
-      const commissionRule = await CommissionRule.getCommissionForProvider(this.provider);
+      const commissionRule = await CommissionRule.getCommissionForProvider(this.provider, this.zoneId);
 
       if (commissionRule) {
         const { commission, netAmount } = CommissionRule.calculateCommission(this.totalAmount, commissionRule);
@@ -556,12 +576,12 @@ bookingSchema.index({ createdAt: -1 });
 // Unique partial compound index to prevent duplicate booking creation race conditions
 bookingSchema.index(
   { customer: 1, date: 1, time: 1, totalAmount: 1 },
-  { 
+  {
     unique: true,
-    partialFilterExpression: { 
-      status: { $nin: ['cancelled'] }, 
-      paymentStatus: { $in: ['pending', 'processing'] } 
-    } 
+    partialFilterExpression: {
+      status: { $nin: ['cancelled'] },
+      paymentStatus: { $in: ['pending', 'processing'] }
+    }
   }
 );
 

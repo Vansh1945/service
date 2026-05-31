@@ -172,7 +172,8 @@ const systemSettingRoutes = require('./routes/SystemSetting-routes');
 const contactRoutes = require('./routes/Contact-routes');
 const notificationRoutes = require('./routes/notification-routes');
 const chatRoutes = require('./routes/Chat-route');
-const zoneRoutes = require('./routes/zone.routes');
+const zoneRoutes = require('./routes/Zone-routes');
+const surgeRoutes = require('./routes/Surge-routes');
 
 // Maintenance Mode Middleware
 app.use(async (req, res, next) => {
@@ -273,6 +274,7 @@ app.use('/api/contact', contactRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/zones', zoneRoutes);
+app.use('/api/surge', surgeRoutes);
 
 // Health check endpoint
 
@@ -318,17 +320,17 @@ const startServer = async () => {
   try {
     await connectDB();
 
-    // Auto-migrate branding from SafeVolt to Raj Electrical Service for instant Google SEO!
+    // Auto-migrate branding from Raj Electrical Services to Raj Electrical Service for instant Google SEO!
     try {
       const { SystemConfig } = require('./models/SystemSetting');
       const existingConfig = await SystemConfig.findOne();
       if (existingConfig) {
         let modified = false;
-        if (existingConfig.companyName === 'Default Company' || existingConfig.companyName === 'SafeVolt Solutions') {
+        if (existingConfig.companyName === 'Default Company' || existingConfig.companyName === 'Raj Electrical Services') {
           existingConfig.companyName = 'Raj Electrical Service';
           modified = true;
         }
-        if (existingConfig.customerBranding?.appName === 'SafeVolt Customer' || !existingConfig.customerBranding?.appName) {
+        if (existingConfig.customerBranding?.appName === 'Raj Electrical Services Customer' || !existingConfig.customerBranding?.appName) {
           existingConfig.customerBranding = {
             appName: 'Raj Electrical Service',
             shortName: 'Raj Service',
@@ -340,7 +342,7 @@ const startServer = async () => {
           };
           modified = true;
         }
-        if (existingConfig.providerBranding?.appName === 'SafeVolt Provider' || !existingConfig.providerBranding?.appName) {
+        if (existingConfig.providerBranding?.appName === 'Raj Electrical Services Provider' || !existingConfig.providerBranding?.appName) {
           existingConfig.providerBranding = {
             appName: 'Raj Provider',
             shortName: 'Raj Partner',
@@ -356,7 +358,7 @@ const startServer = async () => {
           existingConfig.markModified('customerBranding');
           existingConfig.markModified('providerBranding');
           await existingConfig.save();
-          console.log('[SEO Migration] Successfully migrated database branding defaults from SafeVolt to Raj Electrical Service!');
+          console.log('[SEO Migration] Successfully migrated database branding defaults from Raj Electrical Services to Raj Electrical Service!');
         }
       }
     } catch (migError) {

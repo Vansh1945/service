@@ -108,7 +108,7 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
       const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=15&countrycode=in&lat=${position[0]}&lon=${position[1]}&location_bias_scale=0.6`);
       const data = await res.json();
       let results = data?.features || [];
-      
+
       // Filter India strictly to prevent any noise
       results = results.filter(feat => {
         const props = feat.properties || {};
@@ -122,7 +122,7 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
         try {
           const nomSearchRes = await fetch(
             `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&countrycodes=in&limit=10&accept-language=en`,
-            { headers: { "User-Agent": "SafeVoltServiceBooking/1.0 (service-booking-app)" } }
+            { headers: { "User-Agent": "RajServiceBooking/1.0 (service-booking-app)" } }
           );
           const nomSearchJson = await nomSearchRes.json();
           if (Array.isArray(nomSearchJson) && nomSearchJson.length > 0) {
@@ -140,7 +140,7 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
                 district: item.address.suburb || item.address.neighbourhood || ""
               }
             }));
-            
+
             // Deduplicate against existing results
             const existingKeys = new Set(results.map(r => {
               const namePart = (r.properties.name || '').toLowerCase();
@@ -174,13 +174,13 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
     const coords = result.geometry.coordinates; // [lng, lat]
     const lat = coords[1];
     const lng = coords[0];
-    
+
     const pProps = result.properties || {};
-    
+
     // Extract any 6-digit pincode explicitly typed by the user in the search query
     const pincodeMatch = searchQuery.match(/\b\d{6}\b/);
     const queryPincode = pincodeMatch ? pincodeMatch[0] : null;
-    
+
     const postcode = queryPincode || pProps.postcode || "";
     const cityVal = pProps.city || "";
     const streetVal = pProps.street || "";
@@ -192,18 +192,18 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
       road: streetVal,
       city: cityVal
     };
-    
+
     // Populate editable states immediately to avoid UI flicker
     setRoad(streetVal);
     setArea(areaVal);
     setCity(cityVal);
     setPincode(postcode);
-    
+
     // Set position and trigger a high-precision geocode immediately for the exact coordinates
     shouldSkipGeocodeRef.current = true; // Tell position useEffect to skip redundant geocoding
     setPosition([lat, lng]);
     fetchAddressFromCoords(lat, lng);
-    
+
     setShowDropdown(false);
     setSearchQuery('');
   };
@@ -265,16 +265,16 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
     setLoading(true);
     try {
       const data = await reverseGeocode(lat, lng);
-      
+
       // Merge with search result context if available to preserve user query's pincode and sub-locality
       if (searchContextRef.current) {
         const ctx = searchContextRef.current;
-        
+
         // Preserve search suggestion values, only fallback to geocoded ones if suggestion had them empty
         const finalRoadValue = ctx.road || data.road || '';
         const finalAreaValue = ctx.area || data.area || data.locality || '';
         const finalCityValue = ctx.city || data.city || '';
-        
+
         // Resolve pincode with specific fallback
         let finalPincodeValue = ctx.pincode || data.pincode || data.postalCode || '';
         if (finalPincodeValue.endsWith("001") && ctx.pincode && ctx.pincode !== "") {
@@ -295,7 +295,7 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
         setArea(finalAreaValue);
         setCity(finalCityValue);
         setPincode(finalPincodeValue);
-        
+
         // Reset context
         searchContextRef.current = null;
       } else {
@@ -375,13 +375,13 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
 
   const displayText = structuredAddress
     ? buildAddressPreview({
-        ...structuredAddress,
-        houseNumber: houseNo,
-        road: road,
-        area: area,
-        city: city,
-        pincode: pincode
-      }) || structuredAddress.formattedAddress
+      ...structuredAddress,
+      houseNumber: houseNo,
+      road: road,
+      area: area,
+      city: city,
+      pincode: pincode
+    }) || structuredAddress.formattedAddress
     : '';
 
   return createPortal(
@@ -439,7 +439,7 @@ const LocationPickerModal = ({ isOpen, onClose, onLocationSelect }) => {
                 const city = props.city || '';
                 const state = props.state || '';
                 const postcode = props.postcode || '';
-                
+
                 // Construct a beautiful split address format
                 const mainTitle = name || street || city;
                 const subTitle = [

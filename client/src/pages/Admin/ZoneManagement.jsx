@@ -10,7 +10,7 @@ import 'leaflet/dist/leaflet.css';
 import {
   MapPin, Users, Zap, Clock, Trash2, Edit, Check, X,
   Plus, RefreshCw, AlertTriangle, Search, Filter, Layers,
-  Compass, Eye, ShieldCheck, Activity, Award
+  Compass, Eye, ShieldCheck, Activity, Award, ChevronDown, ChevronUp
 } from 'lucide-react';
 
 // Fix default Leaflet markers in Vite
@@ -138,8 +138,17 @@ const ZoneManagement = () => {
     priority: 'medium',
     status: 'active',
     maxProviders: 20,
-    serviceRadius: 5
+    serviceRadius: 5,
+    zoneLevel: 'city',
+    parentZone: '',
+    adjacentZones: []
   });
+
+  // Sidebar, Tree and Analytics States
+  const [sidebarTab, setSidebarTab] = useState('list'); // 'list' or 'tree'
+  const [expandedNodes, setExpandedNodes] = useState({});
+  const [filterLevel, setFilterLevel] = useState('');
+  const [analyticsModal, setAnalyticsModal] = useState({ open: false, zone: null, loading: false });
 
   // Modal and Map States
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
@@ -171,7 +180,10 @@ const ZoneManagement = () => {
             serviceRadius: z.serviceRadius,
             coordinates: coords,
             createdAt: z.createdAt,
-            updatedAt: z.updatedAt
+            updatedAt: z.updatedAt,
+            zoneLevel: z.zoneLevel || 'city',
+            parentZone: z.parentZone,
+            adjacentZones: z.adjacentZones || []
           };
         });
         setZones(dbZones.length > 0 ? dbZones : defaultZones);
@@ -346,7 +358,10 @@ const ZoneManagement = () => {
       priority: 'medium',
       status: 'active',
       maxProviders: 20,
-      serviceRadius: 5
+      serviceRadius: 5,
+      zoneLevel: 'city',
+      parentZone: '',
+      adjacentZones: []
     });
     if (showToast) showToast('Map drawing mode activated. Click map to draw boundary.', 'info');
   };
@@ -357,6 +372,95 @@ const ZoneManagement = () => {
     setDrawPoints([]);
     setShowForm(false);
     setEditingZoneId(null);
+  };
+
+  const handleAdjacentZoneToggleCascade = (zone) => {
+    const currentSelected = formData.adjacentZones || [];
+    const zoneId = (zone._id || zone.id).toString();
+    let newZones = [...currentSelected];
+
+    if (currentSelected.includes(zoneId)) {
+      // DESELECT logic
+      newZones = newZones.filter(id => id.toString() !== zoneId);
+      
+      if (zone.zoneLevel === 'state') {
+        const childCities = zones.filter(z => z.zoneLevel === 'city' && (z.parentZone?._id || z.parentZone || '').toString() === zoneId);
+        const cityIds = childCities.map(c => (c._id || c.id).toString());
+        newZones = newZones.filter(id => !cityIds.includes(id));
+
+        const childMicros = zones.filter(z => z.zoneLevel === 'micro' && cityIds.includes((z.parentZone?._id || z.parentZone || '').toString()));
+        const microIds = childMicros.map(m => (m._id || m.id).toString());
+        newZones = newZones.filter(id => !microIds.includes(id));
+      } else if (zone.zoneLevel === 'city') {
+        const childMicros = zones.filter(z => z.zoneLevel === 'micro' && (z.parentZone?._id || z.parentZone || '').toString() === zoneId);
+        const microIds = childMicros.map(m => (m._id || m.id).toString());
+        newZones = newZones.filter(id => !microIds.includes(id));
+
+        const parentStateId = (zone.parentZone?._id || zone.parentZone || '').toString();
+        if (parentStateId) {
+          newZones = newZones.filter(id => id.toString() !== parentStateId);
+        }
+      } else if (zone.zoneLevel === 'micro') {
+        const parentCityId = (zone.parentZone?._id || zone.parentZone || '').toString();
+        if (parentCityId) {
+          newZones = newZones.filter(id => id.toString() !== parentCityId);
+          const parentCity = zones.find(z => (z._id || z.id).toString() === parentCityId);
+          const parentStateId = parentCity ? (parentCity.parentZone?._id || parentCity.parentZone || '').toString() : '';
+          if (parentStateId) {
+            newZones = newZones.filter(id => id.toString() !== parentStateId);
+          }
+        }
+      }
+    } else {
+      // SELECT logic
+      newZones.push(zoneId);
+
+      if (zone.zoneLevel === 'state') {
+        const childCities = zones.filter(z => z.zoneLevel === 'city' && (z.parentZone?._id || z.parentZone || '').toString() === zoneId);
+        const cityIds = childCities.map(c => (c._id || c.id).toString());
+
+        const childMicros = zones.filter(z => z.zoneLevel === 'micro' && cityIds.includes((z.parentZone?._id || z.parentZone || '').toString()));
+        const microIds = childMicros.map(m => (m._id || m.id).toString());
+
+        newZones = Array.from(new Set([...newZones, ...cityIds, ...microIds]));
+      } else if (zone.zoneLevel === 'city') {
+        const childMicros = zones.filter(z => z.zoneLevel === 'micro' && (z.parentZone?._id || z.parentZone || '').toString() === zoneId);
+        const microIds = childMicros.map(m => (m._id || m.id).toString());
+        newZones = Array.from(new Set([...newZones, ...microIds]));
+
+        const parentStateId = (zone.parentZone?._id || zone.parentZone || '').toString();
+        if (parentStateId) {
+          const siblingCities = zones.filter(z => z.zoneLevel === 'city' && (z.parentZone?._id || z.parentZone || '').toString() === parentStateId);
+          const allSiblingCityIds = siblingCities.map(c => (c._id || c.id).toString());
+          const areAllSelected = allSiblingCityIds.every(id => newZones.includes(id));
+          if (areAllSelected) {
+            newZones.push(parentStateId);
+          }
+        }
+      } else if (zone.zoneLevel === 'micro') {
+        const parentCityId = (zone.parentZone?._id || zone.parentZone || '').toString();
+        if (parentCityId) {
+          const siblingMicros = zones.filter(z => z.zoneLevel === 'micro' && (z.parentZone?._id || z.parentZone || '').toString() === parentCityId);
+          const allSiblingMicroIds = siblingMicros.map(m => (m._id || m.id).toString());
+          const areAllSelected = allSiblingMicroIds.every(id => newZones.includes(id));
+          if (areAllSelected) {
+            newZones.push(parentCityId);
+            
+            const parentCity = zones.find(z => (z._id || z.id).toString() === parentCityId);
+            const parentStateId = parentCity ? (parentCity.parentZone?._id || parentCity.parentZone || '').toString() : '';
+            if (parentStateId) {
+              const siblingCities = zones.filter(z => z.zoneLevel === 'city' && (z.parentZone?._id || z.parentZone || '').toString() === parentStateId);
+              const allSiblingCityIds = siblingCities.map(c => (c._id || c.id).toString());
+              const areAllSelected = allSiblingCityIds.every(id => newZones.includes(id));
+              if (areAllSelected) {
+                newZones.push(parentStateId);
+              }
+            }
+          }
+        }
+      }
+    }
+    setFormData(prev => ({ ...prev, adjacentZones: newZones }));
   };
 
   // Clear current drawing vertices
@@ -441,7 +545,10 @@ const ZoneManagement = () => {
       status: formData.status,
       priority: formData.priority,
       maxProviders: Number(formData.maxProviders),
-      serviceRadius: Number(formData.serviceRadius)
+      serviceRadius: Number(formData.serviceRadius),
+      zoneLevel: formData.zoneLevel,
+      parentZone: formData.zoneLevel !== 'state' && formData.parentZone ? formData.parentZone : null,
+      adjacentZones: formData.adjacentZones || []
     };
 
     setLoading(true);
@@ -476,7 +583,10 @@ const ZoneManagement = () => {
       priority: zone.priority,
       status: zone.status,
       maxProviders: zone.maxProviders,
-      serviceRadius: zone.serviceRadius
+      serviceRadius: zone.serviceRadius,
+      zoneLevel: zone.zoneLevel || 'city',
+      parentZone: zone.parentZone?._id || zone.parentZone || '',
+      adjacentZones: zone.adjacentZones ? zone.adjacentZones.map(z => z._id || z) : []
     });
     setDrawPoints(zone.coordinates);
     setIsDrawing(true);
@@ -525,6 +635,71 @@ const ZoneManagement = () => {
     setMapZoom(13);
   };
 
+  const parentOptions = useMemo(() => {
+    if (formData.zoneLevel === 'state') return [];
+    if (formData.zoneLevel === 'city') {
+      return zones.filter(z => z.zoneLevel === 'state' && z.id !== editingZoneId);
+    }
+    if (formData.zoneLevel === 'micro') {
+      return zones.filter(z => z.zoneLevel === 'city' && z.id !== editingZoneId);
+    }
+    return [];
+  }, [zones, formData.zoneLevel, editingZoneId]);
+
+  const zoneTree = useMemo(() => {
+    const states = zones.filter(z => z.zoneLevel === 'state');
+    const cities = zones.filter(z => z.zoneLevel === 'city');
+    const micros = zones.filter(z => z.zoneLevel === 'micro');
+    
+    return states.map(state => {
+      const stateCities = cities.filter(c => {
+        const pId = c.parentZone?._id || c.parentZone;
+        return pId === state.id;
+      });
+      
+      const cityNodes = stateCities.map(city => {
+        const cityMicros = micros.filter(m => {
+          const pId = m.parentZone?._id || m.parentZone;
+          return pId === city.id;
+        });
+        
+        return {
+          ...city,
+          children: cityMicros
+        };
+      });
+      
+      return {
+        ...state,
+        children: cityNodes
+      };
+    });
+  }, [zones]);
+
+  const toggleNode = (nodeId) => {
+    setExpandedNodes(prev => ({
+      ...prev,
+      [nodeId]: !prev[nodeId]
+    }));
+  };
+
+  const handleOpenAnalytics = async (zoneId) => {
+    try {
+      setAnalyticsModal({ open: true, zone: null, loading: true });
+      const res = await ZoneService.getZoneById(zoneId);
+      if (res.data?.success) {
+        setAnalyticsModal({ open: true, zone: res.data.data, loading: false });
+      } else {
+        setAnalyticsModal({ open: false, zone: null, loading: false });
+        if (showToast) showToast('Failed to fetch zone details', 'error');
+      }
+    } catch (err) {
+      console.error('Error fetching zone details:', err);
+      setAnalyticsModal({ open: false, zone: null, loading: false });
+      if (showToast) showToast('Failed to fetch zone details', 'error');
+    }
+  };
+
   // Search and Filters Logic
   const filteredZones = useMemo(() => {
     return zones.filter(zone => {
@@ -532,9 +707,10 @@ const ZoneManagement = () => {
       const matchCity = filterCity === '' || zone.city.toLowerCase() === filterCity.toLowerCase();
       const matchStatus = filterStatus === '' || zone.status === filterStatus;
       const matchPriority = filterPriority === '' || zone.priority === filterPriority;
-      return matchSearch && matchCity && matchStatus && matchPriority;
+      const matchLevel = filterLevel === '' || zone.zoneLevel === filterLevel;
+      return matchSearch && matchCity && matchStatus && matchPriority && matchLevel;
     });
-  }, [zones, searchQuery, filterCity, filterStatus, filterPriority]);
+  }, [zones, searchQuery, filterCity, filterStatus, filterPriority, filterLevel]);
 
   // Analytics Computation
   const stats = useMemo(() => {
@@ -710,6 +886,18 @@ const ZoneManagement = () => {
 
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase text-gray-500 tracking-wider block">Zone Level</label>
+                    <select
+                      value={formData.zoneLevel}
+                      onChange={(e) => setFormData(prev => ({ ...prev, zoneLevel: e.target.value, parentZone: '' }))}
+                      className="w-full px-2 py-1.5 bg-white border border-gray-250 text-gray-900 rounded-lg text-[11px] outline-none font-semibold cursor-pointer"
+                    >
+                      <option value="state">🌍 State</option>
+                      <option value="city">🏙️ City</option>
+                      <option value="micro">📍 Micro Zone</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
                     <label className="text-[9px] font-black uppercase text-gray-500 tracking-wider block">City</label>
                     <input
                       type="text"
@@ -719,8 +907,37 @@ const ZoneManagement = () => {
                       className="w-full px-2 py-1.5 bg-white border border-gray-250 text-gray-900 rounded-lg text-[11px] outline-none font-semibold"
                       required
                     />
-                    <p className="text-[7.5px] text-gray-400 font-medium">City this zone belongs to.</p>
                   </div>
+                </div>
+
+                {/* Parent Zone Dropdown */}
+                {formData.zoneLevel !== 'state' && (
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase text-gray-500 tracking-wider block">Parent Zone *</label>
+                    <select
+                      value={formData.parentZone}
+                      onChange={(e) => setFormData(prev => ({ ...prev, parentZone: e.target.value }))}
+                      className="w-full px-2.5 py-1.5 bg-white border border-gray-250 text-gray-900 rounded-lg text-[11px] outline-none font-semibold cursor-pointer"
+                      required
+                    >
+                      <option value="">Select Parent Zone</option>
+                      {parentOptions.map(p => (
+                        <option key={p.id} value={p.id}>{p.name} ({p.city})</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {/* Adjacent Zones Multi-Select */}
+                <div className="space-y-1">
+                  <HierarchicalZoneSelector
+                    zones={zones.filter(z => z.id !== editingZoneId)}
+                    selectedZoneIds={formData.adjacentZones}
+                    onChange={handleAdjacentZoneToggleCascade}
+                    label="Adjacent Zones (Optional)"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
                     <label className="text-[9px] font-black uppercase text-gray-500 tracking-wider block">Priority Level</label>
                     <select
@@ -732,7 +949,17 @@ const ZoneManagement = () => {
                       <option value="medium">🟡 Medium</option>
                       <option value="high">🔴 High</option>
                     </select>
-                    <p className="text-[7.5px] text-gray-400 font-medium">High = faster dispatch, surge pricing applies.</p>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase text-gray-500 tracking-wider block">Max Providers</label>
+                    <input
+                      type="number"
+                      placeholder="e.g. 20"
+                      value={formData.maxProviders}
+                      onChange={(e) => setFormData(prev => ({ ...prev, maxProviders: e.target.value }))}
+                      className="w-full px-2 py-1.5 bg-white border border-gray-250 rounded-lg text-[11px] text-gray-900 placeholder-gray-400 font-semibold"
+                      min="0"
+                    />
                   </div>
                 </div>
 
@@ -747,61 +974,45 @@ const ZoneManagement = () => {
                       <option value="active">✅ Active</option>
                       <option value="inactive">⏸️ Inactive</option>
                     </select>
-                    <p className="text-[7.5px] text-gray-400 font-medium">Active = zone is live and enforcing dispatch rules.</p>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[9px] font-black uppercase text-gray-500 tracking-wider block">Max Providers</label>
+                    <label className="text-[9px] font-black uppercase text-gray-500 tracking-wider block">Service Radius (KM)</label>
                     <input
                       type="number"
-                      placeholder="e.g. 20"
-                      value={formData.maxProviders}
-                      onChange={(e) => setFormData(prev => ({ ...prev, maxProviders: e.target.value }))}
+                      placeholder="e.g. 5"
+                      value={formData.serviceRadius}
+                      onChange={(e) => setFormData(prev => ({ ...prev, serviceRadius: e.target.value }))}
                       className="w-full px-2 py-1.5 bg-white border border-gray-250 rounded-lg text-[11px] text-gray-900 placeholder-gray-400 font-semibold"
-                      min="0"
+                      min="1"
                     />
-                    <p className="text-[7.5px] text-gray-400 font-medium">Maximum providers allowed to operate in this zone.</p>
                   </div>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-[9px] font-black uppercase text-gray-500 tracking-wider block">Service Radius (KM)</label>
-                  <input
-                    type="number"
-                    placeholder="e.g. 5"
-                    value={formData.serviceRadius}
-                    onChange={(e) => setFormData(prev => ({ ...prev, serviceRadius: e.target.value }))}
-                    className="w-full px-2 py-1.5 bg-white border border-gray-250 rounded-lg text-[11px] text-gray-900 placeholder-gray-400 font-semibold"
-                    min="1"
-                  />
-                  <p className="text-[7.5px] text-gray-400 font-medium">Max distance (km) within which providers are matched to customers. Also used as fallback radius for auto-generated boundaries.</p>
-                </div>
-
-                <div className="bg-amber-50 rounded-lg p-2.5 border border-amber-500/20 text-[8.5px] text-amber-800 font-medium leading-relaxed space-y-1">
+                <div className="bg-amber-50 rounded-lg p-2.5 border border-amber-500/20 text-[8.5px] text-amber-800 font-medium leading-relaxed space-y-1 text-left">
                   <p className="font-black text-amber-950 text-[9px]">🗺️ How to create a zone boundary:</p>
-                  <p><strong>Option A:</strong> Enter a Pincode or Area name above → click Generate. The boundary will be auto-drawn.</p>
-                  <p><strong>Option B:</strong> Switch to Map tab → click on the map to place vertices one by one. Min 3 points needed.</p>
-                  <p><strong>Editing:</strong> Drag any vertex to reposition. Click a vertex to delete it.</p>
-                  <p className="text-amber-600 font-bold">When done → fill all fields above → click "Save Boundary".</p>
+                  <p><strong>Option A:</strong> Enter a Pincode/Area name → click Generate. The boundary will be auto-drawn.</p>
+                  <p><strong>Option B:</strong> Switch to Map tab → click to place vertices. Min 3 points needed.</p>
+                  <p className="text-amber-600 font-bold">When done → fill details → click "Save Boundary".</p>
                 </div>
 
                 <div className="flex gap-2 pt-1.5">
                   <button
                     type="submit"
-                    className="flex-1 w-full py-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-lg transition-all font-black text-center shadow-md cursor-pointer"
+                    className="flex-1 w-full py-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-lg transition-all font-black text-center shadow-md cursor-pointer text-xs"
                   >
                     Save Boundary
                   </button>
                   <button
                     type="button"
                     onClick={handleClearDrawing}
-                    className="flex-1 py-2 bg-white border border-gray-200 hover:bg-gray-50 active:scale-95 text-gray-700 rounded-lg transition-all font-black text-center shadow-sm cursor-pointer"
+                    className="flex-1 py-2 bg-white border border-gray-200 hover:bg-gray-50 active:scale-95 text-gray-700 rounded-lg transition-all font-black text-center shadow-sm cursor-pointer text-xs"
                   >
                     Clear Map
                   </button>
                   <button
                     type="button"
                     onClick={handleCancelForm}
-                    className="flex-1 py-2 bg-white border border-gray-200 hover:bg-gray-50 active:scale-95 text-gray-700 rounded-lg transition-all font-black text-center shadow-sm cursor-pointer"
+                    className="flex-1 py-2 bg-white border border-gray-200 hover:bg-gray-50 active:scale-95 text-gray-700 rounded-lg transition-all font-black text-center shadow-sm cursor-pointer text-xs"
                   >
                     Cancel
                   </button>
@@ -811,7 +1022,25 @@ const ZoneManagement = () => {
 
             {/* Search and Filters Layout */}
             {!showForm && (
-              <div className="space-y-2 animate-fade-in">
+              <div className="space-y-2.5 animate-fade-in">
+                {/* Sidebar View Toggle */}
+                <div className="flex bg-gray-100 p-1 rounded-xl text-[9px] font-black uppercase tracking-wider border border-gray-200 shadow-inner">
+                  <button
+                    type="button"
+                    onClick={() => setSidebarTab('list')}
+                    className={`flex-1 py-1.5 text-center rounded-lg transition-all ${sidebarTab === 'list' ? 'bg-white text-gray-900 shadow-sm font-black' : 'text-gray-500 hover:text-gray-950 font-bold'}`}
+                  >
+                    List View ({filteredZones.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSidebarTab('tree')}
+                    className={`flex-1 py-1.5 text-center rounded-lg transition-all ${sidebarTab === 'tree' ? 'bg-white text-gray-900 shadow-sm font-black' : 'text-gray-500 hover:text-gray-950 font-bold'}`}
+                  >
+                    Hierarchy Tree
+                  </button>
+                </div>
+
                 <div className="relative">
                   <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
@@ -819,14 +1048,14 @@ const ZoneManagement = () => {
                     placeholder="Search zones..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-8 pr-4 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-[10px] outline-none focus:ring-1 focus:ring-primary text-gray-900 font-sans"
+                    className="w-full pl-8 pr-4 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-[10px] outline-none focus:ring-1 focus:ring-primary text-gray-900 font-sans font-semibold"
                   />
                 </div>
-                <div className="grid grid-cols-3 gap-1.5 text-[9px]">
+                <div className="grid grid-cols-2 gap-1.5 text-[8.5px] font-bold">
                   <select
                     value={filterCity}
                     onChange={(e) => setFilterCity(e.target.value)}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-lg p-1 text-gray-600"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-lg p-1 text-gray-600 outline-none cursor-pointer"
                   >
                     <option value="">All Cities</option>
                     {Array.from(new Set(zones.map(z => z.city).filter(Boolean))).sort().map(city => (
@@ -836,7 +1065,7 @@ const ZoneManagement = () => {
                   <select
                     value={filterStatus}
                     onChange={(e) => setFilterStatus(e.target.value)}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-lg p-1 text-gray-600"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-lg p-1 text-gray-600 outline-none cursor-pointer"
                   >
                     <option value="">All Statuses</option>
                     <option value="active">Active</option>
@@ -845,12 +1074,22 @@ const ZoneManagement = () => {
                   <select
                     value={filterPriority}
                     onChange={(e) => setFilterPriority(e.target.value)}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-lg p-1 text-gray-600"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-lg p-1 text-gray-600 outline-none cursor-pointer"
                   >
                     <option value="">All Priorities</option>
                     <option value="high">High</option>
                     <option value="medium">Medium</option>
                     <option value="low">Low</option>
+                  </select>
+                  <select
+                    value={filterLevel}
+                    onChange={(e) => setFilterLevel(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-lg p-1 text-gray-600 outline-none cursor-pointer"
+                  >
+                    <option value="">All Levels</option>
+                    <option value="state">State</option>
+                    <option value="city">City</option>
+                    <option value="micro">Micro</option>
                   </select>
                 </div>
               </div>
@@ -859,19 +1098,90 @@ const ZoneManagement = () => {
 
           {/* Scrollable list card representation */}
           <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-white">
-            {filteredZones.length > 0 ? (
+            {showForm ? null : sidebarTab === 'tree' ? (
+              /* Tree View Mode */
+              zoneTree.length === 0 ? (
+                <div className="py-12 text-center text-gray-400 text-xs italic font-semibold font-sans">
+                  No zones configured to build a tree.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {zoneTree.map(stateNode => (
+                    <div key={stateNode.id} className="border border-gray-150 rounded-xl p-2 bg-gray-50/50 mb-2 text-left animate-slide-up">
+                      {/* State Node Header */}
+                      <div className="flex items-center justify-between p-2 bg-white rounded-lg border border-gray-200 shadow-sm text-[11px] font-black uppercase tracking-wider text-gray-800">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className={`w-2 h-2 rounded-full ${stateNode.status === 'active' ? 'bg-emerald-500' : 'bg-gray-400'}`}></span>
+                          <span className="truncate">{stateNode.name}</span>
+                          <span className="text-[7.5px] bg-primary/10 text-primary px-1.5 py-0.2 rounded font-black tracking-wider uppercase">State</span>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button onClick={() => handleFocusZone(stateNode.coordinates)} className="p-0.5 hover:bg-gray-150 text-gray-600 rounded" title="View on Map"><Eye className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => handleEditZone(stateNode)} className="p-0.5 hover:bg-gray-150 text-primary rounded" title="Edit"><Edit className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => handleOpenAnalytics(stateNode.id)} className="p-0.5 hover:bg-gray-150 text-indigo-500 rounded" title="View Analytics"><Activity className="w-3.5 h-3.5" /></button>
+                        </div>
+                      </div>
+                      
+                      {/* Render Children (Cities) */}
+                      {stateNode.children && stateNode.children.length > 0 && (
+                        <div className="mt-1 space-y-1">
+                          {stateNode.children.map(cityNode => (
+                            <div key={cityNode.id} className="pl-4 ml-2 border-l border-gray-200">
+                              <div className="flex items-center justify-between p-2 bg-white rounded-lg border border-gray-200 shadow-sm text-[11px] font-black uppercase tracking-wider text-gray-800">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <span className={`w-1.5 h-1.5 rounded-full ${cityNode.status === 'active' ? 'bg-emerald-500' : 'bg-gray-400'}`}></span>
+                                  <span className="truncate">{cityNode.name}</span>
+                                  <span className="text-[7.5px] bg-teal-500/10 text-teal-600 px-1.5 py-0.2 rounded font-black tracking-wider uppercase">City</span>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button onClick={() => handleFocusZone(cityNode.coordinates)} className="p-0.5 hover:bg-gray-150 text-gray-600 rounded" title="View on Map"><Eye className="w-3.5 h-3.5" /></button>
+                                  <button onClick={() => handleEditZone(cityNode)} className="p-0.5 hover:bg-gray-150 text-primary rounded" title="Edit"><Edit className="w-3.5 h-3.5" /></button>
+                                  <button onClick={() => handleOpenAnalytics(cityNode.id)} className="p-0.5 hover:bg-gray-150 text-indigo-500 rounded" title="View Analytics"><Activity className="w-3.5 h-3.5" /></button>
+                                </div>
+                              </div>
+                              
+                              {/* Render Children (Micro Zones) */}
+                              {cityNode.children && cityNode.children.length > 0 && (
+                                <div className="mt-1 space-y-1">
+                                  {cityNode.children.map(microNode => (
+                                    <div key={microNode.id} className="pl-4 ml-2 border-l border-gray-200">
+                                      <div className="flex items-center justify-between p-2 bg-white rounded-lg border border-gray-200 shadow-sm text-[11px] font-black uppercase tracking-wider text-gray-800">
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                          <span className={`w-1 h-1 rounded-full ${microNode.status === 'active' ? 'bg-emerald-500' : 'bg-gray-400'}`}></span>
+                                          <span className="truncate">{microNode.name}</span>
+                                          <span className="text-[7.5px] bg-purple-500/10 text-purple-600 px-1.5 py-0.2 rounded font-black tracking-wider uppercase">Micro</span>
+                                        </div>
+                                        <div className="flex items-center gap-1 shrink-0">
+                                          <button onClick={() => handleFocusZone(microNode.coordinates)} className="p-0.5 hover:bg-gray-150 text-gray-600 rounded" title="View on Map"><Eye className="w-3.5 h-3.5" /></button>
+                                          <button onClick={() => handleEditZone(microNode)} className="p-0.5 hover:bg-gray-150 text-primary rounded" title="Edit"><Edit className="w-3.5 h-3.5" /></button>
+                                          <button onClick={() => handleOpenAnalytics(microNode.id)} className="p-0.5 hover:bg-gray-150 text-indigo-500 rounded" title="View Analytics"><Activity className="w-3.5 h-3.5" /></button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : filteredZones.length > 0 ? (
               filteredZones.map(zone => {
                 const zoneStats = getZoneStats(zone.coordinates);
                 return (
                   <div
                     key={zone.id}
-                    className="p-3 bg-white border border-gray-150 rounded-xl space-y-2.5 hover:border-gray-300 hover:shadow-md shadow-sm transition-all flex flex-col relative group select-text"
+                    className="p-3 bg-white border border-gray-150 rounded-xl space-y-2.5 hover:border-gray-300 hover:shadow-md shadow-sm transition-all flex flex-col relative group select-text text-left animate-slide-up"
                   >
                     {/* Header row */}
                     <div className="flex justify-between items-start">
                       <div className="flex items-center space-x-1.5 min-w-0 flex-1">
                         <span className={`w-1.5 h-3.5 rounded-full shrink-0 ${zone.status === 'active' ? 'bg-emerald-500' : 'bg-gray-400'}`}></span>
-                        <h4 className="text-[11px] font-black text-gray-900 uppercase tracking-wider truncate cursor-text" title={zone.name}>{zone.name}</h4>
+                        <h4 className="text-[11px] font-black text-gray-900 uppercase tracking-wider truncate cursor-text capitalize text-left" title={zone.name}>{zone.name}</h4>
                       </div>
                       <div className="flex items-center space-x-1 shrink-0 ml-2">
                         <button
@@ -902,22 +1212,38 @@ const ZoneManagement = () => {
                       </div>
                     </div>
 
-                    {/* Zone meta info */}
+                    {/* Zone meta info & Hierarchy preview */}
+                    <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-[9px] text-gray-500 font-semibold bg-gray-50 p-1.5 rounded-lg border border-gray-100">
+                      <span className="bg-primary/10 text-primary px-1.5 py-0.5 rounded uppercase font-black tracking-wider text-[7.5px]">{zone.zoneLevel || 'city'}</span>
+                      {zone.parentZone && (
+                        <>
+                          <span className="text-gray-300">➔</span>
+                          <span className="capitalize text-gray-650" title="Parent zone name">Parent: {(zone.parentZone?.name || zone.parentZone)}</span>
+                        </>
+                      )}
+                      {zone.adjacentZones && zone.adjacentZones.length > 0 && (
+                        <>
+                          <span className="text-gray-300">|</span>
+                          <span className="text-gray-650" title="Adjacent zones count">Neighbours: {zone.adjacentZones.length}</span>
+                        </>
+                      )}
+                    </div>
+
                     <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-[9px] text-gray-500 font-semibold">
                       <span className="flex items-center gap-0.5 cursor-text" title="City this zone belongs to"><MapPin className="w-3 h-3 text-primary" /> {zone.city}</span>
                       <span className="text-gray-300">|</span>
                       <span className={`font-black cursor-text ${zone.priority === 'high' ? 'text-red-600' :
                         zone.priority === 'medium' ? 'text-yellow-600' : 'text-emerald-600'
-                        }`} title={`Priority: ${zone.priority} — affects dispatch speed and surge pricing`}>{zone.priority} Priority</span>
+                        }`} title={`Priority: ${zone.priority} — affects dispatch speed`}>{zone.priority} Priority</span>
                       <span className="text-gray-300">|</span>
-                      <span className="cursor-text" title="Max providers limit for this zone">Max: {zone.maxProviders} providers</span>
+                      <span className="cursor-text" title="Max providers limit for this zone">Max: {zone.maxProviders}</span>
                       <span className="text-gray-300">|</span>
                       <span className="cursor-text" title="Service matching radius in kilometers">Radius: {zone.serviceRadius} km</span>
                     </div>
 
                     {/* Stats grid */}
                     <div className="grid grid-cols-3 gap-1.5 text-[9px]">
-                      <div className="bg-blue-50/60 p-1.5 rounded-lg border border-blue-100 flex flex-col justify-center" title="Total active providers inside this zone">
+                      <div className="bg-blue-50/60 p-1.5 rounded-lg border border-blue-100 flex flex-col justify-center animate-pulse-slow" title="Total active providers inside this zone">
                         <span className="text-[7px] text-blue-400 font-bold uppercase">Providers</span>
                         <span className="text-blue-700 font-black text-xs mt-0.5 cursor-text">{zoneStats.providersCount}</span>
                       </div>
@@ -940,7 +1266,13 @@ const ZoneManagement = () => {
                       >
                         <Eye className="w-3.5 h-3.5" /> View on Map
                       </button>
-
+                      <button
+                        onClick={() => handleOpenAnalytics(zone.id)}
+                        className="flex-1 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary text-[8px] font-black rounded-lg transition-all uppercase tracking-widest border border-primary/20 flex items-center justify-center gap-1 shadow-sm"
+                        title="View members and performance metrics for this zone"
+                      >
+                        <Activity className="w-3.5 h-3.5" /> View Analytics
+                      </button>
                     </div>
                   </div>
                 );
@@ -1043,7 +1375,7 @@ const ZoneManagement = () => {
                   pathOptions={zoneStyle}
                 >
                   <Popup minWidth={220}>
-                    <div className="p-2.5 font-sans text-gray-800 bg-white rounded-xl">
+                    <div className="p-2.5 font-sans text-gray-800 bg-white rounded-xl text-left">
                       <div className="flex items-center space-x-1.5 border-b border-gray-150 pb-2 mb-2">
                         <span className={`w-2.5 h-2.5 rounded-full ${zone.status === 'inactive' ? 'bg-gray-400' :
                           zone.priority === 'high' ? 'bg-red-500' :
@@ -1053,6 +1385,7 @@ const ZoneManagement = () => {
                       </div>
                       <div className="space-y-1.5 text-[10px] text-gray-650 uppercase font-sans">
                         <p className="flex justify-between"><span className="text-gray-400 font-semibold">City Hub:</span> <span className="font-black text-gray-800">{zone.city}</span></p>
+                        <p className="flex justify-between"><span className="text-gray-400 font-semibold">Level:</span> <span className="font-black text-gray-800">{zone.zoneLevel || 'city'}</span></p>
                         <p className="flex justify-between"><span className="text-gray-400 font-semibold">Status:</span> <span className={`font-black ${zone.status === 'active' ? 'text-emerald-600' : 'text-gray-500'}`}>{zone.status}</span></p>
                         <p className="flex justify-between"><span className="text-gray-400 font-semibold">Max Providers:</span> <span className="font-black text-gray-800">{zone.maxProviders}</span></p>
                         <p className="flex justify-between"><span className="text-gray-400 font-semibold">Radius Limit:</span> <span className="font-black text-gray-800">{zone.serviceRadius} KM</span></p>
@@ -1077,8 +1410,8 @@ const ZoneManagement = () => {
                 icon={getProviderMarkerIcon(prov.status)}
               >
                 <Popup>
-                  <div className="p-1 font-sans text-xs text-slate-900">
-                    <h4 className="font-black text-slate-900">{prov.name}</h4>
+                  <div className="p-1 font-sans text-xs text-slate-900 text-left">
+                    <h4 className="font-black text-slate-900 capitalize">{prov.name}</h4>
                     <p className="text-[10px] text-slate-500 font-bold mt-0.5 uppercase tracking-wide">{prov.serviceCategory}</p>
                     <p className="text-[10px] text-indigo-500 font-black mt-1 uppercase">Status: {prov.status}</p>
                   </div>
@@ -1133,6 +1466,389 @@ const ZoneManagement = () => {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Analytics Modal Overlay */}
+      {analyticsModal.open && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto p-4 select-text">
+          <div className="bg-white border border-gray-200 p-6 rounded-2xl shadow-2xl max-w-4xl w-full mx-auto my-8 relative flex flex-col max-h-[90vh]">
+            <button
+              onClick={() => setAnalyticsModal({ open: false, zone: null, loading: false })}
+              className="absolute top-4 right-4 p-1.5 rounded-lg text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-all"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {analyticsModal.loading ? (
+              <div className="flex flex-col items-center justify-center py-20 space-y-4">
+                <RefreshCw className="w-8 h-8 text-primary animate-spin" />
+                <p className="text-xs text-gray-500 uppercase tracking-widest font-black">Fetching zone intelligence...</p>
+              </div>
+            ) : analyticsModal.zone ? (
+              <div className="flex flex-col min-h-0 overflow-hidden text-left">
+                {/* Modal Header */}
+                <div className="border-b border-gray-150 pb-4 mb-4">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-lg font-black text-gray-900 uppercase tracking-wider capitalize">
+                      {analyticsModal.zone.name}
+                    </h3>
+                    <span className="bg-primary/10 text-primary px-2 py-0.5 rounded uppercase font-black tracking-wider text-[9px]">
+                      {analyticsModal.zone.zoneLevel}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${
+                      analyticsModal.zone.status === 'active' ? 'bg-emerald-50 border border-emerald-250 text-emerald-700' : 'bg-gray-100 border border-gray-200 text-gray-500'
+                    }`}>
+                      {analyticsModal.zone.status === 'active' ? 'Active' : 'Disabled'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wide mt-1 text-left">
+                    Operational analytics and member list for {analyticsModal.zone.city} hub
+                  </p>
+                </div>
+
+                {/* Scrollable Container */}
+                <div className="flex-1 overflow-y-auto space-y-6 pr-2">
+                  {/* Stats Grid */}
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <div className="bg-white border border-gray-200 p-4 rounded-xl flex flex-col justify-between hover:border-primary/30 shadow-sm">
+                      <div className="flex justify-between items-center text-gray-400">
+                        <span className="text-[9px] font-black uppercase tracking-wider">Total Bookings</span>
+                        <Layers className="w-4 h-4 text-primary" />
+                      </div>
+                      <h4 className="text-xl font-black mt-2 text-gray-900 text-left">
+                        {analyticsModal.zone.analytics?.totalBookings ?? 0}
+                      </h4>
+                      <p className="text-[8px] text-gray-400 mt-1 uppercase tracking-wider text-left">All-time jobs in zone</p>
+                    </div>
+
+                    <div className="bg-white border border-gray-200 p-4 rounded-xl flex flex-col justify-between hover:border-primary/30 shadow-sm">
+                      <div className="flex justify-between items-center text-gray-400">
+                        <span className="text-[9px] font-black uppercase tracking-wider">Active Providers</span>
+                        <Users className="w-4 h-4 text-blue-500" />
+                      </div>
+                      <h4 className="text-xl font-black mt-2 text-gray-900 text-left">
+                        {analyticsModal.zone.analytics?.activeProviders ?? 0}
+                      </h4>
+                      <p className="text-[8px] text-gray-400 mt-1 uppercase tracking-wider text-left">Matched to zone</p>
+                    </div>
+
+                    <div className="bg-white border border-gray-200 p-4 rounded-xl flex flex-col justify-between hover:border-primary/30 shadow-sm">
+                      <div className="flex justify-between items-center text-gray-400">
+                        <span className="text-[9px] font-black uppercase tracking-wider">Active Users</span>
+                        <Users className="w-4 h-4 text-purple-500" />
+                      </div>
+                      <h4 className="text-xl font-black mt-2 text-gray-900 text-left">
+                        {analyticsModal.zone.analytics?.activeUsers ?? 0}
+                      </h4>
+                      <p className="text-[8px] text-gray-400 mt-1 uppercase tracking-wider text-left">Linked accounts</p>
+                    </div>
+
+                    <div className="bg-white border border-gray-200 p-4 rounded-xl flex flex-col justify-between hover:border-primary/30 shadow-sm">
+                      <div className="flex justify-between items-center text-gray-400">
+                        <span className="text-[9px] font-black uppercase tracking-wider">Commission Generated</span>
+                        <Award className="w-4 h-4 text-emerald-500" />
+                      </div>
+                      <h4 className="text-xl font-black mt-2 text-gray-900 text-left">
+                        ₹{(analyticsModal.zone.analytics?.commissionGenerated ?? 0).toLocaleString()}
+                      </h4>
+                      <p className="text-[8px] text-gray-400 mt-1 uppercase tracking-wider text-left">Total commission earned</p>
+                    </div>
+
+                    <div className="bg-white border border-gray-200 p-4 rounded-xl flex flex-col justify-between hover:border-primary/30 shadow-sm">
+                      <div className="flex justify-between items-center text-gray-400">
+                        <span className="text-[9px] font-black uppercase tracking-wider">Coupon Usage</span>
+                        <Zap className="w-4 h-4 text-amber-500" />
+                      </div>
+                      <h4 className="text-xl font-black mt-2 text-gray-900 text-left">
+                        {analyticsModal.zone.analytics?.couponUsage ?? 0}
+                      </h4>
+                      <p className="text-[8px] text-gray-400 mt-1 uppercase tracking-wider text-left">Successful redemptions</p>
+                    </div>
+
+                    <div className="bg-white border border-gray-200 p-4 rounded-xl flex flex-col justify-between hover:border-primary/30 shadow-sm">
+                      <div className="flex justify-between items-center text-gray-400">
+                        <span className="text-[9px] font-black uppercase tracking-wider">Assignment Success</span>
+                        <ShieldCheck className="w-4 h-4 text-teal-500" />
+                      </div>
+                      <h4 className="text-xl font-black mt-2 text-gray-900 text-left">
+                        {analyticsModal.zone.analytics?.assignmentSuccessRate ?? 0}%
+                      </h4>
+                      <p className="text-[8px] text-gray-400 mt-1 uppercase tracking-wider text-left">Workforce dispatch rate</p>
+                    </div>
+                  </div>
+
+                  {/* Split Linked Members Lists */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                    {/* Providers Column */}
+                    <div className="space-y-3 text-left">
+                      <div className="flex justify-between items-center border-b border-gray-150 pb-2">
+                        <h4 className="text-xs font-black uppercase tracking-wider text-gray-800 flex items-center gap-1.5 text-left">
+                          <Users className="w-4 h-4 text-blue-500" /> Linked Providers ({analyticsModal.zone.linkedProviders?.length ?? 0})
+                        </h4>
+                      </div>
+                      <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                        {analyticsModal.zone.linkedProviders && analyticsModal.zone.linkedProviders.length > 0 ? (
+                          analyticsModal.zone.linkedProviders.map(provider => (
+                            <div key={provider._id} className="p-2.5 bg-gray-50 border border-gray-200 rounded-xl flex justify-between items-center gap-2 hover:border-gray-300 transition-all text-left">
+                              <div className="min-w-0 flex-1 text-left">
+                                <h5 className="text-[11px] font-black text-gray-900 truncate capitalize text-left">{provider.name}</h5>
+                                <p className="text-[9px] text-gray-550 truncate text-left">{provider.email}</p>
+                                <p className="text-[9px] text-gray-400 font-semibold text-left">{provider.phone || 'No phone'}</p>
+                              </div>
+                              <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider shrink-0 ${
+                                provider.status === 'available' ? 'bg-emerald-50 border border-emerald-250 text-emerald-700' :
+                                provider.status === 'busy' ? 'bg-amber-50 border border-amber-200 text-amber-700' :
+                                'bg-gray-100 border border-gray-200 text-gray-500'
+                              }`}>
+                                {provider.status}
+                              </span>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-center py-6 text-xs text-gray-400 italic">No providers linked to this zone</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Users Column */}
+                    <div className="space-y-3 text-left">
+                      <div className="flex justify-between items-center border-b border-gray-150 pb-2">
+                        <h4 className="text-xs font-black uppercase tracking-wider text-gray-800 flex items-center gap-1.5 text-left">
+                          <Users className="w-4 h-4 text-purple-500" /> Linked Users ({analyticsModal.zone.linkedUsers?.length ?? 0})
+                        </h4>
+                      </div>
+                      <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                        {analyticsModal.zone.linkedUsers && analyticsModal.zone.linkedUsers.length > 0 ? (
+                          analyticsModal.zone.linkedUsers.map(user => (
+                            <div key={user._id} className="p-2.5 bg-gray-50 border border-gray-200 rounded-xl flex flex-col hover:border-gray-300 transition-all text-left">
+                              <h5 className="text-[11px] font-black text-gray-900 truncate capitalize text-left">{user.name}</h5>
+                              <p className="text-[9px] text-gray-550 truncate text-left">{user.email}</p>
+                              <p className="text-[9px] text-gray-400 font-semibold text-left">{user.phone || 'No phone'}</p>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-center py-6 text-xs text-gray-400 italic">No users linked to this zone</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Modal Footer */}
+                <div className="border-t border-gray-150 pt-4 mt-4 flex justify-end">
+                  <button
+                    onClick={() => setAnalyticsModal({ open: false, zone: null, loading: false })}
+                    className="py-2 px-5 bg-gray-100 border border-gray-205 hover:bg-gray-200 active:scale-95 text-gray-700 text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-sm"
+                  >
+                    Close Analytics
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-20 text-red-500">
+                <AlertTriangle className="w-10 h-10 animate-bounce" />
+                <p className="text-xs font-black uppercase tracking-wider mt-2">Failed to load zone intelligence</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const HierarchicalZoneSelector = ({
+  zones,
+  selectedZoneIds,
+  onChange,
+  label = "Applicable Zones"
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [expandedNodes, setExpandedNodes] = useState({});
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const tree = useMemo(() => {
+    const states = zones.filter(z => z.zoneLevel === 'state' || !z.zoneLevel);
+    const cities = zones.filter(z => z.zoneLevel === 'city');
+    const micros = zones.filter(z => z.zoneLevel === 'micro');
+    
+    return states.map(state => {
+      const stateCities = cities.filter(c => {
+        const pId = c.parentZone?._id || c.parentZone;
+        return pId?.toString() === (state._id || state.id)?.toString();
+      });
+      
+      const cityNodes = stateCities.map(city => {
+        const cityMicros = micros.filter(m => {
+          const pId = m.parentZone?._id || m.parentZone;
+          return pId?.toString() === (city._id || city.id)?.toString();
+        });
+        
+        return { ...city, children: cityMicros };
+      });
+      
+      return { ...state, children: cityNodes };
+    });
+  }, [zones]);
+
+  const filteredTree = useMemo(() => {
+    if (!searchQuery) return tree;
+    const lowerQuery = searchQuery.toLowerCase();
+    
+    const filterNodes = (nodes) => {
+      return nodes.map(node => {
+        const matchesSelf = node.name?.toLowerCase().includes(lowerQuery) || node.city?.toLowerCase().includes(lowerQuery);
+        let filteredChildren = [];
+        if (node.children) {
+          filteredChildren = filterNodes(node.children);
+        }
+        const matchesChildren = filteredChildren.length > 0;
+        
+        if (matchesSelf || matchesChildren) {
+          return {
+            ...node,
+            children: filteredChildren,
+            forceExpanded: true
+          };
+        }
+        return null;
+      }).filter(Boolean);
+    };
+    
+    return filterNodes(tree);
+  }, [tree, searchQuery]);
+
+  const toggleExpand = (id, e) => {
+    e.stopPropagation();
+    setExpandedNodes(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const isSelected = (id) => (selectedZoneIds || []).map(z => z.toString()).includes(id.toString());
+
+  const renderNode = (node, depth = 0) => {
+    const nodeId = node._id || node.id;
+    const hasChildren = node.children && node.children.length > 0;
+    const isExpanded = !!(expandedNodes[nodeId] || node.forceExpanded);
+    const checked = isSelected(nodeId);
+
+    return (
+      <div key={nodeId} className="select-none">
+        <div 
+          className="flex items-center hover:bg-gray-50 py-1.5 px-2 rounded-lg cursor-pointer transition-colors text-left"
+          style={{ paddingLeft: `${depth * 20 + 8}px` }}
+          onClick={() => onChange(node)}
+        >
+          {hasChildren ? (
+            <button
+              type="button"
+              onClick={(e) => toggleExpand(nodeId, e)}
+              className="p-1 hover:bg-gray-200 rounded mr-1 transition-transform duration-200"
+            >
+              {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-gray-500" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-500" />}
+            </button>
+          ) : (
+            <span className="w-6 shrink-0" />
+          )}
+
+          <input
+            type="checkbox"
+            checked={checked}
+            onChange={() => {}}
+            className="h-4 w-4 text-primary border-gray-300 rounded focus:ring-primary mr-2 cursor-pointer"
+          />
+
+          <span className={`text-[11px] font-semibold text-secondary capitalize ${checked ? 'text-primary font-bold' : ''}`}>
+            {node.name}
+          </span>
+          <span className="text-[8px] bg-gray-100 text-gray-500 ml-1.5 px-1.5 py-0.2 rounded font-black uppercase tracking-wider scale-90">
+            {node.zoneLevel || 'state'}
+          </span>
+        </div>
+
+        {hasChildren && isExpanded && (
+          <div className="mt-0.5">
+            {node.children.map(child => renderNode(child, depth + 1))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="relative w-full" ref={dropdownRef}>
+      <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">
+        {label}
+      </label>
+      <div
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full px-3 py-1.5 border border-gray-250 rounded-lg bg-white cursor-pointer flex justify-between items-center text-[11px] shadow-sm hover:border-gray-400 transition-all font-semibold"
+      >
+        <span className="text-gray-700 truncate font-semibold">
+          {(selectedZoneIds || []).length === 0 ? 'Select Zones (None)' : `${(selectedZoneIds || []).length} Zones Selected`}
+        </span>
+        {isOpen ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+      </div>
+
+      {isOpen && (
+        <div className="absolute left-0 right-0 z-[1000] mt-1 bg-white border border-gray-200 rounded-xl shadow-xl p-3 max-h-80 flex flex-col shrink-0">
+          <div className="relative mb-2 shrink-0">
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search by state, city, or micro zone..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 text-[10px] border border-gray-250 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-semibold text-gray-900 bg-gray-50"
+            />
+          </div>
+
+          <div className="overflow-y-auto flex-1 space-y-1 pr-1">
+            {filteredTree.length === 0 ? (
+              <div className="text-[10px] text-gray-400 italic text-center py-6">
+                No matching zones found.
+              </div>
+            ) : (
+              filteredTree.map(node => renderNode(node, 0))
+            )}
+          </div>
+        </div>
+      )}
+
+      {(selectedZoneIds || []).length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-2 max-h-24 overflow-y-auto p-1 bg-gray-50 rounded-lg border border-gray-200 shadow-inner">
+          {(selectedZoneIds || []).map(id => {
+            const zone = zones.find(z => (z._id || z.id)?.toString() === id.toString());
+            if (!zone) return null;
+            
+            let badgeColor = 'bg-teal-50 text-teal-800 border-teal-200';
+            if (zone.zoneLevel === 'city') badgeColor = 'bg-blue-50 text-blue-800 border-blue-200';
+            if (zone.zoneLevel === 'micro') badgeColor = 'bg-purple-50 text-purple-800 border-purple-200';
+
+            return (
+              <span key={id} className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-black border shadow-sm capitalize ${badgeColor}`}>
+                <span>{zone.name} ({zone.zoneLevel?.toUpperCase() || 'STATE'})</span>
+                <button
+                  type="button"
+                  onClick={() => onChange(zone)}
+                  className="ml-1 inline-flex items-center justify-center focus:outline-none text-gray-400 hover:text-gray-650"
+                >
+                  <X className="w-2.5 h-2.5 ml-0.5" />
+                </button>
+              </span>
+            );
+          })}
         </div>
       )}
     </div>

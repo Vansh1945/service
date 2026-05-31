@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Booking = require('../models/Booking-model');
 const Service = require('../models/Service-model');
+const Zone = require('../models/Zone-model');
 const Provider = require('../models/Provider-model');
 const User = require('../models/User-model');
 const CommissionRule = require('../models/CommissionRule-model');
@@ -412,16 +413,7 @@ const autoAssignProviderIfEnabled = async (bookingId) => {
       return cat?._id ? cat._id.toString() : cat?.toString();
     }).filter(Boolean);
 
-    /* BACKUP COMMENT: Original used synchronous S2 calculations, blocking the main Event Loop. Offloading to worker threads now. */
-    const { latLngToS2CellIdAsync, getNeighborsAsync } = require('../utils/s2HelperAsync');
-    let targetCell = booking.address?.s2CellId;
-    if (!targetCell) {
-      targetCell = await latLngToS2CellIdAsync(lat, lng, 13);
-    }
-    const neighborCells = await getNeighborsAsync(targetCell);
-    const searchCells = [targetCell, ...neighborCells];
-
-    const query = {
+    const baseProviderQuery = {
       role: 'provider',
       isActive: true,
       approved: true,
@@ -434,13 +426,94 @@ const autoAssignProviderIfEnabled = async (bookingId) => {
         { blockedTill: { $lte: new Date() } }
       ],
       'performanceScore.restrictionsActive': { $ne: true },
-      services: { $all: bookingServicesCategories },
-      s2CellId: { $in: searchCells }
+      services: { $all: bookingServicesCategories }
     };
 
-    const nearbyProviders = await Provider.find(query);
+  let selectedProvider = null;
+  let selectedSource = null;
 
-    // Sort in memory by distance
+  const ZoneModel = mongoose.model('Zone');
+  let bookingZoneId = booking.zoneId;
+  if (!bookingZoneId) {
+    const detectedZone = await ZoneModel.findZoneByCoordinates(lat, lng);
+    if (detectedZone) {
+      bookingZoneId = detectedZone._id;
+      booking.zoneId = detectedZone._id;
+    }
+  }
+
+  if (bookingZoneId) {
+    // Tier 1: Same Zone Matching
+    const sameZoneProviders = await Provider.find({
+      ...baseProviderQuery,
+      currentZone: bookingZoneId
+    });
+    if (sameZoneProviders.length > 0) {
+      const sorted = sortProviders(sameZoneProviders);
+      if (sorted.length > 0) {
+        selectedProvider = sorted[0].provider;
+        selectedSource = 'Same Zone';
+      }
+    }
+
+    // Tier 2: Adjacent Zone Fallback
+    if (!selectedProvider) {
+      const currentZoneDoc = await ZoneModel.findById(bookingZoneId).lean();
+      if (currentZoneDoc && currentZoneDoc.adjacentZones && currentZoneDoc.adjacentZones.length > 0) {
+        const adjacentProviders = await Provider.find({
+          ...baseProviderQuery,
+          currentZone: { $in: currentZoneDoc.adjacentZones }
+        });
+        if (adjacentProviders.length > 0) {
+          const sorted = sortProviders(adjacentProviders);
+          if (sorted.length > 0) {
+            selectedProvider = sorted[0].provider;
+            selectedSource = 'Adjacent Zone';
+          }
+        }
+      }
+    }
+
+    // Tier 3: Parent Zone Fallback (micro -> city -> state)
+    if (!selectedProvider) {
+      let currentZoneDoc = await ZoneModel.findById(bookingZoneId).lean();
+      while (currentZoneDoc && currentZoneDoc.parentZone && !selectedProvider) {
+        const parentZone = await ZoneModel.findById(currentZoneDoc.parentZone).lean();
+        if (!parentZone) break;
+
+        const parentProviders = await Provider.find({
+          ...baseProviderQuery,
+          currentZone: parentZone._id
+        });
+        if (parentProviders.length > 0) {
+          const sorted = sortProviders(parentProviders);
+          if (sorted.length > 0) {
+            selectedProvider = sorted[0].provider;
+            const levelName = parentZone.zoneLevel || 'Parent';
+            selectedSource = `Parent ${levelName.charAt(0).toUpperCase() + levelName.slice(1)}`;
+          }
+        }
+        currentZoneDoc = parentZone;
+      }
+    }
+  }
+
+  // Tier 4: Failsafe (S2 cell / distance fallback)
+  if (!selectedProvider) {
+    /* BACKUP COMMENT: Original used synchronous S2 calculations, blocking the main Event Loop. Offloading to worker threads now. */
+    const { latLngToS2CellIdAsync, getNeighborsAsync } = require('../utils/s2HelperAsync');
+    let targetCell = booking.address?.s2CellId;
+    if (!targetCell) {
+      targetCell = await latLngToS2CellIdAsync(lat, lng, 13);
+    }
+    const neighborCells = await getNeighborsAsync(targetCell);
+    const searchCells = [targetCell, ...neighborCells];
+
+    const nearbyProviders = await Provider.find({
+      ...baseProviderQuery,
+      s2CellId: { $in: searchCells }
+    });
+
     const providersWithDistance = nearbyProviders.map(p => {
       const pLng = p.currentLocation?.coordinates?.[0];
       const pLat = p.currentLocation?.coordinates?.[1];
@@ -453,109 +526,116 @@ const autoAssignProviderIfEnabled = async (bookingId) => {
 
     providersWithDistance.sort((a, b) => a.distance - b.distance);
 
-    if (providersWithDistance.length === 0) {
-      console.log(`[AutoAssign] No nearby providers found for booking ${booking._id} within ${maxDistanceKm}km (S2 Matchmaking)`);
-      return null;
+    if (providersWithDistance.length > 0) {
+      selectedProvider = providersWithDistance[0].provider;
+      selectedSource = 'Distance-based Fallback';
     }
+  }
 
-    const nearestProvider = providersWithDistance[0].provider;
-
-    // Auto-assign to nearest provider
-    booking.provider = nearestProvider._id;
-    booking.status = 'accepted';
-    booking.updatedAt = new Date();
-
-    booking.statusHistory.push({
-      status: 'accepted',
-      timestamp: new Date(),
-      note: `Booking auto-assigned to nearest provider: ${nearestProvider.name} (Auto-Assign Mode)`,
-      updatedBy: 'system'
-    });
-
-    await booking.save();
-
-    try {
-      await Provider.findByIdAndUpdate(nearestProvider._id, {
-        activeBooking: booking._id,
-        lastUpdated: new Date()
-      });
-    } catch (e) {
-      console.error('Error updating provider activeBooking:', e);
-    }
-
-    // Sync transaction record
-    try {
-      const isOnline = booking.paymentMethod?.toLowerCase() === 'online' || booking.paymentMethod?.toLowerCase() === 'upi';
-      await Transaction.updateMany(
-        { booking: booking._id },
-        {
-          provider: booking.provider,
-          providerId: booking.provider.toString(),
-          commission: isOnline ? (booking.commissionAmount * 100) : (booking.commissionAmount || 0),
-          providerEarning: isOnline ? (booking.providerEarnings * 100) : (booking.providerEarnings || 0),
-          commissionRule: booking.commissionRule,
-          ...((booking.paymentStatus === 'paid' || booking.paymentStatus === 'escrow_hold') && {
-            paymentStatus: isOnline ? 'success' : 'completed'
-          })
-        }
-      );
-    } catch (transError) {
-      console.error('Error syncing transaction on auto-assign:', transError);
-    }
-
-    // Emit live booking socket and notifications
-    try {
-      await sendNotification(
-        booking.customer,
-        'customer',
-        'Provider Auto-Assigned',
-        `Your booking has been auto-assigned to ${nearestProvider.name}. Live tracking started!`,
-        'booking',
-        booking._id
-      );
-
-      await sendNotification(
-        nearestProvider._id,
-        'provider',
-        'New Auto-Assigned Booking',
-        `You have been auto-assigned a new booking at ${booking.address?.street || 'your area'}.`,
-        'booking',
-        booking._id
-      );
-
-      const { getIO } = require('../socket/socketServer');
-      const io = getIO();
-      if (io) {
-        io.to(`booking_${booking._id}`).emit('tracking-started', {
-          bookingId: booking._id,
-          trackingEnabled: true,
-          providerLiveLocation: nearestProvider.currentLocation ? {
-            lat: nearestProvider.currentLocation.coordinates[1],
-            lng: nearestProvider.currentLocation.coordinates[0],
-            updatedAt: new Date()
-          } : null,
-          provider: nearestProvider,
-          status: 'accepted'
-        });
-
-        io.to('admin_live_room').emit('admin-booking-update', {
-          bookingId: booking._id,
-          event: 'auto-assigned',
-          providerId: nearestProvider._id,
-          status: 'accepted'
-        });
-      }
-    } catch (socketErr) {
-      console.error('Error sending auto-assign sockets/notifications:', socketErr);
-    }
-
-    console.log(`[AutoAssign] Booking ${booking._id} successfully assigned to provider ${nearestProvider.name}`);
-    return nearestProvider;
-
-  } catch (error) {
-    console.error('Error in autoAssignProviderIfEnabled:', error);
+  if (!selectedProvider) {
+    console.log(`[AutoAssign] No nearby or zone providers found for booking ${booking._id} within ${maxDistanceKm}km`);
     return null;
   }
+
+  const nearestProvider = selectedProvider;
+
+  // Auto-assign to matched provider
+  booking.provider = nearestProvider._id;
+  booking.assignmentSource = selectedSource;
+  booking.status = 'accepted';
+  booking.updatedAt = new Date();
+
+  booking.statusHistory.push({
+    status: 'accepted',
+    timestamp: new Date(),
+    note: `Booking assigned to nearest provider: ${nearestProvider.name}`,
+    updatedBy: 'system'
+  });
+
+  await booking.save();
+
+  try {
+    await Provider.findByIdAndUpdate(nearestProvider._id, {
+      activeBooking: booking._id,
+      lastUpdated: new Date()
+    });
+  } catch (e) {
+    console.error('Error updating provider activeBooking:', e);
+  }
+
+  // Sync transaction record
+  try {
+    const isOnline = booking.paymentMethod?.toLowerCase() === 'online' || booking.paymentMethod?.toLowerCase() === 'upi';
+    await Transaction.updateMany(
+      { booking: booking._id },
+      {
+        provider: booking.provider,
+        providerId: booking.provider.toString(),
+        commission: isOnline ? (booking.commissionAmount * 100) : (booking.commissionAmount || 0),
+        providerEarning: isOnline ? (booking.providerEarnings * 100) : (booking.providerEarnings || 0),
+        commissionRule: booking.commissionRule,
+        ...((booking.paymentStatus === 'paid' || booking.paymentStatus === 'escrow_hold') && {
+          paymentStatus: isOnline ? 'success' : 'completed'
+        })
+      }
+    );
+  } catch (transError) {
+    console.error('Error syncing transaction on auto-assign:', transError);
+  }
+
+  // Emit live booking socket and notifications
+  try {
+    await sendNotification(
+      booking.customer,
+      'customer',
+      'Provider Assigned',
+      `Your booking has been assigned to ${nearestProvider.name}. Live tracking started!`,
+      'booking',
+      booking._id
+    );
+
+    await sendNotification(
+      nearestProvider._id,
+      'provider',
+      'New Assigned Booking',
+      `You have been assigned a new booking at ${booking.address?.street || 'your area'}.`,
+      'booking',
+      booking._id
+    );
+
+    const { getIO } = require('../socket/socketServer');
+    const io = getIO();
+    if (io) {
+      io.to(`booking_${booking._id}`).emit('tracking-started', {
+        bookingId: booking._id,
+        trackingEnabled: true,
+        providerLiveLocation: nearestProvider.currentLocation ? {
+          lat: nearestProvider.currentLocation.coordinates[1],
+          lng: nearestProvider.currentLocation.coordinates[0],
+          updatedAt: new Date()
+        } : null,
+        provider: nearestProvider,
+        status: 'accepted'
+      });
+
+      io.to('admin_live_room').emit('admin-booking-update', {
+        bookingId: booking._id,
+        event: 'auto-assigned',
+        providerId: nearestProvider._id,
+        status: 'accepted'
+      });
+    }
+  } catch (socketErr) {
+    console.error('Error sending auto-assign sockets/notifications:', socketErr);
+  }
+
+  console.log(`[AutoAssign] Booking ${booking._id} successfully assigned to provider ${nearestProvider.name}`);
+  return nearestProvider;
+
+} catch (error) {
+  console.error('Error in autoAssignProviderIfEnabled:', error);
+  return null;
+}
 };
 
 // Create single service booking
@@ -610,8 +690,8 @@ const createBooking = async (req, res) => {
       }
 
       // Check if service exists
-      const service = session 
-        ? await Service.findById(serviceId).session(session) 
+      const service = session
+        ? await Service.findById(serviceId).session(session)
         : await Service.findById(serviceId);
       if (!service) {
         throw new Error('Service not found');
@@ -625,8 +705,8 @@ const createBooking = async (req, res) => {
 
       // Smart rules: Rebook validation
       if (isRebook && originalBooking) {
-        const oldBooking = session 
-          ? await Booking.findById(originalBooking).session(session) 
+        const oldBooking = session
+          ? await Booking.findById(originalBooking).session(session)
           : await Booking.findById(originalBooking);
         if (!oldBooking) {
           throw new Error('Original booking not found');
@@ -641,8 +721,8 @@ const createBooking = async (req, res) => {
       // Smart rules: Favorite provider validation
       let assignedProviderId = null;
       if (isFavoriteProviderBooking && preferredProviderId) {
-        const providerDoc = session 
-          ? await Provider.findById(preferredProviderId).session(session) 
+        const providerDoc = session
+          ? await Provider.findById(preferredProviderId).session(session)
           : await Provider.findById(preferredProviderId);
         if (!providerDoc) {
           throw new Error('Preferred provider not found');
@@ -666,6 +746,16 @@ const createBooking = async (req, res) => {
         assignedProviderId = providerDoc._id;
       }
 
+      // Resolve booking zone from address coordinates upfront
+      let detectedZoneId = null;
+      if (address && typeof address.lat === 'number' && typeof address.lng === 'number') {
+        const ZoneModel = mongoose.model('Zone');
+        const detectedZone = await ZoneModel.findZoneByCoordinates(address.lat, address.lng);
+        if (detectedZone) {
+          detectedZoneId = detectedZone._id;
+        }
+      }
+
       // Calculate amounts
       let subtotal = service.basePrice * quantity;
       let totalDiscount = 0;
@@ -674,27 +764,7 @@ const createBooking = async (req, res) => {
 
       // Process coupon if provided
       if (couponCode) {
-        coupon = session 
-          ? await Coupon.findOne({ code: couponCode }).session(session) 
-          : await Coupon.findOne({ code: couponCode });
-        if (!coupon) {
-          throw new Error('Invalid coupon code');
-        }
-
-        // Validate coupon correctly (since usedBy is an array of objects)
-        const alreadyUsed = coupon.usedBy.some(usage => usage.user && usage.user.toString() === req.user._id.toString());
-        if (alreadyUsed) {
-          throw new Error('Coupon already used by this user');
-        }
-
-        const now = new Date();
-        if (coupon.expiryDate && new Date(coupon.expiryDate) < now) {
-          throw new Error('Coupon has expired');
-        }
-
-        if (coupon.minBookingValue && subtotal < coupon.minBookingValue) {
-          throw new Error(`Minimum order value of ${coupon.minBookingValue} required for this coupon`);
-        }
+        coupon = await Coupon.validateCoupon(req.user._id, couponCode, subtotal, detectedZoneId);
 
         // Calculate discount
         let discount = 0;
@@ -708,11 +778,84 @@ const createBooking = async (req, res) => {
         couponDetails = {
           code: coupon.code,
           discountType: coupon.discountType,
-          discountValue: coupon.discountValue
+          discountValue: coupon.discountValue,
+          appliedZone: coupon.matchedZoneId || detectedZoneId || null
         };
       }
 
-      const totalAmount = subtotal - totalDiscount;
+      // Resolve Active Surcharges
+      const SurgeModel = mongoose.model('Surge');
+      const allActiveSurges = session
+        ? await SurgeModel.find({ active: true }).session(session)
+        : await SurgeModel.find({ active: true });
+
+      // Resolve ancestry
+      const zoneAncestry = [];
+      if (detectedZoneId) {
+        zoneAncestry.push(detectedZoneId.toString());
+        const ZoneModel = mongoose.model('Zone');
+        let curr = session
+          ? await ZoneModel.findById(detectedZoneId).select('parentZone').session(session)
+          : await ZoneModel.findById(detectedZoneId).select('parentZone');
+        while (curr && curr.parentZone) {
+          zoneAncestry.push(curr.parentZone.toString());
+          curr = session
+            ? await ZoneModel.findById(curr.parentZone).select('parentZone').session(session)
+            : await ZoneModel.findById(curr.parentZone).select('parentZone');
+        }
+      }
+
+      // Check if current time is within HH:MM window helper
+      const isTimeInWindow = (timeStr, start, end) => {
+        if (!start || !end) return true;
+        const parseTime = (t) => {
+          const [h, m] = t.split(':').map(Number);
+          return h * 60 + m;
+        };
+        const current = parseTime(timeStr);
+        const startTime = parseTime(start);
+        const endTime = parseTime(end);
+        if (startTime <= endTime) {
+          return current >= startTime && current <= endTime;
+        } else {
+          return current >= startTime || current <= endTime;
+        }
+      };
+
+      const currentTimeStr = time || new Date().toTimeString().substring(0, 5); // "HH:MM"
+
+      let totalSurcharge = 0;
+      const surchargeBreakdown = [];
+
+      const applicableSurges = allActiveSurges.filter(rule => {
+        if (rule.scope === 'zone') {
+          if (!rule.zoneId || !zoneAncestry.includes(rule.zoneId.toString())) {
+            return false;
+          }
+        }
+        return isTimeInWindow(currentTimeStr, rule.startTime, rule.endTime);
+      });
+
+      applicableSurges.forEach(s => {
+        let chargeAmount = 0;
+        if (s.mode === 'flat') {
+          chargeAmount = s.value;
+        } else if (s.mode === 'percentage') {
+          chargeAmount = (subtotal * s.value) / 100;
+        } else if (s.mode === 'multiplier') {
+          chargeAmount = subtotal * (s.value - 1);
+        }
+        chargeAmount = parseFloat(chargeAmount.toFixed(2));
+        totalSurcharge += chargeAmount;
+        surchargeBreakdown.push({
+          chargeType: s.chargeType,
+          mode: s.mode,
+          value: s.value,
+          amount: chargeAmount
+        });
+      });
+
+      const totalAmount = subtotal - totalDiscount + totalSurcharge;
 
       // CHECK FOR DUPLICATE BOOKING (Idempotency)
       const existingQuery = Booking.findOne({
@@ -767,6 +910,7 @@ const createBooking = async (req, res) => {
         originalBooking: originalBooking || null,
         isFavoriteProviderBooking: !!assignedProviderId,
         provider: assignedProviderId || undefined,
+        zoneId: detectedZoneId || undefined,
         status: paymentMethod === 'cash' ? (assignedProviderId ? 'accepted' : 'pending') : 'pending',
         paymentStatus: paymentMethod === 'cash' ? 'pending' : 'processing',
         confirmedBooking: paymentMethod === 'cash',
@@ -780,7 +924,9 @@ const createBooking = async (req, res) => {
         }],
         metadata: {
           ip: req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress,
-          userAgent: req.headers['user-agent']
+          userAgent: req.headers['user-agent'],
+          totalSurcharge,
+          surchargeBreakdown
         }
       });
 
@@ -2324,6 +2470,29 @@ const userUpdateBookingDateTime = async (req, res) => {
 
 // PROVIDER CONTROLLERS
 
+const getZoneRelation = async (bookingZoneId, providerZoneId) => {
+  if (!bookingZoneId || !providerZoneId) return null;
+  if (bookingZoneId.toString() === providerZoneId.toString()) {
+    return 'Same Zone Booking';
+  }
+  const Zone = mongoose.model('Zone');
+  const bookingZone = await Zone.findById(bookingZoneId).lean();
+  if (bookingZone) {
+    if (bookingZone.adjacentZones && bookingZone.adjacentZones.some(id => id.toString() === providerZoneId.toString())) {
+      return 'Adjacent Zone Booking';
+    }
+    // Check parent hierarchy
+    let currentZone = bookingZone;
+    while (currentZone && currentZone.parentZone) {
+      if (currentZone.parentZone.toString() === providerZoneId.toString()) {
+        return 'Parent Zone Booking';
+      }
+      currentZone = await Zone.findById(currentZone.parentZone).lean();
+    }
+  }
+  return null;
+};
+
 /**
  * @desc    Get a single booking by ID for provider
  * @route   GET /api/providers/bookings/:id
@@ -2342,7 +2511,7 @@ const getProviderBookingById = async (req, res) => {
     }
 
     const provider = await Provider.findById(providerId)
-      .select('services performanceScore')
+      .select('services performanceScore currentZone')
       .lean();
 
     if (!provider) {
@@ -2395,8 +2564,11 @@ const getProviderBookingById = async (req, res) => {
       cleanBooking.statusHistory = sanitizeStatusHistoryForProvider(cleanBooking.statusHistory);
     }
 
+    const zoneRelation = await getZoneRelation(cleanBooking.zoneId, provider.currentZone);
+
     const responseData = {
       ...cleanBooking,
+      zoneRelation,
       commission: {
         rule: commissionRule ? {
           _id: commissionRule._id,
@@ -2463,7 +2635,7 @@ const getBookingsByStatus = async (req, res) => {
     }
 
     const provider = await Provider.findById(providerId)
-      .select('services performanceScore')
+      .select('services performanceScore currentZone')
       .lean();
 
     if (!provider) {
@@ -2516,11 +2688,13 @@ const getBookingsByStatus = async (req, res) => {
       .limit(parseInt(limit))
       .lean();
 
-    const bookingsWithCommission = bookings.map(booking => {
+    const bookingsWithCommission = await Promise.all(bookings.map(async (booking) => {
       const cleanBooking = { ...booking };
       if (cleanBooking.statusHistory) {
         cleanBooking.statusHistory = sanitizeStatusHistoryForProvider(cleanBooking.statusHistory);
       }
+
+      const zoneRelation = await getZoneRelation(cleanBooking.zoneId, provider.currentZone);
 
       const { commission, netAmount } = CommissionRule.calculateCommission(
         cleanBooking.totalAmount,
@@ -2529,6 +2703,7 @@ const getBookingsByStatus = async (req, res) => {
 
       return {
         ...cleanBooking,
+        zoneRelation,
         commission: {
           rule: commissionRule ? {
             _id: commissionRule._id,
@@ -2541,7 +2716,7 @@ const getBookingsByStatus = async (req, res) => {
         netAmount,
         providerCommissionRate: commissionRule ? commissionRule.value : 0
       };
-    });
+    }));
 
     const total = await Booking.countDocuments(query);
 
@@ -2859,15 +3034,15 @@ const startBooking = async (req, res) => {
     const { latLngToS2CellIdAsync, getNeighborsAsync, getLevelAsync } = require('../utils/s2HelperAsync');
     const providerS2Precise = await latLngToS2CellIdAsync(providerLat, providerLng, 20);
     let targetS2Precise = booking.address?.s2CellIdPrecise;
-    
+
     let isTargetValid = false;
     if (targetS2Precise && targetS2Precise.length === 16) {
       try {
         const lvl = await getLevelAsync('0x' + targetS2Precise);
         if (lvl === 20) isTargetValid = true;
-      } catch (e) {}
+      } catch (e) { }
     }
-    
+
     if (!isTargetValid) {
       targetS2Precise = await latLngToS2CellIdAsync(targetLoc.latitude, targetLoc.longitude, 20);
     }
@@ -3308,15 +3483,15 @@ const completeBooking = async (req, res) => {
     const { latLngToS2CellIdAsync, getNeighborsAsync, getLevelAsync } = require('../utils/s2HelperAsync');
     const providerS2Precise = await latLngToS2CellIdAsync(providerLat, providerLng, 20);
     let targetS2Precise = booking.address?.s2CellIdPrecise;
-    
+
     let isTargetValid = false;
     if (targetS2Precise && targetS2Precise.length === 16) {
       try {
         const lvl = await getLevelAsync('0x' + targetS2Precise);
         if (lvl === 20) isTargetValid = true;
-      } catch (e) {}
+      } catch (e) { }
     }
-    
+
     if (!isTargetValid) {
       targetS2Precise = await latLngToS2CellIdAsync(targetLoc.latitude, targetLoc.longitude, 20);
     }
@@ -4033,7 +4208,7 @@ const getAllBookings = async (req, res) => {
           }
         ]
       };
-      
+
       refundStatsPromise = Booking.aggregate([
         { $match: statsMatchForRefunds },
         {
@@ -4155,6 +4330,7 @@ const getBookingDetails = async (req, res) => {
       .populate('feedback')
       .populate('complaint')
       .populate('commissionRule', 'name rate type')
+      .populate('zoneId', 'name city status zoneLevel')
       .lean();
 
     if (!booking) {

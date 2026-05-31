@@ -31,6 +31,7 @@ const SystemLogs = lazy(() => import("../pages/Admin/SystemLogs"));
 const LiveTrackingPage = lazy(() => import("../pages/Admin/LiveTrackingPage"));
 const ZoneManagement = lazy(() => import("../pages/Admin/ZoneManagement"));
 const AdminChatMonitor = lazy(() => import("../pages/Admin/AdminChatMonitor"));
+const SurgeManagement = lazy(() => import("../pages/Admin/SurgeManagement"));
 
 const AdminRoutes = () => {
     return (
@@ -47,6 +48,7 @@ const AdminRoutes = () => {
                         <Route path="bookings" element={<AdminBookingsView />} />
                         <Route path="commission" element={<AdminCommissionPage />} />
                         <Route path="coupons" element={<AdminCoupons />} />
+                        <Route path="surge" element={<SurgeManagement />} />
                         <Route path="add-questions" element={<AdminQuestions />} />
                         <Route path="add-services" element={<AdminServices />} />
                         <Route path="complaints" element={<AdminComplaints />} />

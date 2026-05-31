@@ -80,14 +80,14 @@ export const formatTime = (time) => {
         hour12: timeFormat === "12h",
       });
     }
-    
+
     // If it's a string like "14:30", "14:30:00", or "2:30 PM"
     if (typeof time === "string" && time.includes(":")) {
       const parsedTime = parseClockTime(time);
       if (!parsedTime) return FALLBACK;
       return formatClockTime(parsedTime, timeFormat);
     }
-    
+
     return FALLBACK;
   } catch {
     return FALLBACK;
@@ -182,7 +182,7 @@ export const formatPercentage = (value) => {
 export const getOptimizedCloudinaryUrl = (url, width = 800) => {
   if (!url || typeof url !== 'string') return url;
   if (!url.startsWith('http') || !url.includes('res.cloudinary.com')) return url;
-  
+
   // Clean existing auto/quality/width transformations to avoid duplicate paths
   let cleanUrl = url;
   const uploadRegex = /\/(image\/upload|upload)\/([^/]+)\//;
@@ -251,7 +251,7 @@ export const compressImage = (file, options = {}) => {
           if (!blob) {
             return resolve(file); // Fallback to original
           }
-          
+
           // Re-create the file object with jpeg extension and mime type
           const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpeg", {
             type: "image/jpeg",
@@ -271,7 +271,7 @@ export const compressImage = (file, options = {}) => {
         console.error("Image loading error:", err);
         resolve(file); // Fallback to original
       };
-      
+
       img.src = event.target.result;
     };
 
@@ -387,14 +387,14 @@ export const smartAddressBuilder = (addressObj, displayName = "") => {
   let houseNo = cleanPart(addr.house_number || addr.house || addr.flat || addr.apartment || addr.unit || addr.office);
   let building = cleanPart(addr.building || addr.apartments || addr.amenity);
   let road = cleanPart(addr.road || addr.street || addr.footway || addr.path);
-  
+
   // Locality priority: 1. suburb, 2. neighbourhood, 3. residential, 4. quarter, 5. hamlet
   let locality = cleanPart(addr.suburb) ||
-                 cleanPart(addr.neighbourhood) ||
-                 cleanPart(addr.residential) ||
-                 cleanPart(addr.quarter) ||
-                 cleanPart(addr.hamlet) ||
-                 "";
+    cleanPart(addr.neighbourhood) ||
+    cleanPart(addr.residential) ||
+    cleanPart(addr.quarter) ||
+    cleanPart(addr.hamlet) ||
+    "";
 
   let city = cleanPart(addr.city || addr.town || addr.municipality || addr.city_district || addr.village || addr.county || addr.state_district);
   city = city.replace(/\s+district$/i, "").trim();
@@ -421,7 +421,7 @@ export const smartAddressBuilder = (addressObj, displayName = "") => {
   if (isUnwanted(state)) state = "";
 
   const parts = [];
-  
+
   // House/building details first
   let houseBuildingPart = [houseNo, building].filter(Boolean).join(", ");
   if (houseNo && building && (houseNo.toLowerCase().includes(building.toLowerCase()) || building.toLowerCase().includes(houseNo.toLowerCase()))) {
@@ -512,7 +512,7 @@ export const smartAddressBuilder = (addressObj, displayName = "") => {
  */
 export const cleanAddressFields = (addressObj, displayName = "") => {
   const addr = addressObj || {};
-  
+
   const cleanPart = (val) => {
     if (!val) return "";
     let s = val.toString().trim();
@@ -612,9 +612,9 @@ export const cleanAddressFields = (addressObj, displayName = "") => {
     for (const dp of displayParts) {
       const dpLower = dp.toLowerCase();
       if (
-        dpLower === cityLower || 
-        dpLower === stateLower || 
-        dpLower === pincodeLower || 
+        dpLower === cityLower ||
+        dpLower === stateLower ||
+        dpLower === pincodeLower ||
         (cityLower && cityLower.includes(dpLower)) ||
         (stateLower && stateLower.includes(dpLower))
       ) {
@@ -702,7 +702,7 @@ export const LIGHT_MAP_ATTRIBUTION =
 
 const GEOCODE_CACHE = new Map();
 const GEOCODE_CACHE_TTL_MS = 5 * 60 * 1000;
-const GEOCODE_USER_AGENT = "SafeVoltServiceBooking/1.0 (service-booking-app)";
+const GEOCODE_USER_AGENT = "RajServiceBooking/1.0 (service-booking-app)";
 
 const coordCacheKey = (lat, lng) =>
   `${Number(lat).toFixed(5)},${Number(lng).toFixed(5)}`;
@@ -836,7 +836,7 @@ export const reverseGeocode = async (lat, lng) => {
         const areaPincode = nomJsonArea.address.postcode;
         structured.pincode = areaPincode;
         structured.postalCode = areaPincode;
-        
+
         // Append pincode to formattedAddress preview if missing
         if (structured.formattedAddress && !structured.formattedAddress.includes(areaPincode)) {
           structured.formattedAddress = `${structured.formattedAddress}, ${areaPincode}`;
@@ -1026,8 +1026,8 @@ export const filterGPSJitter = (prev, next, minMeters = 8) => {
   const a =
     Math.sin(dLat / 2) ** 2 +
     Math.cos((prev.lat * Math.PI) / 180) *
-      Math.cos((next.lat * Math.PI) / 180) *
-      Math.sin(dLng / 2) ** 2;
+    Math.cos((next.lat * Math.PI) / 180) *
+    Math.sin(dLng / 2) ** 2;
   const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return dist < minMeters ? prev : next;
 };
@@ -1056,16 +1056,16 @@ export const formatRelativeTime = (timestamp) => {
     const diffSec = Math.floor(diffMs / 1000);
     if (diffSec < 5) return "Just now";
     if (diffSec < 60) return `${diffSec} sec ago`;
-    
+
     const diffMin = Math.floor(diffSec / 60);
     if (diffMin < 60) return `${diffMin} min ago`;
-    
+
     const diffHr = Math.floor(diffMin / 60);
     if (diffHr < 24) return `${diffHr} hr ago`;
-    
+
     const diffDay = Math.floor(diffHr / 24);
     if (diffDay < 7) return `${diffDay} d ago`;
-    
+
     return formatDate(timestamp);
   } catch {
     return FALLBACK;

@@ -74,6 +74,11 @@ const commissionRuleSchema = new Schema({
     type: Boolean,
     default: true
   },
+  zoneId: {
+    type: Schema.Types.ObjectId,
+    ref: 'Zone',
+    default: null
+  },
   createdBy: {
     type: Schema.Types.ObjectId,
     ref: 'Admin',
@@ -109,23 +114,24 @@ commissionRuleSchema.index({ performanceScore: 1 });
 commissionRuleSchema.index({ specificProvider: 1 });
 commissionRuleSchema.index({ effectiveFrom: 1 });
 commissionRuleSchema.index({ effectiveUntil: 1 });
+commissionRuleSchema.index({ zoneId: 1 });
 
 /**
  * 🔹 Static Methods
  */
 
 // Get applicable commission rule for a provider
-commissionRuleSchema.statics.getCommissionForProvider = async function (providerId, providerperformanceScore = 'standard') {
+commissionRuleSchema.statics.getCommissionForProvider = async function (providerId, zoneId = null, providerperformanceScore = 'standard') {
   const now = new Date();
 
   try {
     // If tier not provided, calculate from provider metrics
-    if (!providerperformanceScore) {
+    if (!providerperformanceScore || providerperformanceScore === 'standard') {
       const provider = await mongoose.model('Provider')
         .findById(providerId)
         .select('averageRating performanceScore feedbacks')
         .populate('feedbacks', 'providerFeedback.rating');
-      
+
       if (provider) {
         // Use virtual averageRating logic if available, or calculate it
         let rating = provider.averageRating || 0;
@@ -146,31 +152,87 @@ commissionRuleSchema.statics.getCommissionForProvider = async function (provider
       }
     }
 
-    // 1. Check specific provider rule
-    const providerSpecificRule = await this.findOne({
-      isActive: true,
-      applyTo: 'specificProvider',
-      specificProvider: providerId,
-    }).sort({ createdAt: -1 });
+    // Resolve Zone Ancestry Array
+    const zoneAncestry = [];
+    if (zoneId) {
+      zoneAncestry.push(zoneId.toString());
+      const Zone = mongoose.model('Zone');
+      let current = await Zone.findById(zoneId).select('parentZone');
+      while (current && current.parentZone) {
+        zoneAncestry.push(current.parentZone.toString());
+        current = await Zone.findById(current.parentZone).select('parentZone');
+      }
+    }
 
-    if (providerSpecificRule) return providerSpecificRule;
+    // PRIORITY 1: Specific Provider Rule (closest zone ancestry first, then global)
+    if (providerId) {
+      if (zoneAncestry.length > 0) {
+        for (const zId of zoneAncestry) {
+          const rule = await this.findOne({
+            isActive: true,
+            applyTo: 'specificProvider',
+            specificProvider: providerId,
+            zoneId: zId
+          }).sort({ createdAt: -1 });
 
-    // 2. Check performance tier rule
-    const tierRule = await this.findOne({
+          if (rule) return rule;
+        }
+      }
+
+      const globalSpecificRule = await this.findOne({
+        isActive: true,
+        applyTo: 'specificProvider',
+        specificProvider: providerId,
+        $or: [{ zoneId: null }, { zoneId: { $exists: false } }]
+      }).sort({ createdAt: -1 });
+
+      if (globalSpecificRule) return globalSpecificRule;
+    }
+
+    // PRIORITY 2: Zone + Performance Score Rule (closest zone first)
+    if (zoneAncestry.length > 0) {
+      for (const zId of zoneAncestry) {
+        const zoneTierRule = await this.findOne({
+          isActive: true,
+          applyTo: 'performanceScore',
+          performanceScore: providerperformanceScore,
+          zoneId: zId
+        }).sort({ createdAt: -1 });
+
+        if (zoneTierRule) return zoneTierRule;
+      }
+    }
+
+    // PRIORITY 3: Zone Default Rule (closest zone first)
+    if (zoneAncestry.length > 0) {
+      for (const zId of zoneAncestry) {
+        const zoneDefaultRule = await this.findOne({
+          isActive: true,
+          applyTo: 'all',
+          zoneId: zId
+        }).sort({ createdAt: -1 });
+
+        if (zoneDefaultRule) return zoneDefaultRule;
+      }
+    }
+
+    // PRIORITY 4: Global Rules (Performance global tier first, then Global Default rule)
+    const globalTierRule = await this.findOne({
       isActive: true,
       applyTo: 'performanceScore',
       performanceScore: providerperformanceScore,
+      $or: [{ zoneId: null }, { zoneId: { $exists: false } }]
     }).sort({ createdAt: -1 });
 
-    if (tierRule) return tierRule;
+    if (globalTierRule) return globalTierRule;
 
-    // 3. Default rule for all providers
-    const allProvidersRule = await this.findOne({
+    const globalDefaultRule = await this.findOne({
       isActive: true,
       applyTo: 'all',
+      $or: [{ zoneId: null }, { zoneId: { $exists: false } }]
     }).sort({ createdAt: -1 });
 
-    return allProvidersRule || null;
+    return globalDefaultRule || null;
 
   } catch (error) {
     console.error('Error getting commission rule:', error);

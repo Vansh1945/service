@@ -170,6 +170,11 @@ const BookingRow = React.memo(({ booking, onDetails, onReschedule, onAssign, onD
                 <div className="text-sm text-gray-500">
                     {booking.provider?.email || 'N/A'}
                 </div>
+                {booking.provider && booking.assignmentSource && (
+                    <div className="text-[10px] font-semibold text-teal-650 mt-1 flex items-center gap-0.5">
+                        📍 {booking.assignmentSource}
+                    </div>
+                )}
             </div>
         </td>
         <td className="px-4 py-4 whitespace-nowrap">
@@ -1111,6 +1116,15 @@ const AdminBookingsView = () => {
                                         <InfoRow label="Date">{formatDate(bk.date)}</InfoRow>
                                         <InfoRow label="Time">{bk.time ? formatTime(bk.time) : '—'}</InfoRow>
                                         <InfoRow label="Created">{bk.createdAt ? new Date(bk.createdAt).toLocaleDateString() : '—'}</InfoRow>
+                                        <InfoRow label="Service Zone">
+                                            {bk.zoneId?.name ? (
+                                                <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-250 font-sans">
+                                                    {bk.zoneId.name} ({bk.zoneId.zoneLevel || 'city'})
+                                                </span>
+                                            ) : (
+                                                <span className="text-gray-400">Global/None</span>
+                                            )}
+                                        </InfoRow>
                                     </Card>
 
                                     {/* ── Col 2: Customer Info ── */}
@@ -1190,6 +1204,14 @@ const AdminBookingsView = () => {
                                                         {prov.bankDetails?.verified ? 'Verified' : 'Pending'}
                                                     </span>
                                                 </div>
+                                                {bk.assignmentSource && (
+                                                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
+                                                        <span className="text-[10px] text-gray-400">Assigned From</span>
+                                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-teal-700">
+                                                            {bk.assignmentSource}
+                                                        </span>
+                                                    </div>
+                                                )}
                                             </Card>
                                         )}
 

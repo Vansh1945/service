@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Pagination from '../../components/Pagination';
 import {
   Plus,
@@ -22,6 +22,8 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   BarChart3
 } from 'lucide-react';
 import { toast } from 'react-toastify';
@@ -29,6 +31,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import { useAuth } from '../../context/auth';
 import * as CouponService from '../../services/CouponService';
 import * as AdminService from '../../services/AdminService';
+import { getAllZones } from '../../services/ZoneService';
 import { formatCurrency, formatDate } from '../../utils/format';
 
 const AdminCoupons = () => {
@@ -48,6 +51,7 @@ const AdminCoupons = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
   const [users, setUsers] = useState([]);
+  const [zones, setZones] = useState([]);
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState({
     total: 0,
@@ -66,14 +70,138 @@ const AdminCoupons = () => {
     isGlobal: false,
     isFirstBooking: false,
     assignedTo: '',
-    usageLimit: ''
+    usageLimit: '',
+    applicableZones: []
   });
-  const [editForm, setEditForm] = useState({});
+  const [editForm, setEditForm] = useState({
+    applicableZones: []
+  });
+
+  const [createStateSearch, setCreateStateSearch] = useState('');
+  const [createStateOpen, setCreateStateOpen] = useState(false);
+  const [createCitySearch, setCreateCitySearch] = useState('');
+  const [createCityOpen, setCreateCityOpen] = useState(false);
+  const [createMicroSearch, setCreateMicroSearch] = useState('');
+  const [createMicroOpen, setCreateMicroOpen] = useState(false);
+
+  const [editStateSearch, setEditStateSearch] = useState('');
+  const [editStateOpen, setEditStateOpen] = useState(false);
+  const [editCitySearch, setEditCitySearch] = useState('');
+  const [editCityOpen, setEditCityOpen] = useState(false);
+  const [editMicroSearch, setEditMicroSearch] = useState('');
+  const [editMicroOpen, setEditMicroOpen] = useState(false);
+
+  const handleZoneToggleCascade = (zone, isCreate) => {
+    const form = isCreate ? createForm : editForm;
+    const setForm = isCreate ? setCreateForm : setEditForm;
+    const currentSelected = form.applicableZones || [];
+    const zoneId = zone._id.toString();
+
+    let newZones = [...currentSelected];
+
+    if (currentSelected.includes(zone._id)) {
+      // DESELECT logic
+      newZones = newZones.filter(id => id !== zone._id);
+
+      if (zone.zoneLevel === 'state') {
+        const childCities = zones.filter(z => z.zoneLevel === 'city' && (z.parentZone?._id || z.parentZone || '').toString() === zoneId);
+        const cityIds = childCities.map(c => c._id.toString());
+        newZones = newZones.filter(id => !cityIds.includes(id));
+
+        const childMicros = zones.filter(z => z.zoneLevel === 'micro' && cityIds.includes((z.parentZone?._id || z.parentZone || '').toString()));
+        const microIds = childMicros.map(m => m._id.toString());
+        newZones = newZones.filter(id => !microIds.includes(id));
+      } else if (zone.zoneLevel === 'city') {
+        const childMicros = zones.filter(z => z.zoneLevel === 'micro' && (z.parentZone?._id || z.parentZone || '').toString() === zoneId);
+        const microIds = childMicros.map(m => m._id.toString());
+        newZones = newZones.filter(id => !microIds.includes(id));
+
+        const parentStateId = (zone.parentZone?._id || zone.parentZone || '').toString();
+        if (parentStateId) {
+          newZones = newZones.filter(id => id !== parentStateId);
+        }
+      } else if (zone.zoneLevel === 'micro') {
+        const parentCityId = (zone.parentZone?._id || zone.parentZone || '').toString();
+        if (parentCityId) {
+          newZones = newZones.filter(id => id !== parentCityId);
+          const parentCity = zones.find(z => z._id.toString() === parentCityId);
+          const parentStateId = parentCity ? (parentCity.parentZone?._id || parentCity.parentZone || '').toString() : '';
+          if (parentStateId) {
+            newZones = newZones.filter(id => id !== parentStateId);
+          }
+        }
+      }
+    } else {
+      // SELECT logic
+      newZones.push(zone._id);
+
+      if (zone.zoneLevel === 'state') {
+        const childCities = zones.filter(z => z.zoneLevel === 'city' && (z.parentZone?._id || z.parentZone || '').toString() === zoneId);
+        const cityIds = childCities.map(c => c._id);
+
+        const childMicros = zones.filter(z => z.zoneLevel === 'micro' && cityIds.map(id => id.toString()).includes((z.parentZone?._id || z.parentZone || '').toString()));
+        const microIds = childMicros.map(m => m._id);
+
+        newZones = Array.from(new Set([...newZones, ...cityIds, ...microIds]));
+      } else if (zone.zoneLevel === 'city') {
+        const childMicros = zones.filter(z => z.zoneLevel === 'micro' && (z.parentZone?._id || z.parentZone || '').toString() === zoneId);
+        const microIds = childMicros.map(m => m._id);
+        newZones = Array.from(new Set([...newZones, ...microIds]));
+
+        const parentStateId = (zone.parentZone?._id || zone.parentZone || '').toString();
+        if (parentStateId) {
+          const siblingCities = zones.filter(z => z.zoneLevel === 'city' && (z.parentZone?._id || z.parentZone || '').toString() === parentStateId);
+          const allSiblingCityIds = siblingCities.map(c => c._id.toString());
+          const areAllSelected = allSiblingCityIds.every(id => newZones.includes(id));
+          if (areAllSelected) {
+            newZones.push(parentStateId);
+          }
+        }
+      } else if (zone.zoneLevel === 'micro') {
+        const parentCityId = (zone.parentZone?._id || zone.parentZone || '').toString();
+        if (parentCityId) {
+          const siblingMicros = zones.filter(z => z.zoneLevel === 'micro' && (z.parentZone?._id || z.parentZone || '').toString() === parentCityId);
+          const allSiblingMicroIds = siblingMicros.map(m => m._id.toString());
+          const areAllSelected = allSiblingMicroIds.every(id => newZones.includes(id));
+          if (areAllSelected) {
+            newZones.push(parentCityId);
+
+            const parentCity = zones.find(z => z._id.toString() === parentCityId);
+            const parentStateId = parentCity ? (parentCity.parentZone?._id || parentCity.parentZone || '').toString() : '';
+            if (parentStateId) {
+              const siblingCities = zones.filter(z => z.zoneLevel === 'city' && (z.parentZone?._id || z.parentZone || '').toString() === parentStateId);
+              const allSiblingCityIds = siblingCities.map(c => c._id.toString());
+              const areAllSelectedCities = allSiblingCityIds.every(id => newZones.includes(id) || id === parentCityId);
+              if (areAllSelectedCities) {
+                newZones.push(parentStateId);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    setForm(prev => ({ ...prev, applicableZones: newZones }));
+  };
+
+  // Fetch zones helper
+  const fetchZones = async () => {
+    try {
+      const response = await getAllZones();
+      const data = response.data;
+      if (data.success) {
+        setZones(data.data || []);
+      }
+    } catch (error) {
+      console.error('Fetch zones error:', error);
+    }
+  };
 
   // Check admin access
   useEffect(() => {
     fetchCoupons();
     fetchUsers();
+    fetchZones();
   }, []);
 
   // Filter and search coupons
@@ -269,7 +397,8 @@ const AdminCoupons = () => {
       isGlobal: false,
       isFirstBooking: false,
       assignedTo: '',
-      usageLimit: ''
+      usageLimit: '',
+      applicableZones: []
     });
   };
 
@@ -286,7 +415,8 @@ const AdminCoupons = () => {
       isFirstBooking: coupon.isFirstBooking,
       assignedTo: coupon.assignedTo ? (coupon.assignedTo._id || coupon.assignedTo) : '',
       usageLimit: coupon.usageLimit || '',
-      isActive: coupon.isActive
+      isActive: coupon.isActive,
+      applicableZones: coupon.applicableZones ? coupon.applicableZones.map(z => typeof z === 'object' ? z._id : z) : []
     });
     setShowEditModal(true);
   };
@@ -315,6 +445,42 @@ const AdminCoupons = () => {
   const getRemainingUses = (coupon) => {
     if (coupon.usageLimit === null) return 'Unlimited';
     return coupon.usageLimit - (coupon.usedBy?.length || 0);
+  };
+
+  const getZoneHierarchyPath = (zoneId) => {
+    const zone = zones.find(z => z._id.toString() === zoneId.toString());
+    if (!zone) return 'Unknown Zone';
+
+    let path = zone.name;
+    let current = zone;
+
+    while (current && current.parentZone) {
+      const parentId = typeof current.parentZone === 'object' ? current.parentZone._id : current.parentZone;
+      const parent = zones.find(z => z._id.toString() === parentId.toString());
+      if (parent) {
+        path = `${parent.name} > ${path}`;
+        current = parent;
+      } else {
+        break;
+      }
+    }
+    return path;
+  };
+
+  const displayApplicableZones = (applicableZones) => {
+    if (!applicableZones || applicableZones.length === 0) {
+      return <span className="text-gray-500 font-medium">Global</span>;
+    }
+    const zoneIds = applicableZones.map(z => typeof z === 'object' ? z._id : z);
+    if (zoneIds.length === 1) {
+      return <span className="text-sm font-medium text-secondary">{getZoneHierarchyPath(zoneIds[0])}</span>;
+    }
+    const firstPath = getZoneHierarchyPath(zoneIds[0]);
+    return (
+      <span className="text-sm font-medium text-secondary" title={zoneIds.map(id => getZoneHierarchyPath(id)).join(', ')}>
+        {firstPath} <span className="text-primary font-bold">({zoneIds.length} zones)</span>
+      </span>
+    );
   };
 
   // Get user display name
@@ -487,6 +653,7 @@ const AdminCoupons = () => {
                         <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Min. Booking</th>
                         <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expiry</th>
                         <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                        <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Applicable Zones</th>
                         <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usage</th>
                         <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                         <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -547,6 +714,9 @@ const AdminCoupons = () => {
                                 Standard
                               </span>
                             )}
+                          </td>
+                          <td className="px-4 md:px-6 py-4 whitespace-nowrap">
+                            {displayApplicableZones(coupon.applicableZones)}
                           </td>
                           <td className="px-4 md:px-6 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-600">
@@ -736,31 +906,45 @@ const AdminCoupons = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    name="isGlobal"
-                    id="isGlobal"
-                    checked={createForm.isGlobal}
-                    onChange={handleCreateFormChange}
-                    className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-                  />
-                  <label htmlFor="isGlobal" className="ml-2 block text-sm text-gray-900">
-                    Global Coupon (Available to all users)
+                <div>
+                  <label className="block text-sm font-medium text-secondary mb-2">
+                    Coupon Scope *
                   </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setCreateForm(prev => ({ ...prev, isGlobal: true, applicableZones: [] }))}
+                      className={`py-2.5 px-4 rounded-xl font-bold text-xs border transition-all text-center ${createForm.isGlobal
+                        ? 'border-primary bg-primary/10 text-primary shadow-sm'
+                        : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'}`}
+                    >
+                      Global
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCreateForm(prev => ({ ...prev, isGlobal: false }))}
+                      className={`py-2.5 px-4 rounded-xl font-bold text-xs border transition-all text-center ${!createForm.isGlobal
+                        ? 'border-primary bg-primary/10 text-primary shadow-sm'
+                        : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'}`}
+                    >
+                      Zone Specific
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    name="isFirstBooking"
-                    id="isFirstBooking"
-                    checked={createForm.isFirstBooking}
-                    onChange={handleCreateFormChange}
-                    className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-                  />
-                  <label htmlFor="isFirstBooking" className="ml-2 block text-sm text-gray-900">
-                    First Booking Only
-                  </label>
+                <div className="flex items-end pb-3">
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      name="isFirstBooking"
+                      id="isFirstBooking"
+                      checked={createForm.isFirstBooking}
+                      onChange={handleCreateFormChange}
+                      className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded cursor-pointer"
+                    />
+                    <label htmlFor="isFirstBooking" className="ml-2 block text-sm text-gray-900 font-semibold cursor-pointer">
+                      First Booking Only
+                    </label>
+                  </div>
                 </div>
               </div>
 
@@ -799,6 +983,16 @@ const AdminCoupons = () => {
                       className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                     />
                   )}
+                </div>
+              )}
+
+              {!createForm.isGlobal && (
+                <div>
+                  <HierarchicalZoneSelector
+                    zones={zones}
+                    selectedZoneIds={createForm.applicableZones}
+                    onChange={(zone) => handleZoneToggleCascade(zone, true)}
+                  />
                 </div>
               )}
 
@@ -943,33 +1137,48 @@ const AdminCoupons = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    name="isGlobal"
-                    id="editIsGlobal"
-                    checked={editForm.isGlobal}
-                    onChange={handleEditFormChange}
-                    disabled={selectedCoupon.usedBy && selectedCoupon.usedBy.length > 0}
-                    className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded disabled:bg-gray-100"
-                  />
-                  <label htmlFor="editIsGlobal" className="ml-2 block text-sm text-gray-900">
-                    Global Coupon (Available to all users)
+                <div>
+                  <label className="block text-sm font-medium text-secondary mb-2">
+                    Coupon Scope *
                   </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      disabled={selectedCoupon.usedBy && selectedCoupon.usedBy.length > 0}
+                      onClick={() => setEditForm(prev => ({ ...prev, isGlobal: true, applicableZones: [] }))}
+                      className={`py-2.5 px-4 rounded-xl font-bold text-xs border transition-all text-center ${editForm.isGlobal
+                        ? 'border-primary bg-primary/10 text-primary shadow-sm'
+                        : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50'}`}
+                    >
+                      🌍 Global
+                    </button>
+                    <button
+                      type="button"
+                      disabled={selectedCoupon.usedBy && selectedCoupon.usedBy.length > 0}
+                      onClick={() => setEditForm(prev => ({ ...prev, isGlobal: false }))}
+                      className={`py-2.5 px-4 rounded-xl font-bold text-xs border transition-all text-center ${!editForm.isGlobal
+                        ? 'border-primary bg-primary/10 text-primary shadow-sm'
+                        : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50'}`}
+                    >
+                      📍 Zone Specific
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    name="isFirstBooking"
-                    id="editIsFirstBooking"
-                    checked={editForm.isFirstBooking}
-                    onChange={handleEditFormChange}
-                    disabled={selectedCoupon.usedBy && selectedCoupon.usedBy.length > 0}
-                    className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded disabled:bg-gray-100"
-                  />
-                  <label htmlFor="editIsFirstBooking" className="ml-2 block text-sm text-gray-900">
-                    First Booking Only
-                  </label>
+                <div className="flex items-end pb-3">
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      name="isFirstBooking"
+                      id="editIsFirstBooking"
+                      checked={editForm.isFirstBooking}
+                      onChange={handleEditFormChange}
+                      disabled={selectedCoupon.usedBy && selectedCoupon.usedBy.length > 0}
+                      className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded disabled:bg-gray-100 cursor-pointer"
+                    />
+                    <label htmlFor="editIsFirstBooking" className="ml-2 block text-sm text-gray-900 font-semibold cursor-pointer">
+                      First Booking Only
+                    </label>
+                  </div>
                 </div>
               </div>
 
@@ -1013,6 +1222,16 @@ const AdminCoupons = () => {
                   Active Coupon
                 </label>
               </div>
+
+              {!editForm.isGlobal && (
+                <div>
+                  <HierarchicalZoneSelector
+                    zones={zones}
+                    selectedZoneIds={editForm.applicableZones || []}
+                    onChange={(zone) => handleZoneToggleCascade(zone, false)}
+                  />
+                </div>
+              )}
 
               <div className="flex justify-end space-x-3 pt-4">
                 <button
@@ -1155,6 +1374,31 @@ const AdminCoupons = () => {
                 </div>
               </div>
 
+              {/* Applicable Zones Info */}
+              <div className="bg-white p-5 rounded-xl border border-gray-200">
+                <h4 className="text-lg font-semibold text-secondary mb-4">Applicable Zones</h4>
+                {selectedCoupon.applicableZones && selectedCoupon.applicableZones.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {selectedCoupon.applicableZones.map(z => {
+                      const zoneId = typeof z === 'object' ? z._id : z;
+                      return (
+                        <span key={zoneId} className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-teal-50 text-teal-800 border border-teal-200">
+                          {getZoneHierarchyPath(zoneId)}
+                        </span>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="flex items-center">
+                    <Globe className="w-6 h-6 text-blue-600 mr-3" />
+                    <div>
+                      <p className="font-medium text-gray-900">Globally Applicable</p>
+                      <p className="text-sm text-gray-600">Valid across all service zones</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Usage History */}
               {selectedCoupon.usedBy && selectedCoupon.usedBy.length > 0 && (
                 <div className="bg-white p-5 rounded-xl border border-gray-200">
@@ -1292,6 +1536,203 @@ const Modal = ({ isOpen, onClose, title, children, size = 'medium' }) => {
           </div>
         </div>
       </div>
+    </div>
+  );
+};
+
+const HierarchicalZoneSelector = ({
+  zones,
+  selectedZoneIds,
+  onChange,
+  label = "Applicable Zones"
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [expandedNodes, setExpandedNodes] = useState({});
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const tree = useMemo(() => {
+    const states = zones.filter(z => z.zoneLevel === 'state' || !z.zoneLevel);
+    const cities = zones.filter(z => z.zoneLevel === 'city');
+    const micros = zones.filter(z => z.zoneLevel === 'micro');
+
+    return states.map(state => {
+      const stateCities = cities.filter(c => {
+        const pId = c.parentZone?._id || c.parentZone;
+        return pId?.toString() === (state._id || state.id)?.toString();
+      });
+
+      const cityNodes = stateCities.map(city => {
+        const cityMicros = micros.filter(m => {
+          const pId = m.parentZone?._id || m.parentZone;
+          return pId?.toString() === (city._id || city.id)?.toString();
+        });
+
+        return { ...city, children: cityMicros };
+      });
+
+      return { ...state, children: cityNodes };
+    });
+  }, [zones]);
+
+  const filteredTree = useMemo(() => {
+    if (!searchQuery) return tree;
+    const lowerQuery = searchQuery.toLowerCase();
+
+    const filterNodes = (nodes) => {
+      return nodes.map(node => {
+        const matchesSelf = node.name?.toLowerCase().includes(lowerQuery) || node.city?.toLowerCase().includes(lowerQuery);
+        let filteredChildren = [];
+        if (node.children) {
+          filteredChildren = filterNodes(node.children);
+        }
+        const matchesChildren = filteredChildren.length > 0;
+
+        if (matchesSelf || matchesChildren) {
+          return {
+            ...node,
+            children: filteredChildren,
+            forceExpanded: true
+          };
+        }
+        return null;
+      }).filter(Boolean);
+    };
+
+    return filterNodes(tree);
+  }, [tree, searchQuery]);
+
+  const toggleExpand = (id, e) => {
+    e.stopPropagation();
+    setExpandedNodes(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const isSelected = (id) => (selectedZoneIds || []).includes(id);
+
+  const renderNode = (node, depth = 0) => {
+    const nodeId = node._id || node.id;
+    const hasChildren = node.children && node.children.length > 0;
+    const isExpanded = !!(expandedNodes[nodeId] || node.forceExpanded);
+    const checked = isSelected(nodeId);
+
+    return (
+      <div key={nodeId} className="select-none">
+        <div
+          className="flex items-center hover:bg-gray-50 py-1.5 px-2 rounded-lg cursor-pointer transition-colors"
+          style={{ paddingLeft: `${depth * 20 + 8}px` }}
+          onClick={() => onChange(node)}
+        >
+          {hasChildren ? (
+            <button
+              type="button"
+              onClick={(e) => toggleExpand(nodeId, e)}
+              className="p-1 hover:bg-gray-200 rounded mr-1 transition-transform duration-200"
+            >
+              {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-gray-500" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-500" />}
+            </button>
+          ) : (
+            <span className="w-6 shrink-0" />
+          )}
+
+          <input
+            type="checkbox"
+            checked={checked}
+            onChange={() => { }}
+            className="h-4 w-4 text-primary border-gray-300 rounded focus:ring-primary mr-2 cursor-pointer"
+          />
+
+          <span className={`text-xs font-semibold text-secondary capitalize ${checked ? 'text-primary font-bold' : ''}`}>
+            {node.name}
+          </span>
+          <span className="text-[9px] bg-gray-100 text-gray-500 ml-1.5 px-1.5 py-0.2 rounded font-black uppercase tracking-wider scale-90">
+            {node.zoneLevel || 'state'}
+          </span>
+        </div>
+
+        {hasChildren && isExpanded && (
+          <div className="mt-0.5">
+            {node.children.map(child => renderNode(child, depth + 1))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="relative w-full" ref={dropdownRef}>
+      <label className="block text-sm font-medium text-secondary mb-1.5">
+        {label}
+      </label>
+      <div
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full px-3.5 py-2.5 border border-gray-300 rounded-lg bg-white cursor-pointer flex justify-between items-center text-sm shadow-sm hover:border-gray-400 transition-all font-semibold"
+      >
+        <span className="text-gray-700 truncate font-semibold">
+          {(selectedZoneIds || []).length === 0 ? 'Select Zones (Leave empty for Global)' : `${(selectedZoneIds || []).length} Zones Selected`}
+        </span>
+        {isOpen ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+      </div>
+
+      {isOpen && (
+        <div className="absolute left-0 right-0 z-50 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl p-3 max-h-80 flex flex-col shrink-0">
+          <div className="relative mb-2 shrink-0">
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search by state, city, or micro zone..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-250 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-semibold text-gray-900 bg-gray-50"
+            />
+          </div>
+
+          <div className="overflow-y-auto flex-1 space-y-1 pr-1">
+            {filteredTree.length === 0 ? (
+              <div className="text-xs text-gray-400 italic text-center py-6">
+                No matching zones found.
+              </div>
+            ) : (
+              filteredTree.map(node => renderNode(node, 0))
+            )}
+          </div>
+        </div>
+      )}
+
+      {(selectedZoneIds || []).length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mt-2.5 max-h-24 overflow-y-auto p-1 bg-gray-50 rounded-lg border border-gray-200 shadow-inner">
+          {(selectedZoneIds || []).map(id => {
+            const zone = zones.find(z => (z._id || z.id)?.toString() === id.toString());
+            if (!zone) return null;
+
+            let badgeColor = 'bg-teal-50 text-teal-800 border-teal-200';
+            if (zone.zoneLevel === 'city') badgeColor = 'bg-blue-50 text-blue-800 border-blue-200';
+            if (zone.zoneLevel === 'micro') badgeColor = 'bg-purple-50 text-purple-800 border-purple-200';
+
+            return (
+              <span key={id} className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black border shadow-sm capitalize ${badgeColor}`}>
+                <span>{zone.name} ({zone.zoneLevel?.toUpperCase() || 'STATE'})</span>
+                <button
+                  type="button"
+                  onClick={() => onChange(zone)}
+                  className="ml-1 inline-flex items-center justify-center focus:outline-none text-gray-400 hover:text-gray-650"
+                >
+                  <X className="w-2.5 h-2.5 ml-0.5" />
+                </button>
+              </span>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };
