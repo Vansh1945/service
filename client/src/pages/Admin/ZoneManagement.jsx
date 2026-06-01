@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
 import * as AdminService from '../../services/AdminService';
 import * as BookingService from '../../services/BookingService';
@@ -10,7 +11,8 @@ import 'leaflet/dist/leaflet.css';
 import {
   MapPin, Users, Zap, Clock, Trash2, Edit, Check, X,
   Plus, RefreshCw, AlertTriangle, Search, Filter, Layers,
-  Compass, Eye, ShieldCheck, Activity, Award, ChevronDown, ChevronUp
+  Compass, Eye, ShieldCheck, Activity, Award, ChevronDown, ChevronUp,
+  Ticket, Briefcase, BarChart3, UserCheck, CalendarCheck
 } from 'lucide-react';
 
 // Fix default Leaflet markers in Vite
@@ -24,6 +26,8 @@ let DefaultIcon = L.icon({
   iconAnchor: [12, 41]
 });
 L.Marker.prototype.options.icon = DefaultIcon;
+
+const legacyZonePopupEnabled = false;
 
 // Point-in-Polygon (Ray-casting) spatial containment check
 const isPointInPolygon = (lat, lng, polygon) => {
@@ -109,6 +113,7 @@ const defaultZones = [];
 
 const ZoneManagement = () => {
   const { showToast } = useAuth();
+  const location = useLocation();
   const [zones, setZones] = useState([]);
 
   const [providers, setProviders] = useState([]);
@@ -149,11 +154,27 @@ const ZoneManagement = () => {
   const [expandedNodes, setExpandedNodes] = useState({});
   const [filterLevel, setFilterLevel] = useState('');
   const [analyticsModal, setAnalyticsModal] = useState({ open: false, zone: null, loading: false });
+  const [actionHubModal, setActionHubModal] = useState({ open: false, zone: null });
 
   // Modal and Map States
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [mapCenter, setMapCenter] = useState([31.3260, 75.5762]);
   const [mapZoom, setMapZoom] = useState(12);
+
+  const resolveZonePath = (zoneId) => {
+    const path = [];
+    let currentZone = zones.find(z => z.id === zoneId || z._id === zoneId);
+    while (currentZone) {
+      path.unshift(currentZone.name);
+      const parentId = currentZone.parentZone?._id || currentZone.parentZone;
+      if (parentId) {
+        currentZone = zones.find(z => z.id === parentId || z._id === parentId);
+      } else {
+        currentZone = null;
+      }
+    }
+    return path.length > 0 ? path.join(" > ") : "Global / Root";
+  };
 
   // Fetch zones from server
   const fetchZones = async () => {
@@ -263,6 +284,14 @@ const ZoneManagement = () => {
     fetchTelemetry();
   }, []);
 
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const analyticsZone = params.get('analyticsZone');
+    if (analyticsZone) {
+      handleOpenAnalytics(analyticsZone);
+    }
+  }, [location.search]);
+
   // Compute spatial statistics inside a zone polygon dynamically
   const getZoneStats = (coordinates) => {
     let provCount = 0;
@@ -292,6 +321,124 @@ const ZoneManagement = () => {
       activeBookingsCount: activeJobs,
       customerCount: customerCount
     };
+  };
+
+  const getZoneMemberPreview = (coordinates) => {
+    const providersPreview = providers
+      .filter(provider => provider.coords && isPointInPolygon(provider.coords[0], provider.coords[1], coordinates))
+      .slice(0, 2);
+
+    const customersPreview = customers
+      .filter(customer => isPointInPolygon(customer.lat, customer.lng, coordinates))
+      .slice(0, 2);
+
+    return { providersPreview, customersPreview };
+  };
+
+  const renderZoneMapPopup = (zone, zoneStats) => {
+    let dotColor = 'bg-emerald-500';
+    if (zone.status === 'inactive') dotColor = 'bg-gray-400';
+    else if (zone.priority === 'high') dotColor = 'bg-red-500';
+    else if (zone.priority === 'medium') dotColor = 'bg-amber-500';
+
+    return (
+      <div className="w-full font-sans text-secondary">
+        {/* Header */}
+        <div className="flex items-center gap-2 pb-2.5 pr-6 border-b border-gray-200">
+          <span className={`w-3 h-3 rounded-full ${dotColor} shrink-0`}></span>
+          <h3 className="text-sm font-black uppercase text-secondary tracking-wider leading-none">
+            {zone.name}
+          </h3>
+        </div>
+
+        {/* Details List */}
+        <div className="py-2.5 space-y-2 text-[10px] font-black uppercase tracking-wider text-secondary/65">
+          <div className="flex justify-between items-center">
+            <span>City Hub:</span>
+            <span className="text-secondary font-black text-right">{zone.city || 'N/A'}</span>
+          </div>
+          
+          <div className="flex justify-between items-center">
+            <span>Level:</span>
+            <span className="text-secondary font-black text-right">{zone.zoneLevel || 'N/A'}</span>
+          </div>
+
+          <div className="flex justify-between items-center">
+            <span>Status:</span>
+            <span className={`font-black text-right ${zone.status === 'active' ? 'text-emerald-600' : 'text-red-500'}`}>
+              {zone.status || 'ACTIVE'}
+            </span>
+          </div>
+
+          <div className="flex justify-between items-center">
+            <span>Max Providers:</span>
+            <span className="text-secondary font-black text-right">{zone.maxProviders || '0'}</span>
+          </div>
+
+          <div className="flex justify-between items-center">
+            <span>Radius Limit:</span>
+            <span className="text-secondary font-black text-right">{zone.serviceRadius ? `${zone.serviceRadius} KM` : 'N/A'}</span>
+          </div>
+        </div>
+
+        {/* Separator */}
+        <div className="border-t border-gray-200 my-1"></div>
+
+        {/* Counts Statistics */}
+        <div className="py-2.5 space-y-2 text-[10px] font-black uppercase tracking-wider">
+          <div className="flex justify-between items-center">
+            <span className="text-secondary/65">Providers Inside:</span>
+            <span className="text-blue-600 text-xs font-black text-right">{zoneStats.providersCount}</span>
+          </div>
+          
+          <div className="flex justify-between items-center text-[#a855f7]">
+            <span className="font-extrabold">Customers:</span>
+            <span className="text-xs font-black text-right">{zoneStats.customerCount}</span>
+          </div>
+
+          <div className="flex justify-between items-center">
+            <span className="text-secondary/65">Total Bookings:</span>
+            <span className="text-amber-600 text-xs font-black text-right">{zoneStats.activeBookingsCount}</span>
+          </div>
+        </div>
+
+        {/* Bottom Action Buttons (2x2 Grid with Icon & Name) */}
+        <div className="grid grid-cols-2 gap-2 border-t border-primary/10 pt-3 mt-1 text-[10px] font-bold uppercase tracking-wider">
+          <button
+            onClick={() => { window.location.href = `/admin/coupons?prefillZone=${zone.id}`; }}
+            className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-primary/10 text-primary transition-all hover:bg-primary hover:text-white"
+            title="Create Coupon"
+          >
+            <Ticket className="h-3.5 w-3.5" />
+            <span>Coupon</span>
+          </button>
+          <button
+            onClick={() => { window.location.href = `/admin/commission?prefillZone=${zone.id}`; }}
+            className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-secondary/10 text-secondary transition-all hover:bg-secondary hover:text-white"
+            title="Set Commission"
+          >
+            <Briefcase className="h-3.5 w-3.5" />
+            <span>Commission</span>
+          </button>
+          <button
+            onClick={() => { window.location.href = `/admin/surge?prefillZone=${zone.id}`; }}
+            className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-accent/10 text-accent transition-all hover:bg-accent hover:text-white"
+            title="Add Surge Charge"
+          >
+            <Zap className="h-3.5 w-3.5" />
+            <span>Surge</span>
+          </button>
+          <button
+            onClick={() => handleOpenAnalytics(zone.id)}
+            className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-primary/10 text-primary transition-all hover:bg-primary hover:text-white"
+            title="View Zone Stats"
+          >
+            <BarChart3 className="h-3.5 w-3.5" />
+            <span>Analytics</span>
+          </button>
+        </div>
+      </div>
+    );
   };
 
   // Color mapping based on Priority and Status
@@ -1374,30 +1521,12 @@ const ZoneManagement = () => {
                   positions={zone.coordinates}
                   pathOptions={zoneStyle}
                 >
-                  <Popup minWidth={220}>
-                    <div className="p-2.5 font-sans text-gray-800 bg-white rounded-xl text-left">
-                      <div className="flex items-center space-x-1.5 border-b border-gray-150 pb-2 mb-2">
-                        <span className={`w-2.5 h-2.5 rounded-full ${zone.status === 'inactive' ? 'bg-gray-400' :
-                          zone.priority === 'high' ? 'bg-red-500' :
-                            zone.priority === 'medium' ? 'bg-yellow-500' : 'bg-emerald-500'
-                          }`}></span>
-                        <h3 className="font-black text-xs uppercase tracking-wider text-gray-900">{zone.name}</h3>
-                      </div>
-                      <div className="space-y-1.5 text-[10px] text-gray-650 uppercase font-sans">
-                        <p className="flex justify-between"><span className="text-gray-400 font-semibold">City Hub:</span> <span className="font-black text-gray-800">{zone.city}</span></p>
-                        <p className="flex justify-between"><span className="text-gray-400 font-semibold">Level:</span> <span className="font-black text-gray-800">{zone.zoneLevel || 'city'}</span></p>
-                        <p className="flex justify-between"><span className="text-gray-400 font-semibold">Status:</span> <span className={`font-black ${zone.status === 'active' ? 'text-emerald-600' : 'text-gray-500'}`}>{zone.status}</span></p>
-                        <p className="flex justify-between"><span className="text-gray-400 font-semibold">Max Providers:</span> <span className="font-black text-gray-800">{zone.maxProviders}</span></p>
-                        <p className="flex justify-between"><span className="text-gray-400 font-semibold">Radius Limit:</span> <span className="font-black text-gray-800">{zone.serviceRadius} KM</span></p>
-                        <p className="flex justify-between border-t border-gray-150 pt-2 mt-2"><span className="text-gray-400 font-semibold">Providers inside:</span> <span className="font-black text-blue-600">{zoneDetails.providersCount}</span></p>
-                        <p className="flex justify-between"><span className="text-gray-400 font-semibold font-black text-purple-600">Customers:</span> <span className="font-black text-purple-600 text-xs">{zoneDetails.customerCount}</span></p>
-                        <p className="flex justify-between"><span className="text-gray-400 font-semibold font-black text-amber-600">Total Bookings:</span> <span className="font-black text-amber-600 text-xs">{zoneDetails.activeBookingsCount}</span></p>
-                      </div>
-                    </div>
-                  </Popup>
                   <Tooltip sticky>
                     <span className="font-sans font-bold text-xs uppercase text-slate-800">{zone.name} Zone ({zone.city})</span>
                   </Tooltip>
+                  <Popup minWidth={288} maxWidth={320} closeButton>
+                    {renderZoneMapPopup(zone, zoneDetails)}
+                  </Popup>
                 </Polygon>
               );
             })}
@@ -1437,6 +1566,114 @@ const ZoneManagement = () => {
           </MapContainer>
         </div>
       </div>
+
+      {/* Premium Action Hub Modal Overlay */}
+      {legacyZonePopupEnabled && actionHubModal.open && actionHubModal.zone && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white border border-slate-700/50 p-6 rounded-3xl shadow-2xl max-w-md w-full mx-4 space-y-6 relative overflow-hidden">
+            {/* Ambient Background Glow */}
+            <div className="absolute -top-24 -left-24 w-48 h-48 bg-primary/20 rounded-full blur-3xl pointer-events-none"></div>
+            <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+            {/* Header */}
+            <div className="flex justify-between items-start border-b border-slate-700/50 pb-4 relative z-10">
+              <div>
+                <span className="text-[10px] font-black text-primary uppercase tracking-widest bg-primary/10 px-2.5 py-1 rounded-full border border-primary/20">
+                  Zone action hub
+                </span>
+                <h3 className="text-xl font-bold mt-3 text-white tracking-tight leading-tight">
+                  {actionHubModal.zone.name}
+                </h3>
+                <p className="text-xs text-slate-400 mt-1.5 font-medium flex items-center gap-1">
+                  📍 {resolveZonePath(actionHubModal.zone.id)}
+                </p>
+              </div>
+              <button
+                onClick={() => setActionHubModal({ open: false, zone: null })}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-700/50 transition-all border border-slate-700/50"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Action Grid */}
+            <div className="grid grid-cols-1 gap-3 relative z-10 font-sans">
+              <button
+                onClick={() => {
+                  window.location.href = `/admin/coupons?prefillZone=${actionHubModal.zone.id}`;
+                }}
+                className="flex items-center justify-between bg-slate-800/80 hover:bg-slate-700 border border-slate-700/50 hover:border-slate-600 p-4 rounded-2xl transition-all group cursor-pointer text-left w-full"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-teal-500/10 text-teal-400 rounded-xl border border-teal-500/20 group-hover:bg-teal-500/20 transition-all">
+                    🎟️
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-white leading-none">Create Coupon</p>
+                    <p className="text-[10px] text-slate-400 mt-1">Configure geo-restricted discounts</p>
+                  </div>
+                </div>
+                <span className="text-xs text-slate-500 group-hover:text-white transition-colors">➔</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  window.location.href = `/admin/commission?prefillZone=${actionHubModal.zone.id}`;
+                }}
+                className="flex items-center justify-between bg-slate-800/80 hover:bg-slate-700 border border-slate-700/50 hover:border-slate-600 p-4 rounded-2xl transition-all group cursor-pointer text-left w-full"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-blue-500/10 text-blue-400 rounded-xl border border-blue-500/20 group-hover:bg-blue-500/20 transition-all">
+                    💼
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-white leading-none">Set Commission</p>
+                    <p className="text-[10px] text-slate-400 mt-1">Adjust provider payout splits</p>
+                  </div>
+                </div>
+                <span className="text-xs text-slate-500 group-hover:text-white transition-colors">➔</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  window.location.href = `/admin/surge?prefillZone=${actionHubModal.zone.id}`;
+                }}
+                className="flex items-center justify-between bg-slate-800/80 hover:bg-slate-700 border border-slate-700/50 hover:border-slate-600 p-4 rounded-2xl transition-all group cursor-pointer text-left w-full"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-amber-500/10 text-amber-400 rounded-xl border border-amber-500/20 group-hover:bg-amber-500/20 transition-all">
+                    ⚡
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-white leading-none">Add Surge Charge</p>
+                    <p className="text-[10px] text-slate-400 mt-1">Activate weather or traffic surcharges</p>
+                  </div>
+                </div>
+                <span className="text-xs text-slate-500 group-hover:text-white transition-colors">➔</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setActionHubModal({ open: false, zone: null });
+                  handleOpenAnalytics(actionHubModal.zone.id);
+                }}
+                className="flex items-center justify-between bg-slate-800/80 hover:bg-slate-700 border border-slate-700/50 hover:border-slate-600 p-4 rounded-2xl transition-all group cursor-pointer text-left w-full"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-indigo-500/10 text-indigo-400 rounded-xl border border-indigo-500/20 group-hover:bg-indigo-500/20 transition-all">
+                    📊
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-white leading-none">View Zone Stats</p>
+                    <p className="text-[10px] text-slate-400 mt-1">Review operational telemetry analytics</p>
+                  </div>
+                </div>
+                <span className="text-xs text-slate-500 group-hover:text-white transition-colors">➔</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Confirmation Modal Overlay before delete */}
       {deleteConfirmId && (

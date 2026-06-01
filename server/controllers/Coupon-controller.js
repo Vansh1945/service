@@ -6,7 +6,7 @@ const User = require('../models/User-model');
 // Create new coupon
 const createCoupon = async (req, res) => {
   try {
-    const { code, discountType, discountValue, expiryDate, minBookingValue, isGlobal, isFirstBooking, assignedTo, usageLimit, applicableZones } = req.body;
+    const { code, discountType, discountValue, expiryDate, minBookingValue, isGlobal, isFirstBooking, assignedTo, usageLimit, applicableZones, scope, selectedZones } = req.body;
 
     if (isFirstBooking) {
       const existingFirstBookingCoupon = await Coupon.findOne({ isFirstBooking: true, isActive: true });
@@ -38,7 +38,9 @@ const createCoupon = async (req, res) => {
       isFirstBooking,
       assignedTo,
       usageLimit: usageLimit || null,
-      applicableZones: applicableZones || []
+      applicableZones: applicableZones || [],
+      scope: scope || (isGlobal === true ? 'global' : 'zone'),
+      selectedZones: selectedZones || applicableZones || []
     });
 
     res.status(201).json({
@@ -163,12 +165,12 @@ const updateCoupon = async (req, res) => {
     }
 
     // Perform update
-    const updatedCoupon = await Coupon.findByIdAndUpdate(
-      id,
-      updateData,
-      { new: true, runValidators: true }
-    ).populate('assignedTo', 'name email totalBookings')
-    .populate('usedBy.user', 'name email');
+    Object.assign(existingCoupon, updateData);
+    await existingCoupon.save();
+
+    const updatedCoupon = await Coupon.findById(id)
+      .populate('assignedTo', 'name email totalBookings')
+      .populate('usedBy.user', 'name email');
 
     res.status(200).json({
       success: true,

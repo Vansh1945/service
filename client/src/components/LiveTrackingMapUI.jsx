@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Polyline, Polygon, Circle, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, Polygon, Circle, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { Loader } from 'lucide-react';
+import { Loader, X } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 import { LIGHT_MAP_TILES, LIGHT_MAP_ATTRIBUTION, calculateBearing } from '../utils/format';
 import { latLngToS2CellId, s2CellIdToCorners } from '../utils/s2Helper';
+import { getAllZones } from '../services/ZoneService';
 
 // Fix for default Leaflet marker assets in Vite using a custom divIcon
 let DefaultIcon = L.divIcon({
@@ -123,8 +124,58 @@ const MapBoundsHelper = ({ providerLoc, targetLat, targetLng }) => {
 
 const LiveTrackingMapUI = ({ targetLat, targetLng, providerLoc, routeCoords = [], loadingRoute = false }) => {
   const [mapStyle, setMapStyle] = useState('satellite');
+  const [zones, setZones] = useState([]);
+  const [actionHubModal, setActionHubModal] = useState({ open: false, zone: null });
   const centerLat = targetLat || 31.3260;
   const centerLng = targetLng || 75.5761;
+
+  const resolveZonePath = (zoneId) => {
+    const path = [];
+    let currentZone = zones.find(z => z.id === zoneId || z._id === zoneId);
+    while (currentZone) {
+      path.unshift(currentZone.name);
+      const parentId = currentZone.parentZone?._id || currentZone.parentZone;
+      if (parentId) {
+        currentZone = zones.find(z => z.id === parentId || z._id === parentId);
+      } else {
+        currentZone = null;
+      }
+    }
+    return path.length > 0 ? path.join(" > ") : "Global / Root";
+  };
+
+  useEffect(() => {
+    const fetchZones = async () => {
+      try {
+        const response = await getAllZones({ limit: 1000 });
+        if (response?.data?.success) {
+          const dbZones = response.data.data.map(z => {
+            let coords = [];
+            if (z.polygon && z.polygon.coordinates && z.polygon.coordinates[0]) {
+              coords = z.polygon.coordinates[0].map(coord => [coord[1], coord[0]]);
+              if (coords.length > 1 && coords[0][0] === coords[coords.length - 1][0] && coords[0][1] === coords[coords.length - 1][1]) {
+                coords.pop();
+              }
+            }
+            return {
+              id: z._id,
+              name: z.name,
+              city: z.city || 'Jalandhar',
+              status: z.status,
+              priority: z.priority,
+              coordinates: coords,
+              zoneLevel: z.zoneLevel || 'city',
+              parentZone: z.parentZone
+            };
+          });
+          setZones(dbZones.filter(z => z.coordinates.length > 0));
+        }
+      } catch (err) {
+        console.error("Error loading zones in live tracking map:", err);
+      }
+    };
+    fetchZones();
+  }, []);
 
   const mapLayers = {
     satellite: {
@@ -192,8 +243,8 @@ const LiveTrackingMapUI = ({ targetLat, targetLng, providerLoc, routeCoords = []
             key={style.id}
             onClick={() => setMapStyle(style.id)}
             className={`px-3 py-1.5 rounded-xl text-[10px] font-black tracking-wider uppercase transition-all duration-200 flex items-center gap-1.5 select-none ${mapStyle === style.id
-                ? 'bg-primary text-white shadow-md shadow-primary/20 scale-[1.02]'
-                : 'text-secondary/70 hover:bg-gray-100 hover:text-secondary active:scale-95'
+              ? 'bg-primary text-white shadow-md shadow-primary/20 scale-[1.02]'
+              : 'text-secondary/70 hover:bg-gray-100 hover:text-secondary active:scale-95'
               }`}
           >
             <span>{style.icon}</span>
@@ -213,6 +264,27 @@ const LiveTrackingMapUI = ({ targetLat, targetLng, providerLoc, routeCoords = []
           attribution={mapLayers[mapStyle].attribution}
           url={mapLayers[mapStyle].url}
         />
+
+        {/* Render active zone polygons */}
+        {zones.map(zone => {
+          let color = '#22c55e'; // active/low
+          if (zone.status === 'inactive') color = '#9ca3af';
+          else if (zone.priority === 'high') color = '#ef4444';
+          else if (zone.priority === 'medium') color = '#eab308';
+
+          return (
+            <Polygon
+              key={zone.id}
+              positions={zone.coordinates}
+              pathOptions={{ color, fillColor: color, fillOpacity: 0.15, weight: 1.5 }}
+              eventHandlers={{
+                click: () => {
+                  setActionHubModal({ open: true, zone });
+                }
+              }}
+            />
+          );
+        })}
 
         {/* Customer Target Pulse Ring */}
         {targetLat && targetLng && (

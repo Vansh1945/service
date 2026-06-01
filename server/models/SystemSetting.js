@@ -164,6 +164,28 @@ const systemConfigSchema = new mongoose.Schema(
         default: 48
       }
     },
+    surgeSplitSettings: {
+      visiting: {
+        type: Number,
+        default: 60
+      },
+      rain: {
+        type: Number,
+        default: 70
+      },
+      traffic: {
+        type: Number,
+        default: 70
+      },
+      night: {
+        type: Number,
+        default: 70
+      },
+      demand: {
+        type: Number,
+        default: 50
+      }
+    },
     notificationSettings: {
       pushEnabled: {
         type: Boolean,

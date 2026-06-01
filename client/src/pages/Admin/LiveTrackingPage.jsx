@@ -2,16 +2,19 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/auth';
 import { useSocket } from '../../socket/SocketContext';
 import * as AdminService from '../../services/AdminService';
+import * as ZoneService from '../../services/ZoneService';
 import * as BookingService from '../../services/BookingService';
 import * as ComplaintService from '../../services/ComplaintService';
+
 import Loader from '../../components/Loader';
-import { MapContainer, TileLayer, Marker, Tooltip, Popup, useMap, Polyline } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Tooltip, Popup, useMap, Polyline, Polygon } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet.heat';
 import { useNavigate } from 'react-router-dom';
 import {
   Navigation, Search, Wifi, Layers,
-  RefreshCw, AlertCircle, Clock, MessageSquare
+  RefreshCw, AlertCircle, Clock, MessageSquare,
+  X, Ticket, Briefcase, Zap, BarChart3, Users, UserCheck, CalendarCheck
 } from 'lucide-react';
 
 // Fix for default Leaflet marker assets in Vite
@@ -25,6 +28,8 @@ let DefaultIcon = L.icon({
   iconAnchor: [12, 41]
 });
 L.Marker.prototype.options.icon = DefaultIcon;
+
+const legacyZonePopupEnabled = false;
 
 // Distance helper using Haversine formula (returns distance in km)
 const calculateDistanceKm = (lat1, lon1, lat2, lon2) => {
@@ -46,6 +51,81 @@ const calculateETA = (distanceKm) => {
   const timeHours = distanceKm / 20;
   const timeMinutes = Math.round(timeHours * 60) + 3;
   return timeMinutes;
+};
+
+const isValidLatLng = (pair) => {
+  if (!Array.isArray(pair) || pair.length < 2) return false;
+  const lat = Number(pair[0]);
+  const lng = Number(pair[1]);
+  return Number.isFinite(lat) && Number.isFinite(lng)
+    && Math.abs(lat) <= 90
+    && Math.abs(lng) <= 180
+    && !(lat === 0 && lng === 0);
+};
+
+const getZoneId = (zone) => zone?._id || zone?.id;
+
+const normalizeZoneCoordinates = (zone) => {
+  const polygonCoords = zone?.polygon?.coordinates?.[0];
+  const rawCoordinates = Array.isArray(polygonCoords)
+    ? polygonCoords
+    : (Array.isArray(zone?.coordinates) ? zone.coordinates : []);
+
+  const normalized = rawCoordinates
+    .map((coord) => {
+      if (!Array.isArray(coord) || coord.length < 2) return null;
+      const first = Number(coord[0]);
+      const second = Number(coord[1]);
+      if (!Number.isFinite(first) || !Number.isFinite(second)) return null;
+
+      if (polygonCoords) return [second, first];
+      if (Math.abs(first) > 90 && Math.abs(second) <= 90) return [second, first];
+      return [first, second];
+    })
+    .filter(isValidLatLng);
+
+  if (normalized.length > 1) {
+    const first = normalized[0];
+    const last = normalized[normalized.length - 1];
+    if (first[0] === last[0] && first[1] === last[1]) {
+      normalized.pop();
+    }
+  }
+
+  return normalized.length >= 3 ? normalized : [];
+};
+
+const normalizeZone = (zone) => {
+  const zoneId = getZoneId(zone);
+  return {
+    ...zone,
+    id: zoneId,
+    _id: zoneId,
+    coordinates: normalizeZoneCoordinates(zone),
+    city: zone?.city || 'Unknown city',
+    status: zone?.status || 'active',
+    priority: zone?.priority || 'medium',
+    maxProviders: zone?.maxProviders ?? 0,
+    serviceRadius: zone?.serviceRadius ?? 0
+  };
+};
+
+const isPointInPolygon = (lat, lng, polygon) => {
+  if (!isValidLatLng([lat, lng]) || !Array.isArray(polygon) || polygon.length < 3) return false;
+
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const latI = Number(polygon[i][0]);
+    const lngI = Number(polygon[i][1]);
+    const latJ = Number(polygon[j][0]);
+    const lngJ = Number(polygon[j][1]);
+
+    const intersects = ((lngI > lng) !== (lngJ > lng))
+      && (lat < ((latJ - latI) * (lng - lngI)) / (lngJ - lngI) + latI);
+
+    if (intersects) inside = !inside;
+  }
+  return inside;
 };
 
 // Relative relative time formatter
@@ -170,7 +250,23 @@ const LiveTrackingPage = () => {
   const [mapZoom, setMapZoom] = useState(12);
   const [mapStyle, setMapStyle] = useState('hybrid'); // 'satellite' (Esri World Imagery) or 'hybrid' (Google Satellite with Labels & 3D Terrain)
   const [showHeatmap, setShowHeatmap] = useState(true);
-  const [tick, setTick] = useState(0);
+  const [, setTick] = useState(0);
+  const [actionHubModal, setActionHubModal] = useState({ open: false, zone: null });
+  const [zones, setZones] = useState([]);
+  const resolveZonePath = (zoneId) => {
+    const path = [];
+    let currentZone = zones.find(z => z.id === zoneId || z._id === zoneId);
+    while (currentZone) {
+      path.unshift(currentZone.name);
+      const parentId = currentZone.parentZone?._id || currentZone.parentZone;
+      if (parentId) {
+        currentZone = zones.find(z => z.id === parentId || z._id === parentId);
+      } else {
+        currentZone = null;
+      }
+    }
+    return path.length > 0 ? path.join(" > ") : "Global / Root";
+  };
 
   // Keep timers ticking for last location update displays
   useEffect(() => {
@@ -186,10 +282,11 @@ const LiveTrackingPage = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [provRes, bookRes, compRes] = await Promise.all([
+      const [provRes, bookRes, compRes, zoneRes] = await Promise.all([
         AdminService.getAllProviders(),
         BookingService.getAllBookings({ limit: 1000 }),
-        ComplaintService.getAllComplaints().catch(() => ({ data: { data: [] } }))
+        ComplaintService.getAllComplaints().catch(() => ({ data: { data: [] } })),
+        ZoneService.getAllZones({ limit: 1000 })
       ]);
 
       const allProviders = Array.isArray(provRes.data?.providers)
@@ -204,7 +301,12 @@ const LiveTrackingPage = () => {
         ? compRes.data.data
         : (Array.isArray(compRes.data) ? compRes.data : []);
 
+      const allZones = (Array.isArray(zoneRes.data?.zones) ? zoneRes.data.zones : (Array.isArray(zoneRes.data?.data) ? zoneRes.data.data : []))
+        .map(normalizeZone)
+        .filter(zone => zone.coordinates.length >= 3);
+
       setProviders(allProviders);
+      setZones(allZones);
       setBookings(allBookings);
       setComplaints(allComplaints);
 
@@ -389,10 +491,177 @@ const LiveTrackingPage = () => {
     (b.services?.[0]?.serviceDetails?.title || b.services?.[0]?.service?.title || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const getProviderLatLng = (provider) => {
+    const coords = provider?.currentLocation?.coordinates;
+    if (Array.isArray(coords) && coords.length === 2) {
+      const pair = [Number(coords[1]), Number(coords[0])];
+      if (isValidLatLng(pair)) return pair;
+    }
+
+    const addressPair = [Number(provider?.address?.lat), Number(provider?.address?.lng)];
+    return isValidLatLng(addressPair) ? addressPair : null;
+  };
+
+  const getBookingLatLng = (booking) => {
+    const pair = [Number(booking?.address?.lat), Number(booking?.address?.lng)];
+    return isValidLatLng(pair) ? pair : null;
+  };
+
+  const getZoneStats = (zone) => {
+    const polygon = zone?.coordinates || [];
+    const providersInZone = providers.filter(provider => {
+      const position = getProviderLatLng(provider);
+      return position && isPointInPolygon(position[0], position[1], polygon);
+    });
+
+    const bookingsInZone = bookings.filter(booking => {
+      const position = getBookingLatLng(booking);
+      return position && isPointInPolygon(position[0], position[1], polygon);
+    });
+
+    const activeBookingsInZone = bookingsInZone.filter(booking =>
+      ['pending', 'accepted', 'in-progress', 'in_progress', 'arriving', 'scheduled', 'started'].includes(booking.status)
+    );
+
+    const customerMap = new Map();
+    bookingsInZone.forEach((booking, index) => {
+      const customer = booking.customer || {};
+      const rawCustomerId = customer?._id || customer?.id || booking.customerId || booking.user?._id || booking.user || booking._id || index;
+      const customerId = rawCustomerId?.toString?.() || String(rawCustomerId);
+      if (!customerMap.has(customerId)) {
+        customerMap.set(customerId, {
+          id: customerId,
+          name: customer?.name || booking.customerName || 'Customer',
+          phone: customer?.phone || booking.customerPhone || ''
+        });
+      }
+    });
+
+    return {
+      providersCount: providersInZone.length,
+      customersCount: customerMap.size,
+      activeBookingsCount: activeBookingsInZone.length,
+      providersPreview: providersInZone.slice(0, 2),
+      customersPreview: Array.from(customerMap.values()).slice(0, 2)
+    };
+  };
+
+  const renderZoneActionPopup = (zone) => {
+    if (!zone) return null;
+
+    const zoneId = getZoneId(zone);
+    const zoneStats = getZoneStats(zone);
+
+    let dotColor = 'bg-emerald-500';
+    if (zone.status === 'inactive') dotColor = 'bg-gray-400';
+    else if (zone.priority === 'high') dotColor = 'bg-red-500';
+    else if (zone.priority === 'medium') dotColor = 'bg-amber-500';
+
+    return (
+      <div className="w-full font-sans text-secondary">
+        {/* Header */}
+        <div className="flex items-center gap-2 pb-2.5 pr-6 border-b border-gray-200">
+          <span className={`w-3 h-3 rounded-full ${dotColor} shrink-0`}></span>
+          <h3 className="text-sm font-black uppercase text-secondary tracking-wider leading-none">
+            {zone.name}
+          </h3>
+        </div>
+
+        {/* Details List */}
+        <div className="py-2.5 space-y-2 text-[10px] font-black uppercase tracking-wider text-secondary/65">
+          <div className="flex justify-between items-center">
+            <span>City Hub:</span>
+            <span className="text-secondary font-black text-right">{zone.city || 'N/A'}</span>
+          </div>
+          
+          <div className="flex justify-between items-center">
+            <span>Level:</span>
+            <span className="text-secondary font-black text-right">{zone.zoneLevel || 'N/A'}</span>
+          </div>
+
+          <div className="flex justify-between items-center">
+            <span>Status:</span>
+            <span className={`font-black text-right ${zone.status === 'active' ? 'text-emerald-600' : 'text-red-500'}`}>
+              {zone.status || 'ACTIVE'}
+            </span>
+          </div>
+
+          <div className="flex justify-between items-center">
+            <span>Max Providers:</span>
+            <span className="text-secondary font-black text-right">{zone.maxProviders || '0'}</span>
+          </div>
+
+          <div className="flex justify-between items-center">
+            <span>Radius Limit:</span>
+            <span className="text-secondary font-black text-right">{zone.serviceRadius ? `${zone.serviceRadius} KM` : 'N/A'}</span>
+          </div>
+        </div>
+
+        {/* Separator */}
+        <div className="border-t border-gray-200 my-1"></div>
+
+        {/* Counts Statistics */}
+        <div className="py-2.5 space-y-2 text-[10px] font-black uppercase tracking-wider">
+          <div className="flex justify-between items-center">
+            <span className="text-secondary/65">Providers Inside:</span>
+            <span className="text-blue-600 text-xs font-black text-right">{zoneStats.providersCount}</span>
+          </div>
+          
+          <div className="flex justify-between items-center text-[#a855f7]">
+            <span className="font-extrabold">Customers:</span>
+            <span className="text-xs font-black text-right">{zoneStats.customersCount}</span>
+          </div>
+
+          <div className="flex justify-between items-center">
+            <span className="text-secondary/65">Total Bookings:</span>
+            <span className="text-amber-600 text-xs font-black text-right">{zoneStats.activeBookingsCount}</span>
+          </div>
+        </div>
+
+        {/* Bottom Action Buttons (2x2 Grid with Icon & Name) */}
+        <div className="grid grid-cols-2 gap-2 border-t border-primary/10 pt-3 mt-1 text-[10px] font-bold uppercase tracking-wider">
+          <button
+            onClick={() => { window.location.href = `/admin/coupons?prefillZone=${zoneId}`; }}
+            className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-primary/10 text-primary transition-all hover:bg-primary hover:text-white"
+            title="Create Coupon"
+          >
+            <Ticket className="h-3.5 w-3.5" />
+            <span>Coupon</span>
+          </button>
+          <button
+            onClick={() => { window.location.href = `/admin/commission?prefillZone=${zoneId}`; }}
+            className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-secondary/10 text-secondary transition-all hover:bg-secondary hover:text-white"
+            title="Set Commission"
+          >
+            <Briefcase className="h-3.5 w-3.5" />
+            <span>Commission</span>
+          </button>
+          <button
+            onClick={() => { window.location.href = `/admin/surge?prefillZone=${zoneId}`; }}
+            className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-accent/10 text-accent transition-all hover:bg-accent hover:text-white"
+            title="Add Surge Charge"
+          >
+            <Zap className="h-3.5 w-3.5" />
+            <span>Surge</span>
+          </button>
+          <button
+            onClick={() => { window.location.href = `/admin/zone-management?analyticsZone=${zoneId}`; }}
+            className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-primary/10 text-primary transition-all hover:bg-primary hover:text-white"
+            title="View Zone Stats"
+          >
+            <BarChart3 className="h-3.5 w-3.5" />
+            <span>Analytics</span>
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   // Compute Heatmap Points based on all bookings
   const heatmapPoints = bookings
-    .filter(b => b.address && typeof b.address.lat === 'number' && b.address.lat !== 0)
-    .map(b => [b.address.lat, b.address.lng, 0.85]);
+    .map(getBookingLatLng)
+    .filter(Boolean)
+    .map(([lat, lng]) => [lat, lng, 0.85]);
 
   return (
     <div className="flex flex-col h-[calc(100vh-150px)] bg-gray-50 text-gray-850 overflow-hidden font-sans select-none rounded-2xl border border-gray-200 shadow-sm">
@@ -705,6 +974,65 @@ const LiveTrackingPage = () => {
 
                 <MapCenterer center={mapCenter} zoom={mapZoom} />
 
+                {/* Render dispatch zones on the map */}
+                {zones.filter(zone => Array.isArray(zone.coordinates) && zone.coordinates.length >= 3).map(zone => {
+                  let color = '#22c55e';
+                  if (zone.status === 'inactive') color = '#9ca3af';
+                  else if (zone.priority === 'high') color = '#ef4444';
+                  else if (zone.priority === 'medium') color = '#eab308';
+                  return (
+                    <Polygon
+                      key={'zone-poly-' + getZoneId(zone)}
+                      positions={zone.coordinates}
+                      pathOptions={{ color, fillColor: color, fillOpacity: 0.15, weight: 2 }}
+                    >
+                      <Tooltip sticky>
+                        <span className="font-sans font-bold text-xs uppercase text-slate-800">{zone.name} Zone ({zone.city})</span>
+                      </Tooltip>
+                      <Popup minWidth={288} maxWidth={320} closeButton>
+                        {renderZoneActionPopup(zone)}
+                      </Popup>
+                    </Polygon>
+                  );
+                })}
+                {/* Action Hub Modal */}
+                {legacyZonePopupEnabled && actionHubModal.open && actionHubModal.zone && (
+                  <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-md animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 border border-slate-300/50 rounded-2xl shadow-xl max-w-md w-full mx-4 p-6 space-y-4 relative overflow-hidden">
+                      {/* Ambient background glow using theme colors */}
+                      <div className="absolute -top-20 -left-20 w-48 h-48 bg-primary/20 rounded-full blur-3xl pointer-events-none" />
+                      <div className="absolute -bottom-20 -right-20 w-48 h-48 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+                      <div className="flex justify-between items-start border-b border-slate-200/50 pb-3 relative z-10">
+                        <div>
+                          <span className="text-xs font-medium uppercase tracking-wider bg-primary/10 text-primary px-2.5 py-1 rounded-full border border-primary/20">Zone action hub</span>
+                          <h3 className="text-lg font-bold mt-2 text-gray-900 dark:text-gray-100">{actionHubModal.zone.name}</h3>
+                          <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1">📍 {actionHubModal.zone.name}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">ID: {actionHubModal.zone.id}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Status: {actionHubModal.zone.status}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Priority: {actionHubModal.zone.priority}</p>
+                        </div>
+                        <button onClick={() => setActionHubModal({ open: false, zone: null })} className="p-2 rounded-full text-gray-400 hover:text-gray-800 hover:bg-gray-200 dark:hover:bg-slate-700 transition-all border border-gray-300/50">
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div className="grid gap-3">
+                        <button onClick={() => { window.location.href = `/admin/coupons?prefillZone=${actionHubModal.zone.id}`; }} className="flex items-center justify-between bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 border border-slate-300/50 p-4 rounded-lg transition-all group">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-teal-500/10 text-teal-400 rounded-xl border border-teal-500/20 group-hover:bg-teal-500/20 transition-all">🎟️</div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Create Coupon</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">Configure geo‑restricted discounts</p>
+                            </div>
+                          </div>
+                          <span className="text-xs text-gray-500 group-hover:text-gray-800 transition-colors">➔</span>
+                        </button>
+                        {/* Additional buttons for Commission and Surge can be added here */}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+
                 {/* Leaflet Heatmap Layer */}
                 {showHeatmap && heatmapPoints.length > 0 && (
                   <HeatmapLayer points={heatmapPoints} />
@@ -712,24 +1040,24 @@ const LiveTrackingPage = () => {
 
                 {/* Render Connected Route Polylines: Provider -> Customer */}
                 {activeBookings.map((booking, idx) => {
-                  if (booking.address?.lat) {
+                  const bookingPosition = getBookingLatLng(booking);
+                  if (bookingPosition) {
                     const provId = booking.provider?._id || booking.provider;
                     const provider = providers.find(p => p._id === provId);
-
-                    if (provider && provider.currentLocation?.coordinates?.length === 2 && provider.currentLocation.coordinates[1] !== 0) {
-                      const pLat = provider.currentLocation.coordinates[1];
-                      const pLng = provider.currentLocation.coordinates[0];
-
-                      const route = booking.routeCoordinates && booking.routeCoordinates.length > 0
-                        ? booking.routeCoordinates.map(c => [c.lat || c[0], c.lng || c[1]])
-                        : [[pLat, pLng], [booking.address.lat, booking.address.lng]];
-
-                      const dist = calculateDistanceKm(pLat, pLng, booking.address.lat, booking.address.lng);
+                    const providerPosition = provider ? getProviderLatLng(provider) : null;
+                    if (providerPosition) {
+                      const [pLat, pLng] = providerPosition;
+                      const route = (Array.isArray(booking.routeCoordinates) && booking.routeCoordinates.length > 0
+                        ? booking.routeCoordinates.map(c => [c.lat ?? c[0], c.lng ?? c[1]])
+                        : [[pLat, pLng], bookingPosition])
+                        .map(coord => [Number(coord[0]), Number(coord[1])]);
+                      // Defensive check: ensure route contains valid lat/lng pairs
+                      const isValidRoute = Array.isArray(route) && route.length >= 2 && route.every(isValidLatLng);
+                      if (!isValidRoute) return null;
+                      const dist = calculateDistanceKm(pLat, pLng, bookingPosition[0], bookingPosition[1]);
                       const eta = calculateETA(dist);
-
                       return (
                         <React.Fragment key={'route-grp-' + booking._id + '-' + idx}>
-                          {/* Animated/Dashed route line connecting provider and customer */}
                           <Polyline
                             positions={route}
                             color="#3b82f6"
@@ -758,7 +1086,8 @@ const LiveTrackingPage = () => {
 
                 {/* Render Customer Markers for Active Bookings */}
                 {activeBookings.map((booking, idx) => {
-                  if (booking.address?.lat) {
+                  const customerPosition = getBookingLatLng(booking);
+                  if (customerPosition) {
                     const customer = booking.customer;
                     const totalBookings = customer?.totalBookings || 1;
                     const isRepeatCustomer = totalBookings > 1;
@@ -775,7 +1104,7 @@ const LiveTrackingPage = () => {
                     return (
                       <Marker
                         key={'cust-' + booking._id + '-' + idx}
-                        position={[booking.address.lat, booking.address.lng]}
+                        position={customerPosition}
                         icon={getCustomerMarkerIcon(isRepeatCustomer)}
                       >
                         <Popup minWidth={260}>
@@ -824,12 +1153,10 @@ const LiveTrackingPage = () => {
 
                 {/* Render Providers */}
                 {providers.map(provider => {
-                  const loc = provider.currentLocation;
                   const status = getProviderComputedStatus(provider);
+                  const providerPos = getProviderLatLng(provider);
 
-                  if (loc && loc.coordinates && loc.coordinates.length === 2 && loc.coordinates[1] !== 0) {
-                    const providerPos = [loc.coordinates[1], loc.coordinates[0]];
-
+                  if (providerPos) {
                     // Check active booking logic for telemetry details popup
                     const activeBooking = bookings.find(b =>
                       ['accepted', 'in-progress', 'in_progress', 'arriving', 'started'].includes(b.status) &&
@@ -838,8 +1165,9 @@ const LiveTrackingPage = () => {
 
                     let dist = 0;
                     let calculatedEta = 0;
-                    if (activeBooking && activeBooking.address?.lat) {
-                      dist = calculateDistanceKm(providerPos[0], providerPos[1], activeBooking.address.lat, activeBooking.address.lng);
+                    const activeBookingPosition = getBookingLatLng(activeBooking);
+                    if (activeBookingPosition) {
+                      dist = calculateDistanceKm(providerPos[0], providerPos[1], activeBookingPosition[0], activeBookingPosition[1]);
                       calculatedEta = calculateETA(dist);
                     }
 
@@ -881,7 +1209,10 @@ const LiveTrackingPage = () => {
                               <p className="flex justify-between text-slate-600"><span className="font-bold">Speed:</span> <span className="font-bold text-teal-600">{provider.speed ? `${provider.speed} km/h` : '0 km/h'}</span></p>
                               <p className="flex justify-between text-slate-600"><span className="font-bold">Network status:</span> <span className="font-bold text-emerald-600 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Connected (92ms)</span></p>
                               {activeBooking && (
-                                <p className="flex justify-between text-slate-600"><span className="font-bold">Active Booking ID:</span> <span className="font-mono font-bold text-slate-800">{activeBooking.bookingId}</span></p>
+                                <>
+                                  <p className="flex justify-between text-slate-600"><span className="font-bold">Active Booking ID:</span> <span className="font-mono font-bold text-slate-800">{activeBooking.bookingId}</span></p>
+                                  <p className="flex justify-between text-slate-600"><span className="font-bold">ETA:</span> <span className="font-bold text-primary">{calculatedEta} mins</span></p>
+                                </>
                               )}
                             </div>
                           </div>
@@ -904,8 +1235,117 @@ const LiveTrackingPage = () => {
             </div>
           )}
         </div>
-      </div>
-    </div>
+      </div >
+
+      {/* Premium Action Hub Modal Overlay */}
+      {
+        legacyZonePopupEnabled && actionHubModal.open && actionHubModal.zone && (
+          <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-md animate-in fade-in duration-200">
+            <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white border border-slate-700/50 p-6 rounded-3xl shadow-2xl max-w-md w-full mx-4 space-y-6 relative overflow-hidden">
+              {/* Ambient Background Glow */}
+              <div className="absolute -top-24 -left-24 w-48 h-48 bg-primary/20 rounded-full blur-3xl pointer-events-none"></div>
+              <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+              {/* Header */}
+              <div className="flex justify-between items-start border-b border-slate-700/50 pb-4 relative z-10">
+                <div>
+                  <span className="text-[10px] font-black text-primary uppercase tracking-widest bg-primary/10 px-2.5 py-1 rounded-full border border-primary/20">
+                    Zone action hub
+                  </span>
+                  <h3 className="text-xl font-bold mt-3 text-white tracking-tight leading-tight">
+                    {actionHubModal.zone.name}
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1.5 font-medium flex items-center gap-1">
+                    📍 {resolveZonePath(actionHubModal.zone.id)}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setActionHubModal({ open: false, zone: null })}
+                  className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-700/50 transition-all border border-slate-700/50"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Action Grid */}
+              <div className="grid grid-cols-1 gap-3 relative z-10 font-sans">
+                <button
+                  onClick={() => {
+                    window.location.href = `/admin/coupons?prefillZone=${actionHubModal.zone.id}`;
+                  }}
+                  className="flex items-center justify-between bg-slate-800/80 hover:bg-slate-700 border border-slate-700/50 hover:border-slate-600 p-4 rounded-2xl transition-all group cursor-pointer text-left w-full"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-teal-500/10 text-teal-400 rounded-xl border border-teal-500/20 group-hover:bg-teal-500/20 transition-all">
+                      🎟️
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-white leading-none">Create Coupon</p>
+                      <p className="text-[10px] text-slate-400 mt-1">Configure geo-restricted discounts</p>
+                    </div>
+                  </div>
+                  <span className="text-xs text-slate-500 group-hover:text-white transition-colors">➔</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    window.location.href = `/admin/commision?prefillZone=${actionHubModal.zone.id}`;
+                  }}
+                  className="flex items-center justify-between bg-slate-800/80 hover:bg-slate-700 border border-slate-700/50 hover:border-slate-600 p-4 rounded-2xl transition-all group cursor-pointer text-left w-full"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-blue-500/10 text-blue-400 rounded-xl border border-blue-500/20 group-hover:bg-blue-500/20 transition-all">
+                      💼
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-white leading-none">Set Commission</p>
+                      <p className="text-[10px] text-slate-400 mt-1">Adjust provider payout splits</p>
+                    </div>
+                  </div>
+                  <span className="text-xs text-slate-500 group-hover:text-white transition-colors">➔</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    window.location.href = `/admin/surge?prefillZone=${actionHubModal.zone.id}`;
+                  }}
+                  className="flex items-center justify-between bg-slate-800/80 hover:bg-slate-700 border border-slate-700/50 hover:border-slate-600 p-4 rounded-2xl transition-all group cursor-pointer text-left w-full"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-amber-500/10 text-amber-400 rounded-xl border border-amber-500/20 group-hover:bg-amber-500/20 transition-all">
+                      ⚡
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-white leading-none">Add Surge Charge</p>
+                      <p className="text-[10px] text-slate-400 mt-1">Activate weather or traffic surcharges</p>
+                    </div>
+                  </div>
+                  <span className="text-xs text-slate-500 group-hover:text-white transition-colors">➔</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    window.location.href = `/admin/zone-management?analyticsZone=${actionHubModal.zone.id}`;
+                  }}
+                  className="flex items-center justify-between bg-slate-800/80 hover:bg-slate-700 border border-slate-700/50 hover:border-slate-600 p-4 rounded-2xl transition-all group cursor-pointer text-left w-full"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-indigo-500/10 text-indigo-400 rounded-xl border border-indigo-500/20 group-hover:bg-indigo-500/20 transition-all">
+                      📊
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-white leading-none">View Zone Stats</p>
+                      <p className="text-[10px] text-slate-400 mt-1">Review operational telemetry analytics</p>
+                    </div>
+                  </div>
+                  <span className="text-xs text-slate-500 group-hover:text-white transition-colors">➔</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      }
+    </div >
   );
 };
 

@@ -81,6 +81,15 @@ const couponSchema = new Schema({
   applicableZones: [{
     type: Schema.Types.ObjectId,
     ref: 'Zone'
+  }],
+  scope: {
+    type: String,
+    enum: ['global', 'zone'],
+    default: 'global'
+  },
+  selectedZones: [{
+    type: Schema.Types.ObjectId,
+    ref: 'Zone'
   }]
 }, {
   timestamps: true,
@@ -118,6 +127,30 @@ couponSchema.virtual('formattedDiscount').get(function () {
 couponSchema.pre('save', function (next) {
   if (this.isExpired) {
     this.isActive = false;
+  }
+
+  // Sync scope and isGlobal
+  if (this.scope === 'global') {
+    this.isGlobal = true;
+  } else if (this.scope === 'zone') {
+    this.isGlobal = false;
+  } else {
+    this.scope = this.isGlobal ? 'global' : 'zone';
+  }
+
+  // Sync selectedZones and applicableZones
+  if (this.scope === 'global') {
+    this.applicableZones = [];
+    this.selectedZones = [];
+  } else {
+    if (this.selectedZones && this.selectedZones.length > 0) {
+      this.applicableZones = this.selectedZones;
+    } else if (this.applicableZones && this.applicableZones.length > 0) {
+      this.selectedZones = this.applicableZones;
+    } else {
+      this.applicableZones = [];
+      this.selectedZones = [];
+    }
   }
 
   if (this.isGlobal && this.isFirstBooking) {

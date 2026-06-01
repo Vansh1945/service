@@ -16,13 +16,18 @@ import {
   ChevronUp,
   X,
   Percent,
-  Info
+  Info,
+  Globe,
+  Calendar,
+  Clock,
+  MapPin
 } from 'lucide-react';
-import { formatCurrency, formatDate } from '../../utils/format';
+import { formatCurrency, formatDate, formatDateTime } from '../../utils/format';
 import * as CommissionService from '../../services/CommissionService';
 import * as AdminService from '../../services/AdminService';
 import * as ZoneService from '../../services/ZoneService';
 import Pagination from '../../components/Pagination';
+import HierarchicalZoneSelector from '../../components/HierarchicalZoneSelector';
 
 const AdminCommissionPage = () => {
   const { API, token, showToast } = useAuth();
@@ -615,7 +620,97 @@ const AdminCommissionPage = () => {
     fetchCommissionRules();
     fetchProviders();
     fetchZones();
+
+    const params = new URLSearchParams(window.location.search);
+    const prefillZone = params.get('prefillZone');
+    if (prefillZone) {
+      setRuleForm(prev => ({
+        ...prev,
+        zoneId: prefillZone,
+        zoneIds: [prefillZone]
+      }));
+      setShowRuleModal(true);
+    }
   }, []);
+
+
+  // Helper functions for targeted providers and zone paths
+  const getZoneHierarchyPath = (zoneId) => {
+    if (!zoneId) return 'Unknown Zone';
+    let currentZone = zones.find(z => z._id.toString() === zoneId.toString());
+    const path = [];
+    while (currentZone) {
+      path.unshift(currentZone.name);
+      const parentId = currentZone.parentZone?._id || currentZone.parentZone;
+      if (parentId) {
+        currentZone = zones.find(z => z._id.toString() === parentId.toString());
+      } else {
+        currentZone = null;
+      }
+    }
+    return path.join(' > ') || 'Unknown Zone';
+  };
+
+  const getDescendantZoneIds = (zoneId, allZones) => {
+    if (!zoneId) return [];
+    const descendants = [zoneId.toString()];
+    let added = true;
+    while (added) {
+      added = false;
+      for (const z of allZones) {
+        const parentId = (z.parentZone?._id || z.parentZone || '').toString();
+        if (parentId && descendants.includes(parentId) && !descendants.includes(z._id.toString())) {
+          descendants.push(z._id.toString());
+          added = true;
+        }
+      }
+    }
+    return descendants;
+  };
+
+  const getTargetedProviders = (rule) => {
+    if (!rule) return [];
+    let list = [...providers];
+
+    // 1. Filter by specific provider first (since it overrides everything)
+    if (rule.applyTo === 'specificProvider') {
+      const targetId = (rule.specificProvider?._id || rule.specificProvider || '').toString();
+      return list.filter(p => p._id.toString() === targetId || p.providerId === targetId);
+    }
+
+    // 2. Filter by Zone (if defined, otherwise global and applies to all zones)
+    if (rule.zoneId) {
+      const allowedZoneIds = getDescendantZoneIds(rule.zoneId, zones);
+      list = list.filter(p => {
+        const pZoneId = (p.currentZone?._id || p.currentZone || p.zoneId || '').toString();
+        return pZoneId && allowedZoneIds.includes(pZoneId);
+      });
+    }
+
+    // 3. Filter by Performance Score
+    if (rule.applyTo === 'performanceScore') {
+      list = list.filter(p => {
+        let badge = p.performanceBadge;
+        if (!badge) {
+          const rating = p.averageRating || p.performanceScore?.rating || 0;
+          const completion = p.performanceScore?.completionPercentage || 0;
+          const onTime = p.performanceScore?.onTimePercentage || 0;
+
+          badge = 'Bronze';
+          if (rating >= 4.5 && completion >= 95 && onTime >= 95) {
+            badge = 'Platinum';
+          } else if (rating >= 4.0 && completion >= 90 && onTime >= 90) {
+            badge = 'Gold';
+          } else if (rating >= 3.5 && completion >= 85 && onTime >= 85) {
+            badge = 'Silver';
+          }
+        }
+        return badge === rule.performanceScore;
+      });
+    }
+
+    return list;
+  };
 
   // Refetch when filters change
   useEffect(() => {
@@ -1136,413 +1231,259 @@ const AdminCommissionPage = () => {
         {showRuleModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 overflow-y-auto h-full w-full z-50 flex justify-center py-8 px-4 sm:px-6">
             <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-xl h-fit">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h3 className="text-xl font-semibold text-secondary">
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 rounded-t-2xl">
+                <h3 className="text-lg leading-6 font-bold text-secondary flex items-center gap-2">
+                  <Settings className="w-5 h-5 text-primary" />
                   {editingRule ? 'Edit Commission Rule' : 'Add Commission Rule'}
                 </h3>
-              </div>
-              <div className="p-6 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1">Rule Name *</label>
-                  <input
-                    type="text"
-                    value={ruleForm.name}
-                    onChange={(e) => setRuleForm({ ...ruleForm, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-                    placeholder="Enter rule name"
-                    maxLength={100}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1">Description</label>
-                  <textarea
-                    value={ruleForm.description}
-                    onChange={(e) => setRuleForm({ ...ruleForm, description: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-                    rows="3"
-                    placeholder="Enter description"
-                    maxLength={500}
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-secondary mb-1">Commission Type *</label>
-                    <select
-                      value={ruleForm.type}
-                      onChange={(e) => setRuleForm({ ...ruleForm, type: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-                    >
-                      <option value="percentage">Percentage</option>
-                      <option value="fixed">Fixed Amount</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-secondary mb-1">
-                      Value * {ruleForm.type === 'percentage' ? '(%)' : '(₹)'}
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step={ruleForm.type === 'percentage' ? '0.1' : '1'}
-                      value={ruleForm.value}
-                      onChange={(e) => setRuleForm({ ...ruleForm, value: parseFloat(e.target.value) || 0 })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-                      placeholder={ruleForm.type === 'percentage' ? '10.5' : '1000'}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1">Applicable Zones (Cascading Selector)</label>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    {/* 1. STATE DROPDOWN */}
-                    <div className="relative">
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">State Selector</label>
-                      <div
-                        onClick={() => setStateOpen(!stateOpen)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white cursor-pointer flex justify-between items-center text-sm"
-                      >
-                        <span className="text-gray-700 truncate">
-                          {(() => {
-                            const sel = (ruleForm.zoneIds || []).filter(id => zones.find(z => z._id === id)?.zoneLevel === 'state');
-                            return sel.length === 0 ? 'Select States' : `${sel.length} Selected`;
-                          })()}
-                        </span>
-                        {stateOpen ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
-                      </div>
-                      {stateOpen && (
-                        <div className="mt-1 bg-gray-50 border border-gray-200 rounded-lg max-h-40 overflow-y-auto p-2">
-                          <input
-                            type="text"
-                            placeholder="Search state..."
-                            value={stateSearch}
-                            onChange={(e) => setStateSearch(e.target.value)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="w-full px-2 py-1 text-xs border border-gray-300 rounded mb-2 focus:outline-none focus:ring-1 focus:ring-primary"
-                          />
-                          <div className="space-y-1">
-                            {zones.filter(z => z.zoneLevel === 'state' && z.name.toLowerCase().includes(stateSearch.toLowerCase())).map(s => (
-                              <label key={s._id} className="flex items-center text-xs font-semibold text-secondary hover:text-primary cursor-pointer py-1 px-1 rounded hover:bg-gray-50" onClick={(e) => e.stopPropagation()}>
-                                <input
-                                  type="checkbox"
-                                  checked={ruleForm.zoneIds ? ruleForm.zoneIds.includes(s._id) : false}
-                                  onChange={() => handleZoneToggleCascade(s)}
-                                  className="h-3.5 w-3.5 text-primary border-gray-300 rounded mr-2"
-                                />
-                                {s.name}
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* 2. CITY DROPDOWN */}
-                    <div className="relative">
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">City Selector</label>
-                      <div
-                        onClick={() => setCityOpen(!cityOpen)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white cursor-pointer flex justify-between items-center text-sm"
-                      >
-                        <span className="text-gray-700 truncate">
-                          {(() => {
-                            const sel = (ruleForm.zoneIds || []).filter(id => zones.find(z => z._id === id)?.zoneLevel === 'city');
-                            return sel.length === 0 ? 'Select Cities' : `${sel.length} Selected`;
-                          })()}
-                        </span>
-                        {cityOpen ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
-                      </div>
-                      {cityOpen && (
-                        <div className="mt-1 bg-gray-50 border border-gray-200 rounded-lg max-h-40 overflow-y-auto p-2">
-                          <input
-                            type="text"
-                            placeholder="Search city..."
-                            value={citySearch}
-                            onChange={(e) => setCitySearch(e.target.value)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="w-full px-2 py-1 text-xs border border-gray-300 rounded mb-2 focus:outline-none focus:ring-1 focus:ring-primary"
-                          />
-                          <div className="space-y-1">
-                            {(() => {
-                              const selectedStateIds = (ruleForm.zoneIds || []).filter(id => zones.find(z => z._id === id)?.zoneLevel === 'state');
-                              const cities = selectedStateIds.length > 0
-                                ? zones.filter(z => z.zoneLevel === 'city' && selectedStateIds.includes((z.parentZone?._id || z.parentZone || '').toString()))
-                                : zones.filter(z => z.zoneLevel === 'city');
-
-                              const filteredCities = cities.filter(c => c.name.toLowerCase().includes(citySearch.toLowerCase()));
-                              if (filteredCities.length === 0) {
-                                return <p className="text-[10px] text-gray-400 italic text-center py-2">No cities available.</p>;
-                              }
-
-                              return filteredCities.map(c => (
-                                <label key={c._id} className="flex items-center text-xs font-semibold text-secondary hover:text-primary cursor-pointer py-1 px-1 rounded hover:bg-gray-50" onClick={(e) => e.stopPropagation()}>
-                                  <input
-                                    type="checkbox"
-                                    checked={ruleForm.zoneIds ? ruleForm.zoneIds.includes(c._id) : false}
-                                    onChange={() => handleZoneToggleCascade(c)}
-                                    className="h-3.5 w-3.5 text-primary border-gray-300 rounded mr-2"
-                                  />
-                                  {c.name}
-                                </label>
-                              ));
-                            })()}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* 3. MICRO ZONE DROPDOWN */}
-                    <div className="relative">
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">Micro Zone Selector</label>
-                      <div
-                        onClick={() => setMicroOpen(!microOpen)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white cursor-pointer flex justify-between items-center text-sm"
-                      >
-                        <span className="text-gray-700 truncate">
-                          {(() => {
-                            const sel = (ruleForm.zoneIds || []).filter(id => zones.find(z => z._id === id)?.zoneLevel === 'micro');
-                            return sel.length === 0 ? 'Select Micro Zones' : `${sel.length} Selected`;
-                          })()}
-                        </span>
-                        {microOpen ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
-                      </div>
-                      {microOpen && (
-                        <div className="mt-1 bg-gray-50 border border-gray-200 rounded-lg max-h-40 overflow-y-auto p-2">
-                          <input
-                            type="text"
-                            placeholder="Search micro zone..."
-                            value={microSearch}
-                            onChange={(e) => setMicroSearch(e.target.value)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="w-full px-2 py-1 text-xs border border-gray-300 rounded mb-2 focus:outline-none focus:ring-1 focus:ring-primary"
-                          />
-                          <div className="space-y-1">
-                            {(() => {
-                              const selectedCityIds = (ruleForm.zoneIds || []).filter(id => zones.find(z => z._id === id)?.zoneLevel === 'city');
-                              const micros = selectedCityIds.length > 0
-                                ? zones.filter(z => z.zoneLevel === 'micro' && selectedCityIds.includes((z.parentZone?._id || z.parentZone || '').toString()))
-                                : zones.filter(z => z.zoneLevel === 'micro');
-
-                              const filteredMicros = micros.filter(m => m.name.toLowerCase().includes(microSearch.toLowerCase()));
-                              if (filteredMicros.length === 0) {
-                                return <p className="text-[10px] text-gray-400 italic text-center py-2">No micro zones available.</p>;
-                              }
-
-                              return filteredMicros.map(m => (
-                                <label key={m._id} className="flex items-center text-xs font-medium text-gray-700 hover:text-primary cursor-pointer py-1 px-1 rounded hover:bg-gray-50" onClick={(e) => e.stopPropagation()}>
-                                  <input
-                                    type="checkbox"
-                                    checked={ruleForm.zoneIds ? ruleForm.zoneIds.includes(m._id) : false}
-                                    onChange={() => handleZoneToggleCascade(m)}
-                                    className="h-3.5 w-3.5 text-primary border-gray-300 rounded mr-2"
-                                  />
-                                  {m.name}
-                                </label>
-                              ));
-                            })()}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Selected Zones Displayed as Chips */}
-                  <div className="flex flex-wrap gap-2 mt-3 max-h-24 overflow-y-auto">
-                    {(ruleForm.zoneIds || []).map(id => {
-                      const zone = zones.find(z => z._id.toString() === id.toString());
-                      if (!zone) return null;
-
-                      let badgeColor = 'bg-teal-50 text-teal-800 border-teal-200';
-                      if (zone.zoneLevel === 'city') badgeColor = 'bg-blue-50 text-blue-800 border-blue-200';
-                      if (zone.zoneLevel === 'micro') badgeColor = 'bg-purple-50 text-purple-800 border-purple-200';
-
-                      return (
-                        <span key={id} className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border shadow-sm ${badgeColor}`}>
-                          <span>{zone.name} ({zone.zoneLevel.toUpperCase()})</span>
-                          <button
-                            type="button"
-                            onClick={() => handleZoneToggleCascade(zone)}
-                            className="ml-1 inline-flex items-center justify-center focus:outline-none"
-                          >
-                            <X className="w-3 h-3 ml-0.5" />
-                          </button>
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1">Apply To *</label>
-                  <select
-                    value={ruleForm.applyTo}
-                    onChange={(e) => setRuleForm({ ...ruleForm, applyTo: e.target.value, performanceScore: '', specificProvider: '' })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-                  >
-                    <option value="all">All Providers</option>
-                    <option value="performanceScore">Performance Score</option>
-                    <option value="specificProvider">Specific Provider</option>
-                  </select>
-                </div>
-
-                {ruleForm.applyTo === 'performanceScore' && (
-                  <div>
-                    <label className="block text-sm font-medium text-secondary mb-1">Performance Score *</label>
-                    <select
-                      value={ruleForm.performanceScore}
-                      onChange={(e) => setRuleForm({ ...ruleForm, performanceScore: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-                    >
-                      <option value="">Select tier</option>
-                      {performanceScores.map(tier => (
-                        <option key={tier} value={tier}>
-                          {tier.charAt(0).toUpperCase() + tier.slice(1)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {ruleForm.applyTo === 'specificProvider' && (
-                  <div>
-                    <label className="block text-sm font-medium text-secondary mb-1">Provider ID *</label>
-                    <input
-                      type="text"
-                      value={ruleForm.specificProvider}
-                      onChange={(e) => setRuleForm({ ...ruleForm, specificProvider: e.target.value.toUpperCase() })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary text-sm"
-                      placeholder="e.g. PROV-XXXXXXXX"
-                    />
-
-                    {/* Provider Performance Display */}
-                    {ruleForm.specificProvider && providers.find(p => p.providerId === ruleForm.specificProvider) && (
-                      <div className="mt-3 p-3 bg-teal-50 border border-teal-100 rounded-xl">
-                        {(() => {
-                          const provider = providers.find(p => p.providerId === ruleForm.specificProvider);
-                          const badgeColor = {
-                            'Platinum': 'text-purple-600',
-                            'Gold': 'text-amber-500',
-                            'Silver': 'text-gray-400',
-                            'Bronze': 'text-orange-700'
-                          }[provider.performanceBadge] || 'text-secondary';
-
-                          const nextBadge = {
-                            'Bronze': { name: 'Silver', rating: 3.5, comp: 85 },
-                            'Silver': { name: 'Gold', rating: 4.0, comp: 90 },
-                            'Gold': { name: 'Platinum', rating: 4.5, comp: 95 },
-                            'Platinum': null
-                          }[provider.performanceBadge];
-
-                          let gapInfo = null;
-                          if (nextBadge) {
-                            const ratingGap = Math.max(0, nextBadge.rating - (provider.averageRating || 0));
-                            const compGap = Math.max(0, nextBadge.comp - (provider.completionRate || 0));
-                            const onTimeGap = Math.max(0, nextBadge.comp - (provider.onTimeRate || 0));
-
-                            if (ratingGap > 0 || compGap > 0 || onTimeGap > 0) {
-                              const gapParts = [];
-                              if (ratingGap > 0) gapParts.push(`${ratingGap.toFixed(1)}★`);
-                              if (compGap > 0) gapParts.push(`+${compGap}% comp`);
-                              if (onTimeGap > 0) gapParts.push(`+${onTimeGap}% on-time`);
-                              if (gapParts.length > 0) gapInfo = `Need ${gapParts.join(' & ')} for ${nextBadge.name}`;
-                            }
-                          }
-
-                          return (
-                            <div className="space-y-2">
-                              <div className="flex justify-between items-center">
-                                <span className="text-[10px] font-bold text-teal-800 uppercase tracking-wider">Performance</span>
-                                <div className="flex items-center gap-1.5">
-                                  <div className={`w-1.5 h-1.5 rounded-full ${provider.performanceBadge === 'Platinum' ? 'bg-purple-500' : provider.performanceBadge === 'Gold' ? 'bg-amber-500' : 'bg-gray-400'}`}></div>
-                                  <span className={`text-xs font-bold ${badgeColor}`}>{provider.performanceBadge}</span>
-                                </div>
-                              </div>
-                              <div className="grid grid-cols-3 gap-2">
-                                {[
-                                  { label: 'Rating', value: (provider.averageRating || 0).toFixed(1) },
-                                  { label: 'Comp %', value: `${provider.completionRate || 0}%` },
-                                  { label: 'On-Time', value: `${provider.onTimeRate || 0}%` },
-                                ].map((stat) => (
-                                  <div key={stat.label} className="bg-white p-1.5 rounded-lg border border-teal-100 text-center shadow-xs">
-                                    <p className="text-[9px] text-gray-500 leading-none mb-1">{stat.label}</p>
-                                    <p className="text-[11px] font-bold text-secondary leading-none">{stat.value}</p>
-                                  </div>
-                                ))}
-                              </div>
-                              {gapInfo && (
-                                <p className="text-[9px] text-teal-600 italic font-medium pt-1 border-t border-teal-100/50">{gapInfo}</p>
-                              )}
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Badge Criteria Display */}
-                <div className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden mt-1">
-                  <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-200 flex items-center gap-2">
-                    <Info className="w-3 h-3 text-slate-500" />
-                    <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Badge Criteria</span>
-                  </div>
-                  <div className="p-2 grid grid-cols-2 gap-2">
-                    {[
-                      { name: 'Platinum', criteria: '4.5★ | 95%', color: 'bg-indigo-100 text-indigo-700' },
-                      { name: 'Gold', criteria: '4.0★ | 90%', color: 'bg-amber-100 text-amber-700' },
-                      { name: 'Silver', criteria: '3.5★ | 85%', color: 'bg-slate-200 text-slate-700' },
-                      { name: 'Bronze', criteria: 'Basics / Below', color: 'bg-orange-100 text-orange-700' }
-                    ].map((badge) => (
-                      <div key={badge.name} className="flex items-center justify-between p-1.5 bg-white rounded border border-slate-100 shadow-xs">
-                        <span className={`px-1 rounded text-[8px] font-black ${badge.color}`}>{badge.name.toUpperCase()}</span>
-                        <span className="text-[9px] text-slate-500 font-medium">{badge.criteria}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-secondary mb-1">Effective From</label>
-                    <input
-                      type="date"
-                      value={ruleForm.effectiveFrom ? new Date(ruleForm.effectiveFrom).toISOString().split('T')[0] : ''}
-                      onChange={(e) => setRuleForm({ ...ruleForm, effectiveFrom: new Date(e.target.value) })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-secondary mb-1">Effective Until (Optional)</label>
-                    <input
-                      type="date"
-                      value={ruleForm.effectiveUntil ? new Date(ruleForm.effectiveUntil).toISOString().split('T')[0] : ''}
-                      onChange={(e) => setRuleForm({ ...ruleForm, effectiveUntil: e.target.value ? new Date(e.target.value) : '' })}
-                      min={ruleForm.effectiveFrom ? new Date(ruleForm.effectiveFrom).toISOString().split('T')[0] : ''}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-                    />
-                  </div>
-                </div>
-              </div>
-              <div className="flex justify-end gap-3 p-6 border-t border-gray-200">
                 <button
                   onClick={() => {
                     setShowRuleModal(false);
                     setEditingRule(null);
                     resetRuleForm();
                   }}
-                  className="px-4 py-2 text-sm font-medium text-secondary bg-gray-100 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors"
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-650 hover:bg-slate-100 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+                {/* Section 1: Rule Configuration */}
+                <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100 space-y-4">
+                  <h4 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-1.5 pb-2 border-b border-slate-100/50">
+                    📝 Rule Configuration
+                  </h4>
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                      Rule Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={ruleForm.name}
+                      onChange={(e) => setRuleForm({ ...ruleForm, name: e.target.value })}
+                      className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-sm font-semibold"
+                      placeholder="e.g., Standard City Commission"
+                      maxLength={100}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                      Description
+                    </label>
+                    <textarea
+                      value={ruleForm.description}
+                      onChange={(e) => setRuleForm({ ...ruleForm, description: e.target.value })}
+                      className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-sm font-semibold"
+                      rows="2.5"
+                      placeholder="Describe what this rule applies to..."
+                      maxLength={500}
+                    />
+                  </div>
+                </div>
+
+                {/* Section 2: Payout & Coverage */}
+                <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100 space-y-4">
+                  <h4 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-1.5 pb-2 border-b border-slate-100/50">
+                    💰 Payout & Coverage
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                        Commission Type *
+                      </label>
+                      <select
+                        value={ruleForm.type}
+                        onChange={(e) => setRuleForm({ ...ruleForm, type: e.target.value })}
+                        className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-sm font-semibold cursor-pointer"
+                      >
+                        <option value="percentage">Percentage (%)</option>
+                        <option value="fixed">Fixed Amount (₹)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                        Value * {ruleForm.type === 'percentage' ? '(%)' : '(₹)'}
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step={ruleForm.type === 'percentage' ? '0.1' : '1'}
+                        value={ruleForm.value}
+                        onChange={(e) => setRuleForm({ ...ruleForm, value: parseFloat(e.target.value) || 0 })}
+                        className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-sm font-semibold"
+                        placeholder={ruleForm.type === 'percentage' ? '10.5' : '1000'}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <HierarchicalZoneSelector
+                      zones={zones}
+                      selectedZoneIds={ruleForm.zoneIds}
+                      onChange={(zone) => handleZoneToggleCascade(zone)}
+                      label="Applicable Zones (Hierarchical Selector)"
+                    />
+                  </div>
+                </div>
+
+                {/* Section 3: Target Providers & Timeline */}
+                <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100 space-y-4">
+                  <h4 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-1.5 pb-2 border-b border-slate-100/50">
+                    🎯 Target Providers & Timeline
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                        Apply To *
+                      </label>
+                      <select
+                        value={ruleForm.applyTo}
+                        onChange={(e) => setRuleForm({ ...ruleForm, applyTo: e.target.value, performanceScore: '', specificProvider: '' })}
+                        className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-sm font-semibold cursor-pointer"
+                      >
+                        <option value="all">All Providers</option>
+                        <option value="performanceScore">Performance Score</option>
+                        <option value="specificProvider">Specific Provider</option>
+                      </select>
+                    </div>
+
+                    {ruleForm.applyTo === 'performanceScore' && (
+                      <div className="animate-in fade-in slide-in-from-top-1 duration-200">
+                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                          Performance Score *
+                        </label>
+                        <select
+                          value={ruleForm.performanceScore}
+                          onChange={(e) => setRuleForm({ ...ruleForm, performanceScore: e.target.value })}
+                          className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-sm font-semibold cursor-pointer"
+                        >
+                          <option value="">Select tier</option>
+                          {performanceScores.map(tier => (
+                            <option key={tier} value={tier}>
+                              {tier.charAt(0).toUpperCase() + tier.slice(1)}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {ruleForm.applyTo === 'specificProvider' && (
+                      <div className="animate-in fade-in slide-in-from-top-1 duration-200">
+                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                          Provider ID *
+                        </label>
+                        <input
+                          type="text"
+                          value={ruleForm.specificProvider}
+                          onChange={(e) => setRuleForm({ ...ruleForm, specificProvider: e.target.value.toUpperCase() })}
+                          className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-sm font-semibold"
+                          placeholder="e.g., PROV-XXXXXXXX"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {ruleForm.applyTo === 'specificProvider' && ruleForm.specificProvider && providers.find(p => p.providerId === ruleForm.specificProvider) && (
+                    <div className="p-3.5 bg-teal-50 border border-teal-150 rounded-xl animate-in fade-in duration-200">
+                      {(() => {
+                        const provider = providers.find(p => p.providerId === ruleForm.specificProvider);
+                        const badgeColor = {
+                          'Platinum': 'text-purple-650 font-black',
+                          'Gold': 'text-amber-550 font-black',
+                          'Silver': 'text-slate-500 font-black',
+                          'Bronze': 'text-orange-750 font-black'
+                        }[provider.performanceBadge] || 'text-secondary';
+
+                        return (
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-center pb-1.5 border-b border-teal-100/50">
+                              <span className="text-[9px] font-black text-teal-800 uppercase tracking-widest">Matched Specialist</span>
+                              <span className={`text-xs ${badgeColor}`}>{provider.name} ({provider.performanceBadge})</span>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2">
+                              {[
+                                { label: 'Rating', value: `${(provider.averageRating || 0).toFixed(1)}★` },
+                                { label: 'Completion', value: `${provider.completionRate || 0}%` },
+                                { label: 'On-Time', value: `${provider.onTimeRate || 0}%` },
+                              ].map((stat) => (
+                                <div key={stat.label} className="bg-white/80 p-1.5 rounded-lg border border-teal-100/50 text-center shadow-xs">
+                                  <p className="text-[8px] text-gray-400 font-bold uppercase tracking-wider leading-none mb-1">{stat.label}</p>
+                                  <p className="text-xs font-extrabold text-teal-950">{stat.value}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  {/* Badge Criteria Summary */}
+                  <div className="bg-slate-100/80 rounded-xl border border-slate-200/60 overflow-hidden">
+                    <div className="bg-slate-200/50 px-3 py-2 border-b border-slate-200/80 flex items-center gap-1.5">
+                      <Info className="w-3.5 h-3.5 text-slate-500" />
+                      <span className="text-[9px] font-black text-slate-650 uppercase tracking-widest">Badge Tier Performance Thresholds</span>
+                    </div>
+                    <div className="p-3 grid grid-cols-2 md:grid-cols-4 gap-2">
+                      {[
+                        { name: 'Platinum', criteria: '4.5★ | 95%', color: 'bg-indigo-50 text-indigo-700 border border-indigo-200/60' },
+                        { name: 'Gold', criteria: '4.0★ | 90%', color: 'bg-amber-50 text-amber-700 border border-amber-200/60' },
+                        { name: 'Silver', criteria: '3.5★ | 85%', color: 'bg-slate-100 text-slate-700 border border-slate-250/50' },
+                        { name: 'Bronze', criteria: '< 3.5★ | < 85%', color: 'bg-orange-50 text-orange-700 border border-orange-200/60' }
+                      ].map((badge) => (
+                        <div key={badge.name} className="flex flex-col items-center justify-center p-2 bg-white rounded-lg border border-slate-150 shadow-xs">
+                          <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider mb-1 ${badge.color}`}>{badge.name}</span>
+                          <span className="text-[9px] text-slate-550 font-black tracking-wide">{badge.criteria}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                        Effective From
+                      </label>
+                      <input
+                        type="date"
+                        value={ruleForm.effectiveFrom ? new Date(ruleForm.effectiveFrom).toISOString().split('T')[0] : ''}
+                        onChange={(e) => setRuleForm({ ...ruleForm, effectiveFrom: new Date(e.target.value) })}
+                        className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-sm font-semibold cursor-pointer"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                        Effective Until (Optional)
+                      </label>
+                      <input
+                        type="date"
+                        value={ruleForm.effectiveUntil ? new Date(ruleForm.effectiveUntil).toISOString().split('T')[0] : ''}
+                        onChange={(e) => setRuleForm({ ...ruleForm, effectiveUntil: e.target.value ? new Date(e.target.value) : '' })}
+                        min={ruleForm.effectiveFrom ? new Date(ruleForm.effectiveFrom).toISOString().split('T')[0] : ''}
+                        className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-sm font-semibold cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 p-6 border-t border-slate-100">
+                <button
+                  onClick={() => {
+                    setShowRuleModal(false);
+                    setEditingRule(null);
+                    resetRuleForm();
+                  }}
+                  className="px-5 py-2.5 text-sm font-bold text-slate-650 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={editingRule ? updateCommissionRule : createCommissionRule}
                   disabled={loading}
-                  className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 transition-colors"
+                  className="px-5 py-2.5 bg-primary hover:bg-teal-800 text-white text-sm font-bold rounded-xl transition-colors shadow-md hover:shadow-lg disabled:opacity-50"
                 >
                   {loading ? 'Saving...' : (editingRule ? 'Update Rule' : 'Create Rule')}
                 </button>
@@ -1555,65 +1496,55 @@ const AdminCommissionPage = () => {
         {showRuleDetailsModal && viewingRule && (
           <div className="fixed inset-0 bg-black bg-opacity-50 overflow-y-auto h-full w-full z-50 flex justify-center py-8 px-4 sm:px-6">
             <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-xl h-fit">
-              <div className="px-6 py-4 border-b border-gray-200 bg-slate-50 rounded-t-2xl">
-                <h3 className="text-xl font-bold text-secondary">Commission Rule Details</h3>
+              {/* Header */}
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 rounded-t-2xl">
+                <h3 className="text-lg leading-6 font-bold text-secondary flex items-center gap-2">
+                  <Settings className="w-5 h-5 text-primary" />
+                  Commission Rule Details
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowRuleDetailsModal(false);
+                    setViewingRule(null);
+                  }}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-650 hover:bg-slate-100 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-              <div className="p-6 space-y-5">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <div className="md:col-span-2">
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Rule Name</label>
-                    <p className="text-base font-semibold text-secondary">{viewingRule.name}</p>
-                  </div>
 
-                  {viewingRule.description && (
-                    <div className="md:col-span-2">
-                      <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Description</label>
-                      <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg border border-gray-100">{viewingRule.description}</p>
+              <div className="p-6 space-y-6">
+                {/* Visual Card (The "Commission Ticket") */}
+                <div className="relative bg-slate-50/50 border border-primary/20 rounded-2xl p-5 flex flex-col sm:flex-row justify-between items-center gap-4 shadow-sm overflow-hidden">
+                  <div className="absolute -left-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white rounded-full border-r border-dashed border-primary/30" />
+                  <div className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white rounded-full border-l border-dashed border-primary/30" />
+                  
+                  <div className="flex flex-col items-center sm:items-start text-center sm:text-left pl-2">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-primary bg-primary/10 px-2.5 py-1 rounded-full border border-primary/20 mb-2.5">
+                      {viewingRule.isActive ? 'Active Commission Rule' : 'Inactive Commission Rule'}
+                    </span>
+                    <h3 className="text-2xl font-black text-secondary tracking-wide">
+                      {viewingRule.name}
+                    </h3>
+                  </div>
+                  <div className="flex flex-col items-center sm:items-end text-center sm:text-right pr-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Commission Value</span>
+                    <div className="text-3xl font-black text-primary">
+                      {viewingRule.type === 'percentage'
+                        ? `${viewingRule.value}%`
+                        : `₹${viewingRule.value.toFixed(2)}`
+                      }
                     </div>
-                  )}
-
-                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Commission Type</label>
-                    <p className="text-sm font-bold text-secondary capitalize">{viewingRule.type}</p>
                   </div>
+                </div>
 
-                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Commission Value</label>
-                    <p className="text-lg font-black text-primary">
-                      {viewingRule.type === 'percentage' ? `${viewingRule.value}%` : `₹${viewingRule.value.toFixed(2)}`}
+                {/* Key Indicators Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-slate-50/50 p-4 rounded-2xl border border-slate-100 shadow-xs">
+                  <div className="text-center p-2 border-r border-slate-200/60">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 flex items-center justify-center gap-1.5">
+                      Status
                     </p>
-                  </div>
-
-                  <div className="md:col-span-2 pb-2 border-b border-gray-100">
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Application Scope</label>
-                    <div className="flex flex-wrap gap-2">
-                      <span className="px-3 py-1 bg-teal-100 text-teal-700 rounded-full text-xs font-bold">
-                        {viewingRule.applyTo === 'all' && 'All Providers'}
-                        {viewingRule.applyTo === 'performanceScore' && 'Performance Tier'}
-                        {viewingRule.applyTo === 'specificProvider' && 'Specific Provider'}
-                      </span>
-
-                      {viewingRule.performanceScore && (
-                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${viewingRule.performanceScore === 'Platinum' ? 'bg-purple-100 text-purple-700' :
-                          viewingRule.performanceScore === 'Gold' ? 'bg-amber-100 text-amber-700' :
-                            viewingRule.performanceScore === 'Silver' ? 'bg-slate-200 text-slate-700' :
-                              'bg-orange-100 text-orange-700'
-                          }`}>
-                          {viewingRule.performanceScore} Badge
-                        </span>
-                      )}
-
-                      {viewingRule.specificProvider && (
-                        <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-bold">
-                          {viewingRule.specificProvider.name}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Status</label>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${viewingRule.isActive
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-black ${viewingRule.isActive
                       ? 'bg-green-100 text-green-800'
                       : 'bg-red-100 text-red-800'
                       }`}>
@@ -1621,38 +1552,157 @@ const AdminCommissionPage = () => {
                     </span>
                   </div>
 
-                  <div>
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Created By</label>
-                    <p className="text-sm font-medium text-secondary">{viewingRule.createdBy?.name || 'N/A'}</p>
-                  </div>
-
-                  <div className="bg-gray-50 p-2 rounded-lg">
-                    <label className="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">Effective From</label>
-                    <p className="text-xs font-semibold text-secondary">
-                      {viewingRule.effectiveFrom ? format(new Date(viewingRule.effectiveFrom), 'dd MMM yyyy') : 'N/A'}
+                  <div className="text-center p-2 sm:border-r border-slate-200/60">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 flex items-center justify-center gap-1.5">
+                      Created By
+                    </p>
+                    <p className="text-sm font-extrabold text-slate-755 truncate">
+                      {viewingRule.createdBy?.name || 'Admin'}
                     </p>
                   </div>
 
-                  <div className="bg-gray-50 p-2 rounded-lg">
-                    <label className="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">Effective Until</label>
-                    <p className="text-xs font-semibold text-secondary">
-                      {viewingRule.effectiveUntil ? format(new Date(viewingRule.effectiveUntil), 'dd MMM yyyy') : 'No expiration'}
+                  <div className="text-center p-2 border-r border-slate-200/60">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 flex items-center justify-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5" /> Start
+                    </p>
+                    <p className="text-xs font-extrabold text-slate-750">
+                      {viewingRule.effectiveFrom ? formatDate(viewingRule.effectiveFrom) : 'Immediate'}
+                    </p>
+                  </div>
+
+                  <div className="text-center p-2">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 flex items-center justify-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5" /> Expiration
+                    </p>
+                    <p className="text-xs font-extrabold text-slate-750 truncate">
+                      {viewingRule.effectiveUntil ? formatDate(viewingRule.effectiveUntil) : 'No expiration'}
                     </p>
                   </div>
                 </div>
 
-                <div className="pt-4 border-t border-gray-100 flex justify-between items-center text-[10px] text-gray-400 italic">
-                  <span>Created: {viewingRule.createdAt ? format(new Date(viewingRule.createdAt), 'dd MMM yyyy HH:mm') : 'N/A'}</span>
-                  <span>Updated: {viewingRule.updatedAt ? format(new Date(viewingRule.updatedAt), 'dd MMM yyyy HH:mm') : 'N/A'}</span>
+                {viewingRule.description && (
+                  <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-100 space-y-1">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Rule Description</p>
+                    <p className="text-sm text-slate-600 font-semibold">{viewingRule.description}</p>
+                  </div>
+                )}
+
+                {/* Targeting & Geographic Scope */}
+                <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100 space-y-4">
+                  <h4 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-1.5 pb-2 border-b border-slate-100/50">
+                    <Globe className="w-4 h-4 text-primary" /> Scope & Application Impact
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Geographic Zone Info */}
+                    <div className="bg-white p-3.5 rounded-xl border border-slate-200/50 flex flex-col justify-center shadow-xs">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Geographic Zone Constraints</p>
+                      <p className="text-xs font-extrabold text-slate-750 flex items-center gap-1 uppercase tracking-wider">
+                        {viewingRule.zoneId ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-teal-50 text-teal-800 border border-teal-200/60 shadow-xs">
+                            📍 {getZoneHierarchyPath(viewingRule.zoneId)}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-blue-50 text-blue-800 border border-blue-200/60 shadow-xs">
+                            🌍 Globally Applicable
+                          </span>
+                        )}
+                      </p>
+                    </div>
+
+                    {/* Target Provider Group */}
+                    <div className="bg-white p-3.5 rounded-xl border border-slate-200/50 flex flex-col justify-center shadow-xs">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Targeting Criteria</p>
+                      <div className="flex flex-wrap gap-1">
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-teal-50 text-teal-800 border border-teal-200/60 shadow-xs">
+                          {viewingRule.applyTo === 'all' && 'All Providers'}
+                          {viewingRule.applyTo === 'performanceScore' && 'Performance Tier'}
+                          {viewingRule.applyTo === 'specificProvider' && 'Specific Provider'}
+                        </span>
+                        {viewingRule.performanceScore && (
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold border shadow-xs ${
+                            viewingRule.performanceScore === 'Platinum' ? 'bg-indigo-50 text-indigo-700 border-indigo-200/60' :
+                            viewingRule.performanceScore === 'Gold' ? 'bg-amber-50 text-amber-700 border-amber-200/60' :
+                            viewingRule.performanceScore === 'Silver' ? 'bg-slate-100 text-slate-700 border-slate-250/50' :
+                            'bg-orange-50 text-orange-700 border-orange-200/60'
+                          }`}>
+                            🏆 {viewingRule.performanceScore} Tier
+                          </span>
+                        )}
+                        {viewingRule.specificProvider && (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-purple-50 text-purple-800 border border-purple-200/60 shadow-xs">
+                            👤 {viewingRule.specificProvider.name || viewingRule.specificProvider}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Impact Analysis: Matching Providers Count */}
+                  <div className="pt-2">
+                    {(() => {
+                      const matchedProvs = getTargetedProviders(viewingRule);
+                      return (
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[10px] font-black text-slate-450 uppercase tracking-widest">Active Scope Impact</span>
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-black bg-teal-100 text-teal-900 border border-teal-200/70 shadow-xs">
+                              ⚡ Applies to {matchedProvs.length} {matchedProvs.length === 1 ? 'Provider' : 'Providers'}
+                            </span>
+                          </div>
+
+                          {matchedProvs.length > 0 ? (
+                            <div className="bg-white/80 p-3.5 rounded-xl border border-slate-200/60 shadow-xs">
+                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1">
+                                <Users className="w-3.5 h-3.5 text-slate-500" /> Matched Specialist List
+                              </p>
+                              <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
+                                {matchedProvs.map(prov => {
+                                  const badgeColor = {
+                                    'Platinum': 'bg-indigo-50 text-indigo-700 border-indigo-200/65',
+                                    'Gold': 'bg-amber-50 text-amber-700 border-amber-200/65',
+                                    'Silver': 'bg-slate-100 text-slate-700 border-slate-200/70',
+                                    'Bronze': 'bg-orange-50 text-orange-700 border-orange-200/65'
+                                  }[prov.performanceBadge] || 'bg-slate-50 text-slate-650 border-slate-150';
+
+                                  return (
+                                    <span key={prov._id} className="inline-flex items-center px-2 py-0.8 rounded-full text-[10px] font-bold bg-white text-slate-700 border border-slate-200 hover:border-slate-350 hover:bg-slate-50/50 shadow-xs transition-colors duration-150">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-teal-500 mr-1.5 animate-pulse" />
+                                      {prov.name} ({prov.providerId || 'N/A'})
+                                      <span className={`ml-2 px-1.5 py-0.2 rounded-full text-[8px] font-black uppercase border ${badgeColor}`}>
+                                        {prov.performanceBadge || 'Bronze'}
+                                      </span>
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="bg-amber-50/65 p-3.5 rounded-xl border border-amber-150 text-center">
+                              <p className="text-xs font-semibold text-amber-800">
+                                ⚠️ No active providers currently match this commission rule's targeting parameters.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-slate-100 flex justify-between items-center text-[10px] text-slate-400 italic">
+                  <span>Created: {viewingRule.createdAt ? formatDateTime(viewingRule.createdAt) : 'N/A'}</span>
+                  <span>Updated: {viewingRule.updatedAt ? formatDateTime(viewingRule.updatedAt) : 'N/A'}</span>
                 </div>
               </div>
-              <div className="flex justify-end gap-3 p-6 border-t border-gray-200 bg-slate-50 rounded-b-2xl">
+
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-3 p-6 border-t border-slate-100 bg-slate-50/50 rounded-b-2xl">
                 <button
                   onClick={() => {
                     setShowRuleDetailsModal(false);
                     setViewingRule(null);
                   }}
-                  className="px-6 py-2 text-sm font-bold text-secondary bg-white border border-gray-200 rounded-xl hover:bg-gray-100 transition-colors shadow-sm"
+                  className="px-5 py-2.5 text-sm font-bold text-slate-650 bg-white border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors shadow-sm"
                 >
                   Close
                 </button>

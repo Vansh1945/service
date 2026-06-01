@@ -287,6 +287,38 @@ const bookingSchema = new Schema({
     type: Schema.Types.ObjectId,
     ref: 'CommissionRule'
   },
+  visitingCharge: {
+    type: Number,
+    default: 0
+  },
+  rainCharge: {
+    type: Number,
+    default: 0
+  },
+  trafficCharge: {
+    type: Number,
+    default: 0
+  },
+  nightCharge: {
+    type: Number,
+    default: 0
+  },
+  demandSurge: {
+    type: Number,
+    default: 0
+  },
+  providerSurgeShare: {
+    type: Number,
+    default: 0
+  },
+  companySurgeShare: {
+    type: Number,
+    default: 0
+  },
+  surgeSplitSettings: {
+    type: Object,
+    default: null
+  },
 
   feedback: [{
     type: Schema.Types.ObjectId,
@@ -521,24 +553,52 @@ bookingSchema.pre('save', async function (next) {
       const CommissionRule = mongoose.model('CommissionRule');
       const commissionRule = await CommissionRule.getCommissionForProvider(this.provider, this.zoneId);
 
+      const baseForCommission = Math.max(0, this.subtotal - this.totalDiscount);
+
+      // Load settings for surge splits
+      const { SystemConfig } = require('./SystemSetting');
+      let settings = await SystemConfig.findOne();
+      if (!settings) {
+        settings = new SystemConfig({ companyName: process.env.COMPANY_NAME || 'Raj Electrical Services' });
+        await settings.save();
+      }
+
+      const splits = settings.surgeSplitSettings || { visiting: 60, rain: 70, traffic: 70, night: 70, demand: 50 };
+      this.surgeSplitSettings = splits;
+
+      // Surcharge amounts on this booking
+      const visiting = this.visitingCharge || 0;
+      const rain = this.rainCharge || 0;
+      const traffic = this.trafficCharge || 0;
+      const night = this.nightCharge || 0;
+      const demand = this.demandSurge || 0;
+
+      // Provider splits
+      const provVisitingShare = parseFloat((visiting * (splits.visiting / 100)).toFixed(2));
+      const provRainShare = parseFloat((rain * (splits.rain / 100)).toFixed(2));
+      const provTrafficShare = parseFloat((traffic * (splits.traffic / 100)).toFixed(2));
+      const provNightShare = parseFloat((night * (splits.night / 100)).toFixed(2));
+      const provDemandShare = parseFloat((demand * (splits.demand / 100)).toFixed(2));
+
+      const providerSurgeShare = parseFloat((provVisitingShare + provRainShare + provTrafficShare + provNightShare + provDemandShare).toFixed(2));
+      const totalSurcharges = visiting + rain + traffic + night + demand;
+      const companySurgeShare = parseFloat((totalSurcharges - providerSurgeShare).toFixed(2));
+
+      this.providerSurgeShare = providerSurgeShare;
+      this.companySurgeShare = companySurgeShare;
+
       if (commissionRule) {
-        const { commission, netAmount } = CommissionRule.calculateCommission(this.totalAmount, commissionRule);
+        const { commission, netAmount } = CommissionRule.calculateCommission(baseForCommission, commissionRule);
         this.commissionAmount = commission || 0;
-        this.providerEarnings = netAmount || this.totalAmount;
+        this.providerEarnings = parseFloat((netAmount + providerSurgeShare).toFixed(2));
         this.commissionRule = commissionRule._id;
       } else {
-        const { SystemConfig } = require('./SystemSetting');
-        let settings = await SystemConfig.findOne();
-        if (!settings) {
-          settings = new SystemConfig({ companyName: process.env.COMPANY_NAME || 'Raj Electrical Services' });
-          await settings.save();
-        }
         const defaultCommPercent = settings?.commissionSettings?.defaultCommission ?? parseFloat(process.env.DEFAULT_COMMISSION || 10);
-        const commission = parseFloat(((this.totalAmount * defaultCommPercent) / 100).toFixed(2));
-        const netAmount = parseFloat((this.totalAmount - commission).toFixed(2));
+        const commission = parseFloat(((baseForCommission * defaultCommPercent) / 100).toFixed(2));
+        const netAmount = parseFloat((baseForCommission - commission).toFixed(2));
 
         this.commissionAmount = commission || 0;
-        this.providerEarnings = netAmount || this.totalAmount;
+        this.providerEarnings = parseFloat((netAmount + providerSurgeShare).toFixed(2));
         this.commissionRule = null;
       }
     } catch (error) {

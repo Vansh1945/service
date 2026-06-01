@@ -33,6 +33,7 @@ import * as CouponService from '../../services/CouponService';
 import * as AdminService from '../../services/AdminService';
 import { getAllZones } from '../../services/ZoneService';
 import { formatCurrency, formatDate } from '../../utils/format';
+import HierarchicalZoneSelector from '../../components/HierarchicalZoneSelector';
 
 const AdminCoupons = () => {
   const { API, token } = useAuth();
@@ -202,7 +203,19 @@ const AdminCoupons = () => {
     fetchCoupons();
     fetchUsers();
     fetchZones();
+
+    const params = new URLSearchParams(window.location.search);
+    const prefillZone = params.get('prefillZone');
+    if (prefillZone) {
+      setCreateForm(prev => ({
+        ...prev,
+        isGlobal: false,
+        applicableZones: [prefillZone]
+      }));
+      setShowCreateModal(true);
+    }
   }, []);
+
 
   // Filter and search coupons
   useEffect(() => {
@@ -805,211 +818,221 @@ const AdminCoupons = () => {
             title="Create New Coupon"
             size="large"
           >
-            <form onSubmit={handleCreateCoupon} className="space-y-4 md:space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Coupon Code *
-                  </label>
-                  <input
-                    type="text"
-                    name="code"
-                    value={createForm.code}
-                    onChange={handleCreateFormChange}
-                    required
-                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary font-mono"
-                    placeholder="e.g., WELCOME20"
-                    pattern="[A-Z0-9_]{5,20}"
-                    title="5-20 uppercase alphanumeric characters or underscores"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Discount Type *
-                  </label>
-                  <select
-                    name="discountType"
-                    value={createForm.discountType}
-                    onChange={handleCreateFormChange}
-                    required
-                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    <option value="flat">Flat Amount (₹)</option>
-                    <option value="percent">Percentage (%)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Discount Value *
-                  </label>
-                  <input
-                    type="number"
-                    name="discountValue"
-                    value={createForm.discountValue}
-                    onChange={handleCreateFormChange}
-                    required
-                    min="1"
-                    step={createForm.discountType === 'percent' ? "1" : "any"}
-                    max={createForm.discountType === 'percent' ? "100" : ""}
-                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder={createForm.discountType === 'flat' ? "e.g., 200" : "e.g., 20"}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Minimum Booking Value (₹)
-                  </label>
-                  <input
-                    type="number"
-                    name="minBookingValue"
-                    value={createForm.minBookingValue}
-                    onChange={handleCreateFormChange}
-                    min="0"
-                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="e.g., 1000 (optional)"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Expiry Date *
-                  </label>
-                  <input
-                    type="date"
-                    name="expiryDate"
-                    value={createForm.expiryDate}
-                    onChange={handleCreateFormChange}
-                    required
-                    min={new Date().toISOString().split('T')[0]}
-                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Usage Limit
-                  </label>
-                  <input
-                    type="number"
-                    name="usageLimit"
-                    value={createForm.usageLimit}
-                    onChange={handleCreateFormChange}
-                    min="1"
-                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="Leave empty for unlimited"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-2">
-                    Coupon Scope *
-                  </label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setCreateForm(prev => ({ ...prev, isGlobal: true, applicableZones: [] }))}
-                      className={`py-2.5 px-4 rounded-xl font-bold text-xs border transition-all text-center ${createForm.isGlobal
-                        ? 'border-primary bg-primary/10 text-primary shadow-sm'
-                        : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'}`}
+            <form onSubmit={handleCreateCoupon} className="space-y-6">
+              {/* Section 1: General Details */}
+              <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100 space-y-4">
+                <h4 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-1.5 pb-2 border-b border-slate-100/50">
+                  <Gift className="w-4 h-4 text-primary" /> General Configuration
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                      Coupon Code *
+                    </label>
+                    <input
+                      type="text"
+                      name="code"
+                      value={createForm.code}
+                      onChange={handleCreateFormChange}
+                      required
+                      className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-sm font-semibold font-mono uppercase"
+                      placeholder="e.g., WELCOME20"
+                      pattern="[A-Z0-9_]{5,20}"
+                      title="5-20 uppercase alphanumeric characters or underscores"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                      Discount Type *
+                    </label>
+                    <select
+                      name="discountType"
+                      value={createForm.discountType}
+                      onChange={handleCreateFormChange}
+                      required
+                      className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-sm font-semibold cursor-pointer"
                     >
-                      Global
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCreateForm(prev => ({ ...prev, isGlobal: false }))}
-                      className={`py-2.5 px-4 rounded-xl font-bold text-xs border transition-all text-center ${!createForm.isGlobal
-                        ? 'border-primary bg-primary/10 text-primary shadow-sm'
-                        : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'}`}
-                    >
-                      Zone Specific
-                    </button>
+                      <option value="flat">Flat Amount (₹)</option>
+                      <option value="percent">Percentage (%)</option>
+                    </select>
                   </div>
                 </div>
-                <div className="flex items-end pb-3">
-                  <div className="flex items-center">
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                      Discount Value *
+                    </label>
                     <input
-                      type="checkbox"
-                      name="isFirstBooking"
-                      id="isFirstBooking"
-                      checked={createForm.isFirstBooking}
+                      type="number"
+                      name="discountValue"
+                      value={createForm.discountValue}
                       onChange={handleCreateFormChange}
-                      className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded cursor-pointer"
+                      required
+                      min="1"
+                      step={createForm.discountType === 'percent' ? "1" : "any"}
+                      max={createForm.discountType === 'percent' ? "100" : ""}
+                      className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-sm font-semibold"
+                      placeholder={createForm.discountType === 'flat' ? "e.g., 200" : "e.g., 20"}
                     />
-                    <label htmlFor="isFirstBooking" className="ml-2 block text-sm text-gray-900 font-semibold cursor-pointer">
-                      First Booking Only
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                      Minimum Booking Value (₹)
+                    </label>
+                    <input
+                      type="number"
+                      name="minBookingValue"
+                      value={createForm.minBookingValue}
+                      onChange={handleCreateFormChange}
+                      min="0"
+                      className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-sm font-semibold"
+                      placeholder="e.g., 1000 (optional)"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 2: Expiry & Limits */}
+              <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100 space-y-4">
+                <h4 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-1.5 pb-2 border-b border-slate-100/50">
+                  <Calendar className="w-4 h-4 text-primary" /> Rules & Restrictions
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                      Expiry Date *
+                    </label>
+                    <input
+                      type="date"
+                      name="expiryDate"
+                      value={createForm.expiryDate}
+                      onChange={handleCreateFormChange}
+                      required
+                      min={new Date().toISOString().split('T')[0]}
+                      className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-sm font-semibold cursor-pointer"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                      Usage Limit
+                    </label>
+                    <input
+                      type="number"
+                      name="usageLimit"
+                      value={createForm.usageLimit}
+                      onChange={handleCreateFormChange}
+                      min="1"
+                      className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-sm font-semibold"
+                      placeholder="Leave empty for unlimited"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 3: Scope & Targeting */}
+              <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100 space-y-4">
+                <h4 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-1.5 pb-2 border-b border-slate-100/50">
+                  <Globe className="w-4 h-4 text-primary" /> Scope & Targeting
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                      Coupon Scope *
+                    </label>
+                    <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200/80 w-full shadow-inner">
+                      <button
+                        type="button"
+                        onClick={() => setCreateForm(prev => ({ ...prev, isGlobal: true, applicableZones: [] }))}
+                        className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all uppercase tracking-wider ${createForm.isGlobal ? 'bg-primary text-white shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
+                      >
+                        Global
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCreateForm(prev => ({ ...prev, isGlobal: false }))}
+                        className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all uppercase tracking-wider ${!createForm.isGlobal ? 'bg-primary text-white shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
+                      >
+                        Zone Specific
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-center pt-5 pl-2">
+                    <label className="flex items-center space-x-3 cursor-pointer select-none bg-white py-2.5 px-4 rounded-xl border border-slate-200 w-full hover:bg-slate-50 transition-colors shadow-sm">
+                      <input
+                        type="checkbox"
+                        name="isFirstBooking"
+                        id="isFirstBooking"
+                        checked={createForm.isFirstBooking}
+                        onChange={handleCreateFormChange}
+                        className="h-4.5 w-4.5 text-primary focus:ring-primary border-slate-350 rounded cursor-pointer accent-primary"
+                      />
+                      <span className="text-sm font-bold text-slate-700">First Booking Only</span>
                     </label>
                   </div>
                 </div>
+
+                {!createForm.isGlobal && !createForm.isFirstBooking && (
+                  <div className="pt-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                      Assign to User (Optional)
+                    </label>
+                    {users.length > 0 ? (
+                      <select
+                        name="assignedTo"
+                        value={createForm.assignedTo}
+                        onChange={handleCreateFormChange}
+                        className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-sm font-semibold cursor-pointer"
+                      >
+                        <option value="">Select a user (optional)</option>
+                        {users.map(user => {
+                          const userObj = typeof user === 'string' ? { _id: user } : user;
+                          return (
+                            <option key={userObj._id} value={userObj._id}>
+                              {getUserDisplayName(userObj)}
+                              {userObj.email ? ` - ${userObj.email}` : ''}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        name="assignedTo"
+                        value={createForm.assignedTo}
+                        onChange={handleCreateFormChange}
+                        placeholder="Enter user ID manually"
+                        className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-sm font-semibold"
+                      />
+                    )}
+                  </div>
+                )}
+
+                {!createForm.isGlobal && (
+                  <div className="pt-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <HierarchicalZoneSelector
+                      zones={zones}
+                      selectedZoneIds={createForm.applicableZones}
+                      onChange={(zone) => handleZoneToggleCascade(zone, true)}
+                    />
+                  </div>
+                )}
               </div>
 
-              {!createForm.isGlobal && !createForm.isFirstBooking && (
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Assign to User (Optional)
-                  </label>
-                  {users.length > 0 ? (
-                    <select
-                      name="assignedTo"
-                      value={createForm.assignedTo}
-                      onChange={handleCreateFormChange}
-                      className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                    >
-                      <option value="">Select a user (optional)</option>
-                      {users.map(user => {
-                        const userObj = typeof user === 'string' ? { _id: user } : user;
-                        return (
-                          <option key={userObj._id} value={userObj._id}>
-                            {getUserDisplayName(userObj)}
-                            {userObj.email ? ` - ${userObj.email}` : ''}
-                            {userObj.address ? ` - ${formatAddress(userObj.address)}` : ''}
-                            {userObj.totalBookings !== undefined ? ` - ${userObj.totalBookings || 0} bookings` : ''}
-                          </option>
-                        );
-                      })}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      name="assignedTo"
-                      value={createForm.assignedTo}
-                      onChange={handleCreateFormChange}
-                      placeholder="Enter user ID manually"
-                      className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                    />
-                  )}
-                </div>
-              )}
-
-              {!createForm.isGlobal && (
-                <div>
-                  <HierarchicalZoneSelector
-                    zones={zones}
-                    selectedZoneIds={createForm.applicableZones}
-                    onChange={(zone) => handleZoneToggleCascade(zone, true)}
-                  />
-                </div>
-              )}
-
-              <div className="flex justify-end space-x-3 pt-4">
+              <div className="flex justify-end space-x-3 pt-4 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => {
                     setShowCreateModal(false);
                     resetCreateForm();
                   }}
-                  className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                  className="px-5 py-2.5 text-sm font-bold text-slate-650 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-800 transition-colors duration-200 flex items-center"
+                  className="px-5 py-2.5 bg-primary hover:bg-teal-800 text-white text-sm font-bold rounded-xl transition-colors flex items-center shadow-md hover:shadow-lg"
                 >
                   <Save className="w-4 h-4 mr-2" />
                   Create Coupon
@@ -1027,223 +1050,232 @@ const AdminCoupons = () => {
             title="Edit Coupon"
             size="large"
           >
-            <form onSubmit={handleUpdateCoupon} className="space-y-4 md:space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Coupon Code *
-                  </label>
-                  <input
-                    type="text"
-                    name="code"
-                    value={editForm.code}
-                    onChange={handleEditFormChange}
-                    required
-                    disabled={selectedCoupon.usedBy && selectedCoupon.usedBy.length > 0}
-                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary font-mono disabled:bg-gray-100"
-                    pattern="[A-Z0-9_]{5,20}"
-                    title="5-20 uppercase alphanumeric characters or underscores"
-                  />
-                  {selectedCoupon.usedBy && selectedCoupon.usedBy.length > 0 && (
-                    <p className="text-xs text-gray-500 mt-1">Code cannot be changed after usage</p>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Discount Type *
-                  </label>
-                  <select
-                    name="discountType"
-                    value={editForm.discountType}
-                    onChange={handleEditFormChange}
-                    required
-                    disabled={selectedCoupon.usedBy && selectedCoupon.usedBy.length > 0}
-                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary disabled:bg-gray-100"
-                  >
-                    <option value="flat">Flat Amount (₹)</option>
-                    <option value="percent">Percentage (%)</option>
-                  </select>
-                  {selectedCoupon.usedBy && selectedCoupon.usedBy.length > 0 && (
-                    <p className="text-xs text-gray-500 mt-1">Discount type cannot be changed after usage</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Discount Value *
-                  </label>
-                  <input
-                    type="number"
-                    name="discountValue"
-                    value={editForm.discountValue}
-                    onChange={handleEditFormChange}
-                    required
-                    min="1"
-                    step={editForm.discountType === 'percent' ? "1" : "any"}
-                    max={editForm.discountType === 'percent' ? "100" : ""}
-                    disabled={selectedCoupon.usedBy && selectedCoupon.usedBy.length > 0}
-                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary disabled:bg-gray-100"
-                  />
-                  {selectedCoupon.usedBy && selectedCoupon.usedBy.length > 0 && (
-                    <p className="text-xs text-gray-500 mt-1">Discount value cannot be changed after usage</p>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Minimum Booking Value (₹)
-                  </label>
-                  <input
-                    type="number"
-                    name="minBookingValue"
-                    value={editForm.minBookingValue}
-                    onChange={handleEditFormChange}
-                    min="0"
-                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Expiry Date *
-                  </label>
-                  <input
-                    type="date"
-                    name="expiryDate"
-                    value={editForm.expiryDate}
-                    onChange={handleEditFormChange}
-                    required
-                    min={new Date().toISOString().split('T')[0]}
-                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Usage Limit
-                  </label>
-                  <input
-                    type="number"
-                    name="usageLimit"
-                    value={editForm.usageLimit}
-                    onChange={handleEditFormChange}
-                    min="1"
-                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="Leave empty for unlimited"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-2">
-                    Coupon Scope *
-                  </label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
+            <form onSubmit={handleUpdateCoupon} className="space-y-6">
+              {/* Section 1: General Details */}
+              <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100 space-y-4">
+                <h4 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-1.5 pb-2 border-b border-slate-100/50">
+                  <Gift className="w-4 h-4 text-primary" /> General Configuration
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                      Coupon Code *
+                    </label>
+                    <input
+                      type="text"
+                      name="code"
+                      value={editForm.code}
+                      onChange={handleEditFormChange}
+                      required
                       disabled={selectedCoupon.usedBy && selectedCoupon.usedBy.length > 0}
-                      onClick={() => setEditForm(prev => ({ ...prev, isGlobal: true, applicableZones: [] }))}
-                      className={`py-2.5 px-4 rounded-xl font-bold text-xs border transition-all text-center ${editForm.isGlobal
-                        ? 'border-primary bg-primary/10 text-primary shadow-sm'
-                        : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50'}`}
-                    >
-                      🌍 Global
-                    </button>
-                    <button
-                      type="button"
+                      className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-sm font-semibold font-mono uppercase disabled:bg-slate-100/80 disabled:text-slate-500 disabled:cursor-not-allowed"
+                      placeholder="e.g., WELCOME20"
+                      pattern="[A-Z0-9_]{5,20}"
+                      title="5-20 uppercase alphanumeric characters or underscores"
+                    />
+                    {selectedCoupon.usedBy && selectedCoupon.usedBy.length > 0 && (
+                      <p className="text-[10px] text-amber-600 font-bold uppercase mt-1">Code locked after usage</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                      Discount Type *
+                    </label>
+                    <select
+                      name="discountType"
+                      value={editForm.discountType}
+                      onChange={handleEditFormChange}
+                      required
                       disabled={selectedCoupon.usedBy && selectedCoupon.usedBy.length > 0}
-                      onClick={() => setEditForm(prev => ({ ...prev, isGlobal: false }))}
-                      className={`py-2.5 px-4 rounded-xl font-bold text-xs border transition-all text-center ${!editForm.isGlobal
-                        ? 'border-primary bg-primary/10 text-primary shadow-sm'
-                        : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50'}`}
+                      className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-sm font-semibold cursor-pointer disabled:bg-slate-100/80 disabled:text-slate-500 disabled:cursor-not-allowed"
                     >
-                      📍 Zone Specific
-                    </button>
+                      <option value="flat">Flat Amount (₹)</option>
+                      <option value="percent">Percentage (%)</option>
+                    </select>
+                    {selectedCoupon.usedBy && selectedCoupon.usedBy.length > 0 && (
+                      <p className="text-[10px] text-amber-600 font-bold uppercase mt-1">Type locked after usage</p>
+                    )}
                   </div>
                 </div>
-                <div className="flex items-end pb-3">
-                  <div className="flex items-center">
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                      Discount Value *
+                    </label>
                     <input
-                      type="checkbox"
-                      name="isFirstBooking"
-                      id="editIsFirstBooking"
-                      checked={editForm.isFirstBooking}
+                      type="number"
+                      name="discountValue"
+                      value={editForm.discountValue}
                       onChange={handleEditFormChange}
+                      required
+                      min="1"
+                      step={editForm.discountType === 'percent' ? "1" : "any"}
+                      max={editForm.discountType === 'percent' ? "100" : ""}
                       disabled={selectedCoupon.usedBy && selectedCoupon.usedBy.length > 0}
-                      className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded disabled:bg-gray-100 cursor-pointer"
+                      className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-sm font-semibold disabled:bg-slate-100/80 disabled:text-slate-500 disabled:cursor-not-allowed"
                     />
-                    <label htmlFor="editIsFirstBooking" className="ml-2 block text-sm text-gray-900 font-semibold cursor-pointer">
-                      First Booking Only
+                    {selectedCoupon.usedBy && selectedCoupon.usedBy.length > 0 && (
+                      <p className="text-[10px] text-amber-600 font-bold uppercase mt-1">Value locked after usage</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                      Minimum Booking Value (₹)
+                    </label>
+                    <input
+                      type="number"
+                      name="minBookingValue"
+                      value={editForm.minBookingValue}
+                      onChange={handleEditFormChange}
+                      min="0"
+                      className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-sm font-semibold"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 2: Expiry & Limits */}
+              <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100 space-y-4">
+                <h4 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-1.5 pb-2 border-b border-slate-100/50">
+                  <Calendar className="w-4 h-4 text-primary" /> Rules & Restrictions
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                      Expiry Date *
+                    </label>
+                    <input
+                      type="date"
+                      name="expiryDate"
+                      value={editForm.expiryDate}
+                      onChange={handleEditFormChange}
+                      required
+                      min={new Date().toISOString().split('T')[0]}
+                      className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-sm font-semibold cursor-pointer"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                      Usage Limit
+                    </label>
+                    <input
+                      type="number"
+                      name="usageLimit"
+                      value={editForm.usageLimit}
+                      onChange={handleEditFormChange}
+                      min="1"
+                      className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-sm font-semibold"
+                      placeholder="Leave empty for unlimited"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 3: Scope & Targeting */}
+              <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100 space-y-4">
+                <h4 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-1.5 pb-2 border-b border-slate-100/50">
+                  <Globe className="w-4 h-4 text-primary" /> Scope & Targeting
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                      Coupon Scope *
+                    </label>
+                    <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200/80 w-full shadow-inner disabled:opacity-50">
+                      <button
+                        type="button"
+                        disabled={selectedCoupon.usedBy && selectedCoupon.usedBy.length > 0}
+                        onClick={() => setEditForm(prev => ({ ...prev, isGlobal: true, applicableZones: [] }))}
+                        className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all uppercase tracking-wider ${editForm.isGlobal ? 'bg-primary text-white shadow-sm' : 'text-gray-500 hover:text-gray-800 disabled:opacity-50'}`}
+                      >
+                        Global
+                      </button>
+                      <button
+                        type="button"
+                        disabled={selectedCoupon.usedBy && selectedCoupon.usedBy.length > 0}
+                        onClick={() => setEditForm(prev => ({ ...prev, isGlobal: false }))}
+                        className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all uppercase tracking-wider ${!editForm.isGlobal ? 'bg-primary text-white shadow-sm' : 'text-gray-500 hover:text-gray-800 disabled:opacity-50'}`}
+                      >
+                        Zone Specific
+                      </button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 pt-5 pl-2">
+                    <label className="flex items-center space-x-2.5 cursor-pointer select-none bg-white py-2.5 px-3 rounded-xl border border-slate-200 w-full hover:bg-slate-50 transition-colors shadow-sm">
+                      <input
+                        type="checkbox"
+                        name="isFirstBooking"
+                        id="editIsFirstBooking"
+                        checked={editForm.isFirstBooking}
+                        onChange={handleEditFormChange}
+                        disabled={selectedCoupon.usedBy && selectedCoupon.usedBy.length > 0}
+                        className="h-4.5 w-4.5 text-primary focus:ring-primary border-slate-350 rounded cursor-pointer accent-primary disabled:opacity-50"
+                      />
+                      <span className="text-xs font-black text-slate-700 leading-none">First Booking Only</span>
+                    </label>
+
+                    <label className="flex items-center space-x-2.5 cursor-pointer select-none bg-white py-2.5 px-3 rounded-xl border border-slate-200 w-full hover:bg-slate-50 transition-colors shadow-sm">
+                      <input
+                        type="checkbox"
+                        name="isActive"
+                        id="isActive"
+                        checked={editForm.isActive}
+                        onChange={handleEditFormChange}
+                        className="h-4.5 w-4.5 text-primary focus:ring-primary border-slate-350 rounded cursor-pointer accent-primary"
+                      />
+                      <span className="text-xs font-black text-slate-700 leading-none">Active Coupon</span>
                     </label>
                   </div>
                 </div>
+
+                {!editForm.isGlobal && !editForm.isFirstBooking && (
+                  <div className="pt-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                      Assign to User (Optional)
+                    </label>
+                    <select
+                      name="assignedTo"
+                      value={editForm.assignedTo}
+                      onChange={handleEditFormChange}
+                      className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary bg-white text-sm font-semibold cursor-pointer"
+                    >
+                      <option value="">Select a user (optional)</option>
+                      {users.map(user => {
+                        const userObj = typeof user === 'string' ? { _id: user } : user;
+                        return (
+                          <option key={userObj._id} value={userObj._id}>
+                            {getUserDisplayName(userObj)}
+                            {userObj.email ? ` - ${userObj.email}` : ''}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                )}
+
+                {!editForm.isGlobal && (
+                  <div className="pt-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <HierarchicalZoneSelector
+                      zones={zones}
+                      selectedZoneIds={editForm.applicableZones || []}
+                      onChange={(zone) => handleZoneToggleCascade(zone, false)}
+                    />
+                  </div>
+                )}
               </div>
 
-              {!editForm.isGlobal && !editForm.isFirstBooking && (
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1 md:mb-2">
-                    Assign to User (Optional)
-                  </label>
-                  <select
-                    name="assignedTo"
-                    value={editForm.assignedTo}
-                    onChange={handleEditFormChange}
-                    className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    <option value="">Select a user (optional)</option>
-                    {users.map(user => {
-                      const userObj = typeof user === 'string' ? { _id: user } : user;
-                      return (
-                        <option key={userObj._id} value={userObj._id}>
-                          {getUserDisplayName(userObj)}
-                          {userObj.email ? ` - ${userObj.email}` : ''}
-                          {userObj.address ? ` - ${formatAddress(userObj.address)}` : ''}
-                          {userObj.totalBookings !== undefined ? ` - ${userObj.totalBookings || 0} bookings` : ''}
-                        </option>
-                      );
-                    })}
-                  </select>
-                </div>
-              )}
-
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  name="isActive"
-                  id="isActive"
-                  checked={editForm.isActive}
-                  onChange={handleEditFormChange}
-                  className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-                />
-                <label htmlFor="isActive" className="ml-2 block text-sm text-gray-900">
-                  Active Coupon
-                </label>
-              </div>
-
-              {!editForm.isGlobal && (
-                <div>
-                  <HierarchicalZoneSelector
-                    zones={zones}
-                    selectedZoneIds={editForm.applicableZones || []}
-                    onChange={(zone) => handleZoneToggleCascade(zone, false)}
-                  />
-                </div>
-              )}
-
-              <div className="flex justify-end space-x-3 pt-4">
+              <div className="flex justify-end space-x-3 pt-4 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setShowEditModal(false)}
-                  className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                  className="px-5 py-2.5 text-sm font-bold text-slate-650 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-800 transition-colors duration-200 flex items-center"
+                  className="px-5 py-2.5 bg-primary hover:bg-teal-800 text-white text-sm font-bold rounded-xl transition-colors flex items-center shadow-md hover:shadow-lg"
                 >
                   <Save className="w-4 h-4 mr-2" />
                   Update Coupon
@@ -1262,31 +1294,22 @@ const AdminCoupons = () => {
             size="large"
           >
             <div className="space-y-6">
-              {/* Header Section */}
-              <div className="bg-gradient-to-br from-teal-50 to-teal-100 p-6 rounded-xl border border-teal-200">
-                <div className="flex flex-col md:flex-row items-start justify-between gap-4">
-                  <div>
-                    <h3 className="text-2xl md:text-3xl font-bold text-secondary font-mono">{selectedCoupon.code}</h3>
-                    <div className="flex items-center mt-2">
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${selectedCoupon.isActive && !isExpired(selectedCoupon.expiryDate)
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-red-100 text-red-800'
-                        }`}>
-                        {selectedCoupon.isActive && !isExpired(selectedCoupon.expiryDate) ? (
-                          <>
-                            <CheckCircle className="w-4 h-4 mr-1" />
-                            Active
-                          </>
-                        ) : (
-                          <>
-                            <XCircle className="w-4 h-4 mr-1" />
-                            {isExpired(selectedCoupon.expiryDate) ? 'Expired' : 'Inactive'}
-                          </>
-                        )}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="text-2xl md:text-3xl font-bold text-teal-800">
+              {/* Premium Ticket Card with punch-holes */}
+              <div className="relative bg-teal-50/40 border border-dashed border-primary/30 p-6 rounded-2xl overflow-hidden flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div className="absolute -left-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white rounded-full border-r border-dashed border-primary/30" />
+                <div className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white rounded-full border-l border-dashed border-primary/30" />
+                
+                <div className="flex flex-col items-center sm:items-start text-center sm:text-left pl-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-primary bg-primary/10 px-2.5 py-1 rounded-full border border-primary/20 mb-2.5">
+                    {selectedCoupon.isActive && !isExpired(selectedCoupon.expiryDate) ? 'Active Promo Code' : 'Inactive / Expired Code'}
+                  </span>
+                  <h3 className="text-3xl font-black text-secondary tracking-wider font-mono uppercase">
+                    {selectedCoupon.code}
+                  </h3>
+                </div>
+                <div className="flex flex-col items-center sm:items-end text-center sm:text-right pr-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Savings Value</span>
+                  <div className="text-3xl font-black text-primary">
                     {selectedCoupon.discountType === 'flat'
                       ? formatCurrency(selectedCoupon.discountValue)
                       : `${selectedCoupon.discountValue}% OFF`
@@ -1295,143 +1318,124 @@ const AdminCoupons = () => {
                 </div>
               </div>
 
-              {/* Stats Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                  <div className="flex items-center mb-2">
-                    <Calendar className="w-5 h-5 text-gray-600 mr-2" />
-                    <span className="text-sm font-medium text-gray-700">Expiry Date</span>
-                  </div>
-                  <p className={`text-lg font-semibold ${isExpired(selectedCoupon.expiryDate) ? 'text-red-600' : 'text-gray-900'}`}>
+              {/* Key Indicators Grid */}
+              <div className="grid grid-cols-3 gap-4 bg-slate-50/50 p-4 rounded-2xl border border-slate-100 shadow-xs">
+                <div className="text-center p-2 border-r border-slate-200/60">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 flex items-center justify-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5" /> Expiry
+                  </p>
+                  <p className={`text-sm font-extrabold ${isExpired(selectedCoupon.expiryDate) ? 'text-red-500' : 'text-slate-750'}`}>
                     {formatDate(selectedCoupon.expiryDate)}
                   </p>
                   {isExpired(selectedCoupon.expiryDate) && (
-                    <p className="text-xs text-red-500 mt-1">This coupon has expired</p>
+                    <span className="inline-block mt-0.5 text-[8px] bg-red-150 text-red-700 px-1.5 py-0.2 rounded font-black uppercase">Expired</span>
                   )}
                 </div>
 
-                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                  <div className="flex items-center mb-2">
-                    <Users className="w-5 h-5 text-gray-600 mr-2" />
-                    <span className="text-sm font-medium text-gray-700">Usage</span>
-                  </div>
-                  <p className="text-lg font-semibold text-gray-900">
-                    {selectedCoupon.usedBy?.length || 0} / {selectedCoupon.usageLimit === null ? 'Unlimited' : selectedCoupon.usageLimit}
+                <div className="text-center p-2 border-r border-slate-200/60">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 flex items-center justify-center gap-1.5">
+                    <Users className="w-3.5 h-3.5" /> Redemptions
                   </p>
-                  <p className="text-xs text-gray-500 mt-1">Used / Total Limit</p>
+                  <p className="text-sm font-extrabold text-slate-750">
+                    {selectedCoupon.usedBy?.length || 0} <span className="text-slate-400 font-medium">/</span> {selectedCoupon.usageLimit === null ? '∞' : selectedCoupon.usageLimit}
+                  </p>
+                  <p className="text-[8px] text-slate-450 font-bold uppercase tracking-wider mt-0.5">Used Count</p>
                 </div>
 
-                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                  <div className="flex items-center mb-2">
-                    <DollarSign className="w-5 h-5 text-gray-600 mr-2" />
-                    <span className="text-sm font-medium text-gray-700">Min. Booking</span>
-                  </div>
-                  <p className="text-lg font-semibold text-gray-900">
-                    {selectedCoupon.minBookingValue ? formatCurrency(selectedCoupon.minBookingValue) : 'No minimum'}
+                <div className="text-center p-2">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 flex items-center justify-center gap-1.5">
+                    <DollarSign className="w-3.5 h-3.5" /> Min Booking
                   </p>
+                  <p className="text-sm font-extrabold text-slate-750">
+                    {selectedCoupon.minBookingValue ? formatCurrency(selectedCoupon.minBookingValue) : 'No Minimum'}
+                  </p>
+                  <p className="text-[8px] text-slate-455 font-bold uppercase tracking-wider mt-0.5">Minimum Spend</p>
                 </div>
               </div>
 
-              {/* Type Information */}
-              <div className="bg-white p-5 rounded-xl border border-gray-200">
-                <h4 className="text-lg font-semibold text-secondary mb-4">Coupon Type</h4>
-                <div className="flex items-center">
-                  {selectedCoupon.isGlobal ? (
-                    <>
-                      <Globe className="w-6 h-6 text-blue-600 mr-3" />
-                      <div>
-                        <p className="font-medium">Global Coupon</p>
-                        <p className="text-sm text-gray-600">Available to all users</p>
-                      </div>
-                    </>
-                  ) : selectedCoupon.isFirstBooking ? (
-                    <>
-                      <Users className="w-6 h-6 text-purple-600 mr-3" />
-                      <div>
-                        <p className="font-medium">First Booking Coupon</p>
-                        <p className="text-sm text-gray-600">Only for users with no previous bookings</p>
-                      </div>
-                    </>
-                  ) : selectedCoupon.assignedTo ? (
-                    <>
-                      <Users className="w-6 h-6 text-orange-600 mr-3" />
-                      <div>
-                        <p className="font-medium">Assigned to User</p>
-                        <p className="text-sm text-gray-600">
-                          {getUserDisplayName(selectedCoupon.assignedTo)}
-                        </p>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <Gift className="w-6 h-6 text-gray-600 mr-3" />
-                      <div>
-                        <p className="font-medium">Standard Coupon</p>
-                        <p className="text-sm text-gray-600">Available to all users (non-global)</p>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Applicable Zones Info */}
-              <div className="bg-white p-5 rounded-xl border border-gray-200">
-                <h4 className="text-lg font-semibold text-secondary mb-4">Applicable Zones</h4>
-                {selectedCoupon.applicableZones && selectedCoupon.applicableZones.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {selectedCoupon.applicableZones.map(z => {
-                      const zoneId = typeof z === 'object' ? z._id : z;
-                      return (
-                        <span key={zoneId} className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-teal-50 text-teal-800 border border-teal-200">
-                          {getZoneHierarchyPath(zoneId)}
-                        </span>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="flex items-center">
-                    <Globe className="w-6 h-6 text-blue-600 mr-3" />
+              {/* Targeting & Scope Card (Combined fields) */}
+              <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100 space-y-4">
+                <h4 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-1.5 pb-2 border-b border-slate-100/50">
+                  <Globe className="w-4 h-4 text-primary" /> Targeting & Scope
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Coupon Type Info */}
+                  <div className="bg-white p-3.5 rounded-xl border border-slate-200/50 flex items-center gap-3 shadow-xs">
+                    <div className="p-2 bg-primary/10 text-primary rounded-xl border border-primary/20 shrink-0">
+                      {selectedCoupon.isGlobal ? (
+                        <Globe className="w-5 h-5 text-primary" />
+                      ) : selectedCoupon.isFirstBooking ? (
+                        <Users className="w-5 h-5 text-purple-650" />
+                      ) : selectedCoupon.assignedTo ? (
+                        <Users className="w-5 h-5 text-orange-600" />
+                      ) : (
+                        <Gift className="w-5 h-5 text-slate-650" />
+                      )}
+                    </div>
                     <div>
-                      <p className="font-medium text-gray-900">Globally Applicable</p>
-                      <p className="text-sm text-gray-600">Valid across all service zones</p>
+                      <p className="text-xs font-black text-slate-750 uppercase tracking-wide leading-none">Campaign Type</p>
+                      <p className="text-[11px] text-slate-500 font-semibold mt-1">
+                        {selectedCoupon.isGlobal ? (
+                          'Global Promotion'
+                        ) : selectedCoupon.isFirstBooking ? (
+                          'First Booking Only'
+                        ) : selectedCoupon.assignedTo ? (
+                          `User-Specific: ${getUserDisplayName(selectedCoupon.assignedTo)}`
+                        ) : (
+                          'Standard Campaign'
+                        )}
+                      </p>
                     </div>
                   </div>
-                )}
+
+                  {/* Applicable Zones Info */}
+                  <div className="bg-white p-3.5 rounded-xl border border-slate-200/50 flex flex-col justify-center shadow-xs">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Geographic Zones</p>
+                    {selectedCoupon.applicableZones && selectedCoupon.applicableZones.length > 0 ? (
+                      <div className="flex flex-wrap gap-1 max-h-16 overflow-y-auto pr-1">
+                        {selectedCoupon.applicableZones.map(z => {
+                          const zoneId = typeof z === 'object' ? z._id : z;
+                          return (
+                            <span key={zoneId} className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-teal-50 text-teal-800 border border-teal-200/60 shadow-xs capitalize">
+                              📍 {getZoneHierarchyPath(zoneId).split('>').pop().trim()}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <span className="text-xs font-extrabold text-slate-750 flex items-center gap-1 uppercase tracking-wider text-[10px]">🌍 Globally Applicable</span>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              {/* Usage History */}
+              {/* Redemption History Table */}
               {selectedCoupon.usedBy && selectedCoupon.usedBy.length > 0 && (
-                <div className="bg-white p-5 rounded-xl border border-gray-200">
-                  <h4 className="text-lg font-semibold text-secondary mb-4">Usage History</h4>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
+                <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100 space-y-3">
+                  <h4 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-1.5 pb-2 border-b border-slate-100/50">
+                    <Clock className="w-4 h-4 text-primary" /> Redemption Logs ({selectedCoupon.usedBy.length})
+                  </h4>
+                  <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                    <table className="min-w-full divide-y divide-slate-150">
+                      <thead className="bg-slate-50">
                         <tr>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Booking Value</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Used At</th>
+                          <th className="px-4 py-2.5 text-left text-[9px] font-black text-slate-400 uppercase tracking-widest">User</th>
+                          <th className="px-4 py-2.5 text-left text-[9px] font-black text-slate-400 uppercase tracking-widest">Booking Value</th>
+                          <th className="px-4 py-2.5 text-left text-[9px] font-black text-slate-400 uppercase tracking-widest">Redeemed At</th>
                         </tr>
                       </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
+                      <tbody className="divide-y divide-slate-100 text-xs">
                         {selectedCoupon.usedBy.map((usage, index) => (
-                          <tr key={index}>
-                            <td className="px-4 py-4 whitespace-nowrap">
-                              <div className="text-sm font-medium text-gray-900">
-                                {getUserDisplayName(usage.user)}
-                              </div>
-                              <div className="text-sm text-gray-500">
-                                {usage.user?.email || ''}
-                              </div>
+                          <tr key={index} className="hover:bg-slate-50/40 transition-colors">
+                            <td className="px-4 py-3">
+                              <p className="font-extrabold text-slate-800 leading-none">{getUserDisplayName(usage.user)}</p>
+                              <p className="text-[10px] text-slate-400 mt-1 font-semibold">{usage.user?.email || ''}</p>
                             </td>
-                            <td className="px-4 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-900">
-                                {formatCurrency(usage.bookingValue)}
-                              </div>
+                            <td className="px-4 py-3 font-extrabold text-slate-800">
+                              {formatCurrency(usage.bookingValue)}
                             </td>
-                            <td className="px-4 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-900">
-                                {formatDate(usage.usedAt)}
-                              </div>
+                            <td className="px-4 py-3 font-semibold text-slate-500">
+                              {formatDate(usage.usedAt)}
                             </td>
                           </tr>
                         ))}
@@ -1442,10 +1446,10 @@ const AdminCoupons = () => {
               )}
 
               {/* Action Buttons */}
-              <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+              <div className="flex justify-end space-x-3 pt-4 border-t border-slate-100">
                 <button
                   onClick={() => setShowViewModal(false)}
-                  className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                  className="px-5 py-2.5 text-sm font-bold text-slate-650 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"
                 >
                   Close
                 </button>
@@ -1454,7 +1458,7 @@ const AdminCoupons = () => {
                     setShowViewModal(false);
                     handleEditClick(selectedCoupon);
                   }}
-                  className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-800 transition-colors duration-200 flex items-center"
+                  className="px-5 py-2.5 bg-primary hover:bg-teal-800 text-white text-sm font-bold rounded-xl transition-colors flex items-center shadow-md hover:shadow-lg"
                 >
                   <Edit className="w-4 h-4 mr-2" />
                   Edit Coupon
@@ -1540,201 +1544,6 @@ const Modal = ({ isOpen, onClose, title, children, size = 'medium' }) => {
   );
 };
 
-const HierarchicalZoneSelector = ({
-  zones,
-  selectedZoneIds,
-  onChange,
-  label = "Applicable Zones"
-}) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [expandedNodes, setExpandedNodes] = useState({});
-  const dropdownRef = useRef(null);
 
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const tree = useMemo(() => {
-    const states = zones.filter(z => z.zoneLevel === 'state' || !z.zoneLevel);
-    const cities = zones.filter(z => z.zoneLevel === 'city');
-    const micros = zones.filter(z => z.zoneLevel === 'micro');
-
-    return states.map(state => {
-      const stateCities = cities.filter(c => {
-        const pId = c.parentZone?._id || c.parentZone;
-        return pId?.toString() === (state._id || state.id)?.toString();
-      });
-
-      const cityNodes = stateCities.map(city => {
-        const cityMicros = micros.filter(m => {
-          const pId = m.parentZone?._id || m.parentZone;
-          return pId?.toString() === (city._id || city.id)?.toString();
-        });
-
-        return { ...city, children: cityMicros };
-      });
-
-      return { ...state, children: cityNodes };
-    });
-  }, [zones]);
-
-  const filteredTree = useMemo(() => {
-    if (!searchQuery) return tree;
-    const lowerQuery = searchQuery.toLowerCase();
-
-    const filterNodes = (nodes) => {
-      return nodes.map(node => {
-        const matchesSelf = node.name?.toLowerCase().includes(lowerQuery) || node.city?.toLowerCase().includes(lowerQuery);
-        let filteredChildren = [];
-        if (node.children) {
-          filteredChildren = filterNodes(node.children);
-        }
-        const matchesChildren = filteredChildren.length > 0;
-
-        if (matchesSelf || matchesChildren) {
-          return {
-            ...node,
-            children: filteredChildren,
-            forceExpanded: true
-          };
-        }
-        return null;
-      }).filter(Boolean);
-    };
-
-    return filterNodes(tree);
-  }, [tree, searchQuery]);
-
-  const toggleExpand = (id, e) => {
-    e.stopPropagation();
-    setExpandedNodes(prev => ({ ...prev, [id]: !prev[id] }));
-  };
-
-  const isSelected = (id) => (selectedZoneIds || []).includes(id);
-
-  const renderNode = (node, depth = 0) => {
-    const nodeId = node._id || node.id;
-    const hasChildren = node.children && node.children.length > 0;
-    const isExpanded = !!(expandedNodes[nodeId] || node.forceExpanded);
-    const checked = isSelected(nodeId);
-
-    return (
-      <div key={nodeId} className="select-none">
-        <div
-          className="flex items-center hover:bg-gray-50 py-1.5 px-2 rounded-lg cursor-pointer transition-colors"
-          style={{ paddingLeft: `${depth * 20 + 8}px` }}
-          onClick={() => onChange(node)}
-        >
-          {hasChildren ? (
-            <button
-              type="button"
-              onClick={(e) => toggleExpand(nodeId, e)}
-              className="p-1 hover:bg-gray-200 rounded mr-1 transition-transform duration-200"
-            >
-              {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-gray-500" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-500" />}
-            </button>
-          ) : (
-            <span className="w-6 shrink-0" />
-          )}
-
-          <input
-            type="checkbox"
-            checked={checked}
-            onChange={() => { }}
-            className="h-4 w-4 text-primary border-gray-300 rounded focus:ring-primary mr-2 cursor-pointer"
-          />
-
-          <span className={`text-xs font-semibold text-secondary capitalize ${checked ? 'text-primary font-bold' : ''}`}>
-            {node.name}
-          </span>
-          <span className="text-[9px] bg-gray-100 text-gray-500 ml-1.5 px-1.5 py-0.2 rounded font-black uppercase tracking-wider scale-90">
-            {node.zoneLevel || 'state'}
-          </span>
-        </div>
-
-        {hasChildren && isExpanded && (
-          <div className="mt-0.5">
-            {node.children.map(child => renderNode(child, depth + 1))}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  return (
-    <div className="relative w-full" ref={dropdownRef}>
-      <label className="block text-sm font-medium text-secondary mb-1.5">
-        {label}
-      </label>
-      <div
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-3.5 py-2.5 border border-gray-300 rounded-lg bg-white cursor-pointer flex justify-between items-center text-sm shadow-sm hover:border-gray-400 transition-all font-semibold"
-      >
-        <span className="text-gray-700 truncate font-semibold">
-          {(selectedZoneIds || []).length === 0 ? 'Select Zones (Leave empty for Global)' : `${(selectedZoneIds || []).length} Zones Selected`}
-        </span>
-        {isOpen ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
-      </div>
-
-      {isOpen && (
-        <div className="absolute left-0 right-0 z-50 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl p-3 max-h-80 flex flex-col shrink-0">
-          <div className="relative mb-2 shrink-0">
-            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search by state, city, or micro zone..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-250 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-semibold text-gray-900 bg-gray-50"
-            />
-          </div>
-
-          <div className="overflow-y-auto flex-1 space-y-1 pr-1">
-            {filteredTree.length === 0 ? (
-              <div className="text-xs text-gray-400 italic text-center py-6">
-                No matching zones found.
-              </div>
-            ) : (
-              filteredTree.map(node => renderNode(node, 0))
-            )}
-          </div>
-        </div>
-      )}
-
-      {(selectedZoneIds || []).length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-2.5 max-h-24 overflow-y-auto p-1 bg-gray-50 rounded-lg border border-gray-200 shadow-inner">
-          {(selectedZoneIds || []).map(id => {
-            const zone = zones.find(z => (z._id || z.id)?.toString() === id.toString());
-            if (!zone) return null;
-
-            let badgeColor = 'bg-teal-50 text-teal-800 border-teal-200';
-            if (zone.zoneLevel === 'city') badgeColor = 'bg-blue-50 text-blue-800 border-blue-200';
-            if (zone.zoneLevel === 'micro') badgeColor = 'bg-purple-50 text-purple-800 border-purple-200';
-
-            return (
-              <span key={id} className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black border shadow-sm capitalize ${badgeColor}`}>
-                <span>{zone.name} ({zone.zoneLevel?.toUpperCase() || 'STATE'})</span>
-                <button
-                  type="button"
-                  onClick={() => onChange(zone)}
-                  className="ml-1 inline-flex items-center justify-center focus:outline-none text-gray-400 hover:text-gray-650"
-                >
-                  <X className="w-2.5 h-2.5 ml-0.5" />
-                </button>
-              </span>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-};
 
 export default AdminCoupons;

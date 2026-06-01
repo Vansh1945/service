@@ -555,6 +555,9 @@ const ProviderBooking = () => {
 
   const calculateNetAmount = useCallback((booking) => {
     if (!booking) return 0;
+    if (typeof booking.providerEarnings === 'number') {
+      return booking.providerEarnings.toFixed(2);
+    }
     const totalAmount = booking.totalAmount || calculateSubtotal(booking);
     const commissionAmount = booking.commission?.amount || booking.commissionAmount || 0;
     return (totalAmount - commissionAmount).toFixed(2);
@@ -1431,8 +1434,13 @@ const ProviderBooking = () => {
                         { label: 'Service Amount', value: formatCurrency(calculateServiceSubtotal(selectedBooking)) },
                         ...(calculateTotalDiscount(selectedBooking) > 0 ? [{ label: 'Discount', value: `-${formatCurrency(calculateTotalDiscount(selectedBooking))}`, color: 'text-primary' }] : []),
                         { label: 'Subtotal', value: formatCurrency(calculateSubtotal(selectedBooking)) },
-                        ...(selectedBooking.visitingCharge > 0 ? [{ label: 'Visiting Charge', value: `+${formatCurrency(selectedBooking.visitingCharge)}`, color: 'text-accent' }] : []),
-                        { label: 'Platform Commission', value: `-${formatCurrency(selectedBooking.commission?.amount || selectedBooking.commissionAmount || 0)}`, color: 'text-gray-500' },
+                        ...(selectedBooking.visitingCharge > 0 ? [{ label: 'Visiting Charge', value: `+${formatCurrency(selectedBooking.visitingCharge)} (${selectedBooking.surgeSplitSettings?.visiting || 60}% Provider Share)` }] : []),
+                        ...(selectedBooking.rainCharge > 0 ? [{ label: 'Rain Charge', value: `+${formatCurrency(selectedBooking.rainCharge)} (${selectedBooking.surgeSplitSettings?.rain || 70}% Provider Share)` }] : []),
+                        ...(selectedBooking.trafficCharge > 0 ? [{ label: 'Traffic Charge', value: `+${formatCurrency(selectedBooking.trafficCharge)} (${selectedBooking.surgeSplitSettings?.traffic || 70}% Provider Share)` }] : []),
+                        ...(selectedBooking.nightCharge > 0 ? [{ label: 'Night Charge', value: `+${formatCurrency(selectedBooking.nightCharge)} (${selectedBooking.surgeSplitSettings?.night || 70}% Provider Share)` }] : []),
+                        ...(selectedBooking.demandSurge > 0 ? [{ label: 'Demand Surge', value: `+${formatCurrency(selectedBooking.demandSurge)} (${selectedBooking.surgeSplitSettings?.demand || 50}% Provider Share)` }] : []),
+                        ...(selectedBooking.providerSurgeShare > 0 ? [{ label: 'Your Surcharge Earnings', value: `+${formatCurrency(selectedBooking.providerSurgeShare)}`, color: 'text-emerald-600 font-bold' }] : []),
+                        { label: 'Platform Commission (Base)', value: `-${formatCurrency(selectedBooking.commission?.amount || selectedBooking.commissionAmount || 0)}`, color: 'text-rose-500 font-medium' },
                       ].map(({ label, value, color }) => (
                         <div key={label} className="flex justify-between text-sm">
                           <span className="text-gray-500">{label}</span>
@@ -1440,7 +1448,7 @@ const ProviderBooking = () => {
                         </div>
                       ))}
                       <div className="flex justify-between pt-2 border-t border-gray-100">
-                        <span className="font-bold text-secondary">Net Amount</span>
+                        <span className="font-bold text-secondary">Final Receivable</span>
                         <span className="font-bold text-primary">{formatCurrency(calculateNetAmount(selectedBooking))}</span>
                       </div>
                     </div>

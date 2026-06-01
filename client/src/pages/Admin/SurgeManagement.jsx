@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import Pagination from '../../components/Pagination';
 import {
   Plus,
@@ -30,6 +31,7 @@ import { useAuth } from '../../context/auth';
 import * as SurgeService from '../../services/SurgeService';
 import { getAllZones } from '../../services/ZoneService';
 import { formatCurrency } from '../../utils/format';
+import HierarchicalZoneSelector from '../../components/HierarchicalZoneSelector';
 
 // Charge type config — maps UI labels to backend enum values
 const CHARGE_TYPES = [
@@ -45,6 +47,7 @@ const getChargeTypeConfig = (val) => CHARGE_TYPES.find(t => t.value === val) || 
 
 const SurgeManagement = () => {
   const { showToast } = useAuth();
+  const location = useLocation();
 
   // Data
   const [surgeRules, setSurgeRules] = useState([]);
@@ -131,6 +134,20 @@ const SurgeManagement = () => {
     fetchSurgeRules();
     fetchZones();
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const prefillZone = params.get('prefillZone');
+    if (prefillZone) {
+      setCreateForm(prev => ({
+        ...prev,
+        scope: 'zone',
+        zoneId: prefillZone,
+        zoneIds: [prefillZone]
+      }));
+      setShowCreateModal(true);
+    }
+  }, [location.search]);
 
   // ----- Stats -----
   useEffect(() => {
@@ -587,7 +604,12 @@ const SurgeManagement = () => {
 
         {/* Zone Selector */}
         {form.scope === 'zone' && (
-          <ZoneCascadeSelector isCreate={isCreate} />
+          <HierarchicalZoneSelector
+            zones={zones}
+            selectedZoneIds={form.zoneIds}
+            onChange={(zone) => handleZoneToggleCascade(zone, isCreate)}
+            label="Target Zone (Hierarchical Selector) *"
+          />
         )}
 
         {/* Charge Mode + Value */}

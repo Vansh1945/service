@@ -47,6 +47,7 @@ const AdminRoutes = () => {
                         <Route path="customers" element={<AdminCustomersView />} />
                         <Route path="bookings" element={<AdminBookingsView />} />
                         <Route path="commission" element={<AdminCommissionPage />} />
+                        <Route path="commision" element={<AdminCommissionPage />} />
                         <Route path="coupons" element={<AdminCoupons />} />
                         <Route path="surge" element={<SurgeManagement />} />
                         <Route path="add-questions" element={<AdminQuestions />} />

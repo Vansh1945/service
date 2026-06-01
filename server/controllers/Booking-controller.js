@@ -866,6 +866,11 @@ const createBooking = async (req, res) => {
 
       let totalSurcharge = 0;
       const surchargeBreakdown = [];
+      let rainCharge = 0;
+      let trafficCharge = 0;
+      let nightCharge = 0;
+      let demandSurge = 0;
+      let visitingCharge = 0;
 
       const applicableSurges = allActiveSurges.filter(rule => {
         if (rule.scope === 'zone') {
@@ -887,6 +892,13 @@ const createBooking = async (req, res) => {
         }
         chargeAmount = parseFloat(chargeAmount.toFixed(2));
         totalSurcharge += chargeAmount;
+
+        if (s.chargeType === 'rain') rainCharge += chargeAmount;
+        else if (s.chargeType === 'traffic') trafficCharge += chargeAmount;
+        else if (s.chargeType === 'night') nightCharge += chargeAmount;
+        else if (s.chargeType === 'demand') demandSurge += chargeAmount;
+        else if (s.chargeType === 'visiting' || s.chargeType === 'festival' || s.chargeType === 'custom') visitingCharge += chargeAmount;
+
         surchargeBreakdown.push({
           chargeType: s.chargeType,
           mode: s.mode,
@@ -954,6 +966,11 @@ const createBooking = async (req, res) => {
         status: paymentMethod === 'cash' ? (assignedProviderId ? 'accepted' : 'pending') : 'pending',
         paymentStatus: paymentMethod === 'cash' ? 'pending' : 'processing',
         confirmedBooking: paymentMethod === 'cash',
+        rainCharge,
+        trafficCharge,
+        nightCharge,
+        demandSurge,
+        visitingCharge,
         statusHistory: [{
           status: paymentMethod === 'cash' ? (assignedProviderId ? 'accepted' : 'pending') : 'pending',
           timestamp: new Date(),
@@ -3584,6 +3601,39 @@ const completeBooking = async (req, res) => {
       uploadedAt: new Date()
     }));
 
+    // Commission & Surcharge Splits Calculation
+    const baseForCommission = Math.max(0, booking.subtotal - booking.totalDiscount);
+    const { commission, netAmount } = CommissionRule.calculateCommission(
+      baseForCommission,
+      commissionRule
+    );
+
+    const { SystemConfig } = require('../models/SystemSetting');
+    let settings = await SystemConfig.findOne();
+    if (!settings) {
+      settings = new SystemConfig({ companyName: process.env.COMPANY_NAME || 'Raj Electrical Services' });
+      await settings.save(session ? { session } : {});
+    }
+    const splits = settings.surgeSplitSettings || { visiting: 60, rain: 70, traffic: 70, night: 70, demand: 50 };
+
+    // Surcharge amounts on this booking
+    const visiting = booking.visitingCharge || 0;
+    const rain = booking.rainCharge || 0;
+    const traffic = booking.trafficCharge || 0;
+    const night = booking.nightCharge || 0;
+    const demand = booking.demandSurge || 0;
+
+    // Provider splits
+    const provVisitingShare = parseFloat((visiting * (splits.visiting / 100)).toFixed(2));
+    const provRainShare = parseFloat((rain * (splits.rain / 100)).toFixed(2));
+    const provTrafficShare = parseFloat((traffic * (splits.traffic / 100)).toFixed(2));
+    const provNightShare = parseFloat((night * (splits.night / 100)).toFixed(2));
+    const provDemandShare = parseFloat((demand * (splits.demand / 100)).toFixed(2));
+
+    const providerSurgeShare = parseFloat((provVisitingShare + provRainShare + provTrafficShare + provNightShare + provDemandShare).toFixed(2));
+    const totalSurcharges = visiting + rain + traffic + night + demand;
+    const companySurgeShare = parseFloat((totalSurcharges - providerSurgeShare).toFixed(2));
+
     booking.providerWorkProof = {
       ...booking.providerWorkProof,
       afterImages: afterImages,
@@ -3594,6 +3644,12 @@ const completeBooking = async (req, res) => {
     booking.completedAt = new Date();
     booking.paymentStatus = 'paid';
     booking.commissionProcessed = true;
+
+    booking.commissionAmount = commission || 0;
+    booking.providerEarnings = parseFloat((netAmount + providerSurgeShare).toFixed(2));
+    booking.providerSurgeShare = providerSurgeShare;
+    booking.companySurgeShare = companySurgeShare;
+    booking.surgeSplitSettings = splits;
 
     // Fraud score checking for Hold extension
     const fraudScore = getFraudScore(booking);
@@ -3625,11 +3681,6 @@ const completeBooking = async (req, res) => {
     // ------------------------------
     // Cashback logic moved outside transaction to avoid Write Conflicts
     // ------------------------------
-
-    const { commission, netAmount } = CommissionRule.calculateCommission(
-      booking.totalAmount,
-      commissionRule
-    );
 
     // ------------------------------
     //  CASH PAYMENT: Create a cash transaction
@@ -3678,7 +3729,7 @@ const completeBooking = async (req, res) => {
           grossAmount: booking.totalAmount,
           commissionRate: commissionRule ? commissionRule.value : 0,
           commissionAmount: commission,
-          netAmount: netAmount,
+          netAmount: booking.providerEarnings,
           status: earningStatus,
           availableAfter
         }
