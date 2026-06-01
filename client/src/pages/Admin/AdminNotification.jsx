@@ -158,6 +158,7 @@ const AdminNotification = () => {
         minBookings: 0,
         targetZones: []
     });
+    const [broadcastScope, setBroadcastScope] = useState('global'); // 'global' | 'zone_specific'
     const [zones, setZones] = useState([]);
     const [categories, setCategories] = useState([]);
     const [isScheduled, setIsScheduled] = useState(false);
@@ -249,6 +250,8 @@ const AdminNotification = () => {
     };
 
     const applyPreset = (preset) => {
+        const hasZones = preset.targetZones && preset.targetZones.length > 0;
+        setBroadcastScope(hasZones ? 'zone_specific' : 'global');
         setForm({
             audience: preset.audience,
             title: preset.title,
@@ -512,6 +515,7 @@ const AdminNotification = () => {
     };
 
     const resetForm = () => {
+        setBroadcastScope('global');
         setForm({
             audience: 'all',
             title: '',
@@ -686,15 +690,51 @@ const AdminNotification = () => {
                             </div>
                         </div>
 
-                        {/* Target Zones Selector */}
+                        {/* Broadcast Scope Selector */}
                         <div className="mb-6">
-                            <HierarchicalZoneSelector
-                                zones={zones}
-                                selectedZoneIds={form.targetZones}
-                                onChange={(zone) => handleZoneToggleCascade(zone, true)}
-                                label="Target Zones (Leave empty for Global)"
-                            />
+                            <label className="block text-sm font-semibold text-gray-700 mb-2.5 flex items-center gap-2">
+                                <FiTarget className="text-primary" /> Broadcast Scope *
+                            </label>
+                            <div className="flex gap-4">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setBroadcastScope('global');
+                                        setForm(prev => ({ ...prev, targetZones: [] }));
+                                    }}
+                                    className={`flex-1 py-2.5 px-4 rounded-lg font-bold border-2 transition-all duration-200 ${
+                                        broadcastScope === 'global'
+                                            ? 'border-primary bg-primary/5 text-primary'
+                                            : 'border-gray-200 text-gray-600 hover:border-gray-350 bg-white'
+                                    }`}
+                                >
+                                    🌐 Global Broadcast
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setBroadcastScope('zone_specific')}
+                                    className={`flex-1 py-2.5 px-4 rounded-lg font-bold border-2 transition-all duration-200 ${
+                                        broadcastScope === 'zone_specific'
+                                            ? 'border-primary bg-primary/5 text-primary'
+                                            : 'border-gray-200 text-gray-600 hover:border-gray-350 bg-white'
+                                    }`}
+                                >
+                                    📍 Zone-Targeted Broadcast
+                                </button>
+                            </div>
                         </div>
+
+                        {/* Target Zones Selector */}
+                        {broadcastScope === 'zone_specific' && (
+                            <div className="mb-6">
+                                <HierarchicalZoneSelector
+                                    zones={zones}
+                                    selectedZoneIds={form.targetZones}
+                                    onChange={(zone) => handleZoneToggleCascade(zone, true)}
+                                    label="Target Zones (State/City/Micro)"
+                                />
+                            </div>
+                        )}
 
                         {/* Audience Filters */}
                         <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-dashed border-gray-300">

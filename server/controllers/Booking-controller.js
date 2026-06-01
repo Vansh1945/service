@@ -442,79 +442,38 @@ const autoAssignProviderIfEnabled = async (bookingId) => {
     }
   }
 
+  // Build zone relations for mapping priority tiers
+  const adjacentZoneIds = [];
+  const parentZoneIds = [];
+  const childZoneIds = [];
+
   if (bookingZoneId) {
-    // Tier 1: Same Zone Matching
-    const sameZoneProviders = await Provider.find({
-      ...baseProviderQuery,
-      currentZone: bookingZoneId
-    });
-    if (sameZoneProviders.length > 0) {
-      const sorted = sortProviders(sameZoneProviders);
-      if (sorted.length > 0) {
-        selectedProvider = sorted[0].provider;
-        selectedSource = 'Same Zone';
+    const bookingZone = await ZoneModel.findById(bookingZoneId).lean();
+    if (bookingZone) {
+      // 1. Adjacent zones
+      if (bookingZone.adjacentZones && bookingZone.adjacentZones.length > 0) {
+        bookingZone.adjacentZones.forEach(id => adjacentZoneIds.push(id.toString()));
       }
-    }
-
-    // Tier 2: Adjacent Zone Fallback
-    if (!selectedProvider) {
-      const currentZoneDoc = await ZoneModel.findById(bookingZoneId).lean();
-      if (currentZoneDoc && currentZoneDoc.adjacentZones && currentZoneDoc.adjacentZones.length > 0) {
-        const adjacentProviders = await Provider.find({
-          ...baseProviderQuery,
-          currentZone: { $in: currentZoneDoc.adjacentZones }
-        });
-        if (adjacentProviders.length > 0) {
-          const sorted = sortProviders(adjacentProviders);
-          if (sorted.length > 0) {
-            selectedProvider = sorted[0].provider;
-            selectedSource = 'Adjacent Zone';
-          }
-        }
+      // 2. Parent zones
+      let curr = bookingZone;
+      while (curr && curr.parentZone) {
+        parentZoneIds.push(curr.parentZone.toString());
+        curr = await ZoneModel.findById(curr.parentZone).lean();
       }
-    }
-
-    // Tier 3: Parent Zone Fallback (micro -> city -> state)
-    if (!selectedProvider) {
-      let currentZoneDoc = await ZoneModel.findById(bookingZoneId).lean();
-      while (currentZoneDoc && currentZoneDoc.parentZone && !selectedProvider) {
-        const parentZone = await ZoneModel.findById(currentZoneDoc.parentZone).lean();
-        if (!parentZone) break;
-
-        const parentProviders = await Provider.find({
-          ...baseProviderQuery,
-          currentZone: parentZone._id
-        });
-        if (parentProviders.length > 0) {
-          const sorted = sortProviders(parentProviders);
-          if (sorted.length > 0) {
-            selectedProvider = sorted[0].provider;
-            const levelName = parentZone.zoneLevel || 'Parent';
-            selectedSource = `Parent ${levelName.charAt(0).toUpperCase() + levelName.slice(1)}`;
-          }
-        }
-        currentZoneDoc = parentZone;
+      // 3. Child zones
+      const childZones = await ZoneModel.find({ parentZone: bookingZoneId }).select('_id').lean();
+      if (childZones && childZones.length > 0) {
+        childZones.forEach(z => childZoneIds.push(z._id.toString()));
       }
     }
   }
 
-  // Tier 4: Failsafe (S2 cell / distance fallback)
-  if (!selectedProvider) {
-    /* BACKUP COMMENT: Original used synchronous S2 calculations, blocking the main Event Loop. Offloading to worker threads now. */
-    const { latLngToS2CellIdAsync, getNeighborsAsync } = require('../utils/s2HelperAsync');
-    let targetCell = booking.address?.s2CellId;
-    if (!targetCell) {
-      targetCell = await latLngToS2CellIdAsync(lat, lng, 13);
-    }
-    const neighborCells = await getNeighborsAsync(targetCell);
-    const searchCells = [targetCell, ...neighborCells];
+  // Fetch all qualified providers matching base criteria
+  const eligibleProviders = await Provider.find(baseProviderQuery);
 
-    const nearbyProviders = await Provider.find({
-      ...baseProviderQuery,
-      s2CellId: { $in: searchCells }
-    });
-
-    const providersWithDistance = nearbyProviders.map(p => {
+  if (eligibleProviders.length > 0) {
+    // 1. Calculate distance for each and filter by maxDistanceMeters
+    const providersWithDetails = eligibleProviders.map(p => {
       const pLng = p.currentLocation?.coordinates?.[0];
       const pLat = p.currentLocation?.coordinates?.[1];
       let dist = Infinity;
@@ -524,11 +483,92 @@ const autoAssignProviderIfEnabled = async (bookingId) => {
       return { provider: p, distance: dist };
     }).filter(item => item.distance <= maxDistanceMeters);
 
-    providersWithDistance.sort((a, b) => a.distance - b.distance);
+    if (providersWithDetails.length > 0) {
+      // 2. Query active workloads for filtered providers
+      const providerIds = providersWithDetails.map(item => item.provider._id);
+      const activeBookings = await Booking.find({
+        provider: { $in: providerIds },
+        status: { $in: ['accepted', 'in-progress', 'started', 'confirmed', 'scheduled', 'assigned'] }
+      }).select('provider');
 
-    if (providersWithDistance.length > 0) {
-      selectedProvider = providersWithDistance[0].provider;
-      selectedSource = 'Distance-based Fallback';
+      const workloadMap = {};
+      providerIds.forEach(id => {
+        workloadMap[id.toString()] = 0;
+      });
+      activeBookings.forEach(b => {
+        if (b.provider) {
+          workloadMap[b.provider.toString()] = (workloadMap[b.provider.toString()] || 0) + 1;
+        }
+      });
+
+      // 3. Classify tier/priority for each provider
+      const scoredProviders = providersWithDetails.map(item => {
+        const p = item.provider;
+        const pZoneStr = p.currentZone ? p.currentZone.toString() : null;
+        let tier = 3; // Tier 3: General Fallback / Other Zone
+
+        if (bookingZoneId && pZoneStr) {
+          if (pZoneStr === bookingZoneId.toString()) {
+            tier = 1; // Tier 1: Same Zone
+          } else if (
+            adjacentZoneIds.includes(pZoneStr) ||
+            parentZoneIds.includes(pZoneStr) ||
+            childZoneIds.includes(pZoneStr)
+          ) {
+            tier = 2; // Tier 2: Adjacent / Parent / Child Zone
+          }
+        }
+
+        return {
+          ...item,
+          tier,
+          workload: workloadMap[p._id.toString()] || 0
+        };
+      });
+
+      // 4. Sort based on the priority criteria
+      scoredProviders.sort((a, b) => {
+        // Priority 1 & 2: Zone Tiers (Same Zone first, then Adjacent/Parent/Child, then Fallback)
+        if (a.tier !== b.tier) {
+          return a.tier - b.tier;
+        }
+        // Priority 3: Distance ascending
+        if (a.distance !== b.distance) {
+          return a.distance - b.distance;
+        }
+        // Priority 4: Active workload ascending
+        if (a.workload !== b.workload) {
+          return a.workload - b.workload;
+        }
+        // Priority 5: Higher rating first (descending)
+        const ratingA = a.provider.performanceScore?.rating || 0;
+        const ratingB = b.provider.performanceScore?.rating || 0;
+        if (ratingB !== ratingA) {
+          return ratingB - ratingA;
+        }
+        return 0;
+      });
+
+      const matched = scoredProviders[0];
+      selectedProvider = matched.provider;
+
+      // Determine proper assignmentSource
+      const pZoneStr = selectedProvider.currentZone ? selectedProvider.currentZone.toString() : null;
+      if (matched.tier === 1) {
+        selectedSource = 'Same Zone';
+      } else if (matched.tier === 2) {
+        if (pZoneStr && adjacentZoneIds.includes(pZoneStr)) {
+          selectedSource = 'Adjacent Zone';
+        } else if (pZoneStr && parentZoneIds.includes(pZoneStr)) {
+          selectedSource = 'Parent Zone';
+        } else if (pZoneStr && childZoneIds.includes(pZoneStr)) {
+          selectedSource = 'Child Zone';
+        } else {
+          selectedSource = 'Adjacent Zone';
+        }
+      } else {
+        selectedSource = 'Distance-based Fallback';
+      }
     }
   }
 
