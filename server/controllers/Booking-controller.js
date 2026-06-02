@@ -872,6 +872,7 @@ const createBooking = async (req, res) => {
       let demandSurge = 0;
       let visitingCharge = 0;
       let customCharges = 0;
+      let platformFee = 0;
 
       const applicableSurges = allActiveSurges.filter(rule => {
         if (rule.scope === 'zone') {
@@ -904,6 +905,7 @@ const createBooking = async (req, res) => {
         else if (s.chargeType === 'traffic') trafficCharge += chargeAmount;
         else if (s.chargeType === 'night') nightCharge += chargeAmount;
         else if (s.chargeType === 'demand') demandSurge += chargeAmount;
+        else if (s.chargeType === 'platform') platformFee += chargeAmount;
         else if (s.chargeType === 'visiting' || s.chargeType === 'festival' || s.chargeType === 'custom') visitingCharge += chargeAmount;
 
         surchargeBreakdown.push({
@@ -980,6 +982,7 @@ const createBooking = async (req, res) => {
         nightCharge,
         demandSurge,
         visitingCharge,
+        platformFee,
         customCharges,
         statusHistory: [{
           status: paymentMethod === 'cash' ? (assignedProviderId ? 'accepted' : 'pending') : 'pending',

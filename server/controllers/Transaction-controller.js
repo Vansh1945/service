@@ -721,7 +721,7 @@ const getAllTransactions = async (req, res) => {
       .populate('user', 'name email phone')
       .populate({
         path: 'booking',
-        select: 'bookingId services totalAmount status subtotal totalDiscount couponApplied',
+        select: 'bookingId services totalAmount status subtotal totalDiscount couponApplied commissionAmount providerEarnings companySurgeShare providerSurgeShare visitingCharge rainCharge trafficCharge nightCharge demandSurge platformFee customCharges commissionRule',
         populate: { path: 'services.service', select: 'title' }
       })
       // .populate('commissionRule', 'name rate type')

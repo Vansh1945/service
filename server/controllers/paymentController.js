@@ -983,7 +983,17 @@ const downloadEarningsReport = async (req, res) => {
           holdUntil: 1,
           disputeStatus: 1,
           holdReason: 1,
-          isWithdrawable: 1
+          isWithdrawable: 1,
+          visitingCharge: "$bookingInfo.visitingCharge",
+          rainCharge: "$bookingInfo.rainCharge",
+          trafficCharge: "$bookingInfo.trafficCharge",
+          nightCharge: "$bookingInfo.nightCharge",
+          demandSurge: "$bookingInfo.demandSurge",
+          customCharges: "$bookingInfo.customCharges",
+          platformFee: "$bookingInfo.platformFee",
+          surgeSplitSettings: "$bookingInfo.surgeSplitSettings",
+          subtotal: "$bookingInfo.subtotal",
+          totalDiscount: "$bookingInfo.totalDiscount"
         },
       },
     ]);
@@ -1037,13 +1047,25 @@ const downloadEarningsReport = async (req, res) => {
         {
           $project: {
             booking: 1,
+            bookingId: "$bookingInfo.bookingId",
             grossAmount: 1,
             commissionRate: 1,
-            commissionAmount: 1,
+            commissionAmount: "$bookingInfo.commissionAmount",
             netAmount: 1,
             createdAt: 1,
             paymentMethod: 1,
             status: 1,
+            subtotal: "$bookingInfo.subtotal",
+            totalDiscount: "$bookingInfo.totalDiscount",
+            visitingCharge: "$bookingInfo.visitingCharge",
+            rainCharge: "$bookingInfo.rainCharge",
+            trafficCharge: "$bookingInfo.trafficCharge",
+            nightCharge: "$bookingInfo.nightCharge",
+            demandSurge: "$bookingInfo.demandSurge",
+            platformFee: "$bookingInfo.platformFee",
+            customCharges: "$bookingInfo.customCharges",
+            providerEarnings: "$bookingInfo.providerEarnings",
+            companySurgeShare: "$bookingInfo.companySurgeShare",
           },
         },
       ]);
@@ -1052,23 +1074,58 @@ const downloadEarningsReport = async (req, res) => {
       const worksheet = workbook.addWorksheet("Earnings Report");
 
       worksheet.columns = [
-        { header: "Booking ID", key: "booking", width: 25 },
-        { header: "Gross Amount (₹)", key: "grossAmount", width: 20 },
-        { header: "Commission Rate (%)", key: "commissionRate", width: 20 },
-        { header: "Commission Amount (₹)", key: "commissionAmount", width: 20 },
-        { header: "Net Amount (₹)", key: "netAmount", width: 20 },
+        { header: "Booking ID", key: "bookingId", width: 25 },
+        { header: "Base Subtotal (₹)", key: "subtotal", width: 20 },
+        { header: "Coupon Discount (₹)", key: "totalDiscount", width: 20 },
+        { header: "Net Service Amount (₹)", key: "netServiceAmount", width: 20 },
+        { header: "Service Commission (%)", key: "commissionRate", width: 20 },
+        { header: "Service Commission Amount (₹)", key: "commissionAmount", width: 25 },
+        { header: "Visiting Surcharge (₹)", key: "visitingCharge", width: 20 },
+        { header: "Rain Surcharge (₹)", key: "rainCharge", width: 20 },
+        { header: "Traffic Surcharge (₹)", key: "trafficCharge", width: 20 },
+        { header: "Night Surcharge (₹)", key: "nightCharge", width: 20 },
+        { header: "Demand Surge Surcharge (₹)", key: "demandSurge", width: 20 },
+        { header: "Platform Fee Surcharge (₹)", key: "platformFee", width: 20 },
+        { header: "Final Provider Receivable (₹)", key: "providerEarnings", width: 25 },
+        { header: "Final Platform Revenue (₹)", key: "platformRevenue", width: 25 },
         { header: "Payment Method", key: "paymentMethod", width: 15 },
-        { header: "Status", key: "status", width: 15 },
+        { header: "Status", key: "status", width: 20 },
         { header: "Created At", key: "createdAt", width: 25 },
       ];
 
       allEarnings.forEach((earning) => {
+        const grossBilled = earning.grossAmount || 0;
+        const baseSubtotal = earning.subtotal || 0;
+        const discount = earning.totalDiscount || 0;
+        const netService = Math.max(0, baseSubtotal - discount);
+        const commRate = earning.commissionRate || 0;
+        const commAmt = earning.commissionAmount || 0;
+        
+        const visiting = earning.visitingCharge || 0;
+        const rain = earning.rainCharge || 0;
+        const traffic = earning.trafficCharge || 0;
+        const night = earning.nightCharge || 0;
+        const demand = earning.demandSurge || 0;
+        const platform = earning.platformFee || 0;
+        
+        const providerReceivable = earning.providerEarnings ?? earning.netAmount ?? 0;
+        const platformRevenue = parseFloat((commAmt + (earning.companySurgeShare || 0)).toFixed(2));
+
         worksheet.addRow({
-          booking: earning.booking?.toString() || "N/A",
-          grossAmount: earning.grossAmount || 0,
-          commissionRate: earning.commissionRate || 0,
-          commissionAmount: earning.commissionAmount || 0,
-          netAmount: earning.netAmount || 0,
+          bookingId: earning.bookingId || earning.booking?.toString() || "N/A",
+          subtotal: baseSubtotal,
+          totalDiscount: discount,
+          netServiceAmount: netService,
+          commissionRate: commRate,
+          commissionAmount: commAmt,
+          visitingCharge: visiting,
+          rainCharge: rain,
+          trafficCharge: traffic,
+          nightCharge: night,
+          demandSurge: demand,
+          platformFee: platform,
+          providerEarnings: providerReceivable,
+          platformRevenue: platformRevenue,
           paymentMethod: earning.paymentMethod || "unknown",
           status: earning.status || "N/A",
           createdAt: earning.createdAt
@@ -1795,6 +1852,16 @@ const generateProviderEarningsReport = async (req, res) => {
       { header: "Net Earnings", key: "netEarnings", width: 20 },
       { header: "Total Withdrawn", key: "totalWithdrawn", width: 20 },
       { header: "Balance", key: "pendingBalance", width: 20 },
+      { header: "Total Discount Given", key: "totalDiscount", width: 20 },
+      { header: "Visiting Charge", key: "visitingCharge", width: 20 },
+      { header: "Rain Charge", key: "rainCharge", width: 20 },
+      { header: "Traffic Charge", key: "trafficCharge", width: 20 },
+      { header: "Night Charge", key: "nightCharge", width: 20 },
+      { header: "Demand Surge", key: "demandSurge", width: 20 },
+      { header: "Platform Fee", key: "platformFee", width: 20 },
+      { header: "Provider Surge Share", key: "providerSurgeShare", width: 20 },
+      { header: "Platform Surge Share", key: "companySurgeShare", width: 20 },
+      { header: "Refunded Amount", key: "refundAmount", width: 20 }
     ];
 
     const providerIds = providers.map(p => p._id);
@@ -1808,12 +1875,31 @@ const generateProviderEarningsReport = async (req, res) => {
         }
       },
       {
+        $lookup: {
+          from: 'bookings',
+          localField: 'booking',
+          foreignField: '_id',
+          as: 'bookingInfo'
+        }
+      },
+      { $unwind: { path: '$bookingInfo', preserveNullAndEmptyArrays: true } },
+      {
         $group: {
           _id: '$provider',
           totalBookings: { $sum: 1 },
           totalGross: { $sum: '$grossAmount' },
           totalCommission: { $sum: '$commissionAmount' },
-          totalNet: { $sum: '$netAmount' }
+          totalNet: { $sum: '$netAmount' },
+          totalDiscount: { $sum: { $ifNull: ['$bookingInfo.totalDiscount', 0] } },
+          visitingCharge: { $sum: { $ifNull: ['$bookingInfo.visitingCharge', 0] } },
+          rainCharge: { $sum: { $ifNull: ['$bookingInfo.rainCharge', 0] } },
+          trafficCharge: { $sum: { $ifNull: ['$bookingInfo.trafficCharge', 0] } },
+          nightCharge: { $sum: { $ifNull: ['$bookingInfo.nightCharge', 0] } },
+          demandSurge: { $sum: { $ifNull: ['$bookingInfo.demandSurge', 0] } },
+          platformFee: { $sum: { $ifNull: ['$bookingInfo.platformFee', 0] } },
+          providerSurgeShare: { $sum: { $ifNull: ['$bookingInfo.providerSurgeShare', 0] } },
+          companySurgeShare: { $sum: { $ifNull: ['$bookingInfo.companySurgeShare', 0] } },
+          refundAmount: { $sum: { $ifNull: ['$bookingInfo.cancellationProgress.refundAmount', 0] } }
         }
       }
     ]).lean();
@@ -1856,7 +1942,22 @@ const generateProviderEarningsReport = async (req, res) => {
     });
 
     for (const provider of providers) {
-      const stats = earningStatsMap[provider._id.toString()] || { totalBookings: 0, totalGross: 0, totalCommission: 0, totalNet: 0 };
+      const stats = earningStatsMap[provider._id.toString()] || {
+        totalBookings: 0,
+        totalGross: 0,
+        totalCommission: 0,
+        totalNet: 0,
+        totalDiscount: 0,
+        visitingCharge: 0,
+        rainCharge: 0,
+        trafficCharge: 0,
+        nightCharge: 0,
+        demandSurge: 0,
+        platformFee: 0,
+        providerSurgeShare: 0,
+        companySurgeShare: 0,
+        refundAmount: 0
+      };
       const wStats = withdrawalStatsMap[provider._id.toString()] || [];
 
       const completedWithdrawal = wStats
@@ -1878,7 +1979,17 @@ const generateProviderEarningsReport = async (req, res) => {
         totalCommission: stats.totalCommission,
         netEarnings: stats.totalNet,
         totalWithdrawn: completedWithdrawal,
-        pendingBalance: pendingBalance
+        pendingBalance: pendingBalance,
+        totalDiscount: stats.totalDiscount,
+        visitingCharge: stats.visitingCharge,
+        rainCharge: stats.rainCharge,
+        trafficCharge: stats.trafficCharge,
+        nightCharge: stats.nightCharge,
+        demandSurge: stats.demandSurge,
+        platformFee: stats.platformFee,
+        providerSurgeShare: stats.providerSurgeShare,
+        companySurgeShare: stats.companySurgeShare,
+        refundAmount: stats.refundAmount
       });
     }
 
@@ -1956,7 +2067,17 @@ const getCommissionReport = async (req, res) => {
       { header: 'Total Booking Amount', key: 'totalAmount', width: 20 },
       { header: 'Commission (%)', key: 'commissionPercent', width: 15 },
       { header: 'Commission Amount', key: 'commissionAmount', width: 20 },
-      { header: 'Date', key: 'date', width: 20 }
+      { header: 'Date', key: 'date', width: 20 },
+      { header: 'Total Discount Given', key: 'totalDiscount', width: 20 },
+      { header: 'Visiting Charge', key: 'visitingCharge', width: 20 },
+      { header: 'Rain Charge', key: 'rainCharge', width: 20 },
+      { header: 'Traffic Charge', key: 'trafficCharge', width: 20 },
+      { header: 'Night Charge', key: 'nightCharge', width: 20 },
+      { header: 'Demand Surge', key: 'demandSurge', width: 20 },
+      { header: 'Platform Fee', key: 'platformFee', width: 20 },
+      { header: 'Provider Surge Share', key: 'providerSurgeShare', width: 20 },
+      { header: 'Platform Surge Share', key: 'companySurgeShare', width: 20 },
+      { header: 'Refunded Amount', key: 'refundAmount', width: 20 }
     ];
 
     // Fill data
@@ -1972,7 +2093,17 @@ const getCommissionReport = async (req, res) => {
           totalAmount: booking.totalAmount,
           commissionPercent: booking.commissionRule ? ((booking.commissionAmount / booking.totalAmount) * 100).toFixed(2) : 0,
           commissionAmount: booking.commissionAmount,
-          date: booking.serviceCompletedAt.toISOString().split('T')[0]
+          date: booking.serviceCompletedAt.toISOString().split('T')[0],
+          totalDiscount: booking.totalDiscount || 0,
+          visitingCharge: booking.visitingCharge || 0,
+          rainCharge: booking.rainCharge || 0,
+          trafficCharge: booking.trafficCharge || 0,
+          nightCharge: booking.nightCharge || 0,
+          demandSurge: booking.demandSurge || 0,
+          platformFee: booking.platformFee || 0,
+          providerSurgeShare: booking.providerSurgeShare || 0,
+          companySurgeShare: booking.companySurgeShare || 0,
+          refundAmount: booking.cancellationProgress?.refundAmount || 0
         });
       });
     });
@@ -2144,7 +2275,17 @@ const providerLedgerReport = async (req, res) => {
       { header: 'Payment Method', key: 'paymentMethod', width: 15 }, // cash / online
       { header: 'Withdrawal Linked', key: 'withdrawalLinked', width: 15 },
       { header: 'Withdrawal Reference ID', key: 'withdrawalRef', width: 25 },
-      { header: 'Status', key: 'status', width: 15 } // Booking status
+      { header: 'Status', key: 'status', width: 15 }, // Booking status
+      { header: 'Total Discount Given', key: 'totalDiscount', width: 20 },
+      { header: 'Visiting Charge', key: 'visitingCharge', width: 20 },
+      { header: 'Rain Charge', key: 'rainCharge', width: 20 },
+      { header: 'Traffic Charge', key: 'trafficCharge', width: 20 },
+      { header: 'Night Charge', key: 'nightCharge', width: 20 },
+      { header: 'Demand Surge', key: 'demandSurge', width: 20 },
+      { header: 'Platform Fee', key: 'platformFee', width: 20 },
+      { header: 'Provider Surge Share', key: 'providerSurgeShare', width: 20 },
+      { header: 'Platform Surge Share', key: 'companySurgeShare', width: 20 },
+      { header: 'Refunded Amount', key: 'refundAmount', width: 20 }
     ];
 
     earnings.forEach(earning => {
@@ -2160,7 +2301,17 @@ const providerLedgerReport = async (req, res) => {
         paymentMethod: earning.booking.paymentMethod,
         withdrawalLinked: earning.paymentRecord ? 'Yes' : 'No',
         withdrawalRef: earning.paymentInfo?.transactionReference || '-',
-        status: earning.booking.status
+        status: earning.booking.status,
+        totalDiscount: earning.booking.totalDiscount || 0,
+        visitingCharge: earning.booking.visitingCharge || 0,
+        rainCharge: earning.booking.rainCharge || 0,
+        trafficCharge: earning.booking.trafficCharge || 0,
+        nightCharge: earning.booking.nightCharge || 0,
+        demandSurge: earning.booking.demandSurge || 0,
+        platformFee: earning.booking.platformFee || 0,
+        providerSurgeShare: earning.booking.providerSurgeShare || 0,
+        companySurgeShare: earning.booking.companySurgeShare || 0,
+        refundAmount: earning.booking.cancellationProgress?.refundAmount || 0
       });
     });
 

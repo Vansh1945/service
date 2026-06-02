@@ -90,6 +90,7 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
   const [resolutionNotes, setResolutionNotes] = useState('');
   const [refundAmount, setRefundAmount] = useState(booking?.totalAmount || 0);
   const [decisionType, setDecisionType] = useState(''); // 'refund_full', 'refund_partial', 'reject'
+  const [absorption, setAbsorption] = useState('shared'); // 'provider', 'platform', 'shared'
   const [updating, setUpdating] = useState(false);
   const [selectedPreviewImage, setSelectedPreviewImage] = useState(null);
 
@@ -106,7 +107,8 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
         res = await AdminService.processRefund(booking._id, {
           type,
           amount: type === 'partial' ? refundAmount : undefined,
-          reason: resolutionNotes
+          reason: resolutionNotes,
+          absorption
         });
       } else if (action === 'reject') {
         res = await AdminService.rejectRefund(booking._id, { reason: resolutionNotes });
@@ -575,6 +577,101 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
                     </div>
                   </div>
                 )}
+
+                {/* Absorption Classification */}
+                {!isFullyRefunded && (decisionType === 'refund_full' || decisionType === 'refund_partial') && (
+                  <div className="space-y-2 animate-slide-up">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Refund Absorption Classification</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { id: 'shared', label: 'Shared Split', desc: 'Proportional ratio' },
+                        { id: 'platform', label: 'Platform Absorbed', desc: '100% Platform loss' },
+                        { id: 'provider', label: 'Provider Absorbed', desc: '100% Vendor loss' }
+                      ].map(opt => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => setAbsorption(opt.id)}
+                          className={`p-2 rounded-lg border text-left cursor-pointer transition-all duration-200 ${
+                            absorption === opt.id
+                              ? 'bg-purple-50 border-purple-500 text-purple-700 ring-1 ring-purple-500'
+                              : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          <p className="text-xs font-bold">{opt.label}</p>
+                          <p className="text-[9px] text-gray-400 mt-0.5 font-medium leading-none">{opt.desc}</p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Refund Impact Preview */}
+                {(decisionType === 'refund_full' || decisionType === 'refund_partial') && !isFullyRefunded && (() => {
+                  const grossBilled = booking.totalAmount || 0;
+                  const originalProvider = booking.providerEarnings || 0;
+                  const originalPlatform = (booking.commissionAmount || 0) + (booking.companySurgeShare || 0);
+
+                  let providerLoss = 0;
+                  let platformLoss = 0;
+
+                  if (absorption === 'platform') {
+                    providerLoss = 0;
+                    platformLoss = refundAmount;
+                  } else if (absorption === 'provider') {
+                    providerLoss = Math.min(originalProvider, refundAmount);
+                    platformLoss = Math.max(0, refundAmount - providerLoss);
+                  } else {
+                    // Shared proportional
+                    const ratio = refundAmount / (grossBilled || 1);
+                    providerLoss = parseFloat((originalProvider * ratio).toFixed(2));
+                    platformLoss = parseFloat((refundAmount - providerLoss).toFixed(2));
+                  }
+
+                  return (
+                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 text-xs space-y-3 animate-slide-up">
+                      <div>
+                        <p className="font-bold text-secondary uppercase tracking-wider text-[9px] mb-2 border-b border-gray-200 pb-1 flex justify-between">
+                          <span>Financial Loss Breakdown</span>
+                          <span className="text-purple-600 capitalize font-bold">{absorption} Absorbed</span>
+                        </p>
+                      </div>
+
+                      {/* Original Details */}
+                      <div className="space-y-1 bg-white p-2 rounded border border-gray-100">
+                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Original Booking Values</p>
+                        <div className="flex justify-between text-[11px]">
+                          <span className="text-gray-500 font-medium">Gross Billed to Customer</span>
+                          <span className="font-bold text-secondary">{formatCurrency(grossBilled)}</span>
+                        </div>
+                        <div className="flex justify-between text-[11px] mt-0.5">
+                          <span className="text-gray-500 font-medium">Provider Earnings</span>
+                          <span className="font-semibold text-gray-700">{formatCurrency(originalProvider)}</span>
+                        </div>
+                        <div className="flex justify-between text-[11px] mt-0.5">
+                          <span className="text-gray-500 font-medium">Platform Net Revenue</span>
+                          <span className="font-semibold text-gray-700">{formatCurrency(originalPlatform)}</span>
+                        </div>
+                      </div>
+
+                      {/* Refund Loss & Allocation splits */}
+                      <div className="space-y-1.5 pt-1">
+                        <div className="flex justify-between font-bold text-secondary text-[13px] border-b border-dashed border-gray-200 pb-1.5">
+                          <span>Total Refund Loss</span>
+                          <span className="text-red-600">{formatCurrency(refundAmount || 0)}</span>
+                        </div>
+                        <div className="flex justify-between font-medium">
+                          <span className="text-gray-500">Deducted from Provider Earning</span>
+                          <span className="font-bold text-red-600">-{formatCurrency(providerLoss)}</span>
+                        </div>
+                        <div className="flex justify-between font-medium">
+                          <span className="text-gray-500">Absorbed by Platform (Net Loss)</span>
+                          <span className="font-bold text-purple-700">-{formatCurrency(platformLoss)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Notes Input Area */}
                 <div className="space-y-1">

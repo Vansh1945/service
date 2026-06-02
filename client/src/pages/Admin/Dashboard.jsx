@@ -246,9 +246,8 @@ const AdminDashboard = () => {
             </button>
           </div>
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      </div>      {/* Core Non-Financial Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 animate-fade-in">
         <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-gray-500 uppercase tracking-wider">Total Bookings</span>
@@ -265,36 +264,7 @@ const AdminDashboard = () => {
 
         <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-500 uppercase tracking-wider">Revenue Overview</span>
-            <div className="p-2 bg-green-50 rounded-lg">
-              <FiDollarSign className="text-green-600" />
-            </div>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <h4 className="text-2xl font-bold text-gray-900">{formatCurrency(analytics?.revenueStats?.totalRevenue || 0)}</h4>
-            <span className={`text-xs font-bold ${parseFloat(analytics?.revenueStats?.growth) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {analytics?.revenueStats?.growth}%
-            </span>
-          </div>
-          <div className="flex gap-4 mt-2 border-t pt-2 border-gray-50">
-            <div>
-              <p className="text-[10px] text-gray-400 uppercase font-bold">Commission</p>
-              <p className="text-xs font-bold text-primary">{formatCurrency(analytics?.revenueStats?.platformCommission || 0)}</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-gray-400 uppercase font-bold">Payouts</p>
-              <p className="text-xs font-bold text-orange-600">{formatCurrency(analytics?.revenueStats?.providerPayout || 0)}</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-gray-400 uppercase font-bold">Admin Earnings</p>
-              <p className="text-xs font-bold text-teal-600">{formatCurrency(analytics?.totalAdminEarnings || 0)}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-500 uppercase tracking-wider">Booking Status</span>
+            <span className="text-sm font-medium text-gray-500 uppercase tracking-wider">Booking Status Breakdown</span>
             <div className="p-2 bg-purple-50 rounded-lg">
               <FiPieChart className="text-purple-600" />
             </div>
@@ -336,6 +306,96 @@ const AdminDashboard = () => {
               style={{ width: `${(analytics?.customerStats?.new / (analytics?.customerStats?.total || 1)) * 100}%` }}
             ></div>
           </div>
+        </div>
+      </div>
+
+      {/* FINANCIAL INTELLIGENCE DASHBOARD (6 High-Fidelity dedicated StatCards) */}
+      <h3 className="text-sm font-black uppercase tracking-widest text-secondary mb-3 flex items-center gap-1.5">
+        <FiDollarSign className="text-primary shrink-0" /> Financial Intelligence Dashboard
+      </h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-6 animate-fade-in">
+        {/* Gross Billed */}
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Gross Billed</span>
+            <div className="p-1.5 bg-blue-50 rounded-lg">
+              <FiDollarSign className="text-blue-600 w-4 h-4" />
+            </div>
+          </div>
+          <h4 className="text-lg font-bold text-gray-900 mt-2 truncate">
+            {formatCurrency(analytics?.revenueStats?.grossRevenue || analytics?.revenueStats?.totalRevenue || 0)}
+          </h4>
+          <p className="text-[9px] text-gray-450 mt-1 border-t border-gray-50 pt-1.5">Total customer billing</p>
+        </div>
+
+        {/* Net Revenue */}
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Net Revenue</span>
+            <div className="p-1.5 bg-green-50 rounded-lg">
+              <FiTrendingUp className="text-green-600 w-4 h-4" />
+            </div>
+          </div>
+          <h4 className="text-lg font-bold text-green-600 mt-2 truncate">
+            {formatCurrency(analytics?.revenueStats?.netRevenue || analytics?.revenueStats?.totalRevenue || 0)}
+          </h4>
+          <p className="text-[9px] text-gray-450 mt-1 border-t border-gray-50 pt-1.5">Excluding surcharges</p>
+        </div>
+
+        {/* Commission Revenue */}
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Commission</span>
+            <div className="p-1.5 bg-teal-50 rounded-lg">
+              <FiPieChart className="text-teal-600 w-4 h-4" />
+            </div>
+          </div>
+          <h4 className="text-lg font-bold text-primary mt-2 truncate">
+            {formatCurrency(analytics?.revenueStats?.netEarnings || analytics?.revenueStats?.platformCommission || 0)}
+          </h4>
+          <p className="text-[9px] text-gray-450 mt-1 border-t border-gray-50 pt-1.5">Base commission earned</p>
+        </div>
+
+        {/* Surge Revenue */}
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Surge Revenue</span>
+            <div className="p-1.5 bg-orange-50 rounded-lg">
+              <FiTrendingUp className="text-orange-600 w-4 h-4" />
+            </div>
+          </div>
+          <h4 className="text-lg font-bold text-orange-655 mt-2 truncate">
+            {formatCurrency(analytics?.revenueStats?.surgeRevenue || 0)}
+          </h4>
+          <p className="text-[9px] text-gray-450 mt-1 border-t border-gray-50 pt-1.5">Platform surge share</p>
+        </div>
+
+        {/* Platform Fee */}
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Platform Fee</span>
+            <div className="p-1.5 bg-indigo-50 rounded-lg">
+              <FiActivity className="text-indigo-600 w-4 h-4" />
+            </div>
+          </div>
+          <h4 className="text-lg font-bold text-indigo-650 mt-2 truncate">
+            {formatCurrency(analytics?.revenueStats?.platformFeeRevenue || 0)}
+          </h4>
+          <p className="text-[9px] text-gray-450 mt-1 border-t border-gray-50 pt-1.5">Company retained fees</p>
+        </div>
+
+        {/* Admin Earnings */}
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Admin Earnings</span>
+            <div className="p-1.5 bg-teal-50 rounded-lg">
+              <FiDollarSign className="text-teal-650 w-4 h-4" />
+            </div>
+          </div>
+          <h4 className="text-lg font-black text-teal-600 mt-2 truncate">
+            {formatCurrency((analytics?.revenueStats?.netEarnings || 0) + (analytics?.revenueStats?.surgeSplits?.companySurgeShare || 0) || analytics?.totalAdminEarnings || 0)}
+          </h4>
+          <p className="text-[9px] text-gray-450 mt-1 border-t border-gray-50 pt-1.5">Commission + splits</p>
         </div>
       </div>
 
@@ -447,6 +507,73 @@ const AdminDashboard = () => {
                   <p className="text-xs text-gray-400 italic">No saved providers in this period</p>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* SURGE REVENUE BREAKDOWN & INTELLIGENCE */}
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6 animate-fade-in">
+        <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-50">
+          <div className="flex items-center">
+            <div className="p-2 bg-indigo-50 rounded-lg mr-3">
+              <FiActivity className="text-indigo-600" />
+            </div>
+            <div>
+              <h3 className="font-bold text-gray-900 text-sm">Surge Pricing & Surcharge Analytics</h3>
+              <p className="text-[10px] text-gray-500">Breakdown of platform surcharges and splits</p>
+            </div>
+          </div>
+          <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded">Real-Time Splits</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Surcharge Stream Progress Bars */}
+          <div className="space-y-3">
+            <p className="text-[10px] font-black text-gray-450 uppercase tracking-wider mb-2">Revenue streams</p>
+            {[
+              { label: 'Visiting Charge', value: analytics?.revenueStats?.surgeBreakdown?.visitingRevenue || 0, color: 'bg-emerald-500' },
+              { label: 'Rain Charge', value: analytics?.revenueStats?.surgeBreakdown?.rainRevenue || 0, color: 'bg-blue-500' },
+              { label: 'Traffic Charge', value: analytics?.revenueStats?.surgeBreakdown?.trafficRevenue || 0, color: 'bg-orange-500' },
+              { label: 'Night Charge', value: analytics?.revenueStats?.surgeBreakdown?.nightRevenue || 0, color: 'bg-indigo-500' },
+              { label: 'Demand Surge', value: analytics?.revenueStats?.surgeBreakdown?.demandRevenue || 0, color: 'bg-rose-500' },
+              { label: 'Platform Fee', value: analytics?.revenueStats?.surgeBreakdown?.platformFeeRevenue || 0, color: 'bg-violet-600' },
+              { label: 'Custom Surcharges', value: analytics?.revenueStats?.surgeBreakdown?.customRevenue || 0, color: 'bg-slate-500' },
+            ].map(item => {
+              const totalSurge = analytics?.revenueStats?.surgeRevenue || 1;
+              const pct = ((item.value / totalSurge) * 100).toFixed(0);
+              return (
+                <div key={item.label} className="space-y-1">
+                  <div className="flex justify-between text-xs font-medium text-gray-700">
+                    <span>{item.label}</span>
+                    <span>{formatCurrency(item.value)} ({pct}%)</span>
+                  </div>
+                  <div className="w-full bg-gray-150 h-1.5 rounded-full overflow-hidden">
+                    <div className={`${item.color} h-1.5 rounded-full`} style={{ width: `${pct}%` }}></div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Surcharge Splits */}
+          <div className="bg-gray-50 rounded-xl p-5 border border-gray-100 flex flex-col justify-between">
+            <div>
+              <p className="text-[10px] font-black text-gray-450 uppercase tracking-wider mb-3">Surcharge Distribution Split</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+                  <p className="text-[9px] font-bold text-gray-400 uppercase">Provider Split Share</p>
+                  <h4 className="text-lg font-bold text-emerald-600 mt-1">{formatCurrency(analytics?.revenueStats?.surgeSplits?.providerSurgeShare || 0)}</h4>
+                  <p className="text-[8px] text-gray-500 mt-0.5">Distributed to technicians</p>
+                </div>
+                <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+                  <p className="text-[9px] font-bold text-gray-400 uppercase">Platform Split Share</p>
+                  <h4 className="text-lg font-bold text-purple-650 mt-1">{formatCurrency(analytics?.revenueStats?.surgeSplits?.companySurgeShare || 0)}</h4>
+                  <p className="text-[8px] text-gray-500 mt-0.5">Retained by platform</p>
+                </div>
+              </div>
+            </div>
+            <div className="mt-4 pt-3 border-t border-gray-200 text-[10px] text-gray-500 leading-relaxed italic">
+              * Splits are resolved dynamically at dispatch initialization based on the active zone's surcharge configuration policies.
             </div>
           </div>
         </div>

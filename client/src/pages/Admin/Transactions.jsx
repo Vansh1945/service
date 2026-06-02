@@ -315,115 +315,162 @@ const AdminTransactions = () => {
                         <thead>
                             <tr className="bg-gray-50/50 border-b border-gray-100">
                                 <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Transaction Details</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Booking ID</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Customer</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Provider</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Amount</th>
+                                <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Booking ID & Parties</th>
+                                <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Gross Billed</th>
+                                <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Commission Split</th>
+                                <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Surcharge Split</th>
+                                <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Provider Receivable</th>
+                                <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Platform Revenue</th>
                                 <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider text-center">Status</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Date</th>
                                 <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider text-center">Action</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {loading ? (
                                 <tr>
-                                    <td colSpan="8" className="py-20 text-center">
+                                    <td colSpan="9" className="py-20 text-center">
                                         <Loader />
                                     </td>
                                 </tr>
                             ) : transactions.length === 0 ? (
                                 <tr>
-                                    <td colSpan="8" className="py-20 text-center text-gray-400">
+                                    <td colSpan="9" className="py-20 text-center text-gray-400">
                                         No transactions found matching your criteria.
                                     </td>
                                 </tr>
                             ) : (
-                                transactions.map((txn) => (
-                                    <tr key={txn._id} className="hover:bg-gray-50/50 transition-colors group">
-                                        <td className="px-6 py-4">
-                                            <div className="flex flex-col gap-1">
-                                                <span className="text-sm font-semibold text-secondary font-mono">
-                                                    {txn.transactionId || '---'}
-                                                </span>
-                                                <span className="text-[10px] text-gray-400 flex items-center">
-                                                    {txn.paymentMethod?.toUpperCase()} • {txn.currency}
-                                                </span>
-                                                {txn.razorpayPaymentId && (
-                                                    <span className="text-[9px] text-orange-600 bg-orange-50/60 font-semibold font-mono px-2 py-0.5 rounded-lg border border-orange-100/60 w-fit" title={`Razorpay Payment ID: ${txn.razorpayPaymentId}`}>
-                                                        RPID: {txn.razorpayPaymentId}
+                                transactions.map((txn) => {
+                                    const grossBilled = txn.booking?.totalAmount || getAmountInRupees(txn);
+                                    const commissionSplit = txn.booking?.commissionAmount ?? getCommissionInRupees(txn);
+                                    
+                                    const visiting = txn.booking?.visitingCharge || 0;
+                                    const rain = txn.booking?.rainCharge || 0;
+                                    const traffic = txn.booking?.trafficCharge || 0;
+                                    const night = txn.booking?.nightCharge || 0;
+                                    const demand = txn.booking?.demandSurge || 0;
+                                    const platformFee = txn.booking?.platformFee || 0;
+                                    const custom = txn.booking?.customCharges || 0;
+                                    const totalSurcharges = visiting + rain + traffic + night + demand + platformFee + custom;
+                                    
+                                    const providerSurchargeSplit = txn.booking?.providerSurgeShare || 0;
+                                    const companySurchargeSplit = txn.booking?.companySurgeShare || 0;
+                                    
+                                    const finalProviderReceivable = txn.booking?.providerEarnings ?? getProviderEarningInRupees(txn);
+                                    const finalPlatformRevenue = (txn.booking?.commissionAmount || 0) + (txn.booking?.companySurgeShare || 0);
+
+                                    return (
+                                        <tr key={txn._id} className="hover:bg-gray-50/50 transition-colors group">
+                                            <td className="px-6 py-4">
+                                                <div className="flex flex-col gap-1">
+                                                    <span className="text-sm font-semibold text-secondary font-mono">
+                                                        {txn.transactionId || '---'}
                                                     </span>
-                                                )}
-                                                {txn.razorpayOrderId && !txn.razorpayPaymentId && (
-                                                    <span className="text-[9px] text-gray-600 bg-gray-50 font-semibold font-mono px-2 py-0.5 rounded-lg border border-gray-100 w-fit" title={`Razorpay Order ID: ${txn.razorpayOrderId}`}>
-                                                        RPOID: {txn.razorpayOrderId}
+                                                    <span className="text-[10px] text-gray-400 flex items-center">
+                                                        {txn.paymentMethod?.toUpperCase()} • {txn.currency}
                                                     </span>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex flex-col">
-                                                <button
-                                                    onClick={() => navigateToBooking(txn.bookingId || txn.booking?.bookingId || txn.booking?._id)}
-                                                    className="flex items-center gap-1.5 text-sm font-bold text-primary hover:underline group/link w-fit"
-                                                >
-                                                    {txn.bookingId || txn.booking?.bookingId || 'View Booking'}
-                                                    <ExternalLink className="w-3 h-3 opacity-0 group-hover/link:opacity-100 transition-opacity" />
-                                                </button>
-                                                <span className="text-[10px] text-gray-400 mt-0.5 line-clamp-1 max-w-[150px]">
-                                                    {txn.booking?.services?.[0]?.service?.title || txn.description || 'Service Details'}
-                                                </span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 text-sm text-gray-600">
-                                            {txn.user?.name || '---'}
-                                        </td>
-                                        <td className="px-6 py-4 text-sm text-gray-600">
-                                            {txn.provider?.name || '---'}
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <div className="flex flex-col items-end">
-                                                <span className="text-sm font-bold text-secondary">
-                                                    {formatCurrency(getAmountInRupees(txn))}
-                                                </span>
-                                                {(txn.commission > 0 || txn.provider) && (
-                                                    <div className="flex flex-col items-end mt-0.5">
-                                                        <span className="text-[10px] text-gray-400">
-                                                            Comm: {formatCurrency(getCommissionInRupees(txn))}
-                                                            {txn.commissionRule?.name && <span className="ml-1 opacity-70 italic text-[9px]">({txn.commissionRule.name})</span>}
+                                                    <div className="flex flex-col gap-0.5 mt-1">
+                                                        <span className="text-[10px] text-gray-500 whitespace-nowrap">
+                                                            {formatDateTime(txn.createdAt).split('at')[0]}
                                                         </span>
-                                                        <span className="text-[10px] text-gray-400">
-                                                            Provider: {formatCurrency(getProviderEarningInRupees(txn))}
+                                                        <span className="text-[9px] text-gray-400">
+                                                            {formatDateTime(txn.createdAt).split('at')[1]}
                                                         </span>
                                                     </div>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex justify-center">
-                                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold border ${getStatusColor(txn.paymentStatus)}`}>
-                                                    {getStatusIcon(txn.paymentStatus)}
-                                                    {txn.paymentStatus?.toUpperCase()}
+                                                    {txn.razorpayPaymentId && (
+                                                        <span className="text-[9px] text-orange-600 bg-orange-50/60 font-semibold font-mono px-2 py-0.5 rounded-lg border border-orange-100/60 w-fit mt-1" title={`Razorpay Payment ID: ${txn.razorpayPaymentId}`}>
+                                                            RPID: {txn.razorpayPaymentId}
+                                                        </span>
+                                                    )}
+                                                    {txn.razorpayOrderId && !txn.razorpayPaymentId && (
+                                                        <span className="text-[9px] text-gray-600 bg-gray-50 font-semibold font-mono px-2 py-0.5 rounded-lg border border-gray-100 w-fit mt-1" title={`Razorpay Order ID: ${txn.razorpayOrderId}`}>
+                                                            RPOID: {txn.razorpayOrderId}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex flex-col gap-1">
+                                                    <button
+                                                        onClick={() => navigateToBooking(txn.bookingId || txn.booking?.bookingId || txn.booking?._id)}
+                                                        className="flex items-center gap-1.5 text-sm font-bold text-primary hover:underline group/link w-fit"
+                                                    >
+                                                        {txn.bookingId || txn.booking?.bookingId || 'View Booking'}
+                                                        <ExternalLink className="w-3 h-3 opacity-0 group-hover/link:opacity-100 transition-opacity" />
+                                                    </button>
+                                                    <div className="flex flex-col gap-0.5 text-xs">
+                                                        <span className="text-gray-600 font-medium flex items-center gap-1">
+                                                            <span className="text-gray-400">Cust:</span> {txn.user?.name || '---'}
+                                                        </span>
+                                                        <span className="text-gray-600 font-medium flex items-center gap-1">
+                                                            <span className="text-gray-400">Prov:</span> {txn.provider?.name || '---'}
+                                                        </span>
+                                                    </div>
+                                                    <span className="text-[9px] text-gray-400 mt-1 line-clamp-1 max-w-[150px]">
+                                                        {txn.booking?.services?.[0]?.service?.title || txn.description || 'Service Details'}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <span className="text-sm font-bold text-secondary">
+                                                    {formatCurrency(grossBilled)}
                                                 </span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 text-right text-sm text-gray-500">
-                                            <div className="flex flex-col items-end">
-                                                <span className="whitespace-nowrap">{formatDateTime(txn.createdAt).split('at')[0]}</span>
-                                                <span className="text-[10px] text-gray-400">{formatDateTime(txn.createdAt).split('at')[1]}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex justify-center">
-                                                <button
-                                                    onClick={() => handleRowClick(txn._id)}
-                                                    className="p-2 hover:bg-white hover:shadow-md rounded-lg text-primary transition-all"
-                                                >
-                                                    <Eye className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <div className="flex flex-col items-end">
+                                                    <span className="text-sm font-semibold text-gray-700">
+                                                        {formatCurrency(commissionSplit)}
+                                                    </span>
+                                                    {txn.commissionRule?.name && (
+                                                        <span className="text-[9px] text-gray-400 italic opacity-85">
+                                                            {txn.commissionRule.name}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <div className="flex flex-col items-end">
+                                                    <span className="text-sm font-semibold text-gray-700">
+                                                        {formatCurrency(totalSurcharges)}
+                                                    </span>
+                                                    {totalSurcharges > 0 && (
+                                                        <div className="flex flex-col items-end text-[9px] text-gray-400 mt-0.5">
+                                                            <span>Prov: {formatCurrency(providerSurchargeSplit)}</span>
+                                                            <span>Plat: {formatCurrency(companySurchargeSplit)}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <span className="text-sm font-bold text-green-600">
+                                                    {formatCurrency(finalProviderReceivable)}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <span className="text-sm font-bold text-primary">
+                                                    {formatCurrency(finalPlatformRevenue)}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex justify-center">
+                                                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold border ${getStatusColor(txn.paymentStatus)}`}>
+                                                        {getStatusIcon(txn.paymentStatus)}
+                                                        {txn.paymentStatus?.toUpperCase()}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex justify-center">
+                                                    <button
+                                                        onClick={() => handleRowClick(txn._id)}
+                                                        className="p-2 hover:bg-white hover:shadow-md rounded-lg text-primary transition-all"
+                                                    >
+                                                        <Eye className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })
                             )}
                         </tbody>
                     </table>
@@ -540,7 +587,6 @@ const AdminTransactions = () => {
                                     </div>
                                 </div>
                             </div>
-
                             {/* Financial Breakdown */}
                             <div className="bg-gray-50 p-6 rounded-3xl border border-gray-100">
                                 <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Financial Breakdown</h4>
@@ -554,14 +600,68 @@ const AdminTransactions = () => {
 
                                     {selectedTransaction.booking?.totalDiscount > 0 && (
                                         <div className="flex justify-between items-center text-sm">
-                                            <span className="text-gray-500">Discount {selectedTransaction.booking?.couponApplied?.code && `(${selectedTransaction.booking.couponApplied.code})`}</span>
+                                            <span className="text-gray-500">Discount {selectedTransaction.booking?.couponApplied?.code && '(' + selectedTransaction.booking.couponApplied.code + ')'}</span>
                                             <span className="font-semibold text-green-600">
                                                 -{formatCurrency(selectedTransaction.booking.totalDiscount)}
                                             </span>
                                         </div>
                                     )}
 
-                                    <div className="flex justify-between items-center text-sm">
+                                    {selectedTransaction.booking?.visitingCharge > 0 && (
+                                        <div className="flex justify-between items-center text-sm">
+                                            <span className="text-gray-500">Visiting Charge</span>
+                                            <span className="font-semibold text-orange-600">
+                                                +{formatCurrency(selectedTransaction.booking.visitingCharge)}
+                                            </span>
+                                        </div>
+                                    )}
+
+                                    {selectedTransaction.booking?.rainCharge > 0 && (
+                                        <div className="flex justify-between items-center text-sm">
+                                            <span className="text-gray-500">Rain Charge</span>
+                                            <span className="font-semibold text-orange-600">
+                                                +{formatCurrency(selectedTransaction.booking.rainCharge)}
+                                            </span>
+                                        </div>
+                                    )}
+
+                                    {selectedTransaction.booking?.trafficCharge > 0 && (
+                                        <div className="flex justify-between items-center text-sm">
+                                            <span className="text-gray-500">Traffic Charge</span>
+                                            <span className="font-semibold text-orange-600">
+                                                +{formatCurrency(selectedTransaction.booking.trafficCharge)}
+                                            </span>
+                                        </div>
+                                    )}
+
+                                    {selectedTransaction.booking?.nightCharge > 0 && (
+                                        <div className="flex justify-between items-center text-sm">
+                                            <span className="text-gray-500">Night Charge</span>
+                                            <span className="font-semibold text-orange-600">
+                                                +{formatCurrency(selectedTransaction.booking.nightCharge)}
+                                            </span>
+                                        </div>
+                                    )}
+
+                                    {selectedTransaction.booking?.demandSurge > 0 && (
+                                        <div className="flex justify-between items-center text-sm">
+                                            <span className="text-gray-500">Demand Charge</span>
+                                            <span className="font-semibold text-orange-600">
+                                                +{formatCurrency(selectedTransaction.booking.demandSurge)}
+                                            </span>
+                                        </div>
+                                    )}
+
+                                    {selectedTransaction.booking?.platformFee > 0 && (
+                                        <div className="flex justify-between items-center text-sm">
+                                            <span className="text-gray-500">Platform Fee</span>
+                                            <span className="font-semibold text-orange-600">
+                                                +{formatCurrency(selectedTransaction.booking.platformFee)}
+                                            </span>
+                                        </div>
+                                    )}
+
+                                    <div className="flex justify-between items-center text-sm border-t border-gray-205 pt-2">
                                         <div className="flex flex-col">
                                             <span className="text-gray-500">Commission (Platform)</span>
                                             {selectedTransaction.commissionRule?.name && (
@@ -574,10 +674,45 @@ const AdminTransactions = () => {
                                             -{formatCurrency(getCommissionInRupees(selectedTransaction))}
                                         </span>
                                     </div>
+
+                                    {selectedTransaction.booking?.providerSurgeShare > 0 && (
+                                        <div className="flex justify-between items-center text-sm">
+                                            <span className="text-gray-500">Provider Surge Share</span>
+                                            <span className="font-semibold text-emerald-600">
+                                                +{formatCurrency(selectedTransaction.booking.providerSurgeShare)}
+                                            </span>
+                                        </div>
+                                    )}
+
+                                    {selectedTransaction.booking?.companySurgeShare > 0 && (
+                                        <div className="flex justify-between items-center text-sm">
+                                            <span className="text-gray-500">Platform Surge Share</span>
+                                            <span className="font-semibold text-purple-600">
+                                                +{formatCurrency(selectedTransaction.booking.companySurgeShare)}
+                                            </span>
+                                        </div>
+                                    )}
+
                                     <div className="pt-3 border-t border-gray-200 flex justify-between items-center">
-                                        <span className="font-bold text-secondary">Provider Earning</span>
+                                        <div className="flex flex-col">
+                                            <span className="font-bold text-secondary">Provider Earning</span>
+                                            <span className="text-[9px] text-gray-400">Commission-deducted base + surge share</span>
+                                        </div>
                                         <span className="text-lg font-black text-green-600">
                                             {formatCurrency(getProviderEarningInRupees(selectedTransaction))}
+                                        </span>
+                                    </div>
+
+                                    <div className="pt-3 border-t border-gray-200 flex justify-between items-center">
+                                        <div className="flex flex-col">
+                                            <span className="font-bold text-secondary">Platform Earnings (Admin)</span>
+                                            <span className="text-[9px] text-gray-400">Commission + platform surge share</span>
+                                        </div>
+                                        <span className="text-lg font-black text-purple-600">
+                                            {formatCurrency(
+                                                getCommissionInRupees(selectedTransaction) + 
+                                                (selectedTransaction.booking?.companySurgeShare || 0)
+                                            )}
                                         </span>
                                     </div>
                                 </div>

@@ -1432,19 +1432,18 @@ const ProviderBooking = () => {
                     <div className="border-t border-gray-200 pt-4 space-y-2">
                       {[
                         { label: 'Service Amount', value: formatCurrency(calculateServiceSubtotal(selectedBooking)) },
-                        ...(calculateTotalDiscount(selectedBooking) > 0 ? [{ label: 'Discount', value: `-${formatCurrency(calculateTotalDiscount(selectedBooking))}`, color: 'text-primary' }] : []),
+                        ...(calculateTotalDiscount(selectedBooking) > 0 ? [{ label: 'Discount', value: '-' + formatCurrency(calculateTotalDiscount(selectedBooking)), color: 'text-primary' }] : []),
                         { label: 'Subtotal', value: formatCurrency(calculateSubtotal(selectedBooking)) },
-                        ...(selectedBooking.visitingCharge > 0 ? [{ label: 'Visiting Charge', value: `+${formatCurrency(selectedBooking.visitingCharge)} (${selectedBooking.surgeSplitSettings?.visiting || 60}% Provider Share)` }] : []),
-                        ...(selectedBooking.rainCharge > 0 ? [{ label: 'Rain Charge', value: `+${formatCurrency(selectedBooking.rainCharge)} (${selectedBooking.surgeSplitSettings?.rain || 70}% Provider Share)` }] : []),
-                        ...(selectedBooking.trafficCharge > 0 ? [{ label: 'Traffic Charge', value: `+${formatCurrency(selectedBooking.trafficCharge)} (${selectedBooking.surgeSplitSettings?.traffic || 70}% Provider Share)` }] : []),
-                        ...(selectedBooking.nightCharge > 0 ? [{ label: 'Night Charge', value: `+${formatCurrency(selectedBooking.nightCharge)} (${selectedBooking.surgeSplitSettings?.night || 70}% Provider Share)` }] : []),
-                        ...(selectedBooking.demandSurge > 0 ? [{ label: 'Demand Surge', value: `+${formatCurrency(selectedBooking.demandSurge)} (${selectedBooking.surgeSplitSettings?.demand || 50}% Provider Share)` }] : []),
-                        ...(selectedBooking.providerSurgeShare > 0 ? [{ label: 'Your Surcharge Earnings', value: `+${formatCurrency(selectedBooking.providerSurgeShare)}`, color: 'text-emerald-600 font-bold' }] : []),
-                        { label: 'Platform Commission (Base)', value: `-${formatCurrency(selectedBooking.commission?.amount || selectedBooking.commissionAmount || 0)}`, color: 'text-rose-500 font-medium' },
+                        ...(selectedBooking.visitingCharge > 0 ? [{ label: 'Visiting Charge Share', value: '+' + formatCurrency(parseFloat((selectedBooking.visitingCharge * ((selectedBooking.surgeSplitSettings?.visiting || 60) / 100)).toFixed(2))) + ' (' + (selectedBooking.surgeSplitSettings?.visiting || 60) + '% of ' + formatCurrency(selectedBooking.visitingCharge) + ')', color: 'text-emerald-600' }] : []),
+                        ...(selectedBooking.rainCharge > 0 ? [{ label: 'Rain Charge Share', value: '+' + formatCurrency(parseFloat((selectedBooking.rainCharge * ((selectedBooking.surgeSplitSettings?.rain || 70) / 100)).toFixed(2))) + ' (' + (selectedBooking.surgeSplitSettings?.rain || 70) + '% of ' + formatCurrency(selectedBooking.rainCharge) + ')', color: 'text-emerald-600' }] : []),
+                        ...(selectedBooking.trafficCharge > 0 ? [{ label: 'Traffic Charge Share', value: '+' + formatCurrency(parseFloat((selectedBooking.trafficCharge * ((selectedBooking.surgeSplitSettings?.traffic || 70) / 100)).toFixed(2))) + ' (' + (selectedBooking.surgeSplitSettings?.traffic || 70) + '% of ' + formatCurrency(selectedBooking.trafficCharge) + ')', color: 'text-emerald-600' }] : []),
+                        ...(selectedBooking.nightCharge > 0 ? [{ label: 'Night Charge Share', value: '+' + formatCurrency(parseFloat((selectedBooking.nightCharge * ((selectedBooking.surgeSplitSettings?.night || 70) / 100)).toFixed(2))) + ' (' + (selectedBooking.surgeSplitSettings?.night || 70) + '% of ' + formatCurrency(selectedBooking.nightCharge) + ')', color: 'text-emerald-600' }] : []),
+                        ...(selectedBooking.demandSurge > 0 ? [{ label: 'Demand Surge Share', value: '+' + formatCurrency(parseFloat((selectedBooking.demandSurge * ((selectedBooking.surgeSplitSettings?.demand || 50) / 100)).toFixed(2))) + ' (' + (selectedBooking.surgeSplitSettings?.demand || 50) + '% of ' + formatCurrency(selectedBooking.demandSurge) + ')', color: 'text-emerald-600' }] : []),
+                        { label: 'Platform Commission (Base)', value: '-' + formatCurrency(selectedBooking.commission?.amount || selectedBooking.commissionAmount || 0), color: 'text-rose-500 font-medium' },
                       ].map(({ label, value, color }) => (
-                        <div key={label} className="flex justify-between text-sm">
+                        <div key={label} className="flex justify-between text-sm animate-fadeIn">
                           <span className="text-gray-500">{label}</span>
-                          <span className={`font-medium ${color || 'text-secondary'}`}>{value}</span>
+                          <span className={'font-medium ' + (color || 'text-secondary')}>{value}</span>
                         </div>
                       ))}
                       <div className="flex justify-between pt-2 border-t border-gray-100">

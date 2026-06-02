@@ -869,8 +869,21 @@ const getDashboardStats = async (req, res) => {
                 {
                     $group: {
                         _id: null,
+                        grossRevenue: { $sum: "$totalAmount" },
                         totalRevenue: { $sum: { $subtract: ["$totalAmount", { $ifNull: ["$cancellationProgress.refundAmount", 0] }] } },
-                        netEarnings: { $sum: "$commissionAmount" }
+                        netRevenue: { $sum: { $subtract: ["$totalAmount", { $ifNull: ["$cancellationProgress.refundAmount", 0] }] } },
+                        netEarnings: { $sum: "$commissionAmount" },
+                        platformFeeRevenue: { $sum: { $ifNull: ["$platformFee", 0] } },
+                        providerEarnings: { $sum: { $ifNull: ["$providerEarnings", 0] } },
+                        refundAmount: { $sum: { $ifNull: ["$cancellationProgress.refundAmount", 0] } },
+                        visitingRevenue: { $sum: { $ifNull: ["$visitingCharge", 0] } },
+                        rainRevenue: { $sum: { $ifNull: ["$rainCharge", 0] } },
+                        trafficRevenue: { $sum: { $ifNull: ["$trafficCharge", 0] } },
+                        nightRevenue: { $sum: { $ifNull: ["$nightCharge", 0] } },
+                        demandRevenue: { $sum: { $ifNull: ["$demandSurge", 0] } },
+                        customRevenue: { $sum: { $ifNull: ["$customCharges", 0] } },
+                        providerSurgeShare: { $sum: { $ifNull: ["$providerSurgeShare", 0] } },
+                        companySurgeShare: { $sum: { $ifNull: ["$companySurgeShare", 0] } }
                     }
                 }
             ]).lean(),
@@ -893,8 +906,25 @@ const getDashboardStats = async (req, res) => {
             ]).lean()
         ]);
 
-        const totalRevenue = revenueStats[0]?.totalRevenue || 0;
-        const netEarnings = revenueStats[0]?.netEarnings || 0;
+        const rStats = revenueStats[0] || {};
+        const totalRevenue = rStats.totalRevenue || 0;
+        const grossRevenue = rStats.grossRevenue || 0;
+        const netRevenue = rStats.netRevenue || 0;
+        const netEarnings = rStats.netEarnings || 0;
+        const platformFeeRevenue = rStats.platformFeeRevenue || 0;
+        const providerEarningsSum = rStats.providerEarnings || 0;
+        const refundAmountSum = rStats.refundAmount || 0;
+        const visitingRevenue = rStats.visitingRevenue || 0;
+        const rainRevenue = rStats.rainRevenue || 0;
+        const trafficRevenue = rStats.trafficRevenue || 0;
+        const nightRevenue = rStats.nightRevenue || 0;
+        const demandRevenue = rStats.demandRevenue || 0;
+        const customRevenue = rStats.customRevenue || 0;
+        const providerSurgeShare = rStats.providerSurgeShare || 0;
+        const companySurgeShare = rStats.companySurgeShare || 0;
+
+        const surgeRevenue = visitingRevenue + rainRevenue + trafficRevenue + nightRevenue + demandRevenue + customRevenue + platformFeeRevenue;
+
         const totalWithdrawals = withdrawalStats[0]?.totalWithdrawals || 0;
         const withdrawalCount = withdrawalStats[0]?.withdrawalCount || 0;
         const totalDisputes = await Booking.countDocuments({ disputeRaised: true }).lean();
@@ -922,8 +952,27 @@ const getDashboardStats = async (req, res) => {
                 weeklyBookings,
                 monthlyBookings,
                 pendingProviders,
+                grossRevenue,
                 totalRevenue,
+                netRevenue,
                 netEarnings,
+                platformFeeRevenue,
+                providerEarnings: providerEarningsSum,
+                refundAmount: refundAmountSum,
+                surgeRevenue,
+                surgeBreakdown: {
+                    visitingRevenue,
+                    rainRevenue,
+                    trafficRevenue,
+                    nightRevenue,
+                    demandRevenue,
+                    customRevenue,
+                    platformFeeRevenue
+                },
+                surgeSplits: {
+                    providerSurgeShare,
+                    companySurgeShare
+                },
                 totalRefunds: totalRefundsCount,
                 walletRefundAmount,
                 refundedBookingsCount,
@@ -2097,7 +2146,7 @@ const processAdminRefund = async (req, res) => {
 
     try {
         const { bookingId } = req.params;
-        const { amount, reason, type } = req.body; // type: 'full' or 'partial'
+        const { amount, reason, type, absorption = 'shared' } = req.body; // type: 'full' or 'partial'
 
         const booking = await Booking.findById(bookingId).populate('complaint').session(session);
         if (!booking) {
@@ -2271,22 +2320,33 @@ const processAdminRefund = async (req, res) => {
         let recoveredAmount = 0;
         let totalToRecover = 0;
         let providerEarningsReversal = 0;
+        let adminRevenueReversal = 0;
 
         if (earning) {
-            // Find original commission rate and recalculate proportional reversal
-            let commissionRate = 10; // default 10%
-            if (earning.commissionRate > 0) {
-                commissionRate = earning.commissionRate;
-            } else if (booking.totalAmount > 0) {
-                commissionRate = (booking.commissionAmount / booking.totalAmount) * 100;
+            if (absorption === 'platform') {
+                // Platform absorbs 100% of the refund loss, provider suffers 0% loss
+                providerEarningsReversal = 0;
+                adminRevenueReversal = refundAmount;
+            } else if (absorption === 'provider') {
+                // Provider absorbs 100% of the loss (up to their earnings), platform absorbs the remaining if any
+                providerEarningsReversal = Math.min(booking.providerEarnings || 0, refundAmount);
+                adminRevenueReversal = Math.max(0, refundAmount - providerEarningsReversal);
+            } else {
+                // Shared: Standard proportional ratio split
+                let commissionRate = 10; // default 10%
+                if (earning.commissionRate > 0) {
+                    commissionRate = earning.commissionRate;
+                } else if (booking.totalAmount > 0) {
+                    commissionRate = ((booking.commissionAmount || 0) / booking.totalAmount) * 100;
+                }
+
+                const originalCommissionAmount = booking.totalAmount * (commissionRate / 100);
+                const originalProviderEarnings = booking.totalAmount - originalCommissionAmount;
+
+                const ratio = refundAmount / (booking.totalAmount || 1);
+                providerEarningsReversal = originalProviderEarnings * ratio;
+                adminRevenueReversal = originalCommissionAmount * ratio;
             }
-
-            const originalCommissionAmount = booking.totalAmount * (commissionRate / 100);
-            const originalProviderEarnings = booking.totalAmount - originalCommissionAmount;
-
-            const ratio = refundAmount / booking.totalAmount;
-            providerEarningsReversal = originalProviderEarnings * ratio;
-            const adminRevenueReversal = originalCommissionAmount * ratio;
 
             totalToRecover = providerEarningsReversal;
 

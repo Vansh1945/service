@@ -41,7 +41,8 @@ const CHARGE_TYPES = [
   { value: 'rain', label: 'Rain Charge', icon: CloudRain, color: 'bg-sky-50 text-sky-700 border-sky-200' },
   { value: 'traffic', label: 'Traffic Charge', icon: Car, color: 'bg-amber-50 text-amber-700 border-amber-200' },
   { value: 'night', label: 'Night Charge', icon: Moon, color: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
-  { value: 'demand', label: 'Demand Surge', icon: Flame, color: 'bg-rose-50 text-rose-700 border-rose-200' }
+  { value: 'demand', label: 'Demand Surge', icon: Flame, color: 'bg-rose-50 text-rose-700 border-rose-200' },
+  { value: 'platform', label: 'Platform Fee', icon: Coins, color: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
 ];
 
 const getChargeTypeConfig = (val) => CHARGE_TYPES.find(t => t.value === val) || { value: val, label: val.charAt(0).toUpperCase() + val.slice(1) + ' Charge', icon: AlertCircle, color: 'bg-slate-50 text-slate-700 border-slate-200' };

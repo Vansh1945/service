@@ -291,6 +291,10 @@ const bookingSchema = new Schema({
     type: Number,
     default: 0
   },
+  platformFee: {
+    type: Number,
+    default: 0
+  },
   customCharges: {
     type: Number,
     default: 0
@@ -597,6 +601,7 @@ bookingSchema.pre('save', async function (next) {
       const night = this.nightCharge || 0;
       const demand = this.demandSurge || 0;
       const custom = this.customCharges || 0;
+      const platformFee = this.platformFee || 0;
 
       // Provider splits
       const provVisitingShare = parseFloat((visiting * (splits.visiting / 100)).toFixed(2));
@@ -606,7 +611,7 @@ bookingSchema.pre('save', async function (next) {
       const provDemandShare = parseFloat((demand * (splits.demand / 100)).toFixed(2));
 
       const providerSurgeShare = parseFloat((provVisitingShare + provRainShare + provTrafficShare + provNightShare + provDemandShare).toFixed(2));
-      const totalSurcharges = visiting + rain + traffic + night + demand + custom;
+      const totalSurcharges = visiting + rain + traffic + night + demand + custom + platformFee;
       const companySurgeShare = parseFloat((totalSurcharges - providerSurgeShare).toFixed(2));
 
       this.providerSurgeShare = providerSurgeShare;
@@ -648,6 +653,11 @@ bookingSchema.pre('save', async function (next) {
 bookingSchema.virtual('progressStatus').get(function () {
   const { getBookingProgress } = require('../utils/bookingHelper');
   return getBookingProgress(this);
+});
+
+// Virtual for admin earning
+bookingSchema.virtual('adminEarning').get(function () {
+  return parseFloat(((this.commissionAmount || 0) + (this.companySurgeShare || 0)).toFixed(2));
 });
 
 // Indexes for query optimization

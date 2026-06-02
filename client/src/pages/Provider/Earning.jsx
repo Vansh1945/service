@@ -369,9 +369,9 @@ const ProviderEarningsDashboard = () => {
 
         {/* Summary Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-7 gap-4">
-          <StatCard title="Total Earnings" value={formatCurrency(summary.totalEarnings)} icon={TrendingUp} subtext={`This ${timeFilter}`} />
+          <StatCard title="Gross Billed" value={formatCurrency(summary.totalEarnings)} icon={TrendingUp} subtext="Total paid by customers" />
           <StatCard title="Today's Earning" value={formatCurrency(summary.todayEarnings)} icon={Activity} subtext="Earned today" />
-          <StatCard title="Available Balance" value={formatCurrency(summary.availableBalance)} icon={Wallet} subtext="Ready to withdraw" />
+          <StatCard title="Withdrawable Balance" value={formatCurrency(summary.availableBalance)} icon={Wallet} subtext="Ready to withdraw (Net)" />
           <StatCard title="Total Withdrawn" value={formatCurrency(summary.totalWithdrawn)} icon={FileText} subtext={`This ${timeFilter}`} />
           <StatCard title="Processing" value={formatCurrency(summary.totalPendingWithdrawals)} icon={Clock} subtext="Awaiting clearance" />
           <StatCard title="Held Payouts" value={formatCurrency(summary.heldAmount)} icon={Lock} subtext="Under review" />
@@ -569,13 +569,14 @@ const ProviderEarningsDashboard = () => {
 
             {/* Available Earnings Tab */}
             {activeTab === 'earnings' && (
-              <table className="w-full text-left min-w-[900px]">
+              <table className="w-full text-left min-w-[950px]">
                 <thead>
                   <tr className="border-b border-gray-100">
                     <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Booking ID</th>
                     <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-center">Date</th>
                     <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Amount</th>
                     <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Commission</th>
+                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Other Income</th>
                     <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Net</th>
                     <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Status</th>
                     <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Method</th>
@@ -597,6 +598,48 @@ const ProviderEarningsDashboard = () => {
                         <td className="px-6 py-4 text-right">
                           <p className="text-sm text-red-500 font-medium">-{formatCurrency(e.commissionAmount)}</p>
                           <p className="text-[10px] text-secondary/30">Fee {e.commissionRate}%</p>
+                        </td>
+                        <td className="px-6 py-4 text-right relative group">
+                          {(() => {
+                            const splits = e.surgeSplitSettings || { visiting: 60, rain: 70, traffic: 70, night: 70, demand: 50 };
+                            const rainShare = parseFloat(((e.rainCharge || 0) * (splits.rain / 100)).toFixed(2));
+                            const trafficShare = parseFloat(((e.trafficCharge || 0) * (splits.traffic / 100)).toFixed(2));
+                            const nightShare = parseFloat(((e.nightCharge || 0) * (splits.night / 100)).toFixed(2));
+                            const visitingShare = parseFloat(((e.visitingCharge || 0) * (splits.visiting / 100)).toFixed(2));
+                            const demandShare = parseFloat(((e.demandSurge || 0) * (splits.demand / 100)).toFixed(2));
+                            const otherIncome = parseFloat((rainShare + trafficShare + nightShare).toFixed(2));
+
+                            return (
+                              <>
+                                <span className="text-sm font-medium text-emerald-600 border-b border-dashed border-emerald-450 cursor-help">
+                                  {formatCurrency(otherIncome)}
+                                </span>
+                                <div className="absolute right-0 bottom-full mb-2 w-52 hidden group-hover:block bg-slate-900 text-white text-[10px] p-2.5 rounded-lg shadow-xl z-30 leading-normal pointer-events-none text-left">
+                                  <p className="font-bold border-b border-slate-700 pb-1 mb-1 text-[11px]">Surcharge Split Details</p>
+                                  <div className="flex justify-between py-0.5">
+                                    <span>Rain Share ({splits.rain}%)</span>
+                                    <span>{formatCurrency(rainShare)}</span>
+                                  </div>
+                                  <div className="flex justify-between py-0.5">
+                                    <span>Traffic Share ({splits.traffic}%)</span>
+                                    <span>{formatCurrency(trafficShare)}</span>
+                                  </div>
+                                  <div className="flex justify-between py-0.5">
+                                    <span>Night Share ({splits.night}%)</span>
+                                    <span>{formatCurrency(nightShare)}</span>
+                                  </div>
+                                  <div className="flex justify-between py-0.5 border-t border-slate-700 mt-1 pt-1 font-bold">
+                                    <span>Vis. Share ({splits.visiting}%)</span>
+                                    <span>{formatCurrency(visitingShare)}</span>
+                                  </div>
+                                  <div className="flex justify-between py-0.5 font-bold">
+                                    <span>Demand Share ({splits.demand}%)</span>
+                                    <span>{formatCurrency(demandShare)}</span>
+                                  </div>
+                                </div>
+                              </>
+                            );
+                          })()}
                         </td>
                         <td className="px-6 py-4 text-right text-sm font-bold text-green-600">
                           +{formatCurrency(e.netAmount)}

@@ -280,12 +280,16 @@ const ProviderCard = ({ provider, status, compact = false }) => {
 // ─── Payment Details ──────────────────────────────────────────────────────────
 
 const PaymentDetails = ({ booking }) => {
-  const additionalCharges = (booking.rainCharge || 0) + 
-                            (booking.trafficCharge || 0) + 
-                            (booking.nightCharge || 0) + 
-                            (booking.demandSurge || 0) +
-                            (booking.customCharges || 0);
+  const mergedServicePrice = (booking.subtotal || 0) + (booking.demandSurge || 0);
   const visitingCharge = booking.visitingCharge || 0;
+  const customCharges = booking.customCharges || 0;
+  const additional = (booking.rainCharge || 0) + (booking.trafficCharge || 0) + (booking.nightCharge || 0) + (booking.platformFee || 0);
+  
+  const additionalBreakdown = [];
+  if (booking.rainCharge > 0) additionalBreakdown.push({ name: 'Rain Charge', amount: booking.rainCharge });
+  if (booking.trafficCharge > 0) additionalBreakdown.push({ name: 'Traffic Charge', amount: booking.trafficCharge });
+  if (booking.nightCharge > 0) additionalBreakdown.push({ name: 'Night Charge', amount: booking.nightCharge });
+  if (booking.platformFee > 0) additionalBreakdown.push({ name: 'Platform Fee', amount: booking.platformFee });
 
   return (
     <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
@@ -293,24 +297,78 @@ const PaymentDetails = ({ booking }) => {
         <CreditCard className="w-3.5 h-3.5" /> Payment Details
       </p>
       <div className="space-y-2 text-sm">
-        {[
-          ['Method', <span className="capitalize">{booking.paymentMethod || 'N/A'}</span>],
-          ['Status', <span className={['paid', 'escrow_hold'].includes(booking.paymentStatus) ? 'text-emerald-600 font-semibold' : 'text-accent font-semibold'}>{['paid', 'escrow_hold'].includes(booking.paymentStatus) ? 'Paid' : 'Pending'}</span>],
-          ['Subtotal', formatCurrency(booking.subtotal || 0)],
-          ...(booking.totalDiscount > 0 ? [['Discount', <span className="text-emerald-600 font-medium">-{formatCurrency(booking.totalDiscount)}</span>]] : []),
-          ...(additionalCharges > 0 ? [['Additional Service Charges', <span className="text-red-500 font-medium">+{formatCurrency(additionalCharges)}</span>]] : []),
-          ['Visiting Charges', <span className="text-green-600 font-semibold italic">{visitingCharge > 0 ? formatCurrency(visitingCharge) : "Free"}</span>],
-          ...(booking.couponApplied?.isValid ? [['Coupon', <span className="text-blue-600">{booking.couponApplied.code}</span>]] : []),
-          ...(booking.paymentStatus === 'refunded' ? [['Refund Status', <span className="text-purple-600 font-black flex items-center gap-1"><Wallet className="w-3 h-3" /> Refunded</span>]] : []),
-          ...(booking.fullData?.walletAmountUsed > 0 ? [['Wallet Used', <span className="text-purple-600 font-bold">-{formatCurrency(booking.fullData.walletAmountUsed)}</span>]] : []),
-          ...(booking.fullData?.onlineAmountPaid > 0 ? [['Paid Online', <span className="text-blue-600 font-bold">{formatCurrency(booking.fullData.onlineAmountPaid)}</span>]] : []),
-        ].map(([label, val]) => (
-          <div key={label} className="flex justify-between items-center">
-            <span className="text-gray-500">{label}</span>
-            <span className="font-medium">{val}</span>
+        <div className="flex justify-between items-center animate-fadeIn">
+          <span className="text-gray-500">Method</span>
+          <span className="font-medium capitalize">{booking.paymentMethod || 'N/A'}</span>
+        </div>
+        <div className="flex justify-between items-center animate-fadeIn">
+          <span className="text-gray-500">Status</span>
+          <span className={['paid', 'escrow_hold'].includes(booking.paymentStatus) ? 'text-emerald-600 font-semibold' : 'text-accent font-semibold'}>
+            {['paid', 'escrow_hold'].includes(booking.paymentStatus) ? 'Paid' : 'Pending'}
+          </span>
+        </div>
+        <div className="flex justify-between items-center animate-fadeIn">
+          <span className="text-gray-500">Service Price</span>
+          <span className="font-semibold text-secondary">{formatCurrency(mergedServicePrice)}</span>
+        </div>
+        {booking.totalDiscount > 0 && (
+          <div className="flex justify-between items-center animate-fadeIn">
+            <span className="text-gray-500">Discount</span>
+            <span className="text-emerald-600 font-medium">-{formatCurrency(booking.totalDiscount)}</span>
           </div>
-        ))}
-        <div className="border-t border-gray-200 pt-2 mt-1 flex justify-between font-bold text-secondary">
+        )}
+        <div className="flex justify-between items-center animate-fadeIn">
+          <span className="text-gray-500">Visiting Charges</span>
+          <span className="text-green-600 font-semibold italic">{visitingCharge > 0 ? formatCurrency(visitingCharge) : "Free"}</span>
+        </div>
+        {customCharges > 0 && (
+          <div className="flex justify-between items-center animate-fadeIn">
+            <span className="text-gray-500">Custom Charges</span>
+            <span className="text-red-500 font-medium">+{formatCurrency(customCharges)}</span>
+          </div>
+        )}
+        {additional > 0 && (
+          <div className="flex justify-between items-center relative group animate-fadeIn">
+            <span className="text-gray-500 border-b border-dashed border-gray-400 cursor-help">
+              Additional Charges
+            </span>
+            <span className="text-red-500 font-semibold">+{formatCurrency(additional)}</span>
+            <div className="absolute right-0 bottom-full mb-2 w-56 hidden group-hover:block bg-slate-900 text-white text-[10px] p-2.5 rounded-lg shadow-xl z-30 leading-normal pointer-events-none">
+              <p className="font-bold border-b border-slate-700 pb-1 mb-1 text-[11px]">Fee Breakdown</p>
+              {additionalBreakdown.map((item, idx) => (
+                <div key={idx} className="flex justify-between gap-2 py-0.5">
+                  <span>{item.name}</span>
+                  <span>{formatCurrency(item.amount)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {booking.couponApplied?.isValid && (
+          <div className="flex justify-between items-center animate-fadeIn">
+            <span className="text-gray-500">Coupon</span>
+            <span className="text-blue-600 font-medium">{booking.couponApplied.code}</span>
+          </div>
+        )}
+        {booking.paymentStatus === 'refunded' && (
+          <div className="flex justify-between items-center animate-fadeIn">
+            <span className="text-gray-500">Refund Status</span>
+            <span className="text-purple-600 font-black flex items-center gap-1"><Wallet className="w-3 h-3" /> Refunded</span>
+          </div>
+        )}
+        {booking.fullData?.walletAmountUsed > 0 && (
+          <div className="flex justify-between items-center animate-fadeIn">
+            <span className="text-gray-500">Wallet Used</span>
+            <span className="text-purple-600 font-bold">-{formatCurrency(booking.fullData.walletAmountUsed)}</span>
+          </div>
+        )}
+        {booking.fullData?.onlineAmountPaid > 0 && (
+          <div className="flex justify-between items-center animate-fadeIn">
+            <span className="text-gray-500">Paid Online</span>
+            <span className="text-blue-600 font-bold">{formatCurrency(booking.fullData.onlineAmountPaid)}</span>
+          </div>
+        )}
+        <div className="border-t border-gray-200 pt-2 mt-1 flex justify-between font-bold text-secondary text-base">
           <span>Total Payable</span>
           <span>{formatCurrency(booking.totalAmount || 0)}</span>
         </div>

@@ -6,8 +6,8 @@ const surgeSchema = new Schema({
     type: String,
     required: [true, 'Charge type is required'],
     enum: {
-      values: ['rain', 'traffic', 'night', 'demand', 'festival', 'custom', 'visiting'],
-      message: 'Charge type must be one of: rain, traffic, night, demand, festival, custom, visiting'
+      values: ['rain', 'traffic', 'night', 'demand', 'festival', 'custom', 'visiting', 'platform'],
+      message: 'Charge type must be one of: rain, traffic, night, demand, festival, custom, visiting, platform'
     }
   },
   scope: {

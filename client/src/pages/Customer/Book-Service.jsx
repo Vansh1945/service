@@ -299,7 +299,7 @@ const BookService = () => {
       totalSurcharge += chargeAmount;
       breakdowns.push({
         id: s._id,
-        name: `${s.chargeType.charAt(0).toUpperCase() + s.chargeType.slice(1)} Charge`,
+        name: s.chargeType === 'platform' ? 'Platform Fee' : `${s.chargeType.charAt(0).toUpperCase() + s.chargeType.slice(1)} Charge`,
         amount: chargeAmount,
         mode: s.mode,
         value: s.value
@@ -343,6 +343,35 @@ const BookService = () => {
     });
 
     return { visiting, additional };
+  };
+
+  const getCustomerPricingBreakdown = () => {
+    const { breakdowns } = calculateSurcharges();
+    let demand = 0;
+    let visiting = 0;
+    let additional = 0;
+    const additionalBreakdown = [];
+
+    breakdowns.forEach(s => {
+      const type = s.name.toLowerCase();
+      if (type.includes('demand')) {
+        demand += s.amount;
+      } else if (type.includes('visiting') || type.includes('festival') || type.includes('custom')) {
+        visiting += s.amount;
+      } else {
+        additional += s.amount;
+        additionalBreakdown.push({ name: s.name, amount: s.amount });
+      }
+    });
+
+    const mergedServicePrice = baseAmount + demand;
+    return {
+      mergedServicePrice,
+      visiting,
+      additional,
+      additionalBreakdown,
+      demand
+    };
   };
 
   // Initialize data
@@ -897,15 +926,11 @@ const BookService = () => {
                 </h3>
                 <div className="space-y-2">
                   <div className="flex justify-between text-xs">
-                    <span className="text-gray-500">Price ({formData.quantity} item)</span>
-                    <span className="text-secondary font-medium">{formatCurrency(baseAmount)}</span>
+                    <span className="text-gray-500">Service Price ({formData.quantity} item)</span>
+                    <span className="text-secondary font-semibold">
+                      {formatCurrency(getCustomerPricingBreakdown().mergedServicePrice)}
+                    </span>
                   </div>
-                  {getVisitingAndAdditionalCharges().additional > 0 && (
-                    <div className="flex justify-between text-xs">
-                      <span className="text-gray-500">Additional Service Charges</span>
-                      <span className="text-red-500 font-medium">+{formatCurrency(getVisitingAndAdditionalCharges().additional)}</span>
-                    </div>
-                  )}
                   {formData.appliedCoupon && (
                     <div className="flex justify-between text-xs">
                       <span className="text-gray-500">Discount</span>
@@ -915,11 +940,30 @@ const BookService = () => {
                   <div className="flex justify-between text-xs">
                     <span className="text-gray-500">Visiting Charges</span>
                     <span className="text-green-600 font-semibold italic">
-                      {getVisitingAndAdditionalCharges().visiting > 0 
-                        ? `+${formatCurrency(getVisitingAndAdditionalCharges().visiting)}` 
+                      {getCustomerPricingBreakdown().visiting > 0 
+                        ? `+${formatCurrency(getCustomerPricingBreakdown().visiting)}` 
                         : "Free"}
                     </span>
                   </div>
+                  {getCustomerPricingBreakdown().additional > 0 && (
+                    <div className="flex justify-between text-xs relative group">
+                      <span className="text-gray-500 border-b border-dashed border-gray-400 cursor-help">
+                        Additional Charges
+                      </span>
+                      <span className="text-red-500 font-semibold">
+                        +{formatCurrency(getCustomerPricingBreakdown().additional)}
+                      </span>
+                      <div className="absolute right-0 bottom-full mb-2 w-56 hidden group-hover:block bg-slate-900 text-white text-[10px] p-2.5 rounded-lg shadow-xl z-30 leading-normal pointer-events-none">
+                        <p className="font-bold border-b border-slate-700 pb-1 mb-1 text-[11px]">Fee Breakdown</p>
+                        {getCustomerPricingBreakdown().additionalBreakdown.map((item, idx) => (
+                          <div key={idx} className="flex justify-between gap-2 py-0.5">
+                            <span>{item.name}</span>
+                            <span>{formatCurrency(item.amount)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div className="border-t border-gray-100 pt-2 mt-2">
                     <div className="flex justify-between">
                       <span className="font-bold text-secondary text-sm">Total</span>

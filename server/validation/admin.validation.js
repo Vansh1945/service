@@ -18,7 +18,10 @@ const approveProviderSchema = z.object({
 
 const adminRefundSchema = z.object({
   reason: z.string().optional(),
-  refundAmount: z.number().positive().optional()
+  refundAmount: z.number().positive().optional(),
+  amount: z.number().nonnegative().optional(),
+  type: z.enum(['full', 'partial']).optional(),
+  absorption: z.enum(['platform', 'provider', 'shared']).optional()
 });
 
 const togglePayoutHoldSchema = z.object({
