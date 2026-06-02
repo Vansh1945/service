@@ -333,7 +333,7 @@ const SurgeManagement = () => {
         endTime: createForm.endTime || undefined,
         maxBookingValue: createForm.maxBookingValue ? Number(createForm.maxBookingValue) : null,
         active: createForm.active,
-        zoneId: createForm.scope === 'zone' ? createForm.zoneId : null
+        zoneId: (createForm.scope === 'zone' && createForm.zoneIds?.length > 0) ? createForm.zoneIds[0] : null
       };
 
       const response = await SurgeService.createSurgeRule(payload);
@@ -360,7 +360,7 @@ const SurgeManagement = () => {
         endTime: editForm.endTime || undefined,
         maxBookingValue: editForm.maxBookingValue ? Number(editForm.maxBookingValue) : null,
         active: editForm.active,
-        zoneId: editForm.scope === 'zone' ? editForm.zoneId : null
+        zoneId: (editForm.scope === 'zone' && editForm.zoneIds?.length > 0) ? editForm.zoneIds[0] : null
       };
 
       const response = await SurgeService.updateSurgeRule(selectedRule._id, payload);
@@ -658,7 +658,14 @@ const SurgeManagement = () => {
           <HierarchicalZoneSelector
             zones={zones}
             selectedZoneIds={form.zoneIds}
-            onChange={(zone) => handleZoneToggleCascade(zone, isCreate)}
+            onChange={(newZoneIds) => {
+              if (Array.isArray(newZoneIds)) {
+                setForm(prev => ({ ...prev, zoneIds: newZoneIds }));
+              } else if (newZoneIds && (newZoneIds._id || newZoneIds.id)) {
+                const targetId = (newZoneIds._id || newZoneIds.id).toString();
+                setForm(prev => ({ ...prev, zoneIds: (prev.zoneIds || []).filter(id => id.toString() !== targetId) }));
+              }
+            }}
             label="Target Zone (Hierarchical Selector) *"
           />
         )}

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Clock, IndianRupee, Star, ChevronRight } from 'lucide-react';
 import Rating from '@mui/material/Rating';
 
-const RelatedServices = ({ services, categoryName, categoryId }) => {
+const RelatedServices = ({ services, categoryName, categoryId, activeSurcharges }) => {
   const navigate = useNavigate();
 
   if (!services || services.length === 0) return null;
@@ -31,6 +31,7 @@ const RelatedServices = ({ services, categoryName, categoryId }) => {
               <ServiceCard
                 service={service}
                 categoryName={categoryName}
+                activeSurcharges={activeSurcharges}
                 onView={() => {
                   navigate(`/customer/services/${service._id}`);
                   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -58,9 +59,32 @@ const RelatedServices = ({ services, categoryName, categoryId }) => {
 };
 
 // Internal Service Card (Matches Services.jsx)
-const ServiceCard = ({ service, categoryName, onView }) => {
+const ServiceCard = ({ service, categoryName, onView, activeSurcharges }) => {
   const imageUrl = service.displayImage || service.images?.[0] || 'https://via.placeholder.com/400x300?text=Service';
   const isAvailable = service.isActive !== false;
+
+  const getMergedPrice = (basePrice) => {
+    if (!basePrice) return 0;
+    if (!activeSurcharges || activeSurcharges.length === 0) return basePrice;
+    let demandSurge = 0;
+    activeSurcharges.forEach(s => {
+      if (s.chargeType === 'demand') {
+        if (s.maxBookingValue && basePrice > s.maxBookingValue) {
+          return;
+        }
+        let chargeAmount = 0;
+        if (s.mode === 'flat') {
+          chargeAmount = s.value;
+        } else if (s.mode === 'percentage') {
+          chargeAmount = (basePrice * s.value) / 100;
+        } else if (s.mode === 'multiplier') {
+          chargeAmount = basePrice * (s.value - 1);
+        }
+        demandSurge += parseFloat(chargeAmount.toFixed(2));
+      }
+    });
+    return basePrice + demandSurge;
+  };
 
   return (
     <div className="group bg-white rounded-xl border border-gray-100 hover:border-primary/20 hover:shadow-lg transition-all duration-300 overflow-hidden">
@@ -101,7 +125,9 @@ const ServiceCard = ({ service, categoryName, onView }) => {
         <div className="flex items-center justify-between pt-2 border-t border-gray-100">
           <div className="flex items-baseline gap-0.5">
             <IndianRupee className="w-3 h-3 text-secondary" />
-            <span className="text-base font-bold text-secondary">{service.basePrice?.toLocaleString()}</span>
+            <span className="text-base font-bold text-secondary">
+              {getMergedPrice(service.basePrice)?.toLocaleString()}
+            </span>
           </div>
           <button
             onClick={onView}

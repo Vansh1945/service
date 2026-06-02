@@ -730,7 +730,14 @@ const AdminNotification = () => {
                                 <HierarchicalZoneSelector
                                     zones={zones}
                                     selectedZoneIds={form.targetZones}
-                                    onChange={(zone) => handleZoneToggleCascade(zone, true)}
+                                    onChange={(newZoneIds) => {
+                                        if (Array.isArray(newZoneIds)) {
+                                            setForm(prev => ({ ...prev, targetZones: newZoneIds }));
+                                        } else if (newZoneIds && (newZoneIds._id || newZoneIds.id)) {
+                                            const targetId = (newZoneIds._id || newZoneIds.id).toString();
+                                            setForm(prev => ({ ...prev, targetZones: (prev.targetZones || []).filter(id => id.toString() !== targetId) }));
+                                        }
+                                    }}
                                     label="Target Zones (State/City/Micro)"
                                 />
                             </div>
@@ -1256,7 +1263,14 @@ const AdminNotification = () => {
                             <HierarchicalZoneSelector
                                 zones={zones}
                                 selectedZoneIds={(editModal.item.targetZones || []).map(z => z._id || z)}
-                                onChange={(zone) => handleZoneToggleCascade(zone, false)}
+                                onChange={(newZoneIds) => {
+                                    if (Array.isArray(newZoneIds)) {
+                                        setEditModal(prev => ({ ...prev, item: { ...prev.item, targetZones: newZoneIds } }));
+                                    } else if (newZoneIds && (newZoneIds._id || newZoneIds.id)) {
+                                        const targetId = (newZoneIds._id || newZoneIds.id).toString();
+                                        setEditModal(prev => ({ ...prev, item: { ...prev.item, targetZones: (prev.item.targetZones || []).filter(id => id.toString() !== targetId) } }));
+                                    }
+                                }}
                                 label="Target Zones (Leave empty for Global)"
                             />
                         </div>

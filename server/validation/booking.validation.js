@@ -35,6 +35,7 @@ const createBookingSchema = z.object({
     // Create Date objects represented in local timezone for comparison
     const bookingDateLocal = new Date(bookingDate.getUTCFullYear(), bookingDate.getUTCMonth(), bookingDate.getUTCDate());
     const todayLocal = new Date();
+    todayLocal.setDate(todayLocal.getDate() - 1);
     todayLocal.setHours(0, 0, 0, 0);
     
     return bookingDateLocal >= todayLocal;

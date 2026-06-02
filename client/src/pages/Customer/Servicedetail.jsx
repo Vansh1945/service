@@ -17,11 +17,12 @@ import ErrorState from '../../components/Error';
 import { getPublicServiceById, getServicesByCategory } from '../../services/ServiceService';
 import useCategory from '../../hooks/useCategory';
 import { formatCurrency, formatDate, formatDuration } from '../../utils/format';
+import { resolveActiveSurcharges } from '../../services/SurgeService';
 
 const ServiceDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { API, showToast, isAuthenticated } = useAuth();
+  const { API, showToast, isAuthenticated, user } = useAuth();
 
   // ==================== STATE MANAGEMENT ====================
   const [service, setService] = useState(null);
@@ -34,6 +35,50 @@ const ServiceDetailPage = () => {
   const [imageLoading, setImageLoading] = useState(true);
   const [allImages, setAllImages] = useState([]);
   const { categories } = useCategory();
+  const [activeSurcharges, setActiveSurcharges] = useState([]);
+
+  // Fetch active surcharges
+  useEffect(() => {
+    const fetchSurcharges = async () => {
+      try {
+        const params = {};
+        if (user?.address?.lat && user?.address?.lng) {
+          params.lat = user.address.lat;
+          params.lng = user.address.lng;
+        }
+        const response = await resolveActiveSurcharges(params);
+        if (response.data?.success) {
+          setActiveSurcharges(response.data.data || []);
+        }
+      } catch (err) {
+        console.error("Error fetching active surcharges:", err);
+      }
+    };
+    fetchSurcharges();
+  }, [user]);
+
+  // Helper to get merged price (base price + active demand surge)
+  const getMergedPrice = (basePrice) => {
+    if (!basePrice) return 0;
+    let demandSurge = 0;
+    activeSurcharges.forEach(s => {
+      if (s.chargeType === 'demand') {
+        if (s.maxBookingValue && basePrice > s.maxBookingValue) {
+          return;
+        }
+        let chargeAmount = 0;
+        if (s.mode === 'flat') {
+          chargeAmount = s.value;
+        } else if (s.mode === 'percentage') {
+          chargeAmount = (basePrice * s.value) / 100;
+        } else if (s.mode === 'multiplier') {
+          chargeAmount = basePrice * (s.value - 1);
+        }
+        demandSurge += parseFloat(chargeAmount.toFixed(2));
+      }
+    });
+    return basePrice + demandSurge;
+  };
 
   // ==================== HELPER FUNCTIONS ====================
 
@@ -275,7 +320,7 @@ const ServiceDetailPage = () => {
 
             {/* Left Column: Image Section */}
             <div className="flex flex-col">
-              <div className="relative aspect-square rounded-2xl overflow-hidden bg-gray-50 border border-gray-100 group">
+              <div className="relative aspect-[4/3] md:aspect-square md:max-h-[400px] w-full mx-auto rounded-2xl overflow-hidden bg-gray-50 border border-gray-100 group">
                 {imageLoading && (
                   <div className="absolute inset-0 flex items-center justify-center bg-white/60 z-10">
                     <LoadingSpinner />
@@ -290,18 +335,18 @@ const ServiceDetailPage = () => {
 
                 {/* Counter Overlay */}
                 {allImages.length > 1 && (
-                  <div className="absolute bottom-4 right-4 bg-black/60 text-white text-[10px] font-black px-2 py-1 rounded-md backdrop-blur-sm z-20 tracking-widest">
+                  <div className="absolute bottom-3 right-3 bg-black/60 text-white text-[10px] font-black px-2 py-1 rounded-md backdrop-blur-sm z-20 tracking-widest">
                     {currentImageIndex + 1} / {allImages.length}
                   </div>
                 )}
 
                 {allImages.length > 1 && (
-                  <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 flex justify-between opacity-0 group-hover:opacity-100 transition-opacity z-20">
-                    <button onClick={(e) => { e.stopPropagation(); prevImage(); }} className="p-2 rounded-full bg-white/90 shadow-md text-gray-600 hover:text-primary hover:bg-white transition-all">
-                      <MdArrowBack size={20} />
+                  <div className="absolute inset-x-3 top-1/2 -translate-y-1/2 flex justify-between opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                    <button onClick={(e) => { e.stopPropagation(); prevImage(); }} className="p-1.5 rounded-full bg-white/90 shadow-md text-gray-600 hover:text-primary hover:bg-white transition-all">
+                      <MdArrowBack size={18} />
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); nextImage(); }} className="p-2 rounded-full bg-white/90 shadow-md text-gray-600 hover:text-primary hover:bg-white transition-all">
-                      <MdArrowForward size={20} />
+                    <button onClick={(e) => { e.stopPropagation(); nextImage(); }} className="p-1.5 rounded-full bg-white/90 shadow-md text-gray-600 hover:text-primary hover:bg-white transition-all">
+                      <MdArrowForward size={18} />
                     </button>
                   </div>
                 )}
@@ -309,82 +354,82 @@ const ServiceDetailPage = () => {
             </div>
 
             {/* Right Column: Service Details */}
-            <div className="flex flex-col h-full mt-8 md:mt-0">
-              <div className="flex-1 space-y-8">
-                <div className="space-y-2">
-                  <h1 className="text-2xl lg:text-3xl font-bold text-secondary tracking-tight leading-tight">
+            <div className="flex flex-col h-full mt-6 md:mt-0">
+              <div className="flex-1 space-y-6">
+                <div className="space-y-1.5">
+                  <h1 className="text-xl lg:text-2xl font-bold text-secondary tracking-tight leading-tight">
                     {service.title}
                   </h1>
 
                   {/* Rating Section */}
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center bg-primary/10 px-2.5 py-1 rounded-lg text-primary font-bold text-sm">
-                      <MdStar className="mr-1" />
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center bg-primary/10 px-2 py-0.5 rounded-lg text-primary font-bold text-xs">
+                      <MdStar className="mr-0.5" />
                       {service.averageRating?.toFixed(1) || '0.0'}
                     </div>
-                    <div className="text-gray-400 text-sm font-medium border-l border-gray-200 pl-4">
+                    <div className="text-gray-400 text-xs font-medium border-l border-gray-200 pl-3">
                       {service.ratingCount || 0} Reviews
                     </div>
                   </div>
                 </div>
 
                 {/* Price Section */}
-                <div className="bg-primary/5 p-4 rounded-2xl border border-primary/10">
-                  <div className="flex items-baseline gap-3">
-                    <span className="text-4xl font-bold text-primary">{formatCurrency(service.basePrice)}</span>
+                <div className="bg-primary/5 p-3.5 rounded-xl border border-primary/10">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl lg:text-3xl font-extrabold text-primary">{formatCurrency(getMergedPrice(service.basePrice))}</span>
                   </div>
-                  <p className="text-gray-400 text-xs mt-2 font-medium">• Inclusive of all taxes • Direct Professional Service</p>
+                  <p className="text-gray-400 text-[11px] mt-1 font-medium">• Inclusive of all taxes • Direct Professional Service</p>
                 </div>
 
                 {/* CTA Section */}
-                <div className="space-y-4">
-                  <div className="flex flex-col sm:flex-row gap-4">
+                <div className="space-y-3">
+                  <div className="flex flex-col sm:flex-row gap-3">
                     <button
                       onClick={handleBookNow}
-                      className="flex-1 bg-accent hover:opacity-90 text-white font-bold py-4 rounded-xl shadow-lg shadow-accent/20 transition-all active:scale-95 flex items-center justify-center gap-2"
+                      className="flex-1 bg-accent hover:opacity-90 text-white font-semibold py-3 px-4 rounded-xl shadow-md shadow-accent/15 transition-all active:scale-95 flex items-center justify-center gap-2 text-sm"
                     >
-                      <MdCalendarToday size={20} />
+                      <MdCalendarToday size={18} />
                       BOOK SERVICE NOW
                     </button>
                     <button
                       onClick={handleShare}
-                      className="px-6 py-4 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center justify-center transition-all"
+                      className="px-4 py-3 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 flex items-center justify-center transition-all"
                     >
-                      <MdShare size={24} />
+                      <MdShare size={20} />
                     </button>
                   </div>
                 </div>
 
                 {/* Note Section */}
-                <div className="space-y-2 p-4 bg-yellow-50 rounded-xl border border-yellow-100">
-                  <h3 className="text-yellow-800 font-bold text-[10px] tracking-widest flex items-center gap-2">
-                    <MdError className="w-4 h-4" />
+                <div className="space-y-1 p-3 bg-amber-50/70 rounded-xl border border-amber-100">
+                  <h3 className="text-amber-800 font-bold text-[9px] tracking-widest flex items-center gap-1.5 uppercase">
+                    <MdError className="w-3.5 h-3.5" />
                     Note
                   </h3>
-                  <p className="text-yellow-700 text-xs font-bold leading-relaxed">
-                    Material cost is NOT included actual material charges will be extra.
+                  <p className="text-amber-700 text-xs font-semibold leading-relaxed">
+                    Material cost is NOT included. Actual material charges will be extra.
                   </p>
                 </div>
 
                 {/* Features / Special Notes */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-                  <div className="space-y-4">
-                    <h4 className="text-gray-400 font-bold text-[10px] tracking-widest border-b border-gray-100 pb-2">What's Included</h4>
-                    <ul className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2">
+                  <div className="space-y-3">
+                    <h4 className="text-gray-400 font-bold text-[9px] tracking-widest border-b border-gray-100 pb-1.5 uppercase">What's Included</h4>
+                    <ul className="space-y-2">
                       {specialNotes.length > 0 ? specialNotes.map((note, index) => (
-                        <li key={index} className="flex items-start gap-2 text-sm text-gray-700">
+                        <li key={index} className="flex items-start gap-2 text-xs text-gray-600">
                           <MdCheck className="text-primary mt-0.5 shrink-0" />
                           <span>{note}</span>
                         </li>
                       )) : <li className="text-gray-400 text-xs italic">Standard professional service</li>}
                     </ul>
                   </div>
-                  <div className="space-y-4">
-                    <h4 className="text-gray-400 font-bold text-[10px] tracking-widest border-b border-gray-100 pb-2">Tools & Materials</h4>
-                    <ul className="space-y-3">
+                  <div className="space-y-3">
+                    <h4 className="text-gray-400 font-bold text-[9px] tracking-widest border-b border-gray-100 pb-1.5 uppercase">Tools & Materials</h4>
+                    <ul className="space-y-2">
                       {materialsUsed.length > 0 ? materialsUsed.map((item, index) => (
-                        <li key={index} className="flex items-start gap-2 text-sm text-gray-700">
-                          <div className="w-1.5 h-1.5 rounded-full bg-primary mt-2 shrink-0" />
+                        <li key={index} className="flex items-start gap-2 text-xs text-gray-600">
+                          <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
                           <span>{item}</span>
                         </li>
                       )) : <li className="text-gray-400 text-xs italic">All pro-tools included</li>}
@@ -398,14 +443,14 @@ const ServiceDetailPage = () => {
       </div>
 
       {/* Tabs / Bottom Section (FAQ & Reviews) */}
-      <div className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-4">
-        <div className="border-b border-gray-200 mb-10 overflow-x-auto">
-          <nav className="flex space-x-12 min-w-max">
+      <div className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-4">
+        <div className="border-b border-gray-200 mb-6 overflow-x-auto">
+          <nav className="flex space-x-8 min-w-max">
             {['Overview', 'Specifications', 'Reviews'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`pb-5 px-1 border-b-2 font-bold text-sm tracking-widest transition-all ${activeTab === tab
+                className={`pb-3 px-1 border-b-2 font-semibold text-xs md:text-sm tracking-wide transition-all ${activeTab === tab
                   ? 'border-primary text-primary'
                   : 'border-transparent text-gray-400 hover:text-gray-600'
                   }`}
@@ -416,26 +461,26 @@ const ServiceDetailPage = () => {
           </nav>
         </div>
 
-        <div className="animate-fade-in min-h-[300px]">
+        <div className="animate-fade-in min-h-[250px]">
           {activeTab === 'Overview' && (
-            <div className="bg-white rounded-2xl border border-gray-100 p-8 shadow-sm space-y-8">
-              <div className="grid md:grid-cols-2 gap-12">
-                <div className="space-y-6">
-                  <h3 className="text-xl font-bold text-secondary border-l-4 border-primary pl-4">Service Details</h3>
-                  <p className="text-gray-600 leading-relaxed whitespace-pre-line">{service.description}</p>
+            <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-6">
+              <div className="grid md:grid-cols-2 gap-8">
+                <div className="space-y-4">
+                  <h3 className="text-base md:text-lg font-bold text-secondary border-l-4 border-primary pl-3">Service Details</h3>
+                  <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-line">{service.description}</p>
                 </div>
-                <div className="space-y-6">
-                  <h3 className="text-xl font-bold text-secondary border-l-4 border-primary pl-4">Service Guarantees</h3>
-                  <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-4">
+                  <h3 className="text-base md:text-lg font-bold text-secondary border-l-4 border-primary pl-3">Service Guarantees</h3>
+                  <div className="grid grid-cols-2 gap-3">
                     {[
-                      { icon: <ShieldCheckIcon className="w-5 h-5" />, text: "30-Day Warranty" },
-                      { icon: <UserIcon className="w-5 h-5" />, text: "Certified Pros" },
-                      { icon: <ClockIcon className="w-5 h-5" />, text: "On-Time Arrival" },
-                      { icon: <CheckBadgeIcon className="w-5 h-5" />, text: "Genuine Spares" }
+                      { icon: <ShieldCheckIcon className="w-4.5 h-4.5" />, text: "30-Day Warranty" },
+                      { icon: <UserIcon className="w-4.5 h-4.5" />, text: "Certified Pros" },
+                      { icon: <ClockIcon className="w-4.5 h-4.5" />, text: "On-Time Arrival" },
+                      { icon: <CheckBadgeIcon className="w-4.5 h-4.5" />, text: "Genuine Spares" }
                     ].map((item, i) => (
-                      <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                      <div key={i} className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-xl">
                         <div className="text-primary">{item.icon}</div>
-                        <span className="text-sm font-semibold text-gray-700">{item.text}</span>
+                        <span className="text-xs font-semibold text-gray-600">{item.text}</span>
                       </div>
                     ))}
                   </div>
@@ -445,52 +490,52 @@ const ServiceDetailPage = () => {
           )}
 
           {activeTab === 'Specifications' && (
-            <div className="bg-white rounded-2xl border border-gray-100 p-8 shadow-sm lg:grid lg:grid-cols-2 gap-16">
+            <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm lg:grid lg:grid-cols-2 gap-10">
               {/* Left Column: Tech Specs */}
               <div>
-                <h3 className="text-xl font-bold text-secondary mb-6 flex items-center gap-2">
-                  <WrenchIcon className="w-6 h-6 text-primary" />
+                <h3 className="text-base md:text-lg font-bold text-secondary mb-4 flex items-center gap-2">
+                  <WrenchIcon className="w-5 h-5 text-primary" />
                   Technical Details
                 </h3>
-                <div className="divide-y divide-gray-100">
-                  <div className="grid grid-cols-2 py-4">
+                <div className="divide-y divide-gray-100 text-sm">
+                  <div className="grid grid-cols-2 py-3">
                     <span className="text-gray-500 font-medium">Estimated Duration</span>
-                    <span className="text-secondary font-bold">{formatDuration(service.duration)}</span>
+                    <span className="text-secondary font-semibold">{formatDuration(service.duration)}</span>
                   </div>
-                  <div className="grid grid-cols-2 py-4">
+                  <div className="grid grid-cols-2 py-3">
                     <span className="text-gray-500 font-medium">Category</span>
-                    <span className="text-secondary font-bold">{categoryName}</span>
+                    <span className="text-secondary font-semibold">{categoryName}</span>
                   </div>
-                  <div className="grid grid-cols-2 py-4">
+                  <div className="grid grid-cols-2 py-3">
                     <span className="text-gray-500 font-medium">Availability</span>
-                    <span className={`font-bold ${service.isActive ? 'text-primary' : 'text-red-500'}`}>
-                      {service.isActive ? 'Ready for Booking' : 'Not Available Currently'}
+                    <span className={`font-semibold ${service.isActive ? 'text-primary' : 'text-red-500'}`}>
+                      {service.isActive ? 'Ready for Booking' : 'Not Available'}
                     </span>
                   </div>
                 </div>
               </div>
 
               {/* Right Column: FAQ */}
-              <div className="mt-12 lg:mt-0">
-                <h3 className="text-xl font-bold text-secondary mb-6 flex items-center gap-2">
-                  <MdHelpOutline className="w-6 h-6 text-primary" />
+              <div className="mt-8 lg:mt-0">
+                <h3 className="text-base md:text-lg font-bold text-secondary mb-4 flex items-center gap-2">
+                  <MdHelpOutline className="w-5 h-5 text-primary" />
                   Frequently Asked Questions
                 </h3>
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {faqs.map((faq, index) => (
                     <div
                       key={index}
-                      className="border border-gray-100 rounded-xl p-4 hover:border-primary/30 transition-all cursor-pointer group"
+                      className="border border-gray-100 rounded-xl p-3 hover:border-primary/20 transition-all cursor-pointer group"
                       onClick={() => toggleAccordion(index)}
                     >
-                      <div className="flex items-center justify-between gap-4">
-                        <span className="text-sm font-bold text-secondary group-hover:text-primary transition-colors">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-xs md:text-sm font-semibold text-secondary group-hover:text-primary transition-colors">
                           {faq.q}
                         </span>
-                        <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${openAccordion === index ? 'rotate-180' : ''}`} />
+                        <ChevronDownIcon className={`w-3.5 h-3.5 text-gray-400 transition-transform ${openAccordion === index ? 'rotate-180' : ''}`} />
                       </div>
                       {openAccordion === index && (
-                        <p className="mt-3 text-xs text-gray-500 leading-relaxed animate-fade-in">
+                        <p className="mt-2 text-xs text-gray-500 leading-relaxed animate-fade-in">
                           {faq.a}
                         </p>
                       )}
@@ -502,33 +547,33 @@ const ServiceDetailPage = () => {
           )}
 
           {activeTab === 'Reviews' && (
-            <div className="space-y-10">
-              <div className="bg-white rounded-2xl border border-gray-100 p-8 shadow-sm flex flex-col md:flex-row gap-10">
+            <div className="space-y-6">
+              <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm flex flex-col md:flex-row gap-8">
                 {/* Left Side: Global Score */}
-                <div className="text-center md:text-left min-w-[150px]">
-                  <div className="text-6xl font-black text-secondary mb-2">{service.averageRating?.toFixed(1) || '0.0'}</div>
-                  <div className="flex justify-center md:justify-start items-center gap-1 mb-2">
+                <div className="text-center md:text-left min-w-[120px]">
+                  <div className="text-4xl md:text-5xl font-extrabold text-secondary mb-1">{service.averageRating?.toFixed(1) || '0.0'}</div>
+                  <div className="flex justify-center md:justify-start items-center gap-0.5 mb-1.5">
                     {[1, 2, 3, 4, 5].map((star) => (
-                      <MdStar key={star} className={`w-6 h-6 ${star <= (service.averageRating || 0) ? 'text-yellow-400' : 'text-gray-200'}`} />
+                      <MdStar key={star} className={`w-4 h-4 ${star <= (service.averageRating || 0) ? 'text-yellow-400' : 'text-gray-200'}`} />
                     ))}
                   </div>
-                  <div className="text-gray-400 text-xs font-bold uppercase tracking-widest">{service.ratingCount || 0} Registered Reviews</div>
+                  <div className="text-gray-400 text-[10px] font-bold uppercase tracking-wider">{service.ratingCount || 0} Reviews</div>
                 </div>
 
-                {/* Right Side: Progress Bars AND Comments Grid side-by-side on desktop */}
-                <div className="flex-1 w-full flex flex-col xl:flex-row gap-10">
+                {/* Right Side: Progress Bars AND Comments Grid */}
+                <div className="flex-1 w-full flex flex-col xl:flex-row gap-8">
                   {/* Progress Bars */}
-                  <div className="w-full xl:w-1/3 space-y-3">
+                  <div className="w-full xl:w-1/3 space-y-2">
                     {[5, 4, 3, 2, 1].map((rating) => {
                       const count = ratingDistribution[rating];
                       const percentage = service.ratingCount > 0 ? (count / service.ratingCount) * 100 : 0;
                       return (
-                        <div key={rating} className="flex items-center gap-4 group">
-                          <span className="text-xs font-bold text-gray-600 w-6">{rating}★</span>
-                          <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div key={rating} className="flex items-center gap-3">
+                          <span className="text-xs font-semibold text-gray-500 w-5">{rating}★</span>
+                          <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
                             <div className="h-full bg-yellow-400 rounded-full transition-all duration-1000 shadow-sm" style={{ width: `${percentage}%` }} />
                           </div>
-                          <span className="text-xs font-bold text-gray-400 w-10 text-right">{percentage.toFixed(0)}%</span>
+                          <span className="text-[10px] font-bold text-gray-400 w-8 text-right">{percentage.toFixed(0)}%</span>
                         </div>
                       );
                     })}
@@ -536,19 +581,19 @@ const ServiceDetailPage = () => {
 
                   {/* Comments Grid */}
                   <div className="flex-1">
-                    <div className="grid grid-cols-1 gap-6">
+                    <div className="grid grid-cols-1 gap-4">
                       {service.feedback?.filter(r => r.comment && r.comment.trim() !== "").length > 0 ? (
                         service.feedback
                           .filter(review => review.comment && review.comment.trim() !== "")
                           .map((review, index) => (
-                            <div key={index} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow group">
-                              <div className="flex items-center gap-4 mb-4">
-                                <div className="w-10 h-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center font-bold">
+                            <div key={index} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow group text-xs md:text-sm">
+                              <div className="flex items-center gap-3 mb-3">
+                                <div className="w-8 h-8 bg-primary/10 text-primary rounded-lg flex items-center justify-center font-bold text-xs">
                                   {review.customer?.name?.[0]?.toUpperCase() || 'U'}
                                 </div>
                                 <div className="flex-1">
-                                  <div className="text-sm font-bold text-secondary group-hover:text-primary transition-colors">{review.customer?.name || 'Verified Customer'}</div>
-                                  <div className="text-[10px] uppercase font-black text-gray-400 tracking-widest">
+                                  <div className="font-bold text-secondary group-hover:text-primary transition-colors">{review.customer?.name || 'Verified Customer'}</div>
+                                  <div className="text-[9px] uppercase font-black text-gray-400 tracking-wider">
                                     {formatDate(review.createdAt)}
                                   </div>
                                 </div>
@@ -558,15 +603,15 @@ const ServiceDetailPage = () => {
                                   ))}
                                 </div>
                               </div>
-                              <p className="text-gray-600 text-sm leading-relaxed italic border-l-2 border-gray-100 pl-4">
+                              <p className="text-gray-600 leading-relaxed italic border-l-2 border-gray-100 pl-3">
                                 {review.comment}
                               </p>
                             </div>
                           ))
                       ) : (
-                        <div className="py-12 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-                          <ChatBubbleLeftEllipsisIcon className="w-12 h-12 text-gray-200 mx-auto mb-4" />
-                          <p className="text-gray-400 font-bold uppercase text-xs">No reviews with comments yet</p>
+                        <div className="py-8 text-center bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                          <ChatBubbleLeftEllipsisIcon className="w-10 h-10 text-gray-200 mx-auto mb-2" />
+                          <p className="text-gray-400 font-bold uppercase text-[10px]">No reviews with comments yet</p>
                         </div>
                       )}
                     </div>
@@ -585,6 +630,7 @@ const ServiceDetailPage = () => {
             services={relatedServices}
             categoryName={categoryName}
             categoryId={getCategoryId}
+            activeSurcharges={activeSurcharges}
           />
         </div>
       </div>

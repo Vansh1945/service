@@ -89,7 +89,14 @@ const applyCouponSchema = z.object({
     const num = Number(val);
     if (isNaN(num)) throw new Error("Booking value must be a valid number");
     return num;
-  })
+  }),
+  bookingData: z.object({
+    zoneId: z.string().optional().nullable(),
+    address: z.object({
+      lat: z.union([z.number(), z.string()]).optional().nullable(),
+      lng: z.union([z.number(), z.string()]).optional().nullable()
+    }).optional().nullable()
+  }).optional().nullable()
 });
 
 const markCouponUsedSchema = z.object({

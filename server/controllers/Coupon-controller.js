@@ -284,13 +284,19 @@ const applyCoupon = async (req, res) => {
 
     let bookingZoneId = null;
     if (bookingData) {
-      if (bookingData.zoneId) {
+      if (bookingData.zoneId && bookingData.zoneId !== 'null' && bookingData.zoneId !== 'undefined') {
         bookingZoneId = bookingData.zoneId;
-      } else if (bookingData.address && typeof bookingData.address.lat === 'number' && typeof bookingData.address.lng === 'number') {
-        const Zone = require('../models/Zone-model');
-        const detectedZone = await Zone.findZoneByCoordinates(bookingData.address.lat, bookingData.address.lng);
-        if (detectedZone) {
-          bookingZoneId = detectedZone._id;
+      }
+
+      if (!bookingZoneId && bookingData.address) {
+        const lat = parseFloat(bookingData.address.lat);
+        const lng = parseFloat(bookingData.address.lng);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          const Zone = require('../models/Zone-model');
+          const detectedZone = await Zone.findZoneByCoordinates(lat, lng);
+          if (detectedZone) {
+            bookingZoneId = detectedZone._id;
+          }
         }
       }
     }
@@ -350,14 +356,14 @@ const markCouponUsed = async (req, res) => {
 
 const getAvailableCoupons = async (req, res) => {
   try {
-    const { bookingValue } = req.query;
+    const { bookingValue, zoneId } = req.query;
     const userId = req.user?.id; // safe check
 
     if (!userId) {
       return res.status(401).json({ success: false, message: 'Unauthorized: User ID missing' });
     }
 
-    const coupons = await Coupon.getAvailableCoupons(userId, Number(bookingValue) || 0);
+    const coupons = await Coupon.getAvailableCoupons(userId, Number(bookingValue) || 0, zoneId || null);
 
     res.json({
       success: true,

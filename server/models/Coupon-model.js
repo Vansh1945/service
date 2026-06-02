@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
 const User = require('./User-model');
+const Zone = require('./Zone-model');
 
 const couponSchema = new Schema({
   code: {
@@ -197,7 +198,7 @@ couponSchema.statics.validateCoupon = async function (userId, couponCode, servic
   if (alreadyUsed) throw new Error('You have already used this coupon');
 
   // STEP 3, 4 & 5: Hierarchical Zone Applicability Validation
-  if (!coupon.isGlobal) {
+  if (!coupon.isGlobal && coupon.scope !== 'global') {
     if (!bookingZoneId || !coupon.applicableZones || coupon.applicableZones.length === 0) {
       throw new Error('This coupon is not applicable in your service area');
     }
@@ -228,18 +229,38 @@ couponSchema.statics.validateCoupon = async function (userId, couponCode, servic
   return coupon;
 };
 
-couponSchema.statics.getAvailableCoupons = async function (userId, bookingValue = 0) {
+couponSchema.statics.getAvailableCoupons = async function (userId, bookingValue = 0, bookingZoneId = null) {
   const user = await User.findById(userId);
+
+  const zoneAncestry = [];
+  if (bookingZoneId) {
+    zoneAncestry.push(bookingZoneId.toString());
+    const Zone = mongoose.model('Zone');
+    let currentZone = await Zone.findById(bookingZoneId).select('parentZone');
+    while (currentZone && currentZone.parentZone) {
+      zoneAncestry.push(currentZone.parentZone.toString());
+      currentZone = await Zone.findById(currentZone.parentZone).select('parentZone');
+    }
+  }
 
   const query = {
     isActive: true,
     expiryDate: { $gte: new Date() },
     $or: [
       { isGlobal: true },
+      { scope: 'global' },
       { isFirstBooking: true },
       { assignedTo: userId }
     ]
   };
+
+  if (zoneAncestry.length > 0) {
+    query.$or.push({
+      isGlobal: false,
+      scope: { $ne: 'global' },
+      applicableZones: { $in: zoneAncestry }
+    });
+  }
 
   // Exclude first-booking coupons if user has already used their first booking
   if (user && user.firstBookingUsed) {

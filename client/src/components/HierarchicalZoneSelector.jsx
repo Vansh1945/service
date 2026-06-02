@@ -211,7 +211,11 @@ const HierarchicalZoneSelector = ({
                   <span>{zone.name} ({zone.zoneLevel?.toUpperCase() || 'STATE'})</span>
                   <button
                     type="button"
-                    onClick={() => onChange(zone)}
+                    onClick={() => {
+                      const descendantIds = getAllDescendantIds(zone);
+                      const newSelectedIds = (selectedZoneIds || []).filter(selectedId => !descendantIds.includes(selectedId));
+                      onChange(newSelectedIds);
+                    }}
                     className="ml-1 inline-flex items-center justify-center focus:outline-none text-slate-450 hover:text-slate-650"
                   >
                     <X className="w-2.5 h-2.5 ml-0.5" />

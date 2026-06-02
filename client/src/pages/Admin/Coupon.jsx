@@ -1050,7 +1050,14 @@ const AdminCoupons = () => {
                     <HierarchicalZoneSelector
                       zones={zones}
                       selectedZoneIds={createForm.applicableZones}
-                      onChange={(zone) => handleZoneToggleCascade(zone, true)}
+                      onChange={(newZoneIds) => {
+                        if (Array.isArray(newZoneIds)) {
+                          setCreateForm(prev => ({ ...prev, applicableZones: newZoneIds }));
+                        } else if (newZoneIds && (newZoneIds._id || newZoneIds.id)) {
+                          const targetId = (newZoneIds._id || newZoneIds.id).toString();
+                          setCreateForm(prev => ({ ...prev, applicableZones: (prev.applicableZones || []).filter(id => id.toString() !== targetId) }));
+                        }
+                      }}
                     />
                   </div>
                 )}
@@ -1296,7 +1303,14 @@ const AdminCoupons = () => {
                     <HierarchicalZoneSelector
                       zones={zones}
                       selectedZoneIds={editForm.applicableZones || []}
-                      onChange={(zone) => handleZoneToggleCascade(zone, false)}
+                      onChange={(newZoneIds) => {
+                        if (Array.isArray(newZoneIds)) {
+                          setEditForm(prev => ({ ...prev, applicableZones: newZoneIds }));
+                        } else if (newZoneIds && (newZoneIds._id || newZoneIds.id)) {
+                          const targetId = (newZoneIds._id || newZoneIds.id).toString();
+                          setEditForm(prev => ({ ...prev, applicableZones: (prev.applicableZones || []).filter(id => id.toString() !== targetId) }));
+                        }
+                      }}
                     />
                   </div>
                 )}

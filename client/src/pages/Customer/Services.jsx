@@ -13,6 +13,7 @@ import HeroSection from '../../components/HeroSection';
 import ErrorState from '../../components/Error';
 import { getPublicServices } from '../../services/ServiceService';
 import useCategory from '../../hooks/useCategory';
+import { resolveActiveSurcharges } from '../../services/SurgeService';
 
 const ServiceListingPage = () => {
   const { API, user } = useAuth();
@@ -23,6 +24,49 @@ const ServiceListingPage = () => {
   const [services, setServices] = useState([]);
   const [allServices, setAllServices] = useState([]);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [activeSurcharges, setActiveSurcharges] = useState([]);
+
+  // Fetch active surcharges
+  useEffect(() => {
+    const fetchSurcharges = async () => {
+      try {
+        const params = {};
+        if (user?.address?.lat && user?.address?.lng) {
+          params.lat = user.address.lat;
+          params.lng = user.address.lng;
+        }
+        const response = await resolveActiveSurcharges(params);
+        if (response.data?.success) {
+          setActiveSurcharges(response.data.data || []);
+        }
+      } catch (err) {
+        console.error("Error fetching active surcharges:", err);
+      }
+    };
+    fetchSurcharges();
+  }, [user]);
+
+  // Helper to get merged price (base price + active demand surge)
+  const getMergedPrice = (basePrice) => {
+    let demandSurge = 0;
+    activeSurcharges.forEach(s => {
+      if (s.chargeType === 'demand') {
+        if (s.maxBookingValue && basePrice > s.maxBookingValue) {
+          return;
+        }
+        let chargeAmount = 0;
+        if (s.mode === 'flat') {
+          chargeAmount = s.value;
+        } else if (s.mode === 'percentage') {
+          chargeAmount = (basePrice * s.value) / 100;
+        } else if (s.mode === 'multiplier') {
+          chargeAmount = basePrice * (s.value - 1);
+        }
+        demandSurge += parseFloat(chargeAmount.toFixed(2));
+      }
+    });
+    return basePrice + demandSurge;
+  };
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
   const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') || 'All');
@@ -508,6 +552,7 @@ const ServiceListingPage = () => {
                 service={service}
                 categoryMap={categoriesData.reduce((acc, cat) => ({ ...acc, [cat.value]: cat.label }), {})}
                 onBook={handleBookNow}
+                getMergedPrice={getMergedPrice}
               />
             ))}
           </div>
@@ -518,7 +563,7 @@ const ServiceListingPage = () => {
 };
 
 // Service Card Component
-const ServiceCard = ({ service, categoryMap, onBook }) => {
+const ServiceCard = ({ service, categoryMap, onBook, getMergedPrice }) => {
   const imageUrl = service.displayImage || 'https://via.placeholder.com/400x300?text=Service';
   const isAvailable = service.isActive !== false;
   const categoryName = typeof service.category === 'object'
@@ -559,7 +604,9 @@ const ServiceCard = ({ service, categoryMap, onBook }) => {
         <div className="flex items-center justify-between pt-2 border-t border-gray-100">
           <div className="flex items-baseline gap-0.5">
             <IndianRupee className="w-3 h-3 text-secondary" />
-            <span className="text-base font-bold text-secondary">{service.basePrice?.toLocaleString()}</span>
+            <span className="text-base font-bold text-secondary">
+              {getMergedPrice ? getMergedPrice(service.basePrice)?.toLocaleString() : service.basePrice?.toLocaleString()}
+            </span>
           </div>
           <button
             onClick={() => onBook(service._id, isAvailable)}

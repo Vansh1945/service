@@ -429,253 +429,253 @@ const autoAssignProviderIfEnabled = async (bookingId) => {
       services: { $all: bookingServicesCategories }
     };
 
-  let selectedProvider = null;
-  let selectedSource = null;
+    let selectedProvider = null;
+    let selectedSource = null;
 
-  const ZoneModel = mongoose.model('Zone');
-  let bookingZoneId = booking.zoneId;
-  if (!bookingZoneId) {
-    const detectedZone = await ZoneModel.findZoneByCoordinates(lat, lng);
-    if (detectedZone) {
-      bookingZoneId = detectedZone._id;
-      booking.zoneId = detectedZone._id;
-    }
-  }
-
-  // Build zone relations for mapping priority tiers
-  const adjacentZoneIds = [];
-  const parentZoneIds = [];
-  const childZoneIds = [];
-
-  if (bookingZoneId) {
-    const bookingZone = await ZoneModel.findById(bookingZoneId).lean();
-    if (bookingZone) {
-      // 1. Adjacent zones
-      if (bookingZone.adjacentZones && bookingZone.adjacentZones.length > 0) {
-        bookingZone.adjacentZones.forEach(id => adjacentZoneIds.push(id.toString()));
-      }
-      // 2. Parent zones
-      let curr = bookingZone;
-      while (curr && curr.parentZone) {
-        parentZoneIds.push(curr.parentZone.toString());
-        curr = await ZoneModel.findById(curr.parentZone).lean();
-      }
-      // 3. Child zones
-      const childZones = await ZoneModel.find({ parentZone: bookingZoneId }).select('_id').lean();
-      if (childZones && childZones.length > 0) {
-        childZones.forEach(z => childZoneIds.push(z._id.toString()));
+    const ZoneModel = mongoose.model('Zone');
+    let bookingZoneId = booking.zoneId;
+    if (!bookingZoneId) {
+      const detectedZone = await ZoneModel.findZoneByCoordinates(lat, lng);
+      if (detectedZone) {
+        bookingZoneId = detectedZone._id;
+        booking.zoneId = detectedZone._id;
       }
     }
-  }
 
-  // Fetch all qualified providers matching base criteria
-  const eligibleProviders = await Provider.find(baseProviderQuery);
+    // Build zone relations for mapping priority tiers
+    const adjacentZoneIds = [];
+    const parentZoneIds = [];
+    const childZoneIds = [];
 
-  if (eligibleProviders.length > 0) {
-    // 1. Calculate distance for each and filter by maxDistanceMeters
-    const providersWithDetails = eligibleProviders.map(p => {
-      const pLng = p.currentLocation?.coordinates?.[0];
-      const pLat = p.currentLocation?.coordinates?.[1];
-      let dist = Infinity;
-      if (typeof pLat === 'number' && typeof pLng === 'number' && (pLat !== 0 || pLng !== 0)) {
-        dist = calculateDistance(lat, lng, pLat, pLng);
-      }
-      return { provider: p, distance: dist };
-    }).filter(item => item.distance <= maxDistanceMeters);
-
-    if (providersWithDetails.length > 0) {
-      // 2. Query active workloads for filtered providers
-      const providerIds = providersWithDetails.map(item => item.provider._id);
-      const activeBookings = await Booking.find({
-        provider: { $in: providerIds },
-        status: { $in: ['accepted', 'in-progress', 'started', 'confirmed', 'scheduled', 'assigned'] }
-      }).select('provider');
-
-      const workloadMap = {};
-      providerIds.forEach(id => {
-        workloadMap[id.toString()] = 0;
-      });
-      activeBookings.forEach(b => {
-        if (b.provider) {
-          workloadMap[b.provider.toString()] = (workloadMap[b.provider.toString()] || 0) + 1;
+    if (bookingZoneId) {
+      const bookingZone = await ZoneModel.findById(bookingZoneId).lean();
+      if (bookingZone) {
+        // 1. Adjacent zones
+        if (bookingZone.adjacentZones && bookingZone.adjacentZones.length > 0) {
+          bookingZone.adjacentZones.forEach(id => adjacentZoneIds.push(id.toString()));
         }
-      });
+        // 2. Parent zones
+        let curr = bookingZone;
+        while (curr && curr.parentZone) {
+          parentZoneIds.push(curr.parentZone.toString());
+          curr = await ZoneModel.findById(curr.parentZone).lean();
+        }
+        // 3. Child zones
+        const childZones = await ZoneModel.find({ parentZone: bookingZoneId }).select('_id').lean();
+        if (childZones && childZones.length > 0) {
+          childZones.forEach(z => childZoneIds.push(z._id.toString()));
+        }
+      }
+    }
 
-      // 3. Classify tier/priority for each provider
-      const scoredProviders = providersWithDetails.map(item => {
-        const p = item.provider;
-        const pZoneStr = p.currentZone ? p.currentZone.toString() : null;
-        let tier = 3; // Tier 3: General Fallback / Other Zone
+    // Fetch all qualified providers matching base criteria
+    const eligibleProviders = await Provider.find(baseProviderQuery);
 
-        if (bookingZoneId && pZoneStr) {
-          if (pZoneStr === bookingZoneId.toString()) {
-            tier = 1; // Tier 1: Same Zone
-          } else if (
-            adjacentZoneIds.includes(pZoneStr) ||
-            parentZoneIds.includes(pZoneStr) ||
-            childZoneIds.includes(pZoneStr)
-          ) {
-            tier = 2; // Tier 2: Adjacent / Parent / Child Zone
+    if (eligibleProviders.length > 0) {
+      // 1. Calculate distance for each and filter by maxDistanceMeters
+      const providersWithDetails = eligibleProviders.map(p => {
+        const pLng = p.currentLocation?.coordinates?.[0];
+        const pLat = p.currentLocation?.coordinates?.[1];
+        let dist = Infinity;
+        if (typeof pLat === 'number' && typeof pLng === 'number' && (pLat !== 0 || pLng !== 0)) {
+          dist = calculateDistance(lat, lng, pLat, pLng);
+        }
+        return { provider: p, distance: dist };
+      }).filter(item => item.distance <= maxDistanceMeters);
+
+      if (providersWithDetails.length > 0) {
+        // 2. Query active workloads for filtered providers
+        const providerIds = providersWithDetails.map(item => item.provider._id);
+        const activeBookings = await Booking.find({
+          provider: { $in: providerIds },
+          status: { $in: ['accepted', 'in-progress', 'started', 'confirmed', 'scheduled', 'assigned'] }
+        }).select('provider');
+
+        const workloadMap = {};
+        providerIds.forEach(id => {
+          workloadMap[id.toString()] = 0;
+        });
+        activeBookings.forEach(b => {
+          if (b.provider) {
+            workloadMap[b.provider.toString()] = (workloadMap[b.provider.toString()] || 0) + 1;
           }
-        }
+        });
 
-        return {
-          ...item,
-          tier,
-          workload: workloadMap[p._id.toString()] || 0
-        };
-      });
+        // 3. Classify tier/priority for each provider
+        const scoredProviders = providersWithDetails.map(item => {
+          const p = item.provider;
+          const pZoneStr = p.currentZone ? p.currentZone.toString() : null;
+          let tier = 3; // Tier 3: General Fallback / Other Zone
 
-      // 4. Sort based on the priority criteria
-      scoredProviders.sort((a, b) => {
-        // Priority 1 & 2: Zone Tiers (Same Zone first, then Adjacent/Parent/Child, then Fallback)
-        if (a.tier !== b.tier) {
-          return a.tier - b.tier;
-        }
-        // Priority 3: Distance ascending
-        if (a.distance !== b.distance) {
-          return a.distance - b.distance;
-        }
-        // Priority 4: Active workload ascending
-        if (a.workload !== b.workload) {
-          return a.workload - b.workload;
-        }
-        // Priority 5: Higher rating first (descending)
-        const ratingA = a.provider.performanceScore?.rating || 0;
-        const ratingB = b.provider.performanceScore?.rating || 0;
-        if (ratingB !== ratingA) {
-          return ratingB - ratingA;
-        }
-        return 0;
-      });
+          if (bookingZoneId && pZoneStr) {
+            if (pZoneStr === bookingZoneId.toString()) {
+              tier = 1; // Tier 1: Same Zone
+            } else if (
+              adjacentZoneIds.includes(pZoneStr) ||
+              parentZoneIds.includes(pZoneStr) ||
+              childZoneIds.includes(pZoneStr)
+            ) {
+              tier = 2; // Tier 2: Adjacent / Parent / Child Zone
+            }
+          }
 
-      const matched = scoredProviders[0];
-      selectedProvider = matched.provider;
+          return {
+            ...item,
+            tier,
+            workload: workloadMap[p._id.toString()] || 0
+          };
+        });
 
-      // Determine proper assignmentSource
-      const pZoneStr = selectedProvider.currentZone ? selectedProvider.currentZone.toString() : null;
-      if (matched.tier === 1) {
-        selectedSource = 'Same Zone';
-      } else if (matched.tier === 2) {
-        if (pZoneStr && adjacentZoneIds.includes(pZoneStr)) {
-          selectedSource = 'Adjacent Zone';
-        } else if (pZoneStr && parentZoneIds.includes(pZoneStr)) {
-          selectedSource = 'Parent Zone';
-        } else if (pZoneStr && childZoneIds.includes(pZoneStr)) {
-          selectedSource = 'Child Zone';
+        // 4. Sort based on the priority criteria
+        scoredProviders.sort((a, b) => {
+          // Priority 1 & 2: Zone Tiers (Same Zone first, then Adjacent/Parent/Child, then Fallback)
+          if (a.tier !== b.tier) {
+            return a.tier - b.tier;
+          }
+          // Priority 3: Distance ascending
+          if (a.distance !== b.distance) {
+            return a.distance - b.distance;
+          }
+          // Priority 4: Active workload ascending
+          if (a.workload !== b.workload) {
+            return a.workload - b.workload;
+          }
+          // Priority 5: Higher rating first (descending)
+          const ratingA = a.provider.performanceScore?.rating || 0;
+          const ratingB = b.provider.performanceScore?.rating || 0;
+          if (ratingB !== ratingA) {
+            return ratingB - ratingA;
+          }
+          return 0;
+        });
+
+        const matched = scoredProviders[0];
+        selectedProvider = matched.provider;
+
+        // Determine proper assignmentSource
+        const pZoneStr = selectedProvider.currentZone ? selectedProvider.currentZone.toString() : null;
+        if (matched.tier === 1) {
+          selectedSource = 'Same Zone';
+        } else if (matched.tier === 2) {
+          if (pZoneStr && adjacentZoneIds.includes(pZoneStr)) {
+            selectedSource = 'Adjacent Zone';
+          } else if (pZoneStr && parentZoneIds.includes(pZoneStr)) {
+            selectedSource = 'Parent Zone';
+          } else if (pZoneStr && childZoneIds.includes(pZoneStr)) {
+            selectedSource = 'Child Zone';
+          } else {
+            selectedSource = 'Adjacent Zone';
+          }
         } else {
-          selectedSource = 'Adjacent Zone';
+          selectedSource = 'Distance-based Fallback';
         }
-      } else {
-        selectedSource = 'Distance-based Fallback';
       }
     }
-  }
 
-  if (!selectedProvider) {
-    console.log(`[AutoAssign] No nearby or zone providers found for booking ${booking._id} within ${maxDistanceKm}km`);
+    if (!selectedProvider) {
+      console.log(`[AutoAssign] No nearby or zone providers found for booking ${booking._id} within ${maxDistanceKm}km`);
+      return null;
+    }
+
+    const nearestProvider = selectedProvider;
+
+    // Auto-assign to matched provider
+    booking.provider = nearestProvider._id;
+    booking.assignmentSource = selectedSource;
+    booking.status = 'accepted';
+    booking.updatedAt = new Date();
+
+    booking.statusHistory.push({
+      status: 'accepted',
+      timestamp: new Date(),
+      note: `Booking assigned to nearest provider: ${nearestProvider.name}`,
+      updatedBy: 'system'
+    });
+
+    await booking.save();
+
+    try {
+      await Provider.findByIdAndUpdate(nearestProvider._id, {
+        activeBooking: booking._id,
+        lastUpdated: new Date()
+      });
+    } catch (e) {
+      console.error('Error updating provider activeBooking:', e);
+    }
+
+    // Sync transaction record
+    try {
+      const isOnline = booking.paymentMethod?.toLowerCase() === 'online' || booking.paymentMethod?.toLowerCase() === 'upi';
+      await Transaction.updateMany(
+        { booking: booking._id },
+        {
+          provider: booking.provider,
+          providerId: booking.provider.toString(),
+          commission: isOnline ? (booking.commissionAmount * 100) : (booking.commissionAmount || 0),
+          providerEarning: isOnline ? (booking.providerEarnings * 100) : (booking.providerEarnings || 0),
+          commissionRule: booking.commissionRule,
+          ...((booking.paymentStatus === 'paid' || booking.paymentStatus === 'escrow_hold') && {
+            paymentStatus: isOnline ? 'success' : 'completed'
+          })
+        }
+      );
+    } catch (transError) {
+      console.error('Error syncing transaction on auto-assign:', transError);
+    }
+
+    // Emit live booking socket and notifications
+    try {
+      await sendNotification(
+        booking.customer,
+        'customer',
+        'Provider Assigned',
+        `Your booking has been assigned to ${nearestProvider.name}. Live tracking started!`,
+        'booking',
+        booking._id
+      );
+
+      await sendNotification(
+        nearestProvider._id,
+        'provider',
+        'New Assigned Booking',
+        `You have been assigned a new booking at ${booking.address?.street || 'your area'}.`,
+        'booking',
+        booking._id
+      );
+
+      const { getIO } = require('../socket/socketServer');
+      const io = getIO();
+      if (io) {
+        io.to(`booking_${booking._id}`).emit('tracking-started', {
+          bookingId: booking._id,
+          trackingEnabled: true,
+          providerLiveLocation: nearestProvider.currentLocation ? {
+            lat: nearestProvider.currentLocation.coordinates[1],
+            lng: nearestProvider.currentLocation.coordinates[0],
+            updatedAt: new Date()
+          } : null,
+          provider: nearestProvider,
+          status: 'accepted'
+        });
+
+        io.to('admin_live_room').emit('admin-booking-update', {
+          bookingId: booking._id,
+          event: 'auto-assigned',
+          providerId: nearestProvider._id,
+          status: 'accepted'
+        });
+      }
+    } catch (socketErr) {
+      console.error('Error sending auto-assign sockets/notifications:', socketErr);
+    }
+
+    console.log(`[AutoAssign] Booking ${booking._id} successfully assigned to provider ${nearestProvider.name}`);
+    return nearestProvider;
+
+  } catch (error) {
+    console.error('Error in autoAssignProviderIfEnabled:', error);
     return null;
   }
-
-  const nearestProvider = selectedProvider;
-
-  // Auto-assign to matched provider
-  booking.provider = nearestProvider._id;
-  booking.assignmentSource = selectedSource;
-  booking.status = 'accepted';
-  booking.updatedAt = new Date();
-
-  booking.statusHistory.push({
-    status: 'accepted',
-    timestamp: new Date(),
-    note: `Booking assigned to nearest provider: ${nearestProvider.name}`,
-    updatedBy: 'system'
-  });
-
-  await booking.save();
-
-  try {
-    await Provider.findByIdAndUpdate(nearestProvider._id, {
-      activeBooking: booking._id,
-      lastUpdated: new Date()
-    });
-  } catch (e) {
-    console.error('Error updating provider activeBooking:', e);
-  }
-
-  // Sync transaction record
-  try {
-    const isOnline = booking.paymentMethod?.toLowerCase() === 'online' || booking.paymentMethod?.toLowerCase() === 'upi';
-    await Transaction.updateMany(
-      { booking: booking._id },
-      {
-        provider: booking.provider,
-        providerId: booking.provider.toString(),
-        commission: isOnline ? (booking.commissionAmount * 100) : (booking.commissionAmount || 0),
-        providerEarning: isOnline ? (booking.providerEarnings * 100) : (booking.providerEarnings || 0),
-        commissionRule: booking.commissionRule,
-        ...((booking.paymentStatus === 'paid' || booking.paymentStatus === 'escrow_hold') && {
-          paymentStatus: isOnline ? 'success' : 'completed'
-        })
-      }
-    );
-  } catch (transError) {
-    console.error('Error syncing transaction on auto-assign:', transError);
-  }
-
-  // Emit live booking socket and notifications
-  try {
-    await sendNotification(
-      booking.customer,
-      'customer',
-      'Provider Assigned',
-      `Your booking has been assigned to ${nearestProvider.name}. Live tracking started!`,
-      'booking',
-      booking._id
-    );
-
-    await sendNotification(
-      nearestProvider._id,
-      'provider',
-      'New Assigned Booking',
-      `You have been assigned a new booking at ${booking.address?.street || 'your area'}.`,
-      'booking',
-      booking._id
-    );
-
-    const { getIO } = require('../socket/socketServer');
-    const io = getIO();
-    if (io) {
-      io.to(`booking_${booking._id}`).emit('tracking-started', {
-        bookingId: booking._id,
-        trackingEnabled: true,
-        providerLiveLocation: nearestProvider.currentLocation ? {
-          lat: nearestProvider.currentLocation.coordinates[1],
-          lng: nearestProvider.currentLocation.coordinates[0],
-          updatedAt: new Date()
-        } : null,
-        provider: nearestProvider,
-        status: 'accepted'
-      });
-
-      io.to('admin_live_room').emit('admin-booking-update', {
-        bookingId: booking._id,
-        event: 'auto-assigned',
-        providerId: nearestProvider._id,
-        status: 'accepted'
-      });
-    }
-  } catch (socketErr) {
-    console.error('Error sending auto-assign sockets/notifications:', socketErr);
-  }
-
-  console.log(`[AutoAssign] Booking ${booking._id} successfully assigned to provider ${nearestProvider.name}`);
-  return nearestProvider;
-
-} catch (error) {
-  console.error('Error in autoAssignProviderIfEnabled:', error);
-  return null;
-}
 };
 
 // Create single service booking
@@ -2593,10 +2593,6 @@ const getProviderBookingById = async (req, res) => {
       });
     }
 
-    const commissionRule = await CommissionRule.getCommissionForProvider(
-      providerId
-    );
-
     const servicesInCategory = await Service.find({
       category: { $in: provider.services }
     }).select('_id');
@@ -2621,6 +2617,13 @@ const getProviderBookingById = async (req, res) => {
         message: 'Booking not found or not available for this provider'
       });
     }
+
+    const commissionRule = await CommissionRule.getCommissionForProvider(
+      providerId,
+      booking.zoneId,
+      'standard',
+      booking.services && booking.services[0]?.service
+    );
 
     // Fetch earning and transaction details
     const earning = await ProviderEarning.findOne({ booking: id }).lean();
@@ -2717,10 +2720,6 @@ const getBookingsByStatus = async (req, res) => {
       });
     }
 
-    const commissionRule = await CommissionRule.getCommissionForProvider(
-      providerId
-    );
-
     const servicesInCategory = await Service.find({
       category: { $in: provider.services }
     }).select('_id').lean();
@@ -2768,25 +2767,32 @@ const getBookingsByStatus = async (req, res) => {
 
       const zoneRelation = await getZoneRelation(cleanBooking.zoneId, provider.currentZone);
 
+      const bookingCommissionRule = await CommissionRule.getCommissionForProvider(
+        providerId,
+        cleanBooking.zoneId,
+        'standard',
+        cleanBooking.services && cleanBooking.services[0]?.service
+      );
+
       const { commission, netAmount } = CommissionRule.calculateCommission(
         cleanBooking.totalAmount,
-        commissionRule
+        bookingCommissionRule
       );
 
       return {
         ...cleanBooking,
         zoneRelation,
         commission: {
-          rule: commissionRule ? {
-            _id: commissionRule._id,
-            name: commissionRule.name,
-            type: commissionRule.type,
-            value: commissionRule.value
+          rule: bookingCommissionRule ? {
+            _id: bookingCommissionRule._id,
+            name: bookingCommissionRule.name,
+            type: bookingCommissionRule.type,
+            value: bookingCommissionRule.value
           } : null,
           amount: commission
         },
         netAmount,
-        providerCommissionRate: commissionRule ? commissionRule.value : 0
+        providerCommissionRate: bookingCommissionRule ? bookingCommissionRule.value : 0
       };
     }));
 
@@ -3432,24 +3438,6 @@ const completeBooking = async (req, res) => {
 
     if (!provider) throw new Error('Provider not found');
 
-    // Map provider performanceScore stats to a tier for commission rule selection
-    const stats = provider.performanceScore || { rating: 0, onTimePercentage: 0, completionPercentage: 0 };
-    const avgScore = (stats.rating * 20 + (stats.onTimePercentage || 0) + (stats.completionPercentage || 0)) / 3;
-
-    let performanceTier = 'standard';
-    if (avgScore >= 80) performanceTier = 'premium';
-    else if (avgScore < 40) performanceTier = 'basic';
-
-    // Get commission rule for provider
-    const commissionRule = await CommissionRule.getCommissionForProvider(
-      providerId,
-      performanceTier
-    );
-
-    if (!commissionRule) {
-      throw new Error('No active commission rule found for this provider. Cannot complete booking.');
-    }
-
     const booking = await Booking.findOne({
       _id: id,
       provider: providerId,
@@ -3468,6 +3456,28 @@ const completeBooking = async (req, res) => {
         });
       }
       throw new Error('Booking must be In Progress before it can be completed.');
+    }
+
+    // Map provider performanceScore stats to a tier for commission rule selection
+    const stats = provider.performanceScore || { rating: 0, onTimePercentage: 0, completionPercentage: 0 };
+    const avgScore = (stats.rating * 20 + (stats.onTimePercentage || 0) + (stats.completionPercentage || 0)) / 3;
+
+    let performanceTier = 'standard';
+    if (avgScore >= 80) performanceTier = 'premium';
+    else if (avgScore < 40) performanceTier = 'basic';
+
+    // Get commission rule for provider using booking zoneId and serviceId
+    const firstService = booking.services && booking.services[0];
+    const serviceId = firstService ? firstService.service : null;
+    const commissionRule = await CommissionRule.getCommissionForProvider(
+      providerId,
+      booking.zoneId,
+      performanceTier,
+      serviceId
+    );
+
+    if (!commissionRule) {
+      throw new Error('No active commission rule found for this provider. Cannot complete booking.');
     }
 
     // Prevent duplicate commission
@@ -3923,24 +3933,24 @@ const providerBookingReport = async (req, res) => {
       });
     }
 
-    // Get and commission rule for calculations
-    const commissionRule = await CommissionRule.getCommissionForProvider(
-      providerId,
-      provider.performanceScore
-    );
-
     // Add commission calculations to bookings
-    const bookingsWithCommission = bookings.map(booking => {
+    const bookingsWithCommission = await Promise.all(bookings.map(async (booking) => {
+      const bookingRule = await CommissionRule.getCommissionForProvider(
+        providerId,
+        booking.zoneId,
+        provider.performanceScore || 'standard',
+        booking.services && booking.services[0]?.service
+      );
       const { commission, netAmount } = CommissionRule.calculateCommission(
         booking.totalAmount,
-        commissionRule
+        bookingRule
       );
       return {
         ...booking,
-        commissionAmount: commission,
-        providerEarnings: netAmount
+        commissionAmount: booking.commissionAmount !== undefined ? booking.commissionAmount : commission,
+        providerEarnings: booking.providerEarnings !== undefined ? booking.providerEarnings : netAmount
       };
-    });
+    }));
 
     // Create Excel workbook
     const workbook = new ExcelJS.Workbook();

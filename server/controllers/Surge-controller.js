@@ -50,7 +50,7 @@ exports.createSurgeRule = async (req, res) => {
     const newRule = new Surge({
       chargeType,
       scope,
-      zoneId: scope === 'zone' ? zoneId : null,
+      zoneId: (scope === 'zone' && zoneId !== '') ? zoneId : null,
       mode,
       value,
       startTime: startTime || null,
@@ -115,7 +115,7 @@ exports.updateSurgeRule = async (req, res) => {
 
     rule.chargeType = chargeType || rule.chargeType;
     rule.scope = scope || rule.scope;
-    rule.zoneId = scope === 'zone' ? zoneId : null;
+    rule.zoneId = (scope === 'zone' && zoneId !== '') ? zoneId : null;
     rule.mode = mode || rule.mode;
     rule.value = value !== undefined ? value : rule.value;
     rule.startTime = startTime !== undefined ? (startTime || null) : rule.startTime;

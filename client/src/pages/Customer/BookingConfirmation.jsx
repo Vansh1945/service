@@ -512,7 +512,7 @@ const BookingConfirmation = () => {
                   <div className="mt-2">
                     <div className="flex items-baseline gap-1">
                       <IndianRupee className="w-3.5 h-3.5 text-secondary" />
-                      <span className="text-xl font-bold text-primary">{formatCurrency(serviceInfo.basePrice || 0)}</span>
+                      <span className="text-xl font-bold text-primary">{formatCurrency((serviceInfo.basePrice || 0) + (bookingDetails.demandSurge || 0))}</span>
                       <span className="text-xs text-gray-400">/service</span>
                     </div>
                   </div>
@@ -607,7 +607,7 @@ const BookingConfirmation = () => {
                 <div className="space-y-3">
                   <div className="flex justify-between text-xs">
                     <span className="text-gray-500">Service Price ({quantity} item)</span>
-                    <span className="text-secondary font-medium">{formatCurrency(subtotal)}</span>
+                    <span className="text-secondary font-medium">{formatCurrency(subtotal + (bookingDetails.demandSurge || 0))}</span>
                   </div>
 
                   {discount > 0 && (
@@ -618,7 +618,7 @@ const BookingConfirmation = () => {
                       </div>
                       <div className="flex justify-between text-xs pt-1 border-t border-gray-50">
                         <span className="text-gray-600 font-semibold">Price after Discount</span>
-                        <span className="text-secondary font-bold">{formatCurrency(subtotal - discount)}</span>
+                        <span className="text-secondary font-bold">{formatCurrency(subtotal + (bookingDetails.demandSurge || 0) - discount)}</span>
                       </div>
                     </>
                   )}
@@ -626,7 +626,7 @@ const BookingConfirmation = () => {
                   {((bookingDetails.rainCharge || 0) +
                     (bookingDetails.trafficCharge || 0) +
                     (bookingDetails.nightCharge || 0) +
-                    (bookingDetails.demandSurge || 0) +
+                    (bookingDetails.platformFee || 0) +
                     (bookingDetails.customCharges || 0)) > 0 && (
                       <div className="flex justify-between text-xs">
                         <span className="text-gray-500">Additional Service Charges</span>
@@ -634,7 +634,7 @@ const BookingConfirmation = () => {
                           (bookingDetails.rainCharge || 0) +
                           (bookingDetails.trafficCharge || 0) +
                           (bookingDetails.nightCharge || 0) +
-                          (bookingDetails.demandSurge || 0) +
+                          (bookingDetails.platformFee || 0) +
                           (bookingDetails.customCharges || 0)
                         )}</span>
                       </div>

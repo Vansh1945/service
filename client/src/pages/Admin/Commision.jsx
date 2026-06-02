@@ -1032,7 +1032,14 @@ const AdminCommissionPage = () => {
                     <HierarchicalZoneSelector
                       zones={zones}
                       selectedZoneIds={ruleForm.zoneIds}
-                      onChange={(zone) => handleZoneToggleCascade(zone)}
+                      onChange={(newZoneIds) => {
+                        if (Array.isArray(newZoneIds)) {
+                          setRuleForm(prev => ({ ...prev, zoneIds: newZoneIds }));
+                        } else if (newZoneIds && (newZoneIds._id || newZoneIds.id)) {
+                          const targetId = (newZoneIds._id || newZoneIds.id).toString();
+                          setRuleForm(prev => ({ ...prev, zoneIds: (prev.zoneIds || []).filter(id => id.toString() !== targetId) }));
+                        }
+                      }}
                       label="Applicable Zones (Hierarchical Selector)"
                     />
                   </div>

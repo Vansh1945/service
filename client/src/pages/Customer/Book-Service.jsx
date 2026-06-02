@@ -25,6 +25,7 @@ const BookService = () => {
   // State declarations
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
   const [isFetchingCoupons, setIsFetchingCoupons] = useState(false);
   const [service, setService] = useState(null);
   const [addresses, setAddresses] = useState([]);
@@ -180,7 +181,11 @@ const BookService = () => {
     setIsFetchingCoupons(true);
     try {
       const bookingValue = service.basePrice * (formData.quantity || 1);
-      const response = await getAvailableCoupons({ bookingValue });
+      const params = { bookingValue };
+      if (detectedZoneId) {
+        params.zoneId = detectedZoneId;
+      }
+      const response = await getAvailableCoupons(params);
 
       if (response.data.success) {
         setCoupons(response.data.data || []);
@@ -199,7 +204,9 @@ const BookService = () => {
       toast.error('Please enter a coupon code');
       return;
     }
+    if (isApplyingCoupon) return;
 
+    setIsApplyingCoupon(true);
     try {
       const addressData = formData.useCustomAddress ? formData.customAddress : addresses[0];
       const response = await applyCouponAPI(
@@ -207,7 +214,8 @@ const BookService = () => {
           code: formData.couponCode.trim().toUpperCase(),
           bookingValue: service.basePrice * formData.quantity,
           bookingData: {
-            address: addressData
+            address: addressData,
+            zoneId: detectedZoneId
           }
         }
       );
@@ -233,7 +241,12 @@ const BookService = () => {
 
       toast.success('Coupon applied successfully!');
     } catch (err) {
+      if (err.name === 'CanceledError' || err.message === 'canceled') {
+        return; // Silently ignore request cancellations
+      }
       toast.error(err.response?.data?.message || err.message || 'Failed to apply coupon');
+    } finally {
+      setIsApplyingCoupon(false);
     }
   };
 
@@ -446,12 +459,12 @@ const BookService = () => {
     initializeData();
   }, [serviceId, token]);
 
-  // Fetch coupons when service or quantity changes
+  // Fetch coupons when service, quantity, or detectedZoneId changes
   useEffect(() => {
     if (service) {
       fetchAvailableCoupons();
     }
-  }, [service, formData.quantity]);
+  }, [service, formData.quantity, detectedZoneId]);
 
   const handleQuantityChange = (action) => {
     setFormData(prev => {
@@ -673,7 +686,10 @@ const BookService = () => {
                   </div>
                   <div className="mt-2">
                     <div className="flex items-baseline gap-1">
-                      <span className="text-xl font-bold text-primary">{formatCurrency(service.basePrice)}</span>
+                      <span className="text-xl font-bold text-primary">
+                        {formatCurrency(getCustomerPricingBreakdown().mergedServicePrice / formData.quantity)}
+                      </span>
+                      <span className="text-xs text-gray-400">/service</span>
                     </div>
                   </div>
                 </div>
@@ -783,22 +799,20 @@ const BookService = () => {
                             setBookingPreference('auto');
                             setSelectedFavoriteProviderId('');
                           }}
-                          className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${
-                            bookingPreference === 'auto'
-                              ? 'bg-white text-secondary shadow-sm'
-                              : 'text-gray-500 hover:text-secondary'
-                          }`}
+                          className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${bookingPreference === 'auto'
+                            ? 'bg-white text-secondary shadow-sm'
+                            : 'text-gray-500 hover:text-secondary'
+                            }`}
                         >
                           Auto Match
                         </button>
                         <button
                           type="button"
                           onClick={() => setBookingPreference('favorite')}
-                          className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${
-                            bookingPreference === 'favorite'
-                              ? 'bg-white text-secondary shadow-sm'
-                              : 'text-gray-500 hover:text-secondary'
-                          }`}
+                          className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${bookingPreference === 'favorite'
+                            ? 'bg-white text-secondary shadow-sm'
+                            : 'text-gray-500 hover:text-secondary'
+                            }`}
                         >
                           My Favorite
                         </button>
@@ -854,22 +868,20 @@ const BookService = () => {
                         <button
                           type="button"
                           onClick={() => setFormData(prev => ({ ...prev, useCustomAddress: false }))}
-                          className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${
-                            !formData.useCustomAddress
-                              ? 'bg-white text-secondary shadow-sm'
-                              : 'text-gray-500 hover:text-secondary'
-                          }`}
+                          className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${!formData.useCustomAddress
+                            ? 'bg-white text-secondary shadow-sm'
+                            : 'text-gray-500 hover:text-secondary'
+                            }`}
                         >
                           Saved Address
                         </button>
                         <button
                           type="button"
                           onClick={() => setFormData(prev => ({ ...prev, useCustomAddress: true }))}
-                          className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${
-                            formData.useCustomAddress
-                              ? 'bg-white text-secondary shadow-sm'
-                              : 'text-gray-500 hover:text-secondary'
-                          }`}
+                          className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${formData.useCustomAddress
+                            ? 'bg-white text-secondary shadow-sm'
+                            : 'text-gray-500 hover:text-secondary'
+                            }`}
                         >
                           New Address
                         </button>
@@ -932,41 +944,36 @@ const BookService = () => {
                     </span>
                   </div>
                   {formData.appliedCoupon && (
+                    <>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-gray-500">Discount Applied</span>
+                        <span className="text-green-600 font-medium">-{formatCurrency(discountAmount)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs pt-1 border-t border-gray-50">
+                        <span className="text-gray-600 font-semibold">Price after Discount</span>
+                        <span className="text-secondary font-bold">{formatCurrency(getCustomerPricingBreakdown().mergedServicePrice - discountAmount)}</span>
+                      </div>
+                    </>
+                  )}
+                  {getCustomerPricingBreakdown().additional > 0 && (
                     <div className="flex justify-between text-xs">
-                      <span className="text-gray-500">Discount</span>
-                      <span className="text-green-600 font-medium">-{formatCurrency(discountAmount)}</span>
+                      <span className="text-gray-500">Additional Service Charges</span>
+                      <span className="text-red-500 font-semibold">
+                        +{formatCurrency(getCustomerPricingBreakdown().additional)}
+                      </span>
                     </div>
                   )}
                   <div className="flex justify-between text-xs">
                     <span className="text-gray-500">Visiting Charges</span>
                     <span className="text-green-600 font-semibold italic">
-                      {getCustomerPricingBreakdown().visiting > 0 
-                        ? `+${formatCurrency(getCustomerPricingBreakdown().visiting)}` 
+                      {getCustomerPricingBreakdown().visiting > 0
+                        ? `+${formatCurrency(getCustomerPricingBreakdown().visiting)}`
                         : "Free"}
                     </span>
                   </div>
-                  {getCustomerPricingBreakdown().additional > 0 && (
-                    <div className="flex justify-between text-xs relative group">
-                      <span className="text-gray-500 border-b border-dashed border-gray-400 cursor-help">
-                        Additional Charges
-                      </span>
-                      <span className="text-red-500 font-semibold">
-                        +{formatCurrency(getCustomerPricingBreakdown().additional)}
-                      </span>
-                      <div className="absolute right-0 bottom-full mb-2 w-56 hidden group-hover:block bg-slate-900 text-white text-[10px] p-2.5 rounded-lg shadow-xl z-30 leading-normal pointer-events-none">
-                        <p className="font-bold border-b border-slate-700 pb-1 mb-1 text-[11px]">Fee Breakdown</p>
-                        {getCustomerPricingBreakdown().additionalBreakdown.map((item, idx) => (
-                          <div key={idx} className="flex justify-between gap-2 py-0.5">
-                            <span>{item.name}</span>
-                            <span>{formatCurrency(item.amount)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                   <div className="border-t border-gray-100 pt-2 mt-2">
                     <div className="flex justify-between">
-                      <span className="font-bold text-secondary text-sm">Total</span>
+                      <span className="font-bold text-secondary text-sm">Total Amount</span>
                       <span className="font-bold text-primary text-base">{formatCurrency(totalAmount)}</span>
                     </div>
                   </div>
@@ -1127,10 +1134,14 @@ const BookService = () => {
                   />
                   <button
                     onClick={applyCoupon}
-                    disabled={!!formData.appliedCoupon || !formData.couponCode.trim()}
-                    className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-bold hover:bg-primary/90 disabled:bg-gray-300 transition-all active:scale-95"
+                    disabled={isApplyingCoupon || !!formData.appliedCoupon || !formData.couponCode.trim()}
+                    className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-bold hover:bg-primary/90 disabled:bg-gray-300 transition-all active:scale-95 flex items-center justify-center min-w-[75px]"
                   >
-                    Apply
+                    {isApplyingCoupon ? (
+                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    ) : (
+                      'Apply'
+                    )}
                   </button>
                 </div>
                 {formData.appliedCoupon && (
