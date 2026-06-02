@@ -45,7 +45,7 @@ exports.listSurgeRules = async (req, res) => {
 // Create new surge rule
 exports.createSurgeRule = async (req, res) => {
   try {
-    const { chargeType, scope, zoneId, mode, value, startTime, endTime, active } = req.body;
+    const { chargeType, scope, zoneId, mode, value, startTime, endTime, maxBookingValue, active } = req.body;
 
     const newRule = new Surge({
       chargeType,
@@ -55,6 +55,7 @@ exports.createSurgeRule = async (req, res) => {
       value,
       startTime: startTime || null,
       endTime: endTime || null,
+      maxBookingValue: maxBookingValue !== undefined ? maxBookingValue : null,
       active: active !== undefined ? active : true
     });
 
@@ -102,7 +103,7 @@ exports.getSurgeRuleById = async (req, res) => {
 // Update surge rule
 exports.updateSurgeRule = async (req, res) => {
   try {
-    const { chargeType, scope, zoneId, mode, value, startTime, endTime, active } = req.body;
+    const { chargeType, scope, zoneId, mode, value, startTime, endTime, maxBookingValue, active } = req.body;
 
     const rule = await Surge.findById(req.params.id);
     if (!rule) {
@@ -119,6 +120,7 @@ exports.updateSurgeRule = async (req, res) => {
     rule.value = value !== undefined ? value : rule.value;
     rule.startTime = startTime !== undefined ? (startTime || null) : rule.startTime;
     rule.endTime = endTime !== undefined ? (endTime || null) : rule.endTime;
+    rule.maxBookingValue = maxBookingValue !== undefined ? maxBookingValue : rule.maxBookingValue;
     rule.active = active !== undefined ? active : rule.active;
 
     await rule.save();
@@ -240,6 +242,8 @@ exports.resolveActiveSurcharges = async (req, res) => {
     // Filter based on scope and time window
     const currentTimeStr = time || new Date().toTimeString().substring(0, 5); // "HH:MM"
     
+    const subtotal = req.query.subtotal ? parseFloat(req.query.subtotal) : 0;
+    
     const applicableRules = rules.filter(rule => {
       // 1. Check scope
       if (rule.scope === 'zone') {
@@ -249,14 +253,24 @@ exports.resolveActiveSurcharges = async (req, res) => {
       }
       
       // 2. Check time window
-      return isTimeInWindow(currentTimeStr, rule.startTime, rule.endTime);
+      if (!isTimeInWindow(currentTimeStr, rule.startTime, rule.endTime)) {
+        return false;
+      }
+
+      // 3. Check maxBookingValue constraint
+      if (rule.maxBookingValue && subtotal > rule.maxBookingValue) {
+        return false;
+      }
+
+      return true;
     });
 
     res.status(200).json({
       success: true,
       data: applicableRules,
       currentTime: currentTimeStr,
-      zoneId: resolvedZoneId
+      zoneId: resolvedZoneId,
+      zoneAncestry: zoneAncestry
     });
   } catch (error) {
     res.status(500).json({

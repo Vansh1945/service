@@ -40,8 +40,8 @@ const commissionRuleSchema = new Schema({
     type: String,
     required: [true, 'Application scope is required'],
     enum: {
-      values: ['all', 'performanceScore', 'specificProvider'],
-      message: 'ApplyTo must be one of: all, performanceScore, specificProvider'
+      values: ['all', 'performanceScore', 'specificProvider', 'specificService', 'specificCategory'],
+      message: 'ApplyTo must be one of: all, performanceScore, specificProvider, specificService, specificCategory'
     },
     default: 'all'
   },
@@ -69,6 +69,22 @@ const commissionRuleSchema = new Schema({
       },
       message: 'Provider does not exist'
     }
+  },
+  specificService: {
+    type: Schema.Types.ObjectId,
+    ref: 'Service',
+    required: function () {
+      return this.applyTo === 'specificService';
+    },
+    default: null
+  },
+  specificCategory: {
+    type: Schema.Types.ObjectId,
+    ref: 'Category',
+    required: function () {
+      return this.applyTo === 'specificCategory';
+    },
+    default: null
   },
   isActive: {
     type: Boolean,
@@ -121,7 +137,7 @@ commissionRuleSchema.index({ zoneId: 1 });
  */
 
 // Get applicable commission rule for a provider
-commissionRuleSchema.statics.getCommissionForProvider = async function (providerId, zoneId = null, providerperformanceScore = 'standard') {
+commissionRuleSchema.statics.getCommissionForProvider = async function (providerId, zoneId = null, providerperformanceScore = 'standard', serviceId = null, categoryId = null) {
   const now = new Date();
 
   try {
@@ -149,6 +165,14 @@ commissionRuleSchema.statics.getCommissionForProvider = async function (provider
         providerperformanceScore = badge;
       } else {
         providerperformanceScore = 'Bronze';
+      }
+    }
+
+    // If serviceId is provided and categoryId is not, let's fetch categoryId from service
+    if (serviceId && !categoryId) {
+      const service = await mongoose.model('Service').findById(serviceId).select('category');
+      if (service) {
+        categoryId = service.category;
       }
     }
 
@@ -189,7 +213,57 @@ commissionRuleSchema.statics.getCommissionForProvider = async function (provider
       if (globalSpecificRule) return globalSpecificRule;
     }
 
-    // PRIORITY 2: Zone + Performance Score Rule (closest zone first)
+    // PRIORITY 2: Specific Service Rule (closest zone ancestry first, then global)
+    if (serviceId) {
+      if (zoneAncestry.length > 0) {
+        for (const zId of zoneAncestry) {
+          const rule = await this.findOne({
+            isActive: true,
+            applyTo: 'specificService',
+            specificService: serviceId,
+            zoneId: zId
+          }).sort({ createdAt: -1 });
+
+          if (rule) return rule;
+        }
+      }
+
+      const globalServiceRule = await this.findOne({
+        isActive: true,
+        applyTo: 'specificService',
+        specificService: serviceId,
+        $or: [{ zoneId: null }, { zoneId: { $exists: false } }]
+      }).sort({ createdAt: -1 });
+
+      if (globalServiceRule) return globalServiceRule;
+    }
+
+    // PRIORITY 3: Specific Category Rule (closest zone ancestry first, then global)
+    if (categoryId) {
+      if (zoneAncestry.length > 0) {
+        for (const zId of zoneAncestry) {
+          const rule = await this.findOne({
+            isActive: true,
+            applyTo: 'specificCategory',
+            specificCategory: categoryId,
+            zoneId: zId
+          }).sort({ createdAt: -1 });
+
+          if (rule) return rule;
+        }
+      }
+
+      const globalCategoryRule = await this.findOne({
+        isActive: true,
+        applyTo: 'specificCategory',
+        specificCategory: categoryId,
+        $or: [{ zoneId: null }, { zoneId: { $exists: false } }]
+      }).sort({ createdAt: -1 });
+
+      if (globalCategoryRule) return globalCategoryRule;
+    }
+
+    // PRIORITY 4: Zone + Performance Score Rule (closest zone first)
     if (zoneAncestry.length > 0) {
       for (const zId of zoneAncestry) {
         const zoneTierRule = await this.findOne({
@@ -203,7 +277,7 @@ commissionRuleSchema.statics.getCommissionForProvider = async function (provider
       }
     }
 
-    // PRIORITY 3: Zone Default Rule (closest zone first)
+    // PRIORITY 5: Zone Default Rule (closest zone first)
     if (zoneAncestry.length > 0) {
       for (const zId of zoneAncestry) {
         const zoneDefaultRule = await this.findOne({
@@ -216,7 +290,7 @@ commissionRuleSchema.statics.getCommissionForProvider = async function (provider
       }
     }
 
-    // PRIORITY 4: Global Rules (Performance global tier first, then Global Default rule)
+    // PRIORITY 6: Global Rules (Performance global tier first, then Global Default rule)
     const globalTierRule = await this.findOne({
       isActive: true,
       applyTo: 'performanceScore',

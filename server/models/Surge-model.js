@@ -6,8 +6,8 @@ const surgeSchema = new Schema({
     type: String,
     required: [true, 'Charge type is required'],
     enum: {
-      values: ['rain', 'traffic', 'night', 'demand', 'festival', 'custom'],
-      message: 'Charge type must be one of: rain, traffic, night, demand, festival, custom'
+      values: ['rain', 'traffic', 'night', 'demand', 'festival', 'custom', 'visiting'],
+      message: 'Charge type must be one of: rain, traffic, night, demand, festival, custom, visiting'
     }
   },
   scope: {
@@ -50,6 +50,10 @@ const surgeSchema = new Schema({
     type: String,
     default: null,
     match: [/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Please provide end time in HH:MM format']
+  },
+  maxBookingValue: {
+    type: Number,
+    default: null
   },
   active: {
     type: Boolean,

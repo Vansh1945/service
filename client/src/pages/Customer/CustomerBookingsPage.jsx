@@ -279,72 +279,83 @@ const ProviderCard = ({ provider, status, compact = false }) => {
 
 // ─── Payment Details ──────────────────────────────────────────────────────────
 
-const PaymentDetails = ({ booking }) => (
-  <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-      <CreditCard className="w-3.5 h-3.5" /> Payment Details
-    </p>
-    <div className="space-y-2 text-sm">
-      {[
-        ['Method', <span className="capitalize">{booking.paymentMethod || 'N/A'}</span>],
-        ['Status', <span className={['paid', 'escrow_hold'].includes(booking.paymentStatus) ? 'text-emerald-600 font-semibold' : 'text-accent font-semibold'}>{['paid', 'escrow_hold'].includes(booking.paymentStatus) ? 'Paid' : 'Pending'}</span>],
-        ['Subtotal', formatCurrency(booking.subtotal || 0)],
-        ...(booking.totalDiscount > 0 ? [['Discount', <span className="text-emerald-600">-{formatCurrency(booking.totalDiscount)}</span>]] : []),
-        ...(booking.couponApplied?.isValid ? [['Coupon', <span className="text-blue-600">{booking.couponApplied.code}</span>]] : []),
-        ...(booking.paymentStatus === 'refunded' ? [['Refund Status', <span className="text-purple-600 font-black flex items-center gap-1"><Wallet className="w-3 h-3" /> Refunded</span>]] : []),
-        ...(booking.fullData?.walletAmountUsed > 0 ? [['Wallet Used', <span className="text-purple-600 font-bold">-{formatCurrency(booking.fullData.walletAmountUsed)}</span>]] : []),
-        ...(booking.fullData?.onlineAmountPaid > 0 ? [['Paid Online', <span className="text-blue-600 font-bold">{formatCurrency(booking.fullData.onlineAmountPaid)}</span>]] : []),
-      ].map(([label, val]) => (
-        <div key={label} className="flex justify-between items-center">
-          <span className="text-gray-500">{label}</span>
-          <span className="font-medium">{val}</span>
-        </div>
-      ))}
-      <div className="border-t border-gray-200 pt-2 mt-1 flex justify-between font-bold text-secondary">
-        <span>Total Payable</span>
-        <span>{formatCurrency(booking.totalAmount || 0)}</span>
-      </div>
-    </div>
+const PaymentDetails = ({ booking }) => {
+  const additionalCharges = (booking.rainCharge || 0) + 
+                            (booking.trafficCharge || 0) + 
+                            (booking.nightCharge || 0) + 
+                            (booking.demandSurge || 0) +
+                            (booking.customCharges || 0);
+  const visitingCharge = booking.visitingCharge || 0;
 
-    {/* Payout Hold Info for Transparency */}
-    {booking.timeline?.payoutHoldUntil && booking.status === 'completed' && (
-      <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-xl">
-        <div className="flex justify-between items-center text-[10px] mb-1.5">
-          <span className="text-blue-700 font-bold uppercase tracking-wider">Review Protection</span>
-          <span className={`px-2 py-0.5 rounded-full font-bold ${new Date(booking.timeline.payoutHoldUntil) > new Date() ? 'bg-orange-100 text-orange-600' : 'bg-green-100 text-green-600'}`}>
-            {new Date(booking.timeline.payoutHoldUntil) > new Date() ? 'ACTIVE' : 'COMPLETED'}
-          </span>
-        </div>
-        <p className="text-xs text-blue-700 font-medium">
-          {new Date(booking.timeline.payoutHoldUntil) > new Date()
-            ? "Service under 48-hour review protection"
-            : "Review period completed"}
-        </p>
-        <p className="text-[10px] text-blue-500 mt-1 italic">
-          {new Date(booking.timeline.payoutHoldUntil) > new Date()
-            ? `Protection valid until: ${formatDateTime(booking.timeline.payoutHoldUntil)}`
-            : `Protection ended at: ${formatDateTime(booking.timeline.payoutHoldUntil)}`}
-        </p>
-      </div>
-    )}
-
-    {booking.transactionId && (
-      <div className="mt-3 pt-3 border-t border-gray-200 space-y-1.5">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Transaction Info</p>
+  return (
+    <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+        <CreditCard className="w-3.5 h-3.5" /> Payment Details
+      </p>
+      <div className="space-y-2 text-sm">
         {[
-          ['Txn ID', booking.transactionId],
-          ...(booking.razorpayPaymentId ? [['Payment ID', booking.razorpayPaymentId]] : []),
-          ...(booking.paymentDate ? [['Date', new Date(booking.paymentDate).toLocaleString()]] : []),
+          ['Method', <span className="capitalize">{booking.paymentMethod || 'N/A'}</span>],
+          ['Status', <span className={['paid', 'escrow_hold'].includes(booking.paymentStatus) ? 'text-emerald-600 font-semibold' : 'text-accent font-semibold'}>{['paid', 'escrow_hold'].includes(booking.paymentStatus) ? 'Paid' : 'Pending'}</span>],
+          ['Subtotal', formatCurrency(booking.subtotal || 0)],
+          ...(booking.totalDiscount > 0 ? [['Discount', <span className="text-emerald-600 font-medium">-{formatCurrency(booking.totalDiscount)}</span>]] : []),
+          ...(additionalCharges > 0 ? [['Additional Service Charges', <span className="text-red-500 font-medium">+{formatCurrency(additionalCharges)}</span>]] : []),
+          ['Visiting Charges', <span className="text-green-600 font-semibold italic">{visitingCharge > 0 ? formatCurrency(visitingCharge) : "Free"}</span>],
+          ...(booking.couponApplied?.isValid ? [['Coupon', <span className="text-blue-600">{booking.couponApplied.code}</span>]] : []),
+          ...(booking.paymentStatus === 'refunded' ? [['Refund Status', <span className="text-purple-600 font-black flex items-center gap-1"><Wallet className="w-3 h-3" /> Refunded</span>]] : []),
+          ...(booking.fullData?.walletAmountUsed > 0 ? [['Wallet Used', <span className="text-purple-600 font-bold">-{formatCurrency(booking.fullData.walletAmountUsed)}</span>]] : []),
+          ...(booking.fullData?.onlineAmountPaid > 0 ? [['Paid Online', <span className="text-blue-600 font-bold">{formatCurrency(booking.fullData.onlineAmountPaid)}</span>]] : []),
         ].map(([label, val]) => (
-          <div key={label} className="flex justify-between text-xs">
+          <div key={label} className="flex justify-between items-center">
             <span className="text-gray-500">{label}</span>
-            <span className="font-mono text-gray-700 truncate max-w-[60%] text-right">{val}</span>
+            <span className="font-medium">{val}</span>
           </div>
         ))}
+        <div className="border-t border-gray-200 pt-2 mt-1 flex justify-between font-bold text-secondary">
+          <span>Total Payable</span>
+          <span>{formatCurrency(booking.totalAmount || 0)}</span>
+        </div>
       </div>
-    )}
-  </div>
-);
+
+      {/* Payout Hold Info for Transparency */}
+      {booking.timeline?.payoutHoldUntil && booking.status === 'completed' && (
+        <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-xl">
+          <div className="flex justify-between items-center text-[10px] mb-1.5">
+            <span className="text-blue-700 font-bold uppercase tracking-wider">Review Protection</span>
+            <span className={`px-2 py-0.5 rounded-full font-bold ${new Date(booking.timeline.payoutHoldUntil) > new Date() ? 'bg-orange-100 text-orange-600' : 'bg-green-100 text-green-600'}`}>
+              {new Date(booking.timeline.payoutHoldUntil) > new Date() ? 'ACTIVE' : 'COMPLETED'}
+            </span>
+          </div>
+          <p className="text-xs text-blue-700 font-medium">
+            {new Date(booking.timeline.payoutHoldUntil) > new Date()
+              ? "Service under 48-hour review protection"
+              : "Review period completed"}
+          </p>
+          <p className="text-[10px] text-blue-500 mt-1 italic">
+            {new Date(booking.timeline.payoutHoldUntil) > new Date()
+              ? `Protection valid until: ${formatDateTime(booking.timeline.payoutHoldUntil)}`
+              : `Protection ended at: ${formatDateTime(booking.timeline.payoutHoldUntil)}`}
+          </p>
+        </div>
+      )}
+
+      {booking.transactionId && (
+        <div className="mt-3 pt-3 border-t border-gray-200 space-y-1.5">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Transaction Info</p>
+          {[
+            ['Txn ID', booking.transactionId],
+            ...(booking.razorpayPaymentId ? [['Payment ID', booking.razorpayPaymentId]] : []),
+            ...(booking.paymentDate ? [['Date', new Date(booking.paymentDate).toLocaleString()]] : []),
+          ].map(([label, val]) => (
+            <div key={label} className="flex justify-between text-xs">
+              <span className="text-gray-500">{label}</span>
+              <span className="font-mono text-gray-700 truncate max-w-[60%] text-right">{val}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 // ─── Service Details ──────────────────────────────────────────────────────────
 

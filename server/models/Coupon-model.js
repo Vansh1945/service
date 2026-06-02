@@ -153,10 +153,6 @@ couponSchema.pre('save', function (next) {
     }
   }
 
-  if (this.isGlobal && this.isFirstBooking) {
-    return next(new Error('Coupon cannot be both global and first-booking'));
-  }
-
   next();
 });
 

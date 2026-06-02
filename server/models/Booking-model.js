@@ -291,6 +291,10 @@ const bookingSchema = new Schema({
     type: Number,
     default: 0
   },
+  customCharges: {
+    type: Number,
+    default: 0
+  },
   rainCharge: {
     type: Number,
     default: 0
@@ -486,12 +490,14 @@ bookingSchema.pre('save', async function (next) {
         this.address.s2CellId = latLngToS2CellId(this.address.lat, this.address.lng, 13);
         this.address.s2CellIdPrecise = latLngToS2CellId(this.address.lat, this.address.lng, 20);
 
-        // Populate booking.zoneId if not present (only for new bookings)
-        if (this.isNew && !this.zoneId) {
+        // Populate or reassign booking.zoneId when coordinates change or on creation
+        if (this.isNew || this.isModified('address.lat') || this.isModified('address.lng')) {
           const Zone = mongoose.model('Zone');
           const detectedZone = await Zone.findZoneByCoordinates(this.address.lat, this.address.lng);
           if (detectedZone) {
             this.zoneId = detectedZone._id;
+          } else {
+            this.zoneId = null;
           }
         }
       }
@@ -547,11 +553,29 @@ bookingSchema.pre('save', async function (next) {
     });
   }
 
-  // Commission calculation (only for new bookings to preserve existing commissions on edits/updates)
-  if (this.isNew && this.provider && (this.isModified('transaction') || this.isModified('provider') || this.isNew || this.isModified('totalAmount'))) {
+  // Commission calculation (runs on new bookings with provider, or when provider/pricing changes on existing bookings)
+  if (this.provider && (
+    this.isNew || 
+    this.isModified('provider') || 
+    this.isModified('subtotal') || 
+    this.isModified('totalDiscount') || 
+    this.isModified('visitingCharge') || 
+    this.isModified('rainCharge') || 
+    this.isModified('trafficCharge') || 
+    this.isModified('nightCharge') || 
+    this.isModified('demandSurge')
+  )) {
     try {
       const CommissionRule = mongoose.model('CommissionRule');
-      const commissionRule = await CommissionRule.getCommissionForProvider(this.provider, this.zoneId);
+      const firstService = this.services && this.services[0];
+      const serviceId = firstService ? firstService.service : null;
+
+      const commissionRule = await CommissionRule.getCommissionForProvider(
+        this.provider, 
+        this.zoneId, 
+        'standard',
+        serviceId
+      );
 
       const baseForCommission = Math.max(0, this.subtotal - this.totalDiscount);
 
@@ -572,6 +596,7 @@ bookingSchema.pre('save', async function (next) {
       const traffic = this.trafficCharge || 0;
       const night = this.nightCharge || 0;
       const demand = this.demandSurge || 0;
+      const custom = this.customCharges || 0;
 
       // Provider splits
       const provVisitingShare = parseFloat((visiting * (splits.visiting / 100)).toFixed(2));
@@ -581,7 +606,7 @@ bookingSchema.pre('save', async function (next) {
       const provDemandShare = parseFloat((demand * (splits.demand / 100)).toFixed(2));
 
       const providerSurgeShare = parseFloat((provVisitingShare + provRainShare + provTrafficShare + provNightShare + provDemandShare).toFixed(2));
-      const totalSurcharges = visiting + rain + traffic + night + demand;
+      const totalSurcharges = visiting + rain + traffic + night + demand + custom;
       const companySurgeShare = parseFloat((totalSurcharges - providerSurgeShare).toFixed(2));
 
       this.providerSurgeShare = providerSurgeShare;

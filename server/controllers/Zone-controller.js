@@ -21,6 +21,13 @@ exports.createZone = async (req, res) => {
       return res.status(400).json({ success: false, message: "Polygon must have at least 4 coordinates (minimum polygon points)" });
     }
 
+    // Auto-close polygon loop if first and last coordinates are not equal to prevent MongoDB index crash
+    const firstCoord = coords[0];
+    const lastCoord = coords[coords.length - 1];
+    if (firstCoord && lastCoord && (firstCoord[0] !== lastCoord[0] || firstCoord[1] !== lastCoord[1])) {
+      coords.push([firstCoord[0], firstCoord[1]]);
+    }
+
     // Validate hierarchy constraints
     if (zoneLevel === 'state' && parentZone) {
       return res.status(400).json({ success: false, message: "State zones must not have a parentZone" });
@@ -331,21 +338,38 @@ exports.updateZone = async (req, res) => {
     if (!zone) {
       return res.status(404).json({ success: false, message: "Zone not found", data: null });
     }
+
+    // Auto-close polygon loop if coordinates are updated to prevent MongoDB crash
+    if (polygon && polygon.coordinates && Array.isArray(polygon.coordinates) && polygon.coordinates.length > 0) {
+      const coords = polygon.coordinates[0];
+      if (Array.isArray(coords) && coords.length >= 4) {
+        const firstCoord = coords[0];
+        const lastCoord = coords[coords.length - 1];
+        if (firstCoord && lastCoord && (firstCoord[0] !== lastCoord[0] || firstCoord[1] !== lastCoord[1])) {
+          coords.push([firstCoord[0], firstCoord[1]]);
+        }
+      }
+    }
+
+    const targetStatus = status !== undefined ? status : zone.status;
+    const targetPolygon = polygon !== undefined ? polygon : zone.polygon;
+    const targetParentZone = parentZone !== undefined ? parentZone : zone.parentZone;
+
     // Overlap validation with hierarchical containment
-    if (status !== 'inactive') {
+    if (targetStatus !== 'inactive' && targetPolygon && targetPolygon.coordinates) {
       // Find any overlapping active zones
       const overlapping = await Zone.findOne({
         status: 'active',
         _id: { $ne: id },
-        polygon: { $geoIntersects: { $geometry: { type: "Polygon", coordinates: polygon.coordinates } } }
+        polygon: { $geoIntersects: { $geometry: { type: "Polygon", coordinates: targetPolygon.coordinates } } }
       });
       if (overlapping) {
         // If this zone has a parent, allow overlap only with that parent zone
-        if (parentZone && overlapping._id.equals(parentZone)) {
+        if (targetParentZone && overlapping._id.equals(targetParentZone)) {
           // Ensure child polygon is fully inside parent (basic containment check)
           const containmentCheck = await Zone.findOne({
-            _id: parentZone,
-            polygon: { $geoWithin: { $geometry: { type: "Polygon", coordinates: polygon.coordinates } } }
+            _id: targetParentZone,
+            polygon: { $geoWithin: { $geometry: { type: "Polygon", coordinates: targetPolygon.coordinates } } }
           });
           if (!containmentCheck) {
             return res.status(400).json({ success: false, message: "Micro zone must be fully inside parent city" });
@@ -355,6 +379,7 @@ exports.updateZone = async (req, res) => {
         }
       }
     }
+
     const newLevel = zoneLevel !== undefined ? zoneLevel : zone.zoneLevel;
     const newParent = parentZone !== undefined ? parentZone : zone.parentZone;
     if (newLevel === 'state' && newParent) {
@@ -387,16 +412,7 @@ exports.updateZone = async (req, res) => {
         return res.status(400).json({ success: false, message: "Zone name already exists in this city" });
       }
     }
-    // Overlap check if polygon/status changes and active
-    const targetStatus = status !== undefined ? status : zone.status;
-    const targetPolygon = polygon !== undefined ? polygon : zone.polygon;
-    if (targetStatus === 'active' && targetPolygon && targetPolygon.coordinates) {
-      const overlapQuery = { _id: { $ne: id }, status: 'active', polygon: { $geoIntersects: { $geometry: { type: "Polygon", coordinates: targetPolygon.coordinates } } } };
-      const overlapping = await Zone.findOne(overlapQuery);
-      if (overlapping) {
-        return res.status(400).json({ success: false, message: `Zone overlaps with existing active zone: ${overlapping.name}` });
-      }
-    }
+
     // Apply updates
     if (name !== undefined) zone.name = name;
     if (polygon !== undefined) zone.polygon = polygon;

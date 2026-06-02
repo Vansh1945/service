@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/auth';
 import * as SystemService from '../../services/SystemService';
+import * as ZoneService from '../../services/ZoneService';
 import { writeSystemSettingsCache } from '../../utils/systemSettingsCache';
 import {
   MapPin, Phone, Mail, Facebook, Instagram, Twitter, Linkedin, Youtube,
   Settings, Calendar, Wallet, Percent, Bell, Shield, Flag, AlertTriangle,
   Save, Upload, Sparkles, DollarSign, Globe, ShieldAlert, Coins, HelpCircle,
-  Smartphone, Monitor, MessageSquare, User, Zap
+  Smartphone, Monitor, MessageSquare, User, Zap, Plus, Trash2, Check, X,
+  ChevronDown
 } from 'lucide-react';
 
 const SystemSetting = () => {
@@ -97,11 +99,32 @@ const SystemSetting = () => {
   const [previewLogo, setPreviewLogo] = useState('');
   const [previewFavicon, setPreviewFavicon] = useState('');
 
+  const [categories, setCategories] = useState([]);
+  const [zones, setZones] = useState([]);
+
   const { showToast } = useAuth();
 
   useEffect(() => {
     fetchSystemSettings();
+    fetchCategoriesAndZones();
   }, []);
+
+  const fetchCategoriesAndZones = async () => {
+    try {
+      const catRes = await SystemService.getCategoriesAdmin();
+      if (catRes.data && catRes.data.success) {
+        setCategories(catRes.data.data || []);
+      }
+      const zoneRes = await ZoneService.getAllZones();
+      if (zoneRes.data && zoneRes.data.success) {
+        setZones(zoneRes.data.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching categories/zones:', error);
+    }
+  };
+
+
 
   useEffect(() => {
     if (logoFile) {
@@ -961,103 +984,11 @@ const SystemSetting = () => {
                   />
                   <p className="text-xs text-gray-500 mt-1.5 font-inter">Security cooling-off hours before completed booking earnings transition from "Held" to "Available" for provider withdrawal request.</p>
                 </div>
-
               </div>
-
-              {/* SURGE SPLIT SETTINGS SUB-SECTION */}
-              <div className="border-t border-gray-100 pt-6 mt-6">
-                <h4 className="text-sm font-bold text-secondary pb-2 border-b border-gray-150 font-poppins mb-4 flex items-center gap-2">
-                  Provider Surcharge Split Settings (Customizable Splits)
-                </h4>
-                <p className="text-xs text-gray-500 font-inter mb-6">
-                  Define the percentage share of each active surcharge type that is paid out directly to the Service Provider. The remaining percentage will be retained by the Company.
-                </p>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-semibold text-secondary mb-2 font-inter">Visiting Surcharge split (% to Provider)</label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        value={systemSettings.surgeSplitSettings?.visiting ?? 60}
-                        onChange={(e) => handleNestedChange('surgeSplitSettings', 'visiting', Number(e.target.value))}
-                        min="0"
-                        max="100"
-                        className="w-full pr-10 pl-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-inter text-secondary"
-                      />
-                      <span className="absolute right-3.5 top-1/2 transform -translate-y-1/2 text-gray-500 font-bold font-inter text-sm">%</span>
-                    </div>
-                    <p className="text-[11px] text-gray-400 mt-1.5 font-inter">Recommended: 60% Provider share, 40% Company share.</p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-secondary mb-2 font-inter">Rain Surcharge split (% to Provider)</label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        value={systemSettings.surgeSplitSettings?.rain ?? 70}
-                        onChange={(e) => handleNestedChange('surgeSplitSettings', 'rain', Number(e.target.value))}
-                        min="0"
-                        max="100"
-                        className="w-full pr-10 pl-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-inter text-secondary"
-                      />
-                      <span className="absolute right-3.5 top-1/2 transform -translate-y-1/2 text-gray-500 font-bold font-inter text-sm">%</span>
-                    </div>
-                    <p className="text-[11px] text-gray-400 mt-1.5 font-inter">Recommended: 70% Provider share, 30% Company share.</p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-secondary mb-2 font-inter">Traffic Surcharge split (% to Provider)</label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        value={systemSettings.surgeSplitSettings?.traffic ?? 70}
-                        onChange={(e) => handleNestedChange('surgeSplitSettings', 'traffic', Number(e.target.value))}
-                        min="0"
-                        max="100"
-                        className="w-full pr-10 pl-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-inter text-secondary"
-                      />
-                      <span className="absolute right-3.5 top-1/2 transform -translate-y-1/2 text-gray-500 font-bold font-inter text-sm">%</span>
-                    </div>
-                    <p className="text-[11px] text-gray-400 mt-1.5 font-inter">Recommended: 70% Provider share, 30% Company share.</p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-secondary mb-2 font-inter">Night Surcharge split (% to Provider)</label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        value={systemSettings.surgeSplitSettings?.night ?? 70}
-                        onChange={(e) => handleNestedChange('surgeSplitSettings', 'night', Number(e.target.value))}
-                        min="0"
-                        max="100"
-                        className="w-full pr-10 pl-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-inter text-secondary"
-                      />
-                      <span className="absolute right-3.5 top-1/2 transform -translate-y-1/2 text-gray-500 font-bold font-inter text-sm">%</span>
-                    </div>
-                    <p className="text-[11px] text-gray-400 mt-1.5 font-inter">Recommended: 70% Provider share, 30% Company share.</p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-secondary mb-2 font-inter">Demand Surcharge split (% to Provider)</label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        value={systemSettings.surgeSplitSettings?.demand ?? 50}
-                        onChange={(e) => handleNestedChange('surgeSplitSettings', 'demand', Number(e.target.value))}
-                        min="0"
-                        max="100"
-                        className="w-full pr-10 pl-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-inter text-secondary"
-                      />
-                      <span className="absolute right-3.5 top-1/2 transform -translate-y-1/2 text-gray-500 font-bold font-inter text-sm">%</span>
-                    </div>
-                    <p className="text-[11px] text-gray-400 mt-1.5 font-inter">Recommended: 50% Provider share, 50% Company share.</p>
-                  </div>
-                </div>
-              </div>
-
             </div>
           )}
+
+
 
         {/* NOTIFICATION SETTINGS TAB */}
         {activeTab === 'notifications' && (

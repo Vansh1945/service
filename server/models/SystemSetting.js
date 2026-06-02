@@ -309,6 +309,7 @@ const systemConfigSchema = new mongoose.Schema(
       type: Number,
       default: 0
     },
+
     emailTemplates: {
       forgotPasswordOtp: { type: emailTemplateSchema },
       providerRegistrationOtp: { type: emailTemplateSchema },

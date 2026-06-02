@@ -72,8 +72,8 @@ zoneSchema.index({ polygon: '2dsphere' });
 zoneSchema.index({ city: 1, name: 1 }, { unique: true });
 
 // Static helper to find zone by lat/lng coordinates
-zoneSchema.statics.findZoneByCoordinates = function(lat, lng) {
-  return this.findOne({
+zoneSchema.statics.findZoneByCoordinates = async function(lat, lng) {
+  const zones = await this.find({
     status: 'active',
     polygon: {
       $geoIntersects: {
@@ -84,6 +84,23 @@ zoneSchema.statics.findZoneByCoordinates = function(lat, lng) {
       }
     }
   });
+  if (zones.length === 0) return null;
+
+  const levelWeight = { micro: 3, city: 2, state: 1 };
+  const priorityWeight = { high: 3, medium: 2, low: 1 };
+
+  zones.sort((a, b) => {
+    const aLevel = levelWeight[a.zoneLevel] || 0;
+    const bLevel = levelWeight[b.zoneLevel] || 0;
+    if (aLevel !== bLevel) {
+      return bLevel - aLevel; // higher specificity first (micro > city > state)
+    }
+    const aPriority = priorityWeight[a.priority] || 0;
+    const bPriority = priorityWeight[b.priority] || 0;
+    return bPriority - aPriority; // higher priority first
+  });
+
+  return zones[0];
 };
 
 module.exports = mongoose.model("Zone", zoneSchema);

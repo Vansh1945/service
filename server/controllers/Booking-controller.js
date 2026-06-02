@@ -871,6 +871,7 @@ const createBooking = async (req, res) => {
       let nightCharge = 0;
       let demandSurge = 0;
       let visitingCharge = 0;
+      let customCharges = 0;
 
       const applicableSurges = allActiveSurges.filter(rule => {
         if (rule.scope === 'zone') {
@@ -878,7 +879,13 @@ const createBooking = async (req, res) => {
             return false;
           }
         }
-        return isTimeInWindow(currentTimeStr, rule.startTime, rule.endTime);
+        if (!isTimeInWindow(currentTimeStr, rule.startTime, rule.endTime)) {
+          return false;
+        }
+        if (rule.maxBookingValue && subtotal > rule.maxBookingValue) {
+          return false;
+        }
+        return true;
       });
 
       applicableSurges.forEach(s => {
@@ -906,6 +913,8 @@ const createBooking = async (req, res) => {
           amount: chargeAmount
         });
       });
+
+
 
       const totalAmount = subtotal - totalDiscount + totalSurcharge;
 
@@ -971,6 +980,7 @@ const createBooking = async (req, res) => {
         nightCharge,
         demandSurge,
         visitingCharge,
+        customCharges,
         statusHistory: [{
           status: paymentMethod === 'cash' ? (assignedProviderId ? 'accepted' : 'pending') : 'pending',
           timestamp: new Date(),
@@ -3622,6 +3632,7 @@ const completeBooking = async (req, res) => {
     const traffic = booking.trafficCharge || 0;
     const night = booking.nightCharge || 0;
     const demand = booking.demandSurge || 0;
+    const custom = booking.customCharges || 0;
 
     // Provider splits
     const provVisitingShare = parseFloat((visiting * (splits.visiting / 100)).toFixed(2));
@@ -3631,7 +3642,7 @@ const completeBooking = async (req, res) => {
     const provDemandShare = parseFloat((demand * (splits.demand / 100)).toFixed(2));
 
     const providerSurgeShare = parseFloat((provVisitingShare + provRainShare + provTrafficShare + provNightShare + provDemandShare).toFixed(2));
-    const totalSurcharges = visiting + rain + traffic + night + demand;
+    const totalSurcharges = visiting + rain + traffic + night + demand + custom;
     const companySurgeShare = parseFloat((totalSurcharges - providerSurgeShare).toFixed(2));
 
     booking.providerWorkProof = {

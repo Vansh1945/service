@@ -11,6 +11,7 @@ import { getPublicServiceById } from '../../services/ServiceService';
 import { getAvailableCoupons, applyCoupon as applyCouponAPI } from '../../services/CouponService';
 import { createBooking } from '../../services/BookingService';
 import { resolveActiveSurcharges } from '../../services/SurgeService';
+import { getSystemSetting } from '../../services/SystemService';
 import * as CustomerService from '../../services/CustomerService';
 import { formatCurrency, formatTime } from '../../utils/format';
 
@@ -35,6 +36,9 @@ const BookService = () => {
   const [isMapModalOpen, setIsMapModalOpen] = useState(false);
   const [showPrefillBanner, setShowPrefillBanner] = useState(true);
   const [activeSurcharges, setActiveSurcharges] = useState([]);
+  const [systemSettings, setSystemSettings] = useState(null);
+  const [detectedZoneId, setDetectedZoneId] = useState(null);
+  const [zoneAncestry, setZoneAncestry] = useState([]);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -249,7 +253,8 @@ const BookService = () => {
         }
 
         const params = {
-          time: formData.time || undefined
+          time: formData.time || undefined,
+          subtotal: service ? service.basePrice * formData.quantity : undefined
         };
         if (lat && lng) {
           params.lat = lat;
@@ -259,6 +264,8 @@ const BookService = () => {
         const response = await resolveActiveSurcharges(params);
         if (response.data?.success) {
           setActiveSurcharges(response.data.data || []);
+          setDetectedZoneId(response.data.zoneId || null);
+          setZoneAncestry(response.data.zoneAncestry || []);
         }
       } catch (err) {
         console.error("Error fetching active surcharges:", err);
@@ -268,7 +275,7 @@ const BookService = () => {
     if (service) {
       fetchSurcharges();
     }
-  }, [formData.date, formData.time, formData.customAddress.lat, formData.customAddress.lng, addresses, formData.useCustomAddress, service]);
+  }, [formData.date, formData.time, formData.customAddress.lat, formData.customAddress.lng, addresses, formData.useCustomAddress, service, formData.quantity]);
 
   // Calculate surcharges
   const calculateSurcharges = () => {
@@ -277,6 +284,9 @@ const BookService = () => {
     const baseAmount = service ? service.basePrice * (formData.quantity || 1) : 0;
 
     activeSurcharges.forEach(s => {
+      if (s.maxBookingValue && baseAmount > s.maxBookingValue) {
+        return;
+      }
       let chargeAmount = 0;
       if (s.mode === 'flat') {
         chargeAmount = s.value;
@@ -318,6 +328,23 @@ const BookService = () => {
     return Math.max(0, baseAmount - discount + totalSurcharge);
   };
 
+  const getVisitingAndAdditionalCharges = () => {
+    let visiting = 0;
+    let additional = 0;
+    const { breakdowns } = calculateSurcharges();
+
+    breakdowns.forEach(s => {
+      const type = s.name.toLowerCase();
+      if (type.includes('visiting') || type.includes('festival') || type.includes('custom')) {
+        visiting += s.amount;
+      } else {
+        additional += s.amount;
+      }
+    });
+
+    return { visiting, additional };
+  };
+
   // Initialize data
   useEffect(() => {
     const initializeData = async () => {
@@ -328,16 +355,20 @@ const BookService = () => {
           return;
         }
 
-        const [serviceData, addressesData, profileData] = await Promise.all([
+        const [serviceData, addressesData, profileData, settingsRes] = await Promise.all([
           fetchService(),
           fetchUserAddresses(),
-          CustomerService.getProfile().then(res => res.data?.user).catch(() => null)
+          CustomerService.getProfile().then(res => res.data?.user).catch(() => null),
+          getSystemSetting().catch(() => null)
         ]);
 
         setService(serviceData);
         setAddresses(addressesData);
         if (profileData?.wallet) {
           setWalletBalance(profileData.wallet.availableBalance || 0);
+        }
+        if (settingsRes?.data?.success) {
+          setSystemSettings(settingsRes.data.data);
         }
 
         if (prefillBooking) {
@@ -869,12 +900,12 @@ const BookService = () => {
                     <span className="text-gray-500">Price ({formData.quantity} item)</span>
                     <span className="text-secondary font-medium">{formatCurrency(baseAmount)}</span>
                   </div>
-                  {calculateSurcharges().breakdowns.map(s => (
-                    <div key={s.id} className="flex justify-between text-xs">
-                      <span className="text-gray-500">{s.name}</span>
-                      <span className="text-red-500 font-medium">+{formatCurrency(s.amount)}</span>
+                  {getVisitingAndAdditionalCharges().additional > 0 && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-500">Additional Service Charges</span>
+                      <span className="text-red-500 font-medium">+{formatCurrency(getVisitingAndAdditionalCharges().additional)}</span>
                     </div>
-                  ))}
+                  )}
                   {formData.appliedCoupon && (
                     <div className="flex justify-between text-xs">
                       <span className="text-gray-500">Discount</span>
@@ -883,7 +914,11 @@ const BookService = () => {
                   )}
                   <div className="flex justify-between text-xs">
                     <span className="text-gray-500">Visiting Charges</span>
-                    <span className="text-green-600 font-medium">Free</span>
+                    <span className="text-green-600 font-semibold italic">
+                      {getVisitingAndAdditionalCharges().visiting > 0 
+                        ? `+${formatCurrency(getVisitingAndAdditionalCharges().visiting)}` 
+                        : "Free"}
+                    </span>
                   </div>
                   <div className="border-t border-gray-100 pt-2 mt-2">
                     <div className="flex justify-between">

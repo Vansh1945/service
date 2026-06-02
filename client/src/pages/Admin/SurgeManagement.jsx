@@ -23,27 +23,28 @@ import {
   Wrench,
   MapPin,
   ToggleLeft,
-  ToggleRight
+  ToggleRight,
+  Coins
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useAuth } from '../../context/auth';
 import * as SurgeService from '../../services/SurgeService';
 import { getAllZones } from '../../services/ZoneService';
+import * as SystemService from '../../services/SystemService';
 import { formatCurrency } from '../../utils/format';
 import HierarchicalZoneSelector from '../../components/HierarchicalZoneSelector';
 
 // Charge type config — maps UI labels to backend enum values
 const CHARGE_TYPES = [
-  { value: 'festival', label: 'Visiting Charge', icon: MapPin, color: 'bg-violet-50 text-violet-700 border-violet-200' },
+  { value: 'visiting', label: 'Visiting Charge', icon: MapPin, color: 'bg-violet-50 text-violet-700 border-violet-200' },
   { value: 'rain', label: 'Rain Charge', icon: CloudRain, color: 'bg-sky-50 text-sky-700 border-sky-200' },
   { value: 'traffic', label: 'Traffic Charge', icon: Car, color: 'bg-amber-50 text-amber-700 border-amber-200' },
   { value: 'night', label: 'Night Charge', icon: Moon, color: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
-  { value: 'demand', label: 'Demand Surge', icon: Flame, color: 'bg-rose-50 text-rose-700 border-rose-200' },
-  { value: 'custom', label: 'Custom Charge', icon: Wrench, color: 'bg-slate-50 text-slate-700 border-slate-200' }
+  { value: 'demand', label: 'Demand Surge', icon: Flame, color: 'bg-rose-50 text-rose-700 border-rose-200' }
 ];
 
-const getChargeTypeConfig = (val) => CHARGE_TYPES.find(t => t.value === val) || CHARGE_TYPES[5];
+const getChargeTypeConfig = (val) => CHARGE_TYPES.find(t => t.value === val) || { value: val, label: val.charAt(0).toUpperCase() + val.slice(1) + ' Charge', icon: AlertCircle, color: 'bg-slate-50 text-slate-700 border-slate-200' };
 
 const SurgeManagement = () => {
   const { showToast } = useAuth();
@@ -98,6 +99,7 @@ const SurgeManagement = () => {
     value: '',
     startTime: '',
     endTime: '',
+    maxBookingValue: '',
     active: true
   };
   const [createForm, setCreateForm] = useState({ ...defaultForm });
@@ -130,9 +132,54 @@ const SurgeManagement = () => {
     }
   };
 
+  // Customizable Splits state
+  const [systemSettings, setSystemSettings] = useState(null);
+  const [savingSplits, setSavingSplits] = useState(false);
+
+  const fetchSystemSettings = async () => {
+    try {
+      const response = await SystemService.getSystemSettingAdmin();
+      if (response.data?.success) {
+        setSystemSettings(response.data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching system settings:', error);
+    }
+  };
+
+  const handleSplitChange = (key, value) => {
+    setSystemSettings(prev => ({
+      ...prev,
+      surgeSplitSettings: {
+        ...prev?.surgeSplitSettings,
+        [key]: Number(value)
+      }
+    }));
+  };
+
+  const saveSplitSettings = async () => {
+    try {
+      setSavingSplits(true);
+      const formData = new FormData();
+      formData.append('companyName', systemSettings.companyName || 'Raj Electrical Services');
+      formData.append('surgeSplitSettings', JSON.stringify(systemSettings.surgeSplitSettings));
+
+      const response = await SystemService.updateSystemSetting(formData);
+      if (response.data?.success) {
+        toast.success('Surcharge split settings saved successfully!');
+        fetchSystemSettings();
+      }
+    } catch (error) {
+      toast.error('Failed to save split settings');
+    } finally {
+      setSavingSplits(false);
+    }
+  };
+
   useEffect(() => {
     fetchSurgeRules();
     fetchZones();
+    fetchSystemSettings();
   }, []);
 
   useEffect(() => {
@@ -283,6 +330,7 @@ const SurgeManagement = () => {
         value: Number(createForm.value),
         startTime: createForm.startTime || undefined,
         endTime: createForm.endTime || undefined,
+        maxBookingValue: createForm.maxBookingValue ? Number(createForm.maxBookingValue) : null,
         active: createForm.active,
         zoneId: createForm.scope === 'zone' ? createForm.zoneId : null
       };
@@ -309,6 +357,7 @@ const SurgeManagement = () => {
         value: Number(editForm.value),
         startTime: editForm.startTime || undefined,
         endTime: editForm.endTime || undefined,
+        maxBookingValue: editForm.maxBookingValue ? Number(editForm.maxBookingValue) : null,
         active: editForm.active,
         zoneId: editForm.scope === 'zone' ? editForm.zoneId : null
       };
@@ -361,6 +410,7 @@ const SurgeManagement = () => {
       value: rule.value,
       startTime: rule.startTime || '',
       endTime: rule.endTime || '',
+      maxBookingValue: rule.maxBookingValue || '',
       active: rule.active
     });
     setShowEditModal(true);
@@ -676,6 +726,22 @@ const SurgeManagement = () => {
           </div>
         </div>
 
+        {/* Booking Value Limit */}
+        <div>
+          <label className="block text-sm font-semibold text-secondary mb-1.5">
+            Booking Value Limit (Optional) — Surcharge will NOT apply if order subtotal exceeds this amount
+          </label>
+          <input
+            type="number"
+            name="maxBookingValue"
+            value={form.maxBookingValue}
+            onChange={handleChange}
+            min="0"
+            className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm font-medium"
+            placeholder="e.g. 500 (Free for orders above 500)"
+          />
+        </div>
+
         {/* Actions */}
         <div className="flex justify-end space-x-3 pt-4 border-t border-gray-100">
           <button type="button" onClick={onCancel} className="px-4 py-2 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors text-sm font-medium">
@@ -948,6 +1014,104 @@ const SurgeManagement = () => {
                 </div>
               </>
             )}
+          </div>
+        )}
+
+        {/* Customizable Splits */}
+        {systemSettings && (
+          <div className="bg-white rounded-xl shadow-sm p-6 mt-8 border border-gray-150">
+            <div className="border-b border-gray-100 pb-4 mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-bold text-secondary font-poppins flex items-center gap-2">
+                  <Coins className="w-5 h-5 text-primary" />
+                  Provider Surcharge Split Settings (Customizable Splits)
+                </h3>
+                <p className="text-xs text-gray-500 font-inter mt-1">
+                  Define the percentage share of each active surcharge type that is paid out directly to the Service Provider. The remaining percentage will be retained by the Company.
+                </p>
+              </div>
+              <button
+                onClick={saveSplitSettings}
+                disabled={savingSplits}
+                className="flex items-center bg-primary hover:bg-teal-800 text-white px-4 py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 text-xs font-semibold shrink-0"
+              >
+                <Save className="w-4.5 h-4.5 mr-1.5" />
+                {savingSplits ? 'Saving...' : 'Save Splits'}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-6">
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Visiting Share (%)</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={systemSettings.surgeSplitSettings?.visiting ?? 60}
+                    onChange={(e) => handleSplitChange('visiting', e.target.value)}
+                    min="0"
+                    max="100"
+                    className="w-full pr-8 pl-3 py-2 border border-gray-200 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 font-bold text-xs">%</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Rain Share (%)</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={systemSettings.surgeSplitSettings?.rain ?? 70}
+                    onChange={(e) => handleSplitChange('rain', e.target.value)}
+                    min="0"
+                    max="100"
+                    className="w-full pr-8 pl-3 py-2 border border-gray-200 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 font-bold text-xs">%</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Traffic Share (%)</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={systemSettings.surgeSplitSettings?.traffic ?? 70}
+                    onChange={(e) => handleSplitChange('traffic', e.target.value)}
+                    min="0"
+                    max="100"
+                    className="w-full pr-8 pl-3 py-2 border border-gray-200 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 font-bold text-xs">%</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Night Share (%)</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={systemSettings.surgeSplitSettings?.night ?? 70}
+                    onChange={(e) => handleSplitChange('night', e.target.value)}
+                    min="0"
+                    max="100"
+                    className="w-full pr-8 pl-3 py-2 border border-gray-200 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 font-bold text-xs">%</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Demand Share (%)</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={systemSettings.surgeSplitSettings?.demand ?? 50}
+                    onChange={(e) => handleSplitChange('demand', e.target.value)}
+                    min="0"
+                    max="100"
+                    className="w-full pr-8 pl-3 py-2 border border-gray-200 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 font-bold text-xs">%</span>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
