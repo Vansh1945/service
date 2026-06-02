@@ -665,6 +665,31 @@ const getAllTransactions = async (req, res) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const filter = {};
+    if (req.query.startDate || req.query.endDate) {
+      filter.createdAt = {};
+      if (req.query.startDate) {
+        filter.createdAt.$gte = new Date(req.query.startDate);
+      }
+      if (req.query.endDate) {
+        filter.createdAt.$lte = new Date(req.query.endDate);
+      }
+    }
+
+    if (req.query.zoneIds) {
+      const mongoose = require('mongoose');
+      const zoneIdsArray = req.query.zoneIds.split(',').map(id => {
+        try {
+          return new mongoose.Types.ObjectId(id);
+        } catch (e) {
+          return id;
+        }
+      });
+      const Booking = require('../models/Booking-model');
+      const bookingsInZones = await Booking.find({ zoneId: { $in: zoneIdsArray } }).select('_id');
+      const bookingIds = bookingsInZones.map(b => b._id);
+      filter.booking = { $in: bookingIds };
+    }
+
     if (bookingId) {
       const mongoose = require('mongoose');
       const Booking = require('../models/Booking-model');

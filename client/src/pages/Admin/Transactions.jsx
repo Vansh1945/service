@@ -4,6 +4,8 @@ import { useAuth } from '../../context/auth';
 import Loader from '../../components/Loader';
 import * as TransactionService from '../../services/TransactionService';
 import Pagination from '../../components/Pagination';
+import { useAdminFilter } from '../../context/AdminFilterContext';
+import AdminFilterBar from '../../components/AdminFilterBar';
 import { formatDate, formatDateTime, formatCurrency } from '../../utils/format';
 import {
     Search,
@@ -103,6 +105,16 @@ const AdminTransactions = () => {
     const [reasonText, setReasonText] = useState('');
     const [targetTxnId, setTargetTxnId] = useState(null);
 
+    const {
+        filterType,
+        year,
+        financialYear,
+        month,
+        quarter,
+        zoneIds,
+        getMergedQuery
+    } = useAdminFilter();
+
     // Filters - initialize from URL to prevent race conditions
     const [filters, setFilters] = useState(() => {
         const params = new URLSearchParams(window.location.search);
@@ -130,7 +142,8 @@ const AdminTransactions = () => {
                 page: pagination.page,
                 limit: pagination.limit,
                 bookingId: filters.bookingId,
-                status: filters.status
+                status: filters.status,
+                ...getMergedQuery()
             };
             const response = await TransactionService.getAllTransactions(params);
             if (response.data.success) {
@@ -147,7 +160,7 @@ const AdminTransactions = () => {
         } finally {
             setLoading(false);
         }
-    }, [pagination.page, pagination.limit, filters, showToast]);
+    }, [pagination.page, pagination.limit, filters, showToast, getMergedQuery]);
 
     const location = useLocation();
 
@@ -163,7 +176,7 @@ const AdminTransactions = () => {
 
     useEffect(() => {
         fetchTransactions();
-    }, [fetchTransactions]);
+    }, [fetchTransactions, filterType, year, financialYear, month, quarter, zoneIds]);
 
     const handleFilterChange = (e) => {
         const { name, value } = e.target;
@@ -249,7 +262,10 @@ const AdminTransactions = () => {
                 </div>
             </div>
 
-            {/* Filters */}
+            {/* Reusable Premium Filter Bar */}
+            <AdminFilterBar onApply={fetchTransactions} />
+
+            {/* Local Page Filters */}
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 mb-6 flex flex-col md:flex-row gap-4 items-end">
                 <div className="flex-1 w-full">
                     <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 block">Search Booking / Txn ID</label>

@@ -1823,9 +1823,30 @@ const getDashboardAnalytics = async (req, res) => {
                 startDate = moment().subtract(7, 'days').startOf('day').toDate();
         }
 
-        const matchStage = {
-            createdAt: { $gte: startDate }
-        };
+        const matchStage = {};
+        if (req.query.startDate || req.query.endDate) {
+            matchStage.createdAt = {};
+            if (req.query.startDate) {
+                matchStage.createdAt.$gte = new Date(req.query.startDate);
+            }
+            if (req.query.endDate) {
+                matchStage.createdAt.$lte = new Date(req.query.endDate);
+            }
+        } else {
+            matchStage.createdAt = { $gte: startDate };
+        }
+
+        if (req.query.zoneIds) {
+            const mongoose = require('mongoose');
+            const zoneIdsArray = req.query.zoneIds.split(',').map(id => {
+                try {
+                    return new mongoose.Types.ObjectId(id);
+                } catch (e) {
+                    return id;
+                }
+            });
+            matchStage.zoneId = { $in: zoneIdsArray };
+        }
 
         // Optimized Aggregations with lean() and Promise.all
         const [bookingStatsAgg, topProvidersAgg, customerStatsAgg, pendingCounts, activityData] = await Promise.all([

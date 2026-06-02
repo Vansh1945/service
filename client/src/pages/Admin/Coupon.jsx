@@ -34,9 +34,22 @@ import * as AdminService from '../../services/AdminService';
 import { getAllZones } from '../../services/ZoneService';
 import { formatCurrency, formatDate } from '../../utils/format';
 import HierarchicalZoneSelector from '../../components/HierarchicalZoneSelector';
+import { useAdminFilter } from '../../context/AdminFilterContext';
+import AdminFilterBar from '../../components/AdminFilterBar';
 
 const AdminCoupons = () => {
   const { API, token } = useAuth();
+  
+  const {
+    filterType,
+    year,
+    financialYear,
+    month,
+    quarter,
+    zoneIds,
+    getComputedDateRange,
+    getMergedQuery
+  } = useAdminFilter();
   // State management
   const [coupons, setCoupons] = useState([]);
   const [filteredCoupons, setFilteredCoupons] = useState([]);
@@ -221,6 +234,27 @@ const AdminCoupons = () => {
   useEffect(() => {
     let filtered = [...coupons];
 
+    // Apply global date filter
+    const { startDate, endDate } = getComputedDateRange();
+    if (startDate && endDate) {
+      const startDateTime = new Date(startDate).getTime();
+      const endDateTime = new Date(endDate).getTime();
+      
+      filtered = filtered.filter(coupon => {
+        const couponDate = new Date(coupon.expiryDate || coupon.createdAt).getTime();
+        return couponDate >= startDateTime && couponDate <= endDateTime;
+      });
+    }
+
+    // Apply global zone filter
+    if (zoneIds && zoneIds.length > 0) {
+      filtered = filtered.filter(coupon => {
+        if (coupon.isGlobal) return true; // Global coupons apply everywhere
+        const couponZones = coupon.applicableZones ? coupon.applicableZones.map(z => (z._id || z).toString()) : [];
+        return zoneIds.some(id => couponZones.includes(id.toString()));
+      });
+    }
+
     // Apply search filter
     if (searchTerm) {
       filtered = filtered.filter(coupon =>
@@ -246,7 +280,7 @@ const AdminCoupons = () => {
     }
 
     setFilteredCoupons(filtered);
-  }, [coupons, searchTerm, typeFilter, statusFilter]);
+  }, [coupons, searchTerm, typeFilter, statusFilter, filterType, year, financialYear, month, quarter, zoneIds]);
 
   // Calculate stats whenever coupons change
   useEffect(() => {
@@ -593,6 +627,9 @@ const AdminCoupons = () => {
             </div>
           </div>
         </div>
+
+        {/* Reusable Premium Filter Bar */}
+        <AdminFilterBar onApply={fetchCoupons} />
 
         {/* Filters and Search */}
         <div className="bg-white rounded-xl shadow-md p-4 md:p-6 mb-6 md:mb-8">

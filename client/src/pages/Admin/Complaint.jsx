@@ -13,6 +13,8 @@ import {
 import Pagination from '../../components/Pagination';
 import { formatDate, formatDateTime } from '../../utils/format';
 import CDNImage from '../../components/CDNImage';
+import { useAdminFilter } from '../../context/AdminFilterContext';
+import AdminFilterBar from '../../components/AdminFilterBar';
 
 // ── Helpers ───────────────────────────────────────────────────
 
@@ -877,6 +879,7 @@ const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => 
 // ── Main Page ─────────────────────────────────────────────────
 const ComplaintsPage = () => {
   const { token, API, showToast } = useAuth();
+  const { getComputedDateRange, getMergedQuery, resetGlobalFilters } = useAdminFilter();
   const [searchParams] = useSearchParams();
   const entityId = searchParams.get('entityId') || searchParams.get('complaintId');
   const [complaints, setComplaints] = useState([]);
@@ -910,11 +913,11 @@ const ComplaintsPage = () => {
   const fetchComplaints = async () => {
     setLoading(true);
     try {
-      const params = {
+      const params = getMergedQuery({
         page: pagination.page,
         limit: pagination.limit,
         ...filters
-      };
+      });
 
       const res = await ComplaintService.getAllComplaints(params);
       if (res.data?.success) {
@@ -968,9 +971,23 @@ const ComplaintsPage = () => {
   };
 
   const clearFilters = () => {
+    resetGlobalFilters();
     setFilters({ status: '', category: '', search: '', startDate: '', endDate: '', userType: '', providerId: '' });
     setPagination(p => ({ ...p, page: 1 }));
   };
+
+  // Reactively default dateRange to global computed dates on change
+  const globalDates = getComputedDateRange();
+  useEffect(() => {
+    if (globalDates.startDate && globalDates.endDate) {
+      setFilters(prev => ({
+        ...prev,
+        startDate: globalDates.startDate,
+        endDate: globalDates.endDate
+      }));
+      setPagination(p => ({ ...p, page: 1 }));
+    }
+  }, [globalDates.startDate, globalDates.endDate]);
 
   useEffect(() => { fetchComplaints(); }, [filters, pagination.page]);
 
@@ -993,8 +1010,10 @@ const ComplaintsPage = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-background font-inter p-4 md:p-6">
-      <div className="max-w-7xl mx-auto space-y-5">
+    <div className="min-h-screen bg-background font-inter flex flex-col">
+      <AdminFilterBar />
+      <div className="p-4 md:p-6 flex-1 w-full">
+        <div className="max-w-7xl mx-auto space-y-5">
 
         {/* ── Page Header ── */}
         <div className="animate-fade-in">
@@ -1064,22 +1083,6 @@ const ComplaintsPage = () => {
                 onChange={e => handleFilterChange('providerId', e.target.value)}
                 className="pl-9 w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:bg-white text-sm outline-none transition-all"
               />
-            </div>
-
-            {/* Date From */}
-            <div className="relative">
-              <FiCalendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={13} />
-              <input type="date" value={filters.startDate}
-                onChange={e => handleFilterChange('startDate', e.target.value)}
-                className="pl-9 w-full px-2 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary text-sm outline-none transition-all" />
-            </div>
-
-            {/* Date To */}
-            <div className="relative">
-              <FiCalendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={13} />
-              <input type="date" value={filters.endDate}
-                onChange={e => handleFilterChange('endDate', e.target.value)}
-                className="pl-9 w-full px-2 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary text-sm outline-none transition-all" />
             </div>
 
             {/* Refresh – spans full */}
@@ -1207,6 +1210,7 @@ const ComplaintsPage = () => {
           onResolve={resolveComplaint}
         />
       )}
+      </div>
     </div>
   );
 };

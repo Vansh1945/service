@@ -14,9 +14,12 @@ import {
 } from 'react-icons/fi';
 import * as PaymentService from '../../services/PaymentService';
 import { useAuth } from '../../context/auth';
+import { useAdminFilter } from '../../context/AdminFilterContext';
+import AdminFilterBar from '../../components/AdminFilterBar';
 
 const AdminEarningReports = () => {
   const { API, token, showToast } = useAuth();
+  const { getComputedDateRange, getMergedQuery, resetGlobalFilters } = useAdminFilter();
   const [loading, setLoading] = useState(false);
   const [activeReport, setActiveReport] = useState(null);
   const [dateRange, setDateRange] = useState({
@@ -83,13 +86,13 @@ const AdminEarningReports = () => {
     const diffTime = Math.abs(end - start);
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-    if (diffDays < 7) {
-      setDateError('Date range must be at least 7 days');
+    if (diffDays < 1) {
+      setDateError('Date range must be at least 1 day');
       return false;
     }
 
-    if (diffDays > 62) {
-      setDateError('Date range cannot exceed 2 months (62 days)');
+    if (diffDays > 366) {
+      setDateError('Date range cannot exceed 1 year (366 days)');
       return false;
     }
 
@@ -112,12 +115,13 @@ const AdminEarningReports = () => {
       setLoading(true);
       setActiveReport(reportId);
 
-      const params = {};
-      // Add filters if provided
-      if (dateRange.startDate && dateRange.endDate) {
-        params.fromDate = dateRange.startDate;
-        params.toDate = dateRange.endDate;
-      }
+      // Merge global filters with local ones
+      const params = getMergedQuery({
+        fromDate: dateRange.startDate,
+        toDate: dateRange.endDate,
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate
+      });
       
       if (providerId && reportId !== 'provider-ledger') {
         params.providerId = providerId;
@@ -205,17 +209,16 @@ const AdminEarningReports = () => {
     }
   };
 
-  // Set default date range (last 30 days)
+  // Reactively default dateRange to global computed dates on change
+  const globalDates = getComputedDateRange();
   useEffect(() => {
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - 30);
-
-    setDateRange({
-      startDate: startDate.toISOString().split('T')[0],
-      endDate: endDate.toISOString().split('T')[0]
-    });
-  }, []);
+    if (globalDates.startDate && globalDates.endDate) {
+      setDateRange({
+        startDate: globalDates.startDate,
+        endDate: globalDates.endDate
+      });
+    }
+  }, [globalDates.startDate, globalDates.endDate]);
 
   // Validate date range when it changes
   useEffect(() => {
@@ -223,10 +226,7 @@ const AdminEarningReports = () => {
   }, [dateRange.startDate, dateRange.endDate]);
 
   const clearFilters = () => {
-    setDateRange({
-      startDate: '',
-      endDate: ''
-    });
+    resetGlobalFilters();
     setProviderId('');
     setGroupBy('month');
     setDateError('');
@@ -236,202 +236,181 @@ const AdminEarningReports = () => {
   const isDateRangeValid = !dateError;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-6">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Earning Reports</h1>
-            <p className="text-gray-600 mt-1">Generate and download comprehensive financial reports</p>
-          </div>
-          <button
-            onClick={clearFilters}
-            className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg border border-gray-300"
-          >
-            <FiRefreshCw className="w-4 h-4" />
-            Reset Filters
-          </button>
-        </div>
-
-        {/* Filter Section */}
-        <div className="bg-white rounded-xl border p-5 mb-6">
-          <div className="flex items-center gap-2 mb-4">
-            <FiFilter className="w-5 h-5 text-primary" />
-            <h3 className="font-semibold text-gray-700">Report Filters</h3>
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      <AdminFilterBar />
+      <div className="p-4 md:p-6 flex-1">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Earning Reports</h1>
+              <p className="text-gray-600 mt-1">Generate and download comprehensive financial reports</p>
+            </div>
+            <button
+              onClick={clearFilters}
+              className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg border border-gray-300"
+            >
+              <FiRefreshCw className="w-4 h-4" />
+              Reset Filters
+            </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Start Date
-              </label>
-              <input
-                type="date"
-                value={dateRange.startDate}
-                onChange={(e) => handleDateChange('startDate', e.target.value)}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-              />
+          {/* Filter Section */}
+          <div className="bg-white rounded-xl border p-5 mb-6">
+            <div className="flex items-center gap-2 mb-4">
+              <FiFilter className="w-5 h-5 text-primary" />
+              <h3 className="font-semibold text-gray-700">Report Filters</h3>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                End Date
-              </label>
-              <input
-                type="date"
-                value={dateRange.endDate}
-                onChange={(e) => handleDateChange('endDate', e.target.value)}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Group By
-              </label>
-              <select
-                value={groupBy}
-                onChange={(e) => setGroupBy(e.target.value)}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-              >
-                <option value="month">Monthly</option>
-                <option value="week">Weekly</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Provider ID
-              </label>
-              <input
-                type="text"
-                value={providerId}
-                onChange={(e) => setProviderId(e.target.value)}
-                placeholder="e.g., PROV001"
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-              />
-            </div>
-          </div>
-
-        </div>
-      </div>
-
-      {/* Reports Section */}
-      <div className="space-y-8">
-        {/* Main Reports Grid */}
-        <div>
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">Available Reports</h3>
-          <p className="text-gray-600 mb-6">Download reports in Excel format for easy analysis</p>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {reports.map((report) => (
-              <div key={report.id} className="bg-white rounded-xl border border-gray-200 p-5">
-                <div className="flex items-start gap-3 mb-4">
-                  <div className={`p-3 rounded-lg ${report.color}`}>
-                    {report.icon}
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="font-semibold text-gray-800 mb-1">{report.title}</h4>
-                    <p className="text-sm text-gray-600">{report.description}</p>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => handleDownload(report.id)}
-                  disabled={loading || (!isDateRangeValid && dateRange.startDate && dateRange.endDate)}
-                  className="w-full px-4 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Group By
+                </label>
+                <select
+                  value={groupBy}
+                  onChange={(e) => setGroupBy(e.target.value)}
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
                 >
-                  {loading && activeReport === report.id ? (
+                  <option value="month">Monthly</option>
+                  <option value="week">Weekly</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Provider ID
+                </label>
+                <input
+                  type="text"
+                  value={providerId}
+                  onChange={(e) => setProviderId(e.target.value)}
+                  placeholder="e.g., PROV001"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                />
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        {/* Reports Section */}
+        <div className="space-y-8">
+          {/* Main Reports Grid */}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Available Reports</h3>
+            <p className="text-gray-600 mb-6">Download reports in Excel format for easy analysis</p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {reports.map((report) => (
+                <div key={report.id} className="bg-white rounded-xl border border-gray-200 p-5">
+                  <div className="flex items-start gap-3 mb-4">
+                    <div className={`p-3 rounded-lg ${report.color}`}>
+                      {report.icon}
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-gray-800 mb-1">{report.title}</h4>
+                      <p className="text-sm text-gray-600">{report.description}</p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => handleDownload(report.id)}
+                    disabled={loading || (!isDateRangeValid && dateRange.startDate && dateRange.endDate)}
+                    className="w-full px-4 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {loading && activeReport === report.id ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                        <span>Preparing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <FiDownload className="w-5 h-5" />
+                        <span>Download Report</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Provider Ledger Section */}
+          <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl border border-orange-200 p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-3 rounded-lg bg-orange-100 text-orange-600">
+                <FiFileText className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800">Provider Ledger Report</h3>
+                <p className="text-sm text-gray-600">Generate detailed ledger for a specific provider</p>
+              </div>
+            </div>
+
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Provider ID
+                </label>
+                <input
+                  type="text"
+                  value={providerId}
+                  onChange={(e) => setProviderId(e.target.value)}
+                  placeholder="Enter Provider ID (e.g., PROV001)"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent"
+                />
+              </div>
+
+              <div className="flex items-end">
+                <button
+                  onClick={() => handleDownload('provider-ledger', providerId)}
+                  disabled={loading || !providerId || (!isDateRangeValid && dateRange.startDate && dateRange.endDate)}
+                  className="w-full md:w-auto px-6 py-3 bg-gradient-to-r from-accent to-orange-500 text-white rounded-lg font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {loading && activeReport === 'provider-ledger' ? (
                     <>
                       <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                      <span>Preparing...</span>
+                      <span>Generating...</span>
                     </>
                   ) : (
                     <>
                       <FiDownload className="w-5 h-5" />
-                      <span>Download Report</span>
+                      <span>Download Ledger</span>
                     </>
                   )}
                 </button>
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Provider Ledger Section */}
-        <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl border border-orange-200 p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-3 rounded-lg bg-orange-100 text-orange-600">
-              <FiFileText className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-gray-800">Provider Ledger Report</h3>
-              <p className="text-sm text-gray-600">Generate detailed ledger for a specific provider</p>
             </div>
           </div>
 
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Provider ID
-              </label>
-              <input
-                type="text"
-                value={providerId}
-                onChange={(e) => setProviderId(e.target.value)}
-                placeholder="Enter Provider ID (e.g., PROV001)"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent"
-              />
-            </div>
-
-            <div className="flex items-end">
-              <button
-                onClick={() => handleDownload('provider-ledger', providerId)}
-                disabled={loading || !providerId || (!isDateRangeValid && dateRange.startDate && dateRange.endDate)}
-                className="w-full md:w-auto px-6 py-3 bg-gradient-to-r from-accent to-orange-500 text-white rounded-lg font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {loading && activeReport === 'provider-ledger' ? (
-                  <>
-                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                    <span>Generating...</span>
-                  </>
-                ) : (
-                  <>
-                    <FiDownload className="w-5 h-5" />
-                    <span>Download Ledger</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Help Section */}
-        <div className="bg-blue-50 border border-blue-100 rounded-xl p-6">
-          <div className="flex items-start gap-4">
-            <div className="p-3 bg-blue-100 rounded-lg">
-              <FiAlertCircle className="w-6 h-6 text-blue-600" />
-            </div>
-            <div>
-              <h4 className="text-lg font-semibold text-gray-800 mb-3">Report Guidelines</h4>
-              <ul className="text-gray-600 space-y-2">
-                <li className="flex items-start gap-2">
-                  <span className="text-primary font-bold mt-1">•</span>
-                  <span>All reports download as Excel (.xlsx) files</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary font-bold mt-1">•</span>
-                  <span>Date range must be between 7 days and 2 months</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary font-bold mt-1">•</span>
-                  <span>Leave dates empty for complete historical data</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary font-bold mt-1">•</span>
-                  <span>Provider ID is required for ledger reports only</span>
-                </li>
-              </ul>
+          {/* Help Section */}
+          <div className="bg-blue-50 border border-blue-100 rounded-xl p-6">
+            <div className="flex items-start gap-4">
+              <div className="p-3 bg-blue-100 rounded-lg">
+                <FiAlertCircle className="w-6 h-6 text-blue-600" />
+              </div>
+              <div>
+                <h4 className="text-lg font-semibold text-gray-800 mb-3">Report Guidelines</h4>
+                <ul className="text-gray-600 space-y-2">
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary font-bold mt-1">•</span>
+                    <span>All reports download as Excel (.xlsx) files</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary font-bold mt-1">•</span>
+                    <span>Date range must be between 1 day and 1 year (366 days)</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary font-bold mt-1">•</span>
+                    <span>Leave dates empty or use global reset for complete historical data</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary font-bold mt-1">•</span>
+                    <span>Provider ID is required for ledger reports only</span>
+                  </li>
+                </ul>
+              </div>
             </div>
           </div>
         </div>

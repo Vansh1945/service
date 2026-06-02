@@ -12,6 +12,8 @@ import {
 } from 'react-icons/fi';
 import * as AdminService from '../../services/AdminService';
 import { formatDate, formatCurrency } from '../../utils/format';
+import { useAdminFilter } from '../../context/AdminFilterContext';
+import AdminFilterBar from '../../components/AdminFilterBar';
 
 // Pure helpers at module scope — created once, never re-allocated
 
@@ -31,6 +33,16 @@ const AdminDashboard = () => {
   const [filters, setFilters] = useState({ period: '30d' });
   const [isReady, setIsReady] = useState(false);
   const [Recharts, setRecharts] = useState(null);
+
+  const {
+    filterType,
+    year,
+    financialYear,
+    month,
+    quarter,
+    zoneIds,
+    getMergedQuery
+  } = useAdminFilter();
 
   useEffect(() => {
     import('recharts').then(module => {
@@ -53,7 +65,8 @@ const AdminDashboard = () => {
         setLoading(true);
       }
 
-      const response = await AdminService.getDashboardAnalytics({ period: filters.period });
+      const queryParams = getMergedQuery({ period: filters.period });
+      const response = await AdminService.getDashboardAnalytics(queryParams);
 
       if (response.data?.success) {
         setAnalytics(response.data);
@@ -68,11 +81,11 @@ const AdminDashboard = () => {
       setInitialLoading(false);
       setLoading(false);
     }
-  }, [filters.period]);
+  }, [filters.period, getMergedQuery]);
 
   useEffect(() => {
     fetchDashboardData(true);
-  }, [fetchDashboardData]);
+  }, [fetchDashboardData, filterType, year, financialYear, month, quarter, zoneIds]);
 
   // Handle chart rendering delay to avoid width(-1) error
   useEffect(() => {
@@ -97,7 +110,7 @@ const AdminDashboard = () => {
           <p className="text-gray-600">Welcome back, {user?.name || 'Admin'}</p>
         </div>
         <button
-          onClick={fetchDashboardData}
+          onClick={() => fetchDashboardData()}
           className="flex items-center px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-700"
         >
           <FiRefreshCw className="mr-2" />
@@ -105,42 +118,8 @@ const AdminDashboard = () => {
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center">
-            <div className="p-2 bg-primary/10 rounded-lg mr-3">
-              <FiFilter className="text-primary" />
-            </div>
-            <div>
-              <h3 className="font-bold text-gray-900">Global System Filter</h3>
-              <p className="text-xs text-gray-500">Live analytics synchronization</p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <select
-              value={filters.period}
-              onChange={(e) => setFilters(prev => ({ ...prev, period: e.target.value }))}
-              className="px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-            >
-              <option value="1d">1 Day (Today)</option>
-              <option value="24h">Last 24 Hours</option>
-              <option value="7d">Last 7 Days</option>
-              <option value="30d">Last 30 Days</option>
-              <option value="90d">Quarterly (3 Months)</option>
-              <option value="180d">Last 6 Months</option>
-              <option value="365d">Last 12 Months</option>
-            </select>
-            <button
-              onClick={() => fetchDashboardData()}
-              disabled={loading}
-              className="px-6 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-50 transition-colors shadow-sm"
-            >
-              {loading ? 'Updating...' : 'Apply Filter'}
-            </button>
-          </div>
-        </div>
-      </div>
+      {/* Reusable Premium Filter Bar */}
+      <AdminFilterBar onApply={() => fetchDashboardData()} />
 
       {/* LIVE COMMAND CENTER */}
       <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-zinc-900 text-white p-6 rounded-2xl border border-slate-700 shadow-xl mb-6 relative overflow-hidden">

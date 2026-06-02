@@ -33,6 +33,8 @@ const MapBoundsHelper = ({ providerLoc, targetLat, targetLng }) => {
 import * as BookingService from '../../services/BookingService';
 import * as AdminService from '../../services/AdminService';
 import Pagination from '../../components/Pagination';
+import { useAdminFilter } from '../../context/AdminFilterContext';
+import AdminFilterBar from '../../components/AdminFilterBar';
 import { formatDate, formatTime, formatCurrency, LIGHT_MAP_TILES, LIGHT_MAP_ATTRIBUTION } from '../../utils/format';
 import {
     Search,
@@ -437,16 +439,23 @@ const AdminBookingsView = () => {
     const [showRescheduleModal, setShowRescheduleModal] = useState(false);
     const [showAssignProviderModal, setShowAssignProviderModal] = useState(false);
 
+    const {
+        filterType,
+        year,
+        financialYear,
+        month,
+        quarter,
+        zoneIds,
+        getMergedQuery
+    } = useAdminFilter();
+
     // Filter states - initialize from URL to prevent race conditions and flashes
     const [filters, setFilters] = useState(() => {
         const params = new URLSearchParams(window.location.search);
         return {
             status: '',
-            startDate: '',
-            endDate: '',
             search: params.get('search') || '',
-            paymentStatus: '',
-            timeRange: ''
+            paymentStatus: ''
         };
     });
 
@@ -493,7 +502,8 @@ const AdminBookingsView = () => {
             const params = {
                 page: pagination.page,
                 limit: pagination.limit,
-                ...Object.fromEntries(Object.entries(filters).filter(([_, v]) => v !== ''))
+                ...Object.fromEntries(Object.entries(filters).filter(([_, v]) => v !== '')),
+                ...getMergedQuery()
             };
 
             const response = await BookingService.getAllBookings(params);
@@ -621,38 +631,7 @@ const AdminBookingsView = () => {
     }, [showToast, fetchBookings]);
 
     // Download booking report
-    const handleDownloadReport = useCallback(async () => {
-        if (!filters.startDate || !filters.endDate) {
-            showToast('Please select a date range to export the report.', 'error');
-            return;
-        }
-        try {
-            setActionLoading(true);
-            const params = {
-                startDate: filters.startDate,
-                endDate: filters.endDate
-            };
-
-            const response = await BookingService.downloadBookingReport(params, { responseType: 'blob' });
-
-            const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `booking_report_${new Date().toISOString().split('T')[0]}.xlsx`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-
-            showToast('Report downloaded successfully', 'success');
-        } catch (error) {
-            console.error('Error downloading report:', error);
-            showToast(error.message, 'error');
-        } finally {
-            setActionLoading(false);
-        }
-    }, [showToast, filters.startDate, filters.endDate]);
+    // Removed handleDownloadReport as per requirement to only download reports on Earning Reports page
 
     // Handle filter changes — useCallback avoids recreation on every render
     const handleFilterChange = useCallback((key, value) => {
@@ -672,11 +651,8 @@ const AdminBookingsView = () => {
     const clearFilters = useCallback(() => {
         setFilters({
             status: '',
-            startDate: '',
-            endDate: '',
             search: '',
-            paymentStatus: '',
-            timeRange: ''
+            paymentStatus: ''
         });
         setPagination(prev => ({ ...prev, page: 1 }));
     }, []);
@@ -761,7 +737,7 @@ const AdminBookingsView = () => {
     useEffect(() => {
         fetchBookings();
         fetchProviders();
-    }, [filters, pagination.page, pagination.limit]);
+    }, [filters, pagination.page, pagination.limit, filterType, year, financialYear, month, quarter, zoneIds]);
 
     // Generate pagination items
     const getPaginationItems = () => {
@@ -851,21 +827,24 @@ const AdminBookingsView = () => {
                 </div>
             </div>
 
-            {/* Filters Section */}
+            {/* Reusable Premium Filter Bar */}
+            <AdminFilterBar onApply={fetchBookings} />
+
+            {/* Local Page Filters Section */}
             <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 mb-6">
                 <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-secondary">Filters</h3>
+                    <h3 className="text-lg font-semibold text-secondary">Local Page Filters</h3>
                     <div className="flex items-center space-x-2">
                         <button
                             onClick={clearFilters}
                             className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800"
                         >
-                            Clear All
+                            Clear Local
                         </button>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {/* Search */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
@@ -912,44 +891,6 @@ const AdminBookingsView = () => {
                             ))}
                         </select>
                     </div>
-
-                    {/* Time Range Filter */}
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Time Range</label>
-                        <select
-                            value={filters.timeRange}
-                            onChange={(e) => handleFilterChange('timeRange', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                        >
-                            {timeRangeOptions.map(option => (
-                                <option key={option.value} value={option.value}>
-                                    {option.label}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-
-                    {/* Date Range */}
-                    <div className="grid grid-cols-2 gap-2">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
-                            <input
-                                type="date"
-                                value={filters.startDate}
-                                onChange={(e) => handleFilterChange('startDate', e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">To</label>
-                            <input
-                                type="date"
-                                value={filters.endDate}
-                                onChange={(e) => handleFilterChange('endDate', e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                            />
-                        </div>
-                    </div>
                 </div>
 
                 {/* Active Filters Badges */}
@@ -993,15 +934,8 @@ const AdminBookingsView = () => {
                             Showing {filteredBookingsCount} of {pagination.total} bookings
                         </p>
                     </div>
-                    <button
-                        onClick={handleDownloadReport}
-                        disabled={actionLoading}
-                        className="flex items-center px-4 py-2 bg-accent text-white rounded-lg hover:bg-orange-600 disabled:opacity-50"
-                    >
-                        <Download className="w-4 h-4 mr-2" />
-                        Export Report
-                    </button>
-                </div>
+                    {/* Download Report removed as per user rule to keep it only on Earning Reports page */}
+                    </div>
 
                 {/* Table */}
                 <div className="overflow-x-auto">

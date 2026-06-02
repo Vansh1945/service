@@ -27,11 +27,23 @@ import * as CommissionService from '../../services/CommissionService';
 import * as AdminService from '../../services/AdminService';
 import * as ZoneService from '../../services/ZoneService';
 import Pagination from '../../components/Pagination';
+import { useAdminFilter } from '../../context/AdminFilterContext';
+import AdminFilterBar from '../../components/AdminFilterBar';
 import HierarchicalZoneSelector from '../../components/HierarchicalZoneSelector';
 
 const AdminCommissionPage = () => {
   const { API, token, showToast } = useAuth();
   const [loading, setLoading] = useState(false);
+
+  const {
+    filterType,
+    year,
+    financialYear,
+    month,
+    quarter,
+    zoneIds,
+    getMergedQuery
+  } = useAdminFilter();
 
   // Data states
   const [commissionRules, setCommissionRules] = useState([]);
@@ -183,111 +195,8 @@ const AdminCommissionPage = () => {
     isActive: '',
     applyTo: '',
     priorityTier: '',
-    performanceScore: '',
-    zoneIds: []
+    performanceScore: ''
   });
-
-  // Filter Cascade selector state variables
-  const [filterStateSearch, setFilterStateSearch] = useState('');
-  const [filterStateOpen, setFilterStateOpen] = useState(false);
-  const [filterCitySearch, setFilterCitySearch] = useState('');
-  const [filterCityOpen, setFilterCityOpen] = useState(false);
-  const [filterMicroSearch, setFilterMicroSearch] = useState('');
-  const [filterMicroOpen, setFilterMicroOpen] = useState(false);
-
-  const handleFilterZoneToggleCascade = (zone) => {
-    const currentSelected = filters.zoneIds || [];
-    const zoneId = zone._id.toString();
-
-    let newZones = [...currentSelected];
-
-    if (currentSelected.includes(zone._id)) {
-      // DESELECT logic
-      newZones = newZones.filter(id => id !== zone._id);
-
-      if (zone.zoneLevel === 'state') {
-        const childCities = zones.filter(z => z.zoneLevel === 'city' && (z.parentZone?._id || z.parentZone || '').toString() === zoneId);
-        const cityIds = childCities.map(c => c._id.toString());
-        newZones = newZones.filter(id => !cityIds.includes(id));
-
-        const childMicros = zones.filter(z => z.zoneLevel === 'micro' && cityIds.includes((z.parentZone?._id || z.parentZone || '').toString()));
-        const microIds = childMicros.map(m => m._id.toString());
-        newZones = newZones.filter(id => !microIds.includes(id));
-      } else if (zone.zoneLevel === 'city') {
-        const childMicros = zones.filter(z => z.zoneLevel === 'micro' && (z.parentZone?._id || z.parentZone || '').toString() === zoneId);
-        const microIds = childMicros.map(m => m._id.toString());
-        newZones = newZones.filter(id => !microIds.includes(id));
-
-        const parentStateId = (zone.parentZone?._id || zone.parentZone || '').toString();
-        if (parentStateId) {
-          newZones = newZones.filter(id => id !== parentStateId);
-        }
-      } else if (zone.zoneLevel === 'micro') {
-        const parentCityId = (zone.parentZone?._id || zone.parentZone || '').toString();
-        if (parentCityId) {
-          newZones = newZones.filter(id => id !== parentCityId);
-          const parentCity = zones.find(z => z._id.toString() === parentCityId);
-          const parentStateId = parentCity ? (parentCity.parentZone?._id || parentCity.parentZone || '').toString() : '';
-          if (parentStateId) {
-            newZones = newZones.filter(id => id !== parentStateId);
-          }
-        }
-      }
-    } else {
-      // SELECT logic
-      newZones.push(zone._id);
-
-      if (zone.zoneLevel === 'state') {
-        const childCities = zones.filter(z => z.zoneLevel === 'city' && (z.parentZone?._id || z.parentZone || '').toString() === zoneId);
-        const cityIds = childCities.map(c => c._id);
-
-        const childMicros = zones.filter(z => z.zoneLevel === 'micro' && cityIds.map(id => id.toString()).includes((z.parentZone?._id || z.parentZone || '').toString()));
-        const microIds = childMicros.map(m => m._id);
-
-        newZones = Array.from(new Set([...newZones, ...cityIds, ...microIds]));
-      } else if (zone.zoneLevel === 'city') {
-        const childMicros = zones.filter(z => z.zoneLevel === 'micro' && (z.parentZone?._id || z.parentZone || '').toString() === zoneId);
-        const microIds = childMicros.map(m => m._id);
-        newZones = Array.from(new Set([...newZones, ...microIds]));
-
-        const parentStateId = (zone.parentZone?._id || zone.parentZone || '').toString();
-        if (parentStateId) {
-          const siblingCities = zones.filter(z => z.zoneLevel === 'city' && (z.parentZone?._id || z.parentZone || '').toString() === parentStateId);
-          const allSiblingCityIds = siblingCities.map(c => c._id.toString());
-          const areAllSelected = allSiblingCityIds.every(id => newZones.includes(id));
-          if (areAllSelected) {
-            newZones.push(parentStateId);
-          }
-        }
-      } else if (zone.zoneLevel === 'micro') {
-        const parentCityId = (zone.parentZone?._id || zone.parentZone || '').toString();
-        if (parentCityId) {
-          const siblingMicros = zones.filter(z => z.zoneLevel === 'micro' && (z.parentZone?._id || z.parentZone || '').toString() === parentCityId);
-          const allSiblingMicroIds = siblingMicros.map(m => m._id.toString());
-          const areAllSelected = allSiblingMicroIds.every(id => newZones.includes(id));
-          if (areAllSelected) {
-            newZones.push(parentCityId);
-
-            const parentCity = zones.find(z => z._id.toString() === parentCityId);
-            const parentStateId = parentCity ? (parentCity.parentZone?._id || parentCity.parentZone || '').toString() : '';
-            if (parentStateId) {
-              const siblingCities = zones.filter(z => z.zoneLevel === 'city' && (z.parentZone?._id || z.parentZone || '').toString() === parentStateId);
-              const allSiblingCityIds = siblingCities.map(c => c._id.toString());
-              const areAllSelectedCities = allSiblingCityIds.every(id => newZones.includes(id) || id === parentCityId);
-              if (areAllSelectedCities) {
-                newZones.push(parentStateId);
-              }
-            }
-          }
-        }
-      }
-    }
-
-    setFilters(prev => ({
-      ...prev,
-      zoneIds: newZones
-    }));
-  };
 
   // Available options matching backend enum
   const performanceScores = ['Bronze', 'Silver', 'Gold', 'Platinum'];
@@ -304,7 +213,7 @@ const AdminCommissionPage = () => {
         ...(filters.applyTo && { applyTo: filters.applyTo }),
         ...(filters.priorityTier && { priorityTier: filters.priorityTier }),
         ...(filters.performanceScore && { performanceScore: filters.performanceScore }),
-        ...(filters.zoneIds && filters.zoneIds.length > 0 && { zoneIds: filters.zoneIds.join(',') })
+        ...(zoneIds && zoneIds.length > 0 && { zoneIds: zoneIds.join(',') })
       };
 
       const response = await CommissionService.listCommissionRules(params);
@@ -603,8 +512,8 @@ const AdminCommissionPage = () => {
     }
 
     let matchesZones = true;
-    if (filters.zoneIds && filters.zoneIds.length > 0) {
-      matchesZones = rule.zoneId && filters.zoneIds.includes(rule.zoneId);
+    if (zoneIds && zoneIds.length > 0) {
+      matchesZones = rule.zoneId && zoneIds.includes(rule.zoneId);
     }
 
     let matchesPerformance = true;
@@ -715,7 +624,7 @@ const AdminCommissionPage = () => {
   // Refetch when filters change
   useEffect(() => {
     fetchCommissionRules(1, pagination.limit);
-  }, [filters.isActive, filters.applyTo, filters.priorityTier, filters.performanceScore, filters.zoneIds]);
+  }, [filters.isActive, filters.applyTo, filters.priorityTier, filters.performanceScore, filterType, year, financialYear, month, quarter, zoneIds]);
 
   return (
     <div className="p-4 md:p-8 min-h-screen">
@@ -780,9 +689,12 @@ const AdminCommissionPage = () => {
           </div>
         </div>
 
+        {/* Reusable Premium Filter Bar */}
+        <AdminFilterBar onApply={() => fetchCommissionRules(1, pagination.limit)} />
+
         {/* Content */}
         <div className="space-y-6">
-          {/* Filters */}
+          {/* Local Filters */}
           <div className="bg-white rounded-xl shadow-lg p-6 space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
               <div>
@@ -845,208 +757,6 @@ const AdminCommissionPage = () => {
               </div>
             </div>
 
-            {/* Hierarchical Zone Selector Filter */}
-            <div className="border-t border-gray-100 pt-4">
-              <label className="block text-sm font-medium text-secondary mb-2">Filter by Zone (Cascading Dropdown)</label>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {/* 1. STATE DROPDOWN FOR FILTER */}
-                <div className="relative">
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">State Selector</label>
-                  <div
-                    onClick={() => {
-                      setFilterStateOpen(!filterStateOpen);
-                      setFilterCityOpen(false);
-                      setFilterMicroOpen(false);
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white cursor-pointer flex justify-between items-center text-sm"
-                  >
-                    <span className="text-gray-700 truncate">
-                      {(() => {
-                        const sel = (filters.zoneIds || []).filter(id => zones.find(z => z._id === id)?.zoneLevel === 'state');
-                        return sel.length === 0 ? 'Select States' : `${sel.length} Selected`;
-                      })()}
-                    </span>
-                    {filterStateOpen ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
-                  </div>
-                  {filterStateOpen && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto p-2">
-                      <input
-                        type="text"
-                        placeholder="Search state..."
-                        value={filterStateSearch}
-                        onChange={(e) => setFilterStateSearch(e.target.value)}
-                        onClick={(e) => e.stopPropagation()}
-                        className="w-full px-2 py-1 text-xs border border-gray-300 rounded mb-2 focus:outline-none focus:ring-1 focus:ring-primary"
-                      />
-                      <div className="space-y-1">
-                        {zones.filter(z => z.zoneLevel === 'state' && z.name.toLowerCase().includes(filterStateSearch.toLowerCase())).map(s => (
-                          <label key={s._id} className="flex items-center text-xs font-semibold text-secondary hover:text-primary cursor-pointer py-1 px-1 rounded hover:bg-gray-50" onClick={(e) => e.stopPropagation()}>
-                            <input
-                              type="checkbox"
-                              checked={filters.zoneIds ? filters.zoneIds.includes(s._id) : false}
-                              onChange={() => handleFilterZoneToggleCascade(s)}
-                              className="h-3.5 w-3.5 text-primary border-gray-300 rounded mr-2"
-                            />
-                            {s.name}
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* 2. CITY DROPDOWN FOR FILTER */}
-                <div className="relative">
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">City Selector</label>
-                  <div
-                    onClick={() => {
-                      setFilterCityOpen(!filterCityOpen);
-                      setFilterStateOpen(false);
-                      setFilterMicroOpen(false);
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white cursor-pointer flex justify-between items-center text-sm"
-                  >
-                    <span className="text-gray-700 truncate">
-                      {(() => {
-                        const sel = (filters.zoneIds || []).filter(id => zones.find(z => z._id === id)?.zoneLevel === 'city');
-                        return sel.length === 0 ? 'Select Cities' : `${sel.length} Selected`;
-                      })()}
-                    </span>
-                    {filterCityOpen ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
-                  </div>
-                  {filterCityOpen && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto p-2">
-                      <input
-                        type="text"
-                        placeholder="Search city..."
-                        value={filterCitySearch}
-                        onChange={(e) => setFilterCitySearch(e.target.value)}
-                        onClick={(e) => e.stopPropagation()}
-                        className="w-full px-2 py-1 text-xs border border-gray-300 rounded mb-2 focus:outline-none focus:ring-1 focus:ring-primary"
-                      />
-                      <div className="space-y-1">
-                        {(() => {
-                          const selectedStateIds = (filters.zoneIds || []).filter(id => zones.find(z => z._id === id)?.zoneLevel === 'state');
-                          const cities = selectedStateIds.length > 0
-                            ? zones.filter(z => z.zoneLevel === 'city' && selectedStateIds.includes((z.parentZone?._id || z.parentZone || '').toString()))
-                            : zones.filter(z => z.zoneLevel === 'city');
-
-                          const filteredCities = cities.filter(c => c.name.toLowerCase().includes(filterCitySearch.toLowerCase()));
-                          if (filteredCities.length === 0) {
-                            return <p className="text-[10px] text-gray-400 italic text-center py-2">No cities available.</p>;
-                          }
-
-                          return filteredCities.map(c => (
-                            <label key={c._id} className="flex items-center text-xs font-semibold text-secondary hover:text-primary cursor-pointer py-1 px-1 rounded hover:bg-gray-50" onClick={(e) => e.stopPropagation()}>
-                              <input
-                                type="checkbox"
-                                checked={filters.zoneIds ? filters.zoneIds.includes(c._id) : false}
-                                onChange={() => handleFilterZoneToggleCascade(c)}
-                                className="h-3.5 w-3.5 text-primary border-gray-300 rounded mr-2"
-                              />
-                              {c.name}
-                            </label>
-                          ));
-                        })()}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* 3. MICRO ZONE DROPDOWN FOR FILTER */}
-                <div className="relative">
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Micro Zone Selector</label>
-                  <div
-                    onClick={() => {
-                      setFilterMicroOpen(!filterMicroOpen);
-                      setFilterStateOpen(false);
-                      setFilterCityOpen(false);
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white cursor-pointer flex justify-between items-center text-sm"
-                  >
-                    <span className="text-gray-700 truncate">
-                      {(() => {
-                        const sel = (filters.zoneIds || []).filter(id => zones.find(z => z._id === id)?.zoneLevel === 'micro');
-                        return sel.length === 0 ? 'Select Micro Zones' : `${sel.length} Selected`;
-                      })()}
-                    </span>
-                    {filterMicroOpen ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
-                  </div>
-                  {filterMicroOpen && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto p-2">
-                      <input
-                        type="text"
-                        placeholder="Search micro zone..."
-                        value={filterMicroSearch}
-                        onChange={(e) => setFilterMicroSearch(e.target.value)}
-                        onClick={(e) => e.stopPropagation()}
-                        className="w-full px-2 py-1 text-xs border border-gray-300 rounded mb-2 focus:outline-none focus:ring-1 focus:ring-primary"
-                      />
-                      <div className="space-y-1">
-                        {(() => {
-                          const selectedCityIds = (filters.zoneIds || []).filter(id => zones.find(z => z._id === id)?.zoneLevel === 'city');
-                          const micros = selectedCityIds.length > 0
-                            ? zones.filter(z => z.zoneLevel === 'micro' && selectedCityIds.includes((z.parentZone?._id || z.parentZone || '').toString()))
-                            : zones.filter(z => z.zoneLevel === 'micro');
-
-                          const filteredMicros = micros.filter(m => m.name.toLowerCase().includes(filterMicroSearch.toLowerCase()));
-                          if (filteredMicros.length === 0) {
-                            return <p className="text-[10px] text-gray-400 italic text-center py-2">No micro zones available.</p>;
-                          }
-
-                          return filteredMicros.map(m => (
-                            <label key={m._id} className="flex items-center text-xs font-medium text-gray-700 hover:text-primary cursor-pointer py-1 px-1 rounded hover:bg-gray-50" onClick={(e) => e.stopPropagation()}>
-                              <input
-                                type="checkbox"
-                                checked={filters.zoneIds ? filters.zoneIds.includes(m._id) : false}
-                                onChange={() => handleFilterZoneToggleCascade(m)}
-                                className="h-3.5 w-3.5 text-primary border-gray-300 rounded mr-2"
-                              />
-                              {m.name}
-                            </label>
-                          ));
-                        })()}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Filter Selected Zones Chips */}
-              {filters.zoneIds && filters.zoneIds.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-3 max-h-24 overflow-y-auto bg-gray-50 p-2.5 rounded-xl border border-gray-100">
-                  <span className="text-xs text-gray-500 flex items-center mr-1">Active Zones:</span>
-                  {filters.zoneIds.map(id => {
-                    const zone = zones.find(z => z._id.toString() === id.toString());
-                    if (!zone) return null;
-
-                    let badgeColor = 'bg-teal-50 text-teal-800 border-teal-200';
-                    if (zone.zoneLevel === 'city') badgeColor = 'bg-blue-50 text-blue-800 border-blue-200';
-                    if (zone.zoneLevel === 'micro') badgeColor = 'bg-purple-50 text-purple-800 border-purple-200';
-
-                    return (
-                      <span key={id} className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border shadow-xs ${badgeColor}`}>
-                        <span>{zone.name} ({zone.zoneLevel.toUpperCase()})</span>
-                        <button
-                          type="button"
-                          onClick={() => handleFilterZoneToggleCascade(zone)}
-                          className="ml-1 inline-flex items-center justify-center focus:outline-none"
-                        >
-                          <X className="w-3 h-3 ml-0.5" />
-                        </button>
-                      </span>
-                    );
-                  })}
-                  <button
-                    onClick={() => setFilters(prev => ({ ...prev, zoneIds: [] }))}
-                    className="text-xs font-bold text-red-500 hover:text-red-700 transition-colors ml-auto"
-                  >
-                    Clear All Zones
-                  </button>
-                </div>
-              )}
-            </div>
           </div>
 
           {/* Rules Table */}

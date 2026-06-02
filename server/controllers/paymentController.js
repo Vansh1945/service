@@ -1627,15 +1627,15 @@ const generateWithdrawalReport = async (req, res) => {
     const from = new Date(fromDate);
     const to = new Date(toDate);
 
-    // Ensure min 7 days and max 2 months range
+    // Ensure min 1 day and max 1 year range
     const diffMs = to - from;
-    const minRangeMs = 7 * 24 * 60 * 60 * 1000;    // 7 days
-    const maxRangeMs = 62 * 24 * 60 * 60 * 1000; // 62 days
+    const minRangeMs = 1 * 24 * 60 * 60 * 1000;    // 1 day
+    const maxRangeMs = 366 * 24 * 60 * 60 * 1000; // 366 days
 
     if (diffMs < minRangeMs || diffMs > maxRangeMs) {
       return res.status(400).json({
         success: false,
-        message: "Date range must be between 7 days and 2 months"
+        message: "Date range must be between 1 day and 1 year"
       });
     }
 
@@ -1645,6 +1645,12 @@ const generateWithdrawalReport = async (req, res) => {
     };
     if (status) {
       filter.status = status;
+    }
+    if (req.query.zoneIds) {
+      const zones = req.query.zoneIds.split(',');
+      const providers = await Provider.find({ currentZone: { $in: zones } }).select('_id').lean();
+      const providerIds = providers.map(p => p._id);
+      filter.provider = { $in: providerIds };
     }
 
     // Fetch PaymentRecords with provider details populated
@@ -1740,12 +1746,12 @@ const generateProviderEarningsReport = async (req, res) => {
     // Parse dates
     const start = new Date(fromDate);
     const end = new Date(toDate);
-    // Ensure proper range limits (7-62 days)
+    // Ensure proper range limits (1 day to 1 year)
     const diffDays = (end - start) / (1000 * 60 * 60 * 24);
-    if (diffDays < 7 || diffDays > 62) {
+    if (diffDays < 1 || diffDays > 366) {
       return res.status(400).json({
         success: false,
-        message: "Date range must be between 7 days and 2 months",
+        message: "Date range must be between 1 day and 1 year",
       });
     }
 
@@ -1759,6 +1765,10 @@ const generateProviderEarningsReport = async (req, res) => {
       } else {
         providerFilter.providerId = providerId;
       }
+    }
+    if (req.query.zoneIds) {
+      const zones = req.query.zoneIds.split(',');
+      providerFilter.currentZone = { $in: zones };
     }
     const providers = await Provider.find(providerFilter).lean();
     if (!providers.length) {
@@ -1905,19 +1915,24 @@ const getCommissionReport = async (req, res) => {
     const start = new Date(fromDate);
     const end = new Date(toDate);
 
-    // Ensure min 7 days, max 2 months (~62 days)
+    // Ensure min 1 day, max 1 year (~366 days)
     const diffTime = Math.abs(end - start);
     const diffDays = diffTime / (1000 * 60 * 60 * 24);
 
-    if (diffDays < 7 || diffDays > 62) {
-      return res.status(400).json({ success: false, message: 'Date range must be between 7 days and 2 months' });
+    if (diffDays < 1 || diffDays > 366) {
+      return res.status(400).json({ success: false, message: 'Date range must be between 1 day and 1 year' });
     }
 
     // Fetch completed bookings in date range
-    const bookings = await Booking.find({
+    const filter = {
       status: 'completed',
       serviceCompletedAt: { $gte: start, $lte: end }
-    })
+    };
+    if (req.query.zoneIds) {
+      const zones = req.query.zoneIds.split(',');
+      filter.zoneId = { $in: zones };
+    }
+    const bookings = await Booking.find(filter)
       .populate('provider', 'name email providerId')
       .populate('services.service', 'title basePrice')
       .lean();
@@ -1997,14 +2012,21 @@ const failedRejectedWithdrawalsReport = async (req, res) => {
     const end = new Date(endDate);
     const diffDays = (end - start) / (1000 * 60 * 60 * 24);
 
-    if (diffDays < 7) return res.status(400).json({ message: 'Minimum range is 7 days' });
-    if (diffDays > 62) return res.status(400).json({ message: 'Maximum range is 2 months' });
+    if (diffDays < 1) return res.status(400).json({ message: 'Minimum range is 1 day' });
+    if (diffDays > 366) return res.status(400).json({ message: 'Maximum range is 1 year' });
 
     // Fetch records
-    const records = await PaymentRecord.find({
+    const filter = {
       status: { $in: ['failed', 'rejected'] },
       createdAt: { $gte: start, $lte: end }
-    }).populate('provider', 'name email').lean();
+    };
+    if (req.query.zoneIds) {
+      const zones = req.query.zoneIds.split(',');
+      const providers = await Provider.find({ currentZone: { $in: zones } }).select('_id').lean();
+      const providerIds = providers.map(p => p._id);
+      filter.provider = { $in: providerIds };
+    }
+    const records = await PaymentRecord.find(filter).populate('provider', 'name email').lean();
 
     if (download === 'true') {
       // Excel download
@@ -2071,8 +2093,8 @@ const providerLedgerReport = async (req, res) => {
     end.setHours(23, 59, 59, 999);
 
     const diffDays = Math.floor((end - start) / (1000 * 60 * 60 * 24));
-    if (diffDays < 7 || diffDays > 62) {
-      return res.status(400).json({ success: false, error: 'Date range must be between 7 days and 2 months' });
+    if (diffDays < 1 || diffDays > 366) {
+      return res.status(400).json({ success: false, error: 'Date range must be between 1 day and 1 year' });
     }
 
     // Get earnings for the provider
@@ -2166,11 +2188,17 @@ const earningsSummaryReport = async (req, res) => {
       end = new Date(toDate);
 
       const diffDays = Math.floor((end - start) / (1000 * 60 * 60 * 24));
-      if (diffDays < 7 || diffDays > 62) {
-        return res.status(400).json({ success: false, error: 'Date range must be between 7 days and 2 months' });
+      if (diffDays < 1 || diffDays > 366) {
+        return res.status(400).json({ success: false, error: 'Date range must be between 1 day and 1 year' });
       }
 
       dateFilter = { createdAt: { $gte: start, $lte: end } };
+      if (req.query.zoneIds) {
+        const zones = req.query.zoneIds.split(',');
+        const providers = await Provider.find({ currentZone: { $in: zones } }).select('_id').lean();
+        const providerIds = providers.map(p => p._id);
+        dateFilter.provider = { $in: providerIds };
+      }
     }
 
     if (providerId) {
@@ -2296,14 +2324,21 @@ const payoutHistoryReport = async (req, res) => {
     const end = new Date(toDate);
 
     const diffDays = Math.floor((end - start) / (1000 * 60 * 60 * 24));
-    if (diffDays < 7 || diffDays > 62) {
-      return res.status(400).json({ success: false, error: 'Date range must be between 7 days and 2 months' });
+    if (diffDays < 1 || diffDays > 366) {
+      return res.status(400).json({ success: false, error: 'Date range must be between 1 day and 1 year' });
     }
 
-    const payouts = await PaymentRecord.find({
+    const filter = {
       status: 'completed',
       createdAt: { $gte: start, $lte: end }
-    }).populate('provider', 'name providerId').populate('admin', 'name').sort({ createdAt: -1 }).lean();
+    };
+    if (req.query.zoneIds) {
+      const zones = req.query.zoneIds.split(',');
+      const providers = await Provider.find({ currentZone: { $in: zones } }).select('_id').lean();
+      const providerIds = providers.map(p => p._id);
+      filter.provider = { $in: providerIds };
+    }
+    const payouts = await PaymentRecord.find(filter).populate('provider', 'name providerId').populate('admin', 'name').sort({ createdAt: -1 }).lean();
 
     // Create Excel
     const workbook = new ExcelJS.Workbook();
@@ -2354,7 +2389,12 @@ const payoutHistoryReport = async (req, res) => {
 // Admin - Outstanding Balance Report
 const outstandingBalanceReport = async (req, res) => {
   try {
-    const providers = await Provider.find({ isDeleted: false }).select('name email phone providerId').lean();
+    const providerFilter = { isDeleted: false };
+    if (req.query.zoneIds) {
+      const zones = req.query.zoneIds.split(',');
+      providerFilter.currentZone = { $in: zones };
+    }
+    const providers = await Provider.find(providerFilter).select('name email phone providerId').lean();
 
     const reportData = [];
 
