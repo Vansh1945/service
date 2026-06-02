@@ -21,6 +21,7 @@ const refreshAnalytics = async () => {
             todayBookings,
             pendingProviders,
             totalUsers,
+            totalProviders,
             complaintCounts,
             revenueStats
         ] = await Promise.all([
@@ -29,6 +30,7 @@ const refreshAnalytics = async () => {
             // PRODUCTION FIX
             Provider.countDocuments({ approved: false, isDeleted: false }),
             User.countDocuments({ role: 'customer' }),
+            Provider.countDocuments({ isDeleted: false }),
             Complaint.aggregate([
                 { $group: { _id: "$status", count: { $sum: 1 } } }
             ]),
@@ -43,6 +45,7 @@ const refreshAnalytics = async () => {
             todayBookings,
             pendingProviders,
             totalUsers,
+            totalProviders,
             complaintCounts: complaintCounts.reduce((acc, curr) => {
                 acc[curr._id] = curr.count;
                 return acc;

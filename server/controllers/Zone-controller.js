@@ -62,11 +62,11 @@ exports.createZone = async (req, res) => {
     // Overlap validation with hierarchical containment
     if (status !== 'inactive') {
       // Find any overlapping active zones (including potential parent zone)
-      const overlapping = await Zone.findOne({
+      const overlappingZones = await Zone.find({
         status: 'active',
         polygon: { $geoIntersects: { $geometry: { type: "Polygon", coordinates: polygon.coordinates } } }
       });
-      if (overlapping) {
+      for (const overlapping of overlappingZones) {
         // Allow overlap if overlapping zone is the specified parent zone and the new zone is fully contained within it
         if (parentZone && overlapping._id.equals(parentZone)) {
           const isContained = await Zone.findOne({
@@ -78,7 +78,7 @@ exports.createZone = async (req, res) => {
           }
         } else {
           // Any other overlap is disallowed (same-level or other zones)
-          return res.status(400).json({ success: false, message: "Same-level overlap not allowed" });
+          return res.status(400).json({ success: false, message: `Same-level overlap not allowed with zone: ${overlapping.name}` });
         }
       }
     }
@@ -358,12 +358,12 @@ exports.updateZone = async (req, res) => {
     // Overlap validation with hierarchical containment
     if (targetStatus !== 'inactive' && targetPolygon && targetPolygon.coordinates) {
       // Find any overlapping active zones
-      const overlapping = await Zone.findOne({
+      const overlappingZones = await Zone.find({
         status: 'active',
         _id: { $ne: id },
         polygon: { $geoIntersects: { $geometry: { type: "Polygon", coordinates: targetPolygon.coordinates } } }
       });
-      if (overlapping) {
+      for (const overlapping of overlappingZones) {
         // If this zone has a parent, allow overlap only with that parent zone
         if (targetParentZone && overlapping._id.equals(targetParentZone)) {
           // Ensure child polygon is fully inside parent (basic containment check)

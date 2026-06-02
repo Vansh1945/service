@@ -362,7 +362,7 @@ const ServiceDetailPage = () => {
                     Note
                   </h3>
                   <p className="text-yellow-700 text-xs font-bold leading-relaxed">
-                    Material cost is NOT included; actual material charges will be extra.
+                    Material cost is NOT included actual material charges will be extra.
                   </p>
                 </div>
 

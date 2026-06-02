@@ -2222,7 +2222,8 @@ const cancelBooking = async (req, res) => {
       // Update provider stats if booking was already accepted
       if (booking.provider) {
         await Provider.findByIdAndUpdate(booking.provider, {
-          $inc: { canceledBookings: 1 }
+          $inc: { canceledBookings: 1 },
+          $set: { activeBooking: null }
         }, { session });
         await recalculateProviderPerformance(booking.provider, session);
       }
@@ -2378,7 +2379,8 @@ const cancelBooking = async (req, res) => {
       // Update provider stats if booking was already accepted
       if (previousStatus === 'accepted' && booking.provider) {
         await Provider.findByIdAndUpdate(booking.provider, {
-          $inc: { canceledBookings: 1 }
+          $inc: { canceledBookings: 1 },
+          $set: { activeBooking: null }
         }, { session });
         await recalculateProviderPerformance(booking.provider, session);
       }
@@ -3361,6 +3363,7 @@ const rejectBooking = async (req, res) => {
       }
     }
 
+    await Provider.findByIdAndUpdate(providerId, { $set: { activeBooking: null } }, { session });
     await booking.save({ session });
 
     // Recalculate provider stats and trust score dynamically inside the same transaction session
@@ -3801,6 +3804,7 @@ const completeBooking = async (req, res) => {
 
     provider.wallet.lastUpdated = new Date();
     provider.completedBookings = (provider.completedBookings || 0) + 1;
+    provider.activeBooking = null;
     await provider.save({ session });
 
     // Recalculate performance score and trust score

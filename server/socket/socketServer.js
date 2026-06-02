@@ -721,7 +721,7 @@ const initSocket = (httpServer) => {
 
             if (socket.userRole === 'provider') {
                 try {
-                    await Provider.findByIdAndUpdate(userId, { isOnline: false, activeBooking: null });
+                    await Provider.findByIdAndUpdate(userId, { isOnline: false });
                     io.to('admin_live_room').emit('provider-status-changed', {
                         providerId: userId,
                         isOnline: false
