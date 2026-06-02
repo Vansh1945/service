@@ -30,14 +30,20 @@ const refreshAnalytics = async () => {
             // PRODUCTION FIX
             Provider.countDocuments({ approved: false, isDeleted: false }),
             User.countDocuments({ role: 'customer' }),
-            Provider.countDocuments({ isDeleted: false }),
+            Provider.countDocuments({ approved: true, isDeleted: false }),
             Complaint.aggregate([
                 { $group: { _id: "$status", count: { $sum: 1 } } }
             ]),
-            Booking.aggregate([
-                { $match: { status: 'completed', createdAt: { $gte: startOfMonth } } },
-                { $group: { _id: null, monthlyRevenue: { $sum: { $subtract: ["$totalAmount", { $ifNull: ["$cancellationProgress.refundAmount", 0] }] } } } }
-            ])
+            // Existing revenueStats aggregation
+          Booking.aggregate([
+            { $match: { status: 'completed', createdAt: { $gte: startOfMonth } } },
+            { $group: { _id: null, monthlyRevenue: { $sum: { $subtract: ["$totalAmount", { $ifNull: ["$cancellationProgress.refundAmount", 0] }] } } } }
+          ]),
+          // New admin earnings aggregation (commission + companySurgeShare)
+          Booking.aggregate([
+            { $match: { status: 'completed', createdAt: { $gte: startOfMonth } } },
+            { $group: { _id: null, totalAdminEarnings: { $sum: { $add: ["$commissionAmount", { $ifNull: ["$companySurgeShare", 0] }] } } } }
+          ])
         ]);
 
         const analytics = {
@@ -51,6 +57,7 @@ const refreshAnalytics = async () => {
                 return acc;
             }, {}),
             monthlyRevenue: revenueStats[0]?.monthlyRevenue || 0,
+            totalAdminEarnings: revenueStats[1]?.totalAdminEarnings || 0,
             lastRefreshed: new Date()
         };
 

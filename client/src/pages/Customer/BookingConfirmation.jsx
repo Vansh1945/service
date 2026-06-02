@@ -642,7 +642,7 @@ const BookingConfirmation = () => {
 
                   <div className="flex justify-between text-xs">
                     <span className="text-gray-500">Visiting Charges</span>
-                    <span className="text-green-600 font-semibold italic">{(bookingDetails.visitingCharge > 0 ? formatCurrency(bookingDetails.visitingCharge) : "Free")}</span>
+                    <span className="text-green-600 font-semibold italic">{(Number(bookingDetails.visitingCharge) > 0 ? formatCurrency(bookingDetails.visitingCharge) : "Free")}</span>
                   </div>
 
                   <div className="border-t border-gray-100 pt-3 mt-1">
@@ -890,7 +890,7 @@ const BookingConfirmation = () => {
                   )}
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-400">Visiting Charges</span>
-                    <span className="font-medium text-green-600">{bookingDetails.visitingCharge > 0 ? formatCurrency(bookingDetails.visitingCharge) : "Free"}</span>
+                    <span className="font-medium text-green-600">{(Number(bookingDetails.visitingCharge) > 0 ? formatCurrency(bookingDetails.visitingCharge) : "Free")}</span>
                   </div>
                   <div className="flex justify-between pt-2 border-t border-gray-50">
                     <span className="font-bold text-secondary">Total to Pay</span>

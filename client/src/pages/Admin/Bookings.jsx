@@ -1318,6 +1318,7 @@ const AdminBookingsView = () => {
                                             <div className="bg-white/70 rounded-md p-2 mt-2 border border-dashed border-gray-200 space-y-0.5">
                                                 <InfoRow label="Platform Comm."><span className="text-red-500">-{formatCurrency(selectedBooking.commission?.amount || bk.commissionAmount || 0)}</span></InfoRow>
                                                 <InfoRow label="Provider Earns"><span className="text-green-600 font-black">{formatCurrency(bk.providerEarnings || (pay.totalAmount - (selectedBooking.commission?.amount || 0)))}</span></InfoRow>
+                                                <InfoRow label="Admin Earns"><span className="text-purple-600 font-black">{formatCurrency(bk.adminEarning || 0)}</span></InfoRow>
                                             </div>
                                             <div className="border-t border-gray-100 mt-2 pt-2 space-y-1">
                                                 <div className="flex justify-between items-center">

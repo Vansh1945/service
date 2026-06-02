@@ -285,6 +285,10 @@ const AdminDashboard = () => {
               <p className="text-[10px] text-gray-400 uppercase font-bold">Payouts</p>
               <p className="text-xs font-bold text-orange-600">{formatCurrency(analytics?.revenueStats?.providerPayout || 0)}</p>
             </div>
+            <div>
+              <p className="text-[10px] text-gray-400 uppercase font-bold">Admin Earnings</p>
+              <p className="text-xs font-bold text-teal-600">{formatCurrency(analytics?.totalAdminEarnings || 0)}</p>
+            </div>
           </div>
         </div>
 

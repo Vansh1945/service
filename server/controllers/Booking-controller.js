@@ -4513,6 +4513,7 @@ const getBookingDetails = async (req, res) => {
     const response = {
       booking: {
         ...booking,
+        adminEarning: booking.commissionAmount + (booking.companySurgeShare || 0),
         providerWorkProof: booking.providerWorkProof || { beforeImages: [], afterImages: [] },
         complaintProofs: booking.complaintProofs || []
       },
