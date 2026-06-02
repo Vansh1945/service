@@ -328,20 +328,11 @@ const PaymentDetails = ({ booking }) => {
           </div>
         )}
         {additional > 0 && (
-          <div className="flex justify-between items-center relative group animate-fadeIn">
-            <span className="text-gray-500 border-b border-dashed border-gray-400 cursor-help">
+          <div className="flex justify-between items-center animate-fadeIn">
+            <span className="text-gray-500">
               Additional Charges
             </span>
             <span className="text-red-500 font-semibold">+{formatCurrency(additional)}</span>
-            <div className="absolute right-0 bottom-full mb-2 w-56 hidden group-hover:block bg-slate-900 text-white text-[10px] p-2.5 rounded-lg shadow-xl z-30 leading-normal pointer-events-none">
-              <p className="font-bold border-b border-slate-700 pb-1 mb-1 text-[11px]">Fee Breakdown</p>
-              {additionalBreakdown.map((item, idx) => (
-                <div key={idx} className="flex justify-between gap-2 py-0.5">
-                  <span>{item.name}</span>
-                  <span>{formatCurrency(item.amount)}</span>
-                </div>
-              ))}
-            </div>
           </div>
         )}
         {booking.couponApplied?.isValid && (
