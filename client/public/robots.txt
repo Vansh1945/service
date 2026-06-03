@@ -1,0 +1,20 @@
+User-agent: *
+Allow: /
+Allow: /about
+Allow: /services
+Allow: /contact
+Allow: /careers
+Allow: /privacy-policy
+Allow: /refund-policy
+Allow: /terms-and-conditions
+
+Disallow: /admin/
+Disallow: /customer/
+Disallow: /provider/
+Allow: /login
+Allow: /register
+Allow: /register-provider
+Disallow: /forgot-password
+Disallow: /unauthorized
+
+Sitemap: https://rajelectricalservices.vercel.app/sitemap.xml
