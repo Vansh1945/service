@@ -258,7 +258,6 @@ const getBookingTimeline = (booking, payoutStatus = '') => {
   // Separate completed/error steps and pending/current steps
   const allSteps = [...timeline, ...customSteps];
   const completedSteps = allSteps.filter(step => step.completed === true || step.status === 'completed' || step.status === 'error');
-  const pendingSteps = allSteps.filter(step => !completedSteps.includes(step));
 
   // Sort completed/error steps chronologically by timestamp
   completedSteps.sort((a, b) => {
@@ -267,6 +266,11 @@ const getBookingTimeline = (booking, payoutStatus = '') => {
     return timeA - timeB;
   });
 
+  if (booking.status === 'cancelled') {
+    return completedSteps;
+  }
+
+  const pendingSteps = allSteps.filter(step => !completedSteps.includes(step));
   return [...completedSteps, ...pendingSteps];
 };
 

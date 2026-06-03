@@ -97,7 +97,12 @@ const StatusBadge = ({ status }) => {
 // ─── Timeline ─────────────────────────────────────────────────────────────────
 
 const BookingTimeline = ({ booking }) => {
-  const timeline = Array.isArray(booking.timeline) ? booking.timeline : [];
+  const rawTimeline = Array.isArray(booking.timeline) ? booking.timeline : [];
+  const timeline = rawTimeline.filter(
+    (step) =>
+      !step.title.includes('Start PIN generated') &&
+      !step.title.includes('Completion PIN generated')
+  );
 
   if (timeline.length === 0) return null;
 
@@ -303,8 +308,18 @@ const PaymentDetails = ({ booking }) => {
         </div>
         <div className="flex justify-between items-center animate-fadeIn">
           <span className="text-gray-500">Status</span>
-          <span className={['paid', 'escrow_hold'].includes(booking.paymentStatus) ? 'text-emerald-600 font-semibold' : 'text-accent font-semibold'}>
-            {['paid', 'escrow_hold'].includes(booking.paymentStatus) ? 'Paid' : 'Pending'}
+          <span className={
+            ['paid', 'escrow_hold'].includes(booking.paymentStatus)
+              ? 'text-emerald-600 font-semibold'
+              : booking.paymentStatus === 'refunded'
+              ? 'text-purple-600 font-semibold'
+              : 'text-accent font-semibold'
+          }>
+            {['paid', 'escrow_hold'].includes(booking.paymentStatus)
+              ? 'Paid'
+              : booking.paymentStatus === 'refunded'
+              ? 'Refunded'
+              : 'Pending'}
           </span>
         </div>
         <div className="flex justify-between items-center animate-fadeIn">
@@ -789,8 +804,22 @@ const BookingCard = ({ booking, onView, onPayNow, onReschedule, onCancel, onCall
               </div>
               <div className="text-right flex-shrink-0">
                 <p className="text-lg font-bold text-secondary">{formatCurrency(booking.totalAmount || 0)}</p>
-                <p className={`text-xs font-bold px-2 py-0.5 rounded-full ${['paid', 'escrow_hold'].includes(booking.paymentStatus) ? 'bg-green-100 text-green-600' : (booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service' ? 'bg-yellow-100 text-yellow-600' : 'bg-red-50 text-accent')}`}>
-                  {['paid', 'escrow_hold'].includes(booking.paymentStatus) ? `✓ Paid` : (booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service' ? 'Pay After Service' : 'Unpaid')}
+                <p className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                  ['paid', 'escrow_hold'].includes(booking.paymentStatus)
+                    ? 'bg-green-100 text-green-600'
+                    : booking.paymentStatus === 'refunded'
+                    ? 'bg-purple-100 text-purple-600'
+                    : (booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service'
+                      ? 'bg-yellow-100 text-yellow-600'
+                      : 'bg-red-50 text-accent')
+                }`}>
+                  {['paid', 'escrow_hold'].includes(booking.paymentStatus)
+                    ? `✓ Paid`
+                    : booking.paymentStatus === 'refunded'
+                    ? '✓ Refunded'
+                    : (booking.paymentMethod === 'cash' || booking.paymentType === 'pay_after_service'
+                      ? 'Pay After Service'
+                      : 'Unpaid')}
                 </p>
               </div>
             </div>
