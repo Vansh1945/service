@@ -365,9 +365,14 @@ const AdminTransactions = () => {
                                                     <span className="text-sm font-semibold text-secondary font-mono">
                                                         {txn.transactionId || '---'}
                                                     </span>
-                                                    <span className="text-[10px] text-gray-400 flex items-center">
-                                                        {txn.paymentMethod?.toUpperCase()} • {txn.currency}
-                                                    </span>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className={`inline-flex px-1.5 py-0.5 rounded text-[8px] font-extrabold border ${txn.type === 'refund' ? 'bg-red-50 text-red-700 border-red-100' : 'bg-green-50 text-green-700 border-green-100'}`}>
+                                                            {txn.type?.toUpperCase() || 'PAYMENT'}
+                                                        </span>
+                                                        <span className="text-[10px] text-gray-400">
+                                                            {txn.paymentMethod?.toUpperCase()} • {txn.currency}
+                                                        </span>
+                                                    </div>
                                                     <div className="flex flex-col gap-0.5 mt-1">
                                                         <span className="text-[10px] text-gray-500 whitespace-nowrap">
                                                             {formatDateTime(txn.createdAt).split('at')[0]}
@@ -411,14 +416,14 @@ const AdminTransactions = () => {
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 text-right">
-                                                <span className="text-sm font-bold text-secondary">
-                                                    {formatCurrency(grossBilled)}
+                                                <span className={`text-sm font-bold ${txn.type === 'refund' ? 'text-red-650' : 'text-secondary'}`}>
+                                                    {txn.type === 'refund' ? '-' : ''}{formatCurrency(grossBilled)}
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 text-right">
                                                 <div className="flex flex-col items-end">
-                                                    <span className="text-sm font-semibold text-gray-700">
-                                                        {formatCurrency(commissionSplit)}
+                                                    <span className={`text-sm font-semibold ${txn.type === 'refund' ? 'text-red-650' : 'text-gray-700'}`}>
+                                                        {txn.type === 'refund' ? '-' : ''}{formatCurrency(commissionSplit)}
                                                     </span>
                                                     {txn.commissionRule?.name && (
                                                         <span className="text-[9px] text-gray-400 italic opacity-85">
@@ -429,8 +434,8 @@ const AdminTransactions = () => {
                                             </td>
                                             <td className="px-6 py-4 text-right">
                                                 <div className="flex flex-col items-end">
-                                                    <span className="text-sm font-semibold text-gray-700">
-                                                        {formatCurrency(totalSurcharges)}
+                                                    <span className={`text-sm font-semibold ${txn.type === 'refund' ? 'text-red-650' : 'text-gray-700'}`}>
+                                                        {txn.type === 'refund' ? '-' : ''}{formatCurrency(totalSurcharges)}
                                                     </span>
                                                     {totalSurcharges > 0 && (
                                                         <div className="flex flex-col items-end text-[9px] text-gray-400 mt-0.5">
@@ -441,13 +446,13 @@ const AdminTransactions = () => {
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 text-right">
-                                                <span className="text-sm font-bold text-green-600">
-                                                    {formatCurrency(finalProviderReceivable)}
+                                                <span className={`text-sm font-bold ${txn.type === 'refund' ? 'text-red-650' : 'text-green-600'}`}>
+                                                    {txn.type === 'refund' ? '-' : ''}{formatCurrency(finalProviderReceivable)}
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 text-right">
-                                                <span className="text-sm font-bold text-primary">
-                                                    {formatCurrency(finalPlatformRevenue)}
+                                                <span className={`text-sm font-bold ${txn.type === 'refund' ? 'text-red-650' : 'text-primary'}`}>
+                                                    {txn.type === 'refund' ? '-' : ''}{formatCurrency(finalPlatformRevenue)}
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4">

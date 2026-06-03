@@ -399,8 +399,8 @@ const AdminDashboard = () => {
         </div>
       </div>
 
-      {/* REBOOK & FAVORITE PROVIDER ANALYTICS */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 animate-fade-in">
+      {/* REBOOK & RETENTION INTELLIGENCE */}
+      <div className="grid grid-cols-1 gap-6 mb-6 animate-fade-in">
         {/* Rebook Analytics */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
           <div>
@@ -454,62 +454,6 @@ const AdminDashboard = () => {
             </div>
           </div>
         </div>
-
-        {/* Favorite Provider Analytics */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-50">
-              <div className="flex items-center">
-                <div className="p-2 bg-rose-50 rounded-lg mr-3">
-                  <FiUsers className="text-rose-600" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-gray-900">Customer Loyalty & Favorites</h3>
-                  <p className="text-[10px] text-gray-500">Analysis of user-saved favorite professionals</p>
-                </div>
-              </div>
-              <span className="text-xs font-bold text-rose-600 bg-rose-50 px-2 py-1 rounded">Active</span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Repeat Customers</p>
-                <h4 className="text-2xl font-black text-gray-900 mt-1">{analytics?.favoriteProviderStats?.repeatCustomerCount || 0}</h4>
-                <p className="text-[9px] text-gray-500 mt-0.5">Customers with favorite providers</p>
-              </div>
-
-              <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Provider Retention Score</p>
-                <div className="flex items-baseline gap-1 mt-1">
-                  <h4 className="text-2xl font-black text-gray-900">{Number(analytics?.favoriteProviderStats?.providerRetentionScore || 0).toFixed(1)}/10</h4>
-                </div>
-                <div className="w-full bg-gray-200 h-1 rounded-full mt-2 overflow-hidden">
-                  <div className="bg-rose-550 h-1 rounded-full" style={{ width: `${Number(analytics?.favoriteProviderStats?.providerRetentionScore || 0) * 10}%` }}></div>
-                </div>
-              </div>
-            </div>
-
-            {/* Most Favorited Providers */}
-            <div>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Most Saved Providers</p>
-              <div className="space-y-2">
-                {analytics?.favoriteProviderStats?.mostFavoritedProviders && analytics.favoriteProviderStats.mostFavoritedProviders.length > 0 ? (
-                  analytics.favoriteProviderStats.mostFavoritedProviders.slice(0, 3).map((item, idx) => (
-                    <div key={idx} className="flex justify-between items-center text-xs p-2 bg-gray-50/50 rounded-lg hover:bg-gray-50 transition-colors">
-                      <div>
-                        <span className="font-semibold text-gray-700 block truncate max-w-[150px]">{item.name}</span>
-                        <span className="text-[9px] text-gray-400 uppercase font-medium">{item.category}</span>
-                      </div>
-                      <span className="font-black text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">{item.count} Saves</span>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-xs text-gray-400 italic">No saved providers in this period</p>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* SURGE REVENUE BREAKDOWN & INTELLIGENCE */}
@@ -527,32 +471,34 @@ const AdminDashboard = () => {
           <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded">Real-Time Splits</span>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Surcharge Stream Progress Bars */}
           <div className="space-y-3">
             <p className="text-[10px] font-black text-gray-450 uppercase tracking-wider mb-2">Revenue streams</p>
-            {[
-              { label: 'Visiting Charge', value: analytics?.revenueStats?.surgeBreakdown?.visitingRevenue || 0, color: 'bg-emerald-500' },
-              { label: 'Rain Charge', value: analytics?.revenueStats?.surgeBreakdown?.rainRevenue || 0, color: 'bg-blue-500' },
-              { label: 'Traffic Charge', value: analytics?.revenueStats?.surgeBreakdown?.trafficRevenue || 0, color: 'bg-orange-500' },
-              { label: 'Night Charge', value: analytics?.revenueStats?.surgeBreakdown?.nightRevenue || 0, color: 'bg-indigo-500' },
-              { label: 'Demand Surge', value: analytics?.revenueStats?.surgeBreakdown?.demandRevenue || 0, color: 'bg-rose-500' },
-              { label: 'Platform Fee', value: analytics?.revenueStats?.surgeBreakdown?.platformFeeRevenue || 0, color: 'bg-violet-600' },
-              { label: 'Custom Surcharges', value: analytics?.revenueStats?.surgeBreakdown?.customRevenue || 0, color: 'bg-slate-500' },
-            ].map(item => {
-              const totalSurge = analytics?.revenueStats?.surgeRevenue || 1;
-              const pct = ((item.value / totalSurge) * 100).toFixed(0);
-              return (
-                <div key={item.label} className="space-y-1">
-                  <div className="flex justify-between text-xs font-medium text-gray-700">
-                    <span>{item.label}</span>
-                    <span>{formatCurrency(item.value)} ({pct}%)</span>
+            {(() => {
+              const streams = [
+                { label: 'Visiting Charge', value: analytics?.revenueStats?.surgeBreakdown?.visitingRevenue || 0, color: 'bg-emerald-500' },
+                { label: 'Rain Charge', value: analytics?.revenueStats?.surgeBreakdown?.rainRevenue || 0, color: 'bg-blue-500' },
+                { label: 'Traffic Charge', value: analytics?.revenueStats?.surgeBreakdown?.trafficRevenue || 0, color: 'bg-orange-500' },
+                { label: 'Night Charge', value: analytics?.revenueStats?.surgeBreakdown?.nightRevenue || 0, color: 'bg-indigo-500' },
+                { label: 'Demand Surge', value: analytics?.revenueStats?.surgeBreakdown?.demandRevenue || 0, color: 'bg-rose-500' },
+                { label: 'Platform Fee', value: analytics?.revenueStats?.surgeBreakdown?.platformFeeRevenue || 0, color: 'bg-violet-600' },
+                { label: 'Custom Surcharges', value: analytics?.revenueStats?.surgeBreakdown?.customRevenue || 0, color: 'bg-slate-500' },
+              ];
+              const totalSurchargesSum = streams.reduce((sum, s) => sum + s.value, 0) || 1;
+              return streams.map(item => {
+                const pct = ((item.value / totalSurchargesSum) * 100).toFixed(0);
+                return (
+                  <div key={item.label} className="space-y-1">
+                    <div className="flex justify-between text-xs font-medium text-gray-700">
+                      <span>{item.label}</span>
+                      <span>{formatCurrency(item.value)} ({pct}%)</span>
+                    </div>
+                    <div className="w-full bg-gray-150 h-1.5 rounded-full overflow-hidden">
+                      <div className={`${item.color} h-1.5 rounded-full`} style={{ width: `${pct}%` }}></div>
+                    </div>
                   </div>
-                  <div className="w-full bg-gray-150 h-1.5 rounded-full overflow-hidden">
-                    <div className={`${item.color} h-1.5 rounded-full`} style={{ width: `${pct}%` }}></div>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              });
+            })()}
           </div>
 
           {/* Surcharge Splits */}

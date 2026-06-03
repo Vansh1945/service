@@ -292,7 +292,7 @@ const SystemSetting = () => {
       }
 
       if (!/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(systemSettings.bookingSettings.startTime) ||
-          !/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(systemSettings.bookingSettings.endTime)) {
+        !/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(systemSettings.bookingSettings.endTime)) {
         showToast('Start and End Times must be in valid 24h format (HH:MM)', 'error');
         return;
       }
@@ -806,7 +806,7 @@ const SystemSetting = () => {
                 />
 
                 <ToggleSwitch
-                  label="Allow Cash On Delivery (COD)"
+                  label="Allow Pay after Service (COD)"
                   description="Enable customers to pay with physical cash directly to the provider upon service completion."
                   checked={systemSettings.bookingSettings.allowCOD}
                   onChange={(val) => handleNestedChange('bookingSettings', 'allowCOD', val)}
@@ -1025,260 +1025,260 @@ const SystemSetting = () => {
 
 
 
-        {/* NOTIFICATION SETTINGS TAB */}
-        {activeTab === 'notifications' && (
-          <div className="space-y-6">
-            <h3 className="text-base font-semibold text-secondary pb-2 border-b border-gray-100 font-poppins flex items-center gap-2">
-              <Bell className="w-5 h-5 text-primary" /> Global Notification Delivery Channels
-            </h3>
+          {/* NOTIFICATION SETTINGS TAB */}
+          {activeTab === 'notifications' && (
+            <div className="space-y-6">
+              <h3 className="text-base font-semibold text-secondary pb-2 border-b border-gray-100 font-poppins flex items-center gap-2">
+                <Bell className="w-5 h-5 text-primary" /> Global Notification Delivery Channels
+              </h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-              <ToggleSwitch
-                label="Enable Push Notifications"
-                description="Deliver instant, rich Web/Mobile app push notifications on key booking changes."
-                checked={systemSettings.notificationSettings.pushEnabled}
-                onChange={(val) => handleNestedChange('notificationSettings', 'pushEnabled', val)}
-              />
-
-              <ToggleSwitch
-                label="Enable Email System"
-                description="Trigger transactional email updates for confirmations, invoices, and payouts."
-                checked={systemSettings.notificationSettings.emailEnabled}
-                onChange={(val) => handleNestedChange('notificationSettings', 'emailEnabled', val)}
-              />
-
-              <ToggleSwitch
-                label="Enable SMS System"
-                description="Distribute crucial OTP codes, reminders, and notifications via carrier cellular SMS."
-                checked={systemSettings.notificationSettings.smsEnabled}
-                onChange={(val) => handleNestedChange('notificationSettings', 'smsEnabled', val)}
-              />
-
-              <ToggleSwitch
-                label="Provider Lifecycle Alerts"
-                description="Forward crucial status reports, pending disputes, and payout updates to providers."
-                checked={systemSettings.notificationSettings.providerAlerts}
-                onChange={(val) => handleNestedChange('notificationSettings', 'providerAlerts', val)}
-              />
-
-              <ToggleSwitch
-                label="Customer Order Alerts"
-                description="Send real-time updates regarding accepted jobs, provider travel status, and completions to customers."
-                checked={systemSettings.notificationSettings.customerAlerts}
-                onChange={(val) => handleNestedChange('notificationSettings', 'customerAlerts', val)}
-              />
-
-            </div>
-          </div>
-        )}
-
-        {/* SECURITY SETTINGS TAB */}
-        {activeTab === 'security' && (
-          <div className="space-y-6">
-            <h3 className="text-base font-semibold text-secondary pb-2 border-b border-gray-100 font-poppins flex items-center gap-2">
-              <Shield className="w-5 h-5 text-primary" /> Application Security Settings
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-              <div>
-                <label className="block text-sm font-semibold text-secondary mb-2 font-inter">Max Permitted Login Attempts</label>
-                <input
-                  type="number"
-                  value={systemSettings.securitySettings.maxLoginAttempts}
-                  onChange={(e) => handleNestedChange('securitySettings', 'maxLoginAttempts', Number(e.target.value))}
-                  min="1"
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-inter text-secondary"
-                />
-                <p className="text-xs text-gray-500 mt-1.5 font-inter">Account gets temporarily locked/blocked once incorrect password attempt reaches this ceiling limit.</p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-secondary mb-2 font-inter">OTP Code Expiration Window (Minutes)</label>
-                <input
-                  type="number"
-                  value={systemSettings.securitySettings.otpExpiryMinutes}
-                  onChange={(e) => handleNestedChange('securitySettings', 'otpExpiryMinutes', Number(e.target.value))}
-                  min="1"
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-inter text-secondary"
-                />
-                <p className="text-xs text-gray-500 mt-1.5 font-inter">Lifetime duration of standard login, verification, or password reset OTP verification code tokens.</p>
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-sm font-semibold text-secondary mb-2 font-inter">JWT Session Timeout (Hours)</label>
-                <input
-                  type="number"
-                  value={systemSettings.securitySettings.sessionTimeoutHours}
-                  onChange={(e) => handleNestedChange('securitySettings', 'sessionTimeoutHours', Number(e.target.value))}
-                  min="1"
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-inter text-secondary"
-                />
-                <p className="text-xs text-gray-500 mt-1.5 font-inter">Total valid duration before a logged-in user session expires, requiring fresh re-authentication.</p>
-              </div>
-
-            </div>
-          </div>
-        )}
-
-        {/* FEATURE FLAGS TAB */}
-        {activeTab === 'features' && (
-          <div className="space-y-6">
-            <h3 className="text-base font-semibold text-secondary pb-2 border-b border-gray-100 font-poppins flex items-center gap-2">
-              <Flag className="w-5 h-5 text-primary" /> Platform Module Feature Flags
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-              <ToggleSwitch
-                label="Digital Wallet System"
-                description="Toggle the entire customer and provider financial wallet, payout, and in-app balances modules globally."
-                checked={systemSettings.featureFlags.walletEnabled}
-                onChange={(val) => handleNestedChange('featureFlags', 'walletEnabled', val)}
-              />
-
-
-
-            </div>
-          </div>
-        )}
-
-        {/* MAINTENANCE MODE TAB */}
-        {activeTab === 'maintenance' && (
-          <div className="space-y-8">
-            <h3 className="text-base font-semibold text-secondary pb-2 border-b border-gray-100 font-poppins flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-primary" /> Maintenance Window Controls
-            </h3>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-
-              {/* CUSTOMER MAINTENANCE */}
-              <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm space-y-6">
-                <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
-                  <div className="p-2 bg-primary/10 rounded-xl text-primary">
-                    <User className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-secondary font-poppins text-base">Customer Maintenance</h4>
-                    <p className="text-xs text-gray-400 font-inter">Offline controls for customer-facing interfaces.</p>
-                  </div>
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
                 <ToggleSwitch
-                  label="Enable Customer Maintenance"
-                  description="Block access to logins and customer dashboard features immediately."
-                  checked={systemSettings.maintenanceMode.customer?.enabled}
-                  onChange={(val) => handleNestedChange('maintenanceMode', 'customer', {
-                    ...systemSettings.maintenanceMode.customer,
-                    enabled: val
-                  })}
+                  label="Enable Push Notifications"
+                  description="Deliver instant, rich Web/Mobile app push notifications on key booking changes."
+                  checked={systemSettings.notificationSettings.pushEnabled}
+                  onChange={(val) => handleNestedChange('notificationSettings', 'pushEnabled', val)}
                 />
-
-                <div className="space-y-2">
-                  <label className="block text-xs font-bold text-secondary uppercase tracking-wider font-inter">Customer Maintenance Message</label>
-                  <textarea
-                    value={systemSettings.maintenanceMode.customer?.message}
-                    onChange={(e) => handleNestedChange('maintenanceMode', 'customer', {
-                      ...systemSettings.maintenanceMode.customer,
-                      message: e.target.value
-                    })}
-                    rows="3"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-inter text-secondary text-sm"
-                    placeholder="Customer services are under maintenance."
-                  />
-                </div>
-              </div>
-
-              {/* PROVIDER MAINTENANCE */}
-              <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm space-y-6">
-                <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
-                  <div className="p-2 bg-accent/10 rounded-xl text-accent">
-                    <Zap className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-secondary font-poppins text-base">Provider Maintenance</h4>
-                    <p className="text-xs text-gray-400 font-inter">Offline controls for provider-facing interfaces.</p>
-                  </div>
-                </div>
 
                 <ToggleSwitch
-                  label="Enable Provider Maintenance"
-                  description="Block access to logins and provider dashboard features immediately."
-                  checked={systemSettings.maintenanceMode.provider?.enabled}
-                  onChange={(val) => handleNestedChange('maintenanceMode', 'provider', {
-                    ...systemSettings.maintenanceMode.provider,
-                    enabled: val
-                  })}
+                  label="Enable Email System"
+                  description="Trigger transactional email updates for confirmations, invoices, and payouts."
+                  checked={systemSettings.notificationSettings.emailEnabled}
+                  onChange={(val) => handleNestedChange('notificationSettings', 'emailEnabled', val)}
                 />
 
-                <div className="space-y-2">
-                  <label className="block text-xs font-bold text-secondary uppercase tracking-wider font-inter">Provider Maintenance Message</label>
-                  <textarea
-                    value={systemSettings.maintenanceMode.provider?.message}
-                    onChange={(e) => handleNestedChange('maintenanceMode', 'provider', {
-                      ...systemSettings.maintenanceMode.provider,
-                      message: e.target.value
-                    })}
-                    rows="3"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-inter text-secondary text-sm"
-                    placeholder="Provider services are under maintenance."
-                  />
-                </div>
+                <ToggleSwitch
+                  label="Enable SMS System"
+                  description="Distribute crucial OTP codes, reminders, and notifications via carrier cellular SMS."
+                  checked={systemSettings.notificationSettings.smsEnabled}
+                  onChange={(val) => handleNestedChange('notificationSettings', 'smsEnabled', val)}
+                />
+
+                <ToggleSwitch
+                  label="Provider Lifecycle Alerts"
+                  description="Forward crucial status reports, pending disputes, and payout updates to providers."
+                  checked={systemSettings.notificationSettings.providerAlerts}
+                  onChange={(val) => handleNestedChange('notificationSettings', 'providerAlerts', val)}
+                />
+
+                <ToggleSwitch
+                  label="Customer Order Alerts"
+                  description="Send real-time updates regarding accepted jobs, provider travel status, and completions to customers."
+                  checked={systemSettings.notificationSettings.customerAlerts}
+                  onChange={(val) => handleNestedChange('notificationSettings', 'customerAlerts', val)}
+                />
+
               </div>
-
             </div>
+          )}
 
-            {/* GLOBAL MESSAGE */}
-            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm space-y-4">
-              <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
-                <div className="p-2 bg-amber-500/10 rounded-xl text-amber-600">
-                  <Globe className="w-5 h-5" />
-                </div>
+          {/* SECURITY SETTINGS TAB */}
+          {activeTab === 'security' && (
+            <div className="space-y-6">
+              <h3 className="text-base font-semibold text-secondary pb-2 border-b border-gray-100 font-poppins flex items-center gap-2">
+                <Shield className="w-5 h-5 text-primary" /> Application Security Settings
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
                 <div>
-                  <h4 className="font-bold text-secondary font-poppins text-base">Global Maintenance Settings</h4>
-                  <p className="text-xs text-gray-400 font-inter">General fallback message for all roles.</p>
+                  <label className="block text-sm font-semibold text-secondary mb-2 font-inter">Max Permitted Login Attempts</label>
+                  <input
+                    type="number"
+                    value={systemSettings.securitySettings.maxLoginAttempts}
+                    onChange={(e) => handleNestedChange('securitySettings', 'maxLoginAttempts', Number(e.target.value))}
+                    min="1"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-inter text-secondary"
+                  />
+                  <p className="text-xs text-gray-500 mt-1.5 font-inter">Account gets temporarily locked/blocked once incorrect password attempt reaches this ceiling limit.</p>
                 </div>
-              </div>
 
-              <div className="space-y-2">
-                <label className="block text-xs font-bold text-secondary uppercase tracking-wider font-inter">Global Maintenance Message</label>
-                <textarea
-                  value={systemSettings.maintenanceMode.globalMessage}
-                  onChange={(e) => handleNestedChange('maintenanceMode', 'globalMessage', e.target.value)}
-                  rows="2"
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-inter text-secondary text-sm"
-                  placeholder="System is under maintenance."
-                />
-                <p className="text-xs text-gray-400 font-inter">This message will act as a generic fallback if role-specific messages are empty.</p>
+                <div>
+                  <label className="block text-sm font-semibold text-secondary mb-2 font-inter">OTP Code Expiration Window (Minutes)</label>
+                  <input
+                    type="number"
+                    value={systemSettings.securitySettings.otpExpiryMinutes}
+                    onChange={(e) => handleNestedChange('securitySettings', 'otpExpiryMinutes', Number(e.target.value))}
+                    min="1"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-inter text-secondary"
+                  />
+                  <p className="text-xs text-gray-500 mt-1.5 font-inter">Lifetime duration of standard login, verification, or password reset OTP verification code tokens.</p>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-semibold text-secondary mb-2 font-inter">JWT Session Timeout (Hours)</label>
+                  <input
+                    type="number"
+                    value={systemSettings.securitySettings.sessionTimeoutHours}
+                    onChange={(e) => handleNestedChange('securitySettings', 'sessionTimeoutHours', Number(e.target.value))}
+                    min="1"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-inter text-secondary"
+                  />
+                  <p className="text-xs text-gray-500 mt-1.5 font-inter">Total valid duration before a logged-in user session expires, requiring fresh re-authentication.</p>
+                </div>
+
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-      </div>
+          {/* FEATURE FLAGS TAB */}
+          {activeTab === 'features' && (
+            <div className="space-y-6">
+              <h3 className="text-base font-semibold text-secondary pb-2 border-b border-gray-100 font-poppins flex items-center gap-2">
+                <Flag className="w-5 h-5 text-primary" /> Platform Module Feature Flags
+              </h3>
 
-      {/* Sticky Action Footer with premium aesthetics */}
-      <div className="sticky bottom-0 z-40 -mx-4 lg:-mx-6 xl:-mx-8 -mb-4 lg:-mb-6 xl:-mb-8 mt-12 bg-white/95 backdrop-blur-md border-t border-gray-200 shadow-xl p-4 md:p-6 flex flex-col sm:flex-row items-center justify-between gap-4 transition-all duration-300">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-primary/10 rounded-xl text-primary animate-pulse flex-shrink-0">
-            <Sparkles className="w-5 h-5" />
-          </div>
-          <div className="text-left">
-            <p className="font-semibold text-secondary font-poppins text-sm">System configuration settings have unsaved items</p>
-            <p className="text-xs text-gray-400 font-inter">Review edits across tabs and click apply to commit configurations.</p>
-          </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                <ToggleSwitch
+                  label="Digital Wallet System"
+                  description="Toggle the entire customer and provider financial wallet, payout, and in-app balances modules globally."
+                  checked={systemSettings.featureFlags.walletEnabled}
+                  onChange={(val) => handleNestedChange('featureFlags', 'walletEnabled', val)}
+                />
+
+
+
+              </div>
+            </div>
+          )}
+
+          {/* MAINTENANCE MODE TAB */}
+          {activeTab === 'maintenance' && (
+            <div className="space-y-8">
+              <h3 className="text-base font-semibold text-secondary pb-2 border-b border-gray-100 font-poppins flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-primary" /> Maintenance Window Controls
+              </h3>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+                {/* CUSTOMER MAINTENANCE */}
+                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm space-y-6">
+                  <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
+                    <div className="p-2 bg-primary/10 rounded-xl text-primary">
+                      <User className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-secondary font-poppins text-base">Customer Maintenance</h4>
+                      <p className="text-xs text-gray-400 font-inter">Offline controls for customer-facing interfaces.</p>
+                    </div>
+                  </div>
+
+                  <ToggleSwitch
+                    label="Enable Customer Maintenance"
+                    description="Block access to logins and customer dashboard features immediately."
+                    checked={systemSettings.maintenanceMode.customer?.enabled}
+                    onChange={(val) => handleNestedChange('maintenanceMode', 'customer', {
+                      ...systemSettings.maintenanceMode.customer,
+                      enabled: val
+                    })}
+                  />
+
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold text-secondary uppercase tracking-wider font-inter">Customer Maintenance Message</label>
+                    <textarea
+                      value={systemSettings.maintenanceMode.customer?.message}
+                      onChange={(e) => handleNestedChange('maintenanceMode', 'customer', {
+                        ...systemSettings.maintenanceMode.customer,
+                        message: e.target.value
+                      })}
+                      rows="3"
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-inter text-secondary text-sm"
+                      placeholder="Customer services are under maintenance."
+                    />
+                  </div>
+                </div>
+
+                {/* PROVIDER MAINTENANCE */}
+                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm space-y-6">
+                  <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
+                    <div className="p-2 bg-accent/10 rounded-xl text-accent">
+                      <Zap className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-secondary font-poppins text-base">Provider Maintenance</h4>
+                      <p className="text-xs text-gray-400 font-inter">Offline controls for provider-facing interfaces.</p>
+                    </div>
+                  </div>
+
+                  <ToggleSwitch
+                    label="Enable Provider Maintenance"
+                    description="Block access to logins and provider dashboard features immediately."
+                    checked={systemSettings.maintenanceMode.provider?.enabled}
+                    onChange={(val) => handleNestedChange('maintenanceMode', 'provider', {
+                      ...systemSettings.maintenanceMode.provider,
+                      enabled: val
+                    })}
+                  />
+
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold text-secondary uppercase tracking-wider font-inter">Provider Maintenance Message</label>
+                    <textarea
+                      value={systemSettings.maintenanceMode.provider?.message}
+                      onChange={(e) => handleNestedChange('maintenanceMode', 'provider', {
+                        ...systemSettings.maintenanceMode.provider,
+                        message: e.target.value
+                      })}
+                      rows="3"
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-inter text-secondary text-sm"
+                      placeholder="Provider services are under maintenance."
+                    />
+                  </div>
+                </div>
+
+              </div>
+
+              {/* GLOBAL MESSAGE */}
+              <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm space-y-4">
+                <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
+                  <div className="p-2 bg-amber-500/10 rounded-xl text-amber-600">
+                    <Globe className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-secondary font-poppins text-base">Global Maintenance Settings</h4>
+                    <p className="text-xs text-gray-400 font-inter">General fallback message for all roles.</p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold text-secondary uppercase tracking-wider font-inter">Global Maintenance Message</label>
+                  <textarea
+                    value={systemSettings.maintenanceMode.globalMessage}
+                    onChange={(e) => handleNestedChange('maintenanceMode', 'globalMessage', e.target.value)}
+                    rows="2"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-inter text-secondary text-sm"
+                    placeholder="System is under maintenance."
+                  />
+                  <p className="text-xs text-gray-400 font-inter">This message will act as a generic fallback if role-specific messages are empty.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
         </div>
-        <button
-          onClick={saveSystemSettings}
-          type="button"
-          className="w-full sm:w-auto bg-primary hover:bg-primary/95 text-white font-semibold font-inter px-8 py-3.5 rounded-xl shadow-lg hover:shadow-primary/20 flex items-center justify-center gap-2.5 transition-all hover:scale-[1.02] active:scale-[0.98]"
-        >
-          <Save className="w-4 h-4" /> Save All Configurations
-        </button>
-      </div>
 
-    </div>
+        {/* Sticky Action Footer with premium aesthetics */}
+        <div className="sticky bottom-0 z-40 -mx-4 lg:-mx-6 xl:-mx-8 -mb-4 lg:-mb-6 xl:-mb-8 mt-12 bg-white/95 backdrop-blur-md border-t border-gray-200 shadow-xl p-4 md:p-6 flex flex-col sm:flex-row items-center justify-between gap-4 transition-all duration-300">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-primary/10 rounded-xl text-primary animate-pulse flex-shrink-0">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div className="text-left">
+              <p className="font-semibold text-secondary font-poppins text-sm">System configuration settings have unsaved items</p>
+              <p className="text-xs text-gray-400 font-inter">Review edits across tabs and click apply to commit configurations.</p>
+            </div>
+          </div>
+          <button
+            onClick={saveSystemSettings}
+            type="button"
+            className="w-full sm:w-auto bg-primary hover:bg-primary/95 text-white font-semibold font-inter px-8 py-3.5 rounded-xl shadow-lg hover:shadow-primary/20 flex items-center justify-center gap-2.5 transition-all hover:scale-[1.02] active:scale-[0.98]"
+          >
+            <Save className="w-4 h-4" /> Save All Configurations
+          </button>
+        </div>
+
+      </div>
     </div >
   );
 };

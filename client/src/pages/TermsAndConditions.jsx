@@ -1,14 +1,14 @@
 import React, { useEffect } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { motion } from 'framer-motion';
-import { 
-  FileText, 
-  UserCheck, 
-  CreditCard, 
-  CalendarX, 
-  ShieldCheck, 
-  AlertTriangle, 
-  UserMinus, 
+import {
+  FileText,
+  UserCheck,
+  CreditCard,
+  CalendarX,
+  ShieldCheck,
+  AlertTriangle,
+  UserMinus,
   RefreshCw,
   ChevronRight
 } from 'lucide-react';
@@ -41,7 +41,7 @@ const TermsAndConditions = () => {
       icon: <CreditCard className="w-5 h-5" />,
       content: [
         "Users can book services through the platform after agreeing to the estimated service charges.",
-        "Payment methods supported include Online (Credit/Debit Cards, UPI, Net Banking) and Cash on Delivery (where applicable).",
+        "Payment methods supported include Online (Credit/Debit Cards, UPI, Net Banking) and Pay after Service (where applicable).",
         "The platform reserves the right to charge an advance fee or full payment before the service is initiated for specific high-value tasks."
       ]
     },
@@ -131,7 +131,7 @@ const TermsAndConditions = () => {
             <FileText className="w-4 h-4 text-primary" />
             <span className="text-primary text-sm font-semibold uppercase tracking-wider">Legal Framework</span>
           </motion.div>
-          <motion.h1 
+          <motion.h1
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
@@ -139,7 +139,7 @@ const TermsAndConditions = () => {
           >
             Terms & Conditions
           </motion.h1>
-          <motion.p 
+          <motion.p
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}

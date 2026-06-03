@@ -1155,9 +1155,13 @@ const AdminBookingsView = () => {
             {/* Booking Details Modal */}
             {showModal && selectedBooking && (() => {
                 const bk = selectedBooking.booking;
+                if (bk && bk.cancellationProgress) {
+                    bk.refundAmount = bk.cancellationProgress.refundAmount || bk.refundAmount;
+                }
                 const addr = bk.address || {};
                 const pay = selectedBooking.payment || {};
                 const prov = selectedBooking.provider;
+                const refundAmountVal = bk.cancellationProgress?.refundAmount || bk.refundAmount || 0;
                 const InfoRow = ({ label, children, className = '' }) => (
                     <div className={`flex items-start justify-between gap-2 py-1 ${className}`}>
                         <span className="text-xs text-gray-500 shrink-0 w-28">{label}</span>
@@ -1221,6 +1225,11 @@ const AdminBookingsView = () => {
                                         <InfoRow label="Date">{formatDate(bk.date)}</InfoRow>
                                         <InfoRow label="Time">{bk.time ? formatTime(bk.time) : '—'}</InfoRow>
                                         <InfoRow label="Created">{bk.createdAt ? new Date(bk.createdAt).toLocaleDateString() : '—'}</InfoRow>
+                                        <InfoRow label="Payment Method">
+                                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-50 text-blue-750 border border-blue-200">
+                                                {bk.paymentMethod || '—'}
+                                            </span>
+                                        </InfoRow>
                                         <InfoRow label="Service Zone">
                                             {bk.zoneId?.name ? (
                                                 <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-250 font-sans">
@@ -1545,16 +1554,16 @@ const AdminBookingsView = () => {
                                                             <div className="flex justify-between"><span className="text-gray-400">Cancelled By:</span><span className="font-semibold capitalize">{bk.cancelledBy || 'Admin'}</span></div>
                                                             <div className="flex justify-between"><span className="text-gray-400">Reason:</span><span className="font-semibold text-right max-w-[65%] truncate" title={bk.cancellationReason}>{bk.cancellationReason || '—'}</span></div>
                                                             {bk.complaintId && <div className="flex justify-between"><span className="text-gray-400">Complaint:</span><span className="font-semibold">{bk.complaintId.complaintId || bk.complaintId}</span></div>}
-                                                            {bk.refundAmount > 0 && (
+                                                            {(bk.cancellationProgress?.refundAmount > 0 || bk.refundAmount > 0) && (
                                                                 <>
                                                                     <div className="flex justify-between"><span className="text-gray-400">Refund:</span><span className="font-bold text-teal-700">{formatCurrency(bk.refundAmount)}</span></div>
                                                                     <div className="flex justify-between"><span className="text-gray-400">Refund Destination:</span><span className="font-bold text-teal-755 uppercase">Wallet</span></div>
-                                                                    <div className="flex justify-between"><span className="text-gray-400">Refund Status:</span><span className="px-1.5 py-0.5 rounded text-[10px] bg-teal-100 text-teal-800 font-bold uppercase">{bk.refundStatus || 'Completed'}</span></div>
+                                                                    <div className="flex justify-between"><span className="text-gray-400">Refund Status:</span><span className="px-1.5 py-0.5 rounded text-[10px] bg-teal-100 text-teal-800 font-bold uppercase">{bk.cancellationProgress?.status || bk.refundStatus || 'Completed'}</span></div>
                                                                     <div className="flex justify-between"><span className="text-gray-400">Refund Reference:</span><span className="font-mono text-[10px]">{bk.refundReference || '—'}</span></div>
                                                                     {bk.refundProcessedAt && <div className="flex justify-between"><span className="text-gray-400">Refund Date:</span><span>{new Date(bk.refundProcessedAt).toLocaleDateString()}</span></div>}
+                                                                    {(bk.platformFee > 0 || bk.platformFeeRetained > 0) && <div className="flex justify-between"><span className="text-gray-400">Platform Fee Retained:</span><span className="font-bold text-red-600">{formatCurrency(bk.platformFee || bk.platformFeeRetained)}</span></div>}
                                                                 </>
                                                             )}
-                                                            {bk.platformFeeRetained > 0 && <div className="flex justify-between"><span className="text-gray-400">Platform Fee Retained:</span><span className="font-bold text-red-600">{formatCurrency(bk.platformFeeRetained)}</span></div>}
                                                         </div>
                                                     )}
                                                 </div>

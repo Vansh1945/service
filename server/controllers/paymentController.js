@@ -6,6 +6,7 @@ const PaymentRecord = require('../models/PaymentRecord-model');
 const Provider = require('../models/Provider-model');
 const Booking = require('../models/Booking-model');
 const Transaction = require('../models/Transaction-model');
+const Complaint = require('../models/Complaint-model');
 const ExcelJS = require('exceljs');
 const { sendNotification, notifyAdmins } = require('../utils/notificationHelper');
 const { sendMail } = require('../utils/sendmail');
@@ -1799,6 +1800,14 @@ const generateWithdrawalReport = async (req, res) => {
     // Fetch PaymentRecords with provider details populated
     const records = await PaymentRecord.find(filter)
       .populate('provider', 'name bankDetails providerId')
+      .populate({
+        path: 'booking',
+        select: 'bookingId complaint',
+        populate: {
+          path: 'complaint',
+          select: 'complaintId'
+        }
+      })
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(parseInt(limit))
@@ -1811,6 +1820,8 @@ const generateWithdrawalReport = async (req, res) => {
     worksheet.columns = [
       { header: 'Provider Name', key: 'providerName', width: 25 },
       { header: 'Provider ID', key: 'providerId', width: 25 },
+      { header: 'Booking ID', key: 'bookingId', width: 25 },
+      { header: 'Complaint ID', key: 'complaintId', width: 25 },
       { header: 'Requested Amount', key: 'amount', width: 15 },
       { header: 'Net Amount Paid', key: 'netAmount', width: 15 },
       { header: 'Payment Method', key: 'paymentMethod', width: 15 },
@@ -1832,6 +1843,8 @@ const generateWithdrawalReport = async (req, res) => {
       worksheet.addRow({
         providerName: record.provider ? record.provider.name : '-',
         providerId: record.provider ? record.provider.providerId : '-',
+        bookingId: record.booking ? (record.booking.bookingId || record.booking._id.toString()) : '-',
+        complaintId: (record.booking && record.booking.complaint) ? (record.booking.complaint.complaintId || '-') : '-',
         amount: record.amount,
         netAmount: record.netAmount,
         paymentMethod: record.paymentMethod,
@@ -1932,6 +1945,8 @@ const generateProviderEarningsReport = async (req, res) => {
     worksheet.columns = [
       { header: "Provider ID", key: "providerId", width: 25 },
       { header: "Provider Name", key: "providerName", width: 25 },
+      { header: "Booking IDs", key: "bookingIds", width: 40 },
+      { header: "Complaint IDs", key: "complaintIds", width: 40 },
       { header: "Total Bookings Completed", key: "totalBookings", width: 20 },
       { header: "Total Earnings (Gross)", key: "totalEarnings", width: 20 },
       { header: "Total Commission", key: "totalCommission", width: 20 },
@@ -1971,6 +1986,15 @@ const generateProviderEarningsReport = async (req, res) => {
       },
       { $unwind: { path: '$bookingInfo', preserveNullAndEmptyArrays: true } },
       {
+        $lookup: {
+          from: 'complaints',
+          localField: 'bookingInfo.complaint',
+          foreignField: '_id',
+          as: 'complaintInfo'
+        }
+      },
+      { $unwind: { path: '$complaintInfo', preserveNullAndEmptyArrays: true } },
+      {
         $group: {
           _id: '$provider',
           totalBookings: { $sum: 1 },
@@ -1987,7 +2011,9 @@ const generateProviderEarningsReport = async (req, res) => {
           providerSurgeShare: { $sum: { $ifNull: ['$bookingInfo.providerSurgeShare', 0] } },
           companySurgeShare: { $sum: { $ifNull: ['$bookingInfo.companySurgeShare', 0] } },
           refundAmount: { $sum: { $add: [ { $ifNull: ['$bookingInfo.cancellationProgress.refundAmount', 0] }, { $ifNull: ['$bookingInfo.refundAmount', 0] } ] } },
-          platformFeeRetained: { $sum: { $ifNull: ['$bookingInfo.platformFeeRetained', 0] } }
+          platformFeeRetained: { $sum: { $ifNull: ['$bookingInfo.platformFeeRetained', 0] } },
+          bookingIds: { $addToSet: { $ifNull: ['$bookingInfo.bookingId', { $toString: '$bookingInfo._id' }] } },
+          complaintIds: { $addToSet: '$complaintInfo.complaintId' }
         }
       }
     ]).lean();
@@ -2045,7 +2071,9 @@ const generateProviderEarningsReport = async (req, res) => {
         providerSurgeShare: 0,
         companySurgeShare: 0,
         refundAmount: 0,
-        platformFeeRetained: 0
+        platformFeeRetained: 0,
+        bookingIds: [],
+        complaintIds: []
       };
       const wStats = withdrawalStatsMap[provider._id.toString()] || [];
 
@@ -2063,6 +2091,8 @@ const generateProviderEarningsReport = async (req, res) => {
       worksheet.addRow({
         providerId: provider.providerId || 'N/A',
         providerName: provider.name,
+        bookingIds: stats.bookingIds ? stats.bookingIds.filter(Boolean).join(', ') : '-',
+        complaintIds: stats.complaintIds ? stats.complaintIds.filter(Boolean).join(', ') : '-',
         totalBookings: stats.totalBookings,
         totalEarnings: stats.totalGross,
         totalCommission: stats.totalCommission,
@@ -2136,6 +2166,7 @@ const getCommissionReport = async (req, res) => {
     const bookings = await Booking.find(filter)
       .populate('provider', 'name email providerId')
       .populate('services.service', 'title basePrice')
+      .populate('complaint', 'complaintId')
       .lean();
 
     if (!bookings || bookings.length === 0) {
@@ -2149,6 +2180,7 @@ const getCommissionReport = async (req, res) => {
     // Columns
     worksheet.columns = [
       { header: 'Booking ID', key: 'bookingId', width: 25 },
+      { header: 'Complaint ID', key: 'complaintId', width: 25 },
       { header: 'Provider Name', key: 'providerName', width: 25 },
       { header: 'Provider ID', key: 'providerId', width: 25 },
       { header: 'Service Name', key: 'serviceName', width: 30 },
@@ -2175,7 +2207,8 @@ const getCommissionReport = async (req, res) => {
     bookings.forEach(booking => {
       booking.services.forEach(item => {
         worksheet.addRow({
-          bookingId: booking._id.toString(),
+          bookingId: booking.bookingId || booking._id.toString(),
+          complaintId: booking.complaint?.complaintId || '-',
           providerName: booking.provider?.name || 'N/A',
           providerId: booking.provider?.providerId || 'N/A',
           serviceName: item.service?.title || 'N/A',
@@ -2339,6 +2372,15 @@ const providerLedgerReport = async (req, res) => {
       { $unwind: '$booking' },
       {
         $lookup: {
+          from: 'complaints',
+          localField: 'booking.complaint',
+          foreignField: '_id',
+          as: 'complaintInfo'
+        }
+      },
+      { $unwind: { path: '$complaintInfo', preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
           from: 'paymentrecords',
           localField: 'paymentRecord',
           foreignField: '_id',
@@ -2360,6 +2402,7 @@ const providerLedgerReport = async (req, res) => {
       { header: 'Provider Name', key: 'providerName', width: 25 },
       { header: 'Date', key: 'date', width: 20 },
       { header: 'Booking ID', key: 'bookingId', width: 25 },
+      { header: 'Complaint ID', key: 'complaintId', width: 25 },
       { header: 'Gross Amount', key: 'grossAmount', width: 15 },
       { header: 'Commission Rate', key: 'commissionRate', width: 15 },
       { header: 'Commission Amount', key: 'commissionAmount', width: 15 },
@@ -2386,7 +2429,8 @@ const providerLedgerReport = async (req, res) => {
         providerId: provider.providerId || 'N/A',
         providerName: provider.name,
         date: earning.createdAt.toISOString().slice(0, 10),
-        bookingId: earning.booking._id.toString(),
+        bookingId: earning.booking.bookingId || earning.booking._id.toString(),
+        complaintId: earning.complaintInfo?.complaintId || '-',
         grossAmount: earning.grossAmount,
         commissionRate: earning.commissionRate,
         commissionAmount: earning.commissionAmount,
@@ -2484,12 +2528,23 @@ const earningsSummaryReport = async (req, res) => {
       { $unwind: '$booking' },
       { $match: { 'booking.status': 'completed' } },
       {
+        $lookup: {
+          from: 'complaints',
+          localField: 'booking.complaint',
+          foreignField: '_id',
+          as: 'complaintInfo'
+        }
+      },
+      { $unwind: { path: '$complaintInfo', preserveNullAndEmptyArrays: true } },
+      {
         $group: {
           _id: groupId,
           totalGross: { $sum: '$grossAmount' },
           totalCommission: { $sum: '$commissionAmount' },
           totalNet: { $sum: '$netAmount' },
-          count: { $sum: 1 }
+          count: { $sum: 1 },
+          bookingIds: { $addToSet: { $ifNull: ['$booking.bookingId', { $toString: '$booking._id' }] } },
+          complaintIds: { $addToSet: '$complaintInfo.complaintId' }
         }
       },
       { $sort: { '_id.year': 1, '_id.month': 1 } }
@@ -2517,6 +2572,8 @@ const earningsSummaryReport = async (req, res) => {
 
     worksheet.columns = [
       { header: 'Period', key: 'period', width: 20 },
+      { header: 'Booking IDs', key: 'bookingIds', width: 40 },
+      { header: 'Complaint IDs', key: 'complaintIds', width: 40 },
       { header: 'Total Platform Earnings (Gross)', key: 'totalGross', width: 25 },
       { header: 'Total Provider Earnings (Net)', key: 'totalNet', width: 25 },
       { header: 'Total Commission Earned', key: 'totalCommission', width: 25 },
@@ -2536,6 +2593,8 @@ const earningsSummaryReport = async (req, res) => {
 
       worksheet.addRow({
         period,
+        bookingIds: item.bookingIds ? item.bookingIds.filter(Boolean).join(', ') : '-',
+        complaintIds: item.complaintIds ? item.complaintIds.filter(Boolean).join(', ') : '-',
         totalGross: item.totalGross,
         totalCommission: item.totalCommission,
         totalNet: item.totalNet,
@@ -2663,21 +2722,36 @@ const outstandingBalanceReport = async (req, res) => {
         { $unwind: '$booking' },
         { $match: { 'booking.status': 'completed' } },
         {
+          $lookup: {
+            from: 'complaints',
+            localField: 'booking.complaint',
+            foreignField: '_id',
+            as: 'complaintInfo'
+          }
+        },
+        { $unwind: { path: '$complaintInfo', preserveNullAndEmptyArrays: true } },
+        {
           $group: {
             _id: '$booking.paymentMethod',
             totalNet: { $sum: '$netAmount' },
-            totalCommission: { $sum: '$commissionAmount' }
+            totalCommission: { $sum: '$commissionAmount' },
+            bookingIds: { $addToSet: { $ifNull: ['$booking.bookingId', { $toString: '$booking._id' }] } },
+            complaintIds: { $addToSet: '$complaintInfo.complaintId' }
           }
         }
       ]);
 
       let availableBalance = 0;
+      let providerBookingIds = new Set();
+      let providerComplaintIds = new Set();
       availableBalanceResult.forEach(item => {
         if (item._id === 'online') {
           availableBalance += item.totalNet;
         } else if (item._id === 'cash') {
           availableBalance -= item.totalCommission;
         }
+        if (item.bookingIds) item.bookingIds.forEach(id => providerBookingIds.add(id));
+        if (item.complaintIds) item.complaintIds.forEach(id => id && providerComplaintIds.add(id));
       });
       availableBalance = Math.max(0, availableBalance);
 
@@ -2716,6 +2790,8 @@ const outstandingBalanceReport = async (req, res) => {
         reportData.push({
           providerId: provider.providerId,
           providerName: provider.name,
+          bookingIds: Array.from(providerBookingIds).filter(Boolean).join(', '),
+          complaintIds: Array.from(providerComplaintIds).filter(Boolean).join(', '),
           availableBalance: outstandingBalance,
           lastWithdrawalDate: lastWithdrawalDate ? lastWithdrawalDate.toISOString().slice(0, 10) : 'Never',
           daysPending
@@ -2730,6 +2806,8 @@ const outstandingBalanceReport = async (req, res) => {
     worksheet.columns = [
       { header: 'Provider Name', key: 'providerName', width: 25 },
       { header: 'Provider ID', key: 'providerId', width: 25 },
+      { header: 'Booking IDs', key: 'bookingIds', width: 40 },
+      { header: 'Complaint IDs', key: 'complaintIds', width: 40 },
       { header: 'Available Balance', key: 'availableBalance', width: 20 },
       { header: 'Last Withdrawal Date', key: 'lastWithdrawalDate', width: 20 },
       { header: 'Days Pending', key: 'daysPending', width: 15 }
@@ -2857,6 +2935,186 @@ const releaseHeldEarnings = async () => {
 };
 
 
+// Admin - Generate Complaint Report
+const generateComplaintReport = async (req, res) => {
+  try {
+    const { fromDate, toDate } = req.query;
+
+    if (!fromDate || !toDate) {
+      return res.status(400).json({ success: false, message: 'fromDate and toDate are required' });
+    }
+
+    const start = new Date(fromDate);
+    const end = new Date(toDate);
+    end.setHours(23, 59, 59, 999);
+
+    const diffDays = Math.floor((end - start) / (1000 * 60 * 60 * 24));
+    if (diffDays < 1 || diffDays > 366) {
+      return res.status(400).json({ success: false, message: 'Date range must be between 1 day and 1 year' });
+    }
+
+    const filter = {
+      createdAt: { $gte: start, $lte: end }
+    };
+    if (req.query.zoneIds) {
+      const zones = req.query.zoneIds.split(',');
+      const providers = await Provider.find({ currentZone: { $in: zones } }).select('_id').lean();
+      const providerIds = providers.map(p => p._id);
+      filter.provider = { $in: providerIds };
+    }
+
+    const complaints = await Complaint.find(filter)
+      .populate('customer', 'name email phone')
+      .populate('provider', 'name providerId')
+      .populate('booking', 'bookingId')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Complaint Report');
+
+    worksheet.columns = [
+      { header: 'Complaint ID', key: 'complaintId', width: 25 },
+      { header: 'Booking ID', key: 'bookingId', width: 25 },
+      { header: 'Customer Name', key: 'customerName', width: 25 },
+      { header: 'Customer Email', key: 'customerEmail', width: 25 },
+      { header: 'Customer Phone', key: 'customerPhone', width: 20 },
+      { header: 'Provider Name', key: 'providerName', width: 25 },
+      { header: 'Provider ID', key: 'providerId', width: 25 },
+      { header: 'Category', key: 'category', width: 20 },
+      { header: 'Title', key: 'title', width: 25 },
+      { header: 'Description', key: 'description', width: 40 },
+      { header: 'Status', key: 'status', width: 15 },
+      { header: 'Date Raised', key: 'dateRaised', width: 20 },
+      { header: 'Date Resolved', key: 'dateResolved', width: 20 },
+      { header: 'Resolution', key: 'resolution', width: 25 },
+      { header: 'Resolution Notes', key: 'resolutionNotes', width: 30 }
+    ];
+
+    complaints.forEach(c => {
+      worksheet.addRow({
+        complaintId: c.complaintId || c._id.toString(),
+        bookingId: c.booking ? (c.booking.bookingId || c.booking._id.toString()) : '-',
+        customerName: c.customer?.name || '-',
+        customerEmail: c.customer?.email || '-',
+        customerPhone: c.customer?.phone || '-',
+        providerName: c.provider?.name || '-',
+        providerId: c.provider?.providerId || '-',
+        category: c.category || '-',
+        title: c.title || '-',
+        description: c.description || '-',
+        status: c.status || '-',
+        dateRaised: c.createdAt ? c.createdAt.toLocaleString() : '-',
+        dateResolved: c.resolvedAt ? c.resolvedAt.toLocaleString() : '-',
+        resolution: c.resolution || '-',
+        resolutionNotes: c.resolutionNotes || '-'
+      });
+    });
+
+    worksheet.getRow(1).font = { bold: true };
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=Complaint_Report_${fromDate}_to_${toDate}.xlsx`);
+
+    await workbook.xlsx.write(res);
+    res.status(200).end();
+
+  } catch (error) {
+    console.error('Error generating complaint report:', error);
+    res.status(500).json({ success: false, message: 'Server Error' });
+  }
+};
+
+// Admin - Generate Refund Report
+const generateRefundReport = async (req, res) => {
+  try {
+    const { fromDate, toDate } = req.query;
+
+    if (!fromDate || !toDate) {
+      return res.status(400).json({ success: false, message: 'fromDate and toDate are required' });
+    }
+
+    const start = new Date(fromDate);
+    const end = new Date(toDate);
+    end.setHours(23, 59, 59, 999);
+
+    const diffDays = Math.floor((end - start) / (1000 * 60 * 60 * 24));
+    if (diffDays < 1 || diffDays > 366) {
+      return res.status(400).json({ success: false, message: 'Date range must be between 1 day and 1 year' });
+    }
+
+    const filter = {
+      type: 'refund',
+      createdAt: { $gte: start, $lte: end }
+    };
+    if (req.query.zoneIds) {
+      const zones = req.query.zoneIds.split(',');
+      const bookings = await Booking.find({ zoneId: { $in: zones } }).select('_id').lean();
+      const bookingIds = bookings.map(b => b._id);
+      filter.booking = { $in: bookingIds };
+    }
+
+    const refunds = await Transaction.find(filter)
+      .populate('user', 'name email phone')
+      .populate({
+        path: 'booking',
+        select: 'bookingId complaint provider',
+        populate: [
+          { path: 'complaint', select: 'complaintId' },
+          { path: 'provider', select: 'name providerId' }
+        ]
+      })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Refund Report');
+
+    worksheet.columns = [
+      { header: 'Booking ID', key: 'bookingId', width: 25 },
+      { header: 'Complaint ID', key: 'complaintId', width: 25 },
+      { header: 'Customer Name', key: 'customerName', width: 25 },
+      { header: 'Customer Email', key: 'customerEmail', width: 25 },
+      { header: 'Customer Phone', key: 'customerPhone', width: 20 },
+      { header: 'Provider Name', key: 'providerName', width: 25 },
+      { header: 'Provider ID', key: 'providerId', width: 25 },
+      { header: 'Refunded Amount', key: 'amount', width: 15 },
+      { header: 'Refund Status', key: 'status', width: 15 },
+      { header: 'Refund Reason / Description', key: 'description', width: 40 },
+      { header: 'Date Processed', key: 'dateProcessed', width: 20 }
+    ];
+
+    refunds.forEach(r => {
+      worksheet.addRow({
+        bookingId: r.booking?.bookingId || r.bookingId || '-',
+        complaintId: r.booking?.complaint?.complaintId || '-',
+        customerName: r.user?.name || '-',
+        customerEmail: r.user?.email || '-',
+        customerPhone: r.user?.phone || '-',
+        providerName: r.booking?.provider?.name || '-',
+        providerId: r.booking?.provider?.providerId || '-',
+        amount: r.amount || 0,
+        status: r.paymentStatus || '-',
+        description: r.refundReason || r.description || '-',
+        dateProcessed: r.createdAt ? r.createdAt.toLocaleString() : '-'
+      });
+    });
+
+    worksheet.getRow(1).font = { bold: true };
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=Refund_Report_${fromDate}_to_${toDate}.xlsx`);
+
+    await workbook.xlsx.write(res);
+    res.status(200).end();
+
+  } catch (error) {
+    console.error('Error generating refund report:', error);
+    res.status(500).json({ success: false, message: 'Server Error' });
+  }
+};
+
+
 module.exports = {
   // Webhook
   handleWebhook,
@@ -2882,5 +3140,7 @@ module.exports = {
   earningsSummaryReport,
   payoutHistoryReport,
   outstandingBalanceReport,
-  releaseHeldEarnings
+  releaseHeldEarnings,
+  generateComplaintReport,
+  generateRefundReport
 };

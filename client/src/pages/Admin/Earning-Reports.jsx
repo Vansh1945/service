@@ -13,6 +13,7 @@ import {
   FiRefreshCw
 } from 'react-icons/fi';
 import * as PaymentService from '../../services/PaymentService';
+import * as BookingService from '../../services/BookingService';
 import { useAuth } from '../../context/auth';
 import { useAdminFilter } from '../../context/AdminFilterContext';
 import AdminFilterBar from '../../components/AdminFilterBar';
@@ -64,6 +65,27 @@ const AdminEarningReports = () => {
       title: 'Outstanding Balance',
       description: 'Pending withdrawal amounts',
       icon: <FiClock className="w-5 h-5" />,
+      color: 'bg-rose-100 text-rose-600'
+    },
+    {
+      id: 'booking-report',
+      title: 'Booking Report',
+      description: 'Download overall bookings list',
+      icon: <FiFileText className="w-5 h-5" />,
+      color: 'bg-teal-100 text-teal-600'
+    },
+    {
+      id: 'complaint-report',
+      title: 'Complaint Report',
+      description: 'Download user complaints status',
+      icon: <FiAlertCircle className="w-5 h-5" />,
+      color: 'bg-amber-100 text-amber-600'
+    },
+    {
+      id: 'refund-report',
+      title: 'Refund Report',
+      description: 'Download wallet and online refunds',
+      icon: <FiRefreshCw className="w-5 h-5" />,
       color: 'bg-rose-100 text-rose-600'
     }
   ];
@@ -155,6 +177,15 @@ const AdminEarningReports = () => {
           break;
         case 'outstanding-balance':
           response = await PaymentService.outstandingBalanceReport(params, config);
+          break;
+        case 'booking-report':
+          response = await BookingService.downloadBookingReport(params, config);
+          break;
+        case 'complaint-report':
+          response = await PaymentService.generateComplaintReport(params, config);
+          break;
+        case 'refund-report':
+          response = await PaymentService.generateRefundReport(params, config);
           break;
         default:
           showToast?.('Invalid report type', 'error');

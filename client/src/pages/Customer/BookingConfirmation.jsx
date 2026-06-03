@@ -35,6 +35,7 @@ const BookingConfirmation = () => {
   const [showCashModal, setShowCashModal] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [paymentProgressMessage, setPaymentProgressMessage] = useState('');
+  const [defaultCurrency, setDefaultCurrency] = useState('INR');
 
   // Load Razorpay script
   useEffect(() => {
@@ -135,6 +136,7 @@ const BookingConfirmation = () => {
         const settingsRes = await SystemService.getSystemSetting().catch(() => null);
         if (settingsRes?.data?.success) {
           setAllowCOD(settingsRes.data.data?.bookingSettings?.allowCOD !== false);
+          setDefaultCurrency(settingsRes.data.data?.defaultCurrency || 'INR');
         }
 
         if (location.state?.booking) {
@@ -237,7 +239,7 @@ const BookingConfirmation = () => {
         };
       case 'scheduled':
         return {
-          message: 'Booking Scheduled (Cash on Delivery)',
+          message: 'Booking Scheduled (Pay after Service)',
           color: 'text-yellow-600',
           canPay: !isPaid,
           description: 'You can pay now online, or pay cash when the provider arrives.'
@@ -332,7 +334,7 @@ const BookingConfirmation = () => {
       const orderResponse = await TransactionService.createOrder({
         bookingId: bookingDetails._id,
         amount: Math.round(remainingAmount * 100),
-        currency: 'INR',
+        currency: defaultCurrency,
         paymentMethod: selectedMethod
       });
 
@@ -345,7 +347,7 @@ const BookingConfirmation = () => {
       const options = {
         key: import.meta.env.VITE_RAZORPAY_KEY || key,
         amount: order.amount,
-        currency: order.currency || 'INR',
+        currency: order.currency || defaultCurrency,
         name: 'Raj Electrical Services',
         description: isMixed
           ? `Mixed Payment: Wallet (₹${walletDeduction}) + Razorpay`

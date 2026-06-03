@@ -108,9 +108,20 @@ transactionSchema.pre('save', function (next) {
 
 // Create Razorpay order
 transactionSchema.statics.createRazorpayOrder = async function (amount, currency, receipt, notes) {
+  let finalCurrency = currency;
+  if (!finalCurrency) {
+    try {
+      const { SystemConfig } = require('./SystemSetting');
+      const settings = await SystemConfig.findOne();
+      finalCurrency = settings?.defaultCurrency || 'INR';
+    } catch (e) {
+      finalCurrency = 'INR';
+    }
+  }
+
   const options = {
     amount: Math.round(amount * 100), // Convert to paise
-    currency: currency || 'INR',
+    currency: finalCurrency,
     receipt: receipt,
     payment_capture: 1,
     notes: notes

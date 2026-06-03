@@ -109,6 +109,12 @@ const Dashboard = () => {
       const disputesCount = allBookingsFlat.filter(b => b.disputeRaised).length;
       const pendingReviews = allBookingsFlat.filter(b => b.disputeStatus === 'UNDER_REVIEW').length;
 
+      const sortedBookings = [...combinedBookings].sort((a, b) => {
+        if (a.status === 'pending' && b.status !== 'pending') return -1;
+        if (a.status !== 'pending' && b.status === 'pending') return 1;
+        return 0;
+      });
+
       setDashboardData({
         summary: summary?.data || null,
         earnings: earnings?.data || null,
@@ -120,7 +126,7 @@ const Dashboard = () => {
         todaysEarnings: summary?.data?.todaysEarnings || 0,
         pendingRequests: new Array(summary?.data?.pendingBookings || 0),
         activeJobs: combinedBookings,
-        recentBookings: combinedBookings.slice(0, 5),
+        recentBookings: sortedBookings.slice(0, 5),
         heldPayouts,
         disputesCount,
         pendingReviews

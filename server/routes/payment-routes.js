@@ -33,5 +33,7 @@ router.get('/admin/provider-ledger/:providerId', adminAuthMiddleware, paymentCon
 router.get('/admin/earnings-summary-report', adminAuthMiddleware, paymentController.earningsSummaryReport);
 router.get('/admin/payout-history-report', adminAuthMiddleware, paymentController.payoutHistoryReport);
 router.get('/admin/outstanding-balance-report', adminAuthMiddleware, paymentController.outstandingBalanceReport);
+router.get('/admin/complaint-report', adminAuthMiddleware, paymentController.generateComplaintReport);
+router.get('/admin/refund-report', adminAuthMiddleware, paymentController.generateRefundReport);
 
 module.exports = router;

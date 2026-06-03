@@ -771,7 +771,7 @@ const createBooking = async (req, res) => {
     }
 
     let bookingResult = await runInTransactionOrSequential(async (session) => {
-      // Validate if Cash On Delivery (COD) is allowed
+      // Validate if Pay after Service (COD) is allowed
       if (paymentMethod === 'cash') {
         const { SystemConfig } = require('../models/SystemSetting');
         let settings = await SystemConfig.findOne();
@@ -1073,20 +1073,37 @@ const createBooking = async (req, res) => {
         else await provUpdate;
       }
 
-      // If paymentMethod is cash, create a transaction record
+      // If paymentMethod is cash, create or update a transaction record
       if (paymentMethod === 'cash') {
         const Transaction = mongoose.model('Transaction');
-        const transaction = new Transaction({
-          booking: booking._id,
-          bookingId: booking.bookingId || booking._id.toString(),
-          user: req.user._id,
-          customerId: req.user._id.toString(),
-          amount: booking.totalAmount,
-          paymentMethod: 'cash',
-          paymentStatus: 'pending',
-          type: 'payment',
-          description: 'Pay After Service (Cash/COD) Payment pending'
-        });
+        let transaction;
+        if (session) {
+          transaction = await Transaction.findOne({ booking: booking._id }).session(session);
+        } else {
+          transaction = await Transaction.findOne({ booking: booking._id });
+        }
+
+        if (transaction) {
+          transaction.amount = booking.totalAmount;
+          transaction.paymentMethod = 'cash';
+          transaction.paymentStatus = 'pending';
+          transaction.type = 'payment';
+          transaction.description = 'Pay After Service (Cash/COD) Payment pending';
+          transaction.updatedAt = new Date();
+        } else {
+          transaction = new Transaction({
+            booking: booking._id,
+            bookingId: booking.bookingId || booking._id.toString(),
+            user: req.user._id,
+            customerId: req.user._id.toString(),
+            amount: booking.totalAmount,
+            paymentMethod: 'cash',
+            paymentStatus: 'pending',
+            type: 'payment',
+            description: 'Pay After Service (Cash/COD) Payment pending'
+          });
+        }
+
         if (session) await transaction.save({ session });
         else await transaction.save();
       }
@@ -1630,7 +1647,7 @@ const updateBookingPayment = async (req, res) => {
       });
     }
 
-    // Validate if Cash On Delivery (COD) is allowed
+    // Validate if Pay after Service (COD) is allowed
     if (paymentMethod === 'cash') {
       const { SystemConfig } = require('../models/SystemSetting');
       let settings = await SystemConfig.findOne();
@@ -2352,7 +2369,8 @@ const cancelBooking = async (req, res) => {
 
       if ((booking.paymentStatus === 'paid' || booking.paymentStatus === 'escrow_hold') && ['online', 'wallet', 'mixed'].includes(booking.paymentMethod)) {
         const previouslyRefunded = booking.cancellationProgress?.refundAmount || 0;
-        const refundAmount = booking.totalAmount - previouslyRefunded;
+        const platformFee = booking.platformFee || 0;
+        const refundAmount = Math.max(0, booking.totalAmount - platformFee - previouslyRefunded);
 
         if (refundAmount > 0) {
           // Lock transaction to prevent double refund
@@ -2392,19 +2410,31 @@ const cancelBooking = async (req, res) => {
             user.wallet.lastUpdated = new Date();
             await user.save({ session });
 
-            // Create transaction record for audit
-            const refundTransaction = new Transaction({
-              booking: booking._id,
-              bookingId: booking.bookingId || booking._id.toString(),
-              user: userId,
-              amount: refundAmount,
-              paymentStatus: 'completed',
-              paymentMethod: 'wallet',
-              type: 'refund',
-              description: `Customer cancelled booking - Automatic refund to wallet: ${reason || 'Customer requested cancellation'}`,
-              refundReason: reason || 'Customer cancelled booking'
-            });
-            await refundTransaction.save({ session });
+            // Create or update transaction record for audit
+            let refundTransaction = await Transaction.findOne({ booking: booking._id }).session(session);
+            if (refundTransaction) {
+              refundTransaction.amount = refundAmount;
+              refundTransaction.paymentStatus = 'refunded';
+              refundTransaction.paymentMethod = 'wallet';
+              refundTransaction.type = 'refund';
+              refundTransaction.description = `Customer cancelled booking - Automatic refund to wallet: ${reason || 'Customer requested cancellation'}`;
+              refundTransaction.refundReason = reason || 'Customer cancelled booking';
+              refundTransaction.updatedAt = new Date();
+              await refundTransaction.save({ session });
+            } else {
+              refundTransaction = new Transaction({
+                booking: booking._id,
+                bookingId: booking.bookingId || booking._id.toString(),
+                user: userId,
+                amount: refundAmount,
+                paymentStatus: 'completed',
+                paymentMethod: 'wallet',
+                type: 'refund',
+                description: `Customer cancelled booking - Automatic refund to wallet: ${reason || 'Customer requested cancellation'}`,
+                refundReason: reason || 'Customer cancelled booking'
+              });
+              await refundTransaction.save({ session });
+            }
 
             booking.paymentStatus = 'refunded';
             booking.cancellationProgress.status = 'refund_completed';
@@ -2435,19 +2465,31 @@ const cancelBooking = async (req, res) => {
             booking.cancellationProgress.refundAmount = previouslyRefunded + refundAmount;
             booking.cancellationProgress.refundInitiatedAt = new Date();
 
-            // Create transaction record for audit trail
-            const refundTransaction = new Transaction({
-              booking: booking._id,
-              bookingId: booking.bookingId || booking._id.toString(),
-              user: userId,
-              amount: refundAmount,
-              paymentStatus: 'pending',
-              paymentMethod: 'online',
-              type: 'refund',
-              description: `Customer cancelled booking - Automatic gateway refund initiated: ${reason || 'Customer requested cancellation'}`,
-              refundReason: reason || 'Customer cancelled booking'
-            });
-            await refundTransaction.save({ session });
+            // Create or update transaction record for audit trail
+            let refundTransaction = await Transaction.findOne({ booking: booking._id }).session(session);
+            if (refundTransaction) {
+              refundTransaction.amount = refundAmount;
+              refundTransaction.paymentStatus = 'pending';
+              refundTransaction.paymentMethod = 'online';
+              refundTransaction.type = 'refund';
+              refundTransaction.description = `Customer cancelled booking - Automatic gateway refund initiated: ${reason || 'Customer requested cancellation'}`;
+              refundTransaction.refundReason = reason || 'Customer cancelled booking';
+              refundTransaction.updatedAt = new Date();
+              await refundTransaction.save({ session });
+            } else {
+              refundTransaction = new Transaction({
+                booking: booking._id,
+                bookingId: booking.bookingId || booking._id.toString(),
+                user: userId,
+                amount: refundAmount,
+                paymentStatus: 'pending',
+                paymentMethod: 'online',
+                type: 'refund',
+                description: `Customer cancelled booking - Automatic gateway refund initiated: ${reason || 'Customer requested cancellation'}`,
+                refundReason: reason || 'Customer cancelled booking'
+              });
+              await refundTransaction.save({ session });
+            }
 
             refundDetails = {
               amount: refundAmount,
@@ -3525,19 +3567,31 @@ const rejectBooking = async (req, res) => {
           await customer.save({ session });
         }
 
-        // Create transaction record for audit
-        const refundTransaction = new Transaction({
-          booking: booking._id,
-          bookingId: booking.bookingId || booking._id.toString(),
-          user: booking.customer._id,
-          amount: refundAmount,
-          paymentStatus: 'completed',
-          paymentMethod: 'wallet',
-          type: 'refund',
-          description: `Provider rejected booking - Automatic refund to wallet: ${reason || 'Provider declined'}`,
-          refundReason: reason || 'Provider rejected booking'
-        });
-        await refundTransaction.save({ session });
+        // Create or update transaction record for audit
+        let refundTransaction = await Transaction.findOne({ booking: booking._id }).session(session);
+        if (refundTransaction) {
+          refundTransaction.amount = refundAmount;
+          refundTransaction.paymentStatus = 'refunded';
+          refundTransaction.paymentMethod = 'wallet';
+          refundTransaction.type = 'refund';
+          refundTransaction.description = `Provider rejected booking - Automatic refund to wallet: ${reason || 'Provider declined'}`;
+          refundTransaction.refundReason = reason || 'Provider rejected booking';
+          refundTransaction.updatedAt = new Date();
+          await refundTransaction.save({ session });
+        } else {
+          refundTransaction = new Transaction({
+            booking: booking._id,
+            bookingId: booking.bookingId || booking._id.toString(),
+            user: booking.customer._id,
+            amount: refundAmount,
+            paymentStatus: 'completed',
+            paymentMethod: 'wallet',
+            type: 'refund',
+            description: `Provider rejected booking - Automatic refund to wallet: ${reason || 'Provider declined'}`,
+            refundReason: reason || 'Provider rejected booking'
+          });
+          await refundTransaction.save({ session });
+        }
 
         booking.paymentStatus = 'refunded';
 
@@ -3861,22 +3915,30 @@ const completeBooking = async (req, res) => {
     booking.surgeSplitSettings = splits;
 
     // Fraud score checking for Hold extension
-    const fraudScore = getFraudScore(booking);
-    let holdPeriodHours = typeof settings?.commissionSettings?.payoutHoldHours === 'number' ? settings.commissionSettings.payoutHoldHours : 48;
-    if (fraudScore >= 50) {
-      holdPeriodHours = 168; // 7 days (168 hours)
-      booking.disputeRaised = true; // Flag for review
-      booking.disputeStatus = 'under_review';
+    let fraudScore = 0;
+    let holdPeriodHours = 0;
+    if (booking.paymentMethod === 'cash') {
+      booking.payoutHoldUntil = null;
+    } else {
+      fraudScore = getFraudScore(booking);
+      holdPeriodHours = typeof settings?.commissionSettings?.payoutHoldHours === 'number' ? settings.commissionSettings.payoutHoldHours : 48;
+      if (fraudScore >= 50) {
+        holdPeriodHours = 168; // 7 days (168 hours)
+        booking.disputeRaised = true; // Flag for review
+        booking.disputeStatus = 'under_review';
+      }
+      booking.payoutHoldUntil = new Date(Date.now() + holdPeriodHours * 60 * 60 * 1000);
     }
-    booking.payoutHoldUntil = new Date(Date.now() + holdPeriodHours * 60 * 60 * 1000);
 
     // Add status history note
     booking.statusHistory.push({
       status: 'completed',
       timestamp: new Date(),
-      note: fraudScore >= 50
-        ? `Service completed. Verification successful. Suspicious activity detected (Fraud Score: ${fraudScore}). Payout held for 7 days (168 hours) for admin review.`
-        : `Service completed. Verification successful. Payout held for ${holdPeriodHours} hours for dispute review.`,
+      note: booking.paymentMethod === 'cash'
+        ? `Service completed. Cash payment verified.`
+        : fraudScore >= 50
+          ? `Service completed. Verification successful. Suspicious activity detected (Fraud Score: ${fraudScore}). Payout held for 7 days (168 hours) for admin review.`
+          : `Service completed. Verification successful. Payout held for ${holdPeriodHours} hours for dispute review.`,
       updatedBy: 'system'
     });
 
@@ -3894,26 +3956,39 @@ const completeBooking = async (req, res) => {
     if (booking.paymentMethod === 'cash') {
       const Transaction = require('../models/Transaction-model');
 
-      const cashTransaction = new Transaction({
-        booking: booking._id,
-        user: booking.customer,
-        amount: booking.totalAmount,
-        paymentMethod: 'cash',
-        paymentStatus: 'completed',
-        bookingId: booking.bookingId,
-        customerId: booking.customer?.toString(),
-        provider: booking.provider,
-        providerId: booking.provider?.toString(),
-        commission: booking.commissionAmount || 0,
-        providerEarning: booking.providerEarnings || 0,
-        transactionId: `CASH-${Date.now()}-${booking._id.toString().slice(-6)}`,
-        currency: 'INR',
-        completedAt: new Date(),
-        type: 'payment',
-        description: `Cash payment for booking ${booking.bookingId || booking._id}`
-      });
-
-      await cashTransaction.save({ session });
+      let cashTransaction = await Transaction.findOne({ booking: booking._id }).session(session);
+      if (cashTransaction) {
+        cashTransaction.amount = booking.totalAmount;
+        cashTransaction.paymentStatus = 'completed';
+        cashTransaction.provider = booking.provider;
+        cashTransaction.providerId = booking.provider?.toString();
+        cashTransaction.commission = booking.commissionAmount || 0;
+        cashTransaction.providerEarning = booking.providerEarnings || 0;
+        cashTransaction.completedAt = new Date();
+        cashTransaction.description = `Cash payment for booking ${booking.bookingId || booking._id}`;
+        cashTransaction.updatedAt = new Date();
+        await cashTransaction.save({ session });
+      } else {
+        cashTransaction = new Transaction({
+          booking: booking._id,
+          user: booking.customer,
+          amount: booking.totalAmount,
+          paymentMethod: 'cash',
+          paymentStatus: 'completed',
+          bookingId: booking.bookingId,
+          customerId: booking.customer?.toString(),
+          provider: booking.provider,
+          providerId: booking.provider?.toString(),
+          commission: booking.commissionAmount || 0,
+          providerEarning: booking.providerEarnings || 0,
+          transactionId: `CASH-${Date.now()}-${booking._id.toString().slice(-6)}`,
+          currency: settings?.defaultCurrency || 'INR',
+          completedAt: new Date(),
+          type: 'payment',
+          description: `Cash payment for booking ${booking.bookingId || booking._id}`
+        });
+        await cashTransaction.save({ session });
+      }
     }
 
     //  PREVENT DUPLICATE EARNING RECORD USING UPSERT
@@ -5047,8 +5122,9 @@ const downloadBookingReport = async (req, res) => {
       date: { $gte: startDate, $lte: endDate }
     })
       .populate('customer', 'name email phone')
-      .populate('provider', 'name area')
+      .populate('provider', 'name area providerId')
       .populate('services.service', 'name category')
+      .populate('complaint', 'complaintId')
       .lean();
 
     // Create Excel workbook
@@ -5058,6 +5134,7 @@ const downloadBookingReport = async (req, res) => {
     // Columns
     worksheet.columns = [
       { header: 'Booking ID', key: '_id', width: 25 },
+      { header: 'Complaint ID', key: 'complaintId', width: 25 },
       { header: 'Booking Date', key: 'date', width: 15 },
       { header: 'Booking Time', key: 'time', width: 10 },
       { header: 'Booking Status', key: 'status', width: 15 },
@@ -5096,6 +5173,7 @@ const downloadBookingReport = async (req, res) => {
 
       worksheet.addRow({
         _id: b.bookingId || b._id.toString(),
+        complaintId: b.complaint?.complaintId || '-',
         date: b.date.toISOString().split('T')[0],
         time: b.time,
         status: b.status,

@@ -246,7 +246,7 @@ const approveProvider = async (req, res) => {
             if (backupStr && backupStr.startsWith('{') && backupStr.endsWith('}')) {
                 try {
                     const parsed = JSON.parse(backupStr);
-                    if (parsed.passbookImagePublicId && 
+                    if (parsed.passbookImagePublicId &&
                         parsed.passbookImagePublicId !== provider.bankDetails.passbookImagePublicId) {
                         await deleteFile(parsed.passbookImagePublicId);
                     }
@@ -309,7 +309,7 @@ const approveProvider = async (req, res) => {
 
             if (parsedBankDetails) {
                 // Delete the new (rejected) passbook image if it's different from the old one
-                if (provider.bankDetails?.passbookImagePublicId && 
+                if (provider.bankDetails?.passbookImagePublicId &&
                     provider.bankDetails.passbookImagePublicId !== parsedBankDetails.passbookImagePublicId) {
                     try {
                         await deleteFile(provider.bankDetails.passbookImagePublicId);
@@ -2038,7 +2038,18 @@ const getDashboardAnalytics = async (req, res) => {
                                     totalRevenue: { $sum: { $subtract: ["$totalAmount", { $ifNull: ["$cancellationProgress.refundAmount", 0] }] } },
                                     totalCommission: { $sum: "$commissionAmount" },
                                     totalPayout: { $sum: "$providerEarnings" },
-                                    completedCount: { $sum: 1 }
+                                    completedCount: { $sum: 1 },
+                                    surgeRevenue: { $sum: "$companySurgeShare" },
+                                    platformFeeRevenue: { $sum: "$platformFee" },
+                                    netEarnings: { $sum: "$commissionAmount" },
+                                    visitingRevenue: { $sum: "$visitingCharge" },
+                                    rainRevenue: { $sum: "$rainCharge" },
+                                    trafficRevenue: { $sum: "$trafficCharge" },
+                                    nightRevenue: { $sum: "$nightCharge" },
+                                    demandRevenue: { $sum: "$demandSurge" },
+                                    customRevenue: { $sum: "$customCharges" },
+                                    providerSurgeShare: { $sum: "$providerSurgeShare" },
+                                    companySurgeShare: { $sum: "$companySurgeShare" }
                                 }
                             }
                         ],
@@ -2120,11 +2131,12 @@ const getDashboardAnalytics = async (req, res) => {
                 }
             ]),
 
-            // 4. Pending Counts
+            // 4. Pending Counts & Active Providers
             Promise.all([
                 Provider.countDocuments({ approved: false, kycStatus: 'pending' }),
                 PaymentRecord.countDocuments({ status: { $in: ['requested', 'processing'] } }),
-                Complaint.countDocuments({ status: { $in: ['Open', 'In-Progress'] } })
+                Complaint.countDocuments({ status: { $in: ['Open', 'In-Progress'] } }),
+                Provider.countDocuments({ approved: true, isActive: true })
             ]),
 
             // 5. Recent Activity
@@ -2136,7 +2148,7 @@ const getDashboardAnalytics = async (req, res) => {
         ]);
 
         const stats = bookingStatsAgg[0];
-        const [pendingProviders, pendingWithdrawals, pendingDisputes] = pendingCounts;
+        const [pendingProviders, pendingWithdrawals, pendingDisputes, activeProvidersCount] = pendingCounts;
         const [recentBookings, recentlyCompleted, latestUsers] = activityData;
 
         // Process Live Activity into flat list
@@ -2177,7 +2189,7 @@ const getDashboardAnalytics = async (req, res) => {
                 { $limit: 3 },
                 { $lookup: { from: 'services', localField: '_id', foreignField: '_id', as: 'serviceInfo' } },
                 { $unwind: "$serviceInfo" },
-                { $project: { title: "$serviceInfo.title", count: 1 } }
+                { $project: { serviceName: "$serviceInfo.title", count: 1 } }
             ]),
             User.aggregate([
                 { $unwind: "$favoriteProviders" },
@@ -2212,13 +2224,33 @@ const getDashboardAnalytics = async (req, res) => {
                 inProgress: stats.statusDistribution.find(s => s._id === 'in-progress')?.count || 0,
                 pending: stats.statusDistribution.find(s => s._id === 'pending')?.count || 0,
             },
+            providerStats: {
+                active: activeProvidersCount || 0
+            },
             revenueStats: {
                 totalRevenue: stats.revenueOverview[0]?.totalRevenue || 0,
                 growth: 0, // Placeholder
                 platformCommission: stats.revenueOverview[0]?.totalCommission || 0,
                 providerPayout: stats.revenueOverview[0]?.totalPayout || 0,
-                chartData: stats.chartData
+                chartData: stats.chartData,
+                surgeRevenue: stats.revenueOverview[0]?.surgeRevenue || 0,
+                platformFeeRevenue: stats.revenueOverview[0]?.platformFeeRevenue || 0,
+                netEarnings: stats.revenueOverview[0]?.netEarnings || 0,
+                surgeBreakdown: {
+                    visitingRevenue: stats.revenueOverview[0]?.visitingRevenue || 0,
+                    rainRevenue: stats.revenueOverview[0]?.rainRevenue || 0,
+                    trafficRevenue: stats.revenueOverview[0]?.trafficRevenue || 0,
+                    nightRevenue: stats.revenueOverview[0]?.nightRevenue || 0,
+                    demandRevenue: stats.revenueOverview[0]?.demandRevenue || 0,
+                    platformFeeRevenue: stats.revenueOverview[0]?.platformFeeRevenue || 0,
+                    customRevenue: stats.revenueOverview[0]?.customRevenue || 0
+                },
+                surgeSplits: {
+                    providerSurgeShare: stats.revenueOverview[0]?.providerSurgeShare || 0,
+                    companySurgeShare: stats.revenueOverview[0]?.companySurgeShare || 0
+                }
             },
+            totalAdminEarnings: (stats.revenueOverview[0]?.netEarnings || 0) + (stats.revenueOverview[0]?.companySurgeShare || 0),
             customerStats: {
                 new: customerStatsAgg[0].new[0]?.count || 0,
                 total: customerStatsAgg[0].total[0]?.count || 0
@@ -2281,7 +2313,7 @@ const processAdminRefund = async (req, res) => {
 
         // --- STRICT BLOCK FOR COD REFUNDS ---
         if (booking.paymentMethod === 'cod') {
-            throw new Error('Cash on Delivery (COD) bookings are strictly ineligible for wallet refunds to prevent refund fraud.');
+            throw new Error('Pay after Service (COD) bookings are strictly ineligible for wallet refunds to prevent refund fraud.');
         }
 
         // --- DOUBLE-REFUND PROTECTION SCAN ---
@@ -2753,7 +2785,7 @@ const cancelBookingByAdmin = async (req, res) => {
     const mongoose = require('mongoose');
     const { sendMail } = require('../utils/sendmail');
     const { sendNotification } = require('../utils/notificationHelper');
-    
+
     let session = null;
     try {
         session = await mongoose.startSession();
@@ -2945,7 +2977,7 @@ const cancelBookingByAdmin = async (req, res) => {
         try {
             const serviceName = booking.services?.[0]?.service?.title || 'Service';
             const complaintRef = complaintObj ? (complaintObj.complaintId || complaintObj._id.toString()) : 'N/A';
-            
+
             await sendMail({
                 to: customer.email,
                 templateType: 'adminBookingCancelledCustomer',

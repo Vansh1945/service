@@ -85,3 +85,11 @@ export const payoutHistoryReport = (params, config) => {
 export const outstandingBalanceReport = (params, config) => {
     return axiosInstance.get("/payment/admin/outstanding-balance-report", { params, ...config });
 };
+
+export const generateComplaintReport = (params, config) => {
+    return axiosInstance.get("/payment/admin/complaint-report", { params, ...config });
+};
+
+export const generateRefundReport = (params, config) => {
+    return axiosInstance.get("/payment/admin/refund-report", { params, ...config });
+};

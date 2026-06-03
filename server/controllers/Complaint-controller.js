@@ -9,12 +9,12 @@ const checkAndAutoEscalate = async (complaintId) => {
   try {
     const complaint = await Complaint.findById(complaintId);
     if (!complaint) return null;
-    
+
     const isPending = ['submitted', 'under_review', 'Open', 'In-Progress'].includes(complaint.status);
     if (isPending && complaint.responseDeadline && new Date() > new Date(complaint.responseDeadline)) {
       complaint.status = 'admin_review';
       await complaint.save();
-      
+
       if (complaint.booking) {
         await Booking.findByIdAndUpdate(complaint.booking, {
           disputeStatus: 'admin_review'
@@ -182,7 +182,7 @@ const submitComplaint = async (req, res) => {
       const seenSizes = new Set();
       const seenNames = new Set();
       const uniqueFiles = [];
-      
+
       for (const file of req.files) {
         const sizeKey = file.size;
         const nameKey = file.originalname;
@@ -192,7 +192,7 @@ const submitComplaint = async (req, res) => {
           uniqueFiles.push(file);
         }
       }
-      
+
       images = uniqueFiles.map(file => ({
         secure_url: file.path,
         public_id: file.filename,
@@ -486,8 +486,8 @@ const enrichComplaintData = async (complaint) => {
   let refundStatus = 'N/A';
   let evidenceComparison = {
     beforeWorkImages: [],
-    afterWorkImages:  [],
-    complaintImages:  complaint.images?.map(img => img.secure_url) || []
+    afterWorkImages: [],
+    complaintImages: complaint.images?.map(img => img.secure_url) || []
   };
 
   if (complaint.booking) {
@@ -499,7 +499,7 @@ const enrichComplaintData = async (complaint) => {
 
     if (complaint.booking.providerWorkProof) {
       evidenceComparison.beforeWorkImages = complaint.booking.providerWorkProof.beforeImages?.map(i => i.url) || [];
-      evidenceComparison.afterWorkImages  = complaint.booking.providerWorkProof.afterImages?.map(i => i.url)  || [];
+      evidenceComparison.afterWorkImages = complaint.booking.providerWorkProof.afterImages?.map(i => i.url) || [];
     }
     // Also pick up customer proofs from complaintProofs array
     if (complaint.booking.complaintProofs?.length > 0) {
@@ -551,11 +551,11 @@ const enrichComplaintData = async (complaint) => {
       .select('completedBookings cancelledBookings averageRating performanceScore')
       .lean();
     if (providerDoc) {
-      const completed   = providerDoc.completedBookings   || 0;
-      const cancelled   = providerDoc.cancelledBookings   || 0;
-      const rawRating   = providerDoc.averageRating || providerDoc.performanceScore || 0;
-      const avgRating   = Number(rawRating) || 0;
-      const totalJobs   = completed + cancelled;
+      const completed = providerDoc.completedBookings || 0;
+      const cancelled = providerDoc.cancelledBookings || 0;
+      const rawRating = providerDoc.averageRating || providerDoc.performanceScore || 0;
+      const avgRating = Number(rawRating) || 0;
+      const totalJobs = completed + cancelled;
       const cancelRatio = totalJobs > 0 ? cancelled / totalJobs : 0;
       const complaintRatio = completed > 0 ? providerComplaintsCount / completed : 0;
 
@@ -648,12 +648,12 @@ const enrichComplaintData = async (complaint) => {
 
   // ─── 4. Evidence Strength (0–100) ──────────────────────────
   let evidenceStrength = 0;
-  const hasBefore    = evidenceComparison.beforeWorkImages.length > 0;
-  const hasAfter     = evidenceComparison.afterWorkImages.length > 0;
-  const hasCustomer  = evidenceComparison.complaintImages.length > 0;
-  if (hasCustomer)          evidenceStrength += 35;  // customer uploaded proof
-  if (hasBefore)            evidenceStrength += 20;  // provider before proof
-  if (hasAfter)             evidenceStrength += 20;  // provider after proof
+  const hasBefore = evidenceComparison.beforeWorkImages.length > 0;
+  const hasAfter = evidenceComparison.afterWorkImages.length > 0;
+  const hasCustomer = evidenceComparison.complaintImages.length > 0;
+  if (hasCustomer) evidenceStrength += 35;  // customer uploaded proof
+  if (hasBefore) evidenceStrength += 20;  // provider before proof
+  if (hasAfter) evidenceStrength += 20;  // provider after proof
   if (!hasBefore && !hasAfter) evidenceStrength += 25; // provider missing proof → boosts claim
   evidenceStrength = Math.min(evidenceStrength, 100);
 
@@ -789,7 +789,7 @@ const resolveComplaint = async (req, res) => {
     }
 
     const resolvedStatus = decision === 'approve_refund' ? 'refunded' : decision === 'reject_refund' ? 'rejected' : 'resolved';
-    
+
     // --- STATE MACHINE VALIDATION ---
     const VALID_TRANSITIONS = {
       'submitted': ['under_review', 'Closed'],
@@ -801,7 +801,7 @@ const resolveComplaint = async (req, res) => {
       'refunded': [],
       'Closed': ['Reopened'],
       'Reopened': ['under_review', 'Closed'],
-      
+
       'Open': ['In-Progress', 'Solved', 'Closed', 'submitted', 'under_review', 'provider_responded', 'admin_review', 'resolved', 'rejected', 'refunded'],
       'In-Progress': ['Solved', 'Closed', 'submitted', 'under_review', 'provider_responded', 'admin_review', 'resolved', 'rejected', 'refunded'],
       'Solved': ['Reopened'],
@@ -844,11 +844,11 @@ const resolveComplaint = async (req, res) => {
         // ── Refund Safety Checks & Execution ──
         const booking = complaint.booking;
         if (!booking) {
-           console.log('Cannot refund: No booking linked to complaint');
+          console.log('Cannot refund: No booking linked to complaint');
         } else if (booking.paymentStatus === 'refunded' || booking.adminRefundDecision === 'approved') {
-           console.log('Cannot refund: Booking already refunded');
+          console.log('Cannot refund: Booking already refunded');
         } else if (booking.paymentMethod === 'cod') {
-           console.log('Cannot refund: Cash on Delivery (COD) bookings are strictly ineligible for wallet refunds');
+          console.log('Cannot refund: Pay after Service (COD) bookings are strictly ineligible for wallet refunds');
         } else {
           const previouslyRefunded = booking.cancellationProgress?.refundAmount || 0;
           const refundAmount = booking.totalAmount - previouslyRefunded;
@@ -857,9 +857,9 @@ const resolveComplaint = async (req, res) => {
             // Lock transaction to prevent double refund
             const Transaction = mongoose.model('Transaction');
             const transaction = await Transaction.findOneAndUpdate(
-                { booking: booking._id, paymentStatus: { $in: ['completed', 'paid', 'success'] }, refundStatus: { $ne: 'completed' } },
-                { refundStatus: 'processing' },
-                { session, new: true }
+              { booking: booking._id, paymentStatus: { $in: ['completed', 'paid', 'success'] }, refundStatus: { $ne: 'completed' } },
+              { refundStatus: 'processing' },
+              { session, new: true }
             );
 
             if (transaction) {
@@ -872,12 +872,12 @@ const resolveComplaint = async (req, res) => {
                 user.wallet.availableBalance += refundAmount;
                 user.wallet.totalRefunded += refundAmount;
                 user.wallet.walletTransactions.push({
-                    type: 'credit',
-                    amount: refundAmount,
-                    reason: 'Booking Refund via Support Resolution',
-                    source: 'booking_refund',
-                    status: 'success',
-                    booking: booking._id
+                  type: 'credit',
+                  amount: refundAmount,
+                  reason: 'Booking Refund via Support Resolution',
+                  source: 'booking_refund',
+                  status: 'success',
+                  booking: booking._id
                 });
                 user.wallet.lastUpdated = new Date();
                 await user.save({ session });
@@ -885,15 +885,15 @@ const resolveComplaint = async (req, res) => {
 
               // Create Transaction record for audit
               const refundTransaction = new Transaction({
-                  booking: booking._id,
-                  bookingId: booking.bookingId || booking._id,
-                  user: booking.customer,
-                  amount: refundAmount,
-                  paymentStatus: 'completed',
-                  paymentMethod: 'wallet',
-                  type: 'refund',
-                  description: `Refund Approved via Support ticket resolution for booking #${booking.bookingId || booking._id}. Reason: ${resolutionNotes}`,
-                  refundReason: resolutionNotes
+                booking: booking._id,
+                bookingId: booking.bookingId || booking._id,
+                user: booking.customer,
+                amount: refundAmount,
+                paymentStatus: 'completed',
+                paymentMethod: 'wallet',
+                type: 'refund',
+                description: `Refund Approved via Support ticket resolution for booking #${booking.bookingId || booking._id}. Reason: ${resolutionNotes}`,
+                refundReason: resolutionNotes
               });
               await refundTransaction.save({ session });
 
@@ -909,9 +909,9 @@ const resolveComplaint = async (req, res) => {
                 // Default 'shared' split
                 let commissionRate = 10;
                 if (earning.commissionRate > 0) {
-                    commissionRate = earning.commissionRate;
+                  commissionRate = earning.commissionRate;
                 } else if (booking.totalAmount > 0) {
-                    commissionRate = ((booking.commissionAmount || 0) / booking.totalAmount) * 100;
+                  commissionRate = ((booking.commissionAmount || 0) / booking.totalAmount) * 100;
                 }
 
                 const originalCommissionAmount = booking.totalAmount * (commissionRate / 100);
@@ -928,28 +928,28 @@ const resolveComplaint = async (req, res) => {
                 earning.grossAmount = Math.max(0, earning.grossAmount - refundAmount);
 
                 if (earning.netAmount <= 0) {
-                    earning.status = 'cancelled';
+                  earning.status = 'cancelled';
                 }
 
                 if (['held', 'available', 'under_review', 'pending_release'].includes(earning.status)) {
-                    recoveryStatus = 'cancelled_held';
-                    recoveredAmount = providerEarningsReversal;
-                    await earning.save({ session });
+                  recoveryStatus = 'cancelled_held';
+                  recoveredAmount = providerEarningsReversal;
+                  await earning.save({ session });
                 } else if (['paid', 'withdrawn'].includes(earning.status)) {
-                    await earning.save({ session });
-                    const Provider = mongoose.model('Provider');
-                    const provider = await Provider.findById(booking.provider).session(session);
-                    if (provider && provider.wallet) {
-                        if (provider.wallet.availableBalance === undefined) {
-                            provider.wallet.availableBalance = 0;
-                        }
-                        provider.wallet.availableBalance -= totalToRecover;
-                        provider.wallet.lastUpdated = new Date();
-                        await provider.save({ session });
-
-                        recoveredAmount = totalToRecover;
-                        recoveryStatus = 'fully_recovered';
+                  await earning.save({ session });
+                  const Provider = mongoose.model('Provider');
+                  const provider = await Provider.findById(booking.provider).session(session);
+                  if (provider && provider.wallet) {
+                    if (provider.wallet.availableBalance === undefined) {
+                      provider.wallet.availableBalance = 0;
                     }
+                    provider.wallet.availableBalance -= totalToRecover;
+                    provider.wallet.lastUpdated = new Date();
+                    await provider.save({ session });
+
+                    recoveredAmount = totalToRecover;
+                    recoveryStatus = 'fully_recovered';
+                  }
                 }
 
                 booking.providerEarnings = Math.max(0, booking.providerEarnings - providerEarningsReversal);
@@ -961,7 +961,7 @@ const resolveComplaint = async (req, res) => {
               booking.disputeStatus = 'resolved';
               booking.adminRefundDecision = 'approved';
               if (!booking.cancellationProgress) {
-                  booking.cancellationProgress = {};
+                booking.cancellationProgress = {};
               }
               booking.cancellationProgress.status = 'refund_completed';
               booking.cancellationProgress.refundAmount = previouslyRefunded + refundAmount;
@@ -972,7 +972,7 @@ const resolveComplaint = async (req, res) => {
               booking.refundProcessed = true;
 
               booking.adminRemark = (booking.adminRemark || '') +
-                  ` | Recovery: ${recoveryStatus} (₹${recoveredAmount.toFixed(2)}/₹${totalToRecover.toFixed(2)} recovered from provider)`;
+                ` | Recovery: ${recoveryStatus} (₹${recoveredAmount.toFixed(2)}/₹${totalToRecover.toFixed(2)} recovered from provider)`;
 
               await booking.save({ session });
 
@@ -1043,7 +1043,7 @@ const updateComplaintStatus = async (req, res) => {
       'refunded': [],
       'Closed': ['Reopened'],
       'Reopened': ['under_review', 'Closed'],
-      
+
       'Open': ['In-Progress', 'Solved', 'Closed', 'submitted', 'under_review', 'provider_responded', 'admin_review', 'resolved', 'rejected', 'refunded'],
       'In-Progress': ['Solved', 'Closed', 'submitted', 'under_review', 'provider_responded', 'admin_review', 'resolved', 'rejected', 'refunded'],
       'Solved': ['Reopened'],
@@ -1118,18 +1118,18 @@ const getComplaintDetails = async (req, res) => {
     let bookingData = null;
     if (enrichedData.booking) {
       const b = enrichedData.booking;
-      
+
       const timeline = [];
       if (b.createdAt) timeline.push({ label: "Booking Created", date: b.createdAt });
       if (b.statusHistory && b.statusHistory.length > 0) {
-         b.statusHistory.forEach(history => {
-           if (history.status === 'accepted') timeline.push({ label: "Accepted", date: history.timestamp });
-         });
+        b.statusHistory.forEach(history => {
+          if (history.status === 'accepted') timeline.push({ label: "Accepted", date: history.timestamp });
+        });
       }
       if (b.serviceStartedAt) timeline.push({ label: "Work Started", date: b.serviceStartedAt });
       if (b.serviceCompletedAt) timeline.push({ label: "Completed", date: b.serviceCompletedAt });
       if (complaint.createdAt) timeline.push({ label: "Complaint Raised", date: complaint.createdAt });
-      
+
       timeline.sort((a, b) => new Date(a.date) - new Date(b.date));
 
       let payoutStatus = enrichedData.providerPayoutStatus || 'N/A';

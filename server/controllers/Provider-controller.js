@@ -1641,7 +1641,7 @@ exports.getDashboardAnalytics = async (req, res) => {
             Booking.find({
                 provider: providerId,
                 date: { $gte: today, $lt: tomorrow },
-                status: { $in: ['accepted', 'in-progress', 'scheduled'] }
+                status: { $in: ['pending', 'accepted', 'in-progress', 'scheduled'] }
             })
                 .populate('customer', 'name phone')
                 .populate('services.service', 'title')
@@ -1653,7 +1653,7 @@ exports.getDashboardAnalytics = async (req, res) => {
             Booking.find({
                 provider: providerId,
                 date: { $gte: tomorrow, $lt: new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000) },
-                status: { $in: ['accepted', 'scheduled'] }
+                status: { $in: ['pending', 'accepted', 'scheduled'] }
             })
                 .populate('customer', 'name phone')
                 .populate('services.service', 'title')

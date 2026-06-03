@@ -48,6 +48,17 @@ const createOrder = async (req, res) => {
     const { bookingId, amount, paymentMethod } = req.body;
     const userId = req.user._id;
 
+    const { SystemConfig } = require('../models/SystemSetting');
+    let settings = await SystemConfig.findOne().session(session);
+    if (!settings) {
+      settings = await SystemConfig.findOne();
+      if (!settings) {
+        settings = new SystemConfig({ companyName: 'Raj Electrical Services' });
+        await settings.save();
+      }
+    }
+    const systemCurrency = settings?.defaultCurrency || 'INR';
+
     // Validate input with more detailed checks
     if (!bookingId || !mongoose.Types.ObjectId.isValid(bookingId)) {
       await session.abortTransaction();
@@ -165,7 +176,7 @@ const createOrder = async (req, res) => {
     // Create Razorpay order with better error handling
     const options = {
       amount: expectedAmountPaise,
-      currency: 'INR',
+      currency: systemCurrency,
       receipt: `booking_${bookingId}`,
       payment_capture: 1,
       notes: {
@@ -228,7 +239,7 @@ const createOrder = async (req, res) => {
     // Create transaction record
     const transaction = new Transaction({
       amount: finalAmount,
-      currency: 'INR',
+      currency: systemCurrency,
       paymentMethod: paymentMethod || 'online',
       booking: bookingId,
       bookingId: booking.bookingId,
@@ -262,7 +273,7 @@ const createOrder = async (req, res) => {
         order: {
           id: order.id,
           amount: order.amount,
-          currency: order.currency || 'INR'
+          currency: order.currency || systemCurrency
         }
       }
     });
@@ -724,7 +735,6 @@ const getAllTransactions = async (req, res) => {
         select: 'bookingId services totalAmount status subtotal totalDiscount couponApplied commissionAmount providerEarnings companySurgeShare providerSurgeShare visitingCharge rainCharge trafficCharge nightCharge demandSurge platformFee customCharges commissionRule',
         populate: { path: 'services.service', select: 'title' }
       })
-      // .populate('commissionRule', 'name rate type')
       .populate('provider', 'name email phone providerId')
       .sort({ createdAt: -1 })
       .skip(skip)
