@@ -1,4 +1,0 @@
-User-agent: *
-Allow: /
-
-Sitemap: https://rajelectricalservices.vercel.app/sitemap.xml
