@@ -2285,18 +2285,18 @@ const processAdminRefund = async (req, res) => {
         }
 
         // --- DOUBLE-REFUND PROTECTION SCAN ---
-        if (booking.refundProcessed) {
-            throw new Error('Double-refund protection: A refund has already been processed for this booking.');
+        if (booking.refundProcessed && booking.adminRefundDecision === 'approved') {
+            throw new Error('Double-refund protection: A full refund has already been completed.');
         }
 
-        const existingRefundTx = await Transaction.findOne({
-            booking: booking._id,
-            type: 'refund',
-            paymentStatus: 'completed'
-        }).session(session);
+        const completedRefunds = await Transaction.aggregate([
+            { $match: { booking: booking._id, type: 'refund', paymentStatus: 'completed' } },
+            { $group: { _id: null, total: { $sum: "$amount" } } }
+        ]).session(session);
 
-        if (existingRefundTx) {
-            throw new Error('Double-refund protection: A completed refund transaction already exists for this booking.');
+        const totalRefundedAmt = completedRefunds.length > 0 ? completedRefunds[0].total : 0;
+        if (totalRefundedAmt >= booking.totalAmount) {
+            throw new Error('Double-refund protection: Cumulative refunds already cover the total booking amount.');
         }
 
         // --- CRITICAL CHECKS ---
@@ -2491,24 +2491,20 @@ const processAdminRefund = async (req, res) => {
                 recoveredAmount = providerEarningsReversal;
                 await earning.save({ session });
             } else if (['paid', 'withdrawn'].includes(earning.status)) {
-                // CASE 2: Payout already transferred -> Recover from provider wallet available balance
+                // CASE 2: Payout already transferred -> Recover from provider wallet available balance (allowing negative balance/debt)
                 await earning.save({ session });
 
                 const provider = await Provider.findById(booking.provider).session(session);
                 if (provider && provider.wallet) {
-                    const available = provider.wallet.availableBalance || 0;
-                    const canDeduct = Math.min(available, totalToRecover);
-
-                    if (canDeduct > 0) {
-                        provider.wallet.availableBalance -= canDeduct;
-                        provider.wallet.lastUpdated = new Date();
-                        await provider.save({ session });
-
-                        recoveredAmount = canDeduct;
-                        recoveryStatus = recoveredAmount >= totalToRecover ? 'fully_recovered' : 'partially_recovered';
-                    } else {
-                        recoveryStatus = 'pending_recovery';
+                    if (provider.wallet.availableBalance === undefined) {
+                        provider.wallet.availableBalance = 0;
                     }
+                    provider.wallet.availableBalance -= totalToRecover;
+                    provider.wallet.lastUpdated = new Date();
+                    await provider.save({ session });
+
+                    recoveredAmount = totalToRecover;
+                    recoveryStatus = 'fully_recovered';
                 }
             }
 

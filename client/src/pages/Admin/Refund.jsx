@@ -629,47 +629,47 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
                   }
 
                   return (
-                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 text-xs space-y-3 animate-slide-up">
-                      <div>
-                        <p className="font-bold text-secondary uppercase tracking-wider text-[9px] mb-2 border-b border-gray-200 pb-1 flex justify-between">
-                          <span>Financial Loss Breakdown</span>
-                          <span className="text-purple-600 capitalize font-bold">{absorption} Absorbed</span>
-                        </p>
-                      </div>
+                    <details className="bg-gray-50 rounded-xl p-3 border border-gray-200 text-xs animate-slide-up group">
+                      <summary className="font-bold text-secondary uppercase tracking-wider text-[9px] cursor-pointer select-none outline-none flex justify-between items-center">
+                        <span>Financial Loss Breakdown</span>
+                        <span className="text-primary group-open:hidden text-[10px]">Show Details</span>
+                        <span className="text-primary hidden group-open:inline text-[10px]">Hide Details</span>
+                      </summary>
+                      <div className="mt-3 space-y-3">
+                        {/* Original Details */}
+                        <div className="space-y-1 bg-white p-2 rounded border border-gray-100">
+                          <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Original Booking Values</p>
+                          <div className="flex justify-between text-[11px]">
+                            <span className="text-gray-500 font-medium">Gross Billed to Customer</span>
+                            <span className="font-bold text-secondary">{formatCurrency(grossBilled)}</span>
+                          </div>
+                          <div className="flex justify-between text-[11px] mt-0.5">
+                            <span className="text-gray-500 font-medium">Provider Earnings</span>
+                            <span className="font-semibold text-gray-700">{formatCurrency(originalProvider)}</span>
+                          </div>
+                          <div className="flex justify-between text-[11px] mt-0.5">
+                            <span className="text-gray-500 font-medium">Platform Net Revenue</span>
+                            <span className="font-semibold text-gray-700">{formatCurrency(originalPlatform)}</span>
+                          </div>
+                        </div>
 
-                      {/* Original Details */}
-                      <div className="space-y-1 bg-white p-2 rounded border border-gray-100">
-                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Original Booking Values</p>
-                        <div className="flex justify-between text-[11px]">
-                          <span className="text-gray-500 font-medium">Gross Billed to Customer</span>
-                          <span className="font-bold text-secondary">{formatCurrency(grossBilled)}</span>
-                        </div>
-                        <div className="flex justify-between text-[11px] mt-0.5">
-                          <span className="text-gray-500 font-medium">Provider Earnings</span>
-                          <span className="font-semibold text-gray-700">{formatCurrency(originalProvider)}</span>
-                        </div>
-                        <div className="flex justify-between text-[11px] mt-0.5">
-                          <span className="text-gray-500 font-medium">Platform Net Revenue</span>
-                          <span className="font-semibold text-gray-700">{formatCurrency(originalPlatform)}</span>
-                        </div>
-                      </div>
-
-                      {/* Refund Loss & Allocation splits */}
-                      <div className="space-y-1.5 pt-1">
-                        <div className="flex justify-between font-bold text-secondary text-[13px] border-b border-dashed border-gray-200 pb-1.5">
-                          <span>Total Refund Loss</span>
-                          <span className="text-red-600">{formatCurrency(refundAmount || 0)}</span>
-                        </div>
-                        <div className="flex justify-between font-medium">
-                          <span className="text-gray-500">Deducted from Provider Earning</span>
-                          <span className="font-bold text-red-600">-{formatCurrency(providerLoss)}</span>
-                        </div>
-                        <div className="flex justify-between font-medium">
-                          <span className="text-gray-500">Absorbed by Platform (Net Loss)</span>
-                          <span className="font-bold text-purple-700">-{formatCurrency(platformLoss)}</span>
+                        {/* Refund Loss & Allocation splits */}
+                        <div className="space-y-1.5 pt-1">
+                          <div className="flex justify-between font-bold text-secondary text-[13px] border-b border-dashed border-gray-200 pb-1.5">
+                            <span>Total Refund Loss</span>
+                            <span className="text-red-600">{formatCurrency(refundAmount || 0)}</span>
+                          </div>
+                          <div className="flex justify-between font-medium">
+                            <span className="text-gray-500">Deducted from Provider Earning</span>
+                            <span className="font-bold text-red-600">-{formatCurrency(providerLoss)}</span>
+                          </div>
+                          <div className="flex justify-between font-medium">
+                            <span className="text-gray-500">Absorbed by Platform (Net Loss)</span>
+                            <span className="font-bold text-purple-700">-{formatCurrency(platformLoss)}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    </details>
                   );
                 })()}
 
@@ -708,30 +708,33 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
 
               {/* Provider Payout hold toggles switch */}
               {!isFullyRefunded && (
-                <div className="bg-gray-50 border border-gray-100 p-3 rounded-lg space-y-2">
-                  <div>
-                    <span className="text-[10px] font-bold text-orange-600 uppercase tracking-wider block">Security Escalation Control</span>
-                    <span className="text-[10px] text-gray-400 block mt-0.5">Freeze or release vendor's escrow payout immediately.</span>
+                <details className="bg-gray-50 border border-gray-100 p-3 rounded-lg space-y-2 group">
+                  <summary className="font-bold text-orange-600 uppercase tracking-wider text-[10px] cursor-pointer select-none outline-none flex justify-between items-center">
+                    <span>Security Escalation Control</span>
+                    <span className="text-orange-500 group-open:hidden text-[10px]">Show Controls</span>
+                    <span className="text-orange-500 hidden group-open:inline text-[10px]">Hide Controls</span>
+                  </summary>
+                  <div className="mt-2 space-y-2">
+                    <span className="text-[10px] text-gray-400 block">Freeze or release vendor's escrow payout immediately.</span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => handleAction('hold', 'held')}
+                        disabled={updating || booking.earningHoldStatus === 'held'}
+                        className="py-1.5 bg-orange-50 border border-orange-100 hover:bg-orange-100 text-orange-700 disabled:opacity-40 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                      >
+                        <Lock size={10} /> Hold Escrow
+                      </button>
+                      <button
+                        onClick={() => handleAction('hold', 'available')}
+                        disabled={updating || booking.earningHoldStatus === 'available'}
+                        className="py-1.5 bg-green-50 border border-green-100 hover:bg-green-100 text-green-700 disabled:opacity-40 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                      >
+                        <Unlock size={10} /> Release Escrow
+                      </button>
+                    </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      onClick={() => handleAction('hold', 'held')}
-                      disabled={updating || booking.earningHoldStatus === 'held'}
-                      className="py-1.5 bg-orange-50 border border-orange-100 hover:bg-orange-100 text-orange-700 disabled:opacity-40 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer"
-                    >
-                      <Lock size={10} /> Hold Escrow
-                    </button>
-                    <button
-                      onClick={() => handleAction('hold', 'available')}
-                      disabled={updating || booking.earningHoldStatus === 'available'}
-                      className="py-1.5 bg-green-50 border border-green-100 hover:bg-green-100 text-green-700 disabled:opacity-40 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer"
-                    >
-                      <Unlock size={10} /> Release Escrow
-                    </button>
-                  </div>
-                </div>
+                </details>
               )}
-
               {/* Display admin remarks logs if available */}
               {booking.adminRemark && (
                 <div className="bg-gray-105 p-3 rounded-lg border border-gray-200/50 space-y-1">

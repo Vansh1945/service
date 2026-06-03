@@ -841,24 +841,150 @@ const resolveComplaint = async (req, res) => {
           adminRefundDecision: 'rejected'
         }, { session });
       } else if (decision === 'approve_refund') {
-        // ── Refund Safety Checks ──
-        if (complaint.booking.paymentStatus !== 'paid' && complaint.booking.paymentStatus !== 'completed') {
-           console.log('Cannot refund: Booking payment status is not paid');
-        } else if (!['online', 'wallet'].includes(complaint.booking.paymentMethod)) {
-           console.log('Cannot refund: Booking payment method is not online or wallet');
-        } else if (complaint.booking.paymentStatus === 'refunded' || complaint.booking.adminRefundDecision === 'approved') {
+        // ── Refund Safety Checks & Execution ──
+        const booking = complaint.booking;
+        if (!booking) {
+           console.log('Cannot refund: No booking linked to complaint');
+        } else if (booking.paymentStatus === 'refunded' || booking.adminRefundDecision === 'approved') {
            console.log('Cannot refund: Booking already refunded');
+        } else if (booking.paymentMethod === 'cod') {
+           console.log('Cannot refund: Cash on Delivery (COD) bookings are strictly ineligible for wallet refunds');
         } else {
-          // Refund approved → keep earning held/cancelled
-          await ProviderEarning.findOneAndUpdate(
-            { booking: bookingId },
-            { status: 'cancelled' },
-            { session }
-          );
-          await Booking.findByIdAndUpdate(bookingId, {
-            disputeStatus: 'resolved',
-            adminRefundDecision: 'approved'
-          }, { session });
+          const previouslyRefunded = booking.cancellationProgress?.refundAmount || 0;
+          const refundAmount = booking.totalAmount - previouslyRefunded;
+
+          if (refundAmount > 0) {
+            // Lock transaction to prevent double refund
+            const Transaction = mongoose.model('Transaction');
+            const transaction = await Transaction.findOneAndUpdate(
+                { booking: booking._id, paymentStatus: { $in: ['completed', 'paid', 'success'] }, refundStatus: { $ne: 'completed' } },
+                { refundStatus: 'processing' },
+                { session, new: true }
+            );
+
+            if (transaction) {
+              // Update User wallet
+              const user = await User.findById(booking.customer).session(session);
+              if (user) {
+                if (!user.wallet) {
+                  user.wallet = { availableBalance: 0, totalRefunded: 0, lastUpdated: new Date() };
+                }
+                user.wallet.availableBalance += refundAmount;
+                user.wallet.totalRefunded += refundAmount;
+                user.wallet.walletTransactions.push({
+                    type: 'credit',
+                    amount: refundAmount,
+                    reason: 'Booking Refund via Support Resolution',
+                    source: 'booking_refund',
+                    status: 'success',
+                    booking: booking._id
+                });
+                user.wallet.lastUpdated = new Date();
+                await user.save({ session });
+              }
+
+              // Create Transaction record for audit
+              const refundTransaction = new Transaction({
+                  booking: booking._id,
+                  bookingId: booking.bookingId || booking._id,
+                  user: booking.customer,
+                  amount: refundAmount,
+                  paymentStatus: 'completed',
+                  paymentMethod: 'wallet',
+                  type: 'refund',
+                  description: `Refund Approved via Support ticket resolution for booking #${booking.bookingId || booking._id}. Reason: ${resolutionNotes}`,
+                  refundReason: resolutionNotes
+              });
+              await refundTransaction.save({ session });
+
+              // Proportional recovery from provider earnings
+              const earning = await ProviderEarning.findOne({ booking: booking._id }).session(session);
+              let providerEarningsReversal = 0;
+              let adminRevenueReversal = 0;
+              let totalToRecover = 0;
+              let recoveryStatus = 'not_required';
+              let recoveredAmount = 0;
+
+              if (earning) {
+                // Default 'shared' split
+                let commissionRate = 10;
+                if (earning.commissionRate > 0) {
+                    commissionRate = earning.commissionRate;
+                } else if (booking.totalAmount > 0) {
+                    commissionRate = ((booking.commissionAmount || 0) / booking.totalAmount) * 100;
+                }
+
+                const originalCommissionAmount = booking.totalAmount * (commissionRate / 100);
+                const originalProviderEarnings = booking.totalAmount - originalCommissionAmount;
+
+                const ratio = refundAmount / (booking.totalAmount || 1);
+                providerEarningsReversal = originalProviderEarnings * ratio;
+                adminRevenueReversal = originalCommissionAmount * ratio;
+
+                totalToRecover = providerEarningsReversal;
+
+                earning.netAmount = Math.max(0, earning.netAmount - providerEarningsReversal);
+                earning.commissionAmount = Math.max(0, earning.commissionAmount - adminRevenueReversal);
+                earning.grossAmount = Math.max(0, earning.grossAmount - refundAmount);
+
+                if (earning.netAmount <= 0) {
+                    earning.status = 'cancelled';
+                }
+
+                if (['held', 'available', 'under_review', 'pending_release'].includes(earning.status)) {
+                    recoveryStatus = 'cancelled_held';
+                    recoveredAmount = providerEarningsReversal;
+                    await earning.save({ session });
+                } else if (['paid', 'withdrawn'].includes(earning.status)) {
+                    await earning.save({ session });
+                    const Provider = mongoose.model('Provider');
+                    const provider = await Provider.findById(booking.provider).session(session);
+                    if (provider && provider.wallet) {
+                        if (provider.wallet.availableBalance === undefined) {
+                            provider.wallet.availableBalance = 0;
+                        }
+                        provider.wallet.availableBalance -= totalToRecover;
+                        provider.wallet.lastUpdated = new Date();
+                        await provider.save({ session });
+
+                        recoveredAmount = totalToRecover;
+                        recoveryStatus = 'fully_recovered';
+                    }
+                }
+
+                booking.providerEarnings = Math.max(0, booking.providerEarnings - providerEarningsReversal);
+                booking.commissionAmount = Math.max(0, booking.commissionAmount - adminRevenueReversal);
+              }
+
+              // Update booking fields
+              booking.paymentStatus = 'refunded';
+              booking.disputeStatus = 'resolved';
+              booking.adminRefundDecision = 'approved';
+              if (!booking.cancellationProgress) {
+                  booking.cancellationProgress = {};
+              }
+              booking.cancellationProgress.status = 'refund_completed';
+              booking.cancellationProgress.refundAmount = previouslyRefunded + refundAmount;
+              booking.cancellationProgress.refundCompletedAt = new Date();
+              booking.adminRemark = resolutionNotes || 'Admin approved refund via complaint resolution';
+              booking.refundStatus = 'completed';
+              booking.refundMode = 'wallet';
+              booking.refundProcessed = true;
+
+              booking.adminRemark = (booking.adminRemark || '') +
+                  ` | Recovery: ${recoveryStatus} (₹${recoveredAmount.toFixed(2)}/₹${totalToRecover.toFixed(2)} recovered from provider)`;
+
+              await booking.save({ session });
+
+              // Finalize transaction record
+              transaction.refundStatus = 'completed';
+              transaction.refundReason = resolutionNotes;
+              transaction.refundedAt = new Date();
+              transaction.paymentStatus = 'refunded';
+              transaction.refundedAmount = previouslyRefunded + refundAmount;
+              await transaction.save({ session });
+            }
+          }
         }
       }
       // manual_review → no payout change, admin will act separately

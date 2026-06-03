@@ -158,11 +158,6 @@ const bookingSchema = new Schema({
     default: 'pending'
   },
 
-  refundStatus: {
-    type: String,
-    enum: ['pending', 'completed', 'failed', 'none'],
-    default: 'none'
-  },
 
   refundMode: {
     type: String,

@@ -6,8 +6,7 @@ const crypto = require('crypto');
 const walletSchema = new mongoose.Schema({
     availableBalance: {
         type: Number,
-        default: 0,
-        min: 0
+        default: 0
     },
     totalWithdrawn: {
         type: Number,

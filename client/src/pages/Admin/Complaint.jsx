@@ -654,35 +654,37 @@ const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => 
           {activeTab === 'timeline' && (
             <div className="space-y-4 animate-fade-in">
               {/* Resolution Journey / Booking Timeline */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className={`grid grid-cols-1 ${complaint.booking ? 'md:grid-cols-2' : ''} gap-8`}>
                 {/* Booking Timeline UI */}
-                <div className="space-y-6">
-                  <h4 className="text-sm font-bold text-secondary flex items-center gap-2">
-                    <FiClock className="text-blue-500" /> Booking Progress
-                  </h4>
-                  {booking?.timeline?.length > 0 ? (
-                    <div className="relative pl-6 space-y-8 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-0.5 before:bg-gray-100">
-                      {booking.timeline.map((step, i) => (
-                        <div key={i} className="relative">
-                          <div className={`absolute -left-6 top-1.5 w-6 h-6 rounded-full border-4 border-white shadow-sm flex items-center justify-center
-                            ${i === booking.timeline.length - 1 ? 'bg-primary animate-pulse' : 'bg-gray-300'}`}
-                          >
-                            <div className="w-1.5 h-1.5 bg-white rounded-full" />
+                {complaint.booking && (
+                  <div className="space-y-6">
+                    <h4 className="text-sm font-bold text-secondary flex items-center gap-2">
+                      <FiClock className="text-blue-500" /> Booking Progress
+                    </h4>
+                    {booking?.timeline?.length > 0 ? (
+                      <div className="relative pl-6 space-y-8 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-0.5 before:bg-gray-100">
+                        {booking.timeline.map((step, i) => (
+                          <div key={i} className="relative">
+                            <div className={`absolute -left-6 top-1.5 w-6 h-6 rounded-full border-4 border-white shadow-sm flex items-center justify-center
+                              ${i === booking.timeline.length - 1 ? 'bg-primary animate-pulse' : 'bg-gray-300'}`}
+                            >
+                              <div className="w-1.5 h-1.5 bg-white rounded-full" />
+                            </div>
+                            <div>
+                              <p className="text-xs font-black text-secondary uppercase tracking-tight">{step.label}</p>
+                              <p className="text-[10px] text-gray-400 font-medium">{formatDateTime(step.date)}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="text-xs font-black text-secondary uppercase tracking-tight">{step.label}</p>
-                            <p className="text-[10px] text-gray-400 font-medium">{formatDateTime(step.date)}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="py-8 flex flex-col items-center justify-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-                      <FiClock className="text-gray-300 mb-2" size={24} />
-                      <p className="text-xs text-gray-400 italic">No booking timeline available</p>
-                    </div>
-                  )}
-                </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="py-8 flex flex-col items-center justify-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                        <FiClock className="text-gray-300 mb-2" size={24} />
+                        <p className="text-xs text-gray-400 italic">No booking timeline available</p>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Complaint History (Resolution History) */}
                 <div className="space-y-6">
@@ -780,7 +782,7 @@ const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => 
               </div>
 
               {/* Resolve */}
-              {!['Solved', 'Closed'].includes(complaint.status) && (
+              {!['Solved', 'Closed'].includes(complaint.status) && !complaint.booking && (
                 <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
                   <h4 className="text-sm font-bold text-secondary mb-3 flex items-center gap-2">
                     <FiCheckCircle className="text-green-500" size={16} /> Resolve Complaint
