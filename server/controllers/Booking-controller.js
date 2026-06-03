@@ -108,6 +108,41 @@ const getPayoutStatus = (earning, booking) => {
 };
 
 
+// Scheduling Overlap Check Helper
+const checkProviderOverlap = (newBooking, providerBookings, bufferMinutes = 30) => {
+  const newStart = new Date(newBooking.date);
+  if (newBooking.time) {
+    const [h, m] = newBooking.time.split(':').map(Number);
+    newStart.setHours(h, m, 0, 0);
+  }
+  let newDurationHours = 1;
+  if (newBooking.services && newBooking.services.length > 0) {
+    const firstService = newBooking.services[0];
+    newDurationHours = firstService.service?.duration || firstService.serviceDetails?.duration || 1;
+  }
+  const newEnd = new Date(newStart.getTime() + newDurationHours * 60 * 60 * 1000 + bufferMinutes * 60 * 1000);
+
+  for (const pb of providerBookings) {
+    const start = new Date(pb.date);
+    if (pb.time) {
+      const [h, m] = pb.time.split(':').map(Number);
+      start.setHours(h, m, 0, 0);
+    }
+    let durationHours = 1;
+    if (pb.services && pb.services.length > 0) {
+      const firstService = pb.services[0];
+      durationHours = firstService.service?.duration || firstService.serviceDetails?.duration || 1;
+    }
+    const end = new Date(start.getTime() + durationHours * 60 * 60 * 1000 + bufferMinutes * 60 * 1000);
+
+    if (newStart < end && start < newEnd) {
+      return true;
+    }
+  }
+  return false;
+};
+
+
 // Verification & Fraud Helper Functions
 const getStartPin = (booking) => {
   if (!booking.statusHistory) return null;
@@ -484,26 +519,47 @@ const autoAssignProviderIfEnabled = async (bookingId) => {
       }).filter(item => item.distance <= maxDistanceMeters);
 
       if (providersWithDetails.length > 0) {
-        // 2. Query active workloads for filtered providers
+        // 2. Query active workloads and scheduling for filtered providers
         const providerIds = providersWithDetails.map(item => item.provider._id);
         const activeBookings = await Booking.find({
           provider: { $in: providerIds },
           status: { $in: ['accepted', 'in-progress', 'started', 'confirmed', 'scheduled', 'assigned'] }
-        }).select('provider');
+        }).select('provider date time services');
 
         const workloadMap = {};
+        const providerBookingsMap = {};
         providerIds.forEach(id => {
           workloadMap[id.toString()] = 0;
+          providerBookingsMap[id.toString()] = [];
         });
         activeBookings.forEach(b => {
           if (b.provider) {
-            workloadMap[b.provider.toString()] = (workloadMap[b.provider.toString()] || 0) + 1;
+            const pId = b.provider.toString();
+            workloadMap[pId] = (workloadMap[pId] || 0) + 1;
+            providerBookingsMap[pId].push(b);
           }
         });
 
-        // 3. Classify tier/priority for each provider
+        const maxBookings = settings?.bookingSettings?.maxBookingsPerProvider ?? 10;
+        const bufferMinutes = settings?.bookingSettings?.bookingBufferTime ?? 30;
+
+        // 3. Classify tier/priority for each provider, filtering out overloaded or schedule-conflicted ones
         const scoredProviders = providersWithDetails.map(item => {
           const p = item.provider;
+          const pIdStr = p._id.toString();
+          const workload = workloadMap[pIdStr] || 0;
+
+          // Check parallel workload limit
+          if (workload >= maxBookings) {
+            return null;
+          }
+
+          // Check schedule buffer overlap
+          const providerBookings = providerBookingsMap[pIdStr] || [];
+          if (checkProviderOverlap(booking, providerBookings, bufferMinutes)) {
+            return null;
+          }
+
           const pZoneStr = p.currentZone ? p.currentZone.toString() : null;
           let tier = 3; // Tier 3: General Fallback / Other Zone
 
@@ -522,9 +578,9 @@ const autoAssignProviderIfEnabled = async (bookingId) => {
           return {
             ...item,
             tier,
-            workload: workloadMap[p._id.toString()] || 0
+            workload
           };
-        });
+        }).filter(Boolean);
 
         // 4. Sort based on the priority criteria
         scoredProviders.sort((a, b) => {
@@ -725,7 +781,7 @@ const createBooking = async (req, res) => {
         }
         const allowCOD = settings?.bookingSettings?.allowCOD ?? true;
         if (!allowCOD) {
-          throw new Error('Pay after service (COD/Cash) is currently disabled by system administrator.');
+          throw new Error('Pay After Service is currently disabled for this service. Please proceed with online payment.');
         }
       }
 
@@ -1586,7 +1642,7 @@ const updateBookingPayment = async (req, res) => {
       if (!allowCOD) {
         return res.status(400).json({
           success: false,
-          message: 'Pay after service (COD/Cash) is currently disabled by system administrator.'
+          message: 'Pay after service (COD/Cash) is currently disabled. Please choose online payment.'
         });
       }
     }
@@ -2317,58 +2373,100 @@ const cancelBooking = async (req, res) => {
             throw new Error('Transaction not found or already refunded');
           }
 
-          // Full refund to wallet
-          const user = await User.findById(userId).session(session);
-          if (!user.wallet) {
-            user.wallet = { availableBalance: 0, totalRefunded: 0, lastUpdated: new Date() };
+          const refundToWalletOnly = settings?.walletSettings?.refundToWalletOnly ?? true;
+
+          if (refundToWalletOnly) {
+            // Full refund to wallet
+            const user = await User.findById(userId).session(session);
+            if (!user.wallet) {
+              user.wallet = { availableBalance: 0, totalRefunded: 0, lastUpdated: new Date() };
+            }
+            user.wallet.availableBalance += refundAmount;
+            user.wallet.totalRefunded += refundAmount;
+            user.wallet.walletTransactions.push({
+              type: 'credit',
+              amount: refundAmount,
+              reason: 'Booking Refund',
+              booking: booking._id
+            });
+            user.wallet.lastUpdated = new Date();
+            await user.save({ session });
+
+            // Create transaction record for audit
+            const refundTransaction = new Transaction({
+              booking: booking._id,
+              bookingId: booking.bookingId || booking._id.toString(),
+              user: userId,
+              amount: refundAmount,
+              paymentStatus: 'completed',
+              paymentMethod: 'wallet',
+              type: 'refund',
+              description: `Customer cancelled booking - Automatic refund to wallet: ${reason || 'Customer requested cancellation'}`,
+              refundReason: reason || 'Customer cancelled booking'
+            });
+            await refundTransaction.save({ session });
+
+            booking.paymentStatus = 'refunded';
+            booking.cancellationProgress.status = 'refund_completed';
+            booking.cancellationProgress.refundAmount = previouslyRefunded + refundAmount;
+            booking.cancellationProgress.refundCompletedAt = new Date();
+
+            refundDetails = {
+              amount: refundAmount,
+              method: 'wallet',
+              status: 'completed'
+            };
+
+            // Notify customer
+            try {
+              sendNotification(
+                userId,
+                'customer',
+                'Refund Completed',
+                `A full refund of ₹${refundAmount} has been added to your wallet.`,
+                'refund',
+                booking._id
+              );
+            } catch (err) { }
+          } else {
+            // If refund to wallet only is disabled, push to processing_refund (Razorpay automatic payout or manual approval queue)
+            booking.paymentStatus = 'processing';
+            booking.cancellationProgress.status = 'processing_refund';
+            booking.cancellationProgress.refundAmount = previouslyRefunded + refundAmount;
+            booking.cancellationProgress.refundInitiatedAt = new Date();
+
+            // Create transaction record for audit trail
+            const refundTransaction = new Transaction({
+              booking: booking._id,
+              bookingId: booking.bookingId || booking._id.toString(),
+              user: userId,
+              amount: refundAmount,
+              paymentStatus: 'pending',
+              paymentMethod: 'online',
+              type: 'refund',
+              description: `Customer cancelled booking - Automatic gateway refund initiated: ${reason || 'Customer requested cancellation'}`,
+              refundReason: reason || 'Customer cancelled booking'
+            });
+            await refundTransaction.save({ session });
+
+            refundDetails = {
+              amount: refundAmount,
+              method: 'gateway',
+              status: 'processing'
+            };
+
+            // Notify customer
+            try {
+              sendNotification(
+                userId,
+                'customer',
+                'Refund Initiated',
+                `A refund of ₹${refundAmount} has been initiated back to your original payment method.`,
+                'refund_processing',
+                booking._id
+              );
+            } catch (err) { }
           }
-          user.wallet.availableBalance += refundAmount;
-          user.wallet.totalRefunded += refundAmount;
-          user.wallet.walletTransactions.push({
-            type: 'credit',
-            amount: refundAmount,
-            reason: 'Booking Refund',
-            booking: booking._id
-          });
-          user.wallet.lastUpdated = new Date();
-          await user.save({ session });
-
-          // Create transaction record for audit
-          const refundTransaction = new Transaction({
-            booking: booking._id,
-            bookingId: booking.bookingId || booking._id.toString(),
-            user: userId,
-            amount: refundAmount,
-            paymentStatus: 'completed',
-            paymentMethod: 'wallet',
-            type: 'refund',
-            description: `Customer cancelled booking - Automatic refund to wallet: ${reason || 'Customer requested cancellation'}`,
-            refundReason: reason || 'Customer cancelled booking'
-          });
-          await refundTransaction.save({ session });
-
-          booking.paymentStatus = 'refunded';
-          booking.cancellationProgress.status = 'refund_completed';
-          booking.cancellationProgress.refundAmount = previouslyRefunded + refundAmount;
-          booking.cancellationProgress.refundCompletedAt = new Date();
-
-          refundDetails = {
-            amount: refundAmount,
-            method: 'wallet',
-            status: 'completed'
-          };
-
-          // Notify customer
-          try {
-            sendNotification(
-              userId,
-              'customer',
-              'Refund Completed',
-              `A full refund of ₹${refundAmount} has been added to your wallet.`,
-              'refund',
-              booking._id
-            );
-          } catch (err) { }
         }
       }
 
@@ -2894,6 +2992,31 @@ const acceptBooking = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Invalid time format (use HH:MM)'
+      });
+    }
+
+    // Check parallel bookings limit & scheduling conflict based on system configuration
+    const { SystemConfig } = require('../models/SystemSetting');
+    let settings = await SystemConfig.findOne();
+    const maxBookings = settings?.bookingSettings?.maxBookingsPerProvider ?? 10;
+    const bufferMinutes = settings?.bookingSettings?.bookingBufferTime ?? 30;
+
+    const providerBookings = await Booking.find({
+      provider: providerId,
+      status: { $in: ['accepted', 'in-progress', 'started', 'confirmed', 'scheduled', 'assigned'] }
+    });
+
+    if (providerBookings.length >= maxBookings) {
+      return res.status(400).json({
+        success: false,
+        message: `You have reached the maximum limit of parallel bookings (${maxBookings}). Complete your current jobs first.`
+      });
+    }
+
+    if (checkProviderOverlap(booking, providerBookings, bufferMinutes)) {
+      return res.status(400).json({
+        success: false,
+        message: `Scheduling conflict: You already have another booking scheduled around this time (considering ${bufferMinutes}-minute buffer).`
       });
     }
 
@@ -3687,7 +3810,7 @@ const completeBooking = async (req, res) => {
 
     // Fraud score checking for Hold extension
     const fraudScore = getFraudScore(booking);
-    let holdPeriodHours = 48;
+    let holdPeriodHours = typeof settings?.commissionSettings?.payoutHoldHours === 'number' ? settings.commissionSettings.payoutHoldHours : 48;
     if (fraudScore >= 50) {
       holdPeriodHours = 168; // 7 days (168 hours)
       booking.disputeRaised = true; // Flag for review
@@ -4609,6 +4732,31 @@ const assignProvider = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Invalid provider'
+      });
+    }
+
+    // Check parallel bookings limit & scheduling conflict based on system configuration
+    const { SystemConfig } = require('../models/SystemSetting');
+    let settings = await SystemConfig.findOne();
+    const maxBookings = settings?.bookingSettings?.maxBookingsPerProvider ?? 10;
+    const bufferMinutes = settings?.bookingSettings?.bookingBufferTime ?? 30;
+
+    const providerBookings = await Booking.find({
+      provider: providerId,
+      status: { $in: ['accepted', 'in-progress', 'started', 'confirmed', 'scheduled', 'assigned'] }
+    });
+
+    if (providerBookings.length >= maxBookings) {
+      return res.status(400).json({
+        success: false,
+        message: `This provider has reached the maximum limit of parallel bookings (${maxBookings}).`
+      });
+    }
+
+    if (checkProviderOverlap(booking, providerBookings, bufferMinutes)) {
+      return res.status(400).json({
+        success: false,
+        message: `Scheduling conflict: This provider already has another booking scheduled around this time (considering ${bufferMinutes}-minute buffer).`
       });
     }
 

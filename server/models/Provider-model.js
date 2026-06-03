@@ -332,6 +332,8 @@ const providerSchema = new mongoose.Schema({
         userAgent: String,
         lastLogin: Date
     },
+    loginAttempts: { type: Number, default: 0 },
+    lockUntil: { type: Date },
     isSuspended: {
         type: Boolean,
         default: false
@@ -440,11 +442,11 @@ providerSchema.methods.comparePassword = async function (enteredPassword) {
     return await bcrypt.compare(enteredPassword, this.password);
 };
 
-providerSchema.methods.generateJWT = function () {
+providerSchema.methods.generateJWT = function (sessionTimeoutHours = 24) {
     return jwt.sign(
         { id: this._id, email: this.email, role: this.role, kycStatus: this.kycStatus },
         process.env.JWT_SECRET,
-        { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m' }
+        { expiresIn: `${sessionTimeoutHours}h` }
     );
 };
 

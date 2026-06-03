@@ -286,7 +286,10 @@ exports.completeRegistration = async (req, res) => {
         });
 
         // Generate JWT token
-        const token = provider.generateJWT();
+        const { SystemConfig } = require('../models/SystemSetting');
+        const settings = await SystemConfig.findOne();
+        const sessionTimeoutHours = settings?.securitySettings?.sessionTimeoutHours || 24;
+        const token = provider.generateJWT(sessionTimeoutHours);
 
         res.status(201).json({
             success: true,
@@ -367,7 +370,10 @@ exports.loginForCompletion = async (req, res) => {
         }
 
         // Generate JWT token
-        const token = provider.generateJWT();
+        const { SystemConfig } = require('../models/SystemSetting');
+        const settings = await SystemConfig.findOne();
+        const sessionTimeoutHours = settings?.securitySettings?.sessionTimeoutHours || 24;
+        const token = provider.generateJWT(sessionTimeoutHours);
 
         res.status(200).json({
             success: true,

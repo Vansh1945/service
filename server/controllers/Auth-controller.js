@@ -97,6 +97,21 @@ exports.Login = async (req, res) => {
       });
     }
 
+    // Load security settings
+    const { SystemConfig } = require('../models/SystemSetting');
+    const settings = await SystemConfig.findOne();
+    const maxLoginAttempts = settings?.securitySettings?.maxLoginAttempts || 5;
+    const sessionTimeoutHours = settings?.securitySettings?.sessionTimeoutHours || 24;
+
+    // Check if user is locked out
+    if (user.lockUntil && user.lockUntil > new Date()) {
+      const remainingMs = user.lockUntil - new Date();
+      const remainingMinutes = Math.ceil(remainingMs / (60 * 1000));
+      return res.status(403).json({
+        success: false,
+        message: `Your account is temporarily locked due to too many failed login attempts. Please try again in ${remainingMinutes} minute(s).`
+      });
+    }
 
     // Verify password
     let isMatch;
@@ -111,6 +126,15 @@ exports.Login = async (req, res) => {
     }
 
     if (!isMatch) {
+      // Increment attempts
+      user.loginAttempts = (user.loginAttempts || 0) + 1;
+      let isLockedNow = false;
+      if (user.loginAttempts >= maxLoginAttempts) {
+        user.lockUntil = new Date(Date.now() + 15 * 60 * 1000); // 15 mins lock
+        isLockedNow = true;
+      }
+      await user.save();
+
       const { trackEvent } = require('../middlewares/fraud-middleware');
       await trackEvent({
         req,
@@ -118,15 +142,26 @@ exports.Login = async (req, res) => {
         userId: user._id,
         userModel: userType === 'admin' ? 'Admin' : (userType === 'provider' ? 'Provider' : 'User'),
         role: userType === 'admin' ? 'admin' : (userType === 'provider' ? 'provider' : 'customer'),
-        flagReason: `Failed login attempt: Incorrect password for ${trimmedEmail}`
+        flagReason: `Failed login attempt: Incorrect password for ${trimmedEmail}. Attempts: ${user.loginAttempts}`
       });
       if (global.logger) global.logger.warn(`Failed login attempt: Incorrect password for ${trimmedEmail}`);
 
+      if (isLockedNow) {
+        return res.status(403).json({
+          success: false,
+          message: 'Too many incorrect password attempts. Your account has been temporarily locked for 15 minutes.'
+        });
+      }
+
       return res.status(401).json({
         success: false,
-        message: 'Invalid credentials'
+        message: `Invalid credentials. ${maxLoginAttempts - user.loginAttempts} attempt(s) remaining.`
       });
     }
+
+    // Reset login attempts on success
+    user.loginAttempts = 0;
+    user.lockUntil = undefined;
 
     // Check if user is suspended
     if (user.isSuspended) {
@@ -146,9 +181,6 @@ exports.Login = async (req, res) => {
 
     // Check Global Maintenance Mode Restrictions
     try {
-      const { SystemConfig } = require('../models/SystemSetting');
-      const settings = await SystemConfig.findOne();
-
       if (userType === 'customer') {
         if (settings?.maintenanceMode?.customer?.enabled) {
           return res.status(503).json({
@@ -188,12 +220,11 @@ exports.Login = async (req, res) => {
       }
     }
 
-    // Generate access token (15 min)
-    /* BACKUP COMMENT: Original was { expiresIn: '30d' } */
+    // Generate access token (dynamic)
     const token = jwt.sign(
       { id: user._id, email: user.email, role: userType === 'admin' ? 'admin' : user.role || userType },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m' }
+      { expiresIn: `${sessionTimeoutHours}h` }
     );
 
     // Prepare response data
@@ -596,11 +627,14 @@ exports.firebaseLogin = async (req, res) => {
     if (picture && !user.profilePicUrl) user.profilePicUrl = picture;
 
     // 5. Generate tokens
-    /* BACKUP COMMENT: Original was: { expiresIn: '30d' } */
+    const { SystemConfig } = require('../models/SystemSetting');
+    const settings = await SystemConfig.findOne();
+    const sessionTimeoutHours = settings?.securitySettings?.sessionTimeoutHours || 24;
+
     const accessToken = jwt.sign(
       { id: user._id, email: user.email, role: userType === 'provider' ? 'provider' : 'customer' },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m' }
+      { expiresIn: `${sessionTimeoutHours}h` }
     );
     const { raw: refreshTokenRaw } = user.generateRefreshToken(deviceInfo);
 
@@ -671,11 +705,14 @@ exports.refreshAccessToken = async (req, res) => {
     if (oldToken) oldToken.isValid = false;
 
     // Issue new tokens
-    /* BACKUP COMMENT: Original was: { expiresIn: '30d' } */
+    const { SystemConfig } = require('../models/SystemSetting');
+    const settings = await SystemConfig.findOne();
+    const sessionTimeoutHours = settings?.securitySettings?.sessionTimeoutHours || 24;
+
     const accessToken = jwt.sign(
       { id: user._id, email: user.email, role: userType === 'admin' ? 'admin' : user.role || userType },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m' }
+      { expiresIn: `${sessionTimeoutHours}h` }
     );
     const deviceInfo = extractDeviceInfo(req);
     const { raw: newRefreshRaw } = user.generateRefreshToken(deviceInfo);

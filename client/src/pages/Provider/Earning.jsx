@@ -137,10 +137,18 @@ const ProviderEarningsDashboard = () => {
       const response = await PaymentService.getEarningsSummary(params);
       const data = response.data;
       if (data.success) {
-        setSummary(data.summary || {
-          totalEarnings: 0, todayEarnings: 0, totalWithdrawn: 0,
-          availableBalance: 0, totalPendingWithdrawals: 0,
-          heldAmount: 0, disputeCount: 0, withdrawalSecurity: null
+        setSummary({
+          totalEarnings: data.totalEarnings || 0,
+          lifetimeEarnings: data.lifetimeEarnings || 0,
+          todayEarnings: data.todayEarnings || 0,
+          availableBalance: data.availableBalance || 0,
+          heldAmount: data.heldAmount || 0,
+          disputeCount: data.disputeCount || 0,
+          totalWithdrawn: data.totalWithdrawn || 0,
+          lifetimeWithdrawn: data.lifetimeWithdrawn || 0,
+          totalPendingWithdrawals: data.pendingWithdrawals || 0,
+          withdrawalSecurity: data.withdrawalSecurity || null,
+          minWithdrawalLimit: data.minWithdrawalLimit ?? 500
         });
       }
     } catch (err) {
@@ -209,7 +217,8 @@ const ProviderEarningsDashboard = () => {
   }, []);
 
   const handleWithdrawalRequest = async () => {
-    if (!withdrawalForm.amount || withdrawalForm.amount < 500) { showToast('Minimum ₹500 required', 'error'); return; }
+    const minLimit = summary.minWithdrawalLimit ?? 500;
+    if (!withdrawalForm.amount || withdrawalForm.amount < minLimit) { showToast(`Minimum ₹${minLimit} required`, 'error'); return; }
     if (withdrawalForm.amount > summary.availableBalance) { showToast(`Insufficient balance. Available: ${formatCurrency(summary.availableBalance)}`, 'error'); return; }
 
     try {
@@ -401,15 +410,15 @@ const ProviderEarningsDashboard = () => {
             </div>
             <button
               onClick={() => { fetchProviderProfile(); setShowWithdrawalModal(true); }}
-              disabled={summary.availableBalance < 500}
+              disabled={summary.availableBalance < (summary.minWithdrawalLimit ?? 500)}
               className="w-full sm:w-auto px-6 py-3 bg-accent text-white rounded-lg font-medium hover:bg-accent/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
             >
               <DollarSign className="w-4 h-4" />
               Request Payout
             </button>
           </div>
-          {summary.availableBalance < 500 && (
-            <p className="text-xs text-red-500 mt-3">Minimum ₹500 required for withdrawal</p>
+          {summary.availableBalance < (summary.minWithdrawalLimit ?? 500) && (
+            <p className="text-xs text-red-500 mt-3">Minimum ₹{summary.minWithdrawalLimit ?? 500} required for withdrawal</p>
           )}
 
           {summary.withdrawalSecurity?.lastRequestTime && (
@@ -843,7 +852,7 @@ const ProviderEarningsDashboard = () => {
                   className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-lg font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
                   placeholder="Enter amount"
                 />
-                <p className="mt-2 text-xs text-secondary/40">* Minimum ₹500 required</p>
+                <p className="mt-2 text-xs text-secondary/40">* Minimum ₹{summary.minWithdrawalLimit ?? 500} required</p>
               </div>
 
               {providerBankDetails && (
@@ -880,7 +889,7 @@ const ProviderEarningsDashboard = () => {
 
               <button
                 onClick={handleWithdrawalRequest}
-                disabled={processingWithdrawal || !withdrawalForm.amount || withdrawalForm.amount < 500}
+                disabled={processingWithdrawal || !withdrawalForm.amount || withdrawalForm.amount < (summary.minWithdrawalLimit ?? 500)}
                 className="w-full py-3 bg-accent text-white rounded-lg font-medium hover:bg-accent/90 transition-colors disabled:opacity-50"
               >
                 {processingWithdrawal ? 'Processing...' : 'Request Payout'}

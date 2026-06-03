@@ -2,8 +2,7 @@
  * Standard utility for formatting data across the application.
  * All formatting should be done through these functions to ensure consistency.
  */
-import { latLngToS2CellId } from './s2Helper';
-import { getCachedTimeFormat } from './systemSettingsCache';
+import { getCachedTimeFormat, readCachedSystemSettings } from './systemSettingsCache';
 
 const FALLBACK = "--";
 
@@ -50,10 +49,13 @@ export const formatDate = (date) => {
   try {
     const d = new Date(date);
     if (isNaN(d.getTime())) return FALLBACK;
+    const settings = readCachedSystemSettings();
+    const timezone = settings.timezone || "Asia/Kolkata";
     return d.toLocaleDateString("en-IN", {
       day: "numeric",
       month: "short",
       year: "numeric",
+      timeZone: timezone
     });
   } catch {
     return FALLBACK;
@@ -74,10 +76,13 @@ export const formatTime = (time) => {
     if (time instanceof Date || (typeof time === "string" && time.includes("T"))) {
       const d = new Date(time);
       if (isNaN(d.getTime())) return FALLBACK;
+      const settings = readCachedSystemSettings();
+      const timezone = settings.timezone || "Asia/Kolkata";
       return d.toLocaleTimeString("en-IN", {
         hour: timeFormat === "24h" ? "2-digit" : "numeric",
         minute: "2-digit",
         hour12: timeFormat === "12h",
+        timeZone: timezone
       });
     }
 
@@ -114,9 +119,12 @@ export const formatDateTime = (date) => {
  */
 export const formatCurrency = (amount) => {
   if (amount === null || amount === undefined || amount === "" || isNaN(amount)) return FALLBACK;
-  return new Intl.NumberFormat("en-IN", {
+  const settings = readCachedSystemSettings();
+  const currency = settings.defaultCurrency || "INR";
+  const locale = currency === "INR" ? "en-IN" : "en-US";
+  return new Intl.NumberFormat(locale, {
     style: "currency",
-    currency: "INR",
+    currency: currency,
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(amount);
@@ -129,7 +137,10 @@ export const formatCurrency = (amount) => {
  */
 export const formatNumber = (num) => {
   if (num === null || num === undefined || num === "" || isNaN(num)) return FALLBACK;
-  return new Intl.NumberFormat("en-IN").format(num);
+  const settings = readCachedSystemSettings();
+  const currency = settings.defaultCurrency || "INR";
+  const locale = currency === "INR" ? "en-IN" : "en-US";
+  return new Intl.NumberFormat(locale).format(num);
 };
 
 /**
@@ -139,12 +150,19 @@ export const formatNumber = (num) => {
  */
 export const formatPhone = (phone) => {
   if (!phone) return FALLBACK;
+  const settings = readCachedSystemSettings();
+  const companyPhone = settings.phone || "";
+  let countryCode = "+91";
+  if (companyPhone.startsWith("+")) {
+    const match = companyPhone.match(/^(\+\d{1,4})/);
+    if (match) countryCode = match[1];
+  }
   const cleaned = ("" + phone).replace(/\D/g, "");
   if (cleaned.length === 10) {
-    return `+91 ${cleaned.slice(0, 5)} ${cleaned.slice(5)}`;
+    return `${countryCode} ${cleaned.slice(0, 5)} ${cleaned.slice(5)}`;
   }
   if (cleaned.length === 12 && cleaned.startsWith("91")) {
-    return `+91 ${cleaned.slice(2, 7)} ${cleaned.slice(7)}`;
+    return `${countryCode} ${cleaned.slice(2, 7)} ${cleaned.slice(7)}`;
   }
   return phone;
 };

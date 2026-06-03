@@ -177,6 +177,19 @@ const DEFAULT_EMAIL_TEMPLATES = {
  * @param {Object} [options.variables]   - Key-value pairs to inject into the template placeholders
  */
 const sendMail = async ({ to, subject, html, templateType, variables }) => {
+  try {
+    const config = await SystemConfig.findOne();
+    if (config && config.notificationSettings && config.notificationSettings.emailEnabled === false) {
+      console.log(`[sendMail] Skipped sending email to ${to} because the email system is globally disabled.`);
+      return {
+        success: false,
+        message: "Email sending skipped: Email system is globally disabled."
+      };
+    }
+  } catch (error) {
+    console.error("[sendMail] Error checking global email system status:", error);
+  }
+
   const apiKey = process.env.SMTP_PASS;
   const senderEmail = process.env.SMTP_USER;
 

@@ -19,6 +19,17 @@ const sendPushNotification = async (tokens, payload) => {
     }
 
     try {
+        const { SystemConfig } = require('../models/SystemSetting');
+        const config = await SystemConfig.findOne();
+        if (config && config.notificationSettings && config.notificationSettings.pushEnabled === false) {
+            console.log('[NotificationService] Push notifications are globally disabled in settings. Skipping FCM dispatch.');
+            return;
+        }
+    } catch (e) {
+        console.error('[NotificationService] Error loading system settings in sendPushNotification:', e);
+    }
+
+    try {
         // FCM requires ALL data values to be strings
         const dataPayload = {};
         if (payload.data) {
@@ -229,12 +240,16 @@ const getZoneAndDescendants = async (targetZoneIds) => {
 
 const sendBroadcastNotification = async (audience, payload, filters = {}, broadcastId = null) => {
     try {
+        const { SystemConfig } = require('../models/SystemSetting');
+        const config = await SystemConfig.findOne();
+
         let allTokens = [];
         let notificationsToSave = [];
         const { city, targetZones = [], category, minBookings = 0 } = filters;
 
         let users = [];
-        if (audience === 'all' || audience === 'customer') {
+        const isCustomerAlertsEnabled = !config || !config.notificationSettings || config.notificationSettings.customerAlerts !== false;
+        if ((audience === 'all' || audience === 'customer') && isCustomerAlertsEnabled) {
             const userQuery = { role: 'customer' };
             if (city) userQuery['address.city'] = new RegExp(city, 'i');
             if (minBookings > 0) userQuery.totalBookings = { $gte: minBookings };
@@ -287,7 +302,8 @@ const sendBroadcastNotification = async (audience, payload, filters = {}, broadc
         }
 
         let providers = [];
-        if (audience === 'all' || audience === 'provider') {
+        const isProviderAlertsEnabled = !config || !config.notificationSettings || config.notificationSettings.providerAlerts !== false;
+        if ((audience === 'all' || audience === 'provider') && isProviderAlertsEnabled) {
             const providerQuery = { isDeleted: false };
             if (city) providerQuery['address.city'] = new RegExp(city, 'i');
             if (category) providerQuery.services = category; // category ID

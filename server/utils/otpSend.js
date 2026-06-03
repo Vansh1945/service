@@ -5,9 +5,22 @@ const admin = require('../config/firebaseAdmin');
 const OTP = require('../models/OTP-model');
 const { sendMail } = require('./sendmail');
 
+const { SystemConfig } = require('../models/SystemSetting');
+
 exports.generateOTP = async (email) => {
   const otp = crypto.randomInt(100000, 999999).toString();
-  const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+  
+  let otpExpiryMinutes = 5;
+  try {
+    const config = await SystemConfig.findOne();
+    if (config?.securitySettings?.otpExpiryMinutes) {
+      otpExpiryMinutes = config.securitySettings.otpExpiryMinutes;
+    }
+  } catch (err) {
+    console.error("Error fetching SystemConfig in generateOTP:", err);
+  }
+
+  const expiresAt = new Date(Date.now() + otpExpiryMinutes * 60 * 1000);
 
   // Clear previous OTP for this email dynamically
   await OTP.findOneAndDelete({ email });
@@ -47,13 +60,23 @@ exports.sendOTPViaFCM = async (fcmToken, otp) => {
 // Internal function to send OTP using Brevo API (Preserved original signature and logic, but uses dynamic HBS templates)
 const sendOTPWithBrevoInternal = async (email, otp, otpType = 'forgotPasswordOtp') => {
   try {
+    let otpExpiryMinutes = 5;
+    try {
+      const config = await SystemConfig.findOne();
+      if (config?.securitySettings?.otpExpiryMinutes) {
+        otpExpiryMinutes = config.securitySettings.otpExpiryMinutes;
+      }
+    } catch (err) {
+      console.error("Error fetching SystemConfig in sendOTPWithBrevoInternal:", err);
+    }
+
     const result = await sendMail({
       to: email,
       templateType: otpType,
       variables: {
         otp,
         email,
-        expiry: 5
+        expiry: otpExpiryMinutes
       }
     });
 
@@ -75,8 +98,19 @@ exports.sendOTP = async (email, fcmToken = null, otpType = 'forgotPasswordOtp') 
 
     const otp = await exports.generateOTP(email);
 
-    // Try FCM first if token is available
-    if (fcmToken) {
+    let pushEnabled = true;
+    try {
+      const config = await SystemConfig.findOne();
+      if (config && config.notificationSettings && config.notificationSettings.pushEnabled === false) {
+        pushEnabled = false;
+        console.log(`[otpSend] FCM Push Notification is globally disabled in notification settings.`);
+      }
+    } catch (configError) {
+      console.error("[otpSend] Error reading global configuration:", configError);
+    }
+
+    // Try FCM first if token is available and push is enabled
+    if (fcmToken && pushEnabled) {
       console.log(`[FCM Attempt] Sending Push Notification OTP to token: ${fcmToken.substring(0, 15)}...`);
       try {
         await exports.sendOTPViaFCM(fcmToken, otp);
@@ -90,7 +124,11 @@ exports.sendOTP = async (email, fcmToken = null, otpType = 'forgotPasswordOtp') 
         console.warn("FCM fallback to Brevo Email.");
       }
     } else {
-      console.log(`[FCM Ignored] No FCM token provided for ${email}. Falling back to Brevo Email.`);
+      if (!pushEnabled) {
+        console.log(`[FCM Skipped] FCM Push Notification is globally disabled. Falling back to Brevo Email.`);
+      } else {
+        console.log(`[FCM Ignored] No FCM token provided for ${email}. Falling back to Brevo Email.`);
+      }
     }
 
     // Fallback to Brevo

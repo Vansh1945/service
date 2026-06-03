@@ -62,6 +62,8 @@ const adminSchema = new mongoose.Schema({
   }],
   lastLoginIp:  { type: String },
   lastLoginAt:  { type: Date },
+  loginAttempts: { type: Number, default: 0 },
+  lockUntil: { type: Date },
   notificationPreferences: {
     booking: { type: Boolean, default: true },
     payment: { type: Boolean, default: true },
@@ -101,11 +103,11 @@ adminSchema.methods.comparePassword = async function (enteredPassword) {
 };
 
 // Generate short-lived access token
-adminSchema.methods.generateJWT = function () {
+adminSchema.methods.generateJWT = function (sessionTimeoutHours = 24) {
   return jwt.sign(
     { id: this._id, email: this.email, isAdmin: this.isAdmin, role: 'admin' },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m' }
+    { expiresIn: `${sessionTimeoutHours}h` }
   );
 };
 

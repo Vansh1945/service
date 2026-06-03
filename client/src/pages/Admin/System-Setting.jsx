@@ -39,7 +39,11 @@ const SystemSetting = () => {
       bookingBufferTime: 30,
       trackingEnabled: true,
       trackingInterval: 5,
-      autoAssignRadius: 15
+      autoAssignRadius: 15,
+      maxBookingDays: 3,
+      slotInterval: 30,
+      startTime: '09:00',
+      endTime: '21:00'
     },
     walletSettings: {
       minWithdrawal: 500,
@@ -173,6 +177,10 @@ const SystemSetting = () => {
             trackingEnabled: settingsData.data.bookingSettings?.trackingEnabled ?? true,
             trackingInterval: settingsData.data.bookingSettings?.trackingInterval ?? 5,
             autoAssignRadius: settingsData.data.bookingSettings?.autoAssignRadius ?? 15,
+            maxBookingDays: settingsData.data.bookingSettings?.maxBookingDays ?? 3,
+            slotInterval: settingsData.data.bookingSettings?.slotInterval ?? 30,
+            startTime: settingsData.data.bookingSettings?.startTime || "09:00",
+            endTime: settingsData.data.bookingSettings?.endTime || "21:00",
           },
           walletSettings: {
             minWithdrawal: settingsData.data.walletSettings?.minWithdrawal ?? 500,
@@ -276,8 +284,16 @@ const SystemSetting = () => {
       if (systemSettings.bookingSettings.cancellationWindowMinutes < 0 ||
         systemSettings.bookingSettings.refundReviewHours < 0 ||
         systemSettings.bookingSettings.bookingBufferTime < 0 ||
-        systemSettings.bookingSettings.maxBookingsPerProvider < 1) {
-        showToast('Booking configuration values must be non-negative numbers', 'error');
+        systemSettings.bookingSettings.maxBookingsPerProvider < 1 ||
+        systemSettings.bookingSettings.maxBookingDays < 1 ||
+        systemSettings.bookingSettings.slotInterval < 5) {
+        showToast('Booking configuration values must be valid positive numbers', 'error');
+        return;
+      }
+
+      if (!/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(systemSettings.bookingSettings.startTime) ||
+          !/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(systemSettings.bookingSettings.endTime)) {
+        showToast('Start and End Times must be in valid 24h format (HH:MM)', 'error');
         return;
       }
 
@@ -343,13 +359,7 @@ const SystemSetting = () => {
 
       if (data.success) {
         showToast('System settings saved successfully');
-        // Update local storage settings cache directly
-        const settingsCache = {
-          companyName: data.data.companyName || "Raj Electrical Services",
-          favicon: data.data.favicon || null,
-          timeFormat: data.data.timeFormat || "12h"
-        };
-        writeSystemSettingsCache(settingsCache);
+        writeSystemSettingsCache(data.data);
         setLogoFile(null);
         setFaviconFile(null);
         fetchSystemSettings(); // Refresh data
@@ -879,6 +889,55 @@ const SystemSetting = () => {
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-inter text-secondary"
                   />
                   <p className="text-xs text-gray-500 mt-1.5 font-inter">Caps the number of active/accepted jobs a provider can process simultaneously.</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-secondary mb-2 font-inter">Max Booking Days Ahead</label>
+                  <input
+                    type="number"
+                    value={systemSettings.bookingSettings.maxBookingDays}
+                    onChange={(e) => handleNestedChange('bookingSettings', 'maxBookingDays', Number(e.target.value))}
+                    min="1"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-inter text-secondary"
+                  />
+                  <p className="text-xs text-gray-500 mt-1.5 font-inter">Maximum number of days in advance a customer is allowed to book a service.</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-secondary mb-2 font-inter">Slot Interval (Minutes)</label>
+                  <input
+                    type="number"
+                    value={systemSettings.bookingSettings.slotInterval}
+                    onChange={(e) => handleNestedChange('bookingSettings', 'slotInterval', Number(e.target.value))}
+                    min="5"
+                    step="5"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-inter text-secondary"
+                  />
+                  <p className="text-xs text-gray-500 mt-1.5 font-inter">Minutes between consecutive time slots generated for bookings (e.g. 30 for half-hourly).</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-secondary mb-2 font-inter">Business Start Time (HH:MM)</label>
+                  <input
+                    type="text"
+                    placeholder="09:00"
+                    value={systemSettings.bookingSettings.startTime}
+                    onChange={(e) => handleNestedChange('bookingSettings', 'startTime', e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-inter text-secondary"
+                  />
+                  <p className="text-xs text-gray-500 mt-1.5 font-inter">Daily time when bookings can start, in 24-hour format (e.g. 09:00).</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-secondary mb-2 font-inter">Business End Time (HH:MM)</label>
+                  <input
+                    type="text"
+                    placeholder="21:00"
+                    value={systemSettings.bookingSettings.endTime}
+                    onChange={(e) => handleNestedChange('bookingSettings', 'endTime', e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-inter text-secondary"
+                  />
+                  <p className="text-xs text-gray-500 mt-1.5 font-inter">Daily time when bookings must end, in 24-hour format (e.g. 21:00).</p>
                 </div>
 
               </div>

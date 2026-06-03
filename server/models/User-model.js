@@ -67,6 +67,8 @@ const userSchema = new mongoose.Schema({
   lastLoginIp: { type: String },
   lastLoginAt: { type: Date },
   suspiciousScore: { type: Number, default: 0 },
+  loginAttempts: { type: Number, default: 0 },
+  lockUntil: { type: Date },
 
   providerAuthStatus: { type: String },
   role: {
@@ -288,12 +290,12 @@ userSchema.methods.comparePassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
-// Generate short-lived access token (15 min)
-userSchema.methods.generateJWT = function () {
+// Generate short-lived access token (dynamic expiry)
+userSchema.methods.generateJWT = function (sessionTimeoutHours = 24) {
   return jwt.sign(
     { id: this._id, email: this.email, role: this.role },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m' }
+    { expiresIn: `${sessionTimeoutHours}h` }
   );
 };
 

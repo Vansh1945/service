@@ -90,7 +90,10 @@ const registerAdmin = async (req, res) => {
         });
 
         // Generate JWT token
-        const token = admin.generateJWT();
+        const { SystemConfig } = require('../models/SystemSetting');
+        const settings = await SystemConfig.findOne();
+        const sessionTimeoutHours = settings?.securitySettings?.sessionTimeoutHours || 24;
+        const token = admin.generateJWT(sessionTimeoutHours);
 
         res.status(201).json({
             success: true,

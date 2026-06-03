@@ -85,6 +85,19 @@ const computeNotificationUrl = (role, type, title, message) => {
  */
 const sendNotification = async (userId, role, title, message, type = 'system', referenceId = null, url = '/') => {
     try {
+        const { SystemConfig } = require('../models/SystemSetting');
+        const config = await SystemConfig.findOne();
+        if (config && config.notificationSettings) {
+            if (role === 'provider' && config.notificationSettings.providerAlerts === false) {
+                console.log(`[NotificationHelper] Suppressing notification for provider: providerAlerts is globally disabled.`);
+                return null;
+            }
+            if (role === 'customer' && config.notificationSettings.customerAlerts === false) {
+                console.log(`[NotificationHelper] Suppressing notification for customer: customerAlerts is globally disabled.`);
+                return null;
+            }
+        }
+
         let notification = null;
         const generatedUrl = url !== '/' ? url : computeNotificationUrl(role, type, title, message);
 

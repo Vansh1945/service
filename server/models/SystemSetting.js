@@ -134,6 +134,22 @@ const systemConfigSchema = new mongoose.Schema(
       autoAssignRadius: {
         type: Number,
         default: 15
+      },
+      maxBookingDays: {
+        type: Number,
+        default: 3
+      },
+      slotInterval: {
+        type: Number,
+        default: 30
+      },
+      startTime: {
+        type: String,
+        default: "09:00"
+      },
+      endTime: {
+        type: String,
+        default: "21:00"
       }
     },
     walletSettings: {

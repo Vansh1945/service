@@ -473,6 +473,10 @@ const getEarningsSummary = async (req, res) => {
     ]);
     const todayEarnings = todayEarningsResult.length > 0 ? todayEarningsResult[0].totalEarnings : 0;
 
+    const { SystemConfig } = require('../models/SystemSetting');
+    let settings = await SystemConfig.findOne();
+    const minWithdrawalLimit = settings?.walletSettings?.minWithdrawal ?? 500;
+
     res.json({
       success: true,
       totalEarnings: periodEarnings,
@@ -484,6 +488,7 @@ const getEarningsSummary = async (req, res) => {
       totalWithdrawn: periodWithdrawn,
       lifetimeWithdrawn: totalWithdrawn,
       pendingWithdrawals: totalPendingWithdrawals,
+      minWithdrawalLimit,
       withdrawalSecurity: {
         lastRequestTime: provider.withdrawalSecurity?.lastRequestTime,
         isFlagged: provider.withdrawalSecurity?.isFlagged

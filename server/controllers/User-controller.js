@@ -290,7 +290,10 @@ const register = async (req, res) => {
     });
 
     // Generate JWT token
-    const token = user.generateJWT();
+    const { SystemConfig } = require('../models/SystemSetting');
+    const settings = await SystemConfig.findOne();
+    const sessionTimeoutHours = settings?.securitySettings?.sessionTimeoutHours || 24;
+    const token = user.generateJWT(sessionTimeoutHours);
 
     // Prepare response
     const userResponse = {

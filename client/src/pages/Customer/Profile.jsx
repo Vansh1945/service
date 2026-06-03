@@ -725,8 +725,8 @@ const UserProfile = () => {
                                                 >
                                                     {/* Top color strip */}
                                                     <div className={`h-1 w-full ${isFirstBooking ? 'bg-gradient-to-r from-violet-500 to-purple-500'
-                                                            : isPersonal ? 'bg-gradient-to-r from-amber-400 to-orange-400'
-                                                                : 'bg-gradient-to-r from-primary to-teal-400'
+                                                        : isPersonal ? 'bg-gradient-to-r from-amber-400 to-orange-400'
+                                                            : 'bg-gradient-to-r from-primary to-teal-400'
                                                         }`} />
 
                                                     <div className="p-3">
@@ -758,8 +758,8 @@ const UserProfile = () => {
                                                         <div className="flex items-end justify-between mb-2">
                                                             <div>
                                                                 <p className={`text-xl font-black tracking-tighter ${isFirstBooking ? 'text-violet-600'
-                                                                        : isPersonal ? 'text-amber-500'
-                                                                            : 'text-primary'
+                                                                    : isPersonal ? 'text-amber-500'
+                                                                        : 'text-primary'
                                                                     }`}>
                                                                     {isPercent ? `${coupon.discountValue}%` : `₹${coupon.discountValue}`}
                                                                     <span className="text-xs font-bold ml-1">OFF</span>

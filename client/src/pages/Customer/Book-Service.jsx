@@ -105,43 +105,53 @@ const BookService = () => {
     checkAvailability();
   }, [bookingPreference, selectedFavoriteProviderId, service]);
 
-  // Get next 3 days
+  // Get next N days based on settings
   const getNext3Days = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const next3Days = [];
-    for (let i = 0; i < 3; i++) {
+    const nextDays = [];
+    const maxDays = systemSettings?.bookingSettings?.maxBookingDays || 3;
+    for (let i = 0; i < maxDays; i++) {
       const date = new Date(today);
       date.setDate(today.getDate() + i);
-      next3Days.push(date);
+      nextDays.push(date);
     }
-    return next3Days;
+    return nextDays;
   };
 
   const availableDates = getNext3Days();
   const maxDate = availableDates[availableDates.length - 1];
 
-  // Generate time slots
+  // Generate time slots based on settings
   const generateTimeSlots = () => {
     const slots = [];
     const now = new Date();
     const isToday = formData.date.toDateString() === now.toDateString();
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
 
-    const startHour = isToday ? Math.max(currentHour + 1, 8) : 8;
-    const endHour = 20;
+    const startTimeSetting = systemSettings?.bookingSettings?.startTime || "09:00";
+    const endTimeSetting = systemSettings?.bookingSettings?.endTime || "21:00";
+    const interval = systemSettings?.bookingSettings?.slotInterval || 30;
 
-    for (let hour = startHour; hour <= endHour; hour++) {
+    const [startH, startM] = startTimeSetting.split(':').map(Number);
+    const [endH, endM] = endTimeSetting.split(':').map(Number);
+
+    const startMinutes = startH * 60 + startM;
+    const endMinutes = endH * 60 + endM;
+
+    // For today, slot must be at least 1 hour in the future
+    const minAllowedMinutes = isToday ? (now.getHours() * 60 + now.getMinutes() + 60) : 0;
+
+    for (let m = startMinutes; m <= endMinutes; m += interval) {
+      if (isToday && m < minAllowedMinutes) continue;
+      const hh = Math.floor(m / 60);
+      const mm = m % 60;
+      const timeStr = `${hh.toString().padStart(2, '0')}:${mm.toString().padStart(2, '0')}`;
       slots.push({
-        display: formatTime(`${hour.toString().padStart(2, '0')}:00`),
-        value: `${hour.toString().padStart(2, '0')}:00`
+        display: formatTime(timeStr),
+        value: timeStr
       });
     }
 
-    if (isToday && currentMinute > 45 && slots.length > 0) {
-      return slots.slice(1);
-    }
     return slots;
   };
 
@@ -1016,19 +1026,21 @@ const BookService = () => {
                   </div>
 
                   {/* Pay After Service */}
-                  <div
-                    className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-all ${formData.paymentMethod === 'cash' ? 'border-primary bg-primary/5 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}
-                    onClick={() => setFormData(prev => ({ ...prev, paymentMethod: 'cash' }))}
-                  >
-                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${formData.paymentMethod === 'cash' ? 'border-primary' : 'border-gray-300'}`}>
-                      {formData.paymentMethod === 'cash' && <div className="w-2 h-2 bg-primary rounded-full" />}
+                  {(systemSettings === null || systemSettings?.bookingSettings?.allowCOD !== false) && (
+                    <div
+                      className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-all ${formData.paymentMethod === 'cash' ? 'border-primary bg-primary/5 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}
+                      onClick={() => setFormData(prev => ({ ...prev, paymentMethod: 'cash' }))}
+                    >
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${formData.paymentMethod === 'cash' ? 'border-primary' : 'border-gray-300'}`}>
+                        {formData.paymentMethod === 'cash' && <div className="w-2 h-2 bg-primary rounded-full" />}
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs font-bold text-secondary">Pay After Service</p>
+                        <p className="text-[10px] text-gray-400">Cash or UPI on-site</p>
+                      </div>
+                      <Truck className="w-4 h-4 text-gray-300" />
                     </div>
-                    <div className="flex-1">
-                      <p className="text-xs font-bold text-secondary">Pay After Service</p>
-                      <p className="text-[10px] text-gray-400">Cash or UPI on-site</p>
-                    </div>
-                    <Truck className="w-4 h-4 text-gray-300" />
-                  </div>
+                  )}
 
                   {/* Wallet Payment */}
                   <div

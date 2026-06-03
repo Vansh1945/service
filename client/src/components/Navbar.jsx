@@ -13,6 +13,7 @@ import {
 import { Link, useLocation } from 'react-router-dom';
 import * as SystemService from '../services/SystemService';
 import { useAuth } from '../context/auth';
+import { writeSystemSettingsCache } from '../utils/systemSettingsCache';
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -67,11 +68,12 @@ const Navbar = () => {
       try {
         const response = await SystemService.getSystemSetting();
         if (response.data?.success) {
-          const data = response.data;
+          const data = response.data.data;
           setSystemSettings({
-            companyName: data.data?.companyName || '',
-            logo: data.data?.logo || null
+            companyName: data?.companyName || '',
+            logo: data?.logo || null
           });
+          writeSystemSettingsCache(data);
         }
       } catch (error) {
         console.error('Failed to fetch system settings:', error);
