@@ -222,127 +222,127 @@ const Dashboard = () => {
 
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-          <Link to="/provider/earnings" className="bg-white rounded-2xl shadow-sm p-4 border-l-4 border-primary hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-xl">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5 sm:gap-3">
+          <Link to="/provider/earnings" className="bg-white rounded-2xl shadow-sm p-3 sm:p-4 border-l-4 border-primary hover:shadow-md transition-shadow min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl w-fit">
                 <FiDollarSign className="w-5 h-5 text-primary" />
               </div>
-              <div>
-                <p className="text-xs text-secondary/50 uppercase tracking-wide">Total Earning</p>
-                <p className="text-xl font-bold text-secondary">{formatCurrency(totalEarnings)}</p>
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-xs text-secondary/50 uppercase tracking-wide leading-tight">Total Earning</p>
+                <p className="text-base sm:text-xl font-bold text-secondary truncate">{formatCurrency(totalEarnings)}</p>
               </div>
             </div>
           </Link>
 
-          <Link to="/provider/earnings" className="bg-white rounded-2xl shadow-sm p-4 border-l-4 border-emerald-500 hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-emerald-50 rounded-xl">
+          <Link to="/provider/earnings" className="bg-white rounded-2xl shadow-sm p-3 sm:p-4 border-l-4 border-emerald-500 hover:shadow-md transition-shadow min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+              <div className="p-2 bg-emerald-50 rounded-xl w-fit">
                 <FiDollarSign className="w-5 h-5 text-emerald-600" />
               </div>
-              <div>
-                <p className="text-xs text-secondary/50 uppercase tracking-wide">Today's Earning</p>
-                <p className="text-xl font-bold text-secondary">{formatCurrency(todaysEarnings)}</p>
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-xs text-secondary/50 uppercase tracking-wide leading-tight">Today's Earning</p>
+                <p className="text-base sm:text-xl font-bold text-secondary truncate">{formatCurrency(todaysEarnings)}</p>
               </div>
             </div>
           </Link>
 
-          <Link to="/provider/earnings" className="bg-white rounded-2xl shadow-sm p-4 border-l-4 border-accent hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-accent/10 rounded-xl">
+          <Link to="/provider/earnings" className="bg-white rounded-2xl shadow-sm p-3 sm:p-4 border-l-4 border-accent hover:shadow-md transition-shadow min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+              <div className="p-2 bg-accent/10 rounded-xl w-fit">
                 <FiTrendingUp className="w-5 h-5 text-accent" />
               </div>
-              <div>
-                <p className="text-xs text-secondary/50 uppercase tracking-wide">Wallet Balance</p>
-                <p className="text-xl font-bold text-secondary">{formatCurrency(wallet?.currentBalance || 0)}</p>
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-xs text-secondary/50 uppercase tracking-wide leading-tight">Wallet Balance</p>
+                <p className="text-base sm:text-xl font-bold text-secondary truncate">{formatCurrency(wallet?.currentBalance || 0)}</p>
               </div>
             </div>
           </Link>
 
-          <div className="bg-white rounded-2xl shadow-sm p-4 border-l-4 border-indigo-500">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-indigo-50 rounded-xl">
+          <div className="bg-white rounded-2xl shadow-sm p-3 sm:p-4 border-l-4 border-indigo-500 min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+              <div className="p-2 bg-indigo-50 rounded-xl w-fit">
                 <FiCheckCircle className="w-5 h-5 text-indigo-600" />
               </div>
-              <div>
-                <p className="text-xs text-secondary/50 uppercase tracking-wide">Released Payouts</p>
-                <p className="text-xl font-bold text-secondary">{formatCurrency(wallet?.releasedPayouts || 0)}</p>
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-xs text-secondary/50 uppercase tracking-wide leading-tight">Released Payouts</p>
+                <p className="text-base sm:text-xl font-bold text-secondary truncate">{formatCurrency(wallet?.releasedPayouts || 0)}</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-sm p-4 border-l-4 border-red-500">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-red-50 rounded-xl">
+          <div className="bg-white rounded-2xl shadow-sm p-3 sm:p-4 border-l-4 border-red-500 min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+              <div className="p-2 bg-red-50 rounded-xl w-fit">
                 <FiTrendingUp className="w-5 h-5 text-red-600 rotate-180" />
               </div>
-              <div>
-                <p className="text-xs text-secondary/50 uppercase tracking-wide">Refund Deductions</p>
-                <p className="text-xl font-bold text-secondary">{formatCurrency(wallet?.refundedDeductions || 0)}</p>
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-xs text-secondary/50 uppercase tracking-wide leading-tight">Refund Deductions</p>
+                <p className="text-base sm:text-xl font-bold text-secondary truncate">{formatCurrency(wallet?.refundedDeductions || 0)}</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-sm p-4 border-l-4 border-green-500">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-50 rounded-xl">
+          <div className="bg-white rounded-2xl shadow-sm p-3 sm:p-4 border-l-4 border-green-500 min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+              <div className="p-2 bg-green-50 rounded-xl w-fit">
                 <FiCheckCircle className="w-5 h-5 text-green-600" />
               </div>
-              <div>
-                <p className="text-xs text-secondary/50 uppercase tracking-wide">Completed</p>
-                <p className="text-xl font-bold text-secondary">{summary?.completedJobs || 0}</p>
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-xs text-secondary/50 uppercase tracking-wide leading-tight">Completed</p>
+                <p className="text-base sm:text-xl font-bold text-secondary">{summary?.completedJobs || 0}</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-sm p-4 border-l-4 border-yellow-500">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-yellow-50 rounded-xl">
+          <div className="bg-white rounded-2xl shadow-sm p-3 sm:p-4 border-l-4 border-yellow-500 min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+              <div className="p-2 bg-yellow-50 rounded-xl w-fit">
                 <FiStar className="w-5 h-5 text-yellow-600" />
               </div>
-              <div>
-                <p className="text-xs text-secondary/50 uppercase tracking-wide">Rating</p>
-                <p className="text-xl font-bold text-secondary">
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-xs text-secondary/50 uppercase tracking-wide leading-tight">Rating</p>
+                <p className="text-base sm:text-xl font-bold text-secondary">
                   {ratings?.averageRating ? Number(ratings.averageRating).toFixed(1) : '—'}
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-sm p-4 border-l-4 border-orange-400">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-orange-50 rounded-xl">
+          <div className="bg-white rounded-2xl shadow-sm p-3 sm:p-4 border-l-4 border-orange-400 min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+              <div className="p-2 bg-orange-50 rounded-xl w-fit">
                 <FiLock className="w-5 h-5 text-orange-500" />
               </div>
-              <div>
-                <p className="text-xs text-secondary/50 uppercase tracking-wide">Held Payouts</p>
-                <p className="text-xl font-bold text-secondary">{heldPayouts}</p>
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-xs text-secondary/50 uppercase tracking-wide leading-tight">Held Payouts</p>
+                <p className="text-base sm:text-xl font-bold text-secondary">{heldPayouts}</p>
                 <p className="text-[10px] text-orange-500 font-medium">Awaiting Release</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-sm p-4 border-l-4 border-purple-400">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-purple-50 rounded-xl">
+          <div className="bg-white rounded-2xl shadow-sm p-3 sm:p-4 border-l-4 border-purple-400 min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+              <div className="p-2 bg-purple-50 rounded-xl w-fit">
                 <FiAlertTriangle className="w-5 h-5 text-purple-500" />
               </div>
-              <div>
-                <p className="text-xs text-secondary/50 uppercase tracking-wide">Disputes</p>
-                <p className="text-xl font-bold text-secondary">{disputesCount}</p>
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-xs text-secondary/50 uppercase tracking-wide leading-tight">Disputes</p>
+                <p className="text-base sm:text-xl font-bold text-secondary">{disputesCount}</p>
                 <p className="text-[10px] text-purple-500 font-medium">{pendingReviews} Under Review</p>
               </div>
             </div>
           </div>
 
-          <Link to="/provider/support" className="bg-white rounded-2xl shadow-sm p-4 border-l-4 border-red-400 hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-red-50 rounded-xl">
+          <Link to="/provider/support" className="bg-white rounded-2xl shadow-sm p-3 sm:p-4 border-l-4 border-red-400 hover:shadow-md transition-shadow min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+              <div className="p-2 bg-red-50 rounded-xl w-fit">
                 <FiAlertCircle className="w-5 h-5 text-red-500" />
               </div>
-              <div>
-                <p className="text-xs text-secondary/50 uppercase tracking-wide">Complaints</p>
-                <p className="text-xl font-bold text-secondary">{complaintsCount}</p>
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-xs text-secondary/50 uppercase tracking-wide leading-tight">Complaints</p>
+                <p className="text-base sm:text-xl font-bold text-secondary">{complaintsCount}</p>
               </div>
             </div>
           </Link>
