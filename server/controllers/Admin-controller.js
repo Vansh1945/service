@@ -278,7 +278,7 @@ const approveProvider = async (req, res) => {
                         email: `${process.env.FRONTEND_URL}/login`
                     }
                 });
-            } catch (mailError) {}
+            } catch (mailError) { }
 
             return res.status(200).json({
                 success: true,
@@ -306,7 +306,7 @@ const approveProvider = async (req, res) => {
                     'rejected',
                     provider._id
                 );
-            } catch (fcmError) {}
+            } catch (fcmError) { }
 
             try {
                 await sendMail({
@@ -317,7 +317,7 @@ const approveProvider = async (req, res) => {
                         reason: provider.rejectionReason
                     }
                 });
-            } catch (mailError) {}
+            } catch (mailError) { }
 
             return res.status(200).json({
                 success: true,
@@ -347,7 +347,7 @@ const approveProvider = async (req, res) => {
                     'restriction',
                     provider._id
                 );
-            } catch (fcmError) {}
+            } catch (fcmError) { }
 
             return res.status(200).json({
                 success: true,
@@ -373,7 +373,7 @@ const approveProvider = async (req, res) => {
                     'suspension',
                     provider._id
                 );
-            } catch (fcmError) {}
+            } catch (fcmError) { }
 
             return res.status(200).json({
                 success: true,
@@ -399,7 +399,7 @@ const approveProvider = async (req, res) => {
                     'blocked',
                     provider._id
                 );
-            } catch (fcmError) {}
+            } catch (fcmError) { }
 
             return res.status(200).json({
                 success: true,
@@ -440,21 +440,29 @@ const approveProvider = async (req, res) => {
 const getPendingProviders = async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
+        const limit = parseInt(req.query.limit) || 100;
         const skip = (page - 1) * limit;
         const search = req.query.search || '';
 
         const filter = {
-            approved: false,
             isDeleted: false,
-            ...(search && {
-                $or: [
-                    { name: { $regex: search, $options: 'i' } },
-                    { email: { $regex: search, $options: 'i' } },
-                    { providerId: { $regex: search, $options: 'i' } }
-                ]
-            })
+            $or: [
+                { approved: false },
+                { approved: true, 'bankDetails.verified': false, 'bankDetails.accountNo': { $exists: true, $ne: '' } }
+            ]
         };
+
+        if (search) {
+            filter.$and = [
+                {
+                    $or: [
+                        { name: { $regex: search, $options: 'i' } },
+                        { email: { $regex: search, $options: 'i' } },
+                        { providerId: { $regex: search, $options: 'i' } }
+                    ]
+                }
+            ];
+        }
 
         const providersPipeline = [
             { $match: filter },
@@ -515,23 +523,9 @@ const getPendingProviders = async (req, res) => {
                 provider.age = age;
             }
 
-            // Performance Badge Calculation
-            const rating = provider.averageRating || 0;
-            const completion = provider.performanceScore?.completionPercentage || 0;
-            const onTime = provider.performanceScore?.onTimePercentage || 0;
-
-            let performanceBadge = 'Bronze';
-            if (rating >= 4.5 && completion >= 95 && onTime >= 95) {
-                performanceBadge = 'Platinum';
-            } else if (rating >= 4.0 && completion >= 90 && onTime >= 90) {
-                performanceBadge = 'Gold';
-            } else if (rating >= 3.5 && completion >= 85 && onTime >= 85) {
-                performanceBadge = 'Silver';
-            }
-
-            provider.performanceBadge = performanceBadge;
-            provider.completionRate = completion;
-            provider.onTimeRate = onTime;
+            provider.performanceBadge = provider.performanceScore?.badge || 'Bronze';
+            provider.completionRate = provider.performanceScore?.completionPercentage || 0;
+            provider.onTimeRate = provider.performanceScore?.onTimePercentage || 0;
         });
 
         res.status(200).json({
@@ -635,23 +629,9 @@ const getAllProviders = async (req, res) => {
                 provider.age = age;
             }
 
-            // Performance Badge Calculation
-            const rating = provider.averageRating || 0;
-            const completion = provider.performanceScore?.completionPercentage || 0;
-            const onTime = provider.performanceScore?.onTimePercentage || 0;
-
-            let performanceBadge = 'Bronze';
-            if (rating >= 4.5 && completion >= 95 && onTime >= 95) {
-                performanceBadge = 'Platinum';
-            } else if (rating >= 4.0 && completion >= 90 && onTime >= 90) {
-                performanceBadge = 'Gold';
-            } else if (rating >= 3.5 && completion >= 85 && onTime >= 85) {
-                performanceBadge = 'Silver';
-            }
-
-            provider.performanceBadge = performanceBadge;
-            provider.completionRate = completion;
-            provider.onTimeRate = onTime;
+            provider.performanceBadge = provider.performanceScore?.badge || 'Bronze';
+            provider.completionRate = provider.performanceScore?.completionPercentage || 0;
+            provider.onTimeRate = provider.performanceScore?.onTimePercentage || 0;
         });
 
         res.status(200).json({
@@ -748,23 +728,9 @@ const getProviderDetails = async (req, res) => {
             provider.age = age;
         }
 
-        // Performance Badge Calculation
-        const rating = provider.averageRating || 0;
-        const completion = provider.performanceScore?.completionPercentage || 0;
-        const onTime = provider.performanceScore?.onTimePercentage || 0;
-
-        let performanceBadge = 'Bronze';
-        if (rating >= 4.5 && completion >= 95 && onTime >= 95) {
-            performanceBadge = 'Platinum';
-        } else if (rating >= 4.0 && completion >= 90 && onTime >= 90) {
-            performanceBadge = 'Gold';
-        } else if (rating >= 3.5 && completion >= 85 && onTime >= 85) {
-            performanceBadge = 'Silver';
-        }
-
-        provider.performanceBadge = performanceBadge;
-        provider.completionRate = completion;
-        provider.onTimeRate = onTime;
+        provider.performanceBadge = provider.performanceScore?.badge || 'Bronze';
+        provider.completionRate = provider.performanceScore?.completionPercentage || 0;
+        provider.onTimeRate = provider.performanceScore?.onTimePercentage || 0;
 
         res.status(200).json({
             success: true,
@@ -2056,12 +2022,13 @@ const getDashboardAnalytics = async (req, res) => {
             ]),
             User.aggregate([
                 { $unwind: "$favoriteProviders" },
-                { $group: {
-                    _id: "$favoriteProviders.providerId",
-                    name: { $first: "$favoriteProviders.providerName" },
-                    category: { $first: "$favoriteProviders.category" },
-                    count: { $sum: 1 }
-                  }
+                {
+                    $group: {
+                        _id: "$favoriteProviders.providerId",
+                        name: { $first: "$favoriteProviders.providerName" },
+                        category: { $first: "$favoriteProviders.category" },
+                        count: { $sum: 1 }
+                    }
                 },
                 { $sort: { count: -1 } },
                 { $limit: 3 }
@@ -2627,8 +2594,257 @@ const togglePayoutHold = async (req, res) => {
     }
 };
 
+const cancelBookingByAdmin = async (req, res) => {
+    const mongoose = require('mongoose');
+    const { sendMail } = require('../utils/sendmail');
+    const { sendNotification } = require('../utils/notificationHelper');
+    
+    let session = null;
+    try {
+        session = await mongoose.startSession();
+        session.startTransaction();
+    } catch (err) {
+        console.warn("[Transaction Fallback] Session start failed. Standalone MongoDB detected. Running sequential fallback.", err.message);
+        session = null;
+    }
+
+    try {
+        const { bookingId } = req.params;
+        const { reasonType, reasonText, complaintId, adminNotes } = req.body;
+
+        if (!reasonType || !reasonText) {
+            throw new Error('Cancellation reason type and text are required');
+        }
+
+        const booking = await Booking.findById(bookingId).populate('customer').populate('provider').session(session);
+        if (!booking) {
+            throw new Error('Booking not found');
+        }
+
+        // Safety rules validation
+        if (booking.status === 'completed') {
+            throw new Error('Cannot cancel completed booking.');
+        }
+        if (booking.status === 'cancelled' || booking.paymentStatus === 'refunded') {
+            throw new Error('Booking is already cancelled or refunded.');
+        }
+        if (booking.disputeStatus === 'resolved' || booking.status === 'dispute_closed') {
+            throw new Error('Cannot cancel booking with resolved dispute.');
+        }
+
+        const customer = booking.customer;
+        if (!customer) {
+            throw new Error('Customer details not found on booking');
+        }
+
+        const platformFeeRetained = booking.platformFee || 0;
+        const nonRefundableAmount = platformFeeRetained;
+        const refundableAmount = ['cash'].includes(booking.paymentMethod) ? 0 : Math.max(0, booking.totalAmount - platformFeeRetained);
+
+        // Update booking cancellation details
+        booking.status = 'cancelled';
+        booking.cancelledBy = 'admin';
+        booking.cancellationReason = `${reasonType}: ${reasonText}`;
+        booking.cancelledAt = new Date();
+        booking.refundDestination = refundableAmount > 0 ? 'wallet' : 'none';
+        booking.refundAmount = refundableAmount;
+        booking.nonRefundableAmount = nonRefundableAmount;
+        booking.platformFeeRetained = platformFeeRetained;
+        booking.refundStatus = refundableAmount > 0 ? 'completed' : 'none';
+        booking.refundProcessedAt = refundableAmount > 0 ? new Date() : null;
+        booking.refundReference = refundableAmount > 0 ? `REF-${Date.now()}` : null;
+        booking.paymentStatus = refundableAmount > 0 ? 'refunded' : booking.paymentStatus;
+
+        booking.statusHistory.push({
+            status: 'cancelled',
+            note: `Booking Cancelled By Admin. Reason: ${reasonType} - ${reasonText}${complaintId ? ' (Complaint Linked: ' + complaintId + ')' : ''}`,
+            updatedBy: 'admin',
+            timestamp: new Date()
+        });
+
+        // Wallet Update (if refund is required)
+        if (refundableAmount > 0) {
+            if (!customer.wallet) {
+                customer.wallet = { availableBalance: 0, totalRefunded: 0, lastUpdated: new Date(), walletTransactions: [] };
+            }
+            customer.wallet.availableBalance += refundableAmount;
+            customer.wallet.totalRefunded += refundableAmount;
+            customer.wallet.walletTransactions.push({
+                type: 'credit',
+                amount: refundableAmount,
+                reason: `Booking Refund (Admin Cancellation): ${reasonText}`,
+                source: 'booking_refund',
+                status: 'success',
+                booking: booking._id
+            });
+            customer.wallet.lastUpdated = new Date();
+            await customer.save({ session });
+
+            // Create Transaction record for the refund
+            const refundTransaction = new Transaction({
+                booking: booking._id,
+                bookingId: booking.bookingId || booking._id.toString(),
+                user: customer._id,
+                amount: refundableAmount,
+                paymentStatus: 'completed',
+                paymentMethod: 'wallet',
+                type: 'refund',
+                description: `Admin cancelled booking - Refund to wallet. Reason: ${reasonText}`,
+                refundReason: reasonText
+            });
+            await refundTransaction.save({ session });
+        }
+
+        // Create Transaction record for the Platform Fee Retained
+        if (platformFeeRetained > 0) {
+            const platformFeeTransaction = new Transaction({
+                booking: booking._id,
+                bookingId: booking.bookingId || booking._id.toString(),
+                user: customer._id,
+                amount: platformFeeRetained,
+                paymentStatus: 'success',
+                paymentMethod: 'wallet',
+                type: 'payment',
+                description: `Platform fee retained for cancelled booking #${booking.bookingId || booking._id}`
+            });
+            await platformFeeTransaction.save({ session });
+        }
+
+        // Update provider earnings & performance stats if provider assigned
+        if (booking.provider) {
+            await Provider.findByIdAndUpdate(booking.provider._id, {
+                $inc: { canceledBookings: 1 },
+                $set: { activeBooking: null }
+            }, { session });
+
+            // Reverse provider earning document
+            let earning = await ProviderEarning.findOne({ booking: booking._id }).session(session);
+            if (earning) {
+                earning.netAmount = 0;
+                earning.commissionAmount = 0;
+                earning.grossAmount = 0;
+                earning.status = 'cancelled';
+                await earning.save({ session });
+            }
+
+            const { recalculateProviderPerformance } = require('./Booking-controller');
+            if (recalculateProviderPerformance) {
+                await recalculateProviderPerformance(booking.provider._id, session);
+            }
+        }
+
+        // Resolve Complaint if linked
+        let complaintObj = null;
+        if (complaintId) {
+            complaintObj = await Complaint.findOne({ $or: [{ _id: mongoose.Types.ObjectId.isValid(complaintId) ? complaintId : undefined }, { complaintId: complaintId }] }).session(session);
+            if (complaintObj) {
+                complaintObj.bookingCancelled = true;
+                complaintObj.bookingCancelledAt = new Date();
+                complaintObj.bookingId = booking._id;
+                complaintObj.resolution = "Booking Cancelled";
+                complaintObj.status = "resolved";
+                complaintObj.resolutionNotes = adminNotes || reasonText;
+                complaintObj.resolvedAt = new Date();
+                complaintObj.resolvedBy = req.admin?._id;
+                complaintObj.statusHistory.push({ status: 'resolved', updatedAt: new Date() });
+                await complaintObj.save({ session });
+
+                // Link complaint ID to booking
+                booking.complaintId = complaintObj._id;
+            }
+        }
+
+        await booking.save({ session });
+
+        if (session) {
+            await session.commitTransaction();
+            session.endSession();
+        }
+
+        // Dispatch notifications
+        try {
+            sendNotification(
+                customer._id,
+                'customer',
+                'Booking Cancelled By Support Team',
+                `Your booking has been cancelled by Support Team. Reason: ${reasonText}`,
+                'booking',
+                booking._id
+            );
+
+            if (booking.provider) {
+                sendNotification(
+                    booking.provider._id,
+                    'provider',
+                    'Booking Cancelled',
+                    `Booking cancelled by Admin. Reason: ${reasonText}`,
+                    'booking',
+                    booking._id
+                );
+            }
+        } catch (notifErr) {
+            console.error('Notification dispatch error:', notifErr);
+        }
+
+        // Dispatch emails
+        try {
+            const serviceName = booking.services?.[0]?.service?.title || 'Service';
+            const complaintRef = complaintObj ? (complaintObj.complaintId || complaintObj._id.toString()) : 'N/A';
+            
+            await sendMail({
+                to: customer.email,
+                templateType: 'adminBookingCancelledCustomer',
+                variables: {
+                    name: customer.name,
+                    bookingId: booking.bookingId || booking._id.toString(),
+                    serviceName,
+                    cancellationReason: reasonText,
+                    complaintId: complaintRef,
+                    refundAmount: refundableAmount,
+                    platformFeeRetained,
+                    refundDestination: refundableAmount > 0 ? 'Customer Wallet' : 'None',
+                    expectedRefundTimeline: 'Instant'
+                }
+            });
+
+            if (booking.provider) {
+                await sendMail({
+                    to: booking.provider.email,
+                    templateType: 'adminBookingCancelledProvider',
+                    variables: {
+                        name: booking.provider.name,
+                        bookingId: booking.bookingId || booking._id.toString(),
+                        customerName: customer.name,
+                        cancellationReason: reasonText,
+                        complaintId: complaintRef
+                    }
+                });
+            }
+        } catch (mailErr) {
+            console.error('Email dispatch error:', mailErr);
+        }
+
+        res.status(200).json({
+            success: true,
+            message: 'Booking successfully cancelled by admin and refund processed to wallet.',
+            data: booking
+        });
+
+    } catch (error) {
+        if (session && session.inTransaction()) {
+            await session.abortTransaction();
+        }
+        if (session) {
+            session.endSession();
+        }
+        console.error('Error in admin cancellation:', error);
+        res.status(400).json({ success: false, message: error.message || 'Failed to cancel booking' });
+    }
+};
+
 
 module.exports = {
+    cancelBookingByAdmin,
     registerAdmin,
     getAdminProfile,
     updateAdminProfile,
@@ -2739,7 +2955,7 @@ async function getSameIPFraud(req, res) {
                 const uniqueAccounts = item.users.length;
                 const hasCustomer = item.users.some(u => u.role === 'customer');
                 const hasProvider = item.users.some(u => u.role === 'provider');
-                
+
                 // Account links
                 if (uniqueAccounts > 1) {
                     dynamicScore += uniqueAccounts * 15; // 15 points per linked account
@@ -2754,7 +2970,7 @@ async function getSameIPFraud(req, res) {
                 if ((item.registrations || 0) > 2) {
                     dynamicScore += (item.registrations || 0) * 15;
                 }
-                
+
                 item.maxFraudScore = Math.min(Math.round(dynamicScore), 100);
                 if (item.maxFraudScore >= 75) {
                     item.riskLevel = 'CRITICAL';
@@ -2863,7 +3079,7 @@ async function getDeviceAbuse(req, res) {
                 const uniqueAccounts = item.users.length;
                 const otpSpam = item.otpRequests || 0;
                 const cancellations = item.cancellations || 0;
-                
+
                 // Account links
                 if (uniqueAccounts > 1) {
                     dynamicScore += uniqueAccounts * 20; // 20 points per linked account on same device
@@ -2876,7 +3092,7 @@ async function getDeviceAbuse(req, res) {
                 if (cancellations > 0) {
                     dynamicScore += cancellations * 25;
                 }
-                
+
                 item.maxFraudScore = Math.min(Math.round(dynamicScore), 100);
                 if (item.maxFraudScore >= 75) {
                     item.riskLevel = 'CRITICAL';
@@ -3085,64 +3301,64 @@ async function suspendUserAccount(req, res) {
             data: { userId, isSuspended: suspend, role }
         });
     } catch (err) {
-      console.error('Error suspending user account:', err);
-      res.status(500).json({ success: false, message: 'Server error' });
+        console.error('Error suspending user account:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
     }
-  }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Security Monitoring: Active Sessions & Device Analytics
 // GET /api/admin/security/sessions
 // ─────────────────────────────────────────────────────────────────────────────
 const getActiveSessions = async (req, res) => {
-  try {
-    const { role = 'customer', page = 1, limit = 20 } = req.query;
-    const Model = role === 'provider' ? require('../models/Provider-model') : require('../models/User-model');
-    
-    const users = await Model.find({ 'refreshTokens.isValid': true })
-      .select('name email phone role refreshTokens deviceIds loginHistory lastLoginIp suspiciousScore')
-      .skip((page - 1) * limit)
-      .limit(parseInt(limit))
-      .lean();
+    try {
+        const { role = 'customer', page = 1, limit = 20 } = req.query;
+        const Model = role === 'provider' ? require('../models/Provider-model') : require('../models/User-model');
 
-    const total = await Model.countDocuments({ 'refreshTokens.isValid': true });
+        const users = await Model.find({ 'refreshTokens.isValid': true })
+            .select('name email phone role refreshTokens deviceIds loginHistory lastLoginIp suspiciousScore')
+            .skip((page - 1) * limit)
+            .limit(parseInt(limit))
+            .lean();
 
-    // Format the response for the admin panel
-    const sessions = users.map(user => {
-      const activeTokens = user.refreshTokens?.filter(t => t.isValid && new Date(t.expiresAt) > new Date()) || [];
-      return {
-        userId: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role || role,
-        suspiciousScore: user.suspiciousScore || 0,
-        lastLoginIp: user.lastLoginIp,
-        activeSessions: activeTokens.length,
-        devices: user.deviceIds || [],
-        tokens: activeTokens.map(t => ({
-          deviceId: t.deviceId,
-          ipHash: t.ipHash,
-          userAgent: t.userAgent,
-          createdAt: t.createdAt,
-          expiresAt: t.expiresAt
-        })),
-        recentLogins: (user.loginHistory || []).slice(-5)
-      };
-    }).filter(u => u.activeSessions > 0);
+        const total = await Model.countDocuments({ 'refreshTokens.isValid': true });
 
-    res.status(200).json({
-      success: true,
-      data: sessions,
-      pagination: {
-        total,
-        page: parseInt(page),
-        pages: Math.ceil(total / limit)
-      }
-    });
-  } catch (err) {
-    console.error('Error fetching active sessions:', err);
-    res.status(500).json({ success: false, message: 'Failed to fetch sessions' });
-  }
+        // Format the response for the admin panel
+        const sessions = users.map(user => {
+            const activeTokens = user.refreshTokens?.filter(t => t.isValid && new Date(t.expiresAt) > new Date()) || [];
+            return {
+                userId: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role || role,
+                suspiciousScore: user.suspiciousScore || 0,
+                lastLoginIp: user.lastLoginIp,
+                activeSessions: activeTokens.length,
+                devices: user.deviceIds || [],
+                tokens: activeTokens.map(t => ({
+                    deviceId: t.deviceId,
+                    ipHash: t.ipHash,
+                    userAgent: t.userAgent,
+                    createdAt: t.createdAt,
+                    expiresAt: t.expiresAt
+                })),
+                recentLogins: (user.loginHistory || []).slice(-5)
+            };
+        }).filter(u => u.activeSessions > 0);
+
+        res.status(200).json({
+            success: true,
+            data: sessions,
+            pagination: {
+                total,
+                page: parseInt(page),
+                pages: Math.ceil(total / limit)
+            }
+        });
+    } catch (err) {
+        console.error('Error fetching active sessions:', err);
+        res.status(500).json({ success: false, message: 'Failed to fetch sessions' });
+    }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -3151,37 +3367,37 @@ const getActiveSessions = async (req, res) => {
 // Body: { userId, role, deviceId (optional, if omitted logs out from all) }
 // ─────────────────────────────────────────────────────────────────────────────
 const forceLogoutUser = async (req, res) => {
-  try {
-    const { userId, role, deviceId } = req.body;
-    if (!userId || !role) {
-      return res.status(400).json({ success: false, message: 'User ID and role are required' });
-    }
-
-    const Model = role === 'provider' ? require('../models/Provider-model') : require('../models/User-model');
-    const user = await Model.findById(userId);
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-
-    let revokedCount = 0;
-    if (user.refreshTokens && user.refreshTokens.length > 0) {
-      user.refreshTokens.forEach(t => {
-        if (t.isValid && (!deviceId || t.deviceId === deviceId)) {
-          t.isValid = false;
-          revokedCount++;
+    try {
+        const { userId, role, deviceId } = req.body;
+        if (!userId || !role) {
+            return res.status(400).json({ success: false, message: 'User ID and role are required' });
         }
-      });
-      await user.save();
-    }
 
-    res.status(200).json({
-      success: true,
-      message: `Successfully revoked ${revokedCount} session(s) for user ${user.name}`
-    });
-  } catch (err) {
-    console.error('Error forcing logout:', err);
-    res.status(500).json({ success: false, message: 'Failed to force logout' });
-  }
+        const Model = role === 'provider' ? require('../models/Provider-model') : require('../models/User-model');
+        const user = await Model.findById(userId);
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        let revokedCount = 0;
+        if (user.refreshTokens && user.refreshTokens.length > 0) {
+            user.refreshTokens.forEach(t => {
+                if (t.isValid && (!deviceId || t.deviceId === deviceId)) {
+                    t.isValid = false;
+                    revokedCount++;
+                }
+            });
+            await user.save();
+        }
+
+        res.status(200).json({
+            success: true,
+            message: `Successfully revoked ${revokedCount} session(s) for user ${user.name}`
+        });
+    } catch (err) {
+        console.error('Error forcing logout:', err);
+        res.status(500).json({ success: false, message: 'Failed to force logout' });
+    }
 };
 
 // System Logs API

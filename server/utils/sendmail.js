@@ -125,6 +125,44 @@ const DEFAULT_EMAIL_TEMPLATES = {
 </div>`,
     isActive: true,
     allowedVariables: ["name", "bookingId", "status", "remark"]
+  },
+  adminBookingCancelledCustomer: {
+    subject: "Booking Cancelled By Support Team",
+    body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+    <h2 style="color: #c0392b; text-align: center;">Booking Cancelled By Support Team</h2>
+    <p>Hello {{name}},</p>
+    <p>We would like to inform you that your booking has been cancelled by our support team.</p>
+    <div style="background-color: #f9fafb; padding: 15px; border-radius: 6px; margin: 20px 0; border: 1px solid #f3f4f6;">
+      <p style="margin: 4px 0;"><strong>Booking ID:</strong> {{bookingId}}</p>
+      <p style="margin: 4px 0;"><strong>Service Name:</strong> {{serviceName}}</p>
+      <p style="margin: 4px 0;"><strong>Cancellation Reason:</strong> {{cancellationReason}}</p>
+      <p style="margin: 4px 0;"><strong>Complaint ID:</strong> {{complaintId}}</p>
+      <p style="margin: 4px 0;"><strong>Refund Amount:</strong> ₹{{refundAmount}}</p>
+      <p style="margin: 4px 0;"><strong>Platform Fee Retained:</strong> ₹{{platformFeeRetained}}</p>
+      <p style="margin: 4px 0;"><strong>Refund Destination:</strong> {{refundDestination}}</p>
+    </div>
+    <p style="color: #555;"><strong>Timeline note:</strong> If refunded to original payment method, the amount may take 2–10 business days to reflect depending on your bank or payment provider. If refunded to Customer Wallet, the credit is instant.</p>
+    <p>Regards,<br/><strong>Support Team</strong></p>
+</div>`,
+    isActive: true,
+    allowedVariables: ["name", "bookingId", "serviceName", "cancellationReason", "complaintId", "refundAmount", "platformFeeRetained", "refundDestination", "expectedRefundTimeline"]
+  },
+  adminBookingCancelledProvider: {
+    subject: "Assigned Booking Cancelled",
+    body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+    <h2 style="color: #c0392b; text-align: center;">Assigned Booking Cancelled</h2>
+    <p>Hello {{name}},</p>
+    <p>Please note that the booking assigned to you has been cancelled by the support team/admin.</p>
+    <div style="background-color: #f9fafb; padding: 15px; border-radius: 6px; margin: 20px 0; border: 1px solid #f3f4f6;">
+      <p style="margin: 4px 0;"><strong>Booking ID:</strong> {{bookingId}}</p>
+      <p style="margin: 4px 0;"><strong>Customer Name:</strong> {{customerName}}</p>
+      <p style="margin: 4px 0;"><strong>Cancellation Reason:</strong> {{cancellationReason}}</p>
+      <p style="margin: 4px 0;"><strong>Complaint ID:</strong> {{complaintId}}</p>
+    </div>
+    <p style="color: #e74c3c;">The slot is now available. Provider earnings split and recalculations have been applied where applicable.</p>
+</div>`,
+    isActive: true,
+    allowedVariables: ["name", "bookingId", "customerName", "cancellationReason", "complaintId"]
   }
 };
 

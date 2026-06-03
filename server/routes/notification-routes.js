@@ -40,11 +40,7 @@ router.get('/', flexAuth, notificationController.getNotifications);
 // GET /api/notifications/unread-count
 router.get('/unread-count', flexAuth, notificationController.getUnreadCount);
 
-// GET /api/notifications/preferences
-router.get('/preferences', flexAuth, notificationController.getPreferences);
 
-// PATCH /api/notifications/preferences
-router.patch('/preferences', flexAuth, notificationController.updatePreferences);
 
 // PATCH /api/notifications/read-all — mark all as read
 router.patch('/read-all', flexAuth, notificationController.markAllRead);

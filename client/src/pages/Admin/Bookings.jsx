@@ -128,7 +128,7 @@ const getStatusIcon = (status) => {
 
 
 // Memoized Booking Row to prevent unnecessary re-renders
-const BookingRow = React.memo(({ booking, onDetails, onReschedule, onAssign, onDelete }) => (
+const BookingRow = React.memo(({ booking, onDetails, onReschedule, onAssign, onDelete, onCancel }) => (
     <tr className="hover:bg-gray-50">
         <td className="px-4 py-4 whitespace-nowrap">
             <div className="text-sm font-medium text-secondary">
@@ -230,6 +230,16 @@ const BookingRow = React.memo(({ booking, onDetails, onReschedule, onAssign, onD
                         title="Assign Provider"
                     >
                         <UserCheck className="w-4 h-4" />
+                    </button>
+                )}
+
+                {['pending', 'accepted', 'assigned', 'confirmed'].includes(booking.status) && (
+                    <button
+                        onClick={() => onCancel(booking)}
+                        className="p-1 text-red-500 hover:text-red-700"
+                        title="Cancel Booking"
+                    >
+                        <XCircle className="w-4 h-4" />
                     </button>
                 )}
 
@@ -415,6 +425,117 @@ const getCompletionPin = (b) => {
     return b.completionPin || b.completionOtp || (b.statusHistory && b.statusHistory.find(h => h.note?.includes('COMPLETION_PIN'))?.note.match(/COMPLETION_PIN:(\d+)/)?.[1]) || 'N/A';
 };
 
+const CancelBookingModal = ({ isOpen, onClose, booking, complaints, onConfirm, actionLoading }) => {
+    const [reasonType, setReasonType] = useState('Customer Requested');
+    const [reasonText, setReasonText] = useState('');
+    const [complaintId, setComplaintId] = useState('');
+    const [adminNotes, setAdminNotes] = useState('');
+
+    if (!isOpen || !booking) return null;
+
+    const totalPaid = booking.totalAmount || 0;
+    const platformFee = booking.platformFee || 0;
+    const refundableAmount = ['cash'].includes(booking.paymentMethod) ? 0 : Math.max(0, totalPaid - platformFee);
+
+    const handleConfirm = () => {
+        onConfirm({
+            reasonType,
+            reasonText,
+            complaintId,
+            adminNotes
+        });
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-150">
+                <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                    <h3 className="text-base font-bold text-secondary">Cancel Booking</h3>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+                <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cancellation Reason Type</label>
+                        <select
+                            value={reasonType}
+                            onChange={(e) => setReasonType(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent"
+                        >
+                            <option value="Customer Requested">Customer Requested</option>
+                            <option value="Complaint Resolution">Complaint Resolution</option>
+                            <option value="Provider Unavailable">Provider Unavailable</option>
+                            <option value="Duplicate Booking">Duplicate Booking</option>
+                            <option value="Fraud Prevention">Fraud Prevention</option>
+                            <option value="Admin Decision">Admin Decision</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Reason Details (Mandatory)</label>
+                        <textarea
+                            value={reasonText}
+                            onChange={(e) => setReasonText(e.target.value)}
+                            placeholder="Provide a detailed reason..."
+                            rows="3"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Link Complaint (Optional)</label>
+                        <select
+                            value={complaintId}
+                            onChange={(e) => setComplaintId(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent"
+                        >
+                            <option value="">Select Complaint</option>
+                            {complaints.map(c => (
+                                <option key={c._id} value={c._id}>
+                                    {c.complaintId || c._id.slice(-8)} - {c.title}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Admin Resolution Notes (Optional)</label>
+                        <textarea
+                            value={adminNotes}
+                            onChange={(e) => setAdminNotes(e.target.value)}
+                            placeholder="Resolution notes for the complaint..."
+                            rows="2"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
+                        />
+                    </div>
+                    <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 text-xs space-y-1">
+                        <p className="font-bold text-gray-700 mb-1.5 uppercase tracking-wider text-[10px]">Refund Summary</p>
+                        <div className="flex justify-between"><span>Total Paid:</span><span className="font-semibold text-secondary">{formatCurrency(totalPaid)}</span></div>
+                        <div className="flex justify-between"><span>Platform Fee Retained:</span><span className="font-semibold text-red-600">{formatCurrency(platformFee)}</span></div>
+                        <div className="flex justify-between border-t border-gray-200 pt-1 font-bold"><span>Refundable Amount:</span><span className="text-teal-700">{formatCurrency(refundableAmount)}</span></div>
+                        <div className="flex justify-between pt-1"><span>Refund Destination:</span><span className="font-bold text-teal-700">Customer Wallet</span></div>
+                        <div className="flex justify-between"><span>Expected Refund Method:</span><span className="font-semibold text-teal-700">Wallet Transfer</span></div>
+                    </div>
+                </div>
+                <div className="px-5 py-3 border-t border-gray-100 flex justify-end space-x-3 bg-gray-50">
+                    <button
+                        onClick={onClose}
+                        className="px-4 py-2 border border-gray-300 text-sm font-semibold rounded-lg hover:bg-gray-100 text-secondary transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        onClick={handleConfirm}
+                        disabled={actionLoading || !reasonText.trim()}
+                        className="px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                    >
+                        {actionLoading ? 'Cancelling...' : 'Confirm Cancellation'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const AdminBookingsView = () => {
     const { token, API, showToast } = useAuth();
     const navigate = useNavigate();
@@ -438,6 +559,39 @@ const AdminBookingsView = () => {
     const [actionLoading, setActionLoading] = useState(false);
     const [showRescheduleModal, setShowRescheduleModal] = useState(false);
     const [showAssignProviderModal, setShowAssignProviderModal] = useState(false);
+
+    // Cancellation enhancements states
+    const [showCancelModal, setShowCancelModal] = useState(false);
+    const [bookingComplaints, setBookingComplaints] = useState([]);
+
+    const fetchBookingComplaints = async (bookingId) => {
+        try {
+            const response = await API.get(`/api/complaint?booking=${bookingId}`);
+            if (response.data.success) {
+                setBookingComplaints(response.data.data || []);
+            }
+        } catch (err) {
+            console.error('Error fetching complaints for booking:', err);
+        }
+    };
+
+    const handleCancelBookingByAdmin = async (payload) => {
+        setActionLoading(true);
+        try {
+            const bookingId = selectedBooking.booking._id;
+            const res = await API.patch(`/api/admin/bookings/${bookingId}/cancel`, payload);
+            if (res.data.success) {
+                showToast('Booking cancelled successfully and refund processed to wallet.', 'success');
+                setShowCancelModal(false);
+                setShowModal(false);
+                fetchBookings();
+            }
+        } catch (err) {
+            showToast(err.response?.data?.message || 'Failed to cancel booking', 'error');
+        } finally {
+            setActionLoading(false);
+        }
+    };
 
     const {
         filterType,
@@ -549,6 +703,23 @@ const AdminBookingsView = () => {
             setActionLoading(false);
         }
     }, [showToast]);
+
+    // Initiate cancellation from table row
+    const handleInitiateCancel = useCallback(async (booking) => {
+        try {
+            setActionLoading(true);
+            const response = await BookingService.getBookingDetails(booking._id);
+            const data = response.data;
+            setSelectedBooking(data.data);
+            await fetchBookingComplaints(booking._id);
+            setShowCancelModal(true);
+        } catch (error) {
+            console.error('Error initiating cancellation:', error);
+            showToast(error.message || 'Failed to load booking details for cancellation', 'error');
+        } finally {
+            setActionLoading(false);
+        }
+    }, [showToast, fetchBookingComplaints]);
 
     useEffect(() => {
         if (entityId) {
@@ -674,7 +845,6 @@ const AdminBookingsView = () => {
         );
     }, []);
 
-
     // Filter providers by service location match
     const getFilteredProviders = (booking) => {
         if (!booking || !booking.address) return providers;
@@ -724,6 +894,7 @@ const AdminBookingsView = () => {
                 onDetails={fetchBookingDetails}
                 onReschedule={(b) => { setSelectedBooking(b); setShowRescheduleModal(true); }}
                 onAssign={(b) => { setSelectedBooking(b); setShowAssignProviderModal(true); }}
+                onCancel={handleInitiateCancel}
                 onDelete={(b) => setDeleteConfirm({
                     id: b._id,
                     userId: b.customer?._id,
@@ -769,7 +940,7 @@ const AdminBookingsView = () => {
     };
 
     return (
-        <div className="min-h-screen  p-4 md:p-6">
+        <div className="min-h-screen p-4 md:p-6">
             {/* Header Section */}
             <div className="mb-6">
                 <h1 className="text-3xl font-bold text-secondary mb-2">Bookings Management</h1>
@@ -1296,302 +1467,349 @@ const AdminBookingsView = () => {
 
                                         {/* Payment & Financial */}
                                         <Card title="Payment & Financials Summary" icon={<CreditCard className="w-3 h-3 text-primary" />}>
-                                                        <div className="space-y-3">
-                                                            {/* Customer Invoice Summary */}
-                                                            <div className="bg-gray-50/50 p-3 rounded-xl border border-gray-100">
-                                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Customer Invoice</p>
-                                                                <div className="space-y-1 text-xs">
+                                            <>
+                                                <div className="space-y-3">
+                                                    {/* Customer Invoice Summary */}
+                                                    <div className="bg-gray-50/50 p-3 rounded-xl border border-gray-100">
+                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Customer Invoice</p>
+                                                        <div className="space-y-1 text-xs">
+                                                            <div className="flex justify-between">
+                                                                <span className="text-gray-500">Service Price (Gross)</span>
+                                                                <span className="font-semibold text-secondary">{formatCurrency(pay.subtotal)}</span>
+                                                            </div>
+                                                            {pay.totalDiscount > 0 && (
+                                                                <div className="flex justify-between">
+                                                                    <span className="text-gray-500">Coupon Discount</span>
+                                                                    <span className="font-bold text-red-500">-{formatCurrency(pay.totalDiscount)}</span>
+                                                                </div>
+                                                            )}
+                                                            {(() => {
+                                                                const visiting = bk.visitingCharge || 0;
+                                                                const rain = bk.rainCharge || 0;
+                                                                const traffic = bk.trafficCharge || 0;
+                                                                const night = bk.nightCharge || 0;
+                                                                const demand = bk.demandSurge || 0;
+                                                                const platform = bk.platformFee || 0;
+                                                                const custom = bk.customCharges || 0;
+                                                                const totalSur = visiting + rain + traffic + night + demand + platform + custom;
+                                                                return totalSur > 0 ? (
                                                                     <div className="flex justify-between">
-                                                                        <span className="text-gray-500">Service Price (Gross)</span>
-                                                                        <span className="font-semibold text-secondary">{formatCurrency(pay.subtotal)}</span>
+                                                                        <span className="text-gray-500" title="Visiting, Rain, Traffic, Night, Demand, Custom, Platform fees">Total Surcharges & Fees</span>
+                                                                        <span className="font-semibold text-secondary">+{formatCurrency(totalSur)}</span>
                                                                     </div>
-                                                                    {pay.totalDiscount > 0 && (
-                                                                        <div className="flex justify-between">
-                                                                            <span className="text-gray-500">Coupon Discount</span>
-                                                                            <span className="font-bold text-red-500">-{formatCurrency(pay.totalDiscount)}</span>
-                                                                        </div>
-                                                                    )}
-                                                                    {(() => {
-                                                                        const visiting = bk.visitingCharge || 0;
-                                                                        const rain = bk.rainCharge || 0;
-                                                                        const traffic = bk.trafficCharge || 0;
-                                                                        const night = bk.nightCharge || 0;
-                                                                        const demand = bk.demandSurge || 0;
-                                                                        const platform = bk.platformFee || 0;
-                                                                        const custom = bk.customCharges || 0;
-                                                                        const totalSur = visiting + rain + traffic + night + demand + platform + custom;
-                                                                        return totalSur > 0 ? (
-                                                                            <div className="flex justify-between">
-                                                                                <span className="text-gray-500" title="Visiting, Rain, Traffic, Night, Demand, Custom, Platform fees">Total Surcharges & Fees</span>
-                                                                                <span className="font-semibold text-secondary">+{formatCurrency(totalSur)}</span>
-                                                                            </div>
-                                                                        ) : null;
-                                                                    })()}
-                                                                    <div className="flex justify-between border-t border-gray-100 mt-2 pt-2 text-sm font-bold">
-                                                                        <span className="text-secondary">Total Billed to Customer</span>
-                                                                        <span className="text-primary">{formatCurrency(pay.totalAmount)}</span>
-                                                                    </div>
-                                                                </div>
+                                                                ) : null;
+                                                            })()}
+                                                            <div className="flex justify-between border-t border-gray-100 mt-2 pt-2 text-sm font-bold">
+                                                                <span className="text-secondary">Total Billed to Customer</span>
+                                                                <span className="text-primary">{formatCurrency(pay.totalAmount)}</span>
                                                             </div>
-
-                                                            {/* Settlement Splits (Where the money goes) */}
-                                                            <div className="bg-teal-50/10 p-3 rounded-xl border border-teal-100/60">
-                                                                <p className="text-[10px] font-bold text-teal-600 uppercase tracking-wider mb-2">Settlement Splits</p>
-                                                                <div className="space-y-2 text-xs">
-                                                                    <div className="flex justify-between items-start">
-                                                                        <div>
-                                                                            <p className="font-semibold text-gray-700">Provider Payout</p>
-                                                                            <p className="text-[9px] text-gray-400">₹{(bk.providerEarnings || 0) - (bk.providerSurgeShare || 0)} Service + ₹{bk.providerSurgeShare || 0} Surcharges</p>
-                                                                        </div>
-                                                                        <span className="font-bold text-green-600 text-sm">{formatCurrency(bk.providerEarnings)}</span>
-                                                                    </div>
-                                                                    <div className="flex justify-between items-start border-t border-gray-100/50 pt-2">
-                                                                        <div>
-                                                                            <p className="font-semibold text-gray-700">Platform Earning</p>
-                                                                            <p className="text-[9px] text-gray-400">₹{selectedBooking.commission?.amount || bk.commissionAmount || 0} Comm + ₹{bk.companySurgeShare || 0} Surcharges</p>
-                                                                        </div>
-                                                                        <span className="font-bold text-primary text-sm">{formatCurrency(bk.adminEarning)}</span>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-
-                                                            {/* Payment Source Splits */}
-                                                            {(pay.walletAmountUsed > 0 || pay.onlineAmountPaid > 0) && (
-                                                                <div className="bg-gray-50/50 p-2.5 rounded-xl border border-gray-100 text-[10px]">
-                                                                    <p className="font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Payment Sources</p>
-                                                                    <div className="flex flex-wrap gap-x-4 gap-y-1">
-                                                                        {pay.walletAmountUsed > 0 && <span className="text-gray-500">Wallet: <strong className="text-secondary">{formatCurrency(pay.walletAmountUsed)}</strong></span>}
-                                                                        {pay.onlineAmountPaid > 0 && <span className="text-gray-500">Online: <strong className="text-secondary">{formatCurrency(pay.onlineAmountPaid)}</strong></span>}
-                                                                    </div>
-                                                                </div>
-                                                            )}
                                                         </div>
-                                                        <div className="border-t border-gray-100 mt-2 pt-2 space-y-1">
-                                                            <div className="flex justify-between items-center">
-                                                                <span className="text-[10px] text-gray-500">Payment Status</span>
-                                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${['paid', 'escrow_hold'].includes(pay.status) ? 'bg-green-100 text-green-700' : pay.status === 'refunded' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
-                                                                    {pay.status === 'escrow_hold' ? 'Escrow Hold' : (pay.status || '—')}
-                                                                </span>
+                                                    </div>
+
+                                                    {/* Settlement Splits (Where the money goes) */}
+                                                    <div className="bg-teal-50/10 p-3 rounded-xl border border-teal-100/60">
+                                                        <p className="text-[10px] font-bold text-teal-600 uppercase tracking-wider mb-2">Settlement Splits</p>
+                                                        <div className="space-y-2 text-xs">
+                                                            <div className="flex justify-between items-start">
+                                                                <div>
+                                                                    <p className="font-semibold text-secondary">Provider Settlement</p>
+                                                                    <p className="text-[9px] text-gray-400">₹{(bk.providerEarnings || 0) - (bk.providerSurgeShare || 0)} Service + ₹{bk.providerSurgeShare || 0} Surcharges</p>
+                                                                </div>
+                                                                <span className="font-bold text-green-600 text-sm">{formatCurrency(bk.providerEarnings)}</span>
                                                             </div>
-                                                            {selectedBooking.refundData?.decision && (
-                                                                <div className="flex justify-between items-center">
-                                                                    <span className="text-[10px] text-gray-500">Admin Refund</span>
-                                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${selectedBooking.refundData.decision === 'approved' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                                                        {selectedBooking.refundData.decision}
-                                                                    </span>
+                                                            <div className="flex justify-between border-t border-teal-150 mt-1 pt-1 font-bold text-teal-700">
+                                                                <div>
+                                                                    <p className="font-semibold text-gray-700">Platform Earning</p>
+                                                                    <p className="text-[9px] text-gray-400">₹{(bk.commissionAmount || 0)} Commission + ₹{bk.companySurgeShare || 0} Surge + ₹{bk.platformFee || 0} Fee</p>
                                                                 </div>
-                                                            )}
-                                                            <div className="flex justify-between items-center">
-                                                                <span className="text-[10px] text-gray-500">Payout Status</span>
-                                                                <PayoutStatusBadge status={selectedBooking.payoutStatus} />
+                                                                <span className="text-sm">{formatCurrency((bk.commissionAmount || 0) + (bk.companySurgeShare || 0) + (bk.platformFee || 0))}</span>
                                                             </div>
-                                                            {selectedBooking.earningHoldStatus === 'held' && selectedBooking.payoutHoldUntil && (
-                                                                <p className="text-[9px] text-red-400 text-right italic">Hold until {new Date(selectedBooking.payoutHoldUntil).toLocaleDateString()}</p>
-                                                            )}
-                                                            {pay.details?.transactionId ? (
-                                                                <div className="flex justify-between items-center pt-0.5">
-                                                                    <span className="text-[10px] text-gray-500">Transaction</span>
-                                                                    <button onClick={() => navigateToTransaction(bk.bookingId || bk._id)} className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5">
-                                                                        {pay.details.transactionId} <ExternalLink className="w-2.5 h-2.5" />
-                                                                    </button>
-                                                                </div>
-                                                            ) : ['paid', 'escrow_hold'].includes(bk.paymentStatus) && (
-                                                                <div className="flex justify-end pt-0.5">
-                                                                    <button onClick={() => navigateToTransaction(bk.bookingId || bk._id)} className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5">
-                                                                        View Transaction <ExternalLink className="w-2.5 h-2.5" />
-                                                                    </button>
-                                                                </div>
-                                                            )}
                                                         </div>
-                                                    </Card>
+                                                    </div>
+
+                                                    {/* Payment Sources Info */}
+                                                    {(pay.walletAmountUsed > 0 || pay.onlineAmountPaid > 0) && (
+                                                        <div className="bg-gray-50/50 p-2.5 rounded-xl border border-gray-100 text-[10px]">
+                                                            <p className="font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Payment Sources</p>
+                                                            <div className="flex flex-wrap gap-x-4 gap-y-1">
+                                                                {pay.walletAmountUsed > 0 && <span className="text-gray-500">Wallet: <strong className="text-secondary">{formatCurrency(pay.walletAmountUsed)}</strong></span>}
+                                                                {pay.onlineAmountPaid > 0 && <span className="text-gray-500">Online: <strong className="text-secondary">{formatCurrency(pay.onlineAmountPaid)}</strong></span>}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Cancellation Info */}
+                                                    {bk.status === 'cancelled' && (
+                                                        <div className="bg-red-50 p-2.5 rounded-xl border border-red-100 space-y-1 text-xs text-secondary mt-2">
+                                                            <p className="text-[10px] font-bold text-red-800 uppercase tracking-wider mb-1">Cancellation Info</p>
+                                                            <div className="flex justify-between"><span className="text-gray-400">Cancelled By:</span><span className="font-semibold capitalize">{bk.cancelledBy || 'Admin'}</span></div>
+                                                            <div className="flex justify-between"><span className="text-gray-400">Reason:</span><span className="font-semibold text-right max-w-[65%] truncate" title={bk.cancellationReason}>{bk.cancellationReason || '—'}</span></div>
+                                                            {bk.complaintId && <div className="flex justify-between"><span className="text-gray-400">Complaint:</span><span className="font-semibold">{bk.complaintId.complaintId || bk.complaintId}</span></div>}
+                                                            {bk.refundAmount > 0 && (
+                                                                <>
+                                                                    <div className="flex justify-between"><span className="text-gray-400">Refund:</span><span className="font-bold text-teal-700">{formatCurrency(bk.refundAmount)}</span></div>
+                                                                    <div className="flex justify-between"><span className="text-gray-400">Refund Destination:</span><span className="font-bold text-teal-755 uppercase">Wallet</span></div>
+                                                                    <div className="flex justify-between"><span className="text-gray-400">Refund Status:</span><span className="px-1.5 py-0.5 rounded text-[10px] bg-teal-100 text-teal-800 font-bold uppercase">{bk.refundStatus || 'Completed'}</span></div>
+                                                                    <div className="flex justify-between"><span className="text-gray-400">Refund Reference:</span><span className="font-mono text-[10px]">{bk.refundReference || '—'}</span></div>
+                                                                    {bk.refundProcessedAt && <div className="flex justify-between"><span className="text-gray-400">Refund Date:</span><span>{new Date(bk.refundProcessedAt).toLocaleDateString()}</span></div>}
+                                                                </>
+                                                            )}
+                                                            {bk.platformFeeRetained > 0 && <div className="flex justify-between"><span className="text-gray-400">Platform Fee Retained:</span><span className="font-bold text-red-600">{formatCurrency(bk.platformFeeRetained)}</span></div>}
+                                                        </div>
+                                                    )}
                                                 </div>
+
+                                                <div className="border-t border-gray-100 mt-2 pt-2 space-y-1">
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-[10px] text-gray-500">Payment Status</span>
+                                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${['paid', 'escrow_hold'].includes(pay.status) ? 'bg-green-100 text-green-700' : pay.status === 'refunded' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                            {pay.status === 'escrow_hold' ? 'Escrow Hold' : (pay.status || '—')}
+                                                        </span>
+                                                    </div>
+                                                    {selectedBooking.refundData?.decision && (
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-[10px] text-gray-500">Admin Refund</span>
+                                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${selectedBooking.refundData.decision === 'approved' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                                {selectedBooking.refundData.decision}
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-[10px] text-gray-500">Payout Status</span>
+                                                        <PayoutStatusBadge status={selectedBooking.payoutStatus} />
+                                                    </div>
+                                                    {selectedBooking.earningHoldStatus === 'held' && selectedBooking.payoutHoldUntil && (
+                                                        <p className="text-[9px] text-red-400 text-right italic">Hold until {new Date(selectedBooking.payoutHoldUntil).toLocaleDateString()}</p>
+                                                    )}
+                                                    {pay.details?.transactionId ? (
+                                                        <div className="flex justify-between items-center pt-0.5">
+                                                            <span className="text-[10px] text-gray-500">Transaction</span>
+                                                            <button onClick={() => navigateToTransaction(bk.bookingId || bk._id)} className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5">
+                                                                {pay.details.transactionId} <ExternalLink className="w-2.5 h-2.5" />
+                                                            </button>
+                                                        </div>
+                                                    ) : null}
+                                                    {!pay.details?.transactionId && ['paid', 'escrow_hold'].includes(bk.paymentStatus) && (
+                                                        <div className="flex justify-end pt-0.5">
+                                                            <button onClick={() => navigateToTransaction(bk.bookingId || bk._id)} className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5">
+                                                                View Transaction <ExternalLink className="w-2.5 h-2.5" />
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </>
+                                        </Card>
+                                    </div>
                                 </div>
+                            </div>
+
+                            {/* Modal Footer */}
+                            <div className="px-5 py-3 border-t border-gray-100 shrink-0 flex justify-between items-center">
+                                <button
+                                    onClick={() => setShowModal(false)}
+                                    className="px-5 py-1.5 bg-gray-100 text-secondary text-sm font-semibold rounded-lg hover:bg-gray-200 transition-colors"
+                                >
+                                    Close
+                                </button>
+                                {['pending', 'accepted', 'assigned', 'confirmed'].includes(bk.status) && (
+                                    <button
+                                        onClick={() => {
+                                            fetchBookingComplaints(bk._id);
+                                            setShowCancelModal(true);
+                                        }}
+                                        className="px-5 py-1.5 bg-red-650 text-white text-sm font-semibold rounded-lg hover:bg-red-750 transition-colors"
+                                    >
+                                        Cancel Booking
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
+
+
+            {showCancelModal && selectedBooking && (
+                <CancelBookingModal
+                    isOpen={showCancelModal}
+                    onClose={() => setShowCancelModal(false)}
+                    booking={selectedBooking.booking}
+                    complaints={bookingComplaints}
+                    onConfirm={handleCancelBookingByAdmin}
+                    actionLoading={actionLoading}
+                />
+            )}
+
+            {/* Reschedule Booking Modal */}
+            {showRescheduleModal && selectedBooking && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg max-w-md w-full">
+                        <div className="p-6">
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-lg font-semibold text-secondary">Reschedule Booking</h3>
+                                <button
+                                    onClick={() => setShowRescheduleModal(false)}
+                                    className="text-gray-400 hover:text-gray-600"
+                                >
+                                    <X className="w-6 h-6" />
+                                </button>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        New Date
+                                    </label>
+                                    <input
+                                        type="date"
+                                        id="rescheduleDate"
+                                        min={new Date().toISOString().split('T')[0]}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        New Time
+                                    </label>
+                                    <input
+                                        type="time"
+                                        id="rescheduleTime"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                                    />
                                 </div>
 
-                                {/* Modal Footer */}
-                                <div className="px-5 py-3 border-t border-gray-100 shrink-0">
+                                <div className="flex space-x-3 pt-4">
                                     <button
-                                        onClick={() => setShowModal(false)}
-                                        className="px-5 py-1.5 bg-gray-100 text-secondary text-sm font-semibold rounded-lg hover:bg-gray-200 transition-colors"
+                                        onClick={() => setShowRescheduleModal(false)}
+                                        className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
                                     >
-                                        Close
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            const date = document.getElementById('rescheduleDate').value;
+                                            const time = document.getElementById('rescheduleTime').value;
+                                            if (date || time) {
+                                                handleRescheduleBooking(selectedBooking._id, date, time);
+                                            } else {
+                                                showToast('Please provide either date or time', 'error');
+                                            }
+                                        }}
+                                        disabled={actionLoading}
+                                        className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-700 disabled:opacity-50"
+                                    >
+                                        {actionLoading ? 'Updating...' : 'Update Schedule'}
                                     </button>
                                 </div>
                             </div>
                         </div>
-                        );
-                    })()}
-
-                        {/* Reschedule Booking Modal */}
-                        {showRescheduleModal && selectedBooking && (
-                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                                <div className="bg-white rounded-lg max-w-md w-full">
-                                    <div className="p-6">
-                                        <div className="flex justify-between items-center mb-4">
-                                            <h3 className="text-lg font-semibold text-secondary">Reschedule Booking</h3>
-                                            <button
-                                                onClick={() => setShowRescheduleModal(false)}
-                                                className="text-gray-400 hover:text-gray-600"
-                                            >
-                                                <X className="w-6 h-6" />
-                                            </button>
-                                        </div>
-
-                                        <div className="space-y-4">
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                    New Date
-                                                </label>
-                                                <input
-                                                    type="date"
-                                                    id="rescheduleDate"
-                                                    min={new Date().toISOString().split('T')[0]}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                    New Time
-                                                </label>
-                                                <input
-                                                    type="time"
-                                                    id="rescheduleTime"
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                                                />
-                                            </div>
-
-                                            <div className="flex space-x-3 pt-4">
-                                                <button
-                                                    onClick={() => setShowRescheduleModal(false)}
-                                                    className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-                                                >
-                                                    Cancel
-                                                </button>
-                                                <button
-                                                    onClick={() => {
-                                                        const date = document.getElementById('rescheduleDate').value;
-                                                        const time = document.getElementById('rescheduleTime').value;
-                                                        if (date || time) {
-                                                            handleRescheduleBooking(selectedBooking._id, date, time);
-                                                        } else {
-                                                            showToast('Please provide either date or time', 'error');
-                                                        }
-                                                    }}
-                                                    disabled={actionLoading}
-                                                    className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-700 disabled:opacity-50"
-                                                >
-                                                    {actionLoading ? 'Updating...' : 'Update Schedule'}
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Assign Provider Modal */}
-                        {showAssignProviderModal && selectedBooking && (
-                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                                <div className="bg-white rounded-lg max-w-md w-full">
-                                    <div className="p-6">
-                                        <div className="flex justify-between items-center mb-4">
-                                            <h3 className="text-lg font-semibold text-secondary">Assign Provider</h3>
-                                            <button
-                                                onClick={() => setShowAssignProviderModal(false)}
-                                                className="text-gray-400 hover:text-gray-600"
-                                            >
-                                                <X className="w-6 h-6" />
-                                            </button>
-                                        </div>
-
-                                        <div className="space-y-4">
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                    Select Provider
-                                                </label>
-                                                <select
-                                                    id="providerSelect"
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                                                >
-                                                    <option value="">Select a provider</option>
-                                                    {getFilteredProviders(selectedBooking).map(provider => (
-                                                        <option key={provider._id} value={provider._id}>
-                                                            {provider.providerId ? `[${provider.providerId}] ` : ''} {provider.businessName || provider.name} - {provider.serviceLocation?.city || provider.city || 'N/A'}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                                <p className="text-xs text-gray-500 mt-1">
-                                                    Showing providers matching the service location
-                                                </p>
-                                            </div>
-
-                                            <div className="flex space-x-3 pt-4">
-                                                <button
-                                                    onClick={() => setShowAssignProviderModal(false)}
-                                                    className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-                                                >
-                                                    Cancel
-                                                </button>
-                                                <button
-                                                    onClick={() => {
-                                                        const providerId = document.getElementById('providerSelect').value;
-                                                        if (providerId) {
-                                                            handleAssignProvider(selectedBooking._id, providerId);
-                                                        } else {
-                                                            showToast('Please select a provider', 'error');
-                                                        }
-                                                    }}
-                                                    disabled={actionLoading}
-                                                    className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-700 disabled:opacity-50"
-                                                >
-                                                    {actionLoading ? 'Assigning...' : 'Assign Provider'}
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Delete Confirmation Modal */}
-                        {deleteConfirm && (
-                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                                <div className="bg-white rounded-lg p-6 max-w-md w-full">
-                                    <div className="flex items-center mb-4">
-                                        <AlertCircle className="w-6 h-6 text-red-600 mr-3" />
-                                        <h3 className="text-lg font-semibold text-secondary">
-                                            {deleteConfirm.type === 'user' ? 'Delete User Booking' : 'Delete Booking'}
-                                        </h3>
-                                    </div>
-                                    <p className="text-gray-700 mb-6">
-                                        Are you sure you want to delete this booking? This action cannot be undone.
-                                    </p>
-                                    <div className="flex justify-end space-x-3">
-                                        <button
-                                            onClick={() => setDeleteConfirm(null)}
-                                            className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
-                                        >
-                                            Cancel
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                if (deleteConfirm.type === 'user') {
-                                                    handleDeleteUserBooking(deleteConfirm.userId, deleteConfirm.id);
-                                                } else {
-                                                    handleDeleteBooking(deleteConfirm.id);
-                                                }
-                                            }}
-                                            disabled={actionLoading}
-                                            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
-                                        >
-                                            {actionLoading ? 'Deleting...' : 'Delete'}
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
                     </div>
-                );
-            };
+                </div>
+            )}
 
-            export default AdminBookingsView;
+            {/* Assign Provider Modal */}
+            {showAssignProviderModal && selectedBooking && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg max-w-md w-full">
+                        <div className="p-6">
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-lg font-semibold text-secondary">Assign Provider</h3>
+                                <button
+                                    onClick={() => setShowAssignProviderModal(false)}
+                                    className="text-gray-400 hover:text-gray-600"
+                                >
+                                    <X className="w-6 h-6" />
+                                </button>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Select Provider
+                                    </label>
+                                    <select
+                                        id="providerSelect"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                                    >
+                                        <option value="">Select a provider</option>
+                                        {getFilteredProviders(selectedBooking).map(provider => (
+                                            <option key={provider._id} value={provider._id}>
+                                                {provider.providerId ? `[${provider.providerId}] ` : ''} {provider.businessName || provider.name} - {provider.serviceLocation?.city || provider.city || 'N/A'}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        Showing providers matching the service location
+                                    </p>
+                                </div>
+
+                                <div className="flex space-x-3 pt-4">
+                                    <button
+                                        onClick={() => setShowAssignProviderModal(false)}
+                                        className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            const providerId = document.getElementById('providerSelect').value;
+                                            if (providerId) {
+                                                handleAssignProvider(selectedBooking._id, providerId);
+                                            } else {
+                                                showToast('Please select a provider', 'error');
+                                            }
+                                        }}
+                                        disabled={actionLoading}
+                                        className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-700 disabled:opacity-50"
+                                    >
+                                        {actionLoading ? 'Assigning...' : 'Assign Provider'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {deleteConfirm && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg p-6 max-w-md w-full">
+                        <div className="flex items-center mb-4">
+                            <AlertCircle className="w-6 h-6 text-red-600 mr-3" />
+                            <h3 className="text-lg font-semibold text-secondary">
+                                {deleteConfirm.type === 'user' ? 'Delete User Booking' : 'Delete Booking'}
+                            </h3>
+                        </div>
+                        <p className="text-gray-700 mb-6">
+                            Are you sure you want to delete this booking? This action cannot be undone.
+                        </p>
+                        <div className="flex justify-end space-x-3">
+                            <button
+                                onClick={() => setDeleteConfirm(null)}
+                                className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => {
+                                    if (deleteConfirm.type === 'user') {
+                                        handleDeleteUserBooking(deleteConfirm.userId, deleteConfirm.id);
+                                    } else {
+                                        handleDeleteBooking(deleteConfirm.id);
+                                    }
+                                }}
+                                disabled={actionLoading}
+                                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+                            >
+                                {actionLoading ? 'Deleting...' : 'Delete'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default AdminBookingsView;

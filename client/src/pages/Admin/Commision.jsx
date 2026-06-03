@@ -599,21 +599,7 @@ const AdminCommissionPage = () => {
     // 3. Filter by Performance Score
     if (rule.applyTo === 'performanceScore') {
       list = list.filter(p => {
-        let badge = p.performanceBadge;
-        if (!badge) {
-          const rating = p.averageRating || p.performanceScore?.rating || 0;
-          const completion = p.performanceScore?.completionPercentage || 0;
-          const onTime = p.performanceScore?.onTimePercentage || 0;
-
-          badge = 'Bronze';
-          if (rating >= 4.5 && completion >= 95 && onTime >= 95) {
-            badge = 'Platinum';
-          } else if (rating >= 4.0 && completion >= 90 && onTime >= 90) {
-            badge = 'Gold';
-          } else if (rating >= 3.5 && completion >= 85 && onTime >= 85) {
-            badge = 'Silver';
-          }
-        }
+        const badge = p.performanceBadge || p.performanceScore?.badge || 'Bronze';
         return badge === rule.performanceScore;
       });
     }

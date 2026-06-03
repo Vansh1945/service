@@ -145,24 +145,10 @@ commissionRuleSchema.statics.getCommissionForProvider = async function (provider
     if (!providerperformanceScore || providerperformanceScore === 'standard') {
       const provider = await mongoose.model('Provider')
         .findById(providerId)
-        .select('averageRating performanceScore feedbacks')
-        .populate('feedbacks', 'providerFeedback.rating');
+        .select('performanceScore');
 
       if (provider) {
-        // Use virtual averageRating logic if available, or calculate it
-        let rating = provider.averageRating || 0;
-        const completion = provider.performanceScore?.completionPercentage || 0;
-        const onTime = provider.performanceScore?.onTimePercentage || 0;
-
-        let badge = 'Bronze';
-        if (rating >= 4.5 && completion >= 95 && onTime >= 95) {
-          badge = 'Platinum';
-        } else if (rating >= 4.0 && completion >= 90 && onTime >= 90) {
-          badge = 'Gold';
-        } else if (rating >= 3.5 && completion >= 85 && onTime >= 85) {
-          badge = 'Silver';
-        }
-        providerperformanceScore = badge;
+        providerperformanceScore = provider.performanceScore?.badge || 'Bronze';
       } else {
         providerperformanceScore = 'Bronze';
       }

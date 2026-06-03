@@ -839,7 +839,8 @@ const updateEmailTemplate = async (req, res) => {
     const allowedTypes = [
       'forgotPasswordOtp', 'providerRegistrationOtp', 'providerApproval',
       'providerRejection', 'contactReply', 'withdrawApproved',
-      'withdrawRejected', 'complaintResponse'
+      'withdrawRejected', 'complaintResponse',
+      'adminBookingCancelledCustomer', 'adminBookingCancelledProvider'
     ];
 
     if (!allowedTypes.includes(type)) {

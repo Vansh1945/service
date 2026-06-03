@@ -318,7 +318,9 @@ const systemConfigSchema = new mongoose.Schema(
       contactReply: { type: emailTemplateSchema },
       withdrawApproved: { type: emailTemplateSchema },
       withdrawRejected: { type: emailTemplateSchema },
-      complaintResponse: { type: emailTemplateSchema }
+      complaintResponse: { type: emailTemplateSchema },
+      adminBookingCancelledCustomer: { type: emailTemplateSchema },
+      adminBookingCancelledProvider: { type: emailTemplateSchema }
     },
     metadata: {
       updatedBy: { type: String },

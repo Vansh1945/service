@@ -59,6 +59,7 @@ router.get('/dashboard/analytics', analyticsLimiter, adminController.getDashboar
 router.post('/refund/:bookingId/process', validateBody(adminRefundSchema), adminController.processAdminRefund);
 router.post('/refund/:bookingId/reject', adminController.rejectAdminRefund);
 router.patch('/payout/:bookingId/hold', validateBody(togglePayoutHoldSchema), adminController.togglePayoutHold);
+router.patch('/bookings/:bookingId/cancel', adminController.cancelBookingByAdmin);
 
 // Fraud Detection
 router.get('/fraud/same-ip', adminController.getSameIPFraud);

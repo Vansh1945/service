@@ -51,7 +51,18 @@ const TEMPLATE_METADATA = {
     icon: <FiX className="w-5 h-5" />,
     variables: ['name', 'withdrawAmount', 'reason', 'date']
   },
-
+  adminBookingCancelledCustomer: {
+    name: 'Booking Cancelled (Customer)',
+    description: 'Notification email sent to the customer when their booking is cancelled by support team.',
+    icon: <FiX className="w-5 h-5" />,
+    variables: ['name', 'bookingId', 'serviceName', 'cancellationReason', 'complaintId', 'refundAmount', 'platformFeeRetained', 'refundDestination', 'expectedRefundTimeline']
+  },
+  adminBookingCancelledProvider: {
+    name: 'Booking Cancelled (Provider)',
+    description: 'Notification email sent to the assigned service provider when booking is cancelled by support team.',
+    icon: <FiX className="w-5 h-5" />,
+    variables: ['name', 'bookingId', 'customerName', 'cancellationReason', 'complaintId']
+  }
 };
 
 const EmailTemplate = () => {

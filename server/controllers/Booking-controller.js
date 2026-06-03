@@ -2629,8 +2629,9 @@ const getProviderBookingById = async (req, res) => {
     const earning = await ProviderEarning.findOne({ booking: id }).lean();
     const transactions = await Transaction.find({ booking: id }).sort({ createdAt: -1 }).lean();
 
+    const baseForCommission = Math.max(0, booking.subtotal - (booking.totalDiscount || 0));
     const { commission, netAmount } = CommissionRule.calculateCommission(
-      booking.totalAmount,
+      baseForCommission,
       commissionRule
     );
 
@@ -2774,8 +2775,9 @@ const getBookingsByStatus = async (req, res) => {
         cleanBooking.services && cleanBooking.services[0]?.service
       );
 
+      const baseForCommission = Math.max(0, cleanBooking.subtotal - (cleanBooking.totalDiscount || 0));
       const { commission, netAmount } = CommissionRule.calculateCommission(
-        cleanBooking.totalAmount,
+        baseForCommission,
         bookingCommissionRule
       );
 
@@ -3640,26 +3642,31 @@ const completeBooking = async (req, res) => {
       settings = new SystemConfig({ companyName: process.env.COMPANY_NAME || 'Raj Electrical Services' });
       await settings.save(session ? { session } : {});
     }
-    const splits = settings.surgeSplitSettings || { visiting: 60, rain: 70, traffic: 70, night: 70, demand: 50 };
+    const splits = settings.surgeSplitSettings || {};
+    const splitVisiting = typeof splits.visiting === 'number' && !isNaN(splits.visiting) ? splits.visiting : 60;
+    const splitRain = typeof splits.rain === 'number' && !isNaN(splits.rain) ? splits.rain : 70;
+    const splitTraffic = typeof splits.traffic === 'number' && !isNaN(splits.traffic) ? splits.traffic : 70;
+    const splitNight = typeof splits.night === 'number' && !isNaN(splits.night) ? splits.night : 70;
+    const splitDemand = typeof splits.demand === 'number' && !isNaN(splits.demand) ? splits.demand : 50;
 
     // Surcharge amounts on this booking
-    const visiting = booking.visitingCharge || 0;
-    const rain = booking.rainCharge || 0;
-    const traffic = booking.trafficCharge || 0;
-    const night = booking.nightCharge || 0;
-    const demand = booking.demandSurge || 0;
-    const custom = booking.customCharges || 0;
+    const visiting = typeof booking.visitingCharge === 'number' && !isNaN(booking.visitingCharge) ? booking.visitingCharge : 0;
+    const rain = typeof booking.rainCharge === 'number' && !isNaN(booking.rainCharge) ? booking.rainCharge : 0;
+    const traffic = typeof booking.trafficCharge === 'number' && !isNaN(booking.trafficCharge) ? booking.trafficCharge : 0;
+    const night = typeof booking.nightCharge === 'number' && !isNaN(booking.nightCharge) ? booking.nightCharge : 0;
+    const demand = typeof booking.demandSurge === 'number' && !isNaN(booking.demandSurge) ? booking.demandSurge : 0;
+    const custom = typeof booking.customCharges === 'number' && !isNaN(booking.customCharges) ? booking.customCharges : 0;
 
     // Provider splits
-    const provVisitingShare = parseFloat((visiting * (splits.visiting / 100)).toFixed(2));
-    const provRainShare = parseFloat((rain * (splits.rain / 100)).toFixed(2));
-    const provTrafficShare = parseFloat((traffic * (splits.traffic / 100)).toFixed(2));
-    const provNightShare = parseFloat((night * (splits.night / 100)).toFixed(2));
-    const provDemandShare = parseFloat((demand * (splits.demand / 100)).toFixed(2));
+    const provVisitingShare = parseFloat((visiting * (splitVisiting / 100)).toFixed(2)) || 0;
+    const provRainShare = parseFloat((rain * (splitRain / 100)).toFixed(2)) || 0;
+    const provTrafficShare = parseFloat((traffic * (splitTraffic / 100)).toFixed(2)) || 0;
+    const provNightShare = parseFloat((night * (splitNight / 100)).toFixed(2)) || 0;
+    const provDemandShare = parseFloat((demand * (splitDemand / 100)).toFixed(2)) || 0;
 
-    const providerSurgeShare = parseFloat((provVisitingShare + provRainShare + provTrafficShare + provNightShare + provDemandShare).toFixed(2));
+    const providerSurgeShare = parseFloat((provVisitingShare + provRainShare + provTrafficShare + provNightShare + provDemandShare).toFixed(2)) || 0;
     const totalSurcharges = visiting + rain + traffic + night + demand + custom;
-    const companySurgeShare = parseFloat((totalSurcharges - providerSurgeShare).toFixed(2));
+    const companySurgeShare = parseFloat((totalSurcharges - providerSurgeShare).toFixed(2)) || 0;
 
     booking.providerWorkProof = {
       ...booking.providerWorkProof,

@@ -303,8 +303,8 @@ const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => 
                       <p className={`text-xl font-black ${complaint.complaintScore > 60 ? 'text-red-600' : 'text-secondary'}`}>{complaint.complaintScore}/100</p>
                     </div>
                     <div className="bg-white rounded-lg p-3 shadow-sm border border-blue-50">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase">Provider Trust</p>
-                      <p className={`text-xl font-black ${complaint.providerTrustScore < 40 ? 'text-red-600' : 'text-green-600'}`}>{complaint.providerTrustScore}/100</p>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase">Provider Rating</p>
+                      <p className={`text-xl font-black ${complaint.providerHistory?.avgRating < 3.5 ? 'text-red-600' : 'text-green-600'}`}>{complaint.providerHistory?.avgRating || 0}★</p>
                     </div>
                     <div className="bg-white rounded-lg p-3 shadow-sm border border-blue-50">
                       <p className="text-[10px] font-bold text-gray-400 uppercase">Customer Risk</p>
@@ -417,11 +417,33 @@ const ComplaintDetailsModal = ({ data, onClose, onUpdateStatus, onResolve }) => 
 
                   {/* Booking ID */}
                   {complaint.booking && (
-                    <div className="text-sm pt-2 border-t border-gray-200">
-                      <span className="text-gray-400">Booking: </span>
-                      <span className="font-medium text-secondary">
-                        #{complaint.booking?.bookingId || complaint.booking?._id?.slice(-8) || complaint.booking}
-                      </span>
+                    <div className="text-sm pt-2 border-t border-gray-200 space-y-1">
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400">Booking: </span>
+                        <span className="font-medium text-secondary">
+                          #{complaint.booking?.bookingId || complaint.booking?._id?.slice(-8) || complaint.booking}
+                        </span>
+                      </div>
+                      {booking?.cancelledBy === 'admin' && (
+                        <>
+                          <div className="flex justify-between items-center text-xs mt-1">
+                            <span className="text-red-500 font-semibold">Cancelled By:</span>
+                            <span className="text-red-600 font-bold uppercase">Admin</span>
+                          </div>
+                          {booking?.refundAmount > 0 && (
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-teal-600 font-semibold">Wallet Refund:</span>
+                              <span className="text-teal-700 font-bold">₹{booking.refundAmount}</span>
+                            </div>
+                          )}
+                          {booking?.platformFeeRetained > 0 && (
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-amber-600 font-semibold">Platform Fee Retained:</span>
+                              <span className="text-amber-700 font-bold">₹{booking.platformFeeRetained}</span>
+                            </div>
+                          )}
+                        </>
+                      )}
                     </div>
                   )}
                 </div>

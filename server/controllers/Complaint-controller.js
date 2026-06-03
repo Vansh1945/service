@@ -350,6 +350,8 @@ const getAllComplaints = async (req, res) => {
     if (category) query.category = category;
     if (userType) query.userType = userType;
     if (providerId) query.providerId = providerId;
+    if (req.query.booking) query.booking = req.query.booking;
+    if (req.query.bookingId) query.booking = req.query.bookingId;
 
     if (search) {
       query.$or = [
@@ -542,8 +544,7 @@ const enrichComplaintData = async (complaint) => {
   complaintScore += Math.min(priorComplaints * 5, 15);        // repeated complaints (max 15)
   complaintScore = Math.min(Math.round(complaintScore), 100);
 
-  // ─── 2. Provider Trust Score (0–100, higher = more trustworthy) ─
-  let providerTrustScore = 50; // neutral baseline
+  // ─── 2. Provider Metrics (avgRating, ratios) ─
   let providerHistory = { completedBookings: 0, avgRating: 0, complaintRatio: 0, cancellationRatio: 0 };
   if (providerId) {
     const providerDoc = await Provider.findById(providerId)
@@ -564,13 +565,6 @@ const enrichComplaintData = async (complaint) => {
         complaintRatio: parseFloat((complaintRatio * 100).toFixed(1)),
         cancellationRatio: parseFloat((cancelRatio * 100).toFixed(1))
       };
-
-      providerTrustScore  = 50;
-      providerTrustScore += Math.min(completed / 5, 20);               // experience bonus (max 20)
-      providerTrustScore += Math.min((avgRating / 5) * 20, 20);        // rating bonus (max 20)
-      providerTrustScore -= Math.min(providerComplaintsCount * 8, 30); // complaint penalty (max -30)
-      providerTrustScore -= Math.min(cancelRatio * 20, 20);            // cancellation penalty (max -20)
-      providerTrustScore  = Math.max(0, Math.min(Math.round(providerTrustScore), 100));
     }
   }
 
@@ -665,11 +659,11 @@ const enrichComplaintData = async (complaint) => {
 
   // ─── 5. Suggested Decision ─────────────────────────────────
   let suggestedDecision = 'manual_review';
-  if (customerFraudScore >= 60 && providerTrustScore >= 60) {
+  if (customerFraudScore >= 60 && providerHistory.avgRating >= 4.0) {
     suggestedDecision = 'reject_refund';
   } else if (evidenceStrength >= 55 && providerComplaintsCount >= 2) {
     suggestedDecision = 'approve_refund';
-  } else if (complaintScore >= 65 && providerTrustScore < 40) {
+  } else if (complaintScore >= 65 && providerHistory.avgRating < 3.5) {
     suggestedDecision = 'approve_refund';
   } else if (customerFraudScore >= 70) {
     suggestedDecision = 'reject_refund';
@@ -679,7 +673,7 @@ const enrichComplaintData = async (complaint) => {
 
   // ─── Warnings ───────────────────────────────────────────────
   if (customerFraudScore >= 60 && !warnings.includes('High refund abuse risk detected')) warnings.push('High refund abuse risk detected');
-  if (providerTrustScore <= 30 && !warnings.includes('Provider has repeated complaints')) warnings.push('Provider has repeated complaints');
+  if (providerHistory.avgRating <= 3.0 && !warnings.includes('Provider has low average rating')) warnings.push('Provider has low average rating');
   if (!hasBefore && !hasAfter && !warnings.includes('Provider uploaded no work proof')) warnings.push('Provider uploaded no work proof');
 
   // Dynamic riskScore calculation for non-customers
@@ -696,7 +690,6 @@ const enrichComplaintData = async (complaint) => {
     resolutionHistory,
     // ── Smart AI Scores (runtime only) ──
     complaintScore,
-    providerTrustScore,
     customerFraudScore,
     riskScore: finalRiskScore,
     evidenceStrength,
@@ -1030,7 +1023,10 @@ const getComplaintDetails = async (req, res) => {
           afterImages: b.providerWorkProof?.afterImages || []
         },
         complaintProofs: b.complaintProofs || [],
-        timeline: timeline
+        timeline: timeline,
+        cancelledBy: b.cancelledBy,
+        refundAmount: b.refundAmount,
+        platformFeeRetained: b.platformFeeRetained
       };
     }
 

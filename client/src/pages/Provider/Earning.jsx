@@ -36,14 +36,14 @@ const getStatusConfig = (status) => {
 // ── Shared UI Components ─────────────────────────────────────────────────────
 
 const StatCard = ({ title, value, icon: Icon, subtext }) => (
-  <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
-    <div className="flex items-center justify-between">
-      <div>
-        <p className="text-xs font-medium text-secondary/50 uppercase tracking-wide">{title}</p>
-        <p className="text-2xl font-bold text-secondary mt-1">{value}</p>
-        {subtext && <p className="text-xs text-secondary/40 mt-1">{subtext}</p>}
+  <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm hover:shadow-md transition-shadow">
+    <div className="flex items-center justify-between gap-3">
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-semibold text-secondary/50 uppercase tracking-wider truncate">{title}</p>
+        <p className="text-xl font-bold text-secondary mt-1 truncate">{value}</p>
+        {subtext && <p className="text-[11px] text-secondary/40 mt-0.5 truncate">{subtext}</p>}
       </div>
-      <div className="p-3 bg-primary/10 rounded-xl text-primary">
+      <div className="p-2.5 bg-primary/10 rounded-lg text-primary shrink-0">
         <Icon className="w-5 h-5" />
       </div>
     </div>
@@ -86,7 +86,7 @@ const ProviderEarningsDashboard = () => {
   const [withdrawalReport, setWithdrawalReport] = useState([]);
   const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
   const [selectedWithdrawal, setSelectedWithdrawal] = useState(null);
-  const [expandedCards, setExpandedCards] = useState({ weekly: false, monthly: false });
+  const [expandedCards, setExpandedCards] = useState({ weekly: true, monthly: true });
   const [withdrawalForm, setWithdrawalForm] = useState({ amount: '' });
   const [downloading, setDownloading] = useState({ earnings: false, withdrawals: false });
   const [providerBankDetails, setProviderBankDetails] = useState(null);
@@ -118,102 +118,48 @@ const ProviderEarningsDashboard = () => {
         end = new Date(now);
       } else if (timeFilter === 'week') {
         const d = new Date(now);
-        const day = d.getDay();
-        const diff = d.getDate() - day;
+        const day = d.getDay(), diff = d.getDate() - day + (day === 0 ? -6 : 1);
         start = new Date(d.setDate(diff));
         start.setHours(0, 0, 0, 0);
-        end = new Date();
+        end = new Date(now);
       } else if (timeFilter === 'month') {
         start = new Date(now.getFullYear(), now.getMonth(), 1);
-        start.setHours(0, 0, 0, 0);
-        end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        end = new Date(now);
       } else if (timeFilter === 'year') {
         start = new Date(now.getFullYear(), 0, 1);
-        start.setHours(0, 0, 0, 0);
-        end = new Date(now.getFullYear(), 11, 31);
-      } else {
-        start = new Date(now.getFullYear(), now.getMonth(), 1);
-        start.setHours(0, 0, 0, 0);
-        end = new Date();
+        end = new Date(now);
       }
-      end.setHours(23, 59, 59, 999);
 
-      const params = {
-        startDate: start.toISOString().split('T')[0],
-        endDate: end.toISOString().split('T')[0]
-      };
+      const params = {};
+      if (start) params.startDate = start.toISOString();
+      if (end) params.endDate = end.toISOString();
 
       const response = await PaymentService.getEarningsSummary(params);
       const data = response.data;
       if (data.success) {
-        setSummary({
-          totalEarnings: data.totalEarnings || 0,
-          todayEarnings: data.todayEarnings || 0,
-          totalWithdrawn: data.totalWithdrawn || 0,
-          availableBalance: data.availableBalance || 0,
-          totalPendingWithdrawals: data.pendingWithdrawals || 0,
-          heldAmount: data.heldAmount || 0,
-          disputeCount: data.disputeCount || 0,
-          withdrawalSecurity: data.withdrawalSecurity || null
+        setSummary(data.summary || {
+          totalEarnings: 0, todayEarnings: 0, totalWithdrawn: 0,
+          availableBalance: 0, totalPendingWithdrawals: 0,
+          heldAmount: 0, disputeCount: 0, withdrawalSecurity: null
         });
       }
-    } catch (err) { console.error('Error fetching summary:', err); }
-  }, [timeFilter]);
-
-  const processWeeklyData = useCallback((earnings) => {
-    const currentDate = new Date();
-    const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-    const weeks = [];
-    for (let i = 0; i < 4; i++) {
-      const weekStart = new Date(startOfMonth);
-      weekStart.setDate(startOfMonth.getDate() + (i * 7));
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 6);
-      const weekEarnings = earnings.filter(e => {
-        const d = new Date(e.createdAt);
-        return d >= weekStart && d <= weekEnd;
-      });
-      weeks.push({
-        week: `Week ${i + 1}`,
-        earnings: weekEarnings.reduce((s, e) => s + (e.netAmount || 0), 0),
-        count: weekEarnings.length
-      });
+    } catch (err) {
+      console.error('Failed to fetch summary:', err);
     }
-    setWeeklyData(weeks);
-  }, []);
-
-  const processMonthlyData = useCallback((earnings) => {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const monthlyEarnings = months.map((month, i) => {
-      const monthEarnings = earnings.filter(e => new Date(e.createdAt).getMonth() === i);
-      return {
-        month,
-        earnings: monthEarnings.reduce((s, e) => s + (e.netAmount || 0), 0),
-        count: monthEarnings.length
-      };
-    });
-    setMonthlyData(monthlyEarnings);
-  }, []);
+  }, [timeFilter]);
 
   const fetchWeeklyMonthlyData = useCallback(async () => {
     try {
-      const currentDate = new Date();
-      const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-      const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-      const startOfYear = new Date(currentDate.getFullYear(), 0, 1);
-      const endOfYear = new Date(currentDate.getFullYear(), 11, 31);
-
-      const [weeklyRes, monthlyRes] = await Promise.all([
-        PaymentService.getEarningsReport({ startDate: startOfMonth.toISOString().split('T')[0], endDate: endOfMonth.toISOString().split('T')[0] }),
-        PaymentService.getEarningsReport({ startDate: startOfYear.toISOString().split('T')[0], endDate: endOfYear.toISOString().split('T')[0] })
-      ]);
-
-      const weeklyData = weeklyRes.data;
-      const monthlyData = monthlyRes.data;
-      if (weeklyData.success) processWeeklyData(weeklyData.earnings);
-      if (monthlyData.success) processMonthlyData(monthlyData.earnings);
-    } catch (err) { console.error('Error fetching trends:', err); }
-  }, [processWeeklyData, processMonthlyData]);
+      const response = await PaymentService.getWeeklyMonthlyStats();
+      const data = response.data;
+      if (data.success) {
+        setWeeklyData(data.weekly || []);
+        setMonthlyData(data.monthly || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch weekly/monthly stats:', err);
+    }
+  }, []);
 
   const fetchEarningsReport = useCallback(async (page = 1, limit = 20) => {
     try {
@@ -368,7 +314,7 @@ const ProviderEarningsDashboard = () => {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-7 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           <StatCard title="Gross Billed" value={formatCurrency(summary.totalEarnings)} icon={TrendingUp} subtext="Total paid by customers" />
           <StatCard title="Today's Earning" value={formatCurrency(summary.todayEarnings)} icon={Activity} subtext="Earned today" />
           <StatCard title="Withdrawable Balance" value={formatCurrency(summary.availableBalance)} icon={Wallet} subtext="Ready to withdraw (Net)" />
@@ -394,15 +340,17 @@ const ProviderEarningsDashboard = () => {
                 {expandedCards.weekly ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              {weeklyData.slice(0, 4).map((w) => (
-                <div key={w.week} className="bg-gray-50 p-3 rounded-lg">
-                  <p className="text-xs font-medium text-secondary/50 uppercase">{w.week}</p>
-                  <p className="text-lg font-bold text-secondary">{formatCurrency(w.earnings)}</p>
-                  <p className="text-[10px] text-secondary/40">{w.count} bookings</p>
-                </div>
-              ))}
-            </div>
+            {expandedCards.weekly && (
+              <div className="grid grid-cols-2 gap-3">
+                {weeklyData.slice(0, 4).map((w) => (
+                  <div key={w.week} className="bg-gray-50 p-3 rounded-lg animate-fadeIn">
+                    <p className="text-xs font-medium text-secondary/50 uppercase">{w.week}</p>
+                    <p className="text-lg font-bold text-secondary">{formatCurrency(w.earnings)}</p>
+                    <p className="text-[10px] text-secondary/40">{w.count} bookings</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Monthly Card */}
@@ -419,21 +367,23 @@ const ProviderEarningsDashboard = () => {
                 {expandedCards.monthly ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </button>
             </div>
-            <div className="grid grid-cols-3 gap-2">
-              {monthlyData.slice(0, 6).map((m, i) => {
-                const trend = i > 0 ? getTrend(m.earnings, monthlyData[i - 1].earnings) : { trend: 'neutral' };
-                return (
-                  <div key={m.month} className="bg-gray-50 p-2 rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-medium text-secondary/50 uppercase">{m.month}</span>
-                      {trend.trend === 'up' && <TrendingUp className="w-3 h-3 text-green-500" />}
-                      {trend.trend === 'down' && <TrendingDown className="w-3 h-3 text-red-500" />}
+            {expandedCards.monthly && (
+              <div className="grid grid-cols-3 gap-2 animate-fadeIn">
+                {monthlyData.slice(0, 6).map((m, i) => {
+                  const trend = i > 0 ? getTrend(m.earnings, monthlyData[i - 1].earnings) : { trend: 'neutral' };
+                  return (
+                    <div key={m.month} className="bg-gray-50 p-2 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-medium text-secondary/50 uppercase">{m.month}</span>
+                        {trend.trend === 'up' && <TrendingUp className="w-3 h-3 text-green-500" />}
+                        {trend.trend === 'down' && <TrendingDown className="w-3 h-3 text-red-500" />}
+                      </div>
+                      <p className="text-sm font-bold text-secondary">{formatCurrency(m.earnings)}</p>
                     </div>
-                    <p className="text-sm font-bold text-secondary">{formatCurrency(m.earnings)}</p>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 
@@ -617,23 +567,23 @@ const ProviderEarningsDashboard = () => {
                                 <div className="absolute right-0 bottom-full mb-2 w-52 hidden group-hover:block bg-slate-900 text-white text-[10px] p-2.5 rounded-lg shadow-xl z-30 leading-normal pointer-events-none text-left">
                                   <p className="font-bold border-b border-slate-700 pb-1 mb-1 text-[11px]">Surcharge Split Details</p>
                                   <div className="flex justify-between py-0.5">
-                                    <span>Rain Share ({splits.rain}%)</span>
+                                    <span>Rain Share</span>
                                     <span>{formatCurrency(rainShare)}</span>
                                   </div>
                                   <div className="flex justify-between py-0.5">
-                                    <span>Traffic Share ({splits.traffic}%)</span>
+                                    <span>Traffic Share</span>
                                     <span>{formatCurrency(trafficShare)}</span>
                                   </div>
                                   <div className="flex justify-between py-0.5">
-                                    <span>Night Share ({splits.night}%)</span>
+                                    <span>Night Share</span>
                                     <span>{formatCurrency(nightShare)}</span>
                                   </div>
                                   <div className="flex justify-between py-0.5 border-t border-slate-700 mt-1 pt-1 font-bold">
-                                    <span>Vis. Share ({splits.visiting}%)</span>
+                                    <span>Vis. Share</span>
                                     <span>{formatCurrency(visitingShare)}</span>
                                   </div>
                                   <div className="flex justify-between py-0.5 font-bold">
-                                    <span>Demand Share ({splits.demand}%)</span>
+                                    <span>Demand Share</span>
                                     <span>{formatCurrency(demandShare)}</span>
                                   </div>
                                 </div>

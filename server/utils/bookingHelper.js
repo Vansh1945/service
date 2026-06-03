@@ -39,7 +39,7 @@ const getBookingProgress = (booking) => {
         const now = new Date();
         const completedTime = new Date(completedAt).getTime();
         const fortyEightHoursInMs = 48 * 60 * 60 * 1000;
-        
+
         if (now.getTime() - completedTime < fortyEightHoursInMs) {
           return 'completed_pending_review';
         }
@@ -158,11 +158,15 @@ const getBookingTimeline = (booking, payoutStatus = '') => {
 
   // 10. Cancelled
   if (booking.status === 'cancelled') {
+    const isCancelledByAdmin = booking.cancelledBy === 'admin';
     timeline.push({
-      title: "Booking Cancelled",
+      title: isCancelledByAdmin ? "Booking Cancelled By Support Team" : "Booking Cancelled",
       completed: true,
-      time: booking.cancellationProgress?.cancelledAt || booking.updatedAt,
-      status: 'error'
+      time: booking.cancelledAt || booking.cancellationProgress?.cancelledAt || booking.updatedAt,
+      status: 'error',
+      note: isCancelledByAdmin
+        ? `Reason: ${booking.cancellationReason || 'N/A'}${booking.complaintId ? '\nComplaint: ' + (booking.complaintId.complaintId || booking.complaintId) : ''}`
+        : (booking.cancellationProgress?.reason || 'N/A')
     });
   }
 

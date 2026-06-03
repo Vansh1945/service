@@ -399,106 +399,7 @@ const removeToken = async (req, res) => {
     }
 };
 
-/**
- * GET /api/notifications/preferences
- */
-const getPreferences = async (req, res) => {
-    try {
-        const userId = req.userID;
-        const role = req.role;
 
-        let Model;
-        if (role === 'admin') Model = Admin;
-        else if (role === 'provider') Model = Provider;
-        else Model = User;
-
-        const user = await Model.findById(userId).select('notificationPreferences');
-        if (!user) {
-            return res.status(404).json({ success: false, message: 'User not found' });
-        }
-
-        const prefs = user.notificationPreferences || {
-            booking: true,
-            payment: true,
-            complaint: true,
-            promotional: true,
-            providerUpdates: true,
-            adminAlerts: true,
-            wallet: true,
-            reminder: true,
-            pushEnabled: true,
-            quietHours: { enabled: false, start: '22:00', end: '08:00' }
-        };
-
-        return res.status(200).json({ success: true, data: prefs });
-    } catch (error) {
-        console.error('getPreferences error:', error);
-        return res.status(500).json({ success: false, message: 'Failed to fetch preferences' });
-    }
-};
-
-/**
- * PATCH /api/notifications/preferences
- */
-const updatePreferences = async (req, res) => {
-    const session = await mongoose.startSession();
-    session.startTransaction();
-    try {
-        const userId = req.userID;
-        const role = req.role;
-        const updates = req.body;
-
-        let Model;
-        if (role === 'admin') Model = Admin;
-        else if (role === 'provider') Model = Provider;
-        else Model = User;
-
-        const user = await Model.findById(userId).session(session);
-        if (!user) {
-            await session.abortTransaction();
-            session.endSession();
-            return res.status(404).json({ success: false, message: 'User not found' });
-        }
-
-        if (!user.notificationPreferences) {
-            user.notificationPreferences = {
-                booking: true,
-                payment: true,
-                complaint: true,
-                promotional: true,
-                providerUpdates: true,
-                adminAlerts: true,
-                wallet: true,
-                reminder: true,
-                pushEnabled: true,
-                quietHours: { enabled: false, start: '22:00', end: '08:00' }
-            };
-        }
-
-        // Apply granular preference updates safely
-        Object.keys(updates).forEach(key => {
-            if (key === 'quietHours') {
-                user.notificationPreferences.quietHours = {
-                    ...user.notificationPreferences.quietHours,
-                    ...updates.quietHours
-                };
-            } else {
-                user.notificationPreferences[key] = updates[key];
-            }
-        });
-
-        await user.save({ session });
-        await session.commitTransaction();
-        session.endSession();
-
-        return res.status(200).json({ success: true, message: 'Preferences updated successfully', data: user.notificationPreferences });
-    } catch (error) {
-        await session.abortTransaction();
-        session.endSession();
-        console.error('updatePreferences error:', error);
-        return res.status(500).json({ success: false, message: 'Failed to update preferences' });
-    }
-};
 
 /**
  * POST /api/notifications/send-broadcast
@@ -1083,8 +984,6 @@ module.exports = {
     getUnreadCount,
     saveToken,
     removeToken,
-    getPreferences,
-    updatePreferences,
     sendBroadcast,
     getBroadcastHistory: getAdminNotifications,
     updateNotification,

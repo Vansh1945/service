@@ -447,7 +447,7 @@ const AdminProviders = () => {
                                 <CheckCircle className="w-3 h-3 mr-1" /> Completion: {provider.performanceScore?.completionPercentage?.toFixed(1) || '0.0'}%
                               </div>
                               <div className="text-xs font-semibold flex items-center mt-0.5">
-                                <TrendingUp className="w-3 h-3 mr-1 text-primary" /> Trust Score: <span className={`ml-1 font-bold ${provider.performanceScore?.trustScore < 60 ? 'text-red-600' : provider.performanceScore?.trustScore < 80 ? 'text-amber-600' : 'text-green-600'}`}>{provider.performanceScore?.trustScore !== undefined ? provider.performanceScore.trustScore.toFixed(0) : '100'}%</span>
+                                <TrendingUp className="w-3 h-3 mr-1 text-primary" /> Badge: <span className="ml-1 font-bold text-gray-800">{provider.performanceBadge || provider.performanceScore?.badge || 'Bronze'}</span>
                               </div>
                             </div>
                           </td>
@@ -536,11 +536,12 @@ const ProviderModal = ({
   handleStatusUpdate
 }) => {
   if (!provider) return null;
-
   const ps = provider.performanceScore || {};
   const bd = provider.bankDetails || {};
-  const trustColor = ps.trustScore < 60 ? 'text-red-600' : ps.trustScore < 80 ? 'text-amber-500' : 'text-emerald-600';
-
+  const isBlocked = provider.blockedTill && new Date(provider.blockedTill) > new Date();
+  const isSuspended = provider.isSuspended;
+  const isRestricted = ps.restrictionsActive;
+  const isAnyNegativeState = isBlocked || isSuspended || isRestricted;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
       {/* Backdrop */}
@@ -644,9 +645,9 @@ const ProviderModal = ({
               color="bg-blue-50 text-blue-600"
             />
             <StatPill
-              label="Trust Score"
-              value={`${ps.trustScore !== undefined ? ps.trustScore.toFixed(0) : 100}%`}
-              color={ps.trustScore < 60 ? 'bg-red-50 text-red-600' : ps.trustScore < 80 ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-700'}
+              label="Performance Badge"
+              value={ps.badge || 'Bronze'}
+              color="bg-purple-50 text-purple-700"
             />
           </div>
 
@@ -759,37 +760,7 @@ const ProviderModal = ({
                 </div>
               </div>
 
-              {/* Bank Verify Actions */}
-              {!bd.verified && bd.accountNo && (
-                <div className="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-4">
-                  <p className="text-xs font-bold text-amber-700 mb-3 flex items-center gap-1.5">
-                    <AlertCircle size={13} /> Verify or Reject these bank details
-                  </p>
-                  <textarea
-                    value={approvalRemarks}
-                    onChange={(e) => setApprovalRemarks(e.target.value)}
-                    className="w-full p-2.5 text-sm border border-amber-200 rounded-lg focus:ring-2 focus:ring-amber-400 focus:border-transparent bg-white mb-3 resize-none"
-                    placeholder="Remarks (optional for approval, required for rejection)..."
-                    rows="2"
-                  />
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => handleStatusUpdate('approved')}
-                      disabled={processingAction}
-                      className="flex-1 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-lg transition-colors disabled:opacity-50"
-                    >
-                      {processingAction === 'approved' ? 'Verifying…' : '✓ Verify Bank'}
-                    </button>
-                    <button
-                      onClick={() => handleStatusUpdate('rejected')}
-                      disabled={processingAction}
-                      className="flex-1 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-lg transition-colors disabled:opacity-50"
-                    >
-                      {processingAction === 'rejected' ? 'Rejecting…' : '✕ Reject Bank'}
-                    </button>
-                  </div>
-                </div>
-              )}
+
             </SectionCard>
           )}
 
@@ -809,47 +780,57 @@ const ProviderModal = ({
               />
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-              <button
-                onClick={() => handleStatusUpdate('active')}
-                disabled={processingAction}
-                className="py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
-              >
-                {processingAction === 'active' ? 'Activating…' : '✓ Reactivate'}
-              </button>
-              <button
-                onClick={() => {
-                  const days = prompt('Restriction duration in days (blank = indefinite):');
-                  handleStatusUpdate('restricted', days ? Number(days) : null);
-                }}
-                disabled={processingAction}
-                className="py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
-              >
-                {processingAction === 'restricted' ? 'Restricting…' : '⚠ Restrict'}
-              </button>
-              <button
-                onClick={() => handleStatusUpdate('suspended')}
-                disabled={processingAction}
-                className="py-2.5 bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
-              >
-                {processingAction === 'suspended' ? 'Suspending…' : '🚫 Suspend'}
-              </button>
-              <button
-                onClick={() => {
-                  const days = prompt('Block duration in days (blank = permanent):');
-                  handleStatusUpdate('blocked', days ? Number(days) : null);
-                }}
-                disabled={processingAction}
-                className="py-2.5 bg-red-700 hover:bg-red-800 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50 col-span-2 sm:col-span-1"
-              >
-                {processingAction === 'blocked' ? 'Blocking…' : '❌ Block'}
-              </button>
-              <button
-                onClick={() => handleStatusUpdate('pending_review')}
-                disabled={processingAction}
-                className="py-2.5 bg-slate-500 hover:bg-slate-600 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
-              >
-                {processingAction === 'pending_review' ? 'Updating…' : '⏳ Pending Review'}
-              </button>
+              {(isAnyNegativeState || !provider.approved) && (
+                <button
+                  onClick={() => handleStatusUpdate('active')}
+                  disabled={processingAction}
+                  className="py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
+                >
+                  {processingAction === 'active' ? 'Activating…' : '✓ Reactivate'}
+                </button>
+              )}
+              {(!isRestricted && !isBlocked && !isSuspended && provider.approved) && (
+                <button
+                  onClick={() => {
+                    const days = prompt('Restriction duration in days (blank = indefinite):');
+                    handleStatusUpdate('restricted', days ? Number(days) : null);
+                  }}
+                  disabled={processingAction}
+                  className="py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
+                >
+                  {processingAction === 'restricted' ? 'Restricting…' : '⚠ Restrict'}
+                </button>
+              )}
+              {(!isSuspended && !isBlocked && provider.approved) && (
+                <button
+                  onClick={() => handleStatusUpdate('suspended')}
+                  disabled={processingAction}
+                  className="py-2.5 bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
+                >
+                  {processingAction === 'suspended' ? 'Suspending…' : '🚫 Suspend'}
+                </button>
+              )}
+              {(!isBlocked && provider.approved) && (
+                <button
+                  onClick={() => {
+                    const days = prompt('Block duration in days (blank = permanent):');
+                    handleStatusUpdate('blocked', days ? Number(days) : null);
+                  }}
+                  disabled={processingAction}
+                  className="py-2.5 bg-red-700 hover:bg-red-800 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
+                >
+                  {processingAction === 'blocked' ? 'Blocking…' : '❌ Block'}
+                </button>
+              )}
+              {(provider.approved && !isBlocked && !isSuspended && !isRestricted) && (
+                <button
+                  onClick={() => handleStatusUpdate('pending_review')}
+                  disabled={processingAction}
+                  className="py-2.5 bg-slate-500 hover:bg-slate-600 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
+                >
+                  {processingAction === 'pending_review' ? 'Updating…' : '⏳ Pending Review'}
+                </button>
+              )}
             </div>
           </SectionCard>
 

@@ -116,6 +116,19 @@ const complaintSchema = new mongoose.Schema(
     resolution: {
       type: String,
       default: null
+    },
+    bookingCancelled: {
+      type: Boolean,
+      default: false
+    },
+    bookingCancelledAt: {
+      type: Date,
+      default: null
+    },
+    bookingId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Booking",
+      default: null
     }
   },
   {

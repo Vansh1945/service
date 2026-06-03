@@ -213,19 +213,7 @@ const Dashboard = () => {
             </div>
           </div>
         )}
-        {!ratings?.restrictionsActive && Number(ratings?.trustScore !== undefined ? ratings.trustScore : 100) < 80 && (
-          <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-xl mb-6 flex items-start gap-3 shadow-sm">
-            <FiAlertCircle className="w-6 h-6 text-amber-600 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-bold text-amber-800 text-sm">Action Required: Low Performance Score</p>
-              <p className="text-amber-700 text-xs mt-1 leading-relaxed">
-                Your Trust Score is currently at {Number(ratings?.trustScore !== undefined ? ratings.trustScore : 100).toFixed(0)}%. 
-                If it drops below 60%, your account will be flagged for administrator review. 
-                Please ensure on-time service delivery and avoid cancellation rejections to improve your score.
-              </p>
-            </div>
-          </div>
-        )}
+
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
@@ -386,13 +374,7 @@ const Dashboard = () => {
               <p className="text-2xl font-bold text-secondary">{Number(ratings?.completionRate || 0).toFixed(1)}%</p>
               <p className="text-xs text-secondary/50 mt-1">Completion</p>
             </div>
-            <div className="w-px h-8 bg-gray-200" />
-            <div className="text-center">
-              <p className={`text-2xl font-bold ${Number(ratings?.trustScore !== undefined ? ratings.trustScore : 100) < 60 ? 'text-red-600 animate-pulse font-black' : Number(ratings?.trustScore !== undefined ? ratings.trustScore : 100) < 80 ? 'text-amber-600 font-bold' : 'text-secondary'}`}>
-                {Number(ratings?.trustScore !== undefined ? ratings.trustScore : 100).toFixed(0)}%
-              </p>
-              <p className="text-xs text-secondary/50 mt-1">Trust Score</p>
-            </div>
+
           </div>
         </div>
 

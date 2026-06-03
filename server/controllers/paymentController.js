@@ -1861,7 +1861,8 @@ const generateProviderEarningsReport = async (req, res) => {
       { header: "Platform Fee", key: "platformFee", width: 20 },
       { header: "Provider Surge Share", key: "providerSurgeShare", width: 20 },
       { header: "Platform Surge Share", key: "companySurgeShare", width: 20 },
-      { header: "Refunded Amount", key: "refundAmount", width: 20 }
+      { header: "Refunded Amount", key: "refundAmount", width: 20 },
+      { header: "Platform Fee Retained", key: "platformFeeRetained", width: 20 }
     ];
 
     const providerIds = providers.map(p => p._id);
@@ -1899,7 +1900,8 @@ const generateProviderEarningsReport = async (req, res) => {
           platformFee: { $sum: { $ifNull: ['$bookingInfo.platformFee', 0] } },
           providerSurgeShare: { $sum: { $ifNull: ['$bookingInfo.providerSurgeShare', 0] } },
           companySurgeShare: { $sum: { $ifNull: ['$bookingInfo.companySurgeShare', 0] } },
-          refundAmount: { $sum: { $ifNull: ['$bookingInfo.cancellationProgress.refundAmount', 0] } }
+          refundAmount: { $sum: { $add: [ { $ifNull: ['$bookingInfo.cancellationProgress.refundAmount', 0] }, { $ifNull: ['$bookingInfo.refundAmount', 0] } ] } },
+          platformFeeRetained: { $sum: { $ifNull: ['$bookingInfo.platformFeeRetained', 0] } }
         }
       }
     ]).lean();
@@ -1956,7 +1958,8 @@ const generateProviderEarningsReport = async (req, res) => {
         platformFee: 0,
         providerSurgeShare: 0,
         companySurgeShare: 0,
-        refundAmount: 0
+        refundAmount: 0,
+        platformFeeRetained: 0
       };
       const wStats = withdrawalStatsMap[provider._id.toString()] || [];
 
@@ -1989,7 +1992,8 @@ const generateProviderEarningsReport = async (req, res) => {
         platformFee: stats.platformFee,
         providerSurgeShare: stats.providerSurgeShare,
         companySurgeShare: stats.companySurgeShare,
-        refundAmount: stats.refundAmount
+        refundAmount: stats.refundAmount,
+        platformFeeRetained: stats.platformFeeRetained
       });
     }
 
@@ -2077,7 +2081,8 @@ const getCommissionReport = async (req, res) => {
       { header: 'Platform Fee', key: 'platformFee', width: 20 },
       { header: 'Provider Surge Share', key: 'providerSurgeShare', width: 20 },
       { header: 'Platform Surge Share', key: 'companySurgeShare', width: 20 },
-      { header: 'Refunded Amount', key: 'refundAmount', width: 20 }
+      { header: 'Refunded Amount', key: 'refundAmount', width: 20 },
+      { header: 'Platform Fee Retained', key: 'platformFeeRetained', width: 20 }
     ];
 
     // Fill data
@@ -2103,7 +2108,8 @@ const getCommissionReport = async (req, res) => {
           platformFee: booking.platformFee || 0,
           providerSurgeShare: booking.providerSurgeShare || 0,
           companySurgeShare: booking.companySurgeShare || 0,
-          refundAmount: booking.cancellationProgress?.refundAmount || 0
+          refundAmount: booking.refundAmount || booking.cancellationProgress?.refundAmount || 0,
+          platformFeeRetained: booking.platformFeeRetained || 0
         });
       });
     });
@@ -2285,7 +2291,8 @@ const providerLedgerReport = async (req, res) => {
       { header: 'Platform Fee', key: 'platformFee', width: 20 },
       { header: 'Provider Surge Share', key: 'providerSurgeShare', width: 20 },
       { header: 'Platform Surge Share', key: 'companySurgeShare', width: 20 },
-      { header: 'Refunded Amount', key: 'refundAmount', width: 20 }
+      { header: 'Refunded Amount', key: 'refundAmount', width: 20 },
+      { header: 'Platform Fee Retained', key: 'platformFeeRetained', width: 20 }
     ];
 
     earnings.forEach(earning => {
@@ -2311,7 +2318,8 @@ const providerLedgerReport = async (req, res) => {
         platformFee: earning.booking.platformFee || 0,
         providerSurgeShare: earning.booking.providerSurgeShare || 0,
         companySurgeShare: earning.booking.companySurgeShare || 0,
-        refundAmount: earning.booking.cancellationProgress?.refundAmount || 0
+        refundAmount: earning.booking.refundAmount || earning.booking.cancellationProgress?.refundAmount || 0,
+        platformFeeRetained: earning.booking.platformFeeRetained || 0
       });
     });
 

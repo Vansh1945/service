@@ -335,7 +335,6 @@ const UserProfile = () => {
                                 { id: 'payments', label: 'Wallet & Payments', icon: <Wallet className="w-4 h-4" /> },
                                 { id: 'favorites', label: 'Favorite Providers', icon: <Heart className="w-4 h-4" /> },
                                 { id: 'offers', label: 'Offers', icon: <Gift className="w-4 h-4" />, secondary: true },
-                                { id: 'settings', label: 'Notification Settings', icon: <Bell className="w-4 h-4" /> },
                                 { id: 'support', label: 'Support', icon: <Shield className="w-4 h-4" />, secondary: true, action: () => navigate('/customer/complaints') },
                             ].map((item) => (
                                 <button
@@ -439,7 +438,6 @@ const UserProfile = () => {
                                         { id: 'payments', label: 'Wallet', icon: <Wallet className="w-4 h-4 text-primary" /> },
                                         { id: 'favorites', label: 'Saved', icon: <Heart className="w-4 h-4 text-rose-500" /> },
                                         { id: 'offers', label: 'Offers', icon: <Gift className="w-4 h-4 text-accent" /> },
-                                        { id: 'settings', label: 'Settings', icon: <Bell className="w-4 h-4 text-teal-600" /> },
                                         { id: 'support', label: 'Support', icon: <Shield className="w-4 h-4 text-blue-500" />, action: () => navigate('/customer/complaints') },
                                     ].map((link, idx) => (
                                         <button
@@ -807,109 +805,7 @@ const UserProfile = () => {
                             </div>
                         )}
 
-                        {activeTab === 'settings' && (
-                            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 space-y-6">
-                                <div>
-                                    <h3 className="text-lg font-bold text-secondary">Notification Settings</h3>
-                                    <p className="text-xs text-gray-500">Configure how and when you receive updates from our system.</p>
-                                </div>
 
-                                <div className="space-y-4">
-                                    {/* Master Push Toggle */}
-                                    <div className="flex items-center justify-between p-4 rounded-xl bg-gray-55/50 border border-gray-100 hover:border-gray-200 transition-all">
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-2 bg-primary/10 rounded-lg text-primary">
-                                                <Bell className="w-5 h-5" />
-                                            </div>
-                                            <div>
-                                                <p className="text-sm font-bold text-secondary">Enable Push Notifications</p>
-                                                <p className="text-xs text-gray-500">Receive real-time alerts on your device</p>
-                                            </div>
-                                        </div>
-                                        <button
-                                            onClick={() => handleTogglePreference('pushEnabled')}
-                                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${preferences.pushEnabled ? 'bg-primary' : 'bg-gray-200'}`}
-                                        >
-                                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${preferences.pushEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
-                                        </button>
-                                    </div>
-
-                                    {/* Quiet Hours Block */}
-                                    <div className="p-4 rounded-xl bg-gray-55/50 border border-gray-100 hover:border-gray-200 transition-all space-y-3">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-3">
-                                                <div className="p-2 bg-indigo-50 rounded-lg text-indigo-500">
-                                                    <Shield className="w-5 h-5" />
-                                                </div>
-                                                <div>
-                                                    <p className="text-sm font-bold text-secondary">Quiet Hours</p>
-                                                    <p className="text-xs text-gray-500">Silence push notifications during set hours</p>
-                                                </div>
-                                            </div>
-                                            <button
-                                                onClick={() => handleQuietHoursChange({ enabled: !preferences.quietHours?.enabled })}
-                                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${preferences.quietHours?.enabled ? 'bg-indigo-500' : 'bg-gray-200'}`}
-                                            >
-                                                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${preferences.quietHours?.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
-                                            </button>
-                                        </div>
-
-                                        {preferences.quietHours?.enabled && (
-                                            <div className="flex items-center gap-4 pl-12 pt-2 transition-all">
-                                                <div>
-                                                    <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Start Time</label>
-                                                    <input
-                                                        type="time"
-                                                        value={preferences.quietHours?.start || '22:00'}
-                                                        onChange={(e) => handleQuietHoursChange({ start: e.target.value })}
-                                                        className="px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary bg-white font-medium text-gray-700 shadow-sm"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">End Time</label>
-                                                    <input
-                                                        type="time"
-                                                        value={preferences.quietHours?.end || '08:00'}
-                                                        onChange={(e) => handleQuietHoursChange({ end: e.target.value })}
-                                                        className="px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary bg-white font-medium text-gray-700 shadow-sm"
-                                                    />
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Granular Preferences Grid */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                                        {[
-                                            { key: 'booking', label: 'Bookings', desc: 'Updates about requested and active bookings', icon: <Package className="w-4 h-4 text-blue-500" /> },
-                                            { key: 'payment', label: 'Payments', desc: 'Invoices, transaction updates, and receipts', icon: <CreditCard className="w-4 h-4 text-emerald-500" /> },
-                                            { key: 'complaint', label: 'Complaints', desc: 'Updates on resolved support requests', icon: <Shield className="w-4 h-4 text-rose-500" /> },
-                                            { key: 'wallet', label: 'Wallet Activity', desc: 'Refunds and credits to your wallet', icon: <Wallet className="w-4 h-4 text-indigo-500" /> },
-                                            { key: 'promotional', label: 'Offers & Promos', desc: 'Discounts, seasonal updates, and announcements', icon: <Gift className="w-4 h-4 text-amber-500" /> },
-                                            { key: 'reminder', label: 'Reminders', desc: 'Alerts for upcoming bookings and arrivals', icon: <User className="w-4 h-4 text-teal-500" /> }
-                                        ].map(item => (
-                                            <div key={item.key} className="flex items-start justify-between p-4 rounded-xl border border-gray-100 hover:border-gray-200 transition-all bg-white shadow-sm">
-                                                <div className="flex gap-3 min-w-0">
-                                                    <div className="p-2 bg-gray-50 rounded-lg shrink-0">
-                                                        {item.icon}
-                                                    </div>
-                                                    <div className="min-w-0">
-                                                        <p className="text-sm font-bold text-secondary truncate">{item.label}</p>
-                                                        <p className="text-xs text-gray-500 mt-0.5 leading-snug">{item.desc}</p>
-                                                    </div>
-                                                </div>
-                                                <button
-                                                    onClick={() => handleTogglePreference(item.key)}
-                                                    className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus:outline-none ${preferences[item.key] ? 'bg-primary' : 'bg-gray-200'}`}
-                                                >
-                                                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${preferences[item.key] ? 'translate-x-4.5' : 'translate-x-1'}`} />
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
 
                         {activeTab === 'favorites' && (
                             <div className="space-y-4 animate-fade-in">

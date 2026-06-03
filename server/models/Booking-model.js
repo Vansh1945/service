@@ -205,6 +205,57 @@ const bookingSchema = new Schema({
     }
   },
 
+  // Admin Cancellation Tracking
+  cancelledBy: {
+    type: String,
+    enum: ['customer', 'admin', 'system'],
+    default: null
+  },
+  cancellationReason: {
+    type: String,
+    trim: true,
+    default: null
+  },
+  complaintId: {
+    type: Schema.Types.ObjectId,
+    ref: 'Complaint',
+    default: null
+  },
+  cancelledAt: {
+    type: Date,
+    default: null
+  },
+  refundDestination: {
+    type: String,
+    enum: ['wallet', 'none'],
+    default: 'none'
+  },
+  refundAmount: {
+    type: Number,
+    default: 0
+  },
+  nonRefundableAmount: {
+    type: Number,
+    default: 0
+  },
+  platformFeeRetained: {
+    type: Number,
+    default: 0
+  },
+  refundStatus: {
+    type: String,
+    enum: ['pending', 'processing', 'completed', 'failed', 'none'],
+    default: 'none'
+  },
+  refundReference: {
+    type: String,
+    default: null
+  },
+  refundProcessedAt: {
+    type: Date,
+    default: null
+  },
+
   // Status history for progress tracking
   statusHistory: [{
     status: {
@@ -559,14 +610,14 @@ bookingSchema.pre('save', async function (next) {
 
   // Commission calculation (runs on new bookings with provider, or when provider/pricing changes on existing bookings)
   if (this.provider && (
-    this.isNew || 
-    this.isModified('provider') || 
-    this.isModified('subtotal') || 
-    this.isModified('totalDiscount') || 
-    this.isModified('visitingCharge') || 
-    this.isModified('rainCharge') || 
-    this.isModified('trafficCharge') || 
-    this.isModified('nightCharge') || 
+    this.isNew ||
+    this.isModified('provider') ||
+    this.isModified('subtotal') ||
+    this.isModified('totalDiscount') ||
+    this.isModified('visitingCharge') ||
+    this.isModified('rainCharge') ||
+    this.isModified('trafficCharge') ||
+    this.isModified('nightCharge') ||
     this.isModified('demandSurge')
   )) {
     try {
@@ -575,8 +626,8 @@ bookingSchema.pre('save', async function (next) {
       const serviceId = firstService ? firstService.service : null;
 
       const commissionRule = await CommissionRule.getCommissionForProvider(
-        this.provider, 
-        this.zoneId, 
+        this.provider,
+        this.zoneId,
         'standard',
         serviceId
       );
@@ -591,28 +642,33 @@ bookingSchema.pre('save', async function (next) {
         await settings.save();
       }
 
-      const splits = settings.surgeSplitSettings || { visiting: 60, rain: 70, traffic: 70, night: 70, demand: 50 };
+      const splits = settings.surgeSplitSettings || {};
+      const splitVisiting = typeof splits.visiting === 'number' && !isNaN(splits.visiting) ? splits.visiting : 60;
+      const splitRain = typeof splits.rain === 'number' && !isNaN(splits.rain) ? splits.rain : 70;
+      const splitTraffic = typeof splits.traffic === 'number' && !isNaN(splits.traffic) ? splits.traffic : 70;
+      const splitNight = typeof splits.night === 'number' && !isNaN(splits.night) ? splits.night : 70;
+      const splitDemand = typeof splits.demand === 'number' && !isNaN(splits.demand) ? splits.demand : 50;
       this.surgeSplitSettings = splits;
 
       // Surcharge amounts on this booking
-      const visiting = this.visitingCharge || 0;
-      const rain = this.rainCharge || 0;
-      const traffic = this.trafficCharge || 0;
-      const night = this.nightCharge || 0;
-      const demand = this.demandSurge || 0;
-      const custom = this.customCharges || 0;
-      const platformFee = this.platformFee || 0;
+      const visiting = typeof this.visitingCharge === 'number' && !isNaN(this.visitingCharge) ? this.visitingCharge : 0;
+      const rain = typeof this.rainCharge === 'number' && !isNaN(this.rainCharge) ? this.rainCharge : 0;
+      const traffic = typeof this.trafficCharge === 'number' && !isNaN(this.trafficCharge) ? this.trafficCharge : 0;
+      const night = typeof this.nightCharge === 'number' && !isNaN(this.nightCharge) ? this.nightCharge : 0;
+      const demand = typeof this.demandSurge === 'number' && !isNaN(this.demandSurge) ? this.demandSurge : 0;
+      const custom = typeof this.customCharges === 'number' && !isNaN(this.customCharges) ? this.customCharges : 0;
+      const platformFee = typeof this.platformFee === 'number' && !isNaN(this.platformFee) ? this.platformFee : 0;
 
       // Provider splits
-      const provVisitingShare = parseFloat((visiting * (splits.visiting / 100)).toFixed(2));
-      const provRainShare = parseFloat((rain * (splits.rain / 100)).toFixed(2));
-      const provTrafficShare = parseFloat((traffic * (splits.traffic / 100)).toFixed(2));
-      const provNightShare = parseFloat((night * (splits.night / 100)).toFixed(2));
-      const provDemandShare = parseFloat((demand * (splits.demand / 100)).toFixed(2));
+      const provVisitingShare = parseFloat((visiting * (splitVisiting / 100)).toFixed(2)) || 0;
+      const provRainShare = parseFloat((rain * (splitRain / 100)).toFixed(2)) || 0;
+      const provTrafficShare = parseFloat((traffic * (splitTraffic / 100)).toFixed(2)) || 0;
+      const provNightShare = parseFloat((night * (splitNight / 100)).toFixed(2)) || 0;
+      const provDemandShare = parseFloat((demand * (splitDemand / 100)).toFixed(2)) || 0;
 
-      const providerSurgeShare = parseFloat((provVisitingShare + provRainShare + provTrafficShare + provNightShare + provDemandShare).toFixed(2));
+      const providerSurgeShare = parseFloat((provVisitingShare + provRainShare + provTrafficShare + provNightShare + provDemandShare).toFixed(2)) || 0;
       const totalSurcharges = visiting + rain + traffic + night + demand + custom + platformFee;
-      const companySurgeShare = parseFloat((totalSurcharges - providerSurgeShare).toFixed(2));
+      const companySurgeShare = parseFloat((totalSurcharges - providerSurgeShare).toFixed(2)) || 0;
 
       this.providerSurgeShare = providerSurgeShare;
       this.companySurgeShare = companySurgeShare;

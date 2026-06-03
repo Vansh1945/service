@@ -1870,16 +1870,6 @@ exports.getPerformanceRatings = async (req, res) => {
         const completionRate = totalRelevant > 0 ? parseFloat(((completedBookings / totalRelevant) * 100).toFixed(1)) : 0;
         const onTimeRate = completedBookings > 0 ? parseFloat(((onTimeCompleted / completedBookings) * 100).toFixed(1)) : 0;
 
-        // Determine performance badge
-        let performanceBadge = 'Bronze';
-        if (averageRating >= 4.5 && completionRate >= 95 && onTimeRate >= 95) {
-            performanceBadge = 'Platinum';
-        } else if (averageRating >= 4.0 && completionRate >= 90 && onTimeRate >= 90) {
-            performanceBadge = 'Gold';
-        } else if (averageRating >= 3.5 && completionRate >= 85 && onTimeRate >= 85) {
-            performanceBadge = 'Silver';
-        }
-
         const provider = await Provider.findById(providerId).select('performanceScore').lean();
         const performance = provider?.performanceScore || {};
 
@@ -1890,8 +1880,7 @@ exports.getPerformanceRatings = async (req, res) => {
                 totalReviews: ratingData.totalReviews || 0,
                 completionRate: performance.completionPercentage !== undefined ? performance.completionPercentage : completionRate,
                 onTimeRate: performance.onTimePercentage !== undefined ? performance.onTimePercentage : onTimeRate,
-                performanceBadge,
-                trustScore: performance.trustScore !== undefined ? performance.trustScore : 100,
+                performanceBadge: performance.badge || 'Bronze',
                 cancellationRatio: performance.cancellationRatio || 0,
                 complaintRatio: performance.complaintRatio || 0,
                 codAbuseRisk: performance.codAbuseRisk || 'LOW',
