@@ -11,9 +11,9 @@ Allow: /terms-and-conditions
 Disallow: /admin/
 Disallow: /customer/
 Disallow: /provider/
-Allow: /login
-Allow: /register
-Allow: /register-provider
+Disallow: /login
+Disallow: /register
+Disallow: /register-provider
 Disallow: /forgot-password
 Disallow: /unauthorized
 
