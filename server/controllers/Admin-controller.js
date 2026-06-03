@@ -22,6 +22,16 @@ const { sendMail } = require('../utils/sendmail');
 
 const { getPrecomputedAnalytics, refreshAnalytics } = require('../services/AnalyticsService');
 
+const deleteFile = async (publicId) => {
+    if (!publicId) return;
+    try {
+        await cloudinary.uploader.destroy(publicId);
+        console.log(`Successfully deleted file from Cloudinary: ${publicId}`);
+    } catch (err) {
+        console.error(`Failed to delete file from Cloudinary: ${publicId}`, err.message);
+    }
+};
+
 /**
  * Register a new admin
  */
@@ -207,10 +217,10 @@ const approveProvider = async (req, res) => {
         const { status, remarks, rejectionReason, durationDays } = req.body;
         const finalRemarks = remarks || rejectionReason || '';
 
-        if (!['approved', 'rejected', 'active', 'restricted', 'suspended', 'blocked', 'pending_review'].includes(status)) {
+        if (!['approved', 'rejected', 'active', 'restricted', 'suspended', 'blocked', 'pending_review', 'bank_approved', 'bank_rejected'].includes(status)) {
             return res.status(400).json({
                 success: false,
-                message: 'Invalid status. Must be one of: approved, rejected, active, restricted, suspended, blocked, pending_review'
+                message: 'Invalid status. Must be one of: approved, rejected, active, restricted, suspended, blocked, pending_review, bank_approved, bank_rejected'
             });
         }
 
@@ -224,6 +234,128 @@ const approveProvider = async (req, res) => {
             return res.status(404).json({
                 success: false,
                 message: 'Provider not found'
+            });
+        }
+
+        if (status === 'bank_approved') {
+            // Delete old passbook image if it's replaced
+            const backupStr = provider.rejectionReason;
+            if (backupStr && backupStr.startsWith('{') && backupStr.endsWith('}')) {
+                try {
+                    const parsed = JSON.parse(backupStr);
+                    if (parsed.passbookImagePublicId && 
+                        parsed.passbookImagePublicId !== provider.bankDetails.passbookImagePublicId) {
+                        await deleteFile(parsed.passbookImagePublicId);
+                    }
+                } catch (err) {
+                    console.error("Failed to delete old passbook image on bank approval:", err);
+                }
+            }
+
+            provider.bankDetails.verified = true;
+            provider.rejectionReason = ''; // Clear backup/rejection details
+            await provider.save();
+
+            // Send notification
+            try {
+                sendNotification(
+                    provider._id,
+                    'provider',
+                    'Bank Details Approved 💳',
+                    `Your bank details have been verified and approved. ${finalRemarks ? '\nRemarks: ' + finalRemarks : ''}`,
+                    'approved',
+                    provider._id
+                );
+            } catch (fcmError) {
+                console.error('Failed to send bank approval notification:', fcmError);
+            }
+
+            // Send email
+            try {
+                await sendMail({
+                    to: provider.email,
+                    templateType: 'providerApproval',
+                    variables: {
+                        name: provider.name,
+                        providerName: provider.providerId,
+                        reason: finalRemarks || 'Your updated bank details have been verified and approved.',
+                        email: `${process.env.FRONTEND_URL}/login`
+                    }
+                });
+            } catch (mailError) {
+                console.error('Failed to send bank approval email:', mailError);
+            }
+
+            return res.status(200).json({
+                success: true,
+                message: 'Bank details approved successfully',
+                provider: provider.toJSON()
+            });
+        }
+
+        if (status === 'bank_rejected') {
+            const oldReason = provider.rejectionReason;
+            let parsedBankDetails = null;
+            if (oldReason && oldReason.startsWith('{') && oldReason.endsWith('}')) {
+                try {
+                    parsedBankDetails = JSON.parse(oldReason);
+                } catch (e) {
+                    console.error("Failed to parse backed up bank details:", e);
+                }
+            }
+
+            if (parsedBankDetails) {
+                // Delete the new (rejected) passbook image if it's different from the old one
+                if (provider.bankDetails?.passbookImagePublicId && 
+                    provider.bankDetails.passbookImagePublicId !== parsedBankDetails.passbookImagePublicId) {
+                    try {
+                        await deleteFile(provider.bankDetails.passbookImagePublicId);
+                    } catch (deleteError) {
+                        console.error("Failed to delete rejected passbook image:", deleteError);
+                    }
+                }
+                provider.bankDetails = {
+                    ...parsedBankDetails,
+                    verified: true
+                };
+            }
+
+            // Clear backup
+            provider.rejectionReason = ''; // Clear it since the provider is still approved and active
+            await provider.save();
+
+            // Send notification
+            try {
+                sendNotification(
+                    provider._id,
+                    'provider',
+                    'Bank Details Update Rejected ❌',
+                    `Your bank details update request has been rejected. Reason: ${finalRemarks || 'No reason provided'}`,
+                    'rejected',
+                    provider._id
+                );
+            } catch (fcmError) {
+                console.error('Failed to send bank rejection notification:', fcmError);
+            }
+
+            // Send email
+            try {
+                await sendMail({
+                    to: provider.email,
+                    templateType: 'providerRejection',
+                    variables: {
+                        name: provider.name,
+                        reason: finalRemarks || 'The requested bank account update was rejected by the administrator.'
+                    }
+                });
+            } catch (mailError) {
+                console.error('Failed to send bank rejection email:', mailError);
+            }
+
+            return res.status(200).json({
+                success: true,
+                message: 'Bank details update rejected successfully',
+                provider: provider.toJSON()
             });
         }
 
@@ -443,13 +575,25 @@ const getPendingProviders = async (req, res) => {
         const limit = parseInt(req.query.limit) || 100;
         const skip = (page - 1) * limit;
         const search = req.query.search || '';
+        const { startDate, endDate, tab } = req.query;
+
+        let matchCriteria;
+        if (tab === 'pending') {
+            matchCriteria = { approved: false };
+        } else if (tab === 'bank_pending') {
+            matchCriteria = { approved: true, 'bankDetails.verified': false, 'bankDetails.accountNo': { $exists: true, $ne: '' } };
+        } else {
+            matchCriteria = {
+                $or: [
+                    { approved: false },
+                    { approved: true, 'bankDetails.verified': false, 'bankDetails.accountNo': { $exists: true, $ne: '' } }
+                ]
+            };
+        }
 
         const filter = {
             isDeleted: false,
-            $or: [
-                { approved: false },
-                { approved: true, 'bankDetails.verified': false, 'bankDetails.accountNo': { $exists: true, $ne: '' } }
-            ]
+            ...matchCriteria
         };
 
         if (search) {
@@ -458,10 +602,22 @@ const getPendingProviders = async (req, res) => {
                     $or: [
                         { name: { $regex: search, $options: 'i' } },
                         { email: { $regex: search, $options: 'i' } },
+                        { phone: { $regex: search, $options: 'i' } },
                         { providerId: { $regex: search, $options: 'i' } }
                     ]
                 }
             ];
+        }
+
+        if (startDate || endDate) {
+            const dateFilter = {};
+            if (startDate) dateFilter.$gte = new Date(startDate);
+            if (endDate) {
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                dateFilter.$lte = end;
+            }
+            filter.createdAt = dateFilter;
         }
 
         const providersPipeline = [

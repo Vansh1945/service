@@ -44,6 +44,8 @@ import { useAuth } from '../../context/auth';
 import * as AdminService from '../../services/AdminService';
 import LoadingSpinner from '../../components/Loader';
 import { formatDate } from '../../utils/format';
+import { useAdminFilter } from '../../context/AdminFilterContext';
+import AdminFilterBar from '../../components/AdminFilterBar';
 
 const AdminProvidersPage = () => {
   const { token, API, showToast } = useAuth();
@@ -59,6 +61,7 @@ const AdminProvidersPage = () => {
   const [approvalConfirmation, setApprovalConfirmation] = useState('');
   const [processingAction, setProcessingAction] = useState(null);
 
+  const [activeTab, setActiveTab] = useState('pending_providers'); // 'pending_providers' | 'bank_pending'
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
   const [showFilters, setShowFilters] = useState(false);
@@ -67,6 +70,16 @@ const AdminProvidersPage = () => {
     type: '',
     url: ''
   });
+
+  const {
+    filterType,
+    year,
+    financialYear,
+    month,
+    quarter,
+    zoneIds,
+    getMergedQuery
+  } = useAdminFilter();
 
   // Advanced Filters
   const [filters, setFilters] = useState({
@@ -115,34 +128,15 @@ const AdminProvidersPage = () => {
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   }, []);
 
-  // Optimized data fetching
-  useEffect(() => {
-    fetchProviders();
-  }, []);
-
-  // Memoized provider filtering
-  useEffect(() => {
-    const pendingOnly = allProviders.filter(provider => 
-      (!provider.approved && provider.kycStatus !== 'rejected') || 
-      (provider.bankDetails && !provider.bankDetails.verified && provider.bankDetails.accountNo)
-    );
-    setPendingProviders(pendingOnly);
-  }, [allProviders]);
-
-  // Optimized filtering and sorting
-  useEffect(() => {
-    applyFiltersAndSearch();
-  }, [searchTerm, filters, sortBy, sortOrder, pendingProviders]);
-
-  // Stats calculation
-  useEffect(() => {
-    calculateStats();
-  }, [filteredProviders, allProviders, getDaysPending]);
-
-  const fetchProviders = async () => {
+  const fetchProviders = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await AdminService.getPendingProviders();
+      const params = {
+        tab: activeTab === 'pending_providers' ? 'pending' : 'bank_pending',
+        search: searchTerm,
+        ...getMergedQuery()
+      };
+      const response = await AdminService.getPendingProviders(params);
       const data = response.data;
 
       if (data.success) {
@@ -156,7 +150,27 @@ const AdminProvidersPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeTab, searchTerm, getMergedQuery, showToast]);
+
+  // Optimized data fetching
+  useEffect(() => {
+    fetchProviders();
+  }, [fetchProviders, filterType, year, financialYear, month, quarter, zoneIds]);
+
+  // Memoized provider filtering
+  useEffect(() => {
+    setPendingProviders(allProviders);
+  }, [allProviders]);
+
+  // Optimized filtering and sorting
+  useEffect(() => {
+    applyFiltersAndSearch();
+  }, [searchTerm, filters, sortBy, sortOrder, pendingProviders]);
+
+  // Stats calculation
+  useEffect(() => {
+    calculateStats();
+  }, [filteredProviders, allProviders, getDaysPending]);
 
   const calculateStats = useCallback(() => {
     const total = allProviders.length;
@@ -203,27 +217,7 @@ const AdminProvidersPage = () => {
   const applyFiltersAndSearch = useCallback(() => {
     let filtered = [...pendingProviders];
 
-    // Search filter
-    if (searchTerm.trim()) {
-      const search = searchTerm.toLowerCase();
-      filtered = filtered.filter(provider => {
-        return (
-          provider.name?.toLowerCase().includes(search) ||
-          provider.email?.toLowerCase().includes(search) ||
-          provider.phone?.includes(search) ||
-          provider.services?.some(s => s.toLowerCase().includes(search)) ||
-          provider.serviceArea?.toLowerCase().includes(search) ||
-          (provider.address?.city?.toLowerCase().includes(search)) ||
-          (provider.address?.state?.toLowerCase().includes(search)) ||
-          (provider.address?.street?.toLowerCase().includes(search)) ||
-          (provider.bankDetails?.accountNo?.includes(search)) ||
-          (provider.bankDetails?.ifsc?.includes(search)) ||
-          (provider.bankDetails?.bankName?.toLowerCase().includes(search))
-        );
-      });
-    }
-
-    // Apply filters
+    // Local filters (like experience, services etc)
     Object.entries(filters).forEach(([key, value]) => {
       if (!value) return;
 
@@ -309,7 +303,7 @@ const AdminProvidersPage = () => {
 
     setFilteredProviders(filtered);
     setCurrentPage(1);
-  }, [searchTerm, filters, sortBy, sortOrder, pendingProviders, getDaysPending]);
+  }, [filters, sortBy, sortOrder, pendingProviders, getDaysPending]);
 
   const clearFilters = () => {
     setFilters({
@@ -344,8 +338,6 @@ const AdminProvidersPage = () => {
     }
   }, [showToast]);
 
-
-
   const openApprovalModal = useCallback((action, provider) => {
     setSelectedProvider(provider);
     setApprovalAction(action);
@@ -365,13 +357,19 @@ const AdminProvidersPage = () => {
     setApprovalRemarks(e.target.value);
   }, []);
 
-  const handleApproveProvider = useCallback((p) => openApprovalModal('approved', p), [openApprovalModal]);
-  const handleRejectProvider = useCallback((p) => openApprovalModal('rejected', p), [openApprovalModal]);
+  const handleApproveProvider = useCallback((p) => {
+    openApprovalModal(activeTab === 'pending_providers' ? 'approved' : 'bank_approved', p);
+  }, [openApprovalModal, activeTab]);
+
+  const handleRejectProvider = useCallback((p) => {
+    openApprovalModal(activeTab === 'pending_providers' ? 'rejected' : 'bank_rejected', p);
+  }, [openApprovalModal, activeTab]);
 
   const handleModalConfirm = async () => {
     if (!selectedProvider || !approvalAction) return;
 
-    if (approvalAction === 'rejected' && !approvalRemarks.trim()) {
+    const isReject = approvalAction === 'rejected' || approvalAction === 'bank_rejected';
+    if (isReject && !approvalRemarks.trim()) {
       showToast('Please provide a reason for rejection', 'error');
       return;
     }
@@ -381,13 +379,14 @@ const AdminProvidersPage = () => {
 
       const response = await AdminService.updateProviderStatus(selectedProvider._id, {
         status: approvalAction,
+        remarks: approvalRemarks,
         rejectionReason: approvalRemarks
       });
 
       const data = response.data;
 
       if (data.success) {
-        showToast(`Provider ${approvalAction} successfully`, 'success');
+        showToast(`Action performed successfully`, 'success');
         // Refresh the providers list
         fetchProviders();
         // Close modal and reset states
@@ -965,21 +964,38 @@ const AdminProvidersPage = () => {
               </div>
             </div>
 
-            {(status === 'pending' || (selectedProvider.bankDetails && !selectedProvider.bankDetails.verified && selectedProvider.bankDetails.accountNo)) && (
+            {activeTab === 'pending_providers' ? (
               <div className="mt-8 flex gap-4">
                 <button
                   onClick={() => openApprovalModal('approved', selectedProvider)}
                   className="flex-1 flex items-center justify-center px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-sm hover:shadow-md font-semibold"
                 >
                   <CheckCircle className="w-5 h-5 mr-2" />
-                  {status === 'approved' ? 'Verify Bank Details' : 'Approve Provider'}
+                  Approve Provider
                 </button>
                 <button
                   onClick={() => openApprovalModal('rejected', selectedProvider)}
                   className="flex-1 flex items-center justify-center px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:from-red-600 hover:to-red-700 transition-all duration-200 shadow-sm hover:shadow-md font-semibold"
                 >
                   <XCircle className="w-5 h-5 mr-2" />
-                  {status === 'approved' ? 'Reject Bank Details' : 'Reject Provider'}
+                  Reject Provider
+                </button>
+              </div>
+            ) : (
+              <div className="mt-8 flex gap-4">
+                <button
+                  onClick={() => openApprovalModal('bank_approved', selectedProvider)}
+                  className="flex-1 flex items-center justify-center px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-sm hover:shadow-md font-semibold"
+                >
+                  <CheckCircle className="w-5 h-5 mr-2" />
+                  Approve Bank Update
+                </button>
+                <button
+                  onClick={() => openApprovalModal('bank_rejected', selectedProvider)}
+                  className="flex-1 flex items-center justify-center px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:from-red-600 hover:to-red-700 transition-all duration-200 shadow-sm hover:shadow-md font-semibold"
+                >
+                  <XCircle className="w-5 h-5 mr-2" />
+                  Reject Bank Update
                 </button>
               </div>
             )}
@@ -1106,6 +1122,39 @@ const AdminProvidersPage = () => {
           ))}
         </div>
 
+        {/* Tabs */}
+        <div className="flex gap-4 mb-6 bg-white/60 backdrop-blur-md p-2 rounded-2xl border border-gray-205 shadow-sm max-w-md">
+          <button
+            onClick={() => {
+              setActiveTab('pending_providers');
+              setCurrentPage(1);
+            }}
+            className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold transition-all duration-300 ${activeTab === 'pending_providers'
+                ? 'bg-gradient-to-r from-primary to-teal-600 text-white shadow-md transform scale-[1.02]'
+                : 'text-gray-600 hover:bg-gray-100 hover:text-secondary'
+              }`}
+          >
+            <UserPlus className="w-5 h-5" />
+            Pending Providers
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab('bank_pending');
+              setCurrentPage(1);
+            }}
+            className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold transition-all duration-300 ${activeTab === 'bank_pending'
+                ? 'bg-gradient-to-r from-primary to-teal-600 text-white shadow-md transform scale-[1.02]'
+                : 'text-gray-600 hover:bg-gray-100 hover:text-secondary'
+              }`}
+          >
+            <CreditCard className="w-5 h-5" />
+            Bank Pending
+          </button>
+        </div>
+
+        {/* Reusable Premium Filter Bar */}
+        <AdminFilterBar onApply={fetchProviders} />
+
         {/* Search Bar */}
         <div className="bg-white p-4 rounded-xl shadow-lg border border-gray-200 mb-6 hover:shadow-xl transition-shadow duration-300">
           <div className="relative">
@@ -1213,8 +1262,8 @@ const ApprovalModal = ({
 }) => {
   if (!show) return null;
 
-  const isApprove = action === 'approved';
-  const isReject = action === 'rejected';
+  const isApprove = action === 'approved' || action === 'bank_approved';
+  const isReject = action === 'rejected' || action === 'bank_rejected';
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -1233,11 +1282,14 @@ const ApprovalModal = ({
           </div>
 
           <h3 className="text-xl font-bold text-center text-secondary mb-2">
-            {isApprove ? 'Approve Provider' : 'Reject Provider'}
+            {action === 'approved' && 'Approve Provider'}
+            {action === 'rejected' && 'Reject Provider'}
+            {action === 'bank_approved' && 'Approve Bank Update'}
+            {action === 'bank_rejected' && 'Reject Bank Update'}
           </h3>
 
           <p className="text-center text-gray-600 mb-6">
-            Are you sure you want to {isApprove ? 'approve' : 'reject'} <strong>{providerName}</strong>?
+            Are you sure you want to {isApprove ? 'approve' : 'reject'} <strong>{providerName}</strong>{action.startsWith('bank_') ? "'s bank details update" : ''}?
           </p>
 
           <div className="mb-6 text-left">
@@ -1263,6 +1315,7 @@ const ApprovalModal = ({
               Cancel
             </button>
             <button
+              onClick={onConfirm}
               disabled={processing || (!isApprove && !remarks.trim())}
               className={`flex-1 px-4 py-3 text-white rounded-lg transition-all duration-200 font-semibold ${isApprove
                 ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 disabled:opacity-50'

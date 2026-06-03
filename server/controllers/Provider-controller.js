@@ -945,21 +945,42 @@ exports.updateProviderProfile = async (req, res) => {
                     };
                     updates.s2CellId = newS2CellId;
                     updates.s2CellIdPrecise = newS2CellIdPrecise;
-        // Resolve zone based on new coordinates
-        if (newLat && newLng) {
-            const zone = await Zone.findZoneByCoordinates(newLat, newLng);
-            if (zone) {
-                updates.currentZone = zone._id;
-                updates.zoneUpdatedAt = new Date();
-            }
-        }
+                    // Resolve zone based on new coordinates
+                    if (newLat && newLng) {
+                        const zone = await Zone.findZoneByCoordinates(newLat, newLng);
+                        if (zone) {
+                            updates.currentZone = zone._id;
+                            updates.zoneUpdatedAt = new Date();
+                        }
+                    }
                 }
             }
         }
 
+        // Determine if bank update is requested
+        const isBankUpdateRequested = (
+            (!updateType || updateType === 'bank') &&
+            (accountNo || ifsc || bankName || accountName ||
+                (req.files && req.files['passbookImage']) ||
+                (req.file && req.file.fieldname === 'passbookImage'))
+        );
+
+        if (isBankUpdateRequested && currentProvider.approved && currentProvider.bankDetails?.verified) {
+            // Backup the existing approved and verified bank details to rejectionReason
+            const backupDetails = {
+                accountNo: currentProvider.bankDetails.accountNo || '',
+                ifsc: currentProvider.bankDetails.ifsc || '',
+                bankName: currentProvider.bankDetails.bankName || '',
+                accountName: currentProvider.bankDetails.accountName || '',
+                passbookImage: currentProvider.bankDetails.passbookImage || '',
+                passbookImagePublicId: currentProvider.bankDetails.passbookImagePublicId || ''
+            };
+            updates.rejectionReason = JSON.stringify(backupDetails);
+        }
+
         if (!updateType || updateType === 'bank') {
             // Bank Details Updates
-            if (accountNo || ifsc) {
+            if (accountNo || ifsc || bankName || accountName) {
                 // Validate IFSC if provided
                 if (ifsc && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) {
                     return res.status(400).json({
@@ -1021,8 +1042,8 @@ exports.updateProviderProfile = async (req, res) => {
             if (req.files['passbookImage']) {
                 const passbookImage = req.files['passbookImage'][0];
 
-                // Delete old passbook image
-                if (currentProvider.bankDetails?.passbookImagePublicId) {
+                // Delete old passbook image only if NOT verified / approved
+                if (!currentProvider.bankDetails?.verified && currentProvider.bankDetails?.passbookImagePublicId) {
                     await deleteFile(currentProvider.bankDetails.passbookImagePublicId);
                 }
 
@@ -1056,7 +1077,7 @@ exports.updateProviderProfile = async (req, res) => {
                 updates.resumePublicId = req.file.filename;
                 successMessage = 'Resume updated successfully';
             } else if (fieldName === 'passbookImage') {
-                if (currentProvider.bankDetails?.passbookImagePublicId) {
+                if (!currentProvider.bankDetails?.verified && currentProvider.bankDetails?.passbookImagePublicId) {
                     await deleteFile(currentProvider.bankDetails.passbookImagePublicId);
                 }
                 updates.bankDetails = {

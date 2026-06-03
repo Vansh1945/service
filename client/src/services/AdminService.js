@@ -28,8 +28,8 @@ export const getCustomerById = (id) => {
     return axiosInstance.get(`/admin/customers/${id}`);
 };
 
-export const getPendingProviders = () => {
-    return axiosInstance.get("/admin/providers/pending");
+export const getPendingProviders = (params) => {
+    return axiosInstance.get("/admin/providers/pending", { params });
 };
 
 export const updateProviderStatus = (id, data) => {

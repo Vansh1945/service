@@ -284,7 +284,7 @@ const PaymentDetails = ({ booking }) => {
   const visitingCharge = booking.visitingCharge || 0;
   const customCharges = booking.customCharges || 0;
   const additional = (booking.rainCharge || 0) + (booking.trafficCharge || 0) + (booking.nightCharge || 0) + (booking.platformFee || 0);
-  
+
   const additionalBreakdown = [];
   if (booking.rainCharge > 0) additionalBreakdown.push({ name: 'Rain Charge', amount: booking.rainCharge });
   if (booking.trafficCharge > 0) additionalBreakdown.push({ name: 'Traffic Charge', amount: booking.trafficCharge });

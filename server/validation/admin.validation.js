@@ -8,8 +8,8 @@ const registerAdminSchema = z.object({
 });
 
 const approveProviderSchema = z.object({
-  status: z.enum(['approved', 'rejected', 'active', 'restricted', 'suspended', 'blocked', 'pending_review'], {
-    errorMap: () => ({ message: "Status must be one of: approved, rejected, active, restricted, suspended, blocked, pending_review" })
+  status: z.enum(['approved', 'rejected', 'active', 'restricted', 'suspended', 'blocked', 'pending_review', 'bank_approved', 'bank_rejected'], {
+    errorMap: () => ({ message: "Status must be one of: approved, rejected, active, restricted, suspended, blocked, pending_review, bank_approved, bank_rejected" })
   }),
   remarks: z.string().optional(),
   rejectionReason: z.string().optional(),

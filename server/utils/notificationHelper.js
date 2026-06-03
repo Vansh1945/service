@@ -56,27 +56,27 @@ const setIO = (io) => {
  */
 const computeNotificationUrl = (role, type, title, message) => {
     const textContext = `${title} ${message}`.toLowerCase();
-    
+
     if (role === 'admin') {
         if (type === 'booking') return '/admin/bookings';
         if (textContext.includes('payout') || textContext.includes('withdraw') || type === 'withdrawal') return '/admin/payout';
         if (textContext.includes('provider') || textContext.includes('approved')) return '/admin/approve-providers';
         if (textContext.includes('complaint')) return '/admin/complaints';
         return '/admin/dashboard';
-    } 
-    
+    }
+
     if (role === 'provider') {
         if (textContext.includes('payout') || textContext.includes('withdraw')) return '/provider/dashboard'; // Route to provider payout if available
         if (textContext.includes('review') || textContext.includes('feedback')) return '/provider/dashboard';
         return '/provider/dashboard'; // Main dashboard hosts booking tables
-    } 
-    
+    }
+
     if (role === 'customer') {
         if (type === 'booking' || textContext.includes('booking')) return '/customer/bookings';
         if (type === 'payment') return '/customer/bookings'; // Customer payments relate to bookings
         return '/customer/dashboard';
     }
-    
+
     return '/'; // Fallback
 };
 

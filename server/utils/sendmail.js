@@ -208,7 +208,36 @@ const sendMail = async ({ to, subject, html, templateType, variables }) => {
           ...variables
         };
 
-        const compiledBody = Handlebars.compile(template.body);
+        let bodyMarkup = template.body || '';
+
+        // Auto-inject reason/remarks if passed in variables but missing in template body reference
+        if (variables?.reason && !bodyMarkup.includes('{{reason}}') && !bodyMarkup.includes('reason')) {
+          const isRejection = templateType.toLowerCase().includes('reject');
+          const borderColor = isRejection ? '#ef4444' : '#0d9488';
+          const bgColor = isRejection ? '#fef2f2' : '#f0fdf4';
+          const textColor = isRejection ? '#991b1b' : '#115e59';
+          const title = isRejection ? 'Reason for Rejection' : 'Admin Remarks';
+          
+          const remarksBox = `\n<div style="margin-top: 20px; padding: 15px; border-left: 4px solid ${borderColor}; background-color: ${bgColor}; color: ${textColor}; border-radius: 6px; font-family: sans-serif; font-size: 14px;"><strong>${title}:</strong> {{reason}}</div>`;
+          
+          if (bodyMarkup.includes('</div>')) {
+            const lastIndex = bodyMarkup.lastIndexOf('</div>');
+            bodyMarkup = bodyMarkup.slice(0, lastIndex) + remarksBox + bodyMarkup.slice(lastIndex);
+          } else {
+            bodyMarkup += remarksBox;
+          }
+        } else if (variables?.remark && !bodyMarkup.includes('{{remark}}') && !bodyMarkup.includes('remark')) {
+          const remarksBox = `\n<div style="margin-top: 20px; padding: 15px; border-left: 4px solid #0d9488; background-color: #f0fdf4; color: #115e59; border-radius: 6px; font-family: sans-serif; font-size: 14px;"><strong>Remarks:</strong> {{remark}}</div>`;
+          
+          if (bodyMarkup.includes('</div>')) {
+            const lastIndex = bodyMarkup.lastIndexOf('</div>');
+            bodyMarkup = bodyMarkup.slice(0, lastIndex) + remarksBox + bodyMarkup.slice(lastIndex);
+          } else {
+            bodyMarkup += remarksBox;
+          }
+        }
+
+        const compiledBody = Handlebars.compile(bodyMarkup);
         const compiledSubject = Handlebars.compile(template.subject);
 
         finalHtml = compiledBody(runtimeVars);
@@ -220,7 +249,22 @@ const sendMail = async ({ to, subject, html, templateType, variables }) => {
       if (!finalHtml && DEFAULT_EMAIL_TEMPLATES[templateType]) {
         try {
           const fallback = DEFAULT_EMAIL_TEMPLATES[templateType];
-          finalHtml = Handlebars.compile(fallback.body)(variables || {});
+          let bodyMarkup = fallback.body || '';
+          if (variables?.reason && !bodyMarkup.includes('{{reason}}') && !bodyMarkup.includes('reason')) {
+            const isRejection = templateType.toLowerCase().includes('reject');
+            const borderColor = isRejection ? '#ef4444' : '#0d9488';
+            const bgColor = isRejection ? '#fef2f2' : '#f0fdf4';
+            const textColor = isRejection ? '#991b1b' : '#115e59';
+            const title = isRejection ? 'Reason for Rejection' : 'Admin Remarks';
+            const remarksBox = `\n<div style="margin-top: 20px; padding: 15px; border-left: 4px solid ${borderColor}; background-color: ${bgColor}; color: ${textColor}; border-radius: 6px; font-family: sans-serif; font-size: 14px;"><strong>${title}:</strong> {{reason}}</div>`;
+            if (bodyMarkup.includes('</div>')) {
+              const lastIndex = bodyMarkup.lastIndexOf('</div>');
+              bodyMarkup = bodyMarkup.slice(0, lastIndex) + remarksBox + bodyMarkup.slice(lastIndex);
+            } else {
+              bodyMarkup += remarksBox;
+            }
+          }
+          finalHtml = Handlebars.compile(bodyMarkup)(variables || {});
           finalSubject = Handlebars.compile(fallback.subject)(variables || {});
         } catch (_) {}
       }
