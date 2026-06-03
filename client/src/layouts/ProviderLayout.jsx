@@ -4,7 +4,7 @@ import {
     FiMenu, FiX, FiHome, FiCalendar, FiDollarSign,
     FiFileText, FiMessageSquare, FiUser, FiChevronDown,
     FiLogOut, FiBell, FiCreditCard, FiCheckCircle,
-    FiActivity, FiSettings, FiHeadphones
+    FiActivity, FiSettings, FiHeadphones, FiArrowLeft
 } from 'react-icons/fi';
 import { useAuth } from '../context/auth';
 import NotificationBell from '../components/NotificationBell';
@@ -13,11 +13,11 @@ import { toast } from 'react-toastify';
 
 import * as SystemService from '../services/SystemService';
 import axiosInstance from '../api/axiosInstance';
-import { detectCurrentLocation, toLegacyAddressFields } from '../utils/format';
 
 const ProviderLayout = () => {
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+    const [moreMenuOpen, setMoreMenuOpen] = useState(false);
     const [systemSettings, setSystemSettings] = useState({
         companyName: '',
         logo: null,
@@ -33,36 +33,7 @@ const ProviderLayout = () => {
     const [activeBookingId, setActiveBookingId] = useState(null);
     const locationRequestedRef = React.useRef(false);
 
-    // Auto-detect and update provider location on app open - DISABLED: Overwrites permanent registered address in profile automatically.
-    /*
-    useEffect(() => {
-        if (!token || !user || locationRequestedRef.current) return;
-        locationRequestedRef.current = true;
 
-        detectCurrentLocation({ maximumAge: 60000 })
-            .then(async ({ latitude, longitude, address }) => {
-                const fields = toLegacyAddressFields({ ...address, lat: latitude, lng: longitude });
-                const formData = new FormData();
-                formData.append('updateType', 'address');
-                formData.append('lat', latitude);
-                formData.append('lng', longitude);
-                formData.append('street', fields.street || user.address?.street || '');
-                formData.append('city', fields.city || user.address?.city || '');
-                formData.append('state', fields.state || user.address?.state || '');
-                formData.append('postalCode', fields.postalCode || user.address?.postalCode || '');
-                formData.append('country', fields.country || user.address?.country || 'India');
-                if (fields.formattedAddress) formData.append('formattedAddress', fields.formattedAddress);
-
-                await axiosInstance.put('/provider/profile', formData, {
-                    headers: { 'Content-Type': 'multipart/form-data' }
-                });
-                await refreshUser();
-            })
-            .catch((err) => {
-                console.warn('Provider geolocation sync skipped:', err.message);
-            });
-    }, [token, user]);
-    */
 
     // Fetch active bookings to see if we need tracking
     useEffect(() => {
@@ -227,65 +198,7 @@ const ProviderLayout = () => {
 
     return (
         <div className="flex h-screen bg-gray-50 overflow-hidden">
-            {/* Mobile sidebar overlay */}
-            <div
-                className={`fixed inset-0 z-40 lg:hidden transition-opacity duration-300 ${sidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
-                    }`}
-            >
-                <div
-                    className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm"
-                    onClick={() => setSidebarOpen(false)}
-                />
-
-                {/* Mobile sidebar */}
-                <div className={`relative flex flex-col w-80 max-w-xs h-full bg-white shadow-2xl transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-                    }`}>
-                    {/* Mobile header */}
-                    <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200">
-                        <div className="flex items-center flex-1 min-w-0 pr-2">
-                            {systemSettings.logo && (
-                                <img
-                                    src={systemSettings.logo}
-                                    alt={systemSettings.companyName}
-                                    className="h-8 w-auto object-contain mr-2 flex-shrink-0"
-                                />
-                            )}
-                            <span className="text-lg font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter truncate">
-                                {systemSettings.companyName || 'RAJ ELECTRICAL SERVICES'}
-                            </span>
-                        </div>
-                        <button
-                            onClick={() => setSidebarOpen(false)}
-                            className="p-1.5 flex-shrink-0 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-secondary transition-colors"
-                        >
-                            <FiX className="w-5 h-5" />
-                        </button>
-                    </div>
-
-                    {/* Mobile navigation */}
-                    <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
-                        {menuItems.map((item) => {
-                            const isActive = location.pathname === item.path || (item.name === 'Dashboard' && isDashboardActive);
-                            return (
-                                <Link
-                                    key={item.name}
-                                    to={item.path}
-                                    className={`flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${isActive
-                                        ? 'bg-primary text-white shadow-lg shadow-primary/25'
-                                        : 'text-secondary hover:bg-primary/10 hover:text-primary'
-                                        }`}
-                                    onClick={() => setSidebarOpen(false)}
-                                >
-                                    <span className="mr-3">{item.icon}</span>
-                                    {item.name}
-                                </Link>
-                            );
-                        })}
-                    </nav>
-                </div>
-            </div>
-
-            {/* Desktop sidebar */}
+            {/* Desktop sidebar only */}
             <div className="hidden lg:flex lg:flex-shrink-0">
                 <div className="flex flex-col w-72 bg-white border-r border-gray-200 shadow-sm">
                     {/* Desktop header */}
@@ -323,7 +236,6 @@ const ProviderLayout = () => {
                             );
                         })}
                     </nav>
-
                 </div>
             </div>
 
@@ -332,40 +244,70 @@ const ProviderLayout = () => {
                 {/* Top navigation bar */}
                 <header className="bg-white border-b border-gray-200 shadow-sm z-10">
                     <div className="flex items-center justify-between px-4 py-4 lg:px-6">
-                        {/* Left side - Mobile menu button */}
-                        <div className="flex items-center">
+                        {/* Mobile Header Left - Profile trigger for bottom sheet */}
+                        <div className="flex items-center lg:hidden">
                             <button
-                                type="button"
-                                className="p-2 rounded-lg text-secondary lg:hidden hover:bg-primary/10 hover:text-primary transition-colors"
-                                onClick={() => setSidebarOpen(true)}
+                                onClick={() => setMoreMenuOpen(true)}
+                                className="flex items-center focus:outline-none"
                             >
-                                <FiMenu className="w-6 h-6" />
+                                {user?.profilePicUrl ? (
+                                    <img
+                                        src={user.profilePicUrl}
+                                        alt="Profile"
+                                        className="w-9 h-9 rounded-full object-cover ring-2 ring-primary/20"
+                                    />
+                                ) : (
+                                    <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-white font-semibold text-sm shadow">
+                                        {getUserInitials()}
+                                    </div>
+                                )}
                             </button>
+                        </div>
 
-                            {/* Page title on mobile */}
-                            <h1 className="ml-3 text-xl font-semibold text-secondary lg:hidden">
-                                {menuItems.find(item => item.path === location.pathname)?.name || 'Dashboard'}
-                            </h1>
+                        {/* Page title on desktop only */}
+                        <h1 className="hidden lg:block text-xl font-semibold text-secondary">
+                            {menuItems.find(item => item.path === location.pathname)?.name || 'Dashboard'}
+                        </h1>
+
+                        {/* Mobile Header Center: Tactile Partner-style Duty Toggle Switch */}
+                        <div className="flex-1 flex justify-center lg:hidden">
+                            <div
+                                onClick={toggleOnlineStatus}
+                                className={`relative inline-flex h-9 w-28 items-center rounded-full cursor-pointer transition-all duration-300 shadow-inner select-none ${isOnline 
+                                    ? 'bg-primary border border-primary/80' 
+                                    : 'bg-slate-200 border border-slate-300'}`}
+                            >
+                                <span className={`text-[10px] font-extrabold tracking-wider w-full text-center transition-all duration-300 select-none ${isOnline ? 'text-white pl-1 pr-6' : 'text-slate-500 pr-1 pl-6'}`}>
+                                    {isOnline ? 'DUTY ON' : 'OFFLINE'}
+                                </span>
+                                <span
+                                    className={`absolute top-0.5 left-0.5 h-7 w-7 rounded-full bg-white transition-all duration-300 shadow flex items-center justify-center ${isOnline ? 'translate-x-20' : 'translate-x-0'}`}
+                                >
+                                    <span className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-primary animate-pulse' : 'bg-red-500'}`} />
+                                </span>
+                            </div>
                         </div>
 
                         {/* Right side - Actions and profile */}
                         <div className="flex items-center space-x-3">
-                            {/* GPS Online Toggle */}
-                            <button
-                                onClick={toggleOnlineStatus}
-                                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-black tracking-wider transition-all duration-300 border shadow-sm ${isOnline 
-                                    ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100' 
-                                    : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'}`}
-                            >
-                                <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500 animate-ping' : 'bg-red-500'}`} />
-                                <span className="hidden sm:inline">{isOnline ? 'ONLINE' : 'OFFLINE'}</span>
-                            </button>
+                            {/* GPS Online Toggle (Desktop only) */}
+                            <div className="hidden lg:block">
+                                <button
+                                    onClick={toggleOnlineStatus}
+                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-black tracking-wider transition-all duration-300 border shadow-sm ${isOnline
+                                        ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                                        : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'}`}
+                                >
+                                    <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500 animate-ping' : 'bg-red-500'}`} />
+                                    <span>{isOnline ? 'ONLINE' : 'OFFLINE'}</span>
+                                </button>
+                            </div>
 
                             {/* Notifications */}
                             <NotificationBell />
 
-                            {/* Profile dropdown */}
-                            <div className="relative">
+                            {/* Profile dropdown (Desktop only) */}
+                            <div className="relative hidden lg:block">
                                 <button
                                     className="flex items-center space-x-3 p-2 rounded-lg hover:bg-primary/10 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50"
                                     onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
@@ -416,7 +358,6 @@ const ProviderLayout = () => {
                                             Profile Settings
                                         </Link>
 
-
                                         <hr className="my-2 border-gray-100" />
 
                                         <button
@@ -434,11 +375,163 @@ const ProviderLayout = () => {
                 </header>
 
                 {/* Main content */}
-                <main className="flex-1 overflow-auto bg-gray-50">
+                <main className="flex-1 overflow-auto bg-gray-50 pb-20 lg:pb-0">
                     <div className="p-4 lg:p-6 xl:p-8">
                         <Outlet />
                     </div>
                 </main>
+            </div>
+
+            {/* Sticky bottom navigation for mobile */}
+            <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-30 shadow-[0_-4px_12px_rgba(0,0,0,0.05)] px-4 py-2.5 flex justify-around items-center">
+                {/* Home/Dashboard */}
+                <Link
+                    to="/provider/dashboard"
+                    className={`flex flex-col items-center justify-center space-y-1 transition-colors duration-200 ${
+                        (location.pathname === '/provider/dashboard' || location.pathname === '/provider')
+                            ? 'text-primary'
+                            : 'text-slate-400 hover:text-primary'
+                    }`}
+                >
+                    <FiHome className="w-6 h-6" />
+                    <span className="text-[10px] font-semibold font-inter">Home</span>
+                </Link>
+
+                {/* Requests */}
+                <Link
+                    to="/provider/booking-requests"
+                    className={`flex flex-col items-center justify-center space-y-1 transition-colors duration-200 ${
+                        location.pathname === '/provider/booking-requests'
+                            ? 'text-primary'
+                            : 'text-slate-400 hover:text-primary'
+                    }`}
+                >
+                    <FiCheckCircle className="w-6 h-6" />
+                    <span className="text-[10px] font-semibold font-inter">Requests</span>
+                </Link>
+
+                {/* Earnings */}
+                <Link
+                    to="/provider/earnings"
+                    className={`flex flex-col items-center justify-center space-y-1 transition-colors duration-200 ${
+                        location.pathname === '/provider/earnings'
+                            ? 'text-primary'
+                            : 'text-slate-400 hover:text-primary'
+                    }`}
+                >
+                    <FiDollarSign className="w-6 h-6" />
+                    <span className="text-[10px] font-semibold font-inter">Earnings</span>
+                </Link>
+
+                {/* More/Menu button toggling bottom sheet */}
+                <button
+                    onClick={() => setMoreMenuOpen(true)}
+                    className={`flex flex-col items-center justify-center space-y-1 transition-colors duration-200 ${
+                        moreMenuOpen ? 'text-primary' : 'text-slate-400 hover:text-primary'
+                    }`}
+                >
+                    <FiMenu className="w-6 h-6" />
+                    <span className="text-[10px] font-semibold font-inter">More</span>
+                </button>
+            </div>
+
+            {/* Bottom Sheet for Mobile "More" Menu */}
+            <div
+                className={`fixed inset-0 z-40 lg:hidden transition-opacity duration-300 ${
+                    moreMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                }`}
+            >
+                {/* Backdrop */}
+                <div
+                    className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm"
+                    onClick={() => setMoreMenuOpen(false)}
+                />
+
+                {/* Bottom sheet panel */}
+                <div
+                    className={`fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl z-50 p-6 pb-8 transition-transform duration-300 ease-out transform ${
+                        moreMenuOpen ? 'translate-y-0' : 'translate-y-full'
+                    }`}
+                >
+                    {/* Pull-down handle indicator */}
+                    <div className="flex justify-center mb-6">
+                        <div className="w-12 h-1.5 bg-gray-200 rounded-full" />
+                    </div>
+
+                    {/* Header with back arrow and app name */}
+                    <div className="flex items-center justify-between mb-4 px-2">
+                        <button onClick={() => setMoreMenuOpen(false)} className="text-primary hover:text-primary/80 focus:outline-none">
+                            <FiArrowLeft className="w-5 h-5" />
+                        </button>
+                        <span className="text-lg font-semibold text-primary" title={systemSettings.companyName}>
+                            {systemSettings.companyName || 'RAJ ELECTRICAL SERVICES'}
+                        </span>
+                        {/* Placeholder to balance flex layout */}
+                        <div className="w-5 h-5 opacity-0" />
+                    </div>
+
+                    {/* Profile Header inside Bottom Sheet */}
+                    <div className="flex items-center space-x-4 mb-6 pb-4 border-b border-gray-100">
+                        {user?.profilePicUrl ? (
+                            <img
+                                src={user.profilePicUrl}
+                                alt="Profile"
+                                className="w-12 h-12 rounded-full object-cover ring-2 ring-primary/20"
+                            />
+                        ) : (
+                            <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white font-bold text-lg">
+                                {getUserInitials()}
+                            </div>
+                        )}
+                        <div>
+                            <h4 className="text-base font-bold text-secondary">{user?.name || 'Provider'}</h4>
+                            <p className="text-xs text-slate-500 truncate max-w-[200px]">{user?.email || 'provider@example.com'}</p>
+                        </div>
+                    </div>
+
+                    {/* Menu Options */}
+                    <div className="space-y-2">
+                        <Link
+                            to="/provider/profile"
+                            className="flex items-center px-4 py-3.5 text-sm font-semibold text-secondary hover:bg-primary/10 hover:text-primary rounded-xl transition-all"
+                            onClick={() => setMoreMenuOpen(false)}
+                        >
+                            <FiUser className="w-5 h-5 mr-3 text-primary" />
+                            Profile Settings
+                        </Link>
+
+                        <Link
+                            to="/provider/support"
+                            className="flex items-center px-4 py-3.5 text-sm font-semibold text-secondary hover:bg-primary/10 hover:text-primary rounded-xl transition-all"
+                            onClick={() => setMoreMenuOpen(false)}
+                        >
+                            <FiHeadphones className="w-5 h-5 mr-3 text-primary" />
+                            Support & Help
+                        </Link>
+
+                        <Link
+                            to="/provider/feedbacks"
+                            className="flex items-center px-4 py-3.5 text-sm font-semibold text-secondary hover:bg-primary/10 hover:text-primary rounded-xl transition-all"
+                            onClick={() => setMoreMenuOpen(false)}
+                        >
+                            <FiMessageSquare className="w-5 h-5 mr-3 text-primary" />
+                            Feedback Viewer
+                        </Link>
+
+                        <hr className="border-gray-100 my-2" />
+
+                        <button
+                            onClick={() => {
+                                setMoreMenuOpen(false);
+                                handleLogout();
+                            }}
+                            className="w-full flex items-center px-4 py-3.5 text-sm font-bold text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                        >
+                            <FiLogOut className="w-5 h-5 mr-3 text-red-500" />
+                            Sign Out
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     );
