@@ -163,16 +163,21 @@ const applyDocumentSettings = (settings) => {
   }
 
   if (settings.manifestUrl) {
-    const manifestLink = document.querySelector("link[rel='manifest']");
+    let manifestLink = document.querySelector("link[rel='manifest']");
     if (manifestLink) {
       manifestLink.setAttribute("href", settings.manifestUrl);
+    } else {
+      manifestLink = document.createElement("link");
+      manifestLink.rel = "manifest";
+      manifestLink.href = settings.manifestUrl;
+      document.head.appendChild(manifestLink);
     }
   }
 };
 const generateManifestUrl = (role, data) => {
   const apiBase = import.meta.env.VITE_BACKEND_URL || (window.location.origin + "/api");
   const version = data?.appVersion || data?.updatedAt || Date.now();
-  return `${apiBase}/system-setting/settings/branding/${role}/manifest?v=${version}`;
+  return `${apiBase}/system-setting/settings/branding/${role}/manifest?v=${version}&origin=${encodeURIComponent(window.location.origin)}`;
 };
 
 const App = () => {

@@ -57,7 +57,6 @@ const Footer = () => {
 
   const currentYear = new Date().getFullYear();
 
-  if (loading) return null;
 
   const getSocialIcon = (platform) => {
     const icons = {

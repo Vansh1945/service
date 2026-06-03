@@ -684,9 +684,11 @@ const getBrandingManifest = async (req, res) => {
     const config = await SystemConfig.findOne();
     const branding = config ? config[`${role}Branding`] : null;
 
-    // Detect client origin from Referer header to resolve relative assets properly
+    // Detect client origin from query param or Referer header to resolve relative assets properly
     let clientOrigin = '';
-    if (req.headers.referer) {
+    if (req.query.origin) {
+      clientOrigin = req.query.origin;
+    } else if (req.headers.referer) {
       try {
         const refUrl = new URL(req.headers.referer);
         clientOrigin = refUrl.origin;
@@ -718,10 +720,18 @@ const getBrandingManifest = async (req, res) => {
     const logoUrl = branding?.logo || '/icon-192.png';
     const iconUrl = branding?.icon || logoUrl;
 
+    const getStartUrl = () => {
+      const path = role === 'admin' ? '/admin/dashboard' : role === 'provider' ? '/provider/dashboard' : '/customer/services';
+      if (clientOrigin) {
+        return `${clientOrigin}${path}`;
+      }
+      return path;
+    };
+
     const manifest = {
       name: appName,
       short_name: shortName,
-      start_url: role === 'admin' ? '/admin/dashboard' : role === 'provider' ? '/provider/dashboard' : '/customer/services',
+      start_url: getStartUrl(),
       display: "standalone",
       background_color: backgroundColor,
       theme_color: themeColor,
