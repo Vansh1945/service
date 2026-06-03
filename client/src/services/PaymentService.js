@@ -8,6 +8,10 @@ export const getEarningsSummary = (params) => {
     return axiosInstance.get("/payment/summary", { params });
 };
 
+export const getWeeklyMonthlyStats = () => {
+    return axiosInstance.get("/payment/stats/weekly-monthly");
+};
+
 export const withdraw = (data) => {
     return axiosInstance.post("/payment/withdraw", data);
 };

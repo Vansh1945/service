@@ -501,6 +501,87 @@ const getEarningsSummary = async (req, res) => {
   }
 };
 
+const getWeeklyMonthlyStats = async (req, res) => {
+  try {
+    const providerId = new mongoose.Types.ObjectId(req.provider._id);
+
+    // Get weekly stats (last 4 weeks)
+    const today = new Date();
+    const fourWeeksAgo = new Date(today);
+    fourWeeksAgo.setDate(today.getDate() - 28);
+
+    const weekly = await ProviderEarning.aggregate([
+      {
+        $match: {
+          provider: providerId,
+          isVisibleToProvider: true,
+          createdAt: { $gte: fourWeeksAgo }
+        }
+      },
+      {
+        $group: {
+          _id: { $week: "$createdAt" },
+          earnings: { $sum: "$netAmount" },
+          count: { $sum: 1 },
+          minDate: { $min: "$createdAt" }
+        }
+      },
+      { $sort: { minDate: -1 } }
+    ]);
+
+    // Format weekly data: e.g. "Week of May 25"
+    const formattedWeekly = weekly.map((w, idx) => {
+      const date = new Date(w.minDate);
+      const formattedDate = date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+      return {
+        week: `Week of ${formattedDate}`,
+        earnings: w.earnings || 0,
+        count: w.count || 0
+      };
+    });
+
+    // Get monthly stats (last 6 months)
+    const sixMonthsAgo = new Date(today);
+    sixMonthsAgo.setMonth(today.getMonth() - 6);
+
+    const monthly = await ProviderEarning.aggregate([
+      {
+        $match: {
+          provider: providerId,
+          isVisibleToProvider: true,
+          createdAt: { $gte: sixMonthsAgo }
+        }
+      },
+      {
+        $group: {
+          _id: { $month: "$createdAt" },
+          earnings: { $sum: "$netAmount" },
+          minDate: { $min: "$createdAt" }
+        }
+      },
+      { $sort: { minDate: 1 } }
+    ]);
+
+    const formattedMonthly = monthly.map(m => {
+      const date = new Date(m.minDate);
+      const formattedMonth = date.toLocaleDateString('en-IN', { month: 'short' });
+      return {
+        month: formattedMonth,
+        earnings: m.earnings || 0
+      };
+    });
+
+    res.json({
+      success: true,
+      weekly: formattedWeekly,
+      monthly: formattedMonthly
+    });
+  } catch (err) {
+    console.error('Failed to get weekly/monthly stats:', err);
+    res.status(500).json({ success: false, error: 'Server error', details: err.message });
+  }
+};
+
 
 // Provider - Request bulk withdrawal (Initiate OTP)
 const requestBulkWithdrawal = async (req, res) => {
@@ -2782,6 +2863,7 @@ module.exports = {
 
   // Provider
   getEarningsSummary,
+  getWeeklyMonthlyStats,
   requestBulkWithdrawal,
   verifyWithdrawalOTP,
   downloadEarningsReport,

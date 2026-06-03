@@ -164,7 +164,7 @@ const Navbar = () => {
                   icon={<FiUserPlus className="mr-2 text-sm" />}
                   text="Register"
                   variant="primary"
-                  path="/register"
+                  path={localStorage.getItem("installRole") === "provider" ? "/register-provider" : "/register"}
                   onClick={resetDeepLink}
                 />
               </>
@@ -240,7 +240,7 @@ const Navbar = () => {
                   text="Register"
                   variant="primary"
                   fullWidth
-                  path="/register"
+                  path={localStorage.getItem("installRole") === "provider" ? "/register-provider" : "/register"}
                   onClick={() => setIsOpen(false)}
                 />
               </>

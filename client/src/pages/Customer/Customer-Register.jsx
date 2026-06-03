@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
 import { register } from '../../services/AuthService';
@@ -50,6 +50,12 @@ const CustomerRegistration = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    if (localStorage.getItem("installRole") === "provider") {
+      navigate("/register-provider", { replace: true });
+    }
+  }, [navigate]);
 
 
   const [formData, setFormData] = useState({

@@ -728,10 +728,13 @@ const getBrandingManifest = async (req, res) => {
       return path;
     };
 
+    const scopeUrl = role === 'admin' ? '/admin/' : role === 'provider' ? '/provider/' : '/customer/';
+
     const manifest = {
       name: appName,
       short_name: shortName,
       start_url: getStartUrl(),
+      scope: clientOrigin ? `${clientOrigin}${scopeUrl}` : scopeUrl,
       display: "standalone",
       background_color: backgroundColor,
       theme_color: themeColor,

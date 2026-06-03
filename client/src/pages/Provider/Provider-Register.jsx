@@ -126,6 +126,12 @@ const ProviderRegistration = () => {
   const { categories: providerServices, loading: providerServicesLoading, error: providerServicesError } = useCategory();
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
 
+  useEffect(() => {
+    if (localStorage.getItem("installRole") === "customer") {
+      navigate("/register", { replace: true });
+    }
+  }, [navigate]);
+
   // ── OTP countdown timer ──
   useEffect(() => {
     let timer;

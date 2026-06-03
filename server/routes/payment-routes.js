@@ -14,6 +14,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), paymentContro
 // Provider routes
 
 router.get('/summary', providerAuthMiddleware, paymentController.getEarningsSummary);
+router.get('/stats/weekly-monthly', providerAuthMiddleware, paymentController.getWeeklyMonthlyStats);
 router.post('/withdraw', providerAuthMiddleware, validateBody(requestBulkWithdrawalSchema), paymentController.requestBulkWithdrawal);
 router.post('/verify-withdraw-otp', providerAuthMiddleware, validateBody(verifyWithdrawalOTPSchema), paymentController.verifyWithdrawalOTP);
 

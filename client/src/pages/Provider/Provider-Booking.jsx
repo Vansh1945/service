@@ -564,12 +564,17 @@ const ProviderBooking = () => {
 
   const calculateNetAmount = useCallback((booking) => {
     if (!booking) return 0;
-    if (typeof booking.providerEarnings === 'number') {
+    if (booking.status === 'completed' && typeof booking.providerEarnings === 'number' && booking.providerEarnings > 0) {
       return booking.providerEarnings.toFixed(2);
     }
-    const totalAmount = booking.totalAmount || calculateSubtotal(booking);
-    const commissionAmount = booking.commission?.amount || booking.commissionAmount || 0;
-    return (totalAmount - commissionAmount).toFixed(2);
+    const subtotal = parseFloat(calculateSubtotal(booking)) || 0;
+    const visiting = booking.visitingCharge ? parseFloat((booking.visitingCharge * ((booking.surgeSplitSettings?.visiting || 60) / 100)).toFixed(2)) : 0;
+    const rain = booking.rainCharge ? parseFloat((booking.rainCharge * ((booking.surgeSplitSettings?.rain || 70) / 100)).toFixed(2)) : 0;
+    const traffic = booking.trafficCharge ? parseFloat((booking.trafficCharge * ((booking.surgeSplitSettings?.traffic || 70) / 100)).toFixed(2)) : 0;
+    const night = booking.nightCharge ? parseFloat((booking.nightCharge * ((booking.surgeSplitSettings?.night || 70) / 100)).toFixed(2)) : 0;
+    const demand = booking.demandSurge ? parseFloat((booking.demandSurge * ((booking.surgeSplitSettings?.demand || 50) / 100)).toFixed(2)) : 0;
+    const commission = booking.commission?.amount || booking.commissionAmount || 0;
+    return (subtotal + visiting + rain + traffic + night + demand - commission).toFixed(2);
   }, [calculateSubtotal]);
 
   const toggleSection = useCallback((section) => {
@@ -581,7 +586,13 @@ const ProviderBooking = () => {
     try {
       const response = await BookingService.getBookingsByStatus(status);
       const data = response.data;
-      return data.data || [];
+      const list = data.data || [];
+      return list.filter(b => {
+        if (b.paymentMethod === 'cash') {
+          return true;
+        }
+        return ['paid', 'escrow_hold'].includes(b.paymentStatus);
+      });
     } catch (err) {
       showToast(`Failed to load ${status} bookings`, 'error');
       return [];
@@ -853,7 +864,21 @@ const ProviderBooking = () => {
     if (filter === 'today') filtered = filtered.filter(b => new Date(b.date).toISOString().split('T')[0] === todayStr);
     else if (filter === 'upcoming') filtered = filtered.filter(b => new Date(b.date).toISOString().split('T')[0] >= todayStr);
     else if (filter === 'past') filtered = filtered.filter(b => new Date(b.date).toISOString().split('T')[0] < todayStr);
-    return filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const statusPriority = {
+      'in-progress': 1,
+      'accepted': 2,
+      'pending': 3,
+      'completed': 4,
+      'cancelled': 5
+    };
+    return filtered.sort((a, b) => {
+      const pA = statusPriority[a.status?.toLowerCase()] || 99;
+      const pB = statusPriority[b.status?.toLowerCase()] || 99;
+      if (pA !== pB) {
+        return pA - pB;
+      }
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
   }, [bookings, activeTab, searchQuery, filter]);
 
   const totalPages = Math.ceil(currentBookings.length / bookingsPerPage);
