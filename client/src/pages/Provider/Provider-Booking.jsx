@@ -537,6 +537,15 @@ const ProviderBooking = () => {
   const [isSubmittingResponse, setIsSubmittingResponse] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
 
+  const parallelBookingsCount = (bookings.accepted?.length || 0) + (bookings['in-progress']?.length || 0);
+  const isLimitReached = parallelBookingsCount >= 10;
+
+  useEffect(() => {
+    if (isLimitReached) {
+      showToast("You have reached the maximum limit of parallel bookings (10). Complete your current jobs first.", "error");
+    }
+  }, [isLimitReached, showToast]);
+
   // ── Calculation helpers ──────────────────────────────────────────────────
   const calculateSubtotal = useCallback((booking) => {
     if (!booking?.services) return 0;
@@ -593,8 +602,8 @@ const ProviderBooking = () => {
 
   const loadData = useCallback(async () => {
     try {
-      const all = await Promise.all(['pending', 'accepted', 'in-progress', 'completed', 'cancelled'].map(fetchBookings));
-      setBookings({ pending: all[0], accepted: all[1], 'in-progress': all[2], completed: all[3], cancelled: all[4] });
+      const all = await Promise.all(['pending', 'accepted', 'in-progress', 'completed'].map(fetchBookings));
+      setBookings({ pending: all[0], accepted: all[1], 'in-progress': all[2], completed: all[3], cancelled: [] });
       setStats(calculateStats(all.flat()));
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -1138,6 +1147,18 @@ const ProviderBooking = () => {
     <div className="min-h-screen bg-gray-50 font-inter">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
 
+        {isLimitReached && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-3 shadow-sm animate-fade-in">
+            <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5 animate-bounce" />
+            <div>
+              <h4 className="text-sm font-bold text-red-800">Booking Limit Reached</h4>
+              <p className="text-xs text-red-600 mt-0.5 font-medium">
+                You have reached the maximum limit of parallel bookings (10). Complete your current jobs first.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* ── Header ── */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
@@ -1243,7 +1264,6 @@ const ProviderBooking = () => {
                 <option value="accepted">Accepted ({bookings.accepted.length})</option>
                 <option value="in-progress">In Progress ({bookings['in-progress'].length})</option>
                 <option value="completed">Completed ({bookings.completed.length})</option>
-                <option value="cancelled">Cancelled ({bookings.cancelled.length})</option>
               </select>
               <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
             </div>
@@ -1433,11 +1453,11 @@ const ProviderBooking = () => {
                         { label: 'Service Amount', value: formatCurrency(calculateServiceSubtotal(selectedBooking)) },
                         ...(calculateTotalDiscount(selectedBooking) > 0 ? [{ label: 'Discount', value: '-' + formatCurrency(calculateTotalDiscount(selectedBooking)), color: 'text-primary' }] : []),
                         { label: 'Subtotal', value: formatCurrency(calculateSubtotal(selectedBooking)) },
-                        ...(selectedBooking.visitingCharge > 0 ? [{ label: 'Visiting Charge', value: '+' + formatCurrency(parseFloat((selectedBooking.visitingCharge * ((selectedBooking.surgeSplitSettings?.visiting) / 100)).toFixed(2))) + ' (' + (selectedBooking.surgeSplitSettings?.visiting || 60) + '% of ' + formatCurrency(selectedBooking.visitingCharge) + ')', color: 'text-emerald-600' }] : []),
-                        ...(selectedBooking.rainCharge > 0 ? [{ label: 'Rain Charge', value: '+' + formatCurrency(parseFloat((selectedBooking.rainCharge * ((selectedBooking.surgeSplitSettings?.rain || 70) / 100)).toFixed(2))) + ' (' + (selectedBooking.surgeSplitSettings?.rain || 70) + '% of ' + formatCurrency(selectedBooking.rainCharge) + ')', color: 'text-emerald-600' }] : []),
-                        ...(selectedBooking.trafficCharge > 0 ? [{ label: 'Traffic Charge', value: '+' + formatCurrency(parseFloat((selectedBooking.trafficCharge * ((selectedBooking.surgeSplitSettings?.traffic || 70) / 100)).toFixed(2))) + ' (' + (selectedBooking.surgeSplitSettings?.traffic || 70) + '% of ' + formatCurrency(selectedBooking.trafficCharge) + ')', color: 'text-emerald-600' }] : []),
-                        ...(selectedBooking.nightCharge > 0 ? [{ label: 'Night Charge', value: '+' + formatCurrency(parseFloat((selectedBooking.nightCharge * ((selectedBooking.surgeSplitSettings?.night || 70) / 100)).toFixed(2))) + ' (' + (selectedBooking.surgeSplitSettings?.night || 70) + '% of ' + formatCurrency(selectedBooking.nightCharge) + ')', color: 'text-emerald-600' }] : []),
-                        ...(selectedBooking.demandSurge > 0 ? [{ label: 'Demand Surge', value: '+' + formatCurrency(parseFloat((selectedBooking.demandSurge * ((selectedBooking.surgeSplitSettings?.demand || 50) / 100)).toFixed(2))) + ' (' + (selectedBooking.surgeSplitSettings?.demand || 50) + '% of ' + formatCurrency(selectedBooking.demandSurge) + ')', color: 'text-emerald-600' }] : []),
+                        ...(selectedBooking.visitingCharge > 0 ? [{ label: 'Visiting Charge', value: '+' + formatCurrency(parseFloat((selectedBooking.visitingCharge * ((selectedBooking.surgeSplitSettings?.visiting || 60) / 100)).toFixed(2))), color: 'text-emerald-600' }] : []),
+                        ...(selectedBooking.rainCharge > 0 ? [{ label: 'Rain Charge', value: '+' + formatCurrency(parseFloat((selectedBooking.rainCharge * ((selectedBooking.surgeSplitSettings?.rain || 70) / 100)).toFixed(2))), color: 'text-emerald-600' }] : []),
+                        ...(selectedBooking.trafficCharge > 0 ? [{ label: 'Traffic Charge', value: '+' + formatCurrency(parseFloat((selectedBooking.trafficCharge * ((selectedBooking.surgeSplitSettings?.traffic || 70) / 100)).toFixed(2))), color: 'text-emerald-600' }] : []),
+                        ...(selectedBooking.nightCharge > 0 ? [{ label: 'Night Charge', value: '+' + formatCurrency(parseFloat((selectedBooking.nightCharge * ((selectedBooking.surgeSplitSettings?.night || 70) / 100)).toFixed(2))), color: 'text-emerald-600' }] : []),
+                        ...(selectedBooking.demandSurge > 0 ? [{ label: 'Demand Surge', value: '+' + formatCurrency(parseFloat((selectedBooking.demandSurge * ((selectedBooking.surgeSplitSettings?.demand || 50) / 100)).toFixed(2))), color: 'text-emerald-600' }] : []),
                         { label: 'Platform Commission (Base)', value: '-' + formatCurrency(selectedBooking.commission?.amount || selectedBooking.commissionAmount || 0), color: 'text-rose-500 font-medium' },
                       ].map(({ label, value, color }) => (
                         <div key={label} className="flex justify-between text-sm animate-fadeIn">
@@ -1814,8 +1834,17 @@ const ProviderBooking = () => {
               <div className="mt-6 pt-5 border-t border-gray-100">
                 <div className="flex flex-col sm:flex-row gap-3">
                   {selectedBooking.status === 'pending' && (
-                    <button onClick={() => handleBookingAction(selectedBooking._id, 'accept')} className="flex-1 px-4 py-3 bg-primary hover:bg-primary/90 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors">
-                      <Check className="w-4 h-4" /> Accept Booking
+                    <button
+                      disabled={actionLoading.id !== null || isLimitReached}
+                      onClick={() => handleBookingAction(selectedBooking._id, 'accept')}
+                      className="flex-1 px-4 py-3 rounded-xl text-xs font-bold text-white bg-primary hover:bg-primary/90 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed shadow-md shadow-primary/10 flex items-center justify-center gap-2"
+                    >
+                      {actionLoading.id === selectedBooking._id && actionLoading.type === 'accept' ? (
+                        <Loader className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Check className="w-4 h-4" />
+                      )}
+                      {actionLoading.id === selectedBooking._id && actionLoading.type === 'accept' ? 'Accepting...' : 'Accept Booking'}
                     </button>
                   )}
                   {selectedBooking.status === 'accepted' && (
@@ -1823,12 +1852,18 @@ const ProviderBooking = () => {
                       <button
                         disabled={actionLoading.id !== null || (selectedBooking.paymentMethod !== 'cash' && selectedBooking.paymentType !== 'pay_after_service' && !['paid', 'escrow_hold'].includes(selectedBooking.paymentStatus))}
                         onClick={() => handleBookingAction(selectedBooking._id, 'start')}
-                        className="w-full px-4 py-3 bg-primary hover:bg-primary/90 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                        className="w-full px-4 py-3 rounded-xl text-xs font-bold text-white bg-primary hover:bg-primary/90 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed shadow-md shadow-primary/10 flex items-center justify-center gap-2"
                       >
-                        <Play className="w-4 h-4" />
-                        {(selectedBooking.paymentMethod !== 'cash' && selectedBooking.paymentType !== 'pay_after_service' && !['paid', 'escrow_hold'].includes(selectedBooking.paymentStatus))
-                          ? 'Payment Pending'
-                          : 'Start Service'}
+                        {actionLoading.id === selectedBooking._id && actionLoading.type === 'start' ? (
+                          <Loader className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Play className="w-4 h-4" />
+                        )}
+                        {actionLoading.id === selectedBooking._id && actionLoading.type === 'start'
+                          ? 'Starting...'
+                          : (selectedBooking.paymentMethod !== 'cash' && selectedBooking.paymentType !== 'pay_after_service' && !['paid', 'escrow_hold'].includes(selectedBooking.paymentStatus))
+                            ? 'Payment Pending'
+                            : 'Start Service'}
                       </button>
                       {(selectedBooking.paymentMethod !== 'cash' && selectedBooking.paymentType !== 'pay_after_service' && !['paid', 'escrow_hold'].includes(selectedBooking.paymentStatus)) && (
                         <p className="text-[10px] text-accent font-bold text-center leading-tight">
@@ -1838,8 +1873,17 @@ const ProviderBooking = () => {
                     </div>
                   )}
                   {selectedBooking.status === 'in-progress' && (
-                    <button onClick={() => handleBookingAction(selectedBooking._id, 'complete')} className="flex-1 px-4 py-3 bg-primary hover:bg-primary/90 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors">
-                      <Check className="w-4 h-4" /> Complete Service
+                    <button
+                      disabled={actionLoading.id !== null}
+                      onClick={() => handleBookingAction(selectedBooking._id, 'complete')}
+                      className="flex-1 px-4 py-3 rounded-xl text-xs font-semibold text-white bg-primary hover:bg-primary/90 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed shadow-md shadow-primary/10 flex items-center justify-center gap-2"
+                    >
+                      {actionLoading.id === selectedBooking._id && actionLoading.type === 'complete' ? (
+                        <Loader className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Check className="w-4 h-4" />
+                      )}
+                      {actionLoading.id === selectedBooking._id && actionLoading.type === 'complete' ? 'Completing...' : 'Complete Service'}
                     </button>
                   )}
                   <button onClick={() => setShowModal(false)} className="px-4 py-3 border border-gray-200 text-secondary font-medium rounded-xl hover:bg-gray-50 transition-colors">

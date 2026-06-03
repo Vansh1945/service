@@ -233,7 +233,7 @@ exports.Login = async (req, res) => {
       name: user.name,
       email: user.email,
       role: userType === 'admin' ? 'admin' : user.role || userType,
-      ...(userType === 'provider' && { approved: user.approved, serviceArea: user.serviceArea, providerId: user.providerId }),
+      ...(userType === 'provider' && { approved: user.approved, testPassed: user.testPassed, serviceArea: user.serviceArea, providerId: user.providerId }),
       ...(userType === 'customer' && { phone: user.phone, address: user.address })
     };
 
@@ -653,7 +653,7 @@ exports.firebaseLogin = async (req, res) => {
     const userData = {
       _id: user._id, name: user.name, email: user.email,
       role: userType, phone: user.phone, profilePicUrl: user.profilePicUrl,
-      ...(userType === 'provider' && { approved: user.approved, kycStatus: user.kycStatus, providerId: user.providerId }),
+      ...(userType === 'provider' && { approved: user.approved, testPassed: user.testPassed, kycStatus: user.kycStatus, providerId: user.providerId }),
       isNewUser: !user.loginHistory || user.loginHistory.length <= 1
     };
 

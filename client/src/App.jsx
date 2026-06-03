@@ -10,27 +10,51 @@ import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import { SocketProvider } from "./socket/SocketContext";
 
-// Public Pages (Optimized: Lazy loaded)
-const Home = lazy(() => import("./pages/Home"));
-const AboutPage = lazy(() => import("./pages/About"));
-const ServicesPage = lazy(() => import("./pages/Service"));
-const CareersPage = lazy(() => import("./pages/Careers"));
-const ContactPage = lazy(() => import("./pages/Contact"));
-const LoginPage = lazy(() => import("./pages/Login"));
-const ForgotPassword = lazy(() => import("./pages/ForgetPassword"));
-const CustomerRegistration = lazy(() => import("./pages/Customer/Customer-Register"));
-const ProviderRegistration = lazy(() => import("./pages/Provider/Provider-Register"));
-const Unauthorized = lazy(() => import("./pages/Unauthorized"));
-const TermsAndConditions = lazy(() => import("./pages/TermsAndConditions"));
-const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
-const NotFound = lazy(() => import("./pages/NotFound"));
+// Public Pages (Optimized: Lazy loaded with retry)
+const Home = lazyWithRetry(() => import("./pages/Home"));
+const AboutPage = lazyWithRetry(() => import("./pages/About"));
+const ServicesPage = lazyWithRetry(() => import("./pages/Service"));
+const CareersPage = lazyWithRetry(() => import("./pages/Careers"));
+const ContactPage = lazyWithRetry(() => import("./pages/Contact"));
+const LoginPage = lazyWithRetry(() => import("./pages/Login"));
+const ForgotPassword = lazyWithRetry(() => import("./pages/ForgetPassword"));
+const CustomerRegistration = lazyWithRetry(() => import("./pages/Customer/Customer-Register"));
+const ProviderRegistration = lazyWithRetry(() => import("./pages/Provider/Provider-Register"));
+const Unauthorized = lazyWithRetry(() => import("./pages/Unauthorized"));
+const TermsAndConditions = lazyWithRetry(() => import("./pages/TermsAndConditions"));
+const PrivacyPolicy = lazyWithRetry(() => import("./pages/PrivacyPolicy"));
+const NotFound = lazyWithRetry(() => import("./pages/NotFound"));
+
 import LoadingSpinner from "./components/Loader";
 import RefundPolicy from "./pages/RefundPolicy";
 
-// Routes (Optimized: Lazy loaded)
-const AdminRoutes = lazy(() => import("./routes/AdminRoutes"));
-const CustomerRoutes = lazy(() => import("./routes/CustomerRoutes"));
-const ProviderRoutes = lazy(() => import("./routes/ProviderRoutes"));
+// Lazy-load wrapper: auto-reloads page once on chunk load failure (stale deployment)
+function lazyWithRetry(importFn) {
+  return lazy(() =>
+    importFn().catch((error) => {
+      // Chunk load failed — likely a new deployment invalidated old hashes
+      const hasReloaded = sessionStorage.getItem('chunk_reload');
+      if (!hasReloaded) {
+        sessionStorage.setItem('chunk_reload', 'true');
+        window.location.reload();
+        return new Promise(() => {}); // Never resolves — page is reloading
+      }
+      sessionStorage.removeItem('chunk_reload');
+      throw error; // If reload didn't fix it, throw original error
+    })
+  );
+}
+
+
+// Clear the reload flag on successful page load
+if (sessionStorage.getItem('chunk_reload')) {
+  sessionStorage.removeItem('chunk_reload');
+}
+
+const AdminRoutes = lazyWithRetry(() => import("./routes/AdminRoutes"));
+const CustomerRoutes = lazyWithRetry(() => import("./routes/CustomerRoutes"));
+const ProviderRoutes = lazyWithRetry(() => import("./routes/ProviderRoutes"));
+
 
 import * as SystemService from "./services/SystemService";
 import {

@@ -2808,6 +2808,17 @@ const getBookingsByStatus = async (req, res) => {
       });
     }
 
+    if (status === 'cancelled') {
+      return res.status(200).json({
+        success: true,
+        count: 0,
+        total: 0,
+        page: parseInt(page),
+        pages: 0,
+        data: []
+      });
+    }
+
     const provider = await Provider.findById(providerId)
       .select('services performanceScore currentZone')
       .lean();
@@ -2816,6 +2827,27 @@ const getBookingsByStatus = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Provider not found'
+      });
+    }
+
+    // Check parallel bookings limit for pending bookings list
+    const { SystemConfig } = require('../models/SystemSetting');
+    let settings = await SystemConfig.findOne();
+    const maxBookings = settings?.bookingSettings?.maxBookingsPerProvider ?? 10;
+
+    const providerBookingsCount = await Booking.countDocuments({
+      provider: providerId,
+      status: { $in: ['accepted', 'in-progress', 'started', 'confirmed', 'scheduled', 'assigned'] }
+    });
+
+    if (status === 'pending' && providerBookingsCount >= maxBookings) {
+      return res.status(200).json({
+        success: true,
+        count: 0,
+        total: 0,
+        page: parseInt(page),
+        pages: 0,
+        data: []
       });
     }
 
@@ -2841,6 +2873,26 @@ const getBookingsByStatus = async (req, res) => {
             ]
           }
         ]
+      };
+    } else if (status === 'completed') {
+      const heldEarnings = await ProviderEarning.find({
+        provider: providerId,
+        $or: [
+          { status: 'held' },
+          { availableAfter: { $gt: new Date() } }
+        ]
+      }).select('booking').lean();
+
+      const heldBookingIds = heldEarnings.map(e => e.booking);
+
+      query = {
+        $or: [
+          { _id: { $in: heldBookingIds } },
+          { payoutHoldUntil: { $gt: new Date() } }
+        ],
+        status: 'completed',
+        provider: providerId,
+        'services.service': { $in: serviceIds }
       };
     } else {
       query = {
