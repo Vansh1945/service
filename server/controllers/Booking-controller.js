@@ -3712,9 +3712,6 @@ const completeBooking = async (req, res) => {
     const User = mongoose.model('User');
     await User.findByIdAndUpdate(booking.customer._id || booking.customer, { $inc: { totalBookings: 1 } }, { session });
 
-    // ------------------------------
-    // Cashback logic moved outside transaction to avoid Write Conflicts
-    // ------------------------------
 
     // ------------------------------
     //  CASH PAYMENT: Create a cash transaction

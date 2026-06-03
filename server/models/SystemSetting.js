@@ -144,14 +144,6 @@ const systemConfigSchema = new mongoose.Schema(
       refundToWalletOnly: {
         type: Boolean,
         default: true
-      },
-      cashbackEnabled: {
-        type: Boolean,
-        default: false
-      },
-      referralBonus: {
-        type: Number,
-        default: 0
       }
     },
     commissionSettings: {
@@ -238,10 +230,6 @@ const systemConfigSchema = new mongoose.Schema(
       walletEnabled: {
         type: Boolean,
         default: true
-      },
-      referralEnabled: {
-        type: Boolean,
-        default: false
       }
     },
     securitySettings: {

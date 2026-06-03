@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from '../../context/auth';
 import DatePicker from 'react-datepicker';
 import TimePicker from 'react-time-picker';
@@ -955,6 +955,8 @@ const CustomerBookingsPage = () => {
   const [chatBookingId, setChatBookingId] = useState(null);
   const [chatRoomType, setChatRoomType] = useState('provider_customer');
 
+  const deepLinkLoadedRef = useRef(false);
+
   // Debounce search
   useEffect(() => {
     const t = setTimeout(() => { setDebouncedSearch(searchTerm); setCurrentPage(1); }, 500);
@@ -964,16 +966,18 @@ const CustomerBookingsPage = () => {
   useEffect(() => { fetchBookings(); }, [statusFilter, timeFilter, debouncedSearch, currentPage]);
 
   useEffect(() => {
-    if (entityId) {
+    if (entityId && !deepLinkLoadedRef.current) {
       const existing = bookings.find(b => b._id === entityId);
       if (existing) {
         setSelectedBooking(existing);
         setShowModal(true);
+        deepLinkLoadedRef.current = true;
       } else {
         getBooking(entityId).then(res => {
           if (res.data?.success && res.data?.data) {
             setSelectedBooking(res.data.data);
             setShowModal(true);
+            deepLinkLoadedRef.current = true;
           }
         }).catch(err => {
           console.error("Error fetching single booking on deep link:", err);

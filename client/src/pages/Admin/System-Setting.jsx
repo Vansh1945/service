@@ -43,9 +43,7 @@ const SystemSetting = () => {
     },
     walletSettings: {
       minWithdrawal: 500,
-      refundToWalletOnly: true,
-      cashbackEnabled: false,
-      referralBonus: 0
+      refundToWalletOnly: true
     },
     commissionSettings: {
       defaultCommission: 10,
@@ -77,8 +75,7 @@ const SystemSetting = () => {
       globalMessage: 'System is under maintenance. Please try again later.'
     },
     featureFlags: {
-      walletEnabled: true,
-      referralEnabled: false
+      walletEnabled: true
     },
     securitySettings: {
       maxLoginAttempts: 5,
@@ -180,8 +177,6 @@ const SystemSetting = () => {
           walletSettings: {
             minWithdrawal: settingsData.data.walletSettings?.minWithdrawal ?? 500,
             refundToWalletOnly: settingsData.data.walletSettings?.refundToWalletOnly ?? true,
-            cashbackEnabled: settingsData.data.walletSettings?.cashbackEnabled ?? false,
-            referralBonus: settingsData.data.walletSettings?.referralBonus ?? 0,
           },
           commissionSettings: {
             defaultCommission: settingsData.data.commissionSettings?.defaultCommission ?? 10,
@@ -214,7 +209,6 @@ const SystemSetting = () => {
           },
           featureFlags: {
             walletEnabled: settingsData.data.featureFlags?.walletEnabled ?? true,
-            referralEnabled: settingsData.data.featureFlags?.referralEnabled ?? false,
           },
           securitySettings: {
             maxLoginAttempts: settingsData.data.securitySettings?.maxLoginAttempts ?? 5,
@@ -287,8 +281,8 @@ const SystemSetting = () => {
         return;
       }
 
-      if (systemSettings.walletSettings.minWithdrawal < 0 || systemSettings.walletSettings.referralBonus < 0) {
-        showToast('Wallet thresholds and bonuses must be non-negative', 'error');
+      if (systemSettings.walletSettings.minWithdrawal < 0) {
+        showToast('Wallet thresholds must be non-negative', 'error');
         return;
       }
 
@@ -410,7 +404,7 @@ const SystemSetting = () => {
   const tabs = [
     { id: 'general', name: 'General', icon: Settings, desc: 'Identity, branding, currencies, timezone, and social channels' },
     { id: 'booking', name: 'Booking', icon: Calendar, desc: 'Auto-allocation, cancel windows, buffer and provider limitations' },
-    { id: 'wallet', name: 'Wallet', icon: Wallet, desc: 'Cashbacks, withdrawal thresholds, referrals, and balance refunds' },
+    { id: 'wallet', name: 'Wallet', icon: Wallet, desc: 'Withdrawal thresholds and balance refunds' },
     { id: 'commission', name: 'Commission', icon: Percent, desc: 'Default commission rules, taxes, and payout hold policies' },
     { id: 'notifications', name: 'Notifications', icon: Bell, desc: 'Toggle alerts for push notifications, emails, and SMS integrations' },
     { id: 'security', name: 'Security', icon: Shield, desc: 'Lockouts, authentication expirations, and OTP active times' },
@@ -907,12 +901,7 @@ const SystemSetting = () => {
                   onChange={(val) => handleNestedChange('walletSettings', 'refundToWalletOnly', val)}
                 />
 
-                <ToggleSwitch
-                  label="Cashback Enabled"
-                  description="Enable automatic wallet cashback calculations for successful bookings."
-                  checked={systemSettings.walletSettings.cashbackEnabled}
-                  onChange={(val) => handleNestedChange('walletSettings', 'cashbackEnabled', val)}
-                />
+
 
                 <div>
                   <label className="block text-sm font-semibold text-secondary mb-2 font-inter">Minimum Withdrawal Threshold ({systemSettings.defaultCurrency})</label>
@@ -929,20 +918,7 @@ const SystemSetting = () => {
                   <p className="text-xs text-gray-500 mt-1.5 font-inter">Minimum wallet earnings a provider must accrue before initiating a bank withdrawal.</p>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-semibold text-secondary mb-2 font-inter">Referral Bonus Payoff ({systemSettings.defaultCurrency})</label>
-                  <div className="relative">
-                    <span className="absolute left-3.5 top-1/2 transform -translate-y-1/2 text-gray-500 font-bold font-inter text-sm">{systemSettings.defaultCurrency}</span>
-                    <input
-                      type="number"
-                      value={systemSettings.walletSettings.referralBonus}
-                      onChange={(e) => handleNestedChange('walletSettings', 'referralBonus', Number(e.target.value))}
-                      min="0"
-                      className="w-full pl-14 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-inter text-secondary"
-                    />
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1.5 font-inter">Flat wallet bonus credited when a user successfully registers with a valid referral code.</p>
-                </div>
+
 
               </div>
             </div>
@@ -1103,12 +1079,7 @@ const SystemSetting = () => {
                 onChange={(val) => handleNestedChange('featureFlags', 'walletEnabled', val)}
               />
 
-              <ToggleSwitch
-                label="Referral Program System"
-                description="Activate/deactivate user referrals, invite links, signup bonuses, and program logic globally."
-                checked={systemSettings.featureFlags.referralEnabled}
-                onChange={(val) => handleNestedChange('featureFlags', 'referralEnabled', val)}
-              />
+
 
             </div>
           </div>

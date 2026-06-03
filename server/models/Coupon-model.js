@@ -116,9 +116,6 @@ couponSchema.virtual('isExpired').get(function () {
 });
 
 couponSchema.virtual('formattedDiscount').get(function () {
-  if (this.discountType === 'cashback') {
-    return `${this.discountValue}% Cashback`;
-  }
   return this.discountType === 'flat'
     ? `₹${this.discountValue} OFF`
     : `${this.discountValue}% OFF`;

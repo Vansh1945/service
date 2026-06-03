@@ -598,8 +598,8 @@ const UserProfile = () => {
                                             </h3>
                                         </div>
 
-                                        {/* 4-stat grid */}
-                                        <div className="grid grid-cols-3 gap-3">
+                                        {/* 2-stat grid */}
+                                        <div className="grid grid-cols-2 gap-3">
                                             <div className="bg-white/5 rounded-xl p-3 border border-white/10">
                                                 <p className="text-[9px] text-primary uppercase tracking-wider font-black mb-1">Refund Credits</p>
                                                 <p className="text-base font-black text-white">{formatCurrency(profile.wallet?.totalRefunded || 0)}</p>
@@ -609,10 +609,6 @@ const UserProfile = () => {
                                                 <p className="text-base font-black text-white">
                                                     {formatCurrency(transactions.data.filter(t => t.type === 'debit').reduce((acc, t) => acc + t.amount, 0))}
                                                 </p>
-                                            </div>
-                                            <div className="bg-white/5 rounded-xl p-3 border border-white/10">
-                                                <p className="text-[9px] text-accent uppercase tracking-wider font-black mb-1">Cashback</p>
-                                                <p className="text-base font-black text-white/40">—</p>
                                             </div>
                                         </div>
                                     </div>

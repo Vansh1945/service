@@ -88,7 +88,7 @@ const ProviderLayout = () => {
         };
 
         checkActiveBookings();
-        const interval = setInterval(checkActiveBookings, 15000); // Check every 15s
+        const interval = setInterval(checkActiveBookings, 45000); // Check every 45s
         return () => clearInterval(interval);
     }, [isOnline, token]);
 

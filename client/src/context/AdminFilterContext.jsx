@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import * as BookingService from '../services/BookingService';
 import * as ZoneService from '../services/ZoneService';
 
@@ -52,7 +52,7 @@ export const AdminFilterProvider = ({ children }) => {
   }, []);
 
   // Compute startDate and endDate based on active global filters
-  const getComputedDateRange = () => {
+  const getComputedDateRange = useCallback(() => {
     let startYear, endYear;
 
     if (filterType === 'financial') {
@@ -146,7 +146,7 @@ export const AdminFilterProvider = ({ children }) => {
       fromDate: formatDate(start),
       toDate: formatDate(end)
     };
-  };
+  }, [filterType, year, financialYear, month, quarter]);
 
   const resetGlobalFilters = () => {
     setFilterType('calendar');
@@ -156,7 +156,7 @@ export const AdminFilterProvider = ({ children }) => {
     setZoneIds([]);
   };
 
-  const getMergedQuery = (localFilters = {}) => {
+  const getMergedQuery = useCallback((localFilters = {}) => {
     const dates = getComputedDateRange();
     const query = {
       ...dates,
@@ -164,7 +164,7 @@ export const AdminFilterProvider = ({ children }) => {
       ...localFilters
     };
     return query;
-  };
+  }, [getComputedDateRange, zoneIds]);
 
   return (
     <AdminFilterContext.Provider
