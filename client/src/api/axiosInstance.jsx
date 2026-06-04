@@ -31,14 +31,19 @@ const api = axios.create({
 api.interceptors.request.use(
     (config) => {
         // Prevent duplicate concurrent mutation requests
+        // Prevent duplicate concurrent mutation requests, but allow token save requests
         if (['post', 'put', 'patch', 'delete'].includes(config.method)) {
-            const key = getRequestKey(config);
-            if (pendingRequests.has(key)) {
-                const controller = new AbortController();
-                config.signal = controller.signal;
-                controller.abort("Duplicate request blocked");
-            } else {
-                pendingRequests.set(key, true);
+            // Skip duplicate check for notification token saving to avoid CancelledError
+            const isSaveToken = config.url && config.url.includes('/notifications/save-token');
+            if (!isSaveToken) {
+                const key = getRequestKey(config);
+                if (pendingRequests.has(key)) {
+                    const controller = new AbortController();
+                    config.signal = controller.signal;
+                    controller.abort("Duplicate request blocked");
+                } else {
+                    pendingRequests.set(key, true);
+                }
             }
         }
 
