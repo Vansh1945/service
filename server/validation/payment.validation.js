@@ -10,11 +10,6 @@ const requestBulkWithdrawalSchema = z.object({
   })
 });
 
-const verifyWithdrawalOTPSchema = z.object({
-  otp: z.string().regex(/^\d{6}$/, "OTP must be a 6-digit number")
-});
-
 module.exports = {
-  requestBulkWithdrawalSchema,
-  verifyWithdrawalOTPSchema
+  requestBulkWithdrawalSchema
 };

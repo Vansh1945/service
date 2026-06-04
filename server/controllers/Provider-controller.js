@@ -764,7 +764,7 @@ exports.updateProviderProfile = async (req, res) => {
 
         const {
             // Basic info
-            name, phone, dateOfBirth,
+            name, phone, dateOfBirth, isOnline,
             // Professional info
             services, experience, serviceArea,
             // Address info
@@ -791,6 +791,10 @@ exports.updateProviderProfile = async (req, res) => {
         // Handle different update types or update all if no type specified
         if (!updateType || updateType === 'basic') {
             // Basic Information Updates
+            if (isOnline !== undefined) {
+                updates.isOnline = isOnline === 'true' || isOnline === true;
+            }
+
             if (name && typeof name === 'string') {
                 updates.name = name.trim();
             }

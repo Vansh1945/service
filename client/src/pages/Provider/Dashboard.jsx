@@ -11,6 +11,7 @@ import * as ProviderService from '../../services/ProviderService';
 import * as BookingService from '../../services/BookingService';
 import * as ComplaintService from '../../services/ComplaintService';
 import { formatCurrency, formatDate, formatTime } from '../../utils/format';
+import { formatAddress } from '../../utils/providerHelpers';
 
 const PayoutStatusBadge = ({ status }) => {
   const cfg = {
@@ -73,12 +74,6 @@ const Dashboard = () => {
   const [actionLoading, setActionLoading] = useState({});
   const [complaintsCount, setComplaintsCount] = useState(0);
 
-  const formatAddress = useCallback((address) => {
-    if (!address) return 'Address not specified';
-    if (typeof address === 'string') return address;
-    const parts = [address.street, address.city, address.state].filter(Boolean);
-    return parts.length > 0 ? parts.join(', ') : 'Address not specified';
-  }, []);
 
   const fetchDashboardData = useCallback(async () => {
     try {
@@ -253,7 +248,7 @@ const Dashboard = () => {
                 <FiTrendingUp className="w-5 h-5 text-accent" />
               </div>
               <div className="min-w-0">
-                <p className="text-[10px] sm:text-xs text-secondary/50 uppercase tracking-wide leading-tight">Wallet Balance</p>
+                <p className="text-[10px] sm:text-xs text-secondary/50 uppercase tracking-wide leading-tight">Available Balance</p>
                 <p className="text-base sm:text-xl font-bold text-secondary truncate">{formatCurrency(wallet?.currentBalance || 0)}</p>
               </div>
             </div>
@@ -316,8 +311,21 @@ const Dashboard = () => {
               </div>
               <div className="min-w-0">
                 <p className="text-[10px] sm:text-xs text-secondary/50 uppercase tracking-wide leading-tight">Held Payouts</p>
-                <p className="text-base sm:text-xl font-bold text-secondary">{heldPayouts}</p>
-                <p className="text-[10px] text-orange-500 font-medium">Awaiting Release</p>
+                <p className="text-base sm:text-xl font-bold text-secondary">{formatCurrency(wallet?.heldBalance || wallet?.heldAmount || 0)}</p>
+                <p className="text-[10px] text-orange-500 font-medium">{heldPayouts} Jobs Held</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-sm p-3 sm:p-4 border-l-4 border-pink-500 min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+              <div className="p-2 bg-pink-50 rounded-xl w-fit">
+                <FiClock className="w-5 h-5 text-pink-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-xs text-secondary/50 uppercase tracking-wide leading-tight">Under Review</p>
+                <p className="text-base sm:text-xl font-bold text-secondary truncate">{formatCurrency(wallet?.pendingPayout || 0)}</p>
+                <p className="text-[10px] text-pink-500 font-medium">Pending Release</p>
               </div>
             </div>
           </div>

@@ -88,6 +88,7 @@ const updateProviderProfileSchema = z.object({
   bankName: z.string().optional(),
   accountName: z.string().optional(),
   updateType: z.string().optional(),
+  isOnline: z.union([z.boolean(), z.string()]).optional().transform(val => typeof val === 'string' ? val === 'true' : val),
   lat: z.union([z.number(), z.string()]).nullable().optional().transform(val => (val === null || val === undefined || val === '') ? null : parseFloat(val)),
   lng: z.union([z.number(), z.string()]).nullable().optional().transform(val => (val === null || val === undefined || val === '') ? null : parseFloat(val)),
   houseNumber: z.string().optional().or(z.literal('')),

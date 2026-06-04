@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { MapPin, Building, ChevronDown } from 'lucide-react';
 import LocationPickerModal from './LocationPickerModal';
 import { buildAddressPreview, smartAddressBuilder } from '../utils/format';
+import { latLngToS2CellId } from '../utils/s2Helper';
 
 const AddressSelector = ({
   address = {},
@@ -34,6 +35,21 @@ const AddressSelector = ({
       setCities([]);
     }
   }, [selectedCountry, currentStateCode]);
+
+  // Shared S2 Cell helper to ensure s2CellId, s2CellIdPrecise, and geoHash are computed if lat/lng are present
+  const enrichAddressWithS2Cells = (addr) => {
+    const lat = parseFloat(addr.lat);
+    const lng = parseFloat(addr.lng);
+    if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+      return {
+        ...addr,
+        s2CellId: latLngToS2CellId(lat, lng, 13),
+        s2CellIdPrecise: latLngToS2CellId(lat, lng, 20),
+        geoHash: latLngToS2CellId(lat, lng, 13) // Map geoHash to level 13 S2 cell key
+      };
+    }
+    return addr;
+  };
 
   const handleFieldChange = (name, value) => {
     const updated = {
@@ -69,7 +85,7 @@ const AddressSelector = ({
       ""
     );
 
-    onChange(updated);
+    onChange(enrichAddressWithS2Cells(updated));
   };
 
   const handleStateChange = (stateName) => {
@@ -93,7 +109,7 @@ const AddressSelector = ({
       ""
     );
 
-    onChange(updated);
+    onChange(enrichAddressWithS2Cells(updated));
   };
 
   const handleCityChange = (cityName) => {
@@ -116,7 +132,7 @@ const AddressSelector = ({
       ""
     );
 
-    onChange(updated);
+    onChange(enrichAddressWithS2Cells(updated));
   };
 
   return (
@@ -288,7 +304,7 @@ const AddressSelector = ({
               ...address,
               ...loc
             };
-            onChange(updated);
+            onChange(enrichAddressWithS2Cells(updated));
           }}
         />
       )}

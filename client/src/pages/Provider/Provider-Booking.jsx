@@ -16,27 +16,12 @@ import LoadingSpinner from '../../components/Loader';
 import * as BookingService from '../../services/BookingService';
 import Pagination from '../../components/Pagination';
 import { formatDate, formatTime, formatCurrency, formatDuration, compressImage, filterGPSJitter, LIGHT_MAP_TILES, LIGHT_MAP_ATTRIBUTION } from '../../utils/format';
+import { isChatVisible, formatAddress, calculateSubtotal, calculateNetAmount } from '../../utils/providerHelpers';
 import * as ComplaintService from '../../services/ComplaintService';
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import ChatModal from '../../components/chat/ChatModal';
 
-const isChatVisible = (b) => {
-  if (!b) return false;
-  if (b.disputeStatus === 'resolved' || b.status === 'resolved') return false;
-  if (b.hasComplaint || b.disputeRaised || b.status === 'complaint') return true;
-  if (['pending', 'cancelled', 'no-show'].includes(b.status)) return false;
-
-  if (b.status === 'completed') {
-    const completedTime = b.serviceCompletedAt || b.completedAt || b.updatedAt;
-    if (completedTime) {
-      const diffMs = Date.now() - new Date(completedTime).getTime();
-      return diffMs <= 24 * 60 * 60 * 1000;
-    }
-    return true;
-  }
-  return true;
-};
 
 const customerIcon = L.divIcon({ html: `<div style="background-color: #EF4444; width: 24px; height: 24px; border-radius: 50% 50% 50% 0; border: 3px solid white; transform: rotate(-45deg); box-shadow: 0 0 5px rgba(0,0,0,0.5);"></div>`, className: '', iconSize: [24, 24], iconAnchor: [12, 24], popupAnchor: [1, -34] });
 const providerIcon = L.divIcon({ html: `<div style="background-color: #10B981; width: 24px; height: 24px; border-radius: 50% 50% 50% 0; border: 3px solid white; transform: rotate(-45deg); box-shadow: 0 0 5px rgba(0,0,0,0.5);"></div>`, className: '', iconSize: [24, 24], iconAnchor: [12, 24], popupAnchor: [1, -34] });
@@ -547,11 +532,6 @@ const ProviderBooking = () => {
   }, [isLimitReached, showToast]);
 
   // ── Calculation helpers ──────────────────────────────────────────────────
-  const calculateSubtotal = useCallback((booking) => {
-    if (!booking?.services) return 0;
-    return booking.services.reduce((sum, item) => sum + (item.price * item.quantity) - (item.discountAmount || 0), 0).toFixed(2);
-  }, []);
-
   const calculateServiceSubtotal = useCallback((booking) => {
     if (!booking?.services) return 0;
     return booking.services.reduce((sum, item) => sum + (item.price * item.quantity), 0).toFixed(2);
@@ -562,20 +542,6 @@ const ProviderBooking = () => {
     return booking.services.reduce((sum, item) => sum + (item.discountAmount || 0), 0).toFixed(2);
   }, []);
 
-  const calculateNetAmount = useCallback((booking) => {
-    if (!booking) return 0;
-    if (booking.status === 'completed' && typeof booking.providerEarnings === 'number' && booking.providerEarnings > 0) {
-      return booking.providerEarnings.toFixed(2);
-    }
-    const subtotal = parseFloat(calculateSubtotal(booking)) || 0;
-    const visiting = booking.visitingCharge ? parseFloat((booking.visitingCharge * ((booking.surgeSplitSettings?.visiting || 60) / 100)).toFixed(2)) : 0;
-    const rain = booking.rainCharge ? parseFloat((booking.rainCharge * ((booking.surgeSplitSettings?.rain || 70) / 100)).toFixed(2)) : 0;
-    const traffic = booking.trafficCharge ? parseFloat((booking.trafficCharge * ((booking.surgeSplitSettings?.traffic || 70) / 100)).toFixed(2)) : 0;
-    const night = booking.nightCharge ? parseFloat((booking.nightCharge * ((booking.surgeSplitSettings?.night || 70) / 100)).toFixed(2)) : 0;
-    const demand = booking.demandSurge ? parseFloat((booking.demandSurge * ((booking.surgeSplitSettings?.demand || 50) / 100)).toFixed(2)) : 0;
-    const commission = booking.commission?.amount || booking.commissionAmount || 0;
-    return (subtotal + visiting + rain + traffic + night + demand - commission).toFixed(2);
-  }, [calculateSubtotal]);
 
   const toggleSection = useCallback((section) => {
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
@@ -826,11 +792,7 @@ const ProviderBooking = () => {
   };
 
   // ── Formatters ───────────────────────────────────────────────────────────
-  const formatAddress = useCallback((address) => {
-    if (!address) return 'Address not specified';
-    if (typeof address === 'string') return address;
-    return [address.street, address.city, address.state, address.postalCode, address.country].filter(Boolean).join(', ') || 'Address not specified';
-  }, []);
+
 
   const getStatusColor = useCallback((status) => {
     const map = {
@@ -1092,7 +1054,7 @@ const ProviderBooking = () => {
                 </button>
 
                 {/* Chat Customer */}
-                {(booking.provider && booking.provider.toString() === user?._id?.toString() && booking.status !== 'completed') ? (
+                {(booking.provider && booking.provider.toString() === user?._id?.toString() && isChatVisible(booking)) ? (
                   <button
                     onClick={() => { setChatBookingId(booking._id); setChatRoomType('provider_customer'); }}
                     className="inline-flex items-center justify-center gap-1 py-2 bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white rounded-xl text-[10px] sm:text-xs font-bold transition-all shadow-sm active:scale-95 w-full md:flex-1"
@@ -1101,7 +1063,7 @@ const ProviderBooking = () => {
                     <MessageSquare className="w-3.5 h-3.5" />
                     <span>Chat</span>
                   </button>
-                ) : (booking.status !== 'completed') && (
+                ) : isChatVisible(booking) && (
                   <button
                     disabled
                     title="Chat is only available for the assigned provider"
@@ -1549,7 +1511,7 @@ const ProviderBooking = () => {
                       <div className="p-1.5 bg-primary/10 rounded-lg"><User className="w-4 h-4 text-primary" /></div>
                       <h3 className="font-semibold text-secondary">Customer Information</h3>
                     </div>
-                    {['accepted', 'in-progress', 'assigned'].includes(selectedBooking.status) ? (
+                    {isChatVisible(selectedBooking) ? (
                       <div className="bg-white rounded-xl p-4 border border-gray-100 space-y-3">
                         {selectedBooking.provider && selectedBooking.provider.toString() === user?._id?.toString() ? (
                           <button

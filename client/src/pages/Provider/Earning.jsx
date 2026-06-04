@@ -9,29 +9,11 @@ import {
 import * as PaymentService from '../../services/PaymentService';
 import * as ProviderService from '../../services/ProviderService';
 import { formatDate, formatTime, formatDateTime, formatCurrency, formatNumber } from '../../utils/format';
+import { getStatusConfig } from '../../utils/providerHelpers';
 import Loader from '../../components/Loader';
 
 // ── Utility Helpers ──────────────────────────────────────────────────────────
 
-
-const getStatusConfig = (status) => {
-  const configs = {
-    completed: { color: 'bg-primary/10 text-primary border border-primary/20', icon: CheckCircle, label: 'Success' },
-    paid: { color: 'bg-primary/10 text-primary border border-primary/20', icon: CheckCircle, label: 'Paid' },
-    processing: { color: 'bg-accent/10 text-accent border border-accent/20', icon: Clock, label: 'Processing' },
-    under_review: { color: 'bg-secondary/10 text-secondary border border-secondary/20', icon: Clock, label: 'Review' },
-    approved: { color: 'bg-primary/10 text-primary border border-primary/20', icon: CheckCircle, label: 'Approved' },
-    requested: { color: 'bg-accent/10 text-accent border border-accent/20', icon: Clock, label: 'Requested' },
-    failed: { color: 'bg-red-50 text-red-700 border border-red-200', icon: XCircle, label: 'Failed' },
-    rejected: { color: 'bg-red-50 text-red-700 border border-red-200', icon: XCircle, label: 'Rejected' },
-    withdrawn: { color: 'bg-secondary/10 text-secondary border border-secondary/20', icon: CheckCircle, label: 'Withdrawn' },
-    'dispute hold': { color: 'bg-red-50 text-red-700 border border-red-200', icon: ShieldAlert, label: 'Dispute Hold' },
-    'admin hold': { color: 'bg-accent/10 text-accent border border-accent/20', icon: Lock, label: 'Admin Hold' },
-    'held': { color: 'bg-accent/10 text-accent border border-accent/20', icon: Lock, label: 'Held' },
-    'available': { color: 'bg-primary/10 text-primary border border-primary/20', icon: CheckCircle, label: 'Ready for withdrawal' }
-  };
-  return configs[status?.toLowerCase()] || { color: 'bg-gray-100 text-secondary/70 border border-gray-200', icon: AlertCircle, label: status || 'Unknown' };
-};
 
 // ── Shared UI Components ─────────────────────────────────────────────────────
 
@@ -105,6 +87,17 @@ const ProviderEarningsDashboard = () => {
   const [otpDelivery, setOtpDelivery] = useState(null);
   const [otpTimer, setOtpTimer] = useState(0);
   const [cooldownTime, setCooldownTime] = useState(null);
+  const [surchargeOpenId, setSurchargeOpenId] = useState(null);
+
+  useEffect(() => {
+    const handleDocumentClick = () => {
+      setSurchargeOpenId(null);
+    };
+    document.addEventListener('click', handleDocumentClick);
+    return () => {
+      document.removeEventListener('click', handleDocumentClick);
+    };
+  }, []);
 
   // ── API Handlers ─────────────────────────────────────────────────────────────
 
@@ -476,21 +469,66 @@ const ProviderEarningsDashboard = () => {
           <div className="overflow-x-auto">
             {/* Overview Tab */}
             {activeTab === 'dashboard' && (
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="border-b border-gray-100">
-                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Activity Details</th>
-                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Timestamp</th>
-                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Value</th>
-                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
+              <>
+                {/* Desktop View */}
+                <div className="hidden md:block">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="border-b border-gray-100">
+                        <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Activity Details</th>
+                        <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Timestamp</th>
+                        <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Value</th>
+                        <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {withdrawalReport.length > 0 ? (
+                        withdrawalReport.slice(0, 10).map((r, i) => (
+                          <tr key={i} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-3">
+                                <div className="p-2 bg-gray-50 rounded-lg text-secondary/40">
+                                  <ArrowDownLeft className="w-4 h-4" />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium text-secondary">Bank Payout</p>
+                                  <p className="text-xs text-secondary/40 font-mono">Ref: {r.transactionReference || 'N/A'}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-secondary/50">
+                              {formatDate(r.createdAt)}
+                              <span className="text-secondary/30 ml-1">{formatTime(r.createdAt)}</span>
+                            </td>
+                            <td className="px-6 py-4 text-sm font-semibold text-red-500">
+                              -{formatCurrency(r.amount)}
+                            </td>
+                            <td className="px-6 py-4">
+                              <Badge status={r.status} />
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan="4" className="py-16 text-center">
+                            <div className="flex flex-col items-center text-secondary/30">
+                              <AlertCircle className="w-10 h-10 mb-2" />
+                              <p className="text-sm">No recent transactions</p>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile View */}
+                <div className="md:hidden space-y-4 p-4">
                   {withdrawalReport.length > 0 ? (
                     withdrawalReport.slice(0, 10).map((r, i) => (
-                      <tr key={i} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
+                      <div key={i} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm space-y-2.5">
+                        <div className="flex justify-between items-start">
+                          <div className="flex items-center gap-2.5">
                             <div className="p-2 bg-gray-50 rounded-lg text-secondary/40">
                               <ArrowDownLeft className="w-4 h-4" />
                             </div>
@@ -499,81 +537,184 @@ const ProviderEarningsDashboard = () => {
                               <p className="text-xs text-secondary/40 font-mono">Ref: {r.transactionReference || 'N/A'}</p>
                             </div>
                           </div>
-                        </td>
-                        <td className="px-6 py-4 text-sm text-secondary/50">
-                          {formatDate(r.createdAt)}
-                          <span className="text-secondary/30 ml-1">{formatTime(r.createdAt)}</span>
-                        </td>
-                        <td className="px-6 py-4 text-sm font-semibold text-red-500">
-                          -{formatCurrency(r.amount)}
-                        </td>
-                        <td className="px-6 py-4">
                           <Badge status={r.status} />
-                        </td>
-                      </tr>
+                        </div>
+                        <div className="flex justify-between items-center text-xs text-secondary/50 pt-2 border-t border-gray-50">
+                          <span>{formatDate(r.createdAt)} {formatTime(r.createdAt)}</span>
+                          <span className="text-sm font-bold text-red-500">-{formatCurrency(r.amount)}</span>
+                        </div>
+                      </div>
                     ))
                   ) : (
-                    <tr>
-                      <td colSpan="4" className="py-16 text-center">
-                        <div className="flex flex-col items-center text-secondary/30">
-                          <AlertCircle className="w-10 h-10 mb-2" />
-                          <p className="text-sm">No recent transactions</p>
-                        </div>
-                      </td>
-                    </tr>
+                    <div className="py-12 text-center text-secondary/30 bg-white rounded-xl border border-gray-100">
+                      <AlertCircle className="w-8 h-8 mx-auto mb-2" />
+                      <p className="text-xs">No recent transactions</p>
+                    </div>
                   )}
-                </tbody>
-              </table>
+                </div>
+              </>
             )}
 
             {/* Available Earnings Tab */}
             {activeTab === 'earnings' && (
-              <table className="w-full text-left min-w-[950px]">
-                <thead>
-                  <tr className="border-b border-gray-100">
-                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Booking ID</th>
-                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-center">Date</th>
-                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Amount</th>
-                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Commission</th>
-                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Other Income</th>
-                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Net</th>
-                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Method</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {earningsReport.filter(e => e.isWithdrawable).length > 0 ? (
-                    earningsReport.filter(e => e.isWithdrawable).map((e, i) => (
-                      <tr key={i} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-6 py-4 text-xs font-mono font-medium text-secondary/60">
-                          {e.bookingId || `#${e.booking?.slice(-8)}`}
-                        </td>
-                        <td className="px-6 py-4 text-center text-sm text-secondary/50">
-                          {formatDate(e.createdAt)}
-                        </td>
-                        <td className="px-6 py-4 text-right text-sm text-secondary/40 line-through">
-                          {formatCurrency(e.grossAmount)}
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <p className="text-sm text-red-500 font-medium">-{formatCurrency(e.commissionAmount)}</p>
-                          <p className="text-[10px] text-secondary/30">Fee {e.commissionRate}%</p>
-                        </td>
-                        <td className="px-6 py-4 text-right relative group">
-                          {(() => {
-                            const splits = e.surgeSplitSettings || { visiting: 60, rain: 70, traffic: 70, night: 70, demand: 50 };
-                            const rainShare = parseFloat(((e.rainCharge || 0) * (splits.rain / 100)).toFixed(2));
-                            const trafficShare = parseFloat(((e.trafficCharge || 0) * (splits.traffic / 100)).toFixed(2));
-                            const nightShare = parseFloat(((e.nightCharge || 0) * (splits.night / 100)).toFixed(2));
-                            const visitingShare = parseFloat(((e.visitingCharge || 0) * (splits.visiting / 100)).toFixed(2));
-                            const demandShare = parseFloat(((e.demandSurge || 0) * (splits.demand / 100)).toFixed(2));
-                            const otherIncome = parseFloat((rainShare + trafficShare + nightShare).toFixed(2));
+              <>
+                {/* Desktop View */}
+                <div className="hidden md:block">
+                  <table className="w-full text-left min-w-[950px]">
+                    <thead>
+                      <tr className="border-b border-gray-100">
+                        <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Booking ID</th>
+                        <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-center">Date</th>
+                        <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Amount</th>
+                        <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Commission</th>
+                        <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Other Income</th>
+                        <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Net</th>
+                        <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Method</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {earningsReport.filter(e => e.isWithdrawable).length > 0 ? (
+                        earningsReport.filter(e => e.isWithdrawable).map((e, i) => (
+                          <tr key={i} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-6 py-4 text-xs font-mono font-medium text-secondary/60">
+                              {e.bookingId || `#${e.booking?.slice(-8)}`}
+                            </td>
+                            <td className="px-6 py-4 text-center text-sm text-secondary/50">
+                              {formatDate(e.createdAt)}
+                            </td>
+                            <td className="px-6 py-4 text-right text-sm text-secondary/40 line-through">
+                              {formatCurrency(e.grossAmount)}
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <p className="text-sm text-red-500 font-medium">-{formatCurrency(e.commissionAmount)}</p>
+                              <p className="text-[10px] text-secondary/30">Fee {e.commissionRate}%</p>
+                            </td>
+                            <td className="px-6 py-4 text-right relative group">
+                              {(() => {
+                                const splits = e.surgeSplitSettings || { visiting: 60, rain: 70, traffic: 70, night: 70, demand: 50 };
+                                const rainShare = parseFloat(((e.rainCharge || 0) * (splits.rain / 100)).toFixed(2));
+                                const trafficShare = parseFloat(((e.trafficCharge || 0) * (splits.traffic / 100)).toFixed(2));
+                                const nightShare = parseFloat(((e.nightCharge || 0) * (splits.night / 100)).toFixed(2));
+                                const visitingShare = parseFloat(((e.visitingCharge || 0) * (splits.visiting / 100)).toFixed(2));
+                                const demandShare = parseFloat(((e.demandSurge || 0) * (splits.demand / 100)).toFixed(2));
+                                const otherIncome = parseFloat((rainShare + trafficShare + nightShare).toFixed(2));
 
-                            return (
-                              <>
-                                <span className="text-sm font-medium text-emerald-600 border-b border-dashed border-emerald-450 cursor-help">
-                                  {formatCurrency(otherIncome)}
-                                </span>
-                                <div className="absolute right-0 bottom-full mb-2 w-52 hidden group-hover:block bg-slate-900 text-white text-[10px] p-2.5 rounded-lg shadow-xl z-30 leading-normal pointer-events-none text-left">
+                                return (
+                                  <>
+                                    <span
+                                      onClick={(evt) => {
+                                        evt.stopPropagation();
+                                        setSurchargeOpenId(surchargeOpenId === e._id ? null : e._id);
+                                      }}
+                                      className="text-sm font-medium text-emerald-600 border-b border-dashed border-emerald-450 cursor-pointer flex items-center justify-end gap-1 select-none"
+                                    >
+                                      {formatCurrency(otherIncome)}
+                                      <Info className="w-3.5 h-3.5 text-emerald-600/70" />
+                                    </span>
+                                    {surchargeOpenId === e._id && (
+                                      <div className="absolute right-0 bottom-full mb-2 w-52 bg-slate-900 text-white text-[10px] p-2.5 rounded-lg shadow-xl z-30 leading-normal text-left">
+                                        <p className="font-bold border-b border-slate-700 pb-1 mb-1 text-[11px]">Surcharge Split Details</p>
+                                        <div className="flex justify-between py-0.5">
+                                          <span>Rain Share</span>
+                                          <span>{formatCurrency(rainShare)}</span>
+                                        </div>
+                                        <div className="flex justify-between py-0.5">
+                                          <span>Traffic Share</span>
+                                          <span>{formatCurrency(trafficShare)}</span>
+                                        </div>
+                                        <div className="flex justify-between py-0.5">
+                                          <span>Night Share</span>
+                                          <span>{formatCurrency(nightShare)}</span>
+                                        </div>
+                                        <div className="flex justify-between py-0.5 border-t border-slate-700 mt-1 pt-1 font-bold">
+                                          <span>Vis. Share</span>
+                                          <span>{formatCurrency(visitingShare)}</span>
+                                        </div>
+                                        <div className="flex justify-between py-0.5 font-bold">
+                                          <span>Demand Share</span>
+                                          <span>{formatCurrency(demandShare)}</span>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </>
+                                );
+                              })()}
+                            </td>
+                            <td className="px-6 py-4 text-right text-sm font-bold text-green-600">
+                              +{formatCurrency(e.netAmount)}
+                            </td>
+                            <td className="px-6 py-4">
+                              <Badge status={e.payoutStatus || e.status} />
+                            </td>
+                            <td className="px-6 py-4 text-xs font-medium capitalize text-secondary/60">
+                              {e.paymentMethod || '—'}
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan="8" className="py-16 text-center text-secondary/30">
+                            No available earnings records found
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile View */}
+                <div className="md:hidden space-y-4 p-4">
+                  {earningsReport.filter(e => e.isWithdrawable).length > 0 ? (
+                    earningsReport.filter(e => e.isWithdrawable).map((e, i) => {
+                      const splits = e.surgeSplitSettings || { visiting: 60, rain: 70, traffic: 70, night: 70, demand: 50 };
+                      const rainShare = parseFloat(((e.rainCharge || 0) * (splits.rain / 100)).toFixed(2));
+                      const trafficShare = parseFloat(((e.trafficCharge || 0) * (splits.traffic / 100)).toFixed(2));
+                      const nightShare = parseFloat(((e.nightCharge || 0) * (splits.night / 100)).toFixed(2));
+                      const visitingShare = parseFloat(((e.visitingCharge || 0) * (splits.visiting / 100)).toFixed(2));
+                      const demandShare = parseFloat(((e.demandSurge || 0) * (splits.demand / 100)).toFixed(2));
+                      const otherIncome = parseFloat((rainShare + trafficShare + nightShare).toFixed(2));
+
+                      return (
+                        <div key={i} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm space-y-3">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="text-xs font-mono font-medium text-secondary/60">
+                                {e.bookingId || `#${e.booking?.slice(-8)}`}
+                              </p>
+                              <p className="text-[11px] text-secondary/40">{formatDate(e.createdAt)}</p>
+                            </div>
+                            <Badge status={e.payoutStatus || e.status} />
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-xs border-t border-gray-50 pt-2">
+                            <div>
+                              <p className="text-secondary/40">Gross Amt</p>
+                              <p className="font-semibold text-secondary/40 line-through">{formatCurrency(e.grossAmount)}</p>
+                            </div>
+                            <div>
+                              <p className="text-secondary/40">Commission</p>
+                              <p className="font-semibold text-red-500">-{formatCurrency(e.commissionAmount)} ({e.commissionRate}%)</p>
+                            </div>
+                            <div className="relative">
+                              <p className="text-secondary/40 flex items-center gap-1 select-none">
+                                Other
+                                <button
+                                  type="button"
+                                  onClick={(evt) => {
+                                    evt.stopPropagation();
+                                    setSurchargeOpenId(surchargeOpenId === e._id ? null : e._id);
+                                  }}
+                                  className="text-emerald-600 hover:text-emerald-700 focus:outline-none"
+                                >
+                                  <Info className="w-3 h-3 inline" />
+                                </button>
+                              </p>
+                              <p className="font-semibold text-emerald-600">
+                                {formatCurrency(otherIncome)}
+                              </p>
+                              {/* Tap Popover for Mobile */}
+                              {surchargeOpenId === e._id && (
+                                <div className="absolute left-0 bottom-full mb-2 w-52 bg-slate-900 text-white text-[10px] p-2.5 rounded-lg shadow-xl z-30 leading-normal text-left">
                                   <p className="font-bold border-b border-slate-700 pb-1 mb-1 text-[11px]">Surcharge Split Details</p>
                                   <div className="flex justify-between py-0.5">
                                     <span>Rain Share</span>
@@ -596,30 +737,26 @@ const ProviderEarningsDashboard = () => {
                                     <span>{formatCurrency(demandShare)}</span>
                                   </div>
                                 </div>
-                              </>
-                            );
-                          })()}
-                        </td>
-                        <td className="px-6 py-4 text-right text-sm font-bold text-green-600">
-                          +{formatCurrency(e.netAmount)}
-                        </td>
-                        <td className="px-6 py-4">
-                          <Badge status={e.payoutStatus || e.status} />
-                        </td>
-                        <td className="px-6 py-4 text-xs font-medium capitalize text-secondary/60">
-                          {e.paymentMethod || '—'}
-                        </td>
-                      </tr>
-                    ))
+                              )}
+                            </div>
+                            <div>
+                              <p className="text-secondary/40">Net Amt</p>
+                              <p className="font-bold text-green-600">+{formatCurrency(e.netAmount)}</p>
+                            </div>
+                          </div>
+                          <div className="flex justify-between items-center text-[10px] text-secondary/40 border-t border-gray-50 pt-2">
+                            <span>Method: <span className="font-semibold capitalize text-secondary/60">{e.paymentMethod || '—'}</span></span>
+                          </div>
+                        </div>
+                      );
+                    })
                   ) : (
-                    <tr>
-                      <td colSpan="7" className="py-16 text-center text-secondary/30">
-                        No available earnings records found
-                      </td>
-                    </tr>
+                    <div className="py-12 text-center text-secondary/30 bg-white rounded-xl border border-gray-100">
+                      No available earnings records found
+                    </div>
                   )}
-                </tbody>
-              </table>
+                </div>
+              </>
             )}
 
             {activeTab === 'held' && (
@@ -700,60 +837,103 @@ const ProviderEarningsDashboard = () => {
 
             {/* Withdrawals Tab */}
             {activeTab === 'withdrawals' && (
-              <table className="w-full text-left min-w-[800px]">
-                <thead>
-                  <tr className="border-b border-gray-100">
-                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Operation</th>
-                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Reference ID</th>
-                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Amount</th>
-                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-center">Date</th>
-                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
+              <>
+                {/* Desktop View */}
+                <div className="hidden md:block">
+                  <table className="w-full text-left min-w-[800px]">
+                    <thead>
+                      <tr className="border-b border-gray-100">
+                        <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Operation</th>
+                        <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Reference ID</th>
+                        <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Amount</th>
+                        <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-center">Date</th>
+                        <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {withdrawalReport.length > 0 ? (
+                        withdrawalReport.map((r, i) => (
+                          <tr key={i} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-3">
+                                <div className="p-2 bg-gray-50 rounded-lg text-secondary/40">
+                                  <ArrowDownLeft className="w-4 h-4" />
+                                </div>
+                                <p className="text-sm font-medium text-secondary">Payout<br /><span className="text-xs text-secondary/40">Bank Transfer</span></p>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-xs font-mono font-medium text-secondary/40">
+                              {r.transactionReference || 'REF_PENDING'}
+                            </td>
+                            <td className="px-6 py-4 text-right text-sm font-semibold text-red-500">
+                              {formatCurrency(r.amount)}
+                            </td>
+                            <td className="px-6 py-4 text-center text-sm text-secondary/50">
+                              {formatDate(r.createdAt)}
+                            </td>
+                            <td className="px-6 py-4">
+                              <Badge status={r.status} />
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <button
+                                onClick={() => setSelectedWithdrawal(r)}
+                                className="p-2 text-secondary/40 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan="6" className="py-16 text-center text-secondary/30">
+                            No payout history logged
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile View */}
+                <div className="md:hidden space-y-4 p-4">
                   {withdrawalReport.length > 0 ? (
                     withdrawalReport.map((r, i) => (
-                      <tr key={i} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-6 py-4">
+                      <div key={i} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm space-y-3">
+                        <div className="flex justify-between items-start">
                           <div className="flex items-center gap-3">
                             <div className="p-2 bg-gray-50 rounded-lg text-secondary/40">
                               <ArrowDownLeft className="w-4 h-4" />
                             </div>
-                            <p className="text-sm font-medium text-secondary">Payout<br /><span className="text-xs text-secondary/40">Bank Transfer</span></p>
+                            <div>
+                              <p className="text-sm font-medium text-secondary">Payout</p>
+                              <p className="text-xs text-secondary/40 font-mono">{r.transactionReference || 'REF_PENDING'}</p>
+                            </div>
                           </div>
-                        </td>
-                        <td className="px-6 py-4 text-xs font-mono font-medium text-secondary/40">
-                          {r.transactionReference || 'REF_PENDING'}
-                        </td>
-                        <td className="px-6 py-4 text-right text-sm font-semibold text-red-500">
-                          {formatCurrency(r.amount)}
-                        </td>
-                        <td className="px-6 py-4 text-center text-sm text-secondary/50">
-                          {formatDate(r.createdAt)}
-                        </td>
-                        <td className="px-6 py-4">
                           <Badge status={r.status} />
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <button
-                            onClick={() => setSelectedWithdrawal(r)}
-                            className="p-2 text-secondary/40 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
+                        </div>
+                        <div className="flex justify-between items-center text-xs text-secondary/50 pt-2 border-t border-gray-50">
+                          <span>{formatDate(r.createdAt)}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold text-red-500">{formatCurrency(r.amount)}</span>
+                            <button
+                              onClick={() => setSelectedWithdrawal(r)}
+                              className="p-1.5 text-secondary/40 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
                     ))
                   ) : (
-                    <tr>
-                      <td colSpan="6" className="py-16 text-center text-secondary/30">
-                        No payout history logged
-                      </td>
-                    </tr>
+                    <div className="py-12 text-center text-secondary/30 bg-white rounded-xl border border-gray-100">
+                      No payout history logged
+                    </div>
                   )}
-                </tbody>
-              </table>
+                </div>
+              </>
             )}
 
             {/* Reports Tab */}
@@ -884,12 +1064,38 @@ const ProviderEarningsDashboard = () => {
                       </div>
                     </div>
                   </div>
+
+                  {/* Verification Status Banner */}
+                  <div className="pt-2 border-t border-gray-200">
+                    {providerBankDetails.verified ? (
+                      <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-100 text-green-700 rounded-lg text-xs font-medium">
+                        <CheckCircle className="w-4 h-4 shrink-0 text-green-600" />
+                        <span>Bank details verified and active.</span>
+                      </div>
+                    ) : providerBankDetails.verificationStatus === 'rejected' ? (
+                      <div className="flex flex-col gap-1 p-2 bg-red-50 border border-red-100 text-red-700 rounded-lg text-xs font-medium">
+                        <div className="flex items-center gap-1.5 font-bold">
+                          <XCircle className="w-4 h-4 shrink-0 text-red-600" />
+                          <span>Bank Details Rejected</span>
+                        </div>
+                        <p className="text-[10px] text-red-600/80">Please update bank details in profile to resubmit.</p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-1 p-2 bg-amber-50 border border-amber-100 text-amber-700 rounded-lg text-xs font-medium">
+                        <div className="flex items-center gap-1.5 font-bold">
+                          <Clock className="w-4 h-4 shrink-0 text-amber-600" />
+                          <span>Pending Verification</span>
+                        </div>
+                        <p className="text-[10px] text-amber-600/80">Withdrawals are locked until details are approved.</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
               <button
                 onClick={handleWithdrawalRequest}
-                disabled={processingWithdrawal || !withdrawalForm.amount || withdrawalForm.amount < (summary.minWithdrawalLimit ?? 500)}
+                disabled={processingWithdrawal || !withdrawalForm.amount || withdrawalForm.amount < (summary.minWithdrawalLimit ?? 500) || !providerBankDetails?.verified}
                 className="w-full py-3 bg-accent text-white rounded-lg font-medium hover:bg-accent/90 transition-colors disabled:opacity-50"
               >
                 {processingWithdrawal ? 'Processing...' : 'Request Payout'}

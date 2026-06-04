@@ -5,7 +5,7 @@ const paymentController = require('../controllers/paymentController');
 const { providerAuthMiddleware } = require('../middlewares/Provider-middleware');
 const adminAuthMiddleware = require('../middlewares/Admin-middleware');
 const { validateBody } = require('../validation/common.validation');
-const { requestBulkWithdrawalSchema, verifyWithdrawalOTPSchema } = require('../validation/payment.validation');
+const { requestBulkWithdrawalSchema } = require('../validation/payment.validation');
 
 // Webhook route - must use express.raw() for signature verification
 // This route is PUBLIC - no authentication required
@@ -16,7 +16,6 @@ router.post('/webhook', express.raw({ type: 'application/json' }), paymentContro
 router.get('/summary', providerAuthMiddleware, paymentController.getEarningsSummary);
 router.get('/stats/weekly-monthly', providerAuthMiddleware, paymentController.getWeeklyMonthlyStats);
 router.post('/withdraw', providerAuthMiddleware, validateBody(requestBulkWithdrawalSchema), paymentController.requestBulkWithdrawal);
-router.post('/verify-withdraw-otp', providerAuthMiddleware, validateBody(verifyWithdrawalOTPSchema), paymentController.verifyWithdrawalOTP);
 
 router.get("/earnings-report", providerAuthMiddleware, paymentController.downloadEarningsReport);
 router.get("/withdrawal-report", providerAuthMiddleware, paymentController.downloadWithdrawalReport);
