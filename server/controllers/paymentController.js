@@ -648,12 +648,17 @@ const requestBulkWithdrawal = async (req, res) => {
       return res.status(403).json({ success: false, error: "Withdrawal locked due to active dispute. Please resolve it first." });
     }
 
-    // WITHDRAWAL COOLDOWN: 24 hours
-    const lastWithdrawal = provider.withdrawalSecurity?.lastRequestTime;
-    if (lastWithdrawal) {
-      const hoursSinceLast = (new Date() - new Date(lastWithdrawal)) / (1000 * 60 * 60);
+    // WITHDRAWAL COOLDOWN: 24 hours (Task 10 — use immutable PaymentRecord timestamp)
+    const lastPaymentRecord = await PaymentRecord.findOne(
+      { provider: new mongoose.Types.ObjectId(providerId) },
+      { createdAt: 1 },
+      { sort: { createdAt: -1 } }
+    ).lean();
+    if (lastPaymentRecord) {
+      const hoursSinceLast = (new Date() - new Date(lastPaymentRecord.createdAt)) / (1000 * 60 * 60);
       if (hoursSinceLast < 24) {
-        return res.status(403).json({ success: false, error: "Please wait 24 hours before making another withdrawal request." });
+        const hoursRemaining = Math.ceil(24 - hoursSinceLast);
+        return res.status(403).json({ success: false, error: `Please wait ${hoursRemaining} hour(s) before making another withdrawal request.` });
       }
     }
 
