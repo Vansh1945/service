@@ -35,7 +35,7 @@ const safeAbort = async (session) => {
   if (session) {
     try {
       await session.abortTransaction();
-    } catch (_) {}
+    } catch (_) { }
   }
 };
 
@@ -53,7 +53,7 @@ const safeEnd = (session) => {
   if (session) {
     try {
       session.endSession();
-    } catch (_) {}
+    } catch (_) { }
   }
 };
 
@@ -1187,14 +1187,14 @@ const downloadEarningsReport = async (req, res) => {
         const netService = Math.max(0, baseSubtotal - discount);
         const commRate = earning.commissionRate || 0;
         const commAmt = earning.commissionAmount || 0;
-        
+
         const visiting = earning.visitingCharge || 0;
         const rain = earning.rainCharge || 0;
         const traffic = earning.trafficCharge || 0;
         const night = earning.nightCharge || 0;
         const demand = earning.demandSurge || 0;
         const platform = earning.platformFee || 0;
-        
+
         const providerReceivable = earning.providerEarnings ?? earning.netAmount ?? 0;
         const platformRevenue = parseFloat((commAmt + (earning.companySurgeShare || 0)).toFixed(2));
 
@@ -1272,11 +1272,11 @@ const downloadWithdrawalReport = async (req, res) => {
       filter.createdAt = { $gte: start, $lte: end };
     }
 
-      const records = await PaymentRecord.find(filter)
-        .sort({ createdAt: -1 })
-        .populate('provider', 'providerId')
-        .populate('booking', 'bookingId')
-        .lean();
+    const records = await PaymentRecord.find(filter)
+      .sort({ createdAt: -1 })
+      .populate('provider', 'providerId')
+      .populate('booking', 'bookingId')
+      .lean();
 
     if (!records.length) {
       return res.status(200).json({ success: true, message: "No withdrawal records found", records: [] });
@@ -2010,7 +2010,7 @@ const generateProviderEarningsReport = async (req, res) => {
           platformFee: { $sum: { $ifNull: ['$bookingInfo.platformFee', 0] } },
           providerSurgeShare: { $sum: { $ifNull: ['$bookingInfo.providerSurgeShare', 0] } },
           companySurgeShare: { $sum: { $ifNull: ['$bookingInfo.companySurgeShare', 0] } },
-          refundAmount: { $sum: { $add: [ { $ifNull: ['$bookingInfo.cancellationProgress.refundAmount', 0] }, { $ifNull: ['$bookingInfo.refundAmount', 0] } ] } },
+          refundAmount: { $sum: { $add: [{ $ifNull: ['$bookingInfo.cancellationProgress.refundAmount', 0] }, { $ifNull: ['$bookingInfo.refundAmount', 0] }] } },
           platformFeeRetained: { $sum: { $ifNull: ['$bookingInfo.platformFeeRetained', 0] } },
           bookingIds: { $addToSet: { $ifNull: ['$bookingInfo.bookingId', { $toString: '$bookingInfo._id' }] } },
           complaintIds: { $addToSet: '$complaintInfo.complaintId' }
@@ -2836,13 +2836,13 @@ const releaseHeldEarnings = async () => {
   const session = await safeStartSession();
   try {
     const now = new Date();
-    
+
     const executeRelease = async (currentSession) => {
       const query = ProviderEarning.find({
         status: 'held',
         availableAfter: { $lte: now }
       }).populate('booking');
-      
+
       const heldEarnings = currentSession ? await query.session(currentSession) : await query;
 
       if (heldEarnings.length === 0) return;

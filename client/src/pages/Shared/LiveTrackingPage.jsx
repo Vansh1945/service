@@ -511,7 +511,7 @@ const LiveTrackingPage = () => {
                     )}
                   </div>
 
-                  {otherUser.phone && (
+                  {(otherUser.phone && booking?.status !== 'completed') && (
                     <a href={`tel:${otherUser.phone}`} className={`${isProvider ? 'px-3 py-1.5 bg-gray-50 text-secondary text-xs rounded-xl shadow-sm border border-gray-200 flex items-center justify-center font-bold hover:bg-gray-100 shrink-0' : 'w-9 h-9 md:w-11 md:h-11 bg-primary text-white rounded-full flex items-center justify-center shadow-md shrink-0'}`}>
                       <PhoneCall className={isProvider ? "w-3 h-3 mr-1.5" : "w-4 h-4 md:w-5 md:h-5"} />
                       {isProvider ? 'Call' : ''}
@@ -566,14 +566,16 @@ const LiveTrackingPage = () => {
               </button>
             ) : (
               <div className="flex flex-col gap-2 w-full">
-                <a
-                  href={`https://www.google.com/maps/dir/?api=1&destination=${targetLat},${targetLng}&travelmode=driving`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full py-2.5 bg-primary text-white font-bold rounded-2xl text-xs hover:bg-primary/95 shadow-md transition-all flex items-center justify-center gap-2"
-                >
-                  <Navigation className="w-4 h-4 animate-bounce" /> Open Google Maps Navigation
-                </a>
+                {booking?.status !== 'completed' && (
+                  <a
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${targetLat},${targetLng}&travelmode=driving`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-2.5 bg-primary text-white font-bold rounded-2xl text-xs hover:bg-primary/95 shadow-md transition-all flex items-center justify-center gap-2"
+                  >
+                    <Navigation className="w-4 h-4 animate-bounce" /> Open Google Maps Navigation
+                  </a>
+                )}
                 <button
                   onClick={() => navigate(isProvider ? '/provider/booking-requests' : '/customer/bookings')}
                   className="w-full py-2.5 bg-secondary text-white font-bold rounded-2xl text-xs hover:bg-secondary/90 shadow-lg transition-all"

@@ -16,35 +16,35 @@ import Loader from '../../components/Loader';
 
 const getStatusConfig = (status) => {
   const configs = {
-    completed: { color: 'bg-emerald-50 text-emerald-700', icon: CheckCircle, label: 'Success' },
-    paid: { color: 'bg-emerald-50 text-emerald-700', icon: CheckCircle, label: 'Paid' },
-    processing: { color: 'bg-amber-50 text-amber-700', icon: Clock, label: 'Processing' },
-    under_review: { color: 'bg-purple-50 text-purple-700', icon: Clock, label: 'Review' },
-    approved: { color: 'bg-teal-50 text-teal-700', icon: CheckCircle, label: 'Approved' },
-    requested: { color: 'bg-yellow-50 text-yellow-700', icon: Clock, label: 'Requested' },
-    failed: { color: 'bg-red-50 text-red-700', icon: XCircle, label: 'Failed' },
-    rejected: { color: 'bg-red-50 text-red-700', icon: XCircle, label: 'Rejected' },
-    withdrawn: { color: 'bg-indigo-50 text-indigo-700', icon: CheckCircle, label: 'Withdrawn' },
-    'dispute hold': { color: 'bg-red-50 text-red-700', icon: ShieldAlert, label: 'Dispute Hold' },
-    'admin hold': { color: 'bg-orange-50 text-orange-700', icon: Lock, label: 'Admin Hold' },
-    'held': { color: 'bg-orange-50 text-orange-700 border border-orange-200', icon: Lock, label: 'Held' },
-    'available': { color: 'bg-emerald-50 text-emerald-700 border border-emerald-200', icon: CheckCircle, label: 'Ready for withdrawal' }
+    completed: { color: 'bg-primary/10 text-primary border border-primary/20', icon: CheckCircle, label: 'Success' },
+    paid: { color: 'bg-primary/10 text-primary border border-primary/20', icon: CheckCircle, label: 'Paid' },
+    processing: { color: 'bg-accent/10 text-accent border border-accent/20', icon: Clock, label: 'Processing' },
+    under_review: { color: 'bg-secondary/10 text-secondary border border-secondary/20', icon: Clock, label: 'Review' },
+    approved: { color: 'bg-primary/10 text-primary border border-primary/20', icon: CheckCircle, label: 'Approved' },
+    requested: { color: 'bg-accent/10 text-accent border border-accent/20', icon: Clock, label: 'Requested' },
+    failed: { color: 'bg-red-50 text-red-700 border border-red-200', icon: XCircle, label: 'Failed' },
+    rejected: { color: 'bg-red-50 text-red-700 border border-red-200', icon: XCircle, label: 'Rejected' },
+    withdrawn: { color: 'bg-secondary/10 text-secondary border border-secondary/20', icon: CheckCircle, label: 'Withdrawn' },
+    'dispute hold': { color: 'bg-red-50 text-red-700 border border-red-200', icon: ShieldAlert, label: 'Dispute Hold' },
+    'admin hold': { color: 'bg-accent/10 text-accent border border-accent/20', icon: Lock, label: 'Admin Hold' },
+    'held': { color: 'bg-accent/10 text-accent border border-accent/20', icon: Lock, label: 'Held' },
+    'available': { color: 'bg-primary/10 text-primary border border-primary/20', icon: CheckCircle, label: 'Ready for withdrawal' }
   };
-  return configs[status?.toLowerCase()] || { color: 'bg-gray-100 text-gray-600', icon: AlertCircle, label: status || 'Unknown' };
+  return configs[status?.toLowerCase()] || { color: 'bg-gray-100 text-secondary/70 border border-gray-200', icon: AlertCircle, label: status || 'Unknown' };
 };
 
 // ── Shared UI Components ─────────────────────────────────────────────────────
 
-const StatCard = ({ title, value, icon: Icon, subtext }) => (
-  <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm hover:shadow-md transition-shadow">
-    <div className="flex items-center justify-between gap-3">
-      <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-semibold text-secondary/50 uppercase tracking-wider truncate">{title}</p>
-        <p className="text-xl font-bold text-secondary mt-1 truncate">{value}</p>
-        {subtext && <p className="text-[11px] text-secondary/40 mt-0.5 truncate">{subtext}</p>}
+const StatCard = ({ title, value, icon: Icon, subtext, borderColor = 'border-primary', iconBg = 'bg-primary/10', iconColor = 'text-primary' }) => (
+  <div className={`bg-white rounded-2xl shadow-sm p-3 sm:p-4 border-l-4 ${borderColor} hover:shadow-md transition-shadow min-w-0`}>
+    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+      <div className={`p-2 ${iconBg} rounded-xl w-fit shrink-0`}>
+        <Icon className={`w-5 h-5 ${iconColor}`} />
       </div>
-      <div className="p-2.5 bg-primary/10 rounded-lg text-primary shrink-0">
-        <Icon className="w-5 h-5" />
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] sm:text-xs text-secondary/50 uppercase tracking-wide leading-tight truncate">{title}</p>
+        <p className="text-base sm:text-xl font-bold text-secondary truncate mt-0.5">{value}</p>
+        {subtext && <p className="text-[10px] text-secondary/40 truncate leading-none mt-0.5">{subtext}</p>}
       </div>
     </div>
   </div>
@@ -304,7 +304,7 @@ const ProviderEarningsDashboard = () => {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-secondary flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-secondary flex items-center gap-2">
               <TrendingUp className="w-6 h-6 text-primary" />
               Earnings Dashboard
             </h1>
@@ -323,14 +323,14 @@ const ProviderEarningsDashboard = () => {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          <StatCard title="Gross Billed" value={formatCurrency(summary.totalEarnings)} icon={TrendingUp} subtext="Total paid by customers" />
-          <StatCard title="Today's Earning" value={formatCurrency(summary.todayEarnings)} icon={Activity} subtext="Earned today" />
-          <StatCard title="Withdrawable Balance" value={formatCurrency(summary.availableBalance)} icon={Wallet} subtext="Ready to withdraw (Net)" />
-          <StatCard title="Total Withdrawn" value={formatCurrency(summary.totalWithdrawn)} icon={FileText} subtext={`This ${timeFilter}`} />
-          <StatCard title="Processing" value={formatCurrency(summary.totalPendingWithdrawals)} icon={Clock} subtext="Awaiting clearance" />
-          <StatCard title="Held Payouts" value={formatCurrency(summary.heldAmount)} icon={Lock} subtext="Under review" />
-          <StatCard title="Disputes" value={summary.disputeCount} icon={ShieldAlert} subtext="Active disputes" />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5 sm:gap-3">
+          <StatCard title="Gross Billed" value={formatCurrency(summary.totalEarnings)} icon={TrendingUp} subtext="Total paid by customers" borderColor="border-primary" iconBg="bg-primary/10" iconColor="text-primary" />
+          <StatCard title="Today's Earning" value={formatCurrency(summary.todayEarnings)} icon={Activity} subtext="Earned today" borderColor="border-emerald-500" iconBg="bg-emerald-50" iconColor="text-emerald-600" />
+          <StatCard title="Withdrawable Balance" value={formatCurrency(summary.availableBalance)} icon={Wallet} subtext="Ready to withdraw (Net)" borderColor="border-accent" iconBg="bg-accent/10" iconColor="text-accent" />
+          <StatCard title="Total Withdrawn" value={formatCurrency(summary.totalWithdrawn)} icon={FileText} subtext={`This ${timeFilter}`} borderColor="border-indigo-500" iconBg="bg-indigo-50" iconColor="text-indigo-600" />
+          <StatCard title="Processing" value={formatCurrency(summary.totalPendingWithdrawals)} icon={Clock} subtext="Awaiting clearance" borderColor="border-orange-400" iconBg="bg-orange-50" iconColor="text-orange-500" />
+          <StatCard title="Held Payouts" value={formatCurrency(summary.heldAmount)} icon={Lock} subtext="Under review" borderColor="border-purple-400" iconBg="bg-purple-50" iconColor="text-purple-500" />
+          <StatCard title="Disputes" value={summary.disputeCount} icon={ShieldAlert} subtext="Active disputes" borderColor="border-red-400" iconBg="bg-red-50" iconColor="text-red-500" />
         </div>
 
         {/* Charts Section */}
@@ -404,8 +404,8 @@ const ProviderEarningsDashboard = () => {
                 <Wallet className="w-6 h-6" />
               </div>
               <div>
-                <p className="text-sm text-secondary/50">Available for withdrawal</p>
-                <p className="text-2xl font-bold text-secondary">{formatCurrency(summary.availableBalance)}</p>
+                <p className="text-sm font-medium text-secondary/50">Available for withdrawal</p>
+                <p className="text-3xl font-bold text-secondary mt-1">{formatCurrency(summary.availableBalance)}</p>
               </div>
             </div>
             <button

@@ -407,14 +407,14 @@ const Dashboard = () => {
             </div>
             {isReady && Recharts && (
               <ResponsiveContainer width="100%" height={240}>
-              <LineChart data={earnings?.chartData || []}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#6B7280' }} />
-                <YAxis tick={{ fontSize: 11, fill: '#6B7280' }} />
-                <Tooltip formatter={(value) => [`₹${value}`, 'Earnings']} />
-                <Line type="monotone" dataKey="earnings" stroke="#0D9488" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
+                <LineChart data={earnings?.chartData || []}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#6B7280' }} />
+                  <YAxis tick={{ fontSize: 11, fill: '#6B7280' }} />
+                  <Tooltip formatter={(value) => [`₹${value}`, 'Earnings']} />
+                  <Line type="monotone" dataKey="earnings" stroke="#0D9488" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
             )}
           </div>
 
@@ -425,23 +425,23 @@ const Dashboard = () => {
             </h3>
             {isReady && Recharts && (
               <ResponsiveContainer width="100%" height={240}>
-              <PieChart>
-                <Pie
-                  data={bookings?.pieChartData || []}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={80}
-                  paddingAngle={2}
-                  dataKey="value"
-                >
-                  {(bookings?.pieChartData || []).map((_, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+                <PieChart>
+                  <Pie
+                    data={bookings?.pieChartData || []}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={80}
+                    paddingAngle={2}
+                    dataKey="value"
+                  >
+                    {(bookings?.pieChartData || []).map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
             )}
             <div className="flex flex-wrap justify-center gap-4 mt-2">
               {(bookings?.pieChartData || []).map((entry, index) => (

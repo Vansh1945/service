@@ -268,10 +268,12 @@ const initSocket = (httpServer) => {
         // Room joining & tracking architecture setup
         if (socket.userRole === 'provider') {
             socket.join(`provider_${userId}`);
-            // Automatically mark online on connect
-            Provider.findByIdAndUpdate(userId, { isOnline: true }).then(() => {
-                io.to('admin_live_room').emit('provider-status-changed', { providerId: userId, isOnline: true });
-            }).catch(err => console.error('Error marking provider online:', err.message));
+            // Keep persistent online status on connection, notify admin of current status
+            Provider.findById(userId).then((provider) => {
+                if (provider) {
+                    io.to('admin_live_room').emit('provider-status-changed', { providerId: userId, isOnline: provider.isOnline });
+                }
+            }).catch(err => console.error('Error fetching provider status on connect:', err.message));
         }
 
         if (socket.userRole === 'admin') {
@@ -287,19 +289,43 @@ const initSocket = (httpServer) => {
 
                 // Fetch current booking state
                 const booking = await Booking.findById(bookingId)
-                    .populate('provider', 'name email phone rating address currentLocation isOnline profilePicUrl performanceScore completedBookings')
+                    .populate('provider', 'name email phone rating address currentLocation isOnline profilePicUrl performanceScore completedBookings activeBooking')
                     .lean();
 
                 if (booking) {
+                    let trackingEnabled = booking.trackingEnabled;
+                    let providerLiveLocation = booking.providerLiveLocation;
+                    let liveDistance = booking.liveDistance;
+                    let liveDuration = booking.liveDuration;
+                    let routeCoordinates = booking.routeCoordinates;
+                    let provider = booking.provider;
+
+                    if (provider && socket.userRole === 'customer') {
+                        const isThisBookingActive = provider.activeBooking && 
+                                                    provider.activeBooking.toString() === bookingId.toString();
+                        const isTrackable = (isThisBookingActive && ['accepted'].includes(booking.status)) ||
+                                            ['arriving', 'started', 'in-progress', 'in_progress'].includes(booking.status);
+                        if (!isTrackable) {
+                            trackingEnabled = false;
+                            providerLiveLocation = null;
+                            liveDistance = null;
+                            liveDuration = null;
+                            routeCoordinates = null;
+                            if (provider.currentLocation) {
+                                provider = { ...provider, currentLocation: null };
+                            }
+                        }
+                    }
+
                     socket.emit('tracking-started', {
                         bookingId,
-                        trackingEnabled: booking.trackingEnabled,
-                        providerLiveLocation: booking.providerLiveLocation,
+                        trackingEnabled,
+                        providerLiveLocation,
                         providerReached: booking.providerReached,
-                        liveDistance: booking.liveDistance,
-                        liveDuration: booking.liveDuration,
-                        routeCoordinates: booking.routeCoordinates,
-                        provider: booking.provider,
+                        liveDistance,
+                        liveDuration,
+                        routeCoordinates,
+                        provider,
                         status: booking.status
                     });
                 }
@@ -718,18 +744,6 @@ const initSocket = (httpServer) => {
         socket.on('disconnect', async (reason) => {
             console.log(`❌ Socket disconnected: ${userId} — ${reason}`);
             removeUser(socket.id);
-
-            if (socket.userRole === 'provider') {
-                try {
-                    await Provider.findByIdAndUpdate(userId, { isOnline: false });
-                    io.to('admin_live_room').emit('provider-status-changed', {
-                        providerId: userId,
-                        isOnline: false
-                    });
-                } catch (err) {
-                    console.error('Error updating provider offline status on disconnect:', err.message);
-                }
-            }
         });
     });
 

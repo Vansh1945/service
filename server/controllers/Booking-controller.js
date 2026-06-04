@@ -2029,7 +2029,7 @@ const getBooking = async (req, res) => {
     const booking = await Booking.findById(id)
       .populate('services.service', 'title description basePrice category images duration')
       .populate('customer', 'name email phone')
-      .populate('provider', 'name email phone businessName contactPerson rating address currentLocation isOnline profilePicUrl performanceScore completedBookings')
+      .populate('provider', 'name email phone businessName contactPerson rating address currentLocation isOnline profilePicUrl performanceScore completedBookings activeBooking')
       .populate('feedback')
       .lean();
 
@@ -2046,6 +2046,23 @@ const getBooking = async (req, res) => {
         success: false,
         message: 'Unauthorized to view this booking'
       });
+    }
+
+    // Sanitize live location / tracking data if the provider is not active on this specific booking
+    if (booking.provider) {
+      const isThisBookingActive = booking.provider.activeBooking && 
+                                  booking.provider.activeBooking.toString() === booking._id.toString();
+      const isTrackable = (isThisBookingActive && ['accepted'].includes(booking.status)) ||
+                          ['arriving', 'started', 'in-progress', 'in_progress'].includes(booking.status);
+      if (!isTrackable) {
+        if (booking.provider.currentLocation) {
+          booking.provider.currentLocation = null;
+        }
+        booking.providerLiveLocation = null;
+        booking.liveDistance = null;
+        booking.liveDuration = null;
+        booking.routeCoordinates = null;
+      }
     }
 
     // Fetch transaction details

@@ -29,8 +29,15 @@ const ProviderLayout = () => {
     const testPassed = user?.testPassed || false;
 
     const { socket, isConnected } = useSocket();
-    const [isOnline, setIsOnline] = useState(true);
+    const [isOnline, setIsOnline] = useState(() => user?.isOnline ?? true);
     const [activeBookingId, setActiveBookingId] = useState(null);
+
+    // Sync isOnline state when user profile is fetched/loaded
+    useEffect(() => {
+        if (user && typeof user.isOnline === 'boolean') {
+            setIsOnline(user.isOnline);
+        }
+    }, [user]);
 
 
 

@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  body, button, input, select, textarea, span, p, h1, h2, h3, h4, h5, h6, a, div {
+    font-family: 'Inter', sans-serif !important;
+  }
+}
+
 @layer utilities {
   @keyframes shimmer {
     0% {

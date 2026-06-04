@@ -34,13 +34,10 @@ const getBookingProgress = (booking) => {
       return 'in_progress';
 
     case 'completed':
-      // 48-hour review logic
-      if (completedAt) {
+      // Dynamic review logic using payoutHoldUntil
+      if (booking.payoutHoldUntil) {
         const now = new Date();
-        const completedTime = new Date(completedAt).getTime();
-        const fortyEightHoursInMs = 48 * 60 * 60 * 1000;
-
-        if (now.getTime() - completedTime < fortyEightHoursInMs) {
+        if (new Date(booking.payoutHoldUntil) > now) {
           return 'completed_pending_review';
         }
       }
@@ -137,8 +134,16 @@ const getBookingTimeline = (booking, payoutStatus = '') => {
   // 8. Payout Hold Period
   const isHold = payoutStatus && (payoutStatus.includes('Hold') || payoutStatus.includes('Review'));
   if (isHold || (isCompleted && booking.payoutHoldUntil)) {
+    let holdText = "Service under review protection";
+    if (booking.payoutHoldUntil && (booking.completedAt || booking.updatedAt)) {
+      const completedTime = new Date(booking.completedAt || booking.updatedAt);
+      const diffHrs = Math.round((new Date(booking.payoutHoldUntil) - completedTime) / (1000 * 60 * 60));
+      if (diffHrs > 0) {
+        holdText = `Service under ${diffHrs}h review protection`;
+      }
+    }
     timeline.push({
-      title: "Service under 48h review protection",
+      title: holdText,
       completed: isCompleted && !isHold,
       time: booking.payoutHoldUntil,
       status: isHold ? 'current' : (isCompleted ? 'completed' : 'pending')
