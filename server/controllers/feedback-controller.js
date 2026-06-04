@@ -11,6 +11,16 @@ const updateServiceFeedback = async (serviceId, feedbackId, updateData) => {
     const service = await Service.findById(serviceId);
     if (!service) return;
 
+    if (updateData === 'remove') {
+      // Pull feedback by feedbackId reference
+      service.feedback = service.feedback.filter(
+        f => !f.feedbackId || !f.feedbackId.equals(feedbackId)
+      );
+      await service.save();
+      await updateServiceAverageRating(serviceId);
+      return;
+    }
+
     // Find the index of the feedback to update
     const feedbackIndex = service.feedback.findIndex(
       f => f._id.equals(feedbackId)
@@ -435,6 +445,55 @@ const deleteFeedback = async (req, res) => {
   }
 };
 
+// @desc    Delete feedback (Admin)
+// @route   DELETE /api/feedback/admin/:feedbackId
+// @access  Private (Admin)
+const deleteFeedbackAdmin = async (req, res) => {
+  try {
+    const feedback = await Feedback.findByIdAndDelete(req.params.feedbackId);
+
+    if (!feedback) {
+      return res.status(404).json({
+        success: false,
+        message: 'Feedback not found'
+      });
+    }
+
+    // Remove feedback reference from booking
+    await Booking.findByIdAndUpdate(
+      feedback.booking,
+      { $unset: { feedback: 1 } }
+    );
+
+    // Remove feedback reference from provider
+    await Provider.findByIdAndUpdate(
+      feedback.providerFeedback.provider,
+      { $pull: { feedbacks: feedback._id } }
+    );
+
+    // Remove feedback from service
+    await updateServiceFeedback(
+      feedback.serviceFeedback.service,
+      feedback._id,
+      'remove'
+    );
+
+    // Update provider average rating
+    await updateProviderAverageRating(feedback.providerFeedback.provider);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Feedback deleted successfully by Admin'
+    });
+  } catch (error) {
+    console.error('Error deleting feedback by admin:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error while deleting feedback'
+    });
+  }
+};
+
 // @desc    Get provider's feedbacks
 // @route   GET /api/feedback/provider/my-feedbacks
 // @access  Private (Provider)
@@ -666,6 +725,7 @@ module.exports = {
   getFeedback,
   editFeedback,
   deleteFeedback,
+  deleteFeedbackAdmin,
   getProviderFeedbacks,
   getProviderAverageRating,
   getAllFeedbacks,

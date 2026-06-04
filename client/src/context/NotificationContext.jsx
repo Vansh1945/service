@@ -27,7 +27,7 @@ export const NotificationProvider = ({ children }) => {
     // Save token to backend
     const saveTokenToBackend = async (newToken, authToken) => {
         if (!newToken || !authToken) return;
-        
+
         try {
             const res = await NotificationService.saveToken({
                 token: newToken,
@@ -40,10 +40,6 @@ export const NotificationProvider = ({ children }) => {
                 console.log('[FCM] Token saved to backend successfully.');
             }
         } catch (err) {
-            // Ignore cancellation errors silently
-            if (err.name === 'CanceledError' || err.message === 'canceled' || err.code === 'ERR_CANCELED') {
-                return;
-            }
             console.error('[FCM] Failed to save token to backend:', err);
         }
     };
@@ -102,7 +98,7 @@ export const NotificationProvider = ({ children }) => {
                     const targetRoute = event.data.url;
                     const requiredRole = event.data.role;
                     const entityId = event.data.entityId;
-                    
+
                     setIsDeepLink?.(true);
 
                     const targetRouteWithEntity = targetRoute + (entityId ? (targetRoute.includes('?') ? '&' : '?') + 'entityId=' + entityId : '');
@@ -198,16 +194,16 @@ export const NotificationProvider = ({ children }) => {
 
             const title = payload.notification?.title || payload.data?.title || 'New Notification';
             const body = payload.notification?.body || payload.data?.body || '';
-            
+
             // Foreground App Update Interceptor
             if (payload.data?.type === 'app_update') {
                 console.log('[FCM Foreground Intercept] App update notification detected.');
-                window.dispatchEvent(new CustomEvent('appUpdateReceived', { 
-                    detail: { 
-                        forceRefresh: payload.data?.forceRefresh, 
+                window.dispatchEvent(new CustomEvent('appUpdateReceived', {
+                    detail: {
+                        forceRefresh: payload.data?.forceRefresh,
                         body: body,
                         releaseNotes: body
-                    } 
+                    }
                 }));
                 return;
             }
@@ -220,7 +216,7 @@ export const NotificationProvider = ({ children }) => {
                 setIsDeepLink?.(true);
 
                 const targetRouteWithEntity = targetRoute + (entityId ? (targetRoute.includes('?') ? '&' : '?') + 'entityId=' + entityId : '');
-                
+
                 if (!isAuthenticated) {
                     setIntendedRoute?.(targetRouteWithEntity);
                     navigate('/login');
@@ -245,7 +241,7 @@ export const NotificationProvider = ({ children }) => {
 
             // Removed toast.info to avoid duplicate UI popups, 
             // relying purely on system-level Notification.
-            
+
             if (Notification.permission === 'granted') {
                 const notif = new Notification(title, {
                     body: body,

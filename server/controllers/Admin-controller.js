@@ -953,6 +953,7 @@ const getDashboardStats = async (req, res) => {
                         totalBookings: precomputed.totalBookings,
                         todayBookings: precomputed.todayBookings,
                         monthlyRevenue: precomputed.monthlyRevenue,
+                        totalAdminEarnings: precomputed.totalAdminEarnings || 0,
                         complaintCounts: precomputed.complaintCounts,
                         lastRefreshed: precomputed.lastRefreshed
                     },
@@ -2311,9 +2312,9 @@ const processAdminRefund = async (req, res) => {
             throw new Error('Booking not found');
         }
 
-        // --- STRICT BLOCK FOR COD REFUNDS ---
-        if (booking.paymentMethod === 'cod') {
-            throw new Error('Pay after Service (COD) bookings are strictly ineligible for wallet refunds to prevent refund fraud.');
+        // --- STRICT BLOCK FOR COD/CASH REFUNDS ---
+        if (booking.paymentMethod === 'cod' || booking.paymentMethod === 'cash') {
+            throw new Error('Pay after Service (COD/Cash) bookings are strictly ineligible for wallet refunds to prevent refund fraud.');
         }
 
         // --- DOUBLE-REFUND PROTECTION SCAN ---
@@ -2751,23 +2752,91 @@ const rejectAdminRefund = async (req, res) => {
 
 // 4. Toggle Payout Hold
 const togglePayoutHold = async (req, res) => {
+    let session = null;
+    try {
+        session = await mongoose.startSession();
+        session.startTransaction();
+    } catch (err) {
+        console.warn("[Transaction Fallback] Session start failed. Standalone MongoDB detected. Running sequential fallback.", err.message);
+        session = null;
+    }
+
     try {
         const { bookingId } = req.params;
         const { status, reason } = req.body; // 'held' or 'available'
 
         const ProviderEarning = mongoose.model('ProviderEarning');
-        const earning = await ProviderEarning.findOneAndUpdate(
-            { booking: bookingId },
-            {
-                status: status,
-                isHeldByAdmin: status === 'held',
-                holdReason: status === 'held' ? (reason || 'Held by administrator') : null
-            },
-            { new: true }
-        );
+        const earning = await ProviderEarning.findOne({ booking: bookingId }).session(session);
 
         if (!earning) {
+            if (session) {
+                await session.abortTransaction();
+                session.endSession();
+            }
             return res.status(404).json({ success: false, message: 'Earning record not found' });
+        }
+
+        const oldStatus = earning.status;
+        if (oldStatus === status) {
+            if (session) {
+                await session.abortTransaction();
+                session.endSession();
+            }
+            return res.status(400).json({ success: false, message: `Earning status is already ${status}` });
+        }
+
+        // Apply changes
+        earning.status = status;
+        earning.isHeldByAdmin = status === 'held';
+        earning.holdReason = status === 'held' ? (reason || 'Held by administrator') : null;
+        await earning.save({ session });
+
+        // If releasing payout: credit provider's wallet and create a transaction ledger entry
+        if (oldStatus === 'held' && status === 'available') {
+            const provider = await Provider.findById(earning.provider).session(session);
+            if (provider) {
+                if (!provider.wallet) {
+                    provider.wallet = { availableBalance: 0, totalWithdrawn: 0, lastUpdated: new Date() };
+                }
+                provider.wallet.availableBalance += earning.netAmount;
+                provider.wallet.lastUpdated = new Date();
+                await provider.save({ session });
+
+                const releaseTransaction = new Transaction({
+                    booking: earning.booking,
+                    user: provider._id, // Ledger associated with provider user ref
+                    amount: earning.netAmount,
+                    paymentStatus: 'completed',
+                    paymentMethod: 'wallet',
+                    type: 'payout',
+                    description: `Escrow payout released by administrator for booking #${bookingId}. Reason: ${reason || 'Hold released'}`
+                });
+                await releaseTransaction.save({ session });
+            }
+        } else if (oldStatus === 'available' && status === 'held') {
+            // Reversing the payout: deduct from provider's wallet availableBalance
+            const provider = await Provider.findById(earning.provider).session(session);
+            if (provider && provider.wallet) {
+                provider.wallet.availableBalance = Math.max(0, provider.wallet.availableBalance - earning.netAmount);
+                provider.wallet.lastUpdated = new Date();
+                await provider.save({ session });
+
+                const holdTransaction = new Transaction({
+                    booking: earning.booking,
+                    user: provider._id,
+                    amount: earning.netAmount,
+                    paymentStatus: 'completed',
+                    paymentMethod: 'wallet',
+                    type: 'adjustment',
+                    description: `Escrow payout held by administrator for booking #${bookingId}. Reason: ${reason || 'Held by admin'}`
+                });
+                await holdTransaction.save({ session });
+            }
+        }
+
+        if (session) {
+            await session.commitTransaction();
+            session.endSession();
         }
 
         res.json({
@@ -2776,6 +2845,12 @@ const togglePayoutHold = async (req, res) => {
             data: earning
         });
     } catch (error) {
+        if (session) {
+            if (session.inTransaction()) {
+                await session.abortTransaction();
+            }
+            session.endSession();
+        }
         console.error('Toggle payout hold error:', error);
         res.status(500).json({ success: false, message: 'Server error' });
     }
@@ -2826,7 +2901,7 @@ const cancelBookingByAdmin = async (req, res) => {
 
         const platformFeeRetained = booking.platformFee || 0;
         const nonRefundableAmount = platformFeeRetained;
-        const refundableAmount = ['cash'].includes(booking.paymentMethod) ? 0 : Math.max(0, booking.totalAmount - platformFeeRetained);
+        const refundableAmount = ['cash', 'cod'].includes(booking.paymentMethod) ? 0 : Math.max(0, booking.totalAmount - platformFeeRetained);
 
         // Update booking cancellation details
         booking.status = 'cancelled';

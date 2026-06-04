@@ -66,6 +66,7 @@ const providerEarningSchema = new Schema({
 // Indexes for fast queries
 providerEarningSchema.index({ provider: 1, booking: 1 }, { unique: true });
 providerEarningSchema.index({ provider: 1 });
+providerEarningSchema.index({ provider: 1, createdAt: -1 });
 providerEarningSchema.index({ status: 1 });
 providerEarningSchema.index({ isVisibleToProvider: 1 });
 

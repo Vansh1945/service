@@ -1238,8 +1238,6 @@ const AdminProvidersPage = () => {
           onConfirm={handleModalConfirm}
           onCancel={handleModalCancel}
           processing={processingAction === approvalAction}
-          confirmation={approvalConfirmation}
-          onConfirmationChange={setApprovalConfirmation}
         />
         {documentView.visible && <DocumentViewModal />}
       </div>
@@ -1256,9 +1254,7 @@ const ApprovalModal = ({
   onRemarksChange,
   onConfirm,
   onCancel,
-  processing,
-  confirmation,
-  onConfirmationChange
+  processing
 }) => {
   if (!show) return null;
 

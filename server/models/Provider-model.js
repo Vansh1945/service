@@ -370,6 +370,7 @@ const providerSchema = new mongoose.Schema({
 providerSchema.index({ role: 1 });
 providerSchema.index({ services: 1 });
 providerSchema.index({ isActive: 1, approved: 1 });
+providerSchema.index({ approved: 1, isDeleted: 1 });
 providerSchema.index({ 'performanceScore.rating': -1 });
 providerSchema.index({ location: '2dsphere' });
 providerSchema.index({ currentLocation: '2dsphere' });

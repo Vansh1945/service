@@ -23,7 +23,8 @@ const refreshAnalytics = async () => {
             totalUsers,
             totalProviders,
             complaintCounts,
-            revenueStats
+            revenueStats,
+            adminEarningsStats
         ] = await Promise.all([
             Booking.countDocuments(),
             Booking.countDocuments({ createdAt: { $gte: today } }),
@@ -57,7 +58,7 @@ const refreshAnalytics = async () => {
                 return acc;
             }, {}),
             monthlyRevenue: revenueStats[0]?.monthlyRevenue || 0,
-            totalAdminEarnings: revenueStats[1]?.totalAdminEarnings || 0,
+            totalAdminEarnings: adminEarningsStats[0]?.totalAdminEarnings || 0,
             lastRefreshed: new Date()
         };
 

@@ -62,6 +62,10 @@ const zoneSchema = new mongoose.Schema({
   }],
   createdBy: {
     type: mongoose.Schema.Types.ObjectId
+  },
+  s2CellIds: {
+    type: [String],
+    default: []
   }
 }, {
   timestamps: true
@@ -69,21 +73,37 @@ const zoneSchema = new mongoose.Schema({
 
 // Indexes
 zoneSchema.index({ polygon: '2dsphere' });
+zoneSchema.index({ s2CellIds: 1 });
 zoneSchema.index({ city: 1, name: 1 }, { unique: true });
 
 // Static helper to find zone by lat/lng coordinates
 zoneSchema.statics.findZoneByCoordinates = async function(lat, lng) {
-  const zones = await this.find({
-    status: 'active',
-    polygon: {
-      $geoIntersects: {
-        $geometry: {
-          type: 'Point',
-          coordinates: [parseFloat(lng), parseFloat(lat)]
+  const { latLngToS2CellId } = require('../utils/s2Helper');
+  const cellId = latLngToS2CellId(parseFloat(lat), parseFloat(lng), 13);
+  
+  let zones = [];
+  if (cellId) {
+    // Phase 1: Fast $in match on S2 cells
+    zones = await this.find({
+      status: 'active',
+      s2CellIds: cellId
+    });
+  }
+
+  // Phase 2: Fallback to GeoJSON intersection query if no S2 cells precomputed or matched
+  if (zones.length === 0) {
+    zones = await this.find({
+      status: 'active',
+      polygon: {
+        $geoIntersects: {
+          $geometry: {
+            type: 'Point',
+            coordinates: [parseFloat(lng), parseFloat(lat)]
+          }
         }
       }
-    }
-  });
+    });
+  }
   if (zones.length === 0) return null;
 
   const levelWeight = { micro: 3, city: 2, state: 1 };

@@ -52,18 +52,18 @@ const ChatModal = ({ bookingId, role, isOpen, onClose, roomType = 'provider_cust
         setError('');
 
         const isCustomerRole = role === 'customer';
-        const bookingUrl = bookingId && (isCustomerRole 
-          ? `/booking/${bookingId}` 
+        const bookingUrl = bookingId && (isCustomerRole
+          ? `/booking/${bookingId}`
           : `/booking/provider-booking/${bookingId}`);
 
         // Fetch Room and Booking in parallel
         const [roomRes, bookingRes] = await Promise.all([
-          axiosInstance.post('/chat/create-room', { 
-            bookingId, 
-            roomType, 
-            complaintId, 
-            customerId, 
-            providerId 
+          axiosInstance.post('/chat/create-room', {
+            bookingId,
+            roomType,
+            complaintId,
+            customerId,
+            providerId
           }),
           bookingId ? axiosInstance.get(bookingUrl).catch(err => {
             console.error('Error fetching booking details:', err);
@@ -74,7 +74,7 @@ const ChatModal = ({ bookingId, role, isOpen, onClose, roomType = 'provider_cust
         if (roomRes.data?.success) {
           const roomData = roomRes.data.data;
           setRoom(roomData);
-          
+
           // Determine other user's online status safely
           const otherUser = isCustomerRole ? roomData.providerId : roomData.customerId;
           setOtherOnline(otherUser?.isOnline || false);
@@ -90,9 +90,6 @@ const ChatModal = ({ bookingId, role, isOpen, onClose, roomType = 'provider_cust
           }
         }
       } catch (err) {
-        if (err.name === 'CanceledError' || err.message === 'canceled' || err.code === 'ERR_CANCELED') {
-          return; // Ignore concurrent strict-mode cleanup aborts
-        }
         console.error('Error initializing modal chat:', err);
         setError(err.response?.data?.message || 'Failed to initialize chat room');
       } finally {
@@ -109,7 +106,7 @@ const ChatModal = ({ bookingId, role, isOpen, onClose, roomType = 'provider_cust
 
     // Join Room
     socket.emit('join-chat-room', { roomId: room._id });
-    
+
     // Mark seen on connect
     socket.emit('chat-seen', { roomId: room._id });
     axiosInstance.patch('/chat/mark-seen', { roomId: room._id }).catch(err => console.warn(err));
@@ -250,7 +247,7 @@ const ChatModal = ({ bookingId, role, isOpen, onClose, roomType = 'provider_cust
     if (!booking) return false;
     if (booking.disputeStatus === 'resolved' || booking.status === 'resolved') return true;
     if (booking.hasComplaint || booking.disputeRaised) return false;
-    
+
     if (booking.status === 'completed') {
       const completedTime = booking.serviceCompletedAt || booking.completedAt || booking.updatedAt;
       if (completedTime) {
@@ -326,13 +323,13 @@ const ChatModal = ({ bookingId, role, isOpen, onClose, roomType = 'provider_cust
   return (
     <div className="fixed inset-0 z-[999] flex items-end md:items-center justify-center md:justify-end">
       {/* Backdrop overlay */}
-      <div 
+      <div
         onClick={onClose}
         className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-300"
       />
 
       {/* Main chat window container */}
-      <div 
+      <div
         ref={modalRef}
         className="relative z-10 bg-white/95 backdrop-blur-md flex flex-col shadow-2xl border border-gray-150 transition-all duration-300 ease-out transform
           w-full h-[80vh] rounded-t-2xl md:mr-6 md:mb-6 md:w-96 md:h-[580px] md:rounded-2xl"
@@ -342,10 +339,10 @@ const ChatModal = ({ bookingId, role, isOpen, onClose, roomType = 'provider_cust
           <div className="flex items-center gap-3">
             <div className="relative">
               {isPC && otherParty?.profilePicUrl ? (
-                <img 
-                  src={otherParty.profilePicUrl} 
-                  alt={headerName} 
-                  className="w-9 h-9 rounded-full object-cover border-2 border-white ring-2 ring-primary/10" 
+                <img
+                  src={otherParty.profilePicUrl}
+                  alt={headerName}
+                  className="w-9 h-9 rounded-full object-cover border-2 border-white ring-2 ring-primary/10"
                 />
               ) : (
                 <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs">
@@ -378,8 +375,8 @@ const ChatModal = ({ bookingId, role, isOpen, onClose, roomType = 'provider_cust
                 <Phone className="w-3.5 h-3.5" />
               </a>
             )}
-            <button 
-              onClick={onClose} 
+            <button
+              onClick={onClose}
               className="p-1.5 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors"
             >
               <X className="w-4 h-4" />
@@ -453,7 +450,7 @@ const ChatModal = ({ bookingId, role, isOpen, onClose, roomType = 'provider_cust
                       <div className={`max-w-[75%] rounded-xl px-3 py-2 shadow-sm text-xs border ${isMe
                         ? 'bg-primary text-white border-primary/10 rounded-br-none'
                         : 'bg-white text-secondary border-gray-150 rounded-bl-none'
-                      }`}>
+                        }`}>
                         {isImage ? (
                           <div className="space-y-1">
                             <button
@@ -581,21 +578,21 @@ const ChatModal = ({ bookingId, role, isOpen, onClose, roomType = 'provider_cust
 
       {/* FULLSCREEN IMAGE LIGHTBOX PREVIEW */}
       {previewImage && (
-        <div 
+        <div
           className="fixed inset-0 z-[1001] flex items-center justify-center bg-black/80 backdrop-blur-sm transition-opacity duration-300"
           onClick={() => setPreviewImage(null)}
         >
           <div className="relative max-w-[90vw] max-h-[90vh] flex flex-col items-center">
-            <button 
+            <button
               onClick={() => setPreviewImage(null)}
               className="absolute -top-12 right-0 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors active:scale-95 shadow-md border border-white/10"
               title="Close Preview"
             >
               <X className="w-5 h-5" />
             </button>
-            <img 
-              src={previewImage} 
-              alt="Preview" 
+            <img
+              src={previewImage}
+              alt="Preview"
               className="max-w-full max-h-[80vh] rounded-xl object-contain shadow-2xl animate-in zoom-in-95 duration-200"
               onClick={(e) => e.stopPropagation()}
             />
