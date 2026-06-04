@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   FiMenu, FiX, FiHome, FiCheckCircle, FiUsers, FiCalendar,
-  FiDollarSign, FiTag, FiPlus, FiTool, FiAlertCircle, FiChevronDown,
-  FiLogOut, FiUser, FiBell, FiSettings, FiCreditCard, FiActivity, FiFileText,
+  FiDollarSign, FiTag, FiAlertCircle, FiChevronDown,
+  FiLogOut, FiUser, FiBell, FiSettings, FiCreditCard, FiActivity,
   FiMessageSquare, FiHelpCircle, FiLayers, FiLayout, FiPhoneCall, FiShield, FiTerminal,
   FiMapPin, FiMail
 } from 'react-icons/fi';

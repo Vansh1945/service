@@ -1,5 +1,5 @@
 // src/pages/admin/ComplaintsPage.jsx
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/auth';
 import { useSearchParams } from 'react-router-dom';
 import * as ComplaintService from '../../services/ComplaintService';
@@ -7,8 +7,8 @@ import * as AdminService from '../../services/AdminService';
 import {
   FiSearch, FiRefreshCw, FiEye, FiCheckCircle, FiAlertTriangle,
   FiUsers, FiUser, FiTool, FiClock, FiBarChart2, FiX,
-  FiChevronLeft, FiChevronRight, FiMail, FiPhone, FiMessageSquare,
-  FiFilter, FiCalendar, FiInbox
+  FiMail, FiPhone, FiMessageSquare,
+  FiFilter, FiInbox
 } from 'react-icons/fi';
 import Pagination from '../../components/Pagination';
 import { formatDate, formatDateTime } from '../../utils/format';

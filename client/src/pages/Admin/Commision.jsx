@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/auth';
 import {
-  DollarSign,
   Users,
   Settings,
   Plus,
@@ -10,18 +9,11 @@ import {
   Trash2,
   CheckCircle,
   XCircle,
-  ChevronLeft,
-  ChevronRight,
-  ChevronDown,
-  ChevronUp,
   X,
   Percent,
   Info,
   Globe,
-  Calendar,
-  Clock,
-  MapPin
-} from 'lucide-react';
+  Calendar} from 'lucide-react';
 import { formatCurrency, formatDate, formatDateTime } from '../../utils/format';
 import * as CommissionService from '../../services/CommissionService';
 import * as AdminService from '../../services/AdminService';

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   FiSmartphone, FiMonitor, FiUploadCloud, FiImage, FiSettings,
   FiRefreshCw, FiSave, FiEye, FiCheckCircle, FiInfo, FiTrash2,

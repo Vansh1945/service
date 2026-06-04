@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import Pagination from '../../components/Pagination';
 import {
   Search,
@@ -16,13 +16,8 @@ import {
   Calendar,
   Briefcase,
   Star,
-  ChevronLeft,
-  ChevronRight,
-  Download,
   Shield,
-  FileText,
   Banknote,
-  Wallet,
   TrendingUp,
   AlertCircle
 } from 'lucide-react';
@@ -661,10 +656,9 @@ const ProviderModal = ({
               <InfoRow label="Complaint Ratio" value={`${ps.complaintRatio?.toFixed(1) || '0.0'}%`} />
               <div className="flex flex-col gap-0.5">
                 <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">COD Risk</span>
-                <span className={`text-sm font-bold ${
-                  ps.codAbuseRisk === 'HIGH' ? 'text-red-600' :
-                  ps.codAbuseRisk === 'MEDIUM' ? 'text-amber-500' : 'text-emerald-600'
-                }`}>{ps.codAbuseRisk || 'LOW'}</span>
+                <span className={`text-sm font-bold ${ps.codAbuseRisk === 'HIGH' ? 'text-red-600' :
+                    ps.codAbuseRisk === 'MEDIUM' ? 'text-amber-500' : 'text-emerald-600'
+                  }`}>{ps.codAbuseRisk || 'LOW'}</span>
               </div>
             </div>
           </SectionCard>
@@ -720,11 +714,10 @@ const ProviderModal = ({
               <InfoRow label="Service Area" value={provider.serviceArea} />
               <div>
                 <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide block mb-1.5">KYC Status</span>
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                  provider.kycStatus === 'approved' ? 'bg-green-100 text-green-800' :
-                  provider.kycStatus === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                  'bg-red-100 text-red-800'
-                }`}>
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${provider.kycStatus === 'approved' ? 'bg-green-100 text-green-800' :
+                    provider.kycStatus === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-red-100 text-red-800'
+                  }`}>
                   {provider.kycStatus?.charAt(0).toUpperCase() + provider.kycStatus?.slice(1) || 'N/A'}
                 </span>
                 {provider.rejectionReason && (
@@ -733,9 +726,8 @@ const ProviderModal = ({
               </div>
               <div>
                 <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide block mb-1.5">Test Status</span>
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                  provider.testPassed ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
-                }`}>
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${provider.testPassed ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
+                  }`}>
                   {provider.testPassed ? '✓ Passed' : 'Not Passed'}
                 </span>
               </div>
@@ -752,9 +744,8 @@ const ProviderModal = ({
                 <InfoRow label="IFSC Code" value={bd.ifsc} mono />
                 <div className="sm:col-span-2">
                   <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide block mb-1.5">Verification Status</span>
-                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${
-                    bd.verified ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                  }`}>
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${bd.verified ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                    }`}>
                     {bd.verified ? '✓ Verified' : '⏳ Pending Verification'}
                   </span>
                 </div>

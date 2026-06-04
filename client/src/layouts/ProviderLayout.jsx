@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
-    FiMenu, FiX, FiHome, FiCalendar, FiDollarSign,
-    FiFileText, FiMessageSquare, FiUser, FiChevronDown,
-    FiLogOut, FiBell, FiCreditCard, FiCheckCircle,
-    FiActivity, FiSettings, FiHeadphones, FiArrowLeft
+    FiMenu, FiHome, FiDollarSign,
+    FiMessageSquare, FiUser, FiChevronDown,
+    FiLogOut, FiCheckCircle,
+    FiActivity, FiHeadphones, FiArrowLeft
 } from 'react-icons/fi';
 import { useAuth } from '../context/auth';
 import NotificationBell from '../components/NotificationBell';
@@ -25,13 +25,12 @@ const ProviderLayout = () => {
     });
     const location = useLocation();
     const navigate = useNavigate();
-    const { user, logoutUser, API, token, refreshUser } = useAuth();
+    const { user, logoutUser, token } = useAuth();
     const testPassed = user?.testPassed || false;
 
     const { socket, isConnected } = useSocket();
     const [isOnline, setIsOnline] = useState(true);
     const [activeBookingId, setActiveBookingId] = useState(null);
-    const locationRequestedRef = React.useRef(false);
 
 
 
@@ -273,8 +272,8 @@ const ProviderLayout = () => {
                         <div className="flex-1 flex justify-center lg:hidden">
                             <div
                                 onClick={toggleOnlineStatus}
-                                className={`relative inline-flex h-9 w-28 items-center rounded-full cursor-pointer transition-all duration-300 shadow-inner select-none ${isOnline 
-                                    ? 'bg-primary border border-primary/80' 
+                                className={`relative inline-flex h-9 w-28 items-center rounded-full cursor-pointer transition-all duration-300 shadow-inner select-none ${isOnline
+                                    ? 'bg-primary border border-primary/80'
                                     : 'bg-slate-200 border border-slate-300'}`}
                             >
                                 <span className={`text-[10px] font-extrabold tracking-wider w-full text-center transition-all duration-300 select-none ${isOnline ? 'text-white pl-1 pr-6' : 'text-slate-500 pr-1 pl-6'}`}>
@@ -387,11 +386,10 @@ const ProviderLayout = () => {
                 {/* Home/Dashboard */}
                 <Link
                     to="/provider/dashboard"
-                    className={`flex flex-col items-center justify-center space-y-1 transition-colors duration-200 ${
-                        (location.pathname === '/provider/dashboard' || location.pathname === '/provider')
+                    className={`flex flex-col items-center justify-center space-y-1 transition-colors duration-200 ${(location.pathname === '/provider/dashboard' || location.pathname === '/provider')
                             ? 'text-primary'
                             : 'text-slate-400 hover:text-primary'
-                    }`}
+                        }`}
                 >
                     <FiHome className="w-6 h-6" />
                     <span className="text-[10px] font-semibold font-inter">Home</span>
@@ -400,11 +398,10 @@ const ProviderLayout = () => {
                 {/* Requests */}
                 <Link
                     to="/provider/booking-requests"
-                    className={`flex flex-col items-center justify-center space-y-1 transition-colors duration-200 ${
-                        location.pathname === '/provider/booking-requests'
+                    className={`flex flex-col items-center justify-center space-y-1 transition-colors duration-200 ${location.pathname === '/provider/booking-requests'
                             ? 'text-primary'
                             : 'text-slate-400 hover:text-primary'
-                    }`}
+                        }`}
                 >
                     <FiCheckCircle className="w-6 h-6" />
                     <span className="text-[10px] font-semibold font-inter">Requests</span>
@@ -413,11 +410,10 @@ const ProviderLayout = () => {
                 {/* Earnings */}
                 <Link
                     to="/provider/earnings"
-                    className={`flex flex-col items-center justify-center space-y-1 transition-colors duration-200 ${
-                        location.pathname === '/provider/earnings'
+                    className={`flex flex-col items-center justify-center space-y-1 transition-colors duration-200 ${location.pathname === '/provider/earnings'
                             ? 'text-primary'
                             : 'text-slate-400 hover:text-primary'
-                    }`}
+                        }`}
                 >
                     <FiDollarSign className="w-6 h-6" />
                     <span className="text-[10px] font-semibold font-inter">Earnings</span>
@@ -426,9 +422,8 @@ const ProviderLayout = () => {
                 {/* More/Menu button toggling bottom sheet */}
                 <button
                     onClick={() => setMoreMenuOpen(true)}
-                    className={`flex flex-col items-center justify-center space-y-1 transition-colors duration-200 ${
-                        moreMenuOpen ? 'text-primary' : 'text-slate-400 hover:text-primary'
-                    }`}
+                    className={`flex flex-col items-center justify-center space-y-1 transition-colors duration-200 ${moreMenuOpen ? 'text-primary' : 'text-slate-400 hover:text-primary'
+                        }`}
                 >
                     <FiMenu className="w-6 h-6" />
                     <span className="text-[10px] font-semibold font-inter">More</span>
@@ -437,9 +432,8 @@ const ProviderLayout = () => {
 
             {/* Bottom Sheet for Mobile "More" Menu */}
             <div
-                className={`fixed inset-0 z-40 lg:hidden transition-opacity duration-300 ${
-                    moreMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
-                }`}
+                className={`fixed inset-0 z-40 lg:hidden transition-opacity duration-300 ${moreMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                    }`}
             >
                 {/* Backdrop */}
                 <div
@@ -449,9 +443,8 @@ const ProviderLayout = () => {
 
                 {/* Bottom sheet panel */}
                 <div
-                    className={`fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl z-50 p-6 pb-8 transition-transform duration-300 ease-out transform ${
-                        moreMenuOpen ? 'translate-y-0' : 'translate-y-full'
-                    }`}
+                    className={`fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl z-50 p-6 pb-8 transition-transform duration-300 ease-out transform ${moreMenuOpen ? 'translate-y-0' : 'translate-y-full'
+                        }`}
                 >
                     {/* Pull-down handle indicator */}
                     <div className="flex justify-center mb-6">

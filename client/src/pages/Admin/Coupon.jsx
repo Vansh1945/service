@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import Pagination from '../../components/Pagination';
 import {
   Plus,
@@ -7,8 +7,6 @@ import {
   Eye,
   Search,
   Filter,
-  Upload,
-  Download,
   CheckCircle,
   XCircle,
   Clock,
@@ -19,12 +17,7 @@ import {
   Gift,
   Calendar,
   Save,
-  X,
-  ChevronLeft,
-  ChevronRight,
-  ChevronDown,
-  ChevronUp,
-  BarChart3
+  X
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -39,7 +32,7 @@ import AdminFilterBar from '../../components/AdminFilterBar';
 
 const AdminCoupons = () => {
   const { API, token } = useAuth();
-  
+
   const {
     filterType,
     year,
@@ -239,7 +232,7 @@ const AdminCoupons = () => {
     if (startDate && endDate) {
       const startDateTime = new Date(startDate).getTime();
       const endDateTime = new Date(endDate).getTime();
-      
+
       filtered = filtered.filter(coupon => {
         const couponDate = new Date(coupon.expiryDate || coupon.createdAt).getTime();
         return couponDate >= startDateTime && couponDate <= endDateTime;
@@ -1349,7 +1342,7 @@ const AdminCoupons = () => {
               <div className="relative bg-teal-50/40 border border-dashed border-primary/30 p-6 rounded-2xl overflow-hidden flex flex-col sm:flex-row justify-between items-center gap-4">
                 <div className="absolute -left-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white rounded-full border-r border-dashed border-primary/30" />
                 <div className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white rounded-full border-l border-dashed border-primary/30" />
-                
+
                 <div className="flex flex-col items-center sm:items-start text-center sm:text-left pl-2">
                   <span className="text-[10px] font-black uppercase tracking-widest text-primary bg-primary/10 px-2.5 py-1 rounded-full border border-primary/20 mb-2.5">
                     {selectedCoupon.isActive && !isExpired(selectedCoupon.expiryDate) ? 'Active Promo Code' : 'Inactive / Expired Code'}

@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useLocation, useParams, Link } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
 import { toast } from 'react-toastify';
 import {
-  ArrowLeft, CreditCard, Wallet, CheckCircle, Calendar, MapPin,
-  Clock, Tag, AlertTriangle, Shield, Lock, Wrench, Star, IndianRupee,
-  Truck, Phone, Mail, ChevronRight, MessageCircle, AlertCircle
+  ArrowLeft, CreditCard, Wallet, Calendar, MapPin,
+  Clock, AlertTriangle, Shield, Lock, Wrench, Star, IndianRupee,
+  Truck, Phone, ChevronRight, MessageCircle, AlertCircle
 } from 'lucide-react';
 import { getPublicServiceById } from '../../services/ServiceService';
 import { getBooking, updateBookingPayment, payBooking } from '../../services/BookingService';

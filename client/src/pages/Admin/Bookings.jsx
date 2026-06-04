@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
 import { useSocket } from '../../socket/SocketContext';
@@ -44,7 +44,6 @@ import {
     MapPin,
     Eye,
     Trash2,
-    Download,
     CheckCircle,
     XCircle,
     AlertCircle,
@@ -52,22 +51,13 @@ import {
     CreditCard,
     BarChart2,
     DollarSign,
-    Users,
     Briefcase,
-    Edit,
-    RefreshCw,
-    TrendingUp,
     Activity,
-    Filter,
-    MoreHorizontal,
     Phone,
     Mail,
     Star,
     Award,
-    Target,
     X,
-    ChevronLeft,
-    ChevronRight,
     ExternalLink,
     Lock,
     Unlock,
