@@ -68,7 +68,7 @@ const sendPushNotification = async (tokens, payload) => {
             webpush: {
                 headers: {
                     urgency: 'high',
-                    TTL: '86400' // 1 day TTL to prevent delivery delay
+                    TTL: '86400' // 1 day TTL to prevent delivery delay  
                 },
                 notification: {
                     icon: '/icon-192.png',
