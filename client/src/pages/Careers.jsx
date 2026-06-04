@@ -43,8 +43,8 @@ const CareersPage = () => {
       icon: Clock,
     },
     {
-      title: "Weekly Payouts",
-      description: "Get your money in your bank account every week. No long waiting.",
+      title: "Secure Payments",
+      description: "Track your earnings easily and receive payouts directly to your registered bank account through our secure payment system.",
       icon: Wallet,
     },
     {
@@ -76,11 +76,11 @@ const CareersPage = () => {
     <div className="min-h-screen bg-white">
       <Helmet>
         <title>Careers | Raj Electrical Services | Join as an Electrical Partner</title>
-        <meta name="description" content="Join Raj Electrical Services in North India as a certified electrical partner. Connect with local clients, earn weekly payouts, and grow your service business." />
+        <meta name="description" content="Join Raj Electrical Services in North India as a certified electrical partner. Connect with local clients, earn Secure Payments, and grow your service business." />
         <meta name="keywords" content="careers at Raj Electrical, electrician jobs in North India, join electrical network, trusted electrical solutions" />
         <link rel="canonical" href="https://rajelectricalservices.vercel.app/careers" />
         <meta property="og:title" content="Careers | Raj Electrical Services | Join as an Electrical Partner" />
-        <meta property="og:description" content="Join Raj Electrical Services in North India as a certified electrical partner. Connect with local clients, earn weekly payouts, and grow your service business." />
+        <meta property="og:description" content="Join Raj Electrical Services in North India as a certified electrical partner. Connect with local clients, earn Secure Payments, and grow your service business." />
         <meta property="og:url" content="https://rajelectricalservices.vercel.app/careers" />
         <meta property="og:type" content="website" />
       </Helmet>
@@ -320,14 +320,14 @@ const CareersPage = () => {
                 Built on Trust & Reliability
               </h2>
               <p className="text-gray-500 text-xs font-semibold leading-relaxed mb-6">
-                Our partners are the heart of Raj Electrical Services. We work continuously to provide a platform that protects your earnings, simplifies your schedules, and respects your professional expertise.
+                Our service partners are an important part of Raj Electrical Services. We provide a reliable platform that helps them manage bookings, track earnings, and deliver quality service to customers.
               </p>
 
               <div className="space-y-4">
                 {[
-                  { title: "Weekly & Secure Payouts", desc: "No delays. Completed job payouts are settled securely and credited to your bank account every week." },
-                  { title: "Partner Insurance Coverage", desc: "We provide comprehensive on-job accidental coverage to guarantee peace of mind for you and your family." },
-                  { title: "Skill-Up Onboarding", desc: "Receive technical training, smart tools integration, and professional customer care guidance free of charge." }
+                  { title: "Secure Payments", desc: "Track your earnings easily and receive payouts directly to your registered bank account through our secure payment system." },
+                  { title: "Flexible Work Schedule", desc: "Accept bookings based on your availability and manage your work schedule with complete flexibility." },
+                  { title: "Dedicated Support", desc: "Our support team is available to assist with booking, payment, and account-related issues whenever you need help." }
                 ].map((item, idx) => (
                   <div key={idx} className="flex gap-3">
                     <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 text-primary">
@@ -344,9 +344,9 @@ const CareersPage = () => {
 
             <div className="relative">
               <div className="rounded-2xl overflow-hidden shadow-lg border border-gray-200">
-                <img 
-                  src="https://images.unsplash.com/photo-1621905251189-08b45d6a269e?q=80&w=800&auto=format&fit=crop" 
-                  alt="On-job expert support" 
+                <img
+                  src="https://images.unsplash.com/photo-1621905251189-08b45d6a269e?q=80&w=800&auto=format&fit=crop"
+                  alt="On-job expert support"
                   className="w-full h-[320px] object-cover"
                 />
               </div>

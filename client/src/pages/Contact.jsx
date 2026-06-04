@@ -35,8 +35,8 @@ const Contact = () => {
     email: systemData?.email || 'info@rajelectricalservices.com',
     address: systemData?.address || 'Himachal Pradesh & Punjab, India',
     businessHours: {
-      weekdays: '8:00 AM - 6:00 PM',
-      sunday: '9:00 AM - 5:00 PM'
+      weekdays: '9:00 AM - 6:00 PM',
+      sunday: '9:30 AM - 5:00 PM'
     }
   };
 
@@ -414,25 +414,19 @@ const Contact = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {[
               {
-                region: "Punjab Hubs",
-                desc: "Full coverage for residential wiring, emergency short circuit isolation, and luxe commercial setups.",
-                time: "20-Min Avg Dispatch"
+                region: "Wide Service Coverage",
+                desc: "Reliable electrical services for homes, offices, and commercial properties."
               },
               {
-                region: "Himachal Pradesh Hubs",
-                desc: "Hill-optimized transport units for fast dispatch to domestic maintenance needs and local businesses.",
-                time: "35-Min Avg Dispatch"
+                region: "Emergency Assistance",
+                desc: "Quick support for urgent electrical issues and unexpected power faults."
               },
               {
-                region: "Haryana & J&K Hubs",
-                desc: "Advanced industrial support teams and compliance safety auditors for large enterprises and households.",
-                time: "30-Min Avg Dispatch"
+                region: "Verified Professionals",
+                desc: "Skilled and trusted electricians focused on safe and quality workmanship."
               }
             ].map((hub, index) => (
               <div key={index} className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-                <span className="text-[10px] uppercase tracking-widest font-black bg-primary/10 text-primary px-3 py-1 rounded-lg">
-                  {hub.time}
-                </span>
                 <h3 className="text-lg font-bold text-secondary mt-4 mb-2 font-poppins">{hub.region}</h3>
                 <p className="text-xs text-gray-500 leading-relaxed font-normal">{hub.desc}</p>
               </div>

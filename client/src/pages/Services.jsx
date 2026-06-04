@@ -153,15 +153,8 @@ const Services = ({ limit }) => {
   const displayedServices = limit ? services.slice(0, limit) : services;
 
   return (
-    <section className={`bg-transparent min-h-screen ${limit ? 'py-8' : 'py-20'} px-4 md:px-8`}>
+    <section className={`bg-transparent min-h-screen ${limit ? 'py-4' : 'py-10'} px-4 md:px-8`}>
       <div className="max-w-[1500px] mx-auto">
-        {!limit && (
-          <div className="mb-10 text-center">
-            <h2 className="text-xl md:text-2xl font-extrabold text-secondary tracking-tight mb-1">Our Electrical Services</h2>
-            <p className="text-gray-400 text-sm font-medium">Get professional help for all your electric needs.</p>
-          </div>
-        )}
-
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
           {displayedServices.map((service) => (
             <ServiceCard key={service._id} service={service} />

@@ -154,13 +154,15 @@ const AboutPage = () => {
                 <span className="text-primary text-xs font-semibold">Our Story</span>
               </div>
               <p className="text-gray-600 mb-4 leading-relaxed">
-                It started simple — a small team of electricians who were tired of seeing people struggle to find good, honest service. Customers were either overcharged or left with poor quality work.
+                It started with a simple goal — helping people find reliable, honest, and skilled electricians without the hassle. Too often, customers faced poor service quality, unclear pricing, or difficulty finding trusted professionals.
               </p>
+
               <p className="text-gray-600 mb-4 leading-relaxed">
-                So we decided to do something about it. We built a platform where skilled local electricians could connect directly with homeowners and businesses across Himachal Pradesh and Punjab.
+                To solve this, we created Raj Electrical Services — a platform that connects customers directly with verified local electricians for residential, commercial, and emergency electrical needs.
               </p>
+
               <p className="text-gray-600 mb-6 leading-relaxed">
-                Today, we have over 500 verified providers and 10,000+ happy customers — and we're just getting started.
+                Today, we continue to make electrical services more accessible, transparent, and dependable while supporting skilled professionals and serving customers with confidence.
               </p>
             </motion.div>
 
@@ -180,7 +182,7 @@ const AboutPage = () => {
               <div className="absolute -bottom-4 -right-4 bg-white rounded-lg shadow-lg p-4 border border-gray-100">
                 <div className="flex items-center gap-2">
                   <MapPin className="w-4 h-4 text-primary" />
-                  <span className="text-sm font-medium">Himachal & Punjab</span>
+                  <span className="text-sm font-medium">North India</span>
                 </div>
               </div>
             </motion.div>
@@ -372,9 +374,9 @@ const AboutPage = () => {
 
             <div className="relative">
               <div className="rounded-2xl overflow-hidden shadow-lg border border-gray-200">
-                <img 
-                  src="https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?auto=format&fit=crop&q=80&w=800" 
-                  alt="Safety audit checking" 
+                <img
+                  src="https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?auto=format&fit=crop&q=80&w=800"
+                  alt="Safety audit checking"
                   className="w-full h-[320px] object-cover"
                 />
               </div>

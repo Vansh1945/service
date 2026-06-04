@@ -59,7 +59,7 @@ const ServicesPage = () => {
             price: '₹10,000+',
             rating: 4.6,
             features: ['Code-compliant upgrades', 'Increased capacity', 'Insurance approved'],
-            image: 'https://images.unsplash.com/photo-1565608444338-31650f907693?auto=format&fit=crop&q=80&w=800'
+            image: 'https://images.unsplash.com/photo-1576446470246-499c738d1c8e?fm=jpg&q=60&w=800&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Nnx8ZWxlY3RyaWNhbCUyMHBhbmVsfGVufDB8fDB8fHww'
         },
         {
             _id: '5',
@@ -337,9 +337,9 @@ const ServicesPage = () => {
 
                             <div className="space-y-4">
                                 {[
-                                    { title: "20-Minute Dispatch Window", desc: "Our nearest available certified electrical expert is immediately routed to your coordinates." },
+                                    { title: "Fast Provider Allocation", desc: "Our system quickly connects your request with the nearest available certified electrical expert in your area." },
                                     { title: "Hazard Containment Tools", desc: "Equipped with diagnostic insulation gear and certified materials to isolate faults immediately." },
-                                    { title: "24/7 Hotline Service", desc: "Always online. Reach our North India dispatch hub anytime for immediate help." }
+                                    { title: "24/7 Support Availability", desc: "Our support team remains available around the clock to assist with emergency electrical service requests." }
                                 ].map((item, idx) => (
                                     <div key={idx} className="flex gap-3">
                                         <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center shrink-0 text-accent">
@@ -356,9 +356,9 @@ const ServicesPage = () => {
 
                         <div className="relative">
                             <div className="rounded-2xl overflow-hidden shadow-2xl border border-white/10">
-                                <img 
-                                    src="https://images.unsplash.com/photo-1621905251918-48416bd8575a?auto=format&fit=crop&q=80&w=800" 
-                                    alt="Emergency repair backup" 
+                                <img
+                                    src="https://images.unsplash.com/photo-1621905251918-48416bd8575a?auto=format&fit=crop&q=80&w=800"
+                                    alt="Emergency repair backup"
                                     className="w-full h-[320px] object-cover"
                                 />
                             </div>

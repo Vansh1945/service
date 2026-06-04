@@ -2,14 +2,14 @@ import React, { useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import HeroSection from '../components/HeroSection';
 import Services from './Services';
-import { 
-  ShieldCheck, 
-  Clock, 
-  Award, 
-  Zap, 
-  ChevronDown, 
-  MapPin, 
-  ThumbsUp, 
+import {
+  ShieldCheck,
+  Clock,
+  Award,
+  Zap,
+  ChevronDown,
+  MapPin,
+  ThumbsUp,
   CheckCircle2,
   Users
 } from 'lucide-react';
@@ -116,34 +116,38 @@ const Home = () => {
       </section>
 
       {/* Service Coverage Section */}
-      <section className="py-16 bg-white">
+      <section className="py-8 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="bg-gradient-to-br from-primary to-teal-800 rounded-3xl p-8 md:p-12 text-white shadow-xl relative overflow-hidden group">
             <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
               <MapPin className="w-48 h-48 -mr-12 -mt-12 text-white" />
             </div>
-            
+
             <div className="relative z-10 max-w-2xl">
               <span className="text-[10px] uppercase tracking-widest font-black bg-white/20 px-3 py-1 rounded-lg">
                 Active Operations
               </span>
+
               <h2 className="text-2xl md:text-3xl font-bold mt-4 mb-4 font-poppins">
-                Service Coverage Across North India
+                Reliable Electrical Services
               </h2>
+
               <p className="text-white/90 text-sm leading-relaxed mb-6 font-normal">
-                We are actively extending our professional footprint to deliver home electrical maintenance and premium commercial services. Currently operational across major regions in **Punjab, Himachal Pradesh, Haryana, Uttarakhand, and Jammu & Kashmir**.
+                Raj Electrical Services connects customers with verified electrical professionals for residential, commercial, and emergency electrical needs. Our focus is on quality workmanship, transparent service, and customer satisfaction.
               </p>
 
               <div className="grid grid-cols-2 gap-4">
                 {[
-                  "Verified Local Experts",
-                  "Standardized Quality Care",
-                  "Residential & Commercial Setups",
-                  "24/7 Helpdesk & Dispatch"
+                  "Verified Professionals",
+                  "Quality Service Standards",
+                  "Residential & Commercial Solutions",
+                  "Dedicated Customer Support",
                 ].map((item, idx) => (
                   <div key={idx} className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-accent shrink-0" />
-                    <span className="text-xs font-semibold text-white/90">{item}</span>
+                    <span className="text-xs font-semibold text-white/90">
+                      {item}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -169,8 +173,8 @@ const Home = () => {
 
           <div className="space-y-4">
             {faqs.map((faq, idx) => (
-              <div 
-                key={idx} 
+              <div
+                key={idx}
                 className="bg-white rounded-xl border border-gray-150 overflow-hidden shadow-sm transition-all"
               >
                 <button
@@ -178,11 +182,11 @@ const Home = () => {
                   className="w-full px-6 py-4 flex items-center justify-between text-left focus:outline-none"
                 >
                   <span className="text-sm font-bold text-secondary font-poppins">{faq.q}</span>
-                  <ChevronDown 
-                    className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${openFaq === idx ? 'transform rotate-180 text-primary' : ''}`} 
+                  <ChevronDown
+                    className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${openFaq === idx ? 'transform rotate-180 text-primary' : ''}`}
                   />
                 </button>
-                
+
                 <AnimatePresence initial={false}>
                   {openFaq === idx && (
                     <motion.div
