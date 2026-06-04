@@ -67,7 +67,8 @@ const sendPushNotification = async (tokens, payload) => {
             // Web push config — pass data so SW notificationclick can read url
             webpush: {
                 headers: {
-                    Urgency: 'high'
+                    urgency: 'high',
+                    TTL: '86400' // 1 day TTL to prevent delivery delay
                 },
                 notification: {
                     icon: '/icon-192.png',

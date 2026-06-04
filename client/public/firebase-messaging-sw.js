@@ -62,39 +62,49 @@ self.addEventListener('notificationclick', (event) => {
     const role = data.role || null;
     const entityId = data.entityId || null;
     const notificationId = data.notificationId || null;
-    const urlToOpen = self.location.origin + route;
+
+    const searchParams = new URLSearchParams();
+    searchParams.append('route', route);
+    if (role) searchParams.append('role', role);
+    if (entityId) searchParams.append('entityId', entityId);
+    if (notificationId) searchParams.append('notificationId', notificationId);
+    if (data.updateType) searchParams.append('updateType', data.updateType);
+    if (data.version) searchParams.append('version', data.version);
+    if (data.forceRefresh) searchParams.append('forceRefresh', data.forceRefresh);
+
+    // Crucial: Must use trailing slash self.location.origin + '/' to correctly match PWA scope
+    const urlToOpen = `${self.location.origin}/?${searchParams.toString()}`;
 
     event.waitUntil(
-        clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-            // If app is already open, navigate it to the deep-link route
-            for (const client of clientList) {
-                if (client.url.startsWith(self.location.origin) && 'focus' in client) {
-                    client.postMessage({ 
-                        type: 'NAVIGATE', 
-                        url: route, 
-                        role: role, 
-                        entityId: entityId,
-                        notificationId: notificationId,
-                        updateType: data.updateType || null,
-                        version: data.version || null,
-                        forceRefresh: data.forceRefresh || null
-                    });
-                    return client.focus();
+        clients.matchAll({ type: 'window', includeUncontrolled: true })
+            .then((clientList) => {
+                // If app is already open, navigate it to the deep-link route
+                for (const client of clientList) {
+                    if (client.url.startsWith(self.location.origin) && 'focus' in client) {
+                        client.postMessage({ 
+                            type: 'NAVIGATE', 
+                            url: route, 
+                            role: role, 
+                            entityId: entityId,
+                            notificationId: notificationId,
+                            updateType: data.updateType || null,
+                            version: data.version || null,
+                            forceRefresh: data.forceRefresh || null
+                        });
+                        return client.focus();
+                    }
                 }
-            }
-            // On cold start, we pass route, role, entityId, etc. via search params
-            if (clients.openWindow) {
-                const searchParams = new URLSearchParams();
-                searchParams.append('route', route);
-                if (role) searchParams.append('role', role);
-                if (entityId) searchParams.append('entityId', entityId);
-                if (notificationId) searchParams.append('notificationId', notificationId);
-                if (data.updateType) searchParams.append('updateType', data.updateType);
-                if (data.version) searchParams.append('version', data.version);
-                if (data.forceRefresh) searchParams.append('forceRefresh', data.forceRefresh);
-                return clients.openWindow(`${self.location.origin}?${searchParams.toString()}`);
-            }
-        })
+                // On cold start, we open the PWA window using the root with trailing slash
+                if (clients.openWindow) {
+                    return clients.openWindow(urlToOpen);
+                }
+            })
+            .catch((err) => {
+                console.error('[SW] Navigation / Focus handler failed, attempting direct window open fallback:', err);
+                if (clients.openWindow) {
+                    return clients.openWindow(urlToOpen);
+                }
+            })
     );
 });
 
