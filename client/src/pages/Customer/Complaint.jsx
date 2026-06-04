@@ -457,17 +457,27 @@ const ComplaintsPage = () => {
               {/* Category */}
               <div>
                 <label className="block text-xs font-semibold text-secondary mb-1.5">Category *</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {COMPLAINT_CATEGORIES.map(cat => (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => { setFormData(prev => ({ ...prev, category: cat, bookingId: '' })); setFormErrors(prev => ({ ...prev, category: '' })); }}
-                      className={`text-xs font-medium py-2 px-3 rounded-lg border transition-all ${formData.category === cat ? 'border-primary bg-primary/5 text-primary' : 'border-gray-200 text-gray-600'}`}
-                    >
-                      {cat}
-                    </button>
-                  ))}
+                <div className="grid grid-cols-1 gap-2">
+                  {COMPLAINT_CATEGORIES.map(cat => {
+                    let subLabel = "";
+                    if (cat === "Service issue") subLabel = "Work defects, quality issues, incomplete work, or provider behavior";
+                    else if (cat === "Refund request") subLabel = "Cancellations, refunds, or wallet payout disputes";
+                    else if (cat === "Payment issue") subLabel = "Double charge, incorrect billing, or payment failure";
+                    else if (cat === "Suggestion") subLabel = "Ideas or suggestions to improve our services";
+                    else if (cat === "Other") subLabel = "General questions and other support issues";
+
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => { setFormData(prev => ({ ...prev, category: cat, bookingId: '' })); setFormErrors(prev => ({ ...prev, category: '' })); }}
+                        className={`text-left p-3 rounded-xl border transition-all flex flex-col gap-0.5 ${formData.category === cat ? 'border-primary bg-primary/5 text-primary' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}
+                      >
+                        <span className="text-xs font-bold">{cat}</span>
+                        {subLabel && <span className="text-[10px] text-gray-400 font-normal leading-relaxed">{subLabel}</span>}
+                      </button>
+                    );
+                  })}
                 </div>
                 {formErrors.category && <p className="text-xs text-red-500 mt-1">{formErrors.category}</p>}
               </div>

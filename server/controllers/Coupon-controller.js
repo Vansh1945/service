@@ -136,7 +136,7 @@ const updateCoupon = async (req, res) => {
     if (!existingCoupon) {
       return res.status(404).json({
         success: false,
-        message: 'Coupon not found'
+        message: 'Invalid Coupon '
       });
     }
 
@@ -210,7 +210,7 @@ const deleteCoupon = async (req, res) => {
     if (!coupon) {
       return res.status(404).json({
         success: false,
-        message: 'Coupon not found',
+        message: 'Invalid Coupon ',
       });
     }
 
@@ -244,7 +244,7 @@ const hardDeleteCoupon = async (req, res) => {
     if (!coupon) {
       return res.status(404).json({
         success: false,
-        message: 'Coupon not found',
+        message: 'Invalid Coupon ',
       });
     }
 
@@ -336,7 +336,7 @@ const markCouponUsed = async (req, res) => {
     if (!coupon) {
       return res.status(404).json({
         success: false,
-        message: 'Coupon not found'
+        message: 'Invalid Coupon '
       });
     }
 

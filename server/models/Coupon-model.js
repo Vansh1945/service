@@ -180,14 +180,14 @@ couponSchema.statics.listAllCoupons = async function (adminId, filters = {}) {
 couponSchema.statics.validateCoupon = async function (userId, couponCode, serviceAmount, bookingZoneId = null) {
   const coupon = await this.findOne({ code: couponCode.toUpperCase() });
 
-  if (!coupon) throw new Error('Coupon not found');
+  if (!coupon) throw new Error('Invalid Coupon ');
   if (!coupon.isActive) throw new Error('Coupon is not active');
-  if (coupon.expiryDate && new Date() > coupon.expiryDate) throw new Error('Coupon has expired');
+  if (coupon.expiryDate && new Date() > coupon.expiryDate) throw new Error('Coupon expired');
   if (coupon.minBookingValue && serviceAmount < coupon.minBookingValue) {
     throw new Error(`Booking amount must be at least ₹${coupon.minBookingValue}`);
   }
   if (coupon.usageLimit && coupon.usedBy.length >= coupon.usageLimit) {
-    throw new Error('Coupon usage limit reached');
+    throw new Error('Usage limit reached');
   }
 
   // Check if user has already used this coupon
@@ -197,7 +197,7 @@ couponSchema.statics.validateCoupon = async function (userId, couponCode, servic
   // STEP 3, 4 & 5: Hierarchical Zone Applicability Validation
   if (!coupon.isGlobal && coupon.scope !== 'global') {
     if (!bookingZoneId || !coupon.applicableZones || coupon.applicableZones.length === 0) {
-      throw new Error('This coupon is not applicable in your service area');
+      throw new Error('Service coupon not eligible');
     }
 
     let currentZoneId = bookingZoneId;
@@ -216,7 +216,7 @@ couponSchema.statics.validateCoupon = async function (userId, couponCode, servic
     }
 
     if (!matched) {
-      throw new Error('This coupon is not applicable in your service area');
+      throw new Error('Service not eligible');
     }
 
     // Temporarily attach the matched zone ID for controllers/booking use
@@ -279,7 +279,7 @@ couponSchema.statics.getAvailableCoupons = async function (userId, bookingValue 
 // -------------------- Instance Methods --------------------
 couponSchema.methods.applyCoupon = function (totalAmount) {
   if (totalAmount < this.minBookingValue) {
-    throw new Error(`Minimum booking value of ₹${this.minBookingValue} required`);
+    throw new Error('Minimum amount not met');
   }
 
   if (this.discountType === 'flat') {

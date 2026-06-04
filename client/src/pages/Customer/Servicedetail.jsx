@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
 import {
   MdStar, MdAccessTime, MdSecurity, MdCheck, MdCurrencyRupee,
@@ -22,6 +22,7 @@ import { resolveActiveSurcharges } from '../../services/SurgeService';
 const ServiceDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { API, showToast, isAuthenticated, user } = useAuth();
 
   // ==================== STATE MANAGEMENT ====================
@@ -221,7 +222,7 @@ const ServiceDetailPage = () => {
       return;
     }
     navigate(`/customer/book-service/${id}`, {
-      state: { serviceDetails: service }
+      state: { serviceDetails: service, prefillBooking: location.state?.prefillBooking }
     });
   };
 
@@ -609,9 +610,14 @@ const ServiceDetailPage = () => {
                             </div>
                           ))
                       ) : (
-                        <div className="py-8 text-center bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                          <ChatBubbleLeftEllipsisIcon className="w-10 h-10 text-gray-200 mx-auto mb-2" />
-                          <p className="text-gray-400 font-bold uppercase text-[10px]">No reviews with comments yet</p>
+                        <div className="py-12 px-6 text-center bg-gradient-to-br from-gray-50 to-white rounded-2xl border border-dashed border-gray-200 shadow-inner flex flex-col items-center justify-center w-full">
+                          <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4 text-primary animate-pulse">
+                            <ChatBubbleLeftEllipsisIcon className="w-8 h-8" />
+                          </div>
+                          <h4 className="text-secondary font-bold text-sm mb-1">No Reviews Yet</h4>
+                          <p className="text-gray-400 text-xs max-w-[250px] leading-relaxed">
+                            There are currently no review comments for this service. Book now and be the first to share your experience!
+                          </p>
                         </div>
                       )}
                     </div>

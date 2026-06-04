@@ -4,7 +4,7 @@ import { useAuth } from '../../context/auth';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { toast } from 'react-toastify';
-import { ArrowLeft, CheckCircle, Plus, Minus, Tag, Clock, Shield, Lock, Star, IndianRupee, Truck, RotateCcw, CalendarDays, CreditCard, Wallet, MapPin } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Plus, Minus, Tag, Clock, Shield, Lock, Star, IndianRupee, Truck, RotateCcw, CalendarDays, CreditCard, Wallet, MapPin, AlertTriangle } from 'lucide-react';
 import AddressSelector from '../../components/AddressSelector';
 import Loader from '../../components/Loader';
 import { getPublicServiceById } from '../../services/ServiceService';
@@ -296,7 +296,10 @@ const BookService = () => {
     };
 
     if (service) {
-      fetchSurcharges();
+      const handler = setTimeout(() => {
+        fetchSurcharges();
+      }, 350);
+      return () => clearTimeout(handler);
     }
   }, [formData.date, formData.time, formData.customAddress.lat, formData.customAddress.lng, addresses, formData.useCustomAddress, service, formData.quantity]);
 
@@ -534,6 +537,11 @@ const BookService = () => {
       }
     } else if (addresses.length === 0) {
       toast.error('Please add an address to continue');
+      return false;
+    }
+
+    if (formData.paymentMethod === 'wallet' && walletBalance < calculateTotal()) {
+      toast.error('Insufficient wallet balance for full wallet payment.');
       return false;
     }
 
@@ -1044,18 +1052,13 @@ const BookService = () => {
 
                   {/* Wallet Payment */}
                   <div
-                    className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-all ${walletBalance >= totalAmount
-                      ? formData.paymentMethod === 'wallet'
+                    className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-all ${
+                      formData.paymentMethod === 'wallet'
                         ? 'border-primary bg-primary/5 shadow-sm'
                         : 'border-gray-100 hover:border-gray-200'
-                      : 'opacity-50 cursor-not-allowed bg-gray-50 border-gray-100'
-                      }`}
+                    }`}
                     onClick={() => {
-                      if (walletBalance >= totalAmount) {
-                        setFormData(prev => ({ ...prev, paymentMethod: 'wallet' }));
-                      } else {
-                        toast.info('Insufficient wallet balance for full wallet payment.');
-                      }
+                      setFormData(prev => ({ ...prev, paymentMethod: 'wallet' }));
                     }}
                   >
                     <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${formData.paymentMethod === 'wallet' ? 'border-primary' : 'border-gray-300'}`}>
@@ -1075,18 +1078,13 @@ const BookService = () => {
 
                   {/* Wallet + Online Mixed */}
                   <div
-                    className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-all ${walletBalance > 0
-                      ? formData.paymentMethod === 'mixed'
+                    className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-all ${
+                      formData.paymentMethod === 'mixed'
                         ? 'border-primary bg-primary/5 shadow-sm'
                         : 'border-gray-100 hover:border-gray-200'
-                      : 'opacity-50 cursor-not-allowed bg-gray-50 border-gray-100'
-                      }`}
+                    }`}
                     onClick={() => {
-                      if (walletBalance > 0) {
-                        setFormData(prev => ({ ...prev, paymentMethod: 'mixed' }));
-                      } else {
-                        toast.info('No wallet balance available for mixed payment.');
-                      }
+                      setFormData(prev => ({ ...prev, paymentMethod: 'mixed' }));
                     }}
                   >
                     <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${formData.paymentMethod === 'mixed' ? 'border-primary' : 'border-gray-300'}`}>
@@ -1124,6 +1122,31 @@ const BookService = () => {
                     <div className="flex justify-between text-xs font-bold text-amber-950 pt-1 border-t border-amber-100/50">
                       <span>Remaining Pay Online:</span>
                       <span>{formatCurrency(Math.max(0, totalAmount - walletBalance))}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Wallet Balance Warning Banners */}
+                {formData.paymentMethod === 'wallet' && walletBalance < totalAmount && (
+                  <div className="mt-3 p-3 bg-red-50 border border-red-100 rounded-xl flex items-start gap-2 animate-fade-in">
+                    <AlertTriangle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs font-bold text-red-800">Insufficient Wallet Balance</p>
+                      <p className="text-[11px] text-red-600 font-medium leading-relaxed mt-0.5">
+                        Your wallet balance is insufficient to cover the total booking amount. You need an additional <span className="font-bold">{formatCurrency(totalAmount - walletBalance)}</span> to complete this payment using your wallet.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {formData.paymentMethod === 'mixed' && walletBalance <= 0 && (
+                  <div className="mt-3 p-3 bg-red-50 border border-red-100 rounded-xl flex items-start gap-2 animate-fade-in">
+                    <AlertTriangle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs font-bold text-red-800">No Wallet Balance Available</p>
+                      <p className="text-[11px] text-red-600 font-medium leading-relaxed mt-0.5">
+                        Your wallet balance is ₹0. Mixed payment requires a positive wallet balance. Please add funds to your wallet or choose another payment method.
+                      </p>
                     </div>
                   </div>
                 )}

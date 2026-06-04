@@ -71,19 +71,21 @@ const AddressSelector = ({
     updated.addressLine = updated.street;
 
     // Re-build formattedAddress based on the changed inputs
-    updated.formattedAddress = buildAddressPreview(updated) || smartAddressBuilder(
-      {
-        house_number: updated.houseNumber,
-        road: updated.road,
-        residential: updated.area,
-        neighbourhood: updated.area,
-        suburb: updated.area,
-        city: updated.city,
-        state: updated.state,
-        postcode: updated.pincode
-      },
-      ""
-    );
+    if (!address.isManuallyEdited) {
+      updated.formattedAddress = buildAddressPreview(updated) || smartAddressBuilder(
+        {
+          house_number: updated.houseNumber,
+          road: updated.road,
+          residential: updated.area,
+          neighbourhood: updated.area,
+          suburb: updated.area,
+          city: updated.city,
+          state: updated.state,
+          postcode: updated.pincode
+        },
+        ""
+      );
+    }
 
     onChange(enrichAddressWithS2Cells(updated));
   };
@@ -95,19 +97,21 @@ const AddressSelector = ({
       city: "" // Reset city on state change
     };
 
-    updated.formattedAddress = buildAddressPreview(updated) || smartAddressBuilder(
-      {
-        house_number: updated.houseNumber,
-        road: updated.road,
-        residential: updated.area,
-        neighbourhood: updated.area,
-        suburb: updated.area,
-        city: updated.city,
-        state: updated.state,
-        postcode: updated.pincode
-      },
-      ""
-    );
+    if (!address.isManuallyEdited) {
+      updated.formattedAddress = buildAddressPreview(updated) || smartAddressBuilder(
+        {
+          house_number: updated.houseNumber,
+          road: updated.road,
+          residential: updated.area,
+          neighbourhood: updated.area,
+          suburb: updated.area,
+          city: updated.city,
+          state: updated.state,
+          postcode: updated.pincode
+        },
+        ""
+      );
+    }
 
     onChange(enrichAddressWithS2Cells(updated));
   };
@@ -118,19 +122,21 @@ const AddressSelector = ({
       city: cityName
     };
 
-    updated.formattedAddress = buildAddressPreview(updated) || smartAddressBuilder(
-      {
-        house_number: updated.houseNumber,
-        road: updated.road,
-        residential: updated.area,
-        neighbourhood: updated.area,
-        suburb: updated.area,
-        city: updated.city,
-        state: updated.state,
-        postcode: updated.pincode
-      },
-      ""
-    );
+    if (!address.isManuallyEdited) {
+      updated.formattedAddress = buildAddressPreview(updated) || smartAddressBuilder(
+        {
+          house_number: updated.houseNumber,
+          road: updated.road,
+          residential: updated.area,
+          neighbourhood: updated.area,
+          suburb: updated.area,
+          city: updated.city,
+          state: updated.state,
+          postcode: updated.pincode
+        },
+        ""
+      );
+    }
 
     onChange(enrichAddressWithS2Cells(updated));
   };
@@ -287,12 +293,24 @@ const AddressSelector = ({
         </div>
       </div>
 
-      {/* Row 4: Calculated Address Preview */}
+      {/* Row 4: Calculated Address Preview / Editor */}
       <div className="flex flex-col gap-1">
-        <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Address Preview</label>
-        <div className="w-full p-3 text-xs bg-gray-50 border border-gray-200 rounded-lg text-secondary font-medium leading-relaxed shadow-inner min-h-[48px] flex items-center">
-          {address.formattedAddress || 'Please fill House No. and Road name to construct preview...'}
-        </div>
+        <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Address Preview / Edit Manually</label>
+        <textarea
+          name="formattedAddress"
+          value={address.formattedAddress || ''}
+          onChange={(e) => {
+            const val = e.target.value;
+            onChange(enrichAddressWithS2Cells({
+              ...address,
+              formattedAddress: val,
+              isManuallyEdited: true
+            }));
+          }}
+          placeholder="Please fill House No. and Road name to construct preview, or edit here manually..."
+          rows="2"
+          className="w-full p-3 text-xs border border-gray-200 rounded-lg text-secondary font-medium leading-relaxed shadow-inner resize-none focus:ring-2 focus:ring-primary/20 focus:outline-none"
+        />
       </div>
 
       {isMapModalOpen && (

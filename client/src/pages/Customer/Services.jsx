@@ -3,7 +3,7 @@ import {
   Search, Filter, Clock, IndianRupee, CheckCircle,
   AlertCircle, RefreshCw, Sliders, Star, X
 } from 'lucide-react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useAuth } from '../../context/auth';
@@ -18,6 +18,7 @@ import { resolveActiveSurcharges } from '../../services/SurgeService';
 const ServiceListingPage = () => {
   const { API, user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // State
@@ -227,7 +228,9 @@ const ServiceListingPage = () => {
       navigate('/login');
       return;
     }
-    navigate(`/customer/services/${serviceId}`);
+    navigate(`/customer/services/${serviceId}`, {
+      state: { prefillBooking: location.state?.prefillBooking }
+    });
   };
 
   const resetFilters = () => {
@@ -486,6 +489,20 @@ const ServiceListingPage = () => {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* Category */}
+              <div>
+                <label className="block text-sm font-semibold text-secondary mb-3">Category</label>
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => handleCategoryChange(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm font-medium"
+                >
+                  {categoriesForFilter.map(cat => (
+                    <option key={cat.value} value={cat.value}>{cat.label}</option>
+                  ))}
+                </select>
               </div>
 
               {/* Sort By */}

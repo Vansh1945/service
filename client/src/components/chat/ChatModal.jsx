@@ -295,9 +295,33 @@ const ChatModal = ({ bookingId, role, isOpen, onClose, roomType = 'provider_cust
   const bookingCode = booking?.bookingId || (bookingId ? bookingId.slice(-8).toUpperCase() : '');
   const isLocked = isChatLocked();
 
-  const customerQuickReplies = ['Gate open', 'Call me', 'Reached home'];
-  const providerQuickReplies = ['Arriving in 10 min', 'Reached location', 'Work started', 'Need response'];
-  const quickReplies = isCustomer ? customerQuickReplies : providerQuickReplies;
+  const getFilteredQuickReplies = () => {
+    const status = booking?.status || 'pending';
+    if (isCustomer) {
+      // Customer
+      if (status === 'completed') {
+        return ['Call me'];
+      }
+      if (status === 'pending') {
+        return ['Call me'];
+      }
+      return ['Gate open', 'Call me', 'Reached home'];
+    } else {
+      // Provider
+      let list = ['Arriving in 10 min', 'Reached location', 'Work started', 'Need response'];
+      if (status === 'completed') {
+        return ['Need response'];
+      }
+      if (status === 'pending') {
+        return ['Need response'];
+      }
+      if (['accepted', 'confirmed'].includes(status)) {
+        list = list.filter(r => r !== 'Work started');
+      }
+      return list;
+    }
+  };
+  const quickReplies = getFilteredQuickReplies();
 
   return (
     <div className="fixed inset-0 z-[999] flex items-end md:items-center justify-center md:justify-end">

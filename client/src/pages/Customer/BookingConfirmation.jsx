@@ -258,6 +258,10 @@ const BookingConfirmation = () => {
 
   const handleWalletPayment = async () => {
     if (isProcessingPayment) return;
+    if (walletBalance < totalAmount) {
+      toast.error('Insufficient wallet balance for full wallet payment.');
+      return;
+    }
     setIsProcessingPayment(true);
     setPaymentProgressMessage('Processing Wallet Payment...');
     const toastId = toast.loading('Processing wallet payment...');
@@ -296,6 +300,11 @@ const BookingConfirmation = () => {
     // Safety guard: only 'online' and 'mixed' are valid for Razorpay createOrder
     if (!['online', 'mixed'].includes(selectedMethod)) {
       showToast('Please select a payment method.', 'error');
+      return;
+    }
+
+    if (selectedMethod === 'mixed' && walletBalance <= 0) {
+      showToast('No wallet balance available for mixed payment.', 'error');
       return;
     }
 
@@ -695,19 +704,12 @@ const BookingConfirmation = () => {
 
                     {/* Wallet Payment */}
                     <div
-                      className={`flex items-center gap-3 p-2.5 border rounded-xl cursor-pointer transition-all ${walletBalance >= totalAmount
-                        ? paymentMethod === 'wallet'
+                      className={`flex items-center gap-3 p-2.5 border rounded-xl cursor-pointer transition-all ${
+                        paymentMethod === 'wallet'
                           ? 'border-primary bg-primary/5 shadow-sm'
                           : 'border-gray-100 hover:border-gray-200'
-                        : 'opacity-50 cursor-not-allowed bg-gray-50 border-gray-100'
-                        }`}
-                      onClick={() => {
-                        if (walletBalance >= totalAmount) {
-                          setPaymentMethod('wallet');
-                        } else {
-                          toast.info('Insufficient wallet balance for full wallet payment.');
-                        }
-                      }}
+                      }`}
+                      onClick={() => setPaymentMethod('wallet')}
                     >
                       <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'wallet' ? 'border-primary' : 'border-gray-300'}`}>
                         {paymentMethod === 'wallet' && <div className="w-1.5 h-1.5 bg-primary rounded-full" />}
@@ -726,19 +728,12 @@ const BookingConfirmation = () => {
 
                     {/* Wallet + Online Mixed */}
                     <div
-                      className={`flex items-center gap-3 p-2.5 border rounded-xl cursor-pointer transition-all ${walletBalance > 0
-                        ? paymentMethod === 'mixed'
+                      className={`flex items-center gap-3 p-2.5 border rounded-xl cursor-pointer transition-all ${
+                        paymentMethod === 'mixed'
                           ? 'border-primary bg-primary/5 shadow-sm'
                           : 'border-gray-100 hover:border-gray-200'
-                        : 'opacity-50 cursor-not-allowed bg-gray-50 border-gray-100'
-                        }`}
-                      onClick={() => {
-                        if (walletBalance > 0) {
-                          setPaymentMethod('mixed');
-                        } else {
-                          toast.info('No wallet balance available for mixed payment.');
-                        }
-                      }}
+                      }`}
+                      onClick={() => setPaymentMethod('mixed')}
                     >
                       <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'mixed' ? 'border-primary' : 'border-gray-300'}`}>
                         {paymentMethod === 'mixed' && <div className="w-1.5 h-1.5 bg-primary rounded-full" />}
@@ -792,6 +787,31 @@ const BookingConfirmation = () => {
                       <div className="flex justify-between text-xs font-bold text-amber-950 pt-1 border-t border-amber-100/50">
                         <span>Remaining Pay Online:</span>
                         <span>{formatCurrency(Math.max(0, totalAmount - walletBalance))}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Wallet Balance Warning Banners */}
+                  {paymentMethod === 'wallet' && walletBalance < totalAmount && (
+                    <div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-xl flex items-start gap-2 animate-fade-in">
+                      <AlertTriangle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-xs font-bold text-red-800">Insufficient Wallet Balance</p>
+                        <p className="text-[11px] text-red-600 font-medium leading-relaxed mt-0.5">
+                          Your wallet balance is insufficient to cover the total booking amount. You need an additional <span className="font-bold">{formatCurrency(totalAmount - walletBalance)}</span> to complete this payment using your wallet.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {paymentMethod === 'mixed' && walletBalance <= 0 && (
+                    <div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-xl flex items-start gap-2 animate-fade-in">
+                      <AlertTriangle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-xs font-bold text-red-800">No Wallet Balance Available</p>
+                        <p className="text-[11px] text-red-600 font-medium leading-relaxed mt-0.5">
+                          Your wallet balance is ₹0. Mixed payment requires a positive wallet balance. Please add funds to your wallet or choose another payment method.
+                        </p>
                       </div>
                     </div>
                   )}
