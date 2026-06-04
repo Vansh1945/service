@@ -307,15 +307,9 @@ const LoginPage = () => {
                 <div className="text-center pt-2">
                   <p className="text-sm text-gray-500">
                     Don't have an account?{' '}
-                    {localStorage.getItem("installRole") === "provider" ? (
-                      <Link to="/register-provider" className="text-accent font-semibold hover:underline">
-                        Register as Provider
-                      </Link>
-                    ) : (
-                      <Link to="/register" className="text-accent font-semibold hover:underline">
-                        Create an account
-                      </Link>
-                    )}
+                    <Link to="/register" className="text-accent font-semibold hover:underline">
+                      Create an account
+                    </Link>
                   </p>
                 </div>
               </div>

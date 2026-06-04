@@ -425,7 +425,7 @@ const CustomerRegistration = () => {
               <input
                 type="checkbox"
                 id="terms"
-
+                required
                 className="w-4 h-4 mt-0.5 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer transition-all"
               />
               <label htmlFor="terms" className="text-xs text-gray-400 leading-relaxed cursor-pointer select-none">
