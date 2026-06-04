@@ -64,7 +64,7 @@ const sendPushNotification = async (tokens, payload) => {
                     channelId: 'booking_notifications'
                 }
             },
-            // Web push config — pass data so SW notificationclick can read url
+            //  Web push config — pass data so SW notificationclick can read url
             webpush: {
                 headers: {
                     urgency: 'high',
@@ -213,20 +213,20 @@ const isInQuietHours = (pref) => {
  */
 const getZoneAndDescendants = async (targetZoneIds) => {
     if (!targetZoneIds || targetZoneIds.length === 0) return [];
-    
+
     const mongoose = require('mongoose');
     const Zone = mongoose.model('Zone');
-    
+
     let matchedZoneIds = new Set(targetZoneIds.map(id => id.toString()));
-    
+
     // Level 1: Find children of targetZoneIds
     const level1Children = await Zone.find({
         parentZone: { $in: Array.from(matchedZoneIds) }
     }, '_id').lean();
-    
+
     const level1Ids = level1Children.map(c => c._id.toString());
     level1Ids.forEach(id => matchedZoneIds.add(id));
-    
+
     if (level1Ids.length > 0) {
         // Level 2: Find children of level 1 children
         const level2Children = await Zone.find({
@@ -234,7 +234,7 @@ const getZoneAndDescendants = async (targetZoneIds) => {
         }, '_id').lean();
         level2Children.map(c => c._id.toString()).forEach(id => matchedZoneIds.add(id));
     }
-    
+
     return Array.from(matchedZoneIds).map(id => new mongoose.Types.ObjectId(id));
 };
 
