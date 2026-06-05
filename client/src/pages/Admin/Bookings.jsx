@@ -763,8 +763,11 @@ const AdminBookingsView = () => {
                 fetchBookingDetails(selectedBooking._id);
             }
         } catch (error) {
+            if (error.name === 'CanceledError' || error.message === 'canceled') {
+                return;
+            }
             console.error('Error assigning provider:', error);
-            showToast(error.message, 'error');
+            showToast(error.response?.data?.message || error.message || 'Failed to assign provider', 'error');
         } finally {
             setActionLoading(false);
         }
@@ -837,9 +840,10 @@ const AdminBookingsView = () => {
 
     // Filter providers by service location match
     const getFilteredProviders = (booking) => {
-        if (!booking || !booking.address) return providers;
+        if (!booking || !booking.address) return providers.filter(p => p.approved);
 
         return providers.filter(provider => {
+            if (!provider.approved) return false;
             const providerCity = provider.serviceLocation?.city || provider.city || '';
             const bookingCity = booking.address?.city || '';
 
@@ -1733,7 +1737,7 @@ const AdminBookingsView = () => {
                                         <option value="">Select a provider</option>
                                         {getFilteredProviders(selectedBooking).map(provider => (
                                             <option key={provider._id} value={provider._id}>
-                                                {provider.providerId ? `[${provider.providerId}] ` : ''} {provider.businessName || provider.name} - {provider.serviceLocation?.city || provider.city || 'N/A'}
+                                                {provider.providerId ? `[${provider.providerId}] ` : ''}{provider.businessName || provider.name} (Bookings: {provider.completedBookings || 0}, Badge: {provider.performanceBadge || provider.performanceScore?.badge || 'Bronze'}) - {provider.serviceLocation?.city || provider.city || 'N/A'}
                                             </option>
                                         ))}
                                     </select>
