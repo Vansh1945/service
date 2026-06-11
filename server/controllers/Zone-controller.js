@@ -1,6 +1,97 @@
 const mongoose = require('mongoose');
 const Zone = require('../models/Zone-model');
 
+const MAX_ZONE_POLYGON_VERTICES = 800;
+
+const getPointSegmentDistance = (point, start, end) => {
+  const x = point[0];
+  const y = point[1];
+  const x1 = start[0];
+  const y1 = start[1];
+  const x2 = end[0];
+  const y2 = end[1];
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+
+  if (dx === 0 && dy === 0) {
+    return Math.hypot(x - x1, y - y1);
+  }
+
+  const t = Math.max(0, Math.min(1, ((x - x1) * dx + (y - y1) * dy) / (dx * dx + dy * dy)));
+  return Math.hypot(x - (x1 + t * dx), y - (y1 + t * dy));
+};
+
+const simplifyRdp = (points, tolerance) => {
+  if (!Array.isArray(points) || points.length <= 2) return points || [];
+
+  let maxDistance = 0;
+  let index = 0;
+  const lastIndex = points.length - 1;
+
+  for (let i = 1; i < lastIndex; i++) {
+    const distance = getPointSegmentDistance(points[i], points[0], points[lastIndex]);
+    if (distance > maxDistance) {
+      index = i;
+      maxDistance = distance;
+    }
+  }
+
+  if (maxDistance <= tolerance) {
+    return [points[0], points[lastIndex]];
+  }
+
+  const left = simplifyRdp(points.slice(0, index + 1), tolerance);
+  const right = simplifyRdp(points.slice(index), tolerance);
+  return left.slice(0, -1).concat(right);
+};
+
+const normalizeZonePolygon = (polygon) => {
+  if (!polygon || !polygon.coordinates || !Array.isArray(polygon.coordinates) || polygon.coordinates.length === 0) {
+    throw new Error("Polygon and valid coordinates are required");
+  }
+
+  let coords = polygon.coordinates[0];
+  if (!Array.isArray(coords)) {
+    throw new Error("Polygon coordinates must be an array");
+  }
+
+  coords = coords
+    .filter(coord => Array.isArray(coord) && Number.isFinite(Number(coord[0])) && Number.isFinite(Number(coord[1])))
+    .map(coord => [Number(coord[0]), Number(coord[1])])
+    .filter((coord, index, list) => index === 0 || coord[0] !== list[index - 1][0] || coord[1] !== list[index - 1][1]);
+
+  if (coords.length > 1) {
+    const firstCoord = coords[0];
+    const lastCoord = coords[coords.length - 1];
+    if (firstCoord[0] === lastCoord[0] && firstCoord[1] === lastCoord[1]) {
+      coords = coords.slice(0, -1);
+    }
+  }
+
+  let safeCoords = coords;
+  let tolerance = 0.00025;
+  while (safeCoords.length > MAX_ZONE_POLYGON_VERTICES && tolerance <= 0.02) {
+    safeCoords = simplifyRdp(coords, tolerance);
+    tolerance *= 1.8;
+  }
+
+  if (safeCoords.length > MAX_ZONE_POLYGON_VERTICES) {
+    const step = Math.ceil(safeCoords.length / MAX_ZONE_POLYGON_VERTICES);
+    safeCoords = safeCoords.filter((_, index) => index % step === 0);
+  }
+
+  if (safeCoords.length < 3) {
+    throw new Error("Polygon must have at least 3 valid boundary points");
+  }
+
+  safeCoords.push([safeCoords[0][0], safeCoords[0][1]]);
+  return {
+    ...polygon,
+    type: "Polygon",
+    coordinates: [safeCoords]
+  };
+};
+
 /**
  * Create a new Zone
  */
@@ -12,20 +103,11 @@ exports.createZone = async (req, res) => {
       return res.status(400).json({ success: false, message: "Name is required" });
     }
 
-    if (!polygon || !polygon.coordinates || !Array.isArray(polygon.coordinates) || polygon.coordinates.length === 0) {
-      return res.status(400).json({ success: false, message: "Polygon and valid coordinates are required" });
-    }
-
-    const coords = polygon.coordinates[0];
-    if (!Array.isArray(coords) || coords.length < 4) {
-      return res.status(400).json({ success: false, message: "Polygon must have at least 4 coordinates (minimum polygon points)" });
-    }
-
-    // Auto-close polygon loop if first and last coordinates are not equal to prevent MongoDB index crash
-    const firstCoord = coords[0];
-    const lastCoord = coords[coords.length - 1];
-    if (firstCoord && lastCoord && (firstCoord[0] !== lastCoord[0] || firstCoord[1] !== lastCoord[1])) {
-      coords.push([firstCoord[0], firstCoord[1]]);
+    let normalizedPolygon;
+    try {
+      normalizedPolygon = normalizeZonePolygon(polygon);
+    } catch (validationError) {
+      return res.status(400).json({ success: false, message: validationError.message });
     }
 
     // Validate hierarchy constraints
@@ -64,14 +146,14 @@ exports.createZone = async (req, res) => {
       // Find any overlapping active zones (including potential parent zone)
       const overlappingZones = await Zone.find({
         status: 'active',
-        polygon: { $geoIntersects: { $geometry: { type: "Polygon", coordinates: polygon.coordinates } } }
+        polygon: { $geoIntersects: { $geometry: { type: "Polygon", coordinates: normalizedPolygon.coordinates } } }
       });
       for (const overlapping of overlappingZones) {
         // Allow overlap if overlapping zone is the specified parent zone and the new zone is fully contained within it
         if (parentZone && overlapping._id.equals(parentZone)) {
           const isContained = await Zone.findOne({
             _id: parentZone,
-            polygon: { $geoWithin: { $geometry: { type: "Polygon", coordinates: polygon.coordinates } } }
+            polygon: { $geoWithin: { $geometry: { type: "Polygon", coordinates: normalizedPolygon.coordinates } } }
           });
           if (!isContained) {
             return res.status(400).json({ success: false, message: "Micro zone must be fully inside parent city" });
@@ -86,7 +168,7 @@ exports.createZone = async (req, res) => {
     const newZone = new Zone({
       city,
       name,
-      polygon,
+      polygon: normalizedPolygon,
       priority,
       status,
       serviceRadius,
@@ -339,20 +421,17 @@ exports.updateZone = async (req, res) => {
       return res.status(404).json({ success: false, message: "Zone not found", data: null });
     }
 
-    // Auto-close polygon loop if coordinates are updated to prevent MongoDB crash
-    if (polygon && polygon.coordinates && Array.isArray(polygon.coordinates) && polygon.coordinates.length > 0) {
-      const coords = polygon.coordinates[0];
-      if (Array.isArray(coords) && coords.length >= 4) {
-        const firstCoord = coords[0];
-        const lastCoord = coords[coords.length - 1];
-        if (firstCoord && lastCoord && (firstCoord[0] !== lastCoord[0] || firstCoord[1] !== lastCoord[1])) {
-          coords.push([firstCoord[0], firstCoord[1]]);
-        }
+    let normalizedPolygon;
+    if (polygon !== undefined) {
+      try {
+        normalizedPolygon = normalizeZonePolygon(polygon);
+      } catch (validationError) {
+        return res.status(400).json({ success: false, message: validationError.message });
       }
     }
 
     const targetStatus = status !== undefined ? status : zone.status;
-    const targetPolygon = polygon !== undefined ? polygon : zone.polygon;
+    const targetPolygon = normalizedPolygon !== undefined ? normalizedPolygon : zone.polygon;
     const targetParentZone = parentZone !== undefined ? parentZone : zone.parentZone;
 
     // Overlap validation with hierarchical containment
@@ -415,7 +494,7 @@ exports.updateZone = async (req, res) => {
 
     // Apply updates
     if (name !== undefined) zone.name = name;
-    if (polygon !== undefined) zone.polygon = polygon;
+    if (normalizedPolygon !== undefined) zone.polygon = normalizedPolygon;
     if (priority !== undefined) zone.priority = priority;
     if (status !== undefined) zone.status = status;
     if (serviceRadius !== undefined) zone.serviceRadius = serviceRadius;

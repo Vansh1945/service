@@ -8,7 +8,6 @@ import {
   FiInfo, FiSearch, FiActivity, FiClock, FiFileText
 } from 'react-icons/fi';
 import Pagination from '../../components/Pagination';
-
 // Risk Badge Component
 const RiskBadge = ({ risk }) => {
   const getStyles = (riskLevel) => {
@@ -32,20 +31,7 @@ const RiskBadge = ({ risk }) => {
   );
 };
 
-// Skeleton Loader
-const TableSkeleton = ({ columns }) => (
-  <tbody className="divide-y divide-gray-100">
-    {Array.from({ length: 5 }).map((_, i) => (
-      <tr key={i} className="animate-pulse">
-        {Array.from({ length: columns }).map((_, j) => (
-          <td key={j} className="px-6 py-5">
-            <div className="h-4 bg-gray-100 rounded-full w-24" />
-          </td>
-        ))}
-      </tr>
-    ))}
-  </tbody>
-);
+
 
 // Empty State
 const EmptyState = ({ icon: Icon, message, subMessage }) => (
@@ -410,7 +396,19 @@ const AdminFraud = () => {
                     <th className="px-6 py-4 text-left text-[11px] font-black text-slate-400 uppercase tracking-widest">Action</th>
                   </tr>
                 </thead>
-                {loading ? <TableSkeleton columns={6} /> : (
+                {loading ? (
+                  <tbody>
+                    <tr>
+                      <td colSpan="6" className="px-6 py-4">
+                        <div className="space-y-4 p-4 animate-pulse">
+                          {[1, 2, 3].map(i => (
+                            <div key={i} className="h-10 bg-slate-100 rounded-xl w-full" />
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                ) : (
                   <tbody className="divide-y divide-slate-100">
                     {data.ip.length === 0 ? (
                       <EmptyState icon={FiMapPin} message="No suspicious IP activity detected" subMessage="All IP addresses show normal account usage patterns" />
@@ -499,7 +497,19 @@ const AdminFraud = () => {
                     <th className="px-6 py-4 text-left text-[11px] font-black text-slate-400 uppercase tracking-widest">Action</th>
                   </tr>
                 </thead>
-                {loading ? <TableSkeleton columns={6} /> : (
+                {loading ? (
+                  <tbody>
+                    <tr>
+                      <td colSpan="6" className="px-6 py-4">
+                        <div className="space-y-4 p-4 animate-pulse">
+                          {[1, 2, 3].map(i => (
+                            <div key={i} className="h-10 bg-slate-100 rounded-xl w-full" />
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                ) : (
                   <tbody className="divide-y divide-slate-100">
                     {data.device.length === 0 ? (
                       <EmptyState icon={FiSmartphone} message="No device abuse detected" subMessage="Device usage patterns look normal" />
@@ -603,7 +613,19 @@ const AdminFraud = () => {
                     <th className="px-6 py-4 text-left text-[11px] font-black text-slate-400 uppercase tracking-widest">Action</th>
                   </tr>
                 </thead>
-                {loading ? <TableSkeleton columns={6} /> : (
+                {loading ? (
+                  <tbody>
+                    <tr>
+                      <td colSpan="6" className="px-6 py-4">
+                        <div className="space-y-4 p-4 animate-pulse">
+                          {[1, 2, 3].map(i => (
+                            <div key={i} className="h-10 bg-slate-100 rounded-xl w-full" />
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                ) : (
                   <tbody className="divide-y divide-slate-100">
                     {data.cancellation.length === 0 ? (
                       <EmptyState icon={FiXCircle} message="No high cancellation alerts" subMessage="All users are within normal cancellation thresholds" />
@@ -688,7 +710,19 @@ const AdminFraud = () => {
                     <th className="px-6 py-4 text-left text-[11px] font-black text-slate-400 uppercase tracking-widest">Action</th>
                   </tr>
                 </thead>
-                {loading ? <TableSkeleton columns={5} /> : (
+                {loading ? (
+                  <tbody>
+                    <tr>
+                      <td colSpan="5" className="px-6 py-4">
+                        <div className="space-y-4 p-4 animate-pulse">
+                          {[1, 2, 3].map(i => (
+                            <div key={i} className="h-10 bg-slate-100 rounded-xl w-full" />
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                ) : (
                   <tbody className="divide-y divide-slate-100">
                     {data.sessions.length === 0 ? (
                       <EmptyState icon={FiShield} message="No active sessions found" />

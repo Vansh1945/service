@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { MapPin, Building, ChevronDown } from 'lucide-react';
-import LocationPickerModal from './LocationPickerModal';
-import { buildAddressPreview, smartAddressBuilder } from '../utils/format';
+import LocationPickerModal from './modals/LocationPickerModal';
+import { buildAddressPreview, smartAddressBuilder, buildStreetAddress } from '../utils/format';
 import { latLngToS2CellId } from '../utils/s2Helper';
 
 const AddressSelector = ({
@@ -65,9 +65,7 @@ const AddressSelector = ({
     }
 
     // Auto-construct street if houseNumber and road are updated
-    const houseNum = updated.houseNumber || '';
-    const rd = updated.road || '';
-    updated.street = houseNum && rd ? `${houseNum}, ${rd}` : (houseNum || rd);
+    updated.street = buildStreetAddress(updated.houseNumber, updated.road);
     updated.addressLine = updated.street;
 
     // Re-build formattedAddress based on the changed inputs

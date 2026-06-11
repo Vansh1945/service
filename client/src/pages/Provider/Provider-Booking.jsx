@@ -12,7 +12,8 @@ import {
   Banknote, Download, FileText, Loader, BarChart2, DownloadCloud, Navigation,
   Home, Info, Shield, FileDigit, PhoneCall, Camera, ArrowLeft, ShieldCheck, MessageSquare, Headphones
 } from 'lucide-react';
-import LoadingSpinner from '../../components/Loader';
+import LoadingSpinner from '../../components/ui-skeletons/Loader';
+import BookingCardSkeleton from '../../components/ui-skeletons/BookingCardSkeleton';
 import * as BookingService from '../../services/BookingService';
 import Pagination from '../../components/Pagination';
 import { formatDate, formatTime, formatCurrency, formatDuration, compressImage, filterGPSJitter, LIGHT_MAP_TILES, LIGHT_MAP_ATTRIBUTION } from '../../utils/format';
@@ -854,8 +855,6 @@ const ProviderBooking = () => {
   const paginatedBookings = currentBookings.slice((currentPage - 1) * bookingsPerPage, currentPage * bookingsPerPage);
   const paginate = (n) => setCurrentPage(n);
 
-  if (loading) return <LoadingSpinner />;
-
   // ── Stat card ────────────────────────────────────────────────────────────
   const StatCard = ({ label, value, icon: Icon, iconColor = 'text-primary', iconBg = 'bg-primary/10' }) => (
     <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
@@ -869,14 +868,6 @@ const ProviderBooking = () => {
         </div>
       </div>
     </div>
-  );
-
-  // ── Status badge ─────────────────────────────────────────────────────────
-  const StatusBadge = ({ status }) => (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${getStatusColor(status)}`}>
-      {getStatusIcon(status)}
-      <span className="capitalize">{status === 'in-progress' ? 'In Progress' : status || 'Unknown'}</span>
-    </span>
   );
 
   // ── Booking card ─────────────────────────────────────────────────────────
@@ -923,7 +914,10 @@ const ProviderBooking = () => {
           <div className="flex-1 min-w-0">
             {/* Status + ID + Amount */}
             <div className="flex items-center gap-2 flex-wrap mb-3">
-              <StatusBadge status={booking.status} />
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${getStatusColor(booking.status)}`}>
+                {getStatusIcon(booking.status)}
+                <span className="capitalize">{booking.status}</span>
+              </span>
               <span className="text-xs text-gray-400 bg-gray-50 px-2 py-1 rounded-lg font-mono">
                 #{booking.bookingId || booking._id.slice(-8)}
               </span>
@@ -1330,7 +1324,13 @@ const ProviderBooking = () => {
         </div>
 
         {/* ── Booking List ── */}
-        {currentBookings.length === 0 ? (
+        {loading ? (
+          <div className="grid grid-cols-1 gap-4 mb-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <BookingCardSkeleton key={i} />
+            ))}
+          </div>
+        ) : currentBookings.length === 0 ? (
           <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center">
             <div className="inline-flex items-center justify-center w-14 h-14 bg-gray-100 rounded-2xl mb-4">
               <ClipboardList className="w-7 h-7 text-gray-400" />
@@ -1381,7 +1381,10 @@ const ProviderBooking = () => {
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <StatusBadge status={selectedBooking.status} />
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${getStatusColor(selectedBooking.status)}`}>
+                    {getStatusIcon(selectedBooking.status)}
+                    <span className="capitalize">{selectedBooking.status}</span>
+                  </span>
                   <span className="text-sm text-gray-500">
                     <Calendar className="w-3.5 h-3.5 inline mr-1" />
                     {formatDate(selectedBooking.date)} · {formatTime(selectedBooking.time)}

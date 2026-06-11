@@ -8,6 +8,8 @@ import {
   Timer, Zap, Star, Trophy, BarChart3, Activity, X, ChevronDown, Loader2
 } from 'lucide-react';
 import { formatDate } from '../../utils/format';
+import Processing from '../../components/ui-skeletons/Processing';
+
 
 const useTestTimer = (initialTime, isActive, onTimeUp) => {
   const [timeLeft, setTimeLeft] = useState(initialTime);
@@ -280,6 +282,8 @@ const ProviderTestPage = () => {
   const [allTestData, setAllTestData] = useState({});
   const [cooldown, setCooldown] = useState(null);
 
+  const [submitting, setSubmitting] = useState(false);
+
   const { timeLeft, formatTime, isWarning, setTimeLeft } = useTestTimer(
     600,
     !!currentTest,
@@ -345,6 +349,7 @@ const ProviderTestPage = () => {
     }
 
     try {
+      setSubmitting(true);
       // Start test with all selected categories in one request
       const res = await TestService.startTest({ categories: selectedCategories });
       const data = res.data;
@@ -374,6 +379,8 @@ const ProviderTestPage = () => {
     } catch (error) {
       console.error('Error starting test:', error);
       showToast('Error starting test', 'error');
+    } finally {
+      setSubmitting(false);
     }
   }, [selectedCategories, testAttemptsLeft, showToast, setTimeLeft]);
 
@@ -400,6 +407,7 @@ const ProviderTestPage = () => {
     if (!currentTest) return;
 
     try {
+      setSubmitting(true);
       const formattedAnswers = Object.entries(answers).map(([questionId, selectedOption]) => ({
         questionId,
         selectedOption
@@ -424,6 +432,8 @@ const ProviderTestPage = () => {
       }
     } catch (error) {
       showToast('Error submitting test', 'error');
+    } finally {
+      setSubmitting(false);
     }
   }, [currentTest, answers, showToast, fetchTestHistory]);
 
@@ -589,9 +599,11 @@ const ProviderTestPage = () => {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-4">
-              <button
+              <Processing
                 onClick={handleStartTest}
                 disabled={testAttemptsLeft <= 0 || selectedCategories.length === 0 || cooldown?.isCooldown}
+                loading={submitting}
+                loadingText="Starting..."
                 className={`flex-1 sm:flex-none px-8 py-4 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center space-x-2 transform hover:scale-105 ${testAttemptsLeft <= 0 || selectedCategories.length === 0 || cooldown?.isCooldown
                   ? 'bg-red-500 text-white cursor-not-allowed opacity-75'
                   : 'bg-primary text-white hover:bg-primary/90 hover:shadow-lg'
@@ -618,7 +630,7 @@ const ProviderTestPage = () => {
                     <span>Start Test ({selectedCategories.length} {selectedCategories.length === 1 ? 'category' : 'categories'})</span>
                   </>
                 )}
-              </button>
+              </Processing>
 
               {testAttemptsLeft > 0 && (
                 <button
@@ -795,12 +807,14 @@ const ProviderTestPage = () => {
                     >
                       Cancel
                     </button>
-                    <button
+                    <Processing
                       onClick={handleSubmitTest}
+                      loading={submitting}
+                      loadingText="Submitting..."
                       className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-all duration-200 transform hover:scale-105"
                     >
                       Submit
-                    </button>
+                    </Processing>
                   </div>
                 </div>
               </div>

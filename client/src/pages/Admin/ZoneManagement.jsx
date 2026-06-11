@@ -1,18 +1,17 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
 import * as AdminService from '../../services/AdminService';
 import * as BookingService from '../../services/BookingService';
 import * as ZoneService from '../../services/ZoneService';
-import Loader from '../../components/Loader';
 import { MapContainer, TileLayer, Polygon, Polyline, Circle, Marker, Popup, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
-  MapPin, Users, Zap, Clock, Trash2, Edit, Check, X,
-  Plus, RefreshCw, AlertTriangle, Search, Filter, Layers,
+  MapPin, Users, Zap, Trash2, Edit, X,
+  Plus, RefreshCw, AlertTriangle, Search, Layers,
   Compass, Eye, ShieldCheck, Activity, Award, ChevronDown, ChevronUp,
-  Ticket, Briefcase, BarChart3, UserCheck, CalendarCheck
+  Ticket, Briefcase, BarChart3
 } from 'lucide-react';
 
 // Fix default Leaflet markers in Vite
@@ -161,7 +160,7 @@ const ZoneManagement = () => {
   const [mapCenter, setMapCenter] = useState([31.3260, 75.5762]);
   const [mapZoom, setMapZoom] = useState(12);
 
-  const resolveZonePath = (zoneId) => {
+  const resolveZonePath = useCallback((zoneId) => {
     const path = [];
     let currentZone = zones.find(z => z.id === zoneId || z._id === zoneId);
     while (currentZone) {
@@ -174,10 +173,10 @@ const ZoneManagement = () => {
       }
     }
     return path.length > 0 ? path.join(" > ") : "Global / Root";
-  };
+  }, [zones]);
 
   // Fetch zones from server
-  const fetchZones = async () => {
+  const fetchZones = useCallback(async () => {
     try {
       setLoading(true);
       const response = await ZoneService.getAllZones({ limit: 1000 });
@@ -217,10 +216,10 @@ const ZoneManagement = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   // Fetch provider and booking spatial coordinates from server
-  const fetchTelemetry = async () => {
+  const fetchTelemetry = useCallback(async () => {
     try {
       setLoading(true);
       const [provRes, bookRes, custRes] = await Promise.all([
@@ -277,12 +276,30 @@ const ZoneManagement = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchZones();
     fetchTelemetry();
-  }, []);
+  }, [fetchZones, fetchTelemetry]);
+
+  // Forward declaration of handleOpenAnalytics to satisfy dependency
+  const handleOpenAnalytics = useCallback(async (zoneId) => {
+    try {
+      setAnalyticsModal({ open: true, zone: null, loading: true });
+      const res = await ZoneService.getZoneById(zoneId);
+      if (res.data?.success) {
+        setAnalyticsModal({ open: true, zone: res.data.data, loading: false });
+      } else {
+        setAnalyticsModal({ open: false, zone: null, loading: false });
+        if (showToast) showToast('Failed to fetch zone details', 'error');
+      }
+    } catch (err) {
+      console.error('Error fetching zone details:', err);
+      setAnalyticsModal({ open: false, zone: null, loading: false });
+      if (showToast) showToast('Failed to fetch zone details', 'error');
+    }
+  }, [showToast]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -290,10 +307,10 @@ const ZoneManagement = () => {
     if (analyticsZone) {
       handleOpenAnalytics(analyticsZone);
     }
-  }, [location.search]);
+  }, [location.search, handleOpenAnalytics]);
 
   // Compute spatial statistics inside a zone polygon dynamically
-  const getZoneStats = (coordinates) => {
+  const getZoneStats = useCallback((coordinates) => {
     let provCount = 0;
     let activeJobs = 0;
     let customerCount = 0;
@@ -321,9 +338,9 @@ const ZoneManagement = () => {
       activeBookingsCount: activeJobs,
       customerCount: customerCount
     };
-  };
+  }, [providers, bookings, customers]);
 
-  const getZoneMemberPreview = (coordinates) => {
+  const getZoneMemberPreview = useCallback((coordinates) => {
     const providersPreview = providers
       .filter(provider => provider.coords && isPointInPolygon(provider.coords[0], provider.coords[1], coordinates))
       .slice(0, 2);
@@ -333,7 +350,7 @@ const ZoneManagement = () => {
       .slice(0, 2);
 
     return { providersPreview, customersPreview };
-  };
+  }, [providers, customers]);
 
   const renderZoneMapPopup = (zone, zoneStats) => {
     let dotColor = 'bg-emerald-500';
@@ -357,7 +374,7 @@ const ZoneManagement = () => {
             <span>City Hub:</span>
             <span className="text-secondary font-black text-right">{zone.city || 'N/A'}</span>
           </div>
-          
+
           <div className="flex justify-between items-center">
             <span>Level:</span>
             <span className="text-secondary font-black text-right">{zone.zoneLevel || 'N/A'}</span>
@@ -390,7 +407,7 @@ const ZoneManagement = () => {
             <span className="text-secondary/65">Providers Inside:</span>
             <span className="text-blue-600 text-xs font-black text-right">{zoneStats.providersCount}</span>
           </div>
-          
+
           <div className="flex justify-between items-center text-[#a855f7]">
             <span className="font-extrabold">Customers:</span>
             <span className="text-xs font-black text-right">{zoneStats.customerCount}</span>
@@ -529,7 +546,7 @@ const ZoneManagement = () => {
     if (currentSelected.includes(zoneId)) {
       // DESELECT logic
       newZones = newZones.filter(id => id.toString() !== zoneId);
-      
+
       if (zone.zoneLevel === 'state') {
         const childCities = zones.filter(z => z.zoneLevel === 'city' && (z.parentZone?._id || z.parentZone || '').toString() === zoneId);
         const cityIds = childCities.map(c => (c._id || c.id).toString());
@@ -592,7 +609,7 @@ const ZoneManagement = () => {
           const areAllSelected = allSiblingMicroIds.every(id => newZones.includes(id));
           if (areAllSelected) {
             newZones.push(parentCityId);
-            
+
             const parentCity = zones.find(z => (z._id || z.id).toString() === parentCityId);
             const parentStateId = parentCity ? (parentCity.parentZone?._id || parentCity.parentZone || '').toString() : '';
             if (parentStateId) {
@@ -611,11 +628,11 @@ const ZoneManagement = () => {
   };
 
   // Clear current drawing vertices
-  const handleClearDrawing = () => {
+  const handleClearDrawing = useCallback(() => {
     setDrawPoints([]);
-  };
+  }, []);
 
-  const handleAutoGenerateBoundary = async () => {
+  const handleAutoGenerateBoundary = useCallback(async () => {
     if (!geoQuery.trim()) {
       if (showToast) showToast('Please enter a Pincode or Area Name', 'warning');
       return;
@@ -665,10 +682,10 @@ const ZoneManagement = () => {
     } finally {
       setAutoGenerating(false);
     }
-  };
+  }, [geoQuery, formData.serviceRadius, showToast]);
 
   // Save new or updated zone
-  const handleSaveZone = async (e) => {
+  const handleSaveZone = useCallback(async (e) => {
     e.preventDefault();
     if (!formData.name.trim()) {
       if (showToast) showToast('Please enter a valid Zone Name', 'warning');
@@ -719,10 +736,10 @@ const ZoneManagement = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [formData, drawPoints, editingZoneId, showToast, fetchZones]);
 
   // Trigger Zone Editing
-  const handleEditZone = (zone) => {
+  const handleEditZone = useCallback((zone) => {
     setEditingZoneId(zone.id);
     setFormData({
       name: zone.name,
@@ -741,10 +758,10 @@ const ZoneManagement = () => {
     const center = getPolygonCenter(zone.coordinates);
     setMapCenter(center);
     setMapZoom(13);
-  };
+  }, []);
 
   // Quick enable/disable status toggle from card
-  const handleToggleStatus = async (id, currentStatus) => {
+  const handleToggleStatus = useCallback(async (id, currentStatus) => {
     try {
       setLoading(true);
       await ZoneService.toggleZoneStatus(id);
@@ -756,10 +773,10 @@ const ZoneManagement = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showToast, fetchZones]);
 
   // Delete Zone Handler
-  const handleDeleteZone = async () => {
+  const handleDeleteZone = useCallback(async () => {
     if (!deleteConfirmId) return;
     try {
       setLoading(true);
@@ -773,14 +790,14 @@ const ZoneManagement = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [deleteConfirmId, showToast, fetchZones]);
 
   // Center/Zoom map to specific zone
-  const handleFocusZone = (coordinates) => {
+  const handleFocusZone = useCallback((coordinates) => {
     const center = getPolygonCenter(coordinates);
     setMapCenter(center);
     setMapZoom(13);
-  };
+  }, []);
 
   const parentOptions = useMemo(() => {
     if (formData.zoneLevel === 'state') return [];
@@ -797,25 +814,25 @@ const ZoneManagement = () => {
     const states = zones.filter(z => z.zoneLevel === 'state');
     const cities = zones.filter(z => z.zoneLevel === 'city');
     const micros = zones.filter(z => z.zoneLevel === 'micro');
-    
+
     return states.map(state => {
       const stateCities = cities.filter(c => {
         const pId = c.parentZone?._id || c.parentZone;
         return pId === state.id;
       });
-      
+
       const cityNodes = stateCities.map(city => {
         const cityMicros = micros.filter(m => {
           const pId = m.parentZone?._id || m.parentZone;
           return pId === city.id;
         });
-        
+
         return {
           ...city,
           children: cityMicros
         };
       });
-      
+
       return {
         ...state,
         children: cityNodes
@@ -823,29 +840,12 @@ const ZoneManagement = () => {
     });
   }, [zones]);
 
-  const toggleNode = (nodeId) => {
+  const toggleNode = useCallback((nodeId) => {
     setExpandedNodes(prev => ({
       ...prev,
       [nodeId]: !prev[nodeId]
     }));
-  };
-
-  const handleOpenAnalytics = async (zoneId) => {
-    try {
-      setAnalyticsModal({ open: true, zone: null, loading: true });
-      const res = await ZoneService.getZoneById(zoneId);
-      if (res.data?.success) {
-        setAnalyticsModal({ open: true, zone: res.data.data, loading: false });
-      } else {
-        setAnalyticsModal({ open: false, zone: null, loading: false });
-        if (showToast) showToast('Failed to fetch zone details', 'error');
-      }
-    } catch (err) {
-      console.error('Error fetching zone details:', err);
-      setAnalyticsModal({ open: false, zone: null, loading: false });
-      if (showToast) showToast('Failed to fetch zone details', 'error');
-    }
-  };
+  }, []);
 
   // Search and Filters Logic
   const filteredZones = useMemo(() => {
@@ -1268,7 +1268,7 @@ const ZoneManagement = () => {
                           <button onClick={() => handleOpenAnalytics(stateNode.id)} className="p-0.5 hover:bg-gray-150 text-indigo-500 rounded" title="View Analytics"><Activity className="w-3.5 h-3.5" /></button>
                         </div>
                       </div>
-                      
+
                       {/* Render Children (Cities) */}
                       {stateNode.children && stateNode.children.length > 0 && (
                         <div className="mt-1 space-y-1">
@@ -1286,7 +1286,7 @@ const ZoneManagement = () => {
                                   <button onClick={() => handleOpenAnalytics(cityNode.id)} className="p-0.5 hover:bg-gray-150 text-indigo-500 rounded" title="View Analytics"><Activity className="w-3.5 h-3.5" /></button>
                                 </div>
                               </div>
-                              
+
                               {/* Render Children (Micro Zones) */}
                               {cityNode.children && cityNode.children.length > 0 && (
                                 <div className="mt-1 space-y-1">
@@ -1733,9 +1733,8 @@ const ZoneManagement = () => {
                     <span className="bg-primary/10 text-primary px-2 py-0.5 rounded uppercase font-black tracking-wider text-[9px]">
                       {analyticsModal.zone.zoneLevel}
                     </span>
-                    <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${
-                      analyticsModal.zone.status === 'active' ? 'bg-emerald-50 border border-emerald-250 text-emerald-700' : 'bg-gray-100 border border-gray-200 text-gray-500'
-                    }`}>
+                    <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${analyticsModal.zone.status === 'active' ? 'bg-emerald-50 border border-emerald-250 text-emerald-700' : 'bg-gray-100 border border-gray-200 text-gray-500'
+                      }`}>
                       {analyticsModal.zone.status === 'active' ? 'Active' : 'Disabled'}
                     </span>
                   </div>
@@ -1833,11 +1832,10 @@ const ZoneManagement = () => {
                                 <p className="text-[9px] text-gray-550 truncate text-left">{provider.email}</p>
                                 <p className="text-[9px] text-gray-400 font-semibold text-left">{provider.phone || 'No phone'}</p>
                               </div>
-                              <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider shrink-0 ${
-                                provider.status === 'available' ? 'bg-emerald-50 border border-emerald-250 text-emerald-700' :
+                              <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider shrink-0 ${provider.status === 'available' ? 'bg-emerald-50 border border-emerald-250 text-emerald-700' :
                                 provider.status === 'busy' ? 'bg-amber-50 border border-amber-200 text-amber-700' :
-                                'bg-gray-100 border border-gray-200 text-gray-500'
-                              }`}>
+                                  'bg-gray-100 border border-gray-200 text-gray-500'
+                                }`}>
                                 {provider.status}
                               </span>
                             </div>
@@ -1920,22 +1918,22 @@ const HierarchicalZoneSelector = ({
     const states = zones.filter(z => z.zoneLevel === 'state' || !z.zoneLevel);
     const cities = zones.filter(z => z.zoneLevel === 'city');
     const micros = zones.filter(z => z.zoneLevel === 'micro');
-    
+
     return states.map(state => {
       const stateCities = cities.filter(c => {
         const pId = c.parentZone?._id || c.parentZone;
         return pId?.toString() === (state._id || state.id)?.toString();
       });
-      
+
       const cityNodes = stateCities.map(city => {
         const cityMicros = micros.filter(m => {
           const pId = m.parentZone?._id || m.parentZone;
           return pId?.toString() === (city._id || city.id)?.toString();
         });
-        
+
         return { ...city, children: cityMicros };
       });
-      
+
       return { ...state, children: cityNodes };
     });
   }, [zones]);
@@ -1943,7 +1941,7 @@ const HierarchicalZoneSelector = ({
   const filteredTree = useMemo(() => {
     if (!searchQuery) return tree;
     const lowerQuery = searchQuery.toLowerCase();
-    
+
     const filterNodes = (nodes) => {
       return nodes.map(node => {
         const matchesSelf = node.name?.toLowerCase().includes(lowerQuery) || node.city?.toLowerCase().includes(lowerQuery);
@@ -1952,7 +1950,7 @@ const HierarchicalZoneSelector = ({
           filteredChildren = filterNodes(node.children);
         }
         const matchesChildren = filteredChildren.length > 0;
-        
+
         if (matchesSelf || matchesChildren) {
           return {
             ...node,
@@ -1963,7 +1961,7 @@ const HierarchicalZoneSelector = ({
         return null;
       }).filter(Boolean);
     };
-    
+
     return filterNodes(tree);
   }, [tree, searchQuery]);
 
@@ -1982,7 +1980,7 @@ const HierarchicalZoneSelector = ({
 
     return (
       <div key={nodeId} className="select-none">
-        <div 
+        <div
           className="flex items-center hover:bg-gray-50 py-1.5 px-2 rounded-lg cursor-pointer transition-colors text-left"
           style={{ paddingLeft: `${depth * 20 + 8}px` }}
           onClick={() => onChange(node)}
@@ -2002,7 +2000,7 @@ const HierarchicalZoneSelector = ({
           <input
             type="checkbox"
             checked={checked}
-            onChange={() => {}}
+            onChange={() => { }}
             className="h-4 w-4 text-primary border-gray-300 rounded focus:ring-primary mr-2 cursor-pointer"
           />
 
@@ -2068,7 +2066,7 @@ const HierarchicalZoneSelector = ({
           {(selectedZoneIds || []).map(id => {
             const zone = zones.find(z => (z._id || z.id)?.toString() === id.toString());
             if (!zone) return null;
-            
+
             let badgeColor = 'bg-teal-50 text-teal-800 border-teal-200';
             if (zone.zoneLevel === 'city') badgeColor = 'bg-blue-50 text-blue-800 border-blue-200';
             if (zone.zoneLevel === 'micro') badgeColor = 'bg-purple-50 text-purple-800 border-purple-200';

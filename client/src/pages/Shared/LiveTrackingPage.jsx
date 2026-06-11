@@ -6,7 +6,7 @@ import {
   MapPin, Phone, Star, Shield, ArrowLeft, Navigation, Clock, ShieldCheck, HelpCircle, PhoneCall
 } from 'lucide-react';
 import { toast } from 'react-toastify';
-import Loader from '../../components/Loader';
+import Loader from '../../components/ui-skeletons/Loader';
 import LiveTrackingMapUI from '../../components/LiveTrackingMapUI';
 import * as BookingService from '../../services/BookingService';
 import { filterGPSJitter } from '../../utils/format';

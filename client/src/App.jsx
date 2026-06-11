@@ -25,7 +25,7 @@ const TermsAndConditions = lazyWithRetry(() => import("./pages/TermsAndCondition
 const PrivacyPolicy = lazyWithRetry(() => import("./pages/PrivacyPolicy"));
 const NotFound = lazyWithRetry(() => import("./pages/NotFound"));
 
-import LoadingSpinner from "./components/Loader";
+import LoadingSpinner from "./components/ui-skeletons/Loader";
 import RefundPolicy from "./pages/RefundPolicy";
 
 // Lazy-load wrapper: auto-reloads page once on chunk load failure (stale deployment)

@@ -5,7 +5,7 @@ import {
   FiTrendingUp, FiClock, FiAlertCircle, FiCreditCard,
   FiPieChart, FiBriefcase, FiChevronRight, FiLock, FiUnlock, FiAlertTriangle
 } from 'react-icons/fi';
-import Loader from '../../components/Loader';
+import Loader from '../../components/ui-skeletons/Loader';
 import { useAuth } from '../../context/auth';
 import * as ProviderService from '../../services/ProviderService';
 import * as BookingService from '../../services/BookingService';

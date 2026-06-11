@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
+import ProfileSkeleton from '../../components/ui-skeletons/ProfileSkeleton';
 import { useAuth } from '../../context/auth';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 import { getProfile, updateProfile, updateprofilepic, toggleFavoriteProvider } from '../../services/CustomerService';
 import AddressSelector from '../../components/AddressSelector';
+import Processing from '../../components/ui-skeletons/Processing';
 import * as NotificationService from '../../services/NotificationService';
 import {
     User, MapPin, Mail, Phone, Camera, LogOut, Shield, Bell,
@@ -46,6 +48,7 @@ const UserProfile = () => {
         customDiscount: 0,
         wallet: { availableBalance: 0, totalRefunded: 0, lastUpdated: new Date() }
     });
+    const [pageLoading, setPageLoading] = useState(true);
     const [isEditing, setIsEditing] = useState(false);
     const [isEditingAddress, setIsEditingAddress] = useState(false);
     const [activeTab, setActiveTab] = useState('profile');
@@ -57,66 +60,9 @@ const UserProfile = () => {
     const [couponsLoading, setCouponsLoading] = useState(false);
 
 
-    const [preferences, setPreferences] = useState({
-        booking: true,
-        payment: true,
-        complaint: true,
-        promotional: true,
-        providerUpdates: true,
-        adminAlerts: true,
-        wallet: true,
-        reminder: true,
-        pushEnabled: true,
-        quietHours: { enabled: false, start: '22:00', end: '08:00' }
-    });
-    const [prefLoading, setPrefLoading] = useState(false);
 
-    const fetchPreferences = async () => {
-        try {
-            setPrefLoading(true);
-            const res = await NotificationService.getPreferences();
-            if (res.data?.success) {
-                setPreferences(res.data.data);
-            }
-        } catch (err) {
-            toast.error('Failed to load notification settings');
-        } finally {
-            setPrefLoading(false);
-        }
-    };
 
-    useEffect(() => {
-        if (activeTab === 'settings') {
-            fetchPreferences();
-        }
-    }, [activeTab]);
 
-    const handleTogglePreference = async (key) => {
-        try {
-            const updatedVal = !preferences[key];
-            const res = await NotificationService.updatePreferences({ [key]: updatedVal });
-            if (res.data?.success) {
-                setPreferences(res.data.data);
-                toast.success('Notification preference updated!');
-            }
-        } catch (err) {
-            toast.error('Failed to update preference');
-        }
-    };
-
-    const handleQuietHoursChange = async (fields) => {
-        try {
-            const res = await NotificationService.updatePreferences({
-                quietHours: { ...preferences.quietHours, ...fields }
-            });
-            if (res.data?.success) {
-                setPreferences(res.data.data);
-                toast.success('Quiet hours updated!');
-            }
-        } catch (err) {
-            toast.error('Failed to update quiet hours');
-        }
-    };
 
     useEffect(() => {
         if (user) {
@@ -154,18 +100,7 @@ const UserProfile = () => {
         }
     };
 
-    const fetchProfile = async () => {
-        try {
-            const response = await getProfile();
-            const data = response.data;
-            setProfile({
-                ...data.user,
-                address: data.user.address || { street: '', city: '', state: '', postalCode: '' }
-            });
-        } catch (error) {
-            toast.error(error.message);
-        }
-    };
+
 
     const handleBookAgainFavorite = async (fp) => {
         try {
@@ -213,32 +148,6 @@ const UserProfile = () => {
         setProfile(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleAddressChange = (e) => {
-        const { name, value } = e.target;
-        setProfile(prev => {
-            const updatedAddress = { ...prev.address, [name]: value };
-            if (name === 'postalCode') {
-                updatedAddress.pincode = value;
-            } else if (name === 'pincode') {
-                updatedAddress.postalCode = value;
-            }
-
-            // Construct street address dynamically
-            const parts = [];
-            if (updatedAddress.houseNumber) parts.push(updatedAddress.houseNumber);
-            if (updatedAddress.road) parts.push(updatedAddress.road);
-            updatedAddress.street = parts.join(', ') || updatedAddress.street || '';
-            updatedAddress.addressLine = updatedAddress.street;
-
-            // Update formatted address preview
-            updatedAddress.formattedAddress = buildAddressPreview(updatedAddress);
-
-            return {
-                ...prev,
-                address: updatedAddress
-            };
-        });
-    };
 
     // Only saves name and phone — never touches address
     const handleSubmit = async (e) => {
@@ -307,7 +216,31 @@ const UserProfile = () => {
         }
     };
 
-    return (
+// Fetch profile data
+const fetchProfile = async () => {
+  try {
+    setPageLoading(true);
+    const res = await getProfile();
+    if (res?.data?.user) {
+      setProfile(prev => ({ ...prev, ...res.data.user }));
+    }
+  } catch (err) {
+    console.error(err);
+    toast.error('Failed to load profile');
+  } finally {
+    setPageLoading(false);
+  }
+};
+
+useEffect(() => {
+  fetchProfile();
+}, []);
+
+
+    if (pageLoading) {
+    return <ProfileSkeleton />;
+  }
+  return (
         <div className="min-h-screen bg-gray-50">
             {/* Header */}
             <div className="sticky top-0 z-20 bg-white border-b border-gray-100 shadow-sm">
@@ -504,9 +437,9 @@ const UserProfile = () => {
                                                     className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20"
                                                 />
                                             </div>
-                                            <button type="submit" disabled={loading} className="w-full py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50">
-                                                {loading ? 'Saving...' : 'Save Name & Phone'}
-                                            </button>
+                                            <Processing type="submit" loading={loading} loadingText="Saving..." className="w-full py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50">
+                                                Save Name & Phone
+                                            </Processing>
                                         </form>
                                     ) : (
                                         <div className="space-y-3">
@@ -546,9 +479,9 @@ const UserProfile = () => {
                                                 address={profile.address}
                                                 onChange={(updatedAddress) => setProfile(prev => ({ ...prev, address: updatedAddress }))}
                                             />
-                                            <button type="submit" disabled={addressLoading} className="w-full py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50">
-                                                {addressLoading ? 'Saving Address...' : 'Save Address'}
-                                            </button>
+                                            <Processing type="submit" loading={addressLoading} loadingText="Saving Address..." className="w-full py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50">
+                                                Save Address
+                                            </Processing>
                                         </form>
                                     ) : (
                                         <div className="flex items-start gap-3">

@@ -57,6 +57,9 @@ export const AuthProvider = ({ children }) => {
 
     // Toast notification
     const showToast = (message, type = 'success') => {
+        if (message === 'silent_cancel' || message === 'canceled' || message === 'Duplicate request blocked') {
+            return;
+        }
         toast[type](message, {
             position: "top-right",
             autoClose: 3000,

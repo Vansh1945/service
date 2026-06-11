@@ -5,8 +5,10 @@ import { FaEdit, FaTrash, FaToggleOn, FaToggleOff, FaPlus, FaSave, FaTimes, FaIm
 import * as SystemService from '../../services/SystemService';
 import useCategory from '../../hooks/useCategory';
 import { formatDate } from '../../utils/format';
+import { useConfirm } from '../../context/ConfirmContext';
 
 const CategoryBanner = () => {
+  const confirm = useConfirm();
   const { categories, loading: categoriesLoading, refresh: refreshCategories } = useCategory(true);
   const [banners, setBanners] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -115,7 +117,13 @@ const CategoryBanner = () => {
   };
 
   const removeBanner = async (id) => {
-    if (!window.confirm('Are you sure you want to remove this banner?')) return;
+    const isConfirmed = await confirm({
+      title: 'Remove Banner',
+      message: 'Are you sure you want to remove this banner? This action cannot be undone.',
+      type: 'danger',
+      confirmText: 'Remove',
+    });
+    if (!isConfirmed) return;
 
     try {
       await SystemService.deleteBanner(id);
@@ -179,7 +187,13 @@ const CategoryBanner = () => {
   };
 
   const deleteCategory = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this category?')) return;
+    const isConfirmed = await confirm({
+      title: 'Delete Category',
+      message: 'Are you sure you want to delete this category? This action cannot be undone.',
+      type: 'danger',
+      confirmText: 'Delete',
+    });
+    if (!isConfirmed) return;
 
     try {
       await SystemService.deleteCategory(id);

@@ -1,15 +1,18 @@
+import BaseCrudService from "./BaseCrudService";
 import axiosInstance from "../api/axiosInstance";
 
+const commissionRuleService = new BaseCrudService("/commission/rules");
+
 export const createCommissionRule = (data) => {
-    return axiosInstance.post("/commission/rules", data);
+    return commissionRuleService.create(data);
 };
 
 export const listCommissionRules = (params) => {
-    return axiosInstance.get("/commission/rules", { params });
+    return commissionRuleService.getAll(params);
 };
 
 export const getCommissionRuleById = (id) => {
-    return axiosInstance.get(`/commission/rules/${id}`);
+    return commissionRuleService.getById(id);
 };
 
 export const toggleCommissionRuleStatus = (id) => {
@@ -17,11 +20,9 @@ export const toggleCommissionRuleStatus = (id) => {
 };
 
 export const updateCommissionRule = (id, data) => {
-    return axiosInstance.put(`/commission/rules/${id}`, data);
+    return commissionRuleService.update(id, data);
 };
 
 export const deleteCommissionRule = (id) => {
-    return axiosInstance.delete(`/commission/rules/${id}`);
+    return commissionRuleService.delete(id);
 };
-
-

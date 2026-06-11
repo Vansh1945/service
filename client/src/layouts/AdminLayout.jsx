@@ -70,8 +70,8 @@ const AdminLayout = () => {
 
   const menuItems = [
     { name: 'Dashboard', path: '/admin/dashboard', icon: <FiHome className="w-5 h-5" /> },
-    { name: 'Pending Providers', path: '/admin/approve-providers', icon: <FiCheckCircle className="w-5 h-5" /> },
-    { name: 'Approved Providers', path: '/admin/providers', icon: <FiUsers className="w-5 h-5" /> },
+    { name: 'Approved Providers', path: '/admin/approve-providers', icon: <FiCheckCircle className="w-5 h-5" /> },
+    { name: 'Pending Providers', path: '/admin/providers', icon: <FiUsers className="w-5 h-5" /> },
     { name: 'All Customers', path: '/admin/customers', icon: <FiUser className="w-5 h-5" /> },
     { name: 'Bookings', path: '/admin/bookings', icon: <FiCalendar className="w-5 h-5" /> },
     { name: 'Transactions', path: '/admin/transactions', icon: <FiActivity className="w-5 h-5" /> },

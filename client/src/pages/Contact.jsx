@@ -21,6 +21,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/auth';
 import * as SystemService from '../services/SystemService';
 import * as ContactService from '../services/ContactService';
+import Processing from '../components/ui-skeletons/Processing';
 
 const Contact = () => {
   const { API, showToast } = useAuth();
@@ -274,23 +275,14 @@ const Contact = () => {
                   ></textarea>
                 </div>
 
-                <button
+                <Processing
                   type="submit"
-                  disabled={isSubmitting}
+                  loading={isSubmitting}
+                  loadingText="Sending..."
                   className="w-full bg-accent text-white font-semibold py-3 px-6 rounded-lg flex items-center justify-center gap-2 hover:bg-accent/90 transition-colors disabled:opacity-50 shadow-lg shadow-accent/20"
                 >
-                  {isSubmitting ? (
-                    <>
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                      Sending...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-4 h-4" />
-                      Send Message
-                    </>
-                  )}
-                </button>
+                  <Send className="w-4 h-4" /> Send Message
+                </Processing>
 
                 <div className="flex items-center justify-center gap-6 text-sm text-gray-500">
                   <div className="flex items-center gap-1">

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../../context/auth';
+import { useConfirm } from '../../context/ConfirmContext';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import {
@@ -10,6 +11,7 @@ import {
 import * as AdminService from '../../services/AdminService';
 import * as NotificationService from '../../services/NotificationService';
 import Pagination from '../../components/Pagination';
+import Processing from '../../components/ui-skeletons/Processing';
 import { formatDate } from '../../utils/format';
 
 // Debounce hook for search optimization
@@ -31,6 +33,7 @@ const useDebounce = (value, delay) => {
 
 const AdminProfile = () => {
   const { user, logoutUser, API } = useAuth();
+  const confirm = useConfirm();
   const [profile, setProfile] = useState(null);
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -65,64 +68,6 @@ const AdminProfile = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [preferences, setPreferences] = useState({
-    booking: true,
-    payment: true,
-    complaint: true,
-    promotional: true,
-    providerUpdates: true,
-    adminAlerts: true,
-    wallet: true,
-    reminder: true,
-    pushEnabled: true,
-    quietHours: { enabled: false, start: '22:00', end: '08:00' }
-  });
-  const [prefLoading, setPrefLoading] = useState(false);
-
-  const fetchPreferences = useCallback(async () => {
-    try {
-      setPrefLoading(true);
-      const res = await NotificationService.getPreferences();
-      if (res.data?.success) {
-        setPreferences(res.data.data);
-      }
-    } catch (err) {
-      toast.error('Failed to load notification settings');
-    } finally {
-      setPrefLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchPreferences();
-  }, [fetchPreferences]);
-
-  const handleTogglePreference = async (key) => {
-    try {
-      const updatedVal = !preferences[key];
-      const res = await NotificationService.updatePreferences({ [key]: updatedVal });
-      if (res.data?.success) {
-        setPreferences(res.data.data);
-        toast.success('Notification preference updated!');
-      }
-    } catch (err) {
-      toast.error('Failed to update preference');
-    }
-  };
-
-  const handleQuietHoursChange = async (fields) => {
-    try {
-      const res = await NotificationService.updatePreferences({
-        quietHours: { ...preferences.quietHours, ...fields }
-      });
-      if (res.data?.success) {
-        setPreferences(res.data.data);
-        toast.success('Quiet hours updated!');
-      }
-    } catch (err) {
-      toast.error('Failed to update quiet hours');
-    }
-  };
 
   // Fetch admin profile
   const fetchProfile = useCallback(async () => {
@@ -291,9 +236,14 @@ const AdminProfile = () => {
 
   // Delete admin
   const handleDeleteAdmin = async (adminId) => {
-    if (!window.confirm('Are you sure you want to delete this admin?')) {
-      return;
-    }
+    const isConfirmed = await confirm({
+      title: 'Delete Admin',
+      message: 'Are you sure you want to delete this admin? This action cannot be undone.',
+      type: 'danger',
+      confirmText: 'Delete',
+    });
+
+    if (!isConfirmed) return;
 
     try {
       await AdminService.deleteAdmin(adminId);
@@ -706,14 +656,14 @@ const AdminProfile = () => {
                     >
                       Cancel
                     </button>
-                    <button
+                    <Processing
                       type="submit"
-                      className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-700 transition disabled:opacity-50 flex items-center"
-                      disabled={isSubmitting}
+                      loading={isSubmitting}
+                      loadingText="Registering..."
+                      className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-700 transition disabled:opacity-50 flex items-center font-semibold text-sm"
                     >
-                      {isSubmitting && <FiLoader className="animate-spin mr-2" />}
                       Register Admin
-                    </button>
+                    </Processing>
                   </div>
                 </form>
               </div>
@@ -879,14 +829,14 @@ const AdminProfile = () => {
                     >
                       Cancel
                     </button>
-                    <button
+                    <Processing
                       type="submit"
-                      className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-700 transition disabled:opacity-50 flex items-center"
-                      disabled={isSubmitting}
+                      loading={isSubmitting}
+                      loadingText="Updating..."
+                      className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-700 transition disabled:opacity-50 flex items-center font-semibold text-sm"
                     >
-                      {isSubmitting && <FiLoader className="animate-spin mr-2" />}
                       Update Profile
-                    </button>
+                    </Processing>
                   </div>
                 </form>
               </div>

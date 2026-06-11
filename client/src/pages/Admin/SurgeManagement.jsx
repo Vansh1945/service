@@ -29,6 +29,7 @@ import {
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useAuth } from '../../context/auth';
+import { useConfirm } from '../../context/ConfirmContext';
 import * as SurgeService from '../../services/SurgeService';
 import { getAllZones } from '../../services/ZoneService';
 import * as SystemService from '../../services/SystemService';
@@ -50,6 +51,7 @@ const getChargeTypeConfig = (val) => CHARGE_TYPES.find(t => t.value === val) || 
 const SurgeManagement = () => {
   const { showToast } = useAuth();
   const location = useLocation();
+  const confirm = useConfirm();
 
   // Data
   const [surgeRules, setSurgeRules] = useState([]);
@@ -387,7 +389,15 @@ const SurgeManagement = () => {
   };
 
   const handleDeleteRule = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this surge rule permanently?')) return;
+    const isConfirmed = await confirm({
+      title: 'Delete Surge Rule',
+      message: 'Are you sure you want to delete this surge rule permanently? This action cannot be undone.',
+      type: 'danger',
+      confirmText: 'Delete',
+    });
+
+    if (!isConfirmed) return;
+
     try {
       const response = await SurgeService.deleteSurgeRule(id);
       if (response.data?.success) {

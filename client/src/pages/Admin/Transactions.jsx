@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
-import Loader from '../../components/Loader';
+import TableSkeleton from '../../components/ui-skeletons/TableSkeleton';
 import * as TransactionService from '../../services/TransactionService';
 import Pagination from '../../components/Pagination';
 import { useAdminFilter } from '../../context/AdminFilterContext';
@@ -327,11 +327,7 @@ const AdminTransactions = () => {
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {loading ? (
-                                <tr>
-                                    <td colSpan="9" className="py-20 text-center">
-                                        <Loader />
-                                    </td>
-                                </tr>
+                                <TableSkeleton rows={8} cols={9} />
                             ) : transactions.length === 0 ? (
                                 <tr>
                                     <td colSpan="9" className="py-20 text-center text-gray-400">
@@ -416,13 +412,13 @@ const AdminTransactions = () => {
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 text-right">
-                                                <span className={`text-sm font-bold ${txn.type === 'refund' ? 'text-red-650' : 'text-secondary'}`}>
+                                                <span className={`text-sm font-bold ${txn.type === 'refund' ? 'text-red-600' : 'text-secondary'}`}>
                                                     {txn.type === 'refund' ? '-' : ''}{formatCurrency(grossBilled)}
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 text-right">
                                                 <div className="flex flex-col items-end">
-                                                    <span className={`text-sm font-semibold ${txn.type === 'refund' ? 'text-red-650' : 'text-gray-700'}`}>
+                                                    <span className={`text-sm font-semibold ${txn.type === 'refund' ? 'text-red-600' : 'text-gray-700'}`}>
                                                         {txn.type === 'refund' ? '-' : ''}{formatCurrency(commissionSplit)}
                                                     </span>
                                                     {txn.commissionRule?.name && (
@@ -434,7 +430,7 @@ const AdminTransactions = () => {
                                             </td>
                                             <td className="px-6 py-4 text-right">
                                                 <div className="flex flex-col items-end">
-                                                    <span className={`text-sm font-semibold ${txn.type === 'refund' ? 'text-red-650' : 'text-gray-700'}`}>
+                                                    <span className={`text-sm font-semibold ${txn.type === 'refund' ? 'text-red-600' : 'text-gray-700'}`}>
                                                         {txn.type === 'refund' ? '-' : ''}{formatCurrency(totalSurcharges)}
                                                     </span>
                                                     {totalSurcharges > 0 && (
@@ -446,12 +442,12 @@ const AdminTransactions = () => {
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 text-right">
-                                                <span className={`text-sm font-bold ${txn.type === 'refund' ? 'text-red-650' : 'text-green-600'}`}>
+                                                <span className={`text-sm font-bold ${txn.type === 'refund' ? 'text-red-600' : 'text-green-600'}`}>
                                                     {txn.type === 'refund' ? '-' : ''}{formatCurrency(finalProviderReceivable)}
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 text-right">
-                                                <span className={`text-sm font-bold ${txn.type === 'refund' ? 'text-red-650' : 'text-primary'}`}>
+                                                <span className={`text-sm font-bold ${txn.type === 'refund' ? 'text-red-600' : 'text-primary'}`}>
                                                     {txn.type === 'refund' ? '-' : ''}{formatCurrency(finalPlatformRevenue)}
                                                 </span>
                                             </td>

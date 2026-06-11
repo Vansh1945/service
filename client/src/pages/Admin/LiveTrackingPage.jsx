@@ -6,7 +6,7 @@ import * as ZoneService from '../../services/ZoneService';
 import * as BookingService from '../../services/BookingService';
 import * as ComplaintService from '../../services/ComplaintService';
 
-import Loader from '../../components/Loader';
+import Loader from '../../components/ui-skeletons/Loader';
 import { MapContainer, TileLayer, Marker, Tooltip, Popup, useMap, Polyline, Polygon } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet.heat';

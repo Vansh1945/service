@@ -8,7 +8,7 @@ import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useAuth } from '../../context/auth';
 import Rating from '@mui/material/Rating';
-import LoadingSpinner from '../../components/Loader';
+import ServiceCardSkeleton from '../../components/ui-skeletons/ServiceCardSkeleton';
 import HeroSection from '../../components/HeroSection';
 import ErrorState from '../../components/Error';
 import { getPublicServices } from '../../services/ServiceService';
@@ -262,7 +262,20 @@ const ServiceListingPage = () => {
     };
   }, []);
 
-  if (initialLoading) return <LoadingSpinner />;
+  if (initialLoading) {
+    return (
+      <div className="min-h-screen pt-20 md:pt-24 lg:pt-28">
+        <HeroSection noMargin />
+        <div className="max-w-[98%] mx-auto px-2 md:px-4 py-6 pb-24 md:pb-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <ServiceCardSkeleton key={i} />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (error && allServices.length === 0) {
     return (

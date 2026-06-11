@@ -42,7 +42,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/auth';
 import * as AdminService from '../../services/AdminService';
-import LoadingSpinner from '../../components/Loader';
+import LoadingSpinner from '../../components/ui-skeletons/Loader';
 import { formatDate } from '../../utils/format';
 import { useAdminFilter } from '../../context/AdminFilterContext';
 import AdminFilterBar from '../../components/AdminFilterBar';

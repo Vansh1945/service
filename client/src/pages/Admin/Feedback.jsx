@@ -8,7 +8,6 @@ import {
 } from 'lucide-react';
 import Pagination from '../../components/Pagination';
 import { formatDate } from '../../utils/format';
-
 const AdminFeedback = () => {
   const { token, API, showToast } = useAuth();
   const [feedbacks, setFeedbacks] = useState([]);
@@ -230,13 +229,15 @@ const AdminFeedback = () => {
               </thead>
               <tbody className="bg-white divide-y divide-gray-50">
                 {loading ? (
-                  Array.from({ length: 5 }).map((_, i) => (
-                    <tr key={i} className="animate-pulse">
-                      {Array.from({ length: 7 }).map((_, j) => (
-                        <td key={j} className="px-5 py-4"><div className="h-4 bg-gray-200 rounded w-24" /></td>
-                      ))}
-                    </tr>
-                  ))
+                  <tr>
+                    <td colSpan="8" className="px-5 py-4">
+                      <div className="space-y-4 p-4 animate-pulse">
+                        {[1, 2, 3].map(i => (
+                          <div key={i} className="h-10 bg-slate-100 rounded-xl w-full" />
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
                 ) : feedbacks.length === 0 ? (
                   <tr>
                     <td colSpan="7" className="px-6 py-12 text-center">

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Pagination from '../../components/Pagination';
 import { useAuth } from '../../context/auth';
+import { useConfirm } from '../../context/ConfirmContext';
 import * as QuestionService from '../../services/QuestionService';
 import * as SystemService from '../../services/SystemService';
 import { toast } from 'react-toastify';
@@ -18,6 +19,7 @@ import {
 const AdminQuestions = () => {
   const { token, isAdmin, API, showToast, logoutUser } = useAuth();
   const navigate = useNavigate();
+  const confirm = useConfirm();
 
   // Form states
   const [formData, setFormData] = useState({
@@ -211,7 +213,14 @@ const AdminQuestions = () => {
 
   // Delete question
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this question?')) return;
+    const isConfirmed = await confirm({
+      title: 'Delete Question',
+      message: 'Are you sure you want to delete this question? This action cannot be undone.',
+      type: 'danger',
+      confirmText: 'Delete',
+    });
+
+    if (!isConfirmed) return;
 
     try {
       await QuestionService.deleteQuestion(id);

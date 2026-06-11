@@ -4,9 +4,10 @@ import {
   ArrowLeft, CheckCircle, Shield, Zap,
   Sparkles, Award, Users,
   DollarSign, Calendar, FileText, Camera, CreditCard,
-  Briefcase, RotateCcw, AlertCircle, X, Info
+  Briefcase, RotateCcw, AlertCircle, X, Info, ChevronDown
 } from 'lucide-react';
 import AddressSelector from '../../components/AddressSelector';
+import Processing from '../../components/ui-skeletons/Processing';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
 import { toast } from 'react-toastify';
@@ -16,7 +17,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import useCategory from '../../hooks/useCategory';
 import * as SystemService from '../../services/SystemService';
 import * as ProviderService from '../../services/ProviderService';
-import { formatTime, compressImage } from '../../utils/format';
+import { formatTime, compressImage, buildStreetAddress } from '../../utils/format';
 
 // ─── Static sub-components (defined OUTSIDE the main component to avoid remount) ─
 
@@ -173,9 +174,7 @@ const ProviderRegistration = () => {
         }
 
         // Auto-construct street if houseNumber and road are updated
-        const houseNum = updated.houseNumber || '';
-        const rd = updated.road || '';
-        updated.street = houseNum && rd ? `${houseNum}, ${rd}` : (houseNum || rd);
+        updated.street = buildStreetAddress(updated.houseNumber, updated.road);
 
         // Re-build formattedAddress based on the changed inputs
         updated.formattedAddress = smartAddressBuilder(
@@ -1157,20 +1156,14 @@ const ProviderRegistration = () => {
                     </button>
                   )}
 
-                  <button
+                  <Processing
                     type="submit"
-                    disabled={isSubmitting}
+                    loading={isSubmitting}
+                    loadingText="Submitting..."
                     className="flex-1 flex items-center justify-center gap-2 py-3 rounded-lg bg-primary text-background text-sm font-bold hover:bg-primary/90 active:scale-[0.99] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    {isSubmitting ? (
-                      <>
-                        <div className="h-4 w-4 rounded-full border-2 border-background border-t-transparent animate-spin" />
-                        Submitting...
-                      </>
-                    ) : (
-                      submitLabel[step]
-                    )}
-                  </button>
+                    {submitLabel[step]}
+                  </Processing>
                 </div>
               </form>
 

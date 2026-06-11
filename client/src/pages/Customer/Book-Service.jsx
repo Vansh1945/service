@@ -6,7 +6,8 @@ import 'react-datepicker/dist/react-datepicker.css';
 import { toast } from 'react-toastify';
 import { ArrowLeft, CheckCircle, Plus, Minus, Tag, Clock, Shield, Lock, Star, IndianRupee, Truck, RotateCcw, CalendarDays, CreditCard, Wallet, MapPin, AlertTriangle } from 'lucide-react';
 import AddressSelector from '../../components/AddressSelector';
-import Loader from '../../components/Loader';
+import Loader from '../../components/ui-skeletons/Loader';
+import Processing from '../../components/ui-skeletons/Processing';
 import { getPublicServiceById } from '../../services/ServiceService';
 import { getAvailableCoupons, applyCoupon as applyCouponAPI } from '../../services/CouponService';
 import { createBooking } from '../../services/BookingService';
@@ -1162,17 +1163,16 @@ const BookService = () => {
                     className="flex-1 px-3 py-2 text-sm font-semibold border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 uppercase placeholder:normal-case"
                     disabled={!!formData.appliedCoupon}
                   />
-                  <button
+                  <Processing
+                    type="button"
                     onClick={applyCoupon}
-                    disabled={isApplyingCoupon || !!formData.appliedCoupon || !formData.couponCode.trim()}
+                    disabled={!!formData.appliedCoupon || !formData.couponCode.trim()}
+                    loading={isApplyingCoupon}
+                    loadingText="Applying..."
                     className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-bold hover:bg-primary/90 disabled:bg-gray-300 transition-all active:scale-95 flex items-center justify-center min-w-[75px]"
                   >
-                    {isApplyingCoupon ? (
-                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                    ) : (
-                      'Apply'
-                    )}
-                  </button>
+                    Apply
+                  </Processing>
                 </div>
                 {formData.appliedCoupon && (
                   <div className="mt-2 p-2 bg-green-50 rounded-lg flex justify-between items-center">
@@ -1197,27 +1197,19 @@ const BookService = () => {
               </div>
 
               {/* Confirm Booking Button */}
-              <button
+              <Processing
                 onClick={handleSubmit}
-                disabled={isSubmitting}
+                loading={isSubmitting}
+                loadingText="Processing..."
                 className="w-full bg-accent text-white py-3 rounded-xl font-semibold hover:bg-accent/90 transition-all disabled:bg-gray-300 flex items-center justify-center gap-2 text-sm"
               >
-                {isSubmitting ? (
-                  <>
-                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="w-4 h-4" />
-                    {formData.paymentMethod === 'cash'
-                      ? `Confirm Booking • ${formatCurrency(totalAmount)}`
-                      : formData.paymentMethod === 'wallet'
-                        ? `Pay via Wallet • ${formatCurrency(totalAmount)}`
-                        : `Pay ${formatCurrency(totalAmount)}`}
-                  </>
-                )}
-              </button>
+                <CheckCircle className="w-4 h-4" />
+                {formData.paymentMethod === 'cash'
+                  ? `Confirm Booking • ${formatCurrency(totalAmount)}`
+                  : formData.paymentMethod === 'wallet'
+                    ? `Pay via Wallet • ${formatCurrency(totalAmount)}`
+                    : `Pay ${formatCurrency(totalAmount)}`}
+              </Processing>
 
               {/* Security & Trust Badges */}
               <div className="flex justify-center gap-4 text-xs text-gray-400 pt-2">

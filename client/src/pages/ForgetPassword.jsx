@@ -8,6 +8,7 @@ import { useAuth } from '../context/auth';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { forgetpassword, verifyotp, resendotp, resetpassword } from '../services/AuthService';
+import Processing from '../components/ui-skeletons/Processing';
 
 // ─── Static sub-components (defined OUTSIDE to avoid remount) ──────────────
 
@@ -164,10 +165,10 @@ const ForgotPassword = () => {
               <div className="flex flex-col items-center gap-1.5 min-w-0">
                 <div
                   className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${done
-                      ? 'bg-primary text-background'
-                      : active
-                        ? 'bg-accent text-background ring-4 ring-accent/20 border-2 border-accent'
-                        : 'bg-gray-100 text-gray-400'
+                    ? 'bg-primary text-background'
+                    : active
+                      ? 'bg-accent text-background ring-4 ring-accent/20 border-2 border-accent'
+                      : 'bg-gray-100 text-gray-400'
                     }`}
                 >
                   {done ? (
@@ -223,8 +224,8 @@ const ForgotPassword = () => {
           <div
             key={title}
             className={`rounded-xl border p-4 transition-all hover:shadow-sm ${color === 'primary'
-                ? 'border-primary/20 bg-primary/5 hover:border-primary/30'
-                : 'border-accent/20 bg-accent/5 hover:border-accent/30'
+              ? 'border-primary/20 bg-primary/5 hover:border-primary/30'
+              : 'border-accent/20 bg-accent/5 hover:border-accent/30'
               }`}
           >
             <div
@@ -394,23 +395,14 @@ const ForgotPassword = () => {
                 {renderStepContent()}
 
                 <div className="mt-10">
-                  <button
+                  <Processing
                     onClick={step === 1 ? sendOTP : step === 2 ? verifyOTP : resetPassword}
-                    disabled={loading}
+                    loading={loading}
+                    loadingText="Processing..."
                     className="w-full flex items-center justify-center gap-2 py-3 rounded-lg bg-primary text-background text-sm font-bold hover:bg-primary/90 active:scale-[0.99] transition-all disabled:opacity-60"
                   >
-                    {loading ? (
-                      <>
-                        <div className="h-4 w-4 rounded-full border-2 border-background border-t-transparent animate-spin" />
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        {step === 1 ? 'Send OTP' : step === 2 ? 'Verify OTP' : 'Reset Password'}
-                        <ArrowRight className="w-4 h-4" />
-                      </>
-                    )}
-                  </button>
+                    {step === 1 ? 'Send OTP' : step === 2 ? 'Verify OTP' : 'Reset Password'} <ArrowRight className="w-4 h-4" />
+                  </Processing>
                 </div>
 
                 <div className="text-center mt-6">

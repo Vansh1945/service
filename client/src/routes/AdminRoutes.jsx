@@ -1,7 +1,7 @@
 import { Routes, Route } from "react-router-dom";
 import { lazy, Suspense } from "react";
 import ProtectedRoute from "../components/ProtectedRoute";
-import LoadingSpinner from "../components/Loader";
+import LoadingSpinner from "../components/ui-skeletons/Loader";
 
 const AdminLayout = lazy(() => import("../layouts/AdminLayout"));
 const AdminDashboard = lazy(() => import("../pages/Admin/Dashboard"));

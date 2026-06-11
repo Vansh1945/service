@@ -119,23 +119,7 @@ const getSpeedBadgeClass = (speedStr) => {
   return 'bg-rose-50 text-rose-600 border-rose-100 font-extrabold';
 };
 
-// 8-Column Skeleton loader for structured columns
-const TableSkeleton = () => (
-  <tbody className="divide-y divide-gray-50">
-    {Array.from({ length: 6 }).map((_, i) => (
-      <tr key={i} className="animate-pulse">
-        <td className="px-6 py-4"><div className="h-4 bg-gray-100 rounded-full w-24" /></td>
-        <td className="px-6 py-4"><div className="h-4 bg-gray-100 rounded-full w-16" /></td>
-        <td className="px-6 py-4"><div className="h-4 bg-gray-100 rounded-full w-20" /></td>
-        <td className="px-6 py-4"><div className="h-4 bg-gray-100 rounded-full w-12" /></td>
-        <td className="px-6 py-4"><div className="h-4 bg-gray-100 rounded-full w-48" /></td>
-        <td className="px-6 py-4"><div className="h-4 bg-gray-100 rounded-full w-16" /></td>
-        <td className="px-6 py-4"><div className="h-4 bg-gray-100 rounded-full w-16" /></td>
-        <td className="px-6 py-4"><div className="h-4 bg-gray-100 rounded-full w-8" /></td>
-      </tr>
-    ))}
-  </tbody>
-);
+
 
 const SystemLogs = () => {
   const { showToast } = useAuth();
@@ -416,7 +400,17 @@ const SystemLogs = () => {
                 </tr>
               </thead>
               {loading && logs.length === 0 ? (
-                <TableSkeleton />
+                <tbody>
+                  <tr>
+                    <td colSpan="8" className="px-6 py-4">
+                      <div className="space-y-4 p-4 animate-pulse">
+                        {[1, 2, 3].map(i => (
+                          <div key={i} className="h-10 bg-slate-100 rounded-xl w-full" />
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
               ) : (
                 <tbody className="divide-y divide-gray-50 font-sans text-xs">
                   {filteredLogs.length === 0 ? (

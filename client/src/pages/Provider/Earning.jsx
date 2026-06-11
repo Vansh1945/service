@@ -10,7 +10,7 @@ import * as PaymentService from '../../services/PaymentService';
 import * as ProviderService from '../../services/ProviderService';
 import { formatDate, formatTime, formatDateTime, formatCurrency, formatNumber } from '../../utils/format';
 import { getStatusConfig } from '../../utils/providerHelpers';
-import Loader from '../../components/Loader';
+import TableSkeleton from '../../components/ui-skeletons/TableSkeleton';
 
 // ── Utility Helpers ──────────────────────────────────────────────────────────
 
@@ -287,7 +287,11 @@ const ProviderEarningsDashboard = () => {
   }, [fetchSummary]);
 
   if (loading && !summary.totalEarnings && !earningsReport.length) {
-    return <Loader />;
+    return (
+      <div className="min-h-screen p-6 max-w-7xl mx-auto">
+        <TableSkeleton rows={8} cols={6} />
+      </div>
+    );
   }
 
   return (
@@ -466,7 +470,7 @@ const ProviderEarningsDashboard = () => {
           </div>
 
           {/* Tab Panels */}
-          <div className="overflow-x-auto">
+          <div className="overflow-visible">
             {/* Overview Tab */}
             {activeTab === 'dashboard' && (
               <>
@@ -564,8 +568,11 @@ const ProviderEarningsDashboard = () => {
                     <thead>
                       <tr className="border-b border-gray-100">
                         <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Booking ID</th>
+                        <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Customer</th>
+                        <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider">Provider</th>
                         <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-center">Date</th>
                         <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Amount</th>
+                        <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Price</th>
                         <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Commission</th>
                         <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Other Income</th>
                         <th className="px-6 py-4 text-xs font-medium text-secondary/40 uppercase tracking-wider text-right">Net</th>
@@ -580,11 +587,16 @@ const ProviderEarningsDashboard = () => {
                             <td className="px-6 py-4 text-xs font-mono font-medium text-secondary/60">
                               {e.bookingId || `#${e.booking?.slice(-8)}`}
                             </td>
+                            <td className="px-6 py-4 text-xs text-secondary/60">{e.customerName || '—'}</td>
+                            <td className="px-6 py-4 text-xs text-secondary/60">{e.providerName || '—'}</td>
                             <td className="px-6 py-4 text-center text-sm text-secondary/50">
                               {formatDate(e.createdAt)}
                             </td>
                             <td className="px-6 py-4 text-right text-sm text-secondary/40 line-through">
                               {formatCurrency(e.grossAmount)}
+                            </td>
+                            <td className="px-6 py-4 text-right text-sm font-medium text-primary">
+                              {formatCurrency(e.price)}
                             </td>
                             <td className="px-6 py-4 text-right">
                               <p className="text-sm text-red-500 font-medium">-{formatCurrency(e.commissionAmount)}</p>
@@ -598,7 +610,7 @@ const ProviderEarningsDashboard = () => {
                                 const nightShare = parseFloat(((e.nightCharge || 0) * (splits.night / 100)).toFixed(2));
                                 const visitingShare = parseFloat(((e.visitingCharge || 0) * (splits.visiting / 100)).toFixed(2));
                                 const demandShare = parseFloat(((e.demandSurge || 0) * (splits.demand / 100)).toFixed(2));
-                                const otherIncome = parseFloat((rainShare + trafficShare + nightShare).toFixed(2));
+                                const otherIncome = parseFloat((rainShare + trafficShare + nightShare + visitingShare + demandShare).toFixed(2));
 
                                 return (
                                   <>
@@ -613,7 +625,7 @@ const ProviderEarningsDashboard = () => {
                                       <Info className="w-3.5 h-3.5 text-emerald-600/70" />
                                     </span>
                                     {surchargeOpenId === e._id && (
-                                      <div className="absolute right-0 bottom-full mb-2 w-52 bg-slate-900 text-white text-[10px] p-2.5 rounded-lg shadow-xl z-30 leading-normal text-left">
+                                      <div className="absolute right-0 top-full mt-2 w-52 bg-slate-900 text-white text-[10px] p-2.5 rounded-lg shadow-xl z-50 leading-normal text-left">
                                         <p className="font-bold border-b border-slate-700 pb-1 mb-1 text-[11px]">Surcharge Split Details</p>
                                         <div className="flex justify-between py-0.5">
                                           <span>Rain Share</span>
@@ -634,6 +646,10 @@ const ProviderEarningsDashboard = () => {
                                         <div className="flex justify-between py-0.5 font-bold">
                                           <span>Demand Share</span>
                                           <span>{formatCurrency(demandShare)}</span>
+                                        </div>
+                                        <div className="flex justify-between py-0.5 border-t border-slate-700 mt-1 pt-1 font-bold">
+                                          <span>Total Surcharge</span>
+                                          <span>{formatCurrency(otherIncome)}</span>
                                         </div>
                                       </div>
                                     )}
@@ -673,7 +689,7 @@ const ProviderEarningsDashboard = () => {
                       const nightShare = parseFloat(((e.nightCharge || 0) * (splits.night / 100)).toFixed(2));
                       const visitingShare = parseFloat(((e.visitingCharge || 0) * (splits.visiting / 100)).toFixed(2));
                       const demandShare = parseFloat(((e.demandSurge || 0) * (splits.demand / 100)).toFixed(2));
-                      const otherIncome = parseFloat((rainShare + trafficShare + nightShare).toFixed(2));
+                      const otherIncome = parseFloat((rainShare + trafficShare + nightShare + visitingShare + demandShare).toFixed(2));
 
                       return (
                         <div key={i} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm space-y-3">
@@ -693,8 +709,11 @@ const ProviderEarningsDashboard = () => {
                             </div>
                             <div>
                               <p className="text-secondary/40">Commission</p>
-                              <p className="font-semibold text-red-500">-{formatCurrency(e.commissionAmount)} ({e.commissionRate}%)</p>
-                            </div>
+                               <p className="font-semibold text-red-500">-{formatCurrency(e.commissionAmount)} ({e.commissionRate}%)</p>
+                               <div className="px-6 py-4 text-right text-sm font-medium text-primary">
+                                 {formatCurrency(e.price)}
+                               </div>
+                             </div>
                             <div className="relative">
                               <p className="text-secondary/40 flex items-center gap-1 select-none">
                                 Other
@@ -714,7 +733,7 @@ const ProviderEarningsDashboard = () => {
                               </p>
                               {/* Tap Popover for Mobile */}
                               {surchargeOpenId === e._id && (
-                                <div className="absolute left-0 bottom-full mb-2 w-52 bg-slate-900 text-white text-[10px] p-2.5 rounded-lg shadow-xl z-30 leading-normal text-left">
+                                <div className="absolute left-0 top-full mt-2 w-52 bg-slate-900 text-white text-[10px] p-2.5 rounded-lg shadow-xl z-50 leading-normal text-left">
                                   <p className="font-bold border-b border-slate-700 pb-1 mb-1 text-[11px]">Surcharge Split Details</p>
                                   <div className="flex justify-between py-0.5">
                                     <span>Rain Share</span>

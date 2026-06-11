@@ -7,19 +7,20 @@ import {
   User, Eye, Edit2, CheckCircle, Clock, ChevronRight, X
 } from 'lucide-react';
 import { formatDate } from '../../utils/format';
-import LoadingSpinner from '../../components/Loader';
 import { getCustomerBookings } from '../../services/BookingService';
-import { 
-  submitFeedback as submitFeedbackService, 
-  getCustomerFeedbacks as getCustomerFeedbacksService, 
-  getFeedback as getFeedbackService, 
-  editFeedback as editFeedbackService 
+import {
+  submitFeedback as submitFeedbackService,
+  getCustomerFeedbacks as getCustomerFeedbacksService,
+  getFeedback as getFeedbackService,
+  editFeedback as editFeedbackService
 } from '../../services/FeedbackService';
+import BookingCardSkeleton from '../../components/ui-skeletons/BookingCardSkeleton';
+import Processing from '../../components/ui-skeletons/Processing';
+import Rating from '../../components/Rating';
 
 const Feedback = () => {
   const { token, API } = useAuth();
   const navigate = useNavigate();
-
 
   const [completedBookings, setCompletedBookings] = useState([]);
   const [feedbacks, setFeedbacks] = useState([]);
@@ -187,25 +188,32 @@ const Feedback = () => {
   };
 
   const renderStars = (rating, onChange, interactive = false) => {
-    return (
-      <div className="flex items-center gap-1">
-        {[1, 2, 3, 4, 5].map((star) => (
-          <button
-            key={star}
-            type="button"
-            onClick={() => interactive && onChange(star)}
-            className={`transition-all ${interactive ? 'cursor-pointer hover:scale-110' : 'cursor-default'}`}
-            disabled={!interactive}
-          >
-            <Star className={`${interactive ? 'w-7 h-7' : 'w-3.5 h-3.5 sm:w-4 sm:h-4'} ${star <= rating ? 'fill-accent text-accent' : 'text-gray-200'}`} />
-          </button>
-        ))}
-      </div>
-    );
+    return <Rating rating={rating} onChange={onChange} interactive={interactive} />;
   };
 
   if (loading) {
-    return <LoadingSpinner />;
+    return (
+      <div className="min-h-screen bg-gray-50 font-inter">
+        <div className="bg-white border-b border-gray-100 shadow-sm">
+          <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div className="h-6 bg-gray-200 rounded w-32 animate-pulse"></div>
+            <div className="h-8 bg-gray-200 rounded-full w-28 animate-pulse"></div>
+          </div>
+        </div>
+        <div className="max-w-5xl mx-auto px-4 py-6 space-y-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-20 bg-gray-200 rounded-xl animate-pulse"></div>
+            ))}
+          </div>
+          <div className="space-y-3">
+            {[...Array(3)].map((_, i) => (
+              <BookingCardSkeleton key={i} />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
   }
 
   const pendingCount = completedBookings.filter(b => !getFeedbackForBooking(b._id)).length;
@@ -214,23 +222,23 @@ const Feedback = () => {
     : '0.0';
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 font-inter">
       {/* Header */}
-      <div className="sticky top-0 z-20 bg-white border-b border-gray-100 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-3">
+      <div className="bg-white border-b border-gray-100 shadow-sm">
+        <div className="max-w-5xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <button onClick={() => navigate(-1)} className="p-1.5 rounded-full hover:bg-gray-100">
-                <ArrowLeft className="w-5 h-5 text-gray-600" />
+              <button onClick={() => navigate(-1)} className="p-1.5 rounded-full hover:bg-gray-100 transition-colors">
+                <ArrowLeft className="w-5 h-5 text-secondary" />
               </button>
               <div>
-                <h1 className="text-base font-bold text-secondary">My Reviews</h1>
+                <h1 className="text-base font-bold text-secondary font-poppins">My Reviews</h1>
                 <p className="text-xs text-gray-400">Share your experience</p>
               </div>
             </div>
             <button
               onClick={openAddFeedbackModal}
-              className="flex items-center gap-2 px-4 py-1.5 bg-primary text-white rounded-full text-sm font-medium hover:bg-primary/90 transition-colors"
+              className="flex items-center gap-2 px-4 py-1.5 bg-primary text-white rounded-full text-sm font-medium hover:bg-primary/90 transition-colors shadow-sm"
             >
               <Plus className="w-4 h-4" /> Write Review
             </button>
@@ -238,53 +246,57 @@ const Feedback = () => {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-4 sm:py-5 space-y-4 sm:space-y-5">
+      <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-          <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] sm:text-xs text-gray-400 font-medium uppercase tracking-wider">Total</span>
-              <MessageSquare className="w-3.5 h-3.5 text-primary" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm flex items-center justify-between">
+            <div>
+              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Total Reviews</span>
+              <div className="text-2xl font-bold text-secondary mt-1">{feedbacks.length}</div>
             </div>
-            <div className="text-lg sm:text-2xl font-bold text-secondary leading-none">{feedbacks.length}</div>
-            <div className="text-[10px] text-gray-400 mt-1">Reviews</div>
+            <div className="p-2 bg-primary/10 rounded-lg text-primary">
+              <MessageSquare className="w-5 h-5" />
+            </div>
           </div>
-          <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] sm:text-xs text-gray-400 font-medium uppercase tracking-wider">Avg Rating</span>
-              <Star className="w-3.5 h-3.5 text-accent fill-accent" />
+          <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm flex items-center justify-between">
+            <div>
+              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Avg Rating</span>
+              <div className="text-2xl font-bold text-secondary mt-1">{avgRating}</div>
             </div>
-            <div className="text-lg sm:text-2xl font-bold text-secondary leading-none">{avgRating}</div>
-            <div className="text-[10px] text-gray-400 mt-1">Overall</div>
+            <div className="p-2 bg-accent/10 rounded-lg text-accent">
+              <Star className="w-5 h-5 fill-accent" />
+            </div>
           </div>
-          <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] sm:text-xs text-gray-400 font-medium uppercase tracking-wider">Pending</span>
-              <Clock className="w-3.5 h-3.5 text-accent" />
+          <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm flex items-center justify-between">
+            <div>
+              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Pending</span>
+              <div className="text-2xl font-bold text-secondary mt-1">{pendingCount}</div>
             </div>
-            <div className="text-lg sm:text-2xl font-bold text-secondary leading-none">{pendingCount}</div>
-            <div className="text-[10px] text-gray-400 mt-1">Tasks</div>
+            <div className="p-2 bg-yellow-50 rounded-lg text-yellow-600">
+              <Clock className="w-5 h-5" />
+            </div>
           </div>
-          <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] sm:text-xs text-gray-400 font-medium uppercase tracking-wider">Providers</span>
-              <User className="w-3.5 h-3.5 text-secondary" />
+          <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm flex items-center justify-between">
+            <div>
+              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Rated Providers</span>
+              <div className="text-2xl font-bold text-secondary mt-1">
+                {Array.from(new Set(feedbacks.map(f => f.providerFeedback?.provider?._id))).length}
+              </div>
             </div>
-            <div className="text-lg sm:text-2xl font-bold text-secondary leading-none">
-              {Array.from(new Set(feedbacks.map(f => f.providerFeedback?.provider?._id))).length}
+            <div className="p-2 bg-gray-100 rounded-lg text-secondary">
+              <User className="w-5 h-5" />
             </div>
-            <div className="text-[10px] text-gray-400 mt-1">Rated</div>
           </div>
         </div>
 
         {/* Pending Banner */}
         {pendingCount > 0 && (
-          <div className="bg-gradient-to-r from-primary/10 to-primary/5 rounded-xl p-4 border border-primary/20 flex flex-col sm:flex-row items-center sm:justify-between gap-3 text-center sm:text-left">
+          <div className="bg-primary/5 rounded-xl p-4 border border-primary/10 flex flex-col sm:flex-row items-center sm:justify-between gap-3 text-center sm:text-left">
             <div>
               <p className="text-sm font-bold text-primary">You have {pendingCount} pending review{pendingCount > 1 ? 's' : ''}</p>
               <p className="text-xs text-gray-500">Your feedback helps others choose better services.</p>
             </div>
-            <button onClick={openAddFeedbackModal} className="w-full sm:w-auto bg-primary text-white px-6 py-2 rounded-lg text-sm font-bold hover:bg-primary/90 transition-all active:scale-95 shadow-sm shadow-primary/20">
+            <button onClick={openAddFeedbackModal} className="w-full sm:w-auto bg-primary text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-primary/90 transition-colors shadow-sm">
               Review Now
             </button>
           </div>
@@ -292,61 +304,76 @@ const Feedback = () => {
 
         {/* Reviews List */}
         {feedbacks.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-100 p-12 text-center">
-            <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Star className="w-8 h-8 text-gray-300" />
+          <div className="bg-white rounded-xl border border-gray-100 p-12 text-center shadow-sm">
+            <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-gray-100">
+              <Star className="w-6 h-6 text-gray-300" />
             </div>
-            <h3 className="text-base font-semibold text-secondary mb-1">No reviews yet</h3>
-            <p className="text-sm text-gray-400 mb-6">Your reviews will appear here</p>
-            <button onClick={openAddFeedbackModal} className="bg-primary text-white px-6 py-2 rounded-lg text-sm font-medium">
+            <h3 className="text-sm font-bold text-secondary mb-1">No reviews yet</h3>
+            <p className="text-xs text-gray-400 mb-5">Your reviews will appear here</p>
+            <button onClick={openAddFeedbackModal} className="bg-primary text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-primary/90 transition-colors shadow-sm">
               Write First Review
             </button>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {feedbacks.map((feedback) => {
               const service = feedback.serviceFeedback?.service;
               const provider = feedback.providerFeedback?.provider;
               return (
-                <div key={feedback._id} className="bg-white rounded-xl border border-gray-100 p-4 hover:shadow-sm transition-all">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-start gap-2 sm:gap-3 flex-1 overflow-hidden">
-                      <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <Star className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
-                      </div>
-                      <div className="flex-1 overflow-hidden">
-                        <h3 className="text-sm sm:text-base font-bold text-secondary truncate">{service?.title || 'Service'}</h3>
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
-                          <span className="flex items-center gap-1 text-[10px] sm:text-xs text-gray-400">
-                            <Calendar className="w-3 h-3" />{formatDate(feedback.booking?.date)}
-                          </span>
-                          <span className="flex items-center gap-1 text-[10px] sm:text-xs text-gray-400">
-                            <User className="w-3 h-3" />{provider?.name || 'Provider'}
-                          </span>
-                        </div>
-
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6 mt-4">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] text-gray-400 font-bold tracking-[0.1em]">Service Rating</span>
-                            {renderStars(feedback.serviceFeedback.rating)}
+                <div key={feedback._id} className="bg-white rounded-xl border border-gray-100 p-4 hover:shadow-sm transition-all shadow-sm">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-3 flex-grow min-w-0">
+                      <img
+                        src={provider?.profilePicUrl || `https://ui-avatars.com/api/?name=${provider?.name || 'Provider'}&background=0D9488&color=fff`}
+                        alt={provider?.name || 'Provider'}
+                        className="w-10 h-10 rounded-full object-cover bg-gray-50 border border-gray-100 flex-shrink-0"
+                      />
+                      <div className="flex-grow min-w-0">
+                        <h3 className="text-sm font-bold text-secondary truncate">{service?.title || 'Service'}</h3>
+                        <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
+                          <User className="w-3.5 h-3.5" />
+                          <span>{provider?.name || 'Provider'}</span>
+                        </p>
+                        
+                        <div className="mt-3 space-y-2">
+                          <div className="bg-gray-50 rounded-lg p-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1">
+                              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Service Rating</span>
+                              {renderStars(feedback.serviceFeedback.rating)}
+                            </div>
+                            <p className="text-xs text-gray-600 mt-1 italic">
+                              "{feedback.serviceFeedback.comment || 'No comment provided'}"
+                            </p>
                           </div>
-                          <div className="hidden sm:block w-[1px] h-3 bg-gray-100"></div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] text-gray-400 font-bold tracking-[0.1em]">Provider Rating</span>
-                            {renderStars(feedback.providerFeedback.rating)}
+
+                          <div className="bg-gray-50 rounded-lg p-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1">
+                              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Provider Rating</span>
+                              {renderStars(feedback.providerFeedback.rating)}
+                            </div>
+                            <p className="text-xs text-gray-600 mt-1 italic">
+                              "{feedback.providerFeedback.comment || 'No comment provided'}"
+                            </p>
                           </div>
                         </div>
                       </div>
                     </div>
-                    <div className="flex flex-col gap-1 sm:flex-row sm:gap-2">
-                      <button onClick={() => getFeedback(feedback._id)} className="p-2 text-primary hover:bg-primary/5 rounded-lg transition-colors" title="View">
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      {new Date() - new Date(feedback.createdAt) <= 7 * 24 * 60 * 60 * 1000 && (
-                        <button onClick={() => startEditing(feedback)} className="p-2 text-accent hover:bg-accent/5 rounded-lg transition-colors" title="Edit">
-                          <Edit2 className="w-4 h-4" />
+
+                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                      <span className="text-[10px] text-gray-400 flex items-center gap-1 font-medium">
+                        <Calendar className="w-3 h-3" />
+                        {formatDate(feedback.createdAt)}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => getFeedback(feedback._id)} className="p-1.5 text-primary hover:bg-primary/5 rounded-lg transition-colors border border-transparent hover:border-primary/10" title="View">
+                          <Eye className="w-4 h-4" />
                         </button>
-                      )}
+                        {new Date() - new Date(feedback.createdAt) <= 7 * 24 * 60 * 60 * 1000 && (
+                          <button onClick={() => startEditing(feedback)} className="p-1.5 text-accent hover:bg-accent/5 rounded-lg transition-colors border border-transparent hover:border-accent/10" title="Edit">
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -362,7 +389,7 @@ const Feedback = () => {
           <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl flex flex-col max-h-[90vh] animate-slide-up" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center px-5 py-4 border-b border-gray-100">
               <div>
-                <h3 className="text-lg font-bold text-secondary">
+                <h3 className="text-lg font-bold text-secondary font-poppins">
                   {isViewing ? 'Review Details' : isEditing ? 'Edit Review' : 'Write a Review'}
                 </h3>
                 <p className="text-xs text-gray-400">
@@ -470,9 +497,14 @@ const Feedback = () => {
                   </div>
                   <div className="flex gap-3 pt-2">
                     <button type="button" onClick={isEditing ? closeModal : closeAddFeedbackModal} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-50">Cancel</button>
-                    <button type="submit" disabled={submitting} className="flex-1 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50">
-                      {submitting ? 'Saving...' : isEditing ? 'Update Review' : 'Submit Review'}
-                    </button>
+                    <Processing
+                      type="submit"
+                      loading={submitting}
+                      loadingText="Saving..."
+                      className="flex-1 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90"
+                    >
+                      {isEditing ? 'Update Review' : 'Submit Review'}
+                    </Processing>
                   </div>
                 </form>
               )}
@@ -484,4 +516,4 @@ const Feedback = () => {
   );
 };
 
-export default Feedback;
+export default Feedback;

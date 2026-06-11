@@ -11,7 +11,7 @@ import {
   WrenchIcon, UserIcon, ClockIcon, ChevronRightIcon, CheckIcon,
   ChatBubbleLeftEllipsisIcon, ChevronDownIcon
 } from '@heroicons/react/24/outline';
-import LoadingSpinner from '../../components/Loader';
+import LoadingSpinner from '../../components/ui-skeletons/Loader';
 import RelatedServicesComponent from '../../components/RelatedServices';
 import ErrorState from '../../components/Error';
 import { getPublicServiceById, getServicesByCategory } from '../../services/ServiceService';

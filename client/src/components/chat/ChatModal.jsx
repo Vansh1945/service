@@ -7,9 +7,10 @@ import {
   Clock, MapPin, AlertCircle, Info, ShieldAlert, Loader
 } from 'lucide-react';
 import { formatRelativeTime } from '../../utils/format';
+import CDNImage from '../CDNImage';
 
 const ChatModal = ({ bookingId, role, isOpen, onClose, roomType = 'provider_customer', complaintId, customerId, providerId }) => {
-  const { user } = useAuth();
+  const { user, showToast } = useAuth();
   const { socket } = useSocket();
 
   // State Management
@@ -23,12 +24,12 @@ const ChatModal = ({ bookingId, role, isOpen, onClose, roomType = 'provider_cust
   const [otherTyping, setOtherTyping] = useState(false);
   const [otherOnline, setOtherOnline] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
-  const [previewImage, setPreviewImage] = useState(null);
 
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const modalRef = useRef(null);
   const fileInputRef = useRef(null);
+
 
   // Close on ESC keypress
   useEffect(() => {
@@ -210,7 +211,7 @@ const ChatModal = ({ bookingId, role, isOpen, onClose, roomType = 'provider_cust
     if (!file || !room?._id) return;
 
     if (file.size > 25 * 1024 * 1024) {
-      alert("File size exceeds 25MB limit.");
+      showToast("File size exceeds 25MB limit.", 'error');
       return;
     }
 
@@ -235,7 +236,7 @@ const ChatModal = ({ bookingId, role, isOpen, onClose, roomType = 'provider_cust
       }
     } catch (err) {
       console.error('Error uploading chat image:', err);
-      alert(err.response?.data?.message || 'Failed to upload image');
+      showToast(err.response?.data?.message || 'Failed to upload image', 'error');
     } finally {
       setUploadingFile(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -453,21 +454,12 @@ const ChatModal = ({ bookingId, role, isOpen, onClose, roomType = 'provider_cust
                         }`}>
                         {isImage ? (
                           <div className="space-y-1">
-                            <button
-                              type="button"
-                              onClick={() => setPreviewImage(msg.fileUrl)}
-                              className="block overflow-hidden rounded-lg outline-none border-none p-0 cursor-pointer"
-                            >
-                              <img
-                                src={msg.fileUrl}
-                                alt="Chat attachment"
-                                className="max-w-full max-h-48 object-cover rounded-lg"
-                                onError={(e) => {
-                                  e.target.onerror = null;
-                                  e.target.src = 'https://images.unsplash.com/photo-1594322436404-5a0526db4d13?w=500&auto=format&fit=crop';
-                                }}
-                              />
-                            </button>
+                            <CDNImage
+                              src={msg.fileUrl}
+                              alt="Chat attachment"
+                              className="max-w-full max-h-48 object-cover rounded-lg"
+                              previewable={true}
+                            />
                             {msg.content && <p className="leading-relaxed break-words mt-1">{msg.content}</p>}
                           </div>
                         ) : (
@@ -575,30 +567,6 @@ const ChatModal = ({ bookingId, role, isOpen, onClose, roomType = 'provider_cust
           )}
         </div>
       </div>
-
-      {/* FULLSCREEN IMAGE LIGHTBOX PREVIEW */}
-      {previewImage && (
-        <div
-          className="fixed inset-0 z-[1001] flex items-center justify-center bg-black/80 backdrop-blur-sm transition-opacity duration-300"
-          onClick={() => setPreviewImage(null)}
-        >
-          <div className="relative max-w-[90vw] max-h-[90vh] flex flex-col items-center">
-            <button
-              onClick={() => setPreviewImage(null)}
-              className="absolute -top-12 right-0 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors active:scale-95 shadow-md border border-white/10"
-              title="Close Preview"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <img
-              src={previewImage}
-              alt="Preview"
-              className="max-w-full max-h-[80vh] rounded-xl object-contain shadow-2xl animate-in zoom-in-95 duration-200"
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 };

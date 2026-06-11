@@ -6,8 +6,10 @@ import {
 } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import * as SystemService from '../../services/SystemService';
+import { useConfirm } from '../../context/ConfirmContext';
 
 const Branding = () => {
+  const confirm = useConfirm();
   const [activeTab, setActiveTab] = useState('customer'); // 'customer' | 'provider' | 'admin'
   const [loading, setLoading] = useState(false);
   const [uploadingField, setUploadingField] = useState(null);
@@ -163,7 +165,13 @@ const Branding = () => {
 
   // Save changes, BUMP version, and broadcast FCM update push
   const handlePublishUpdate = async (role) => {
-    const confirmBroadcast = window.confirm("Send update notification to installed users?");
+    const confirmBroadcast = await confirm({
+      title: 'Publish Update',
+      message: 'Send update notification to installed users?',
+      type: 'confirm',
+      confirmText: 'Send Notification',
+      cancelText: 'Cancel'
+    });
 
     setLoading(true);
     try {

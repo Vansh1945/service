@@ -7,6 +7,7 @@ import {
 } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import * as SystemService from '../../services/SystemService';
+import { useConfirm } from '../../context/ConfirmContext';
 
 const TEMPLATE_METADATA = {
   forgotPasswordOtp: {
@@ -66,6 +67,7 @@ const TEMPLATE_METADATA = {
 };
 
 const EmailTemplate = () => {
+  const confirm = useConfirm();
   const [templates, setTemplates] = useState({});
   const [selectedType, setSelectedType] = useState('forgotPasswordOtp');
   const [loading, setLoading] = useState(true);
@@ -206,9 +208,12 @@ const EmailTemplate = () => {
   };
 
   const handleRestore = async () => {
-    const confirmRestore = window.confirm(
-      `Are you sure you want to restore ${TEMPLATE_METADATA[selectedType].name} to its original default design? All your custom modifications for this template will be lost.`
-    );
+    const confirmRestore = await confirm({
+      title: 'Restore Default Template',
+      message: `Are you sure you want to restore ${TEMPLATE_METADATA[selectedType].name} to its original default design? All your custom modifications for this template will be lost.`,
+      type: 'warning',
+      confirmText: 'Restore',
+    });
     if (!confirmRestore) return;
 
     setIsRestoring(true);

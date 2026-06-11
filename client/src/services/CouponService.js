@@ -1,20 +1,22 @@
+import BaseCrudService from "./BaseCrudService";
 import axiosInstance from "../api/axiosInstance";
 
+const adminCouponService = new BaseCrudService("/coupon/admin/coupons");
+
 export const createCoupon = (data) => {
-    return axiosInstance.post("/coupon/admin/coupons", data);
+    return adminCouponService.create(data);
 };
 
 export const getAllCoupons = (data) => {
-    return axiosInstance.get("/coupon/admin/coupons", data);
+    return adminCouponService.getAll(data);
 };
-
 
 export const updateCoupon = (id, data) => {
     return axiosInstance.put(`/coupon/admin/coupon/${id}`, data);
 };
 
 export const deleteCoupon = (id) => {
-    return axiosInstance.delete(`/coupon/admin/coupons/${id}`);
+    return adminCouponService.delete(id);
 };
 
 export const hardDeleteCoupon = (id) => {

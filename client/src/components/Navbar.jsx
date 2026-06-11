@@ -44,7 +44,7 @@ const Navbar = () => {
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (
-        menuRef.current && 
+        menuRef.current &&
         !menuRef.current.contains(event.target) &&
         buttonRef.current &&
         !buttonRef.current.contains(event.target)
@@ -99,8 +99,8 @@ const Navbar = () => {
       role="navigation"
       aria-label="Main navigation"
       className={`fixed w-full top-0 z-50 transition-all duration-500 ease-out ${scrolled
-          ? 'bg-white/70 backdrop-blur-md border-b border-gray-200 shadow-lg'
-          : 'bg-white border-b border-gray-100'
+        ? 'bg-white/70 backdrop-blur-md border-b border-gray-200 shadow-lg'
+        : 'bg-white border-b border-gray-100'
         }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -120,9 +120,9 @@ const Navbar = () => {
                     className="flex-shrink-0 h-8 md:h-10 lg:h-12 w-auto object-contain mr-2 md:mr-3"
                   />
                 )}
-                <span className="font-extrabold text-lg md:text-2xl lg:text-3xl bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter tracking-tight truncate">
+                {/* <span className="font-extrabold text-lg md:text-2xl lg:text-3xl bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter tracking-tight truncate">
                   {systemSettings.companyName || 'Raj Electrical Services'}
-                </span>
+                </span> */}
               </div>
             </Link>
 
@@ -197,8 +197,8 @@ const Navbar = () => {
       <div
         ref={menuRef}
         className={`lg:hidden overflow-hidden transition-all duration-500 ease-in-out ${isOpen
-            ? 'max-h-[500px] opacity-100 visible'
-            : 'max-h-0 opacity-0 invisible'
+          ? 'max-h-[500px] opacity-100 visible'
+          : 'max-h-0 opacity-0 invisible'
           } bg-white/98 backdrop-blur-xl border-t border-gray-200 shadow-xl`}
       >
         <div className="px-6 py-8 space-y-6">
@@ -258,20 +258,20 @@ const NavItem = ({ text, path, icon, isActive, onClick }) => (
     to={path}
     onClick={onClick}
     className={`relative px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-300 flex items-center group ${isActive
-        ? 'text-primary bg-primary/10 shadow-sm'
-        : 'text-secondary hover:text-accent'
+      ? 'text-primary bg-primary/10 shadow-sm'
+      : 'text-secondary hover:text-accent'
       }`}
   >
     {/* Animated background on hover */}
     <div className={`absolute inset-0 rounded-lg transition-all duration-300 transform ${isActive
-        ? 'bg-primary/5 scale-100 opacity-100'
-        : 'bg-accent/5 scale-95 opacity-0 group-hover:scale-100 group-hover:opacity-100'
+      ? 'bg-primary/5 scale-100 opacity-100'
+      : 'bg-accent/5 scale-95 opacity-0 group-hover:scale-100 group-hover:opacity-100'
       }`} />
 
     {/* Animated border bottom */}
     <div className={`absolute bottom-0 left-1/2 w-0 h-0.5 transition-all duration-300 transform -translate-x-1/2 ${isActive
-        ? 'bg-primary w-4/5'
-        : 'bg-accent group-hover:w-3/5'
+      ? 'bg-primary w-4/5'
+      : 'bg-accent group-hover:w-3/5'
       }`} />
 
     <span className="relative z-10 flex items-center">
@@ -287,14 +287,14 @@ const MobileNavItem = ({ text, path, icon, isActive, onClick }) => (
     to={path}
     onClick={onClick}
     className={`relative flex items-center px-4 py-3 rounded-lg text-base font-medium transition-all duration-300 group ${isActive
-        ? 'text-primary bg-primary/10 border-r-2 border-primary'
-        : 'text-secondary hover:text-accent hover:bg-accent/5'
+      ? 'text-primary bg-primary/10 border-r-2 border-primary'
+      : 'text-secondary hover:text-accent hover:bg-accent/5'
       }`}
   >
     {/* Subtle hover effect */}
     <div className={`absolute inset-0 rounded-lg transition-all duration-300 transform ${isActive
-        ? 'bg-primary/5 scale-100 opacity-100'
-        : 'bg-accent/5 scale-95 opacity-0 group-hover:scale-100 group-hover:opacity-100'
+      ? 'bg-primary/5 scale-100 opacity-100'
+      : 'bg-accent/5 scale-95 opacity-0 group-hover:scale-100 group-hover:opacity-100'
       }`} />
 
     <span className="relative z-10 flex items-center">
@@ -321,8 +321,8 @@ const ActionButton = ({ icon, text, variant = 'primary', fullWidth = false, path
     >
       {/* Hover overlay effect */}
       <div className={`absolute inset-0 transition-all duration-300 transform ${variant === 'primary'
-          ? 'bg-white/0 group-hover:bg-white/10'
-          : 'bg-primary/0 group-hover:bg-primary/5'
+        ? 'bg-white/0 group-hover:bg-white/10'
+        : 'bg-primary/0 group-hover:bg-primary/5'
         }`} />
 
       {/* Button content */}

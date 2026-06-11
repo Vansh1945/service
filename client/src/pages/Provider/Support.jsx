@@ -13,11 +13,13 @@ import { getComplaint, getCustomerComplaints, submitComplaint as submitComplaint
 import { formatDate, formatDateTime, compressImage } from '../../utils/format';
 import CDNImage from '../../components/CDNImage';
 import ChatModal from '../../components/chat/ChatModal';
+import LoadingSpinner from '../../components/ui-skeletons/Loader';
+import Processing from '../../components/ui-skeletons/Processing';
 
 const SUPPORT_CATEGORIES = ["Payment", "Booking", "Account", "Other"];
 
 const ProviderSupportPage = () => {
-  const { token, user, isAuthenticated, API, API_URL_IMAGE, logoutUser } = useAuth();
+  const { user, isAuthenticated, API_URL_IMAGE } = useAuth();
   const navigate = useNavigate();
   const [complaints, setComplaints] = useState([]);
   const [bookings, setBookings] = useState([]);
@@ -293,10 +295,7 @@ const ProviderSupportPage = () => {
               </div>
 
               {loading ? (
-                <div className="flex flex-col items-center justify-center py-12">
-                  <Loader2 className="h-8 w-8 text-primary animate-spin mb-2" />
-                  <p className="text-xs text-gray-400">Loading tickets...</p>
-                </div>
+                <LoadingSpinner />
               ) : complaints.length === 0 ? (
                 <div className="text-center py-12">
                   <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -461,17 +460,14 @@ const ProviderSupportPage = () => {
 
             <div className="px-5 py-4 border-t border-gray-100 flex gap-3 sticky bottom-0 bg-white">
               <button onClick={() => { setOpenNewComplaint(false); resetForm(); }} className="flex-1 py-2 border rounded-lg text-sm font-medium hover:bg-gray-50">Cancel</button>
-              <button
+              <Processing
                 onClick={handleSubmitTicket}
-                disabled={submittingTicket}
+                loading={submittingTicket}
+                loadingText="Submitting..."
                 className="flex-1 py-2 rounded-lg text-sm font-medium text-white bg-primary hover:bg-primary/90 flex items-center justify-center gap-1.5"
               >
-                {submittingTicket ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" /> Submitting...
-                  </>
-                ) : 'Submit Ticket'}
-              </button>
+                Submit Ticket
+              </Processing>
             </div>
           </div>
         </div>
@@ -576,7 +572,7 @@ const ProviderSupportPage = () => {
                       {selectedComplaint.resolutionHistory.map((step, i) => (
                         <div key={i} className="relative">
                           <div className={`absolute -left-[20px] top-1.5 w-2 h-2 rounded-full border-2 bg-white ${step.event.includes('Resolved') ? 'border-green-500' :
-                              step.event.includes('Replied') ? 'border-primary' : 'border-gray-300'
+                            step.event.includes('Replied') ? 'border-primary' : 'border-gray-300'
                             }`} />
                           <div className="flex justify-between items-start">
                             <p className="text-[11px] font-bold text-secondary">{step.event}</p>
@@ -617,14 +613,15 @@ const ProviderSupportPage = () => {
                       </div>
                     </div>
 
-                    <button
+                    <Processing
                       onClick={handleReplySubmit}
-                      disabled={submittingReply || !replyText.trim()}
+                      disabled={!replyText.trim()}
+                      loading={submittingReply}
+                      loadingText="Submitting..."
                       className="w-full py-2 bg-primary text-white rounded-xl text-sm font-bold shadow-md hover:bg-primary/90 disabled:opacity-50 flex items-center justify-center gap-2"
                     >
-                      {submittingReply ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
-                      Submit Response
-                    </button>
+                      <MessageSquare className="w-4 h-4" /> Submit Response
+                    </Processing>
                     <p className="text-[9px] text-gray-400 text-center italic">This response will be visible to the Customer and Support Team.</p>
                   </div>
                 </div>

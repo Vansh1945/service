@@ -13,6 +13,7 @@ import { getCustomerBookings } from '../../services/BookingService';
 import { getComplaint, getCustomerComplaints, submitComplaint as submitComplaintAPI, reopenComplaint as reopenComplaintAPI } from '../../services/ComplaintService';
 import { formatDate, formatDateTime, compressImage } from '../../utils/format';
 import CDNImage from '../../components/CDNImage';
+import Processing from '../../components/ui-skeletons/Processing';
 import ChatModal from '../../components/chat/ChatModal';
 
 const COMPLAINT_CATEGORIES = ["Service issue", "Payment issue", "Refund request", "Suggestion", "Other"];
@@ -102,12 +103,12 @@ const ComplaintsPage = () => {
   const handleImageUpload = (e) => {
     const files = Array.from(e.target.files);
     const validFiles = [], validPreviews = [];
-    
+
     if (formData.images.length + files.length > 5) {
       toast.error('You can upload a maximum of 5 screenshot proofs.');
       return;
     }
-    
+
     files.forEach(file => {
       if (!file.type.match('image.*')) { toast.error('Images only'); return; }
       if (file.size > 5 * 1024 * 1024) { toast.error('Max 5MB per image'); return; }
@@ -272,10 +273,7 @@ const ComplaintsPage = () => {
           </div>
 
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 text-primary animate-spin mb-2" />
-              <p className="text-xs text-gray-400">Loading history...</p>
-            </div>
+            <LoadingSpinner />
           ) : error ? (
             <div className="text-center py-12">
               <AlertCircle className="h-10 w-10 text-red-400 mx-auto mb-2" />
@@ -308,16 +306,16 @@ const ComplaintsPage = () => {
                           <p className="text-sm font-semibold text-secondary truncate max-w-[150px]">{complaint.title || 'Support Request'}</p>
                           <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-tighter ${s.bg} ${s.text}`}>
                             {complaint.status === 'Solved' ? 'Resolved' :
-                             complaint.status === 'In-Progress' ? 'In Review' :
-                             complaint.status === 'Reopened' ? 'Reopened' :
-                             complaint.status === 'Closed' ? 'Closed' :
-                             complaint.status === 'submitted' ? 'Submitted' :
-                             complaint.status === 'under_review' ? 'Under Review' :
-                             complaint.status === 'provider_responded' ? 'Provider Responded' :
-                             complaint.status === 'admin_review' ? 'Admin Review' :
-                             complaint.status === 'resolved' ? 'Resolved' :
-                             complaint.status === 'rejected' ? 'Rejected' :
-                             complaint.status === 'refunded' ? 'Refunded' : complaint.status}
+                              complaint.status === 'In-Progress' ? 'In Review' :
+                                complaint.status === 'Reopened' ? 'Reopened' :
+                                  complaint.status === 'Closed' ? 'Closed' :
+                                    complaint.status === 'submitted' ? 'Submitted' :
+                                      complaint.status === 'under_review' ? 'Under Review' :
+                                        complaint.status === 'provider_responded' ? 'Provider Responded' :
+                                          complaint.status === 'admin_review' ? 'Admin Review' :
+                                            complaint.status === 'resolved' ? 'Resolved' :
+                                              complaint.status === 'rejected' ? 'Rejected' :
+                                                complaint.status === 'refunded' ? 'Refunded' : complaint.status}
                           </span>
                         </div>
                         <p className="text-[10px] text-gray-400 flex items-center gap-1">
@@ -556,13 +554,9 @@ const ComplaintsPage = () => {
 
             <div className="px-5 py-4 border-t border-gray-100 flex gap-3">
               <button onClick={() => { setOpenNewComplaint(false); resetForm(); }} className="flex-1 py-2 border rounded-lg text-sm font-medium hover:bg-gray-50">Cancel</button>
-              <button onClick={handleSubmitComplaint} disabled={isFormDisabled} className={`flex-1 py-2 rounded-lg text-sm font-medium text-white flex items-center justify-center gap-1.5 ${isFormDisabled ? 'bg-primary/50 cursor-not-allowed' : 'bg-primary hover:bg-primary/90'}`}>
-                {submittingComplaint ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" /> Submitting...
-                  </>
-                ) : 'Submit'}
-              </button>
+              <Processing onClick={handleSubmitComplaint} disabled={isFormDisabled && !submittingComplaint} loading={submittingComplaint} loadingText="Submitting..." className={`flex-1 py-2 rounded-lg text-sm font-medium text-white flex items-center justify-center gap-1.5 ${isFormDisabled && !submittingComplaint ? 'bg-primary/50 cursor-not-allowed' : 'bg-primary hover:bg-primary/90'}`}>
+                Submit
+              </Processing>
             </div>
           </div>
         </div>
@@ -592,16 +586,16 @@ const ComplaintsPage = () => {
                   </div>
                   <span className={`text-[10px] font-bold px-3 py-1 rounded-full whitespace-nowrap flex-shrink-0 ${getStatusStyle(selectedComplaint.status).bg} ${getStatusStyle(selectedComplaint.status).text} border ${getStatusStyle(selectedComplaint.status).border}`}>
                     {selectedComplaint.status === 'Solved' ? '✓ Issue Resolved' :
-                     selectedComplaint.status === 'In-Progress' ? '⏳ Being Reviewed' :
-                     selectedComplaint.status === 'Reopened' ? '↩ Reopened' :
-                     selectedComplaint.status === 'Closed' ? 'Closed' :
-                     selectedComplaint.status === 'submitted' ? 'Submitted' :
-                     selectedComplaint.status === 'under_review' ? 'Under Review' :
-                     selectedComplaint.status === 'provider_responded' ? 'Provider Responded' :
-                     selectedComplaint.status === 'admin_review' ? 'Admin Review' :
-                     selectedComplaint.status === 'resolved' ? 'Resolved' :
-                     selectedComplaint.status === 'rejected' ? 'Rejected' :
-                     selectedComplaint.status === 'refunded' ? 'Refunded' : '○ Open'}
+                      selectedComplaint.status === 'In-Progress' ? '⏳ Being Reviewed' :
+                        selectedComplaint.status === 'Reopened' ? '↩ Reopened' :
+                          selectedComplaint.status === 'Closed' ? 'Closed' :
+                            selectedComplaint.status === 'submitted' ? 'Submitted' :
+                              selectedComplaint.status === 'under_review' ? 'Under Review' :
+                                selectedComplaint.status === 'provider_responded' ? 'Provider Responded' :
+                                  selectedComplaint.status === 'admin_review' ? 'Admin Review' :
+                                    selectedComplaint.status === 'resolved' ? 'Resolved' :
+                                      selectedComplaint.status === 'rejected' ? 'Rejected' :
+                                        selectedComplaint.status === 'refunded' ? 'Refunded' : '○ Open'}
                   </span>
                 </div>
               </div>
@@ -617,8 +611,8 @@ const ComplaintsPage = () => {
                   )}
                 </div>
                 <p className="text-sm text-gray-700 leading-relaxed">
-                  {selectedComplaint.description?.includes(']') 
-                    ? selectedComplaint.description.split(']').slice(1).join(']').trim() 
+                  {selectedComplaint.description?.includes(']')
+                    ? selectedComplaint.description.split(']').slice(1).join(']').trim()
                     : selectedComplaint.description}
                 </p>
               </div>
@@ -688,14 +682,12 @@ const ComplaintsPage = () => {
                     <div className="space-y-4">
                       {selectedComplaint.resolutionHistory.map((step, i) => (
                         <div key={i} className="relative">
-                          <div className={`absolute -left-[20px] top-1.5 w-2 h-2 rounded-full border-2 bg-white ${
-                            step.event.includes('Resolved') || step.event.includes('Solved') ? 'border-green-500' :
-                            step.event.includes('Replied') ? 'border-primary' : 'border-gray-300'
-                          }`} />
+                          <div className={`absolute -left-[20px] top-1.5 w-2 h-2 rounded-full border-2 bg-white ${step.event.includes('Resolved') || step.event.includes('Solved') ? 'border-green-500' :
+                              step.event.includes('Replied') ? 'border-primary' : 'border-gray-300'
+                            }`} />
                           <div className="flex justify-between items-start mb-0.5">
-                            <p className={`text-[11px] font-bold ${
-                               step.event.includes('Resolved') ? 'text-green-600' : 'text-secondary'
-                            }`}>{step.event}</p>
+                            <p className={`text-[11px] font-bold ${step.event.includes('Resolved') ? 'text-green-600' : 'text-secondary'
+                              }`}>{step.event}</p>
                             <span className="text-[9px] text-gray-400">{formatDateTime(step.timestamp)}</span>
                           </div>
                           {step.note && <p className="text-[10px] text-gray-500 leading-relaxed italic">"{step.note}"</p>}
@@ -725,10 +717,10 @@ const ComplaintsPage = () => {
                     <div className="flex justify-between items-center">
                       <span className="text-xs text-gray-500">Amount Refunded</span>
                       <span className="text-base font-black text-primary">
-                        ₹{selectedComplaint.transaction?.type === 'refund' 
+                        ₹{selectedComplaint.transaction?.type === 'refund'
                           ? (selectedComplaint.transaction.isRupees || ['cash', 'wallet'].includes(selectedComplaint.transaction.paymentMethod?.toLowerCase())
-                              ? selectedComplaint.transaction.amount
-                              : selectedComplaint.transaction.amount / 100)
+                            ? selectedComplaint.transaction.amount
+                            : selectedComplaint.transaction.amount / 100)
                           : (selectedComplaint.booking.cancellationProgress?.refundAmount || selectedComplaint.booking.totalAmount || '0')}
                       </span>
                     </div>
@@ -736,16 +728,15 @@ const ComplaintsPage = () => {
                     {selectedComplaint.booking.adminRefundDecision && selectedComplaint.booking.adminRefundDecision !== 'none' && (
                       <div className="flex justify-between items-center">
                         <span className="text-xs text-gray-500">Refund Type</span>
-                        <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${
-                          selectedComplaint.booking.adminRefundDecision === 'approved'
+                        <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${selectedComplaint.booking.adminRefundDecision === 'approved'
                             ? 'bg-green-50 text-green-700 border-green-100'
                             : selectedComplaint.booking.adminRefundDecision === 'partial'
-                            ? 'bg-amber-50 text-amber-700 border-amber-100'
-                            : 'bg-red-50 text-red-600 border-red-100'
-                        }`}>
+                              ? 'bg-amber-50 text-amber-700 border-amber-100'
+                              : 'bg-red-50 text-red-600 border-red-100'
+                          }`}>
                           {selectedComplaint.booking.adminRefundDecision === 'approved' ? '✓ Full Refund'
                             : selectedComplaint.booking.adminRefundDecision === 'partial' ? '◑ Partial Refund'
-                            : '✗ No Refund'}
+                              : '✗ No Refund'}
                         </span>
                       </div>
                     )}
@@ -770,7 +761,7 @@ const ComplaintsPage = () => {
                     const steps = [
                       { label: 'Complaint Submitted', done: true, icon: FileText },
                       { label: 'Provider Response', done: b.complaintProofs?.some(p => p.uploadedBy === 'provider'), icon: MessageSquare },
-                      { label: 'Under Review by Support', done: ['resolved','closed'].includes(b.disputeStatus), active: b.disputeStatus === 'pending', icon: ShieldCheck },
+                      { label: 'Under Review by Support', done: ['resolved', 'closed'].includes(b.disputeStatus), active: b.disputeStatus === 'pending', icon: ShieldCheck },
                       { label: b.adminRefundDecision === 'approved' ? 'Full Refund Approved' : b.adminRefundDecision === 'partial' ? 'Partial Refund Approved' : b.adminRefundDecision === 'rejected' ? 'No Refund Applicable' : 'Decision Pending', done: !!b.adminRefundDecision && b.adminRefundDecision !== 'none', icon: BadgeCheck },
                       { label: b.paymentStatus === 'refunded' ? 'Refund Credited to Wallet' : 'Awaiting Refund', done: b.paymentStatus === 'refunded', icon: Wallet },
                     ];
@@ -810,23 +801,23 @@ const ComplaintsPage = () => {
                   <p className="text-xs font-bold text-orange-700 mb-1">Not satisfied with the resolution?</p>
                   <p className="text-[10px] text-orange-500 mb-3">You can reopen this ticket within 7 days.</p>
                   <textarea rows="2" value={reopenReason} onChange={(e) => setReopenReason(e.target.value)} placeholder="Tell us why you're not satisfied..." className="w-full px-3 py-2 text-sm border border-orange-200 bg-white rounded-lg focus:ring-2 focus:ring-orange-300 resize-none" />
-                  <button onClick={handleReopenComplaint} disabled={!reopenReason.trim()} className="mt-2 w-full py-2 bg-orange-500 text-white rounded-lg text-sm font-bold disabled:opacity-50 hover:bg-orange-600 transition-colors flex items-center justify-center gap-2">
+                  <Processing onClick={handleReopenComplaint} disabled={!reopenReason.trim()} loading={false} className="mt-2 w-full py-2 bg-orange-500 text-white rounded-lg text-sm font-bold disabled:opacity-50 hover:bg-orange-600 transition-colors flex items-center justify-center gap-2">
                     <RotateCcw className="w-3.5 h-3.5" /> Reopen Ticket
-                  </button>
+                  </Processing>
                 </div>
               )}
             </div>
 
             <div className="px-5 py-4 border-t border-gray-100 flex gap-2">
-              <button 
+              <button
                 onClick={() => {
                   setOpenComplaintDetail(false);
-                  setChatRoomInfo({ 
-                    bookingId: selectedComplaint.bookingId || selectedComplaint.booking?._id, 
-                    roomType: 'complaint_admin', 
-                    complaintId: selectedComplaint._id 
+                  setChatRoomInfo({
+                    bookingId: selectedComplaint.bookingId || selectedComplaint.booking?._id,
+                    roomType: 'complaint_admin',
+                    complaintId: selectedComplaint._id
                   });
-                }} 
+                }}
                 className="flex-1 py-2 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white rounded-lg text-sm font-bold shadow-sm transition-all active:scale-95 flex items-center justify-center gap-1.5"
               >
                 <MessageSquare className="w-4 h-4" /> Resolve with Admin
@@ -845,7 +836,7 @@ const ComplaintsPage = () => {
           <CDNImage src={previewImage} width={1600} lazy={false} className="max-w-[95vw] max-h-[90vh] object-contain rounded-lg shadow-2xl" alt="Preview" onClick={e => e.stopPropagation()} />
         </div>
       )}
-      <ChatModal 
+      <ChatModal
         bookingId={chatRoomInfo?.bookingId}
         roomType={chatRoomInfo?.roomType || 'complaint_admin'}
         complaintId={chatRoomInfo?.complaintId}

@@ -9,8 +9,8 @@ import {
   DollarSign, XCircle, Lock, Unlock, ChevronRight, ChevronLeft
 } from 'lucide-react';
 import Pagination from '../../components/Pagination';
-import { formatDate, formatDateTime } from '../../utils/format';
-
+import { formatDate, formatDateTime, formatCurrency } from '../../utils/format';
+import CDNImage from '../../components/CDNImage';
 // ── Status Badges (Standardized Clean Designs) ────────────────────────
 const RefundStatusBadge = ({ status }) => {
   const cfg = {
@@ -92,7 +92,6 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
   const [decisionType, setDecisionType] = useState(''); // 'refund_full', 'refund_partial', 'reject'
   const [absorption, setAbsorption] = useState('shared'); // 'provider', 'platform', 'shared'
   const [updating, setUpdating] = useState(false);
-  const [selectedPreviewImage, setSelectedPreviewImage] = useState(null);
 
   if (!booking) return null;
 
@@ -256,12 +255,14 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
                       {booking.providerWorkProof?.beforeImages?.length > 0 ? (
                         <div className="grid grid-cols-3 gap-2 w-full">
                           {booking.providerWorkProof.beforeImages.map((img, i) => (
-                            <div key={i} className="relative group overflow-hidden rounded-lg h-20 bg-black/5 border border-gray-100 cursor-pointer" onClick={() => setSelectedPreviewImage(img.url)}>
-                              <img src={img.url} alt="Before" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
-                              <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity duration-200">
-                                <Eye size={14} />
-                              </div>
-                            </div>
+                            <CDNImage
+                              key={i}
+                              src={img.url}
+                              alt="Before"
+                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                              containerClassName="relative group overflow-hidden rounded-lg h-20 bg-black/5 border border-gray-100"
+                              previewable={true}
+                            />
                           ))}
                         </div>
                       ) : (
@@ -279,12 +280,14 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
                       {booking.providerWorkProof?.afterImages?.length > 0 ? (
                         <div className="grid grid-cols-3 gap-2 w-full">
                           {booking.providerWorkProof.afterImages.map((img, i) => (
-                            <div key={i} className="relative group overflow-hidden rounded-lg h-20 bg-black/5 border border-gray-100 cursor-pointer" onClick={() => setSelectedPreviewImage(img.url)}>
-                              <img src={img.url} alt="After" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
-                              <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity duration-200">
-                                <Eye size={14} />
-                              </div>
-                            </div>
+                            <CDNImage
+                              key={i}
+                              src={img.url}
+                              alt="After"
+                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                              containerClassName="relative group overflow-hidden rounded-lg h-20 bg-black/5 border border-gray-100"
+                              previewable={true}
+                            />
                           ))}
                         </div>
                       ) : (
@@ -309,12 +312,14 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
                         {proof.images?.length > 0 && (
                           <div className="grid grid-cols-4 gap-2">
                             {proof.images.map((img, j) => (
-                              <div key={j} className="relative group overflow-hidden rounded-lg h-16 bg-black/5 border border-gray-100 cursor-pointer" onClick={() => setSelectedPreviewImage(img.url)}>
-                                <img src={img.url} alt="Complaint Proof" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
-                                <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity duration-200">
-                                  <Eye size={12} />
-                                </div>
-                              </div>
+                              <CDNImage
+                                key={j}
+                                src={img.url}
+                                alt="Complaint Proof"
+                                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                                containerClassName="relative group overflow-hidden rounded-lg h-16 bg-black/5 border border-gray-100"
+                                previewable={true}
+                              />
                             ))}
                           </div>
                         )}
@@ -344,12 +349,14 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
                         {proof.images?.length > 0 && (
                           <div className="grid grid-cols-4 gap-2">
                             {proof.images.map((img, j) => (
-                              <div key={j} className="relative group overflow-hidden rounded-lg h-16 bg-black/5 border border-gray-100 cursor-pointer" onClick={() => setSelectedPreviewImage(img.url)}>
-                                <img src={img.url} alt="Provider Response Proof" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
-                                <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity duration-200">
-                                  <Eye size={12} />
-                                </div>
-                              </div>
+                              <CDNImage
+                                key={j}
+                                src={img.url}
+                                alt="Provider Response Proof"
+                                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                                containerClassName="relative group overflow-hidden rounded-lg h-16 bg-black/5 border border-gray-100"
+                                previewable={true}
+                              />
                             ))}
                           </div>
                         )}
@@ -427,7 +434,7 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
                           <div className="flex justify-between items-center border-b border-gray-50 pb-1.5">
                             <span className="text-xs font-mono font-bold text-secondary">{tx.transactionId || 'No Gateway ID'}</span>
                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase ${tx.paymentStatus === 'refunded'
-                              ? 'bg-red-50 text-red-650 border-red-100'
+                              ? 'bg-red-50 text-red-600 border-red-100'
                               : 'bg-green-50 text-green-755 border-green-100'
                               }`}>
                               {tx.paymentStatus}
@@ -529,7 +536,7 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
                       {[
                         { id: 'refund_full', label: 'Full Refund', color: 'border-green-200 text-green-600 hover:bg-green-50/50', activeColor: 'bg-green-50 border-green-500 text-green-700' },
                         { id: 'refund_partial', label: 'Partial', color: 'border-primary/20 text-primary hover:bg-primary/5', activeColor: 'bg-primary/10 border-primary text-primary' },
-                        { id: 'reject', label: 'Reject Claim', color: 'border-red-200 text-red-650 hover:bg-red-50/50', activeColor: 'bg-red-50 border-red-500 text-red-700' }
+                        { id: 'reject', label: 'Reject Claim', color: 'border-red-200 text-red-600 hover:bg-red-50/50', activeColor: 'bg-red-50 border-red-500 text-red-700' }
                       ].map(opt => (
                         <button
                           key={opt.id}
@@ -751,20 +758,6 @@ const RefundDetailsModal = ({ booking, onClose, onAction }) => {
 
       </div>
 
-      {/* Media zoom preview lightbox */}
-      {selectedPreviewImage && (
-        <div className="fixed inset-0 bg-black/90 z-[60] flex items-center justify-center p-4 animate-fade-in" onClick={() => setSelectedPreviewImage(null)}>
-          <div className="absolute top-4 right-4">
-            <button
-              onClick={() => setSelectedPreviewImage(null)}
-              className="w-10 h-10 flex items-center justify-center bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-          <img src={selectedPreviewImage} alt="Zoom Preview" className="max-w-full max-h-[88vh] object-contain rounded-lg shadow-2xl animate-scale-up" onClick={e => e.stopPropagation()} />
-        </div>
-      )}
 
     </div>
   );
@@ -955,27 +948,15 @@ const RefundPage = () => {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
-                  // Skeleton rows — varied widths make it look realistic
-                  Array.from({ length: 8 }).map((_, i) => (
-                    <tr key={i} className="animate-pulse">
-                      <td className="px-4 py-3.5"><div className="h-3.5 bg-gray-100 rounded w-20" /></td>
-                      <td className="px-4 py-3.5"><div className="h-5 bg-gray-100 rounded-full w-24" /></td>
-                      <td className="px-4 py-3.5"><div className="h-3.5 bg-gray-100 rounded w-28" /></td>
-                      <td className="px-4 py-3.5">
-                        <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 bg-gray-100 rounded-lg shrink-0" />
-                          <div className="h-3.5 bg-gray-100 rounded w-20" />
-                        </div>
-                      </td>
-                      <td className="px-4 py-3.5"><div className="h-3.5 bg-gray-100 rounded w-20" /></td>
-                      <td className="px-4 py-3.5"><div className="h-3.5 bg-gray-100 rounded w-12" /></td>
-                      <td className="px-4 py-3.5"><div className="h-5 bg-gray-100 rounded-full w-16" /></td>
-                      <td className="px-4 py-3.5"><div className="h-5 bg-gray-100 rounded-full w-16" /></td>
-                      <td className="px-4 py-3.5"><div className="h-5 bg-gray-100 rounded-full w-20" /></td>
-                      <td className="px-4 py-3.5"><div className="h-3.5 bg-gray-100 rounded w-16" /></td>
-                      <td className="px-4 py-3.5"><div className="w-6 h-6 bg-gray-100 rounded-full" /></td>
-                    </tr>
-                  ))
+                  <tr>
+                    <td colSpan="9" className="px-6 py-4">
+                      <div className="space-y-4 p-4 animate-pulse">
+                        {[1, 2, 3].map(i => (
+                          <div key={i} className="h-10 bg-slate-100 rounded-xl w-full" />
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
                 ) : bookings.length === 0 ? (
                   <tr>
                     <td colSpan="11" className="px-6 py-16 text-center text-gray-400">

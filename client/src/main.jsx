@@ -22,6 +22,8 @@ const queryClient = new QueryClient({
   },
 });
 
+import { ConfirmProvider } from "./context/ConfirmContext";
+
 const root = ReactDOM.createRoot(document.getElementById("root"));
 
 root.render(
@@ -30,9 +32,11 @@ root.render(
       <BrowserRouter>
         <AuthProvider>
           <NotificationProvider>
-            <HelmetProvider>
-              <App />
-            </HelmetProvider>
+            <ConfirmProvider>
+              <HelmetProvider>
+                <App />
+              </HelmetProvider>
+            </ConfirmProvider>
             <ToastContainer
               position="top-right"
               autoClose={3000}

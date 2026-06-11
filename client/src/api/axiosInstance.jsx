@@ -75,6 +75,7 @@ const optimizeCloudinaryUrls = (data) => {
     if (!data) return data;
     if (typeof data === 'string') {
         if (data.startsWith('http') && data.includes('res.cloudinary.com')) {
+            if (data.includes('/s--')) return data;
             if (data.includes('/image/upload/')) {
                 if (!data.includes('/image/upload/f_auto,q_auto,w_800/')) {
                     return data.replace('/image/upload/', '/image/upload/f_auto,q_auto,w_800/');
@@ -117,6 +118,11 @@ api.interceptors.response.use(
         return response;
     },
     async (error) => {
+        if (axios.isCancel(error)) {
+            error.message = 'silent_cancel';
+            return Promise.reject(error);
+        }
+
         const originalRequest = error.config;
 
         if (error.config && ['post', 'put', 'patch', 'delete'].includes(error.config.method)) {

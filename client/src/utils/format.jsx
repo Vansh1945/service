@@ -200,6 +200,7 @@ export const formatPercentage = (value) => {
 export const getOptimizedCloudinaryUrl = (url, width = 800) => {
   if (!url || typeof url !== 'string') return url;
   if (!url.startsWith('http') || !url.includes('res.cloudinary.com')) return url;
+  if (url.includes('/s--')) return url;
 
   // Clean existing auto/quality/width transformations to avoid duplicate paths
   let cleanUrl = url;
@@ -1088,4 +1089,16 @@ export const formatRelativeTime = (timestamp) => {
   } catch {
     return FALLBACK;
   }
+};
+
+/**
+ * Unified street address builder from house number and road
+ * @param {string} houseNumber
+ * @param {string} road
+ * @returns {string} constructed street address
+ */
+export const buildStreetAddress = (houseNumber, road) => {
+  const houseNum = (houseNumber || '').trim();
+  const rd = (road || '').trim();
+  return houseNum && rd ? `${houseNum}, ${rd}` : (houseNum || rd);
 };

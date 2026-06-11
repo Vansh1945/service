@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../../context/auth';
+import useDebounce from '../../hooks/useDebounce';
+import { useConfirm } from '../../context/ConfirmContext';
 import {
   Users,
   Settings,
@@ -25,6 +27,7 @@ import HierarchicalZoneSelector from '../../components/HierarchicalZoneSelector'
 
 const AdminCommissionPage = () => {
   const { API, token, showToast } = useAuth();
+  const confirm = useConfirm();
   const [loading, setLoading] = useState(false);
 
   const {
@@ -190,12 +193,14 @@ const AdminCommissionPage = () => {
     performanceScore: ''
   });
 
+  const debouncedSearch = useDebounce(filters.search, 500);
+
   // Available options matching backend enum
   const performanceScores = ['Bronze', 'Silver', 'Gold', 'Platinum'];
   const applyToOptions = ['all', 'performanceScore', 'specificProvider'];
 
   // Fetch commission rules
-  const fetchCommissionRules = async (page = 1, limit = 10) => {
+  const fetchCommissionRules = useCallback(async (page = 1, limit = 10) => {
     setLoading(true);
     try {
       const params = {
@@ -234,7 +239,7 @@ const AdminCommissionPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters.isActive, filters.applyTo, filters.priorityTier, filters.performanceScore, zoneIds, showToast]);
 
   // Fetch specific commission rule by ID
   const fetchCommissionRuleById = async (ruleId) => {
@@ -427,7 +432,13 @@ const AdminCommissionPage = () => {
 
   // Delete commission rule
   const deleteCommissionRule = async (ruleId) => {
-    if (!window.confirm('Are you sure you want to delete this commission rule?')) return;
+    const isConfirmed = await confirm({
+      title: 'Delete Commission Rule',
+      message: 'Are you sure you want to delete this commission rule? This action cannot be undone.',
+      type: 'danger',
+      confirmText: 'Delete',
+    });
+    if (!isConfirmed) return;
 
     try {
       const response = await CommissionService.deleteCommissionRule(ruleId);
@@ -486,35 +497,37 @@ const AdminCommissionPage = () => {
   };
 
   // Filter rules
-  const filteredRules = commissionRules.filter(rule => {
-    const matchesSearch = rule.name.toLowerCase().includes(filters.search.toLowerCase()) ||
-      rule.description?.toLowerCase().includes(filters.search.toLowerCase());
-    const matchesActive = filters.isActive === '' || rule.isActive.toString() === filters.isActive;
-    const matchesApplyTo = filters.applyTo === '' || rule.applyTo === filters.applyTo;
+  const filteredRules = useMemo(() => {
+    return commissionRules.filter(rule => {
+      const matchesSearch = rule.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+        rule.description?.toLowerCase().includes(debouncedSearch.toLowerCase());
+      const matchesActive = filters.isActive === '' || rule.isActive.toString() === filters.isActive;
+      const matchesApplyTo = filters.applyTo === '' || rule.applyTo === filters.applyTo;
 
-    let matchesPriority = true;
-    if (filters.priorityTier === 'global') {
-      matchesPriority = !rule.zoneId;
-    } else if (filters.priorityTier === 'zone') {
-      matchesPriority = !!rule.zoneId;
-    } else if (filters.priorityTier === 'performance') {
-      matchesPriority = rule.applyTo === 'performanceScore';
-    } else if (filters.priorityTier === 'provider') {
-      matchesPriority = rule.applyTo === 'specificProvider';
-    }
+      let matchesPriority = true;
+      if (filters.priorityTier === 'global') {
+        matchesPriority = !rule.zoneId;
+      } else if (filters.priorityTier === 'zone') {
+        matchesPriority = !!rule.zoneId;
+      } else if (filters.priorityTier === 'performance') {
+        matchesPriority = rule.applyTo === 'performanceScore';
+      } else if (filters.priorityTier === 'provider') {
+        matchesPriority = rule.applyTo === 'specificProvider';
+      }
 
-    let matchesZones = true;
-    if (zoneIds && zoneIds.length > 0) {
-      matchesZones = rule.zoneId && zoneIds.includes(rule.zoneId);
-    }
+      let matchesZones = true;
+      if (zoneIds && zoneIds.length > 0) {
+        matchesZones = rule.zoneId && zoneIds.includes(rule.zoneId);
+      }
 
-    let matchesPerformance = true;
-    if (filters.performanceScore) {
-      matchesPerformance = rule.applyTo === 'performanceScore' && rule.performanceScore === filters.performanceScore;
-    }
+      let matchesPerformance = true;
+      if (filters.performanceScore) {
+        matchesPerformance = rule.applyTo === 'performanceScore' && rule.performanceScore === filters.performanceScore;
+      }
 
-    return matchesSearch && matchesActive && matchesApplyTo && matchesPriority && matchesZones && matchesPerformance;
-  });
+      return matchesSearch && matchesActive && matchesApplyTo && matchesPriority && matchesZones && matchesPerformance;
+    });
+  }, [commissionRules, debouncedSearch, filters.isActive, filters.applyTo, filters.priorityTier, filters.performanceScore, zoneIds]);
 
   // Initial data fetch
   useEffect(() => {
@@ -768,33 +781,15 @@ const AdminCommissionPage = () => {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {loading ? (
-                    Array.from({ length: 5 }).map((_, index) => (
-                      <tr key={index} className="animate-pulse">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="h-4 bg-gray-200 rounded w-32"></div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="h-4 bg-gray-200 rounded w-20"></div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="h-4 bg-gray-200 rounded w-24"></div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="h-6 bg-gray-200 rounded-full w-16"></div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="h-4 bg-gray-200 rounded w-20"></div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex space-x-2">
-                            <div className="h-8 w-8 bg-gray-200 rounded"></div>
-                            <div className="h-8 w-8 bg-gray-200 rounded"></div>
-                            <div className="h-8 w-8 bg-gray-200 rounded"></div>
-                            <div className="h-8 w-8 bg-gray-200 rounded"></div>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
+                    <tr>
+                      <td colSpan="7" className="px-6 py-4">
+                        <div className="space-y-4 p-4 animate-pulse">
+                          {[1, 2, 3].map(i => (
+                            <div key={i} className="h-10 bg-slate-100 rounded-xl w-full" />
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
                   ) : filteredRules.length > 0 ? (
                     filteredRules.map((rule) => (
                       <tr key={rule._id} className="hover:bg-gray-50 transition-colors">
@@ -834,12 +829,11 @@ const AdminCommissionPage = () => {
                           )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${rule.isActive
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-red-100 text-red-800'
-                            }`}>
-                            {rule.isActive ? 'Active' : 'Inactive'}
-                          </span>
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+                            rule.isActive
+                              ? 'bg-green-50 text-green-800 border-green-200'
+                              : 'bg-red-50 text-red-800 border-red-200'
+                          }`}>{rule.isActive ? 'Active' : 'Inactive'}</span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {formatDate(rule.createdAt)}

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Pagination from '../../components/Pagination';
+import Processing from '../../components/ui-skeletons/Processing';
 import { useAuth } from '../../context/auth';
 import * as PaymentService from '../../services/PaymentService';
 import { ToastContainer, toast } from 'react-toastify';
@@ -46,7 +47,7 @@ const AdminPayout = () => {
 
       const response = await PaymentService.getAllWithdrawalRequests(params);
       const data = response.data;
-      
+
       if (data.success) {
         setWithdrawals(data.data || []);
         setTotal(data.total || 0);
@@ -62,8 +63,8 @@ const AdminPayout = () => {
   const clearFilters = () => { setFilters({ status: '', startDate: '', endDate: '', providerSearch: '', sortBy: '' }); setPage(1); };
 
   const handleApprove = (w) => { setSelectedWithdrawal(w); setApproveForm({ utrNo: '', transferDate: '', transferTime: '', adminRemark: '' }); setShowApproveModal(true); };
-  const handleReject  = (w) => { setSelectedWithdrawal(w); setRejectReason(''); setShowRejectModal(true); };
-  const handleView    = (w) => { setSelectedDetails(w); setShowDetailsModal(true); };
+  const handleReject = (w) => { setSelectedWithdrawal(w); setRejectReason(''); setShowRejectModal(true); };
+  const handleView = (w) => { setSelectedDetails(w); setShowDetailsModal(true); };
 
   const handleRejectSubmit = async (e) => {
     e.preventDefault();
@@ -100,12 +101,12 @@ const AdminPayout = () => {
 
   const getStatusBadge = (status) => {
     const cfg = {
-      requested:    'text-yellow-700 bg-yellow-50 border-yellow-200',
+      requested: 'text-yellow-700 bg-yellow-50 border-yellow-200',
       under_review: 'text-purple-700 bg-purple-50 border-purple-200',
-      approved:     'text-teal-700 bg-teal-50 border-teal-200',
-      processing:   'text-blue-700 bg-blue-50 border-blue-200',
-      completed:    'text-green-700 bg-green-50 border-green-200',
-      rejected:     'text-red-600 bg-red-50 border-red-200',
+      approved: 'text-teal-700 bg-teal-50 border-teal-200',
+      processing: 'text-blue-700 bg-blue-50 border-blue-200',
+      completed: 'text-green-700 bg-green-50 border-green-200',
+      rejected: 'text-red-600 bg-red-50 border-red-200',
     };
     return (
       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border capitalize ${cfg[status] || 'text-gray-600 bg-gray-50 border-gray-200'}`}>
@@ -188,7 +189,7 @@ const AdminPayout = () => {
               onChange={e => handleFilterChange('status', e.target.value)}
             >
               <option value="">All Status</option>
-              {['requested','under_review','approved','processing','completed','rejected'].map(s => (
+              {['requested', 'under_review', 'approved', 'processing', 'completed', 'rejected'].map(s => (
                 <option key={s} value={s}>{s.replace('_', ' ')}</option>
               ))}
             </select>
@@ -383,10 +384,10 @@ const AdminPayout = () => {
                   className="flex-1 py-2.5 text-sm font-medium text-secondary bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
                   Cancel
                 </button>
-                <button type="submit" disabled={submitting}
+                <Processing type="submit" loading={submitting} loadingText="Processing…"
                   className="flex-1 py-2.5 text-sm font-medium text-white bg-primary hover:bg-teal-700 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-                  {submitting ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Processing…</> : 'Approve Payment'}
-                </button>
+                  Approve Payment
+                </Processing>
               </div>
             </form>
           </div>
@@ -431,10 +432,10 @@ const AdminPayout = () => {
                   className="flex-1 py-2.5 text-sm font-medium text-secondary bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
                   Cancel
                 </button>
-                <button type="submit" disabled={submitting}
+                <Processing type="submit" loading={submitting} loadingText="Processing…"
                   className="flex-1 py-2.5 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-                  {submitting ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Processing…</> : 'Reject Withdrawal'}
-                </button>
+                  Reject Withdrawal
+                </Processing>
               </div>
             </form>
           </div>

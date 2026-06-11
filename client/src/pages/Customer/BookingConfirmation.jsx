@@ -13,7 +13,9 @@ import axiosInstance from '../../api/axiosInstance';
 import * as TransactionService from '../../services/TransactionService';
 import * as CustomerService from '../../services/CustomerService';
 import * as SystemService from '../../services/SystemService';
-import Loader from '../../components/Loader';
+import Loader from '../../components/ui-skeletons/Loader';
+import Processing from '../../components/ui-skeletons/Processing';
+import ErrorState from '../../components/Error';
 import { formatDate, formatTime, formatCurrency } from '../../utils/format';
 
 const BookingConfirmation = () => {
@@ -449,16 +451,14 @@ const BookingConfirmation = () => {
 
   if (error || !bookingDetails) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="text-center max-w-md bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
-          <AlertTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-secondary mb-2">Something went wrong</h2>
-          <p className="text-gray-500 mb-6">{error || 'Booking not found'}</p>
-          <button onClick={() => navigate('/customer/services')} className="px-6 py-3 bg-primary text-white rounded-xl font-medium">
-            Browse Services
-          </button>
-        </div>
-      </div>
+      <ErrorState
+        title="Failed to Load"
+        message={error || 'Booking not found'}
+        onRetry={() => fetchBookingDetails()}
+        retryText="Try Again"
+        onBack={() => navigate('/customer/services')}
+        backText="Browse Services"
+      />
     );
   }
 
@@ -817,7 +817,7 @@ const BookingConfirmation = () => {
                   )}
 
                   <div className="space-y-3">
-                    <button
+                    <Processing
                       onClick={() => {
                         if (paymentMethod === 'wallet') {
                           handleWalletPayment();
@@ -827,31 +827,23 @@ const BookingConfirmation = () => {
                           handleOnlineOrMixedPayment(paymentMethod);
                         }
                       }}
-                      disabled={isProcessingPayment}
+                      loading={isProcessingPayment}
+                      loadingText={paymentProgressMessage || 'Processing...'}
                       className="w-full flex items-center justify-center gap-2 py-2.5 bg-primary text-white rounded-lg text-sm font-bold hover:bg-primary/90 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
                     >
-                      {isProcessingPayment ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          {paymentProgressMessage || 'Processing...'}
-                        </>
+                      {paymentMethod === 'cash' ? (
+                        <Wallet className="w-4 h-4" />
                       ) : (
-                        <>
-                          {paymentMethod === 'cash' ? (
-                            <Wallet className="w-4 h-4" />
-                          ) : (
-                            <CreditCard className="w-4 h-4" />
-                          )}
-                          {paymentMethod === 'wallet'
-                            ? `Pay via Wallet • ${formatCurrency(totalAmount)}`
-                            : paymentMethod === 'mixed'
-                              ? `Pay Remaining • ${formatCurrency(Math.max(0, totalAmount - walletBalance))}`
-                              : paymentMethod === 'cash'
-                                ? `Confirm Cash Booking • ${formatCurrency(totalAmount)}`
-                                : `Pay Online • ${formatCurrency(totalAmount)}`}
-                        </>
+                        <CreditCard className="w-4 h-4" />
                       )}
-                    </button>
+                      {paymentMethod === 'wallet'
+                        ? `Pay via Wallet • ${formatCurrency(totalAmount)}`
+                        : paymentMethod === 'mixed'
+                          ? `Pay Remaining • ${formatCurrency(Math.max(0, totalAmount - walletBalance))}`
+                          : paymentMethod === 'cash'
+                            ? `Confirm Cash Booking • ${formatCurrency(totalAmount)}`
+                            : `Pay Online • ${formatCurrency(totalAmount)}`}
+                    </Processing>
                   </div>
                   <div className="mt-3 flex justify-center gap-3 text-xs text-gray-400">
                     <div className="flex items-center gap-1"><Lock className="w-3 h-3" />Secure</div>

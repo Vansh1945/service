@@ -3,7 +3,7 @@ import { useAuth } from '../../context/auth';
 import { useNavigate } from 'react-router-dom';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import LoadingSpinner from '../../components/Loader';
+import LoadingSpinner from '../../components/ui-skeletons/Loader';
 import {
   FiCalendar, FiDollarSign, FiUsers, FiUser,
   FiTrendingUp, FiPieChart, FiArrowUp, FiClock,

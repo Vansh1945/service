@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import Pagination from '../../components/Pagination';
+import TableSkeleton from '../../components/ui-skeletons/TableSkeleton';
+import Modal from '../../components/ui/Modal';
 import {
   Search,
   Filter,
@@ -346,46 +348,40 @@ const AdminProviders = () => {
           </div>
         </div>
 
-        {/* Loading State */}
-        {loading && (
-          <div className="bg-white rounded-xl shadow-md p-8 mb-6 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-            <p className="mt-4 text-gray-600">Loading providers...</p>
-          </div>
-        )}
-
         {/* Providers Table */}
-        {!loading && (
-          <div className="bg-white rounded-xl shadow-md overflow-hidden">
-            {currentProviders.length === 0 ? (
-              <div className="text-center py-12 md:py-16">
-                <Users className="w-12 h-12 md:w-16 md:h-16 text-gray-400 mx-auto mb-3 md:mb-4" />
-                <p className="text-gray-600 text-md md:text-lg">No providers found</p>
-                <p className="text-gray-400 text-sm mt-1 md:mt-2">
-                  {searchTerm || statusFilter !== 'approved' || serviceFilter !== 'all' || ratingFilter !== 'all'
-                    ? 'Try adjusting your search or filters'
-                    : 'No approved providers found'
-                  }
-                </p>
-              </div>
-            ) : (
-              <>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Provider</th>
-                        <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
-                        <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Services</th>
-                        <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Experience</th>
-                        <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bookings</th>
-                        <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Performance</th>
-                        <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                        <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {currentProviders.map((provider) => (
+        <div className="bg-white rounded-xl shadow-md overflow-hidden">
+          {(!loading && currentProviders.length === 0) ? (
+            <div className="text-center py-12 md:py-16">
+              <Users className="w-12 h-12 md:w-16 md:h-16 text-gray-400 mx-auto mb-3 md:mb-4" />
+              <p className="text-gray-600 text-md md:text-lg">No providers found</p>
+              <p className="text-gray-400 text-sm mt-1 md:mt-2">
+                {searchTerm || statusFilter !== 'approved' || serviceFilter !== 'all' || ratingFilter !== 'all'
+                  ? 'Try adjusting your search or filters'
+                  : 'No approved providers found'
+                }
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Provider</th>
+                      <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
+                      <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Services</th>
+                      <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Experience</th>
+                      <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bookings</th>
+                      <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Performance</th>
+                      <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                      <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {loading ? (
+                      <TableSkeleton rows={8} cols={8} />
+                    ) : (
+                      currentProviders.map((provider) => (
                         <tr key={provider._id} className="hover:bg-gray-50 transition-colors duration-200">
                           <td className="px-4 md:px-6 py-4">
                             <div className="flex items-center">
@@ -461,25 +457,21 @@ const AdminProviders = () => {
                             </div>
                           </td>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Pagination */}
-                <div className="mt-4">
-                  <Pagination
-                    currentPage={currentPage}
-                    totalPages={totalPages}
-                    totalItems={filteredProviders.length}
-                    limit={itemsPerPage}
-                    onPageChange={setCurrentPage}
-                  />
-                </div>
-              </>
-            )}
-          </div>
-        )}
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalItems={filteredProviders.length}
+                limit={itemsPerPage}
+                onPageChange={setCurrentPage}
+              />
+            </>
+          )}
+        </div>
 
         {/* View Provider Modal */}
         {showViewModal && selectedProvider && (
@@ -530,6 +522,10 @@ const ProviderModal = ({
   processingAction,
   handleStatusUpdate
 }) => {
+  const [showDurationInput, setShowDurationInput] = useState(false);
+  const [durationType, setDurationType] = useState('restricted'); // or 'blocked'
+  const [durationValue, setDurationValue] = useState('');
+
   if (!provider) return null;
   const ps = provider.performanceScore || {};
   const bd = provider.bankDetails || {};
@@ -783,8 +779,9 @@ const ProviderModal = ({
               {(!isRestricted && !isBlocked && !isSuspended && provider.approved) && (
                 <button
                   onClick={() => {
-                    const days = prompt('Restriction duration in days (blank = indefinite):');
-                    handleStatusUpdate('restricted', days ? Number(days) : null);
+                    setDurationType('restricted');
+                    setDurationValue('');
+                    setShowDurationInput(true);
                   }}
                   disabled={processingAction}
                   className="py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
@@ -804,8 +801,9 @@ const ProviderModal = ({
               {(!isBlocked && provider.approved) && (
                 <button
                   onClick={() => {
-                    const days = prompt('Block duration in days (blank = permanent):');
-                    handleStatusUpdate('blocked', days ? Number(days) : null);
+                    setDurationType('blocked');
+                    setDurationValue('');
+                    setShowDurationInput(true);
                   }}
                   disabled={processingAction}
                   className="py-2.5 bg-red-700 hover:bg-red-800 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
@@ -837,6 +835,58 @@ const ProviderModal = ({
           </button>
         </div>
       </div>
+
+      {showDurationInput && (
+        <Modal
+          isOpen={showDurationInput}
+          onClose={() => setShowDurationInput(false)}
+          title={durationType === 'restricted' ? 'Restrict Provider Account' : 'Block Provider Account'}
+          size="small"
+        >
+          <div className="p-1">
+            <p className="text-xs text-gray-500 mb-4 leading-relaxed">
+              {durationType === 'restricted'
+                ? 'Specify the number of days to restrict this provider. Leave blank for an indefinite restriction.'
+                : 'Specify the number of days to block this provider. Leave blank for a permanent block.'}
+            </p>
+            <div className="mb-4">
+              <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                Duration (Days)
+              </label>
+              <input
+                type="number"
+                min="1"
+                placeholder={durationType === 'restricted' ? 'e.g. 7 (blank for indefinite)' : 'e.g. 30 (blank for permanent)'}
+                value={durationValue}
+                onChange={(e) => setDurationValue(e.target.value)}
+                className="w-full p-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-teal-400 focus:border-transparent bg-white"
+              />
+            </div>
+            <div className="flex items-center gap-3 w-full mt-6">
+              <button
+                type="button"
+                onClick={() => setShowDurationInput(false)}
+                className="flex-1 py-2 px-4 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDurationInput(false);
+                  const days = durationValue.trim();
+                  handleStatusUpdate(durationType, days ? Number(days) : null);
+                }}
+                className={`flex-1 py-2 px-4 text-xs font-bold text-white rounded-lg transition-all ${
+                  durationType === 'restricted' ? 'bg-amber-500 hover:bg-amber-600' : 'bg-red-700 hover:bg-red-800'
+                }`}
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

@@ -7,7 +7,7 @@ import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useAuth } from '../context/auth';
 import Rating from '@mui/material/Rating';
-import LoadingSpinner from '../components/Loader';
+import ServiceCardSkeleton from '../components/ui-skeletons/ServiceCardSkeleton';
 import { getActiveServices } from '../services/ServiceService';
 
 const Services = ({ limit }) => {
@@ -148,7 +148,19 @@ const Services = ({ limit }) => {
     );
   };
 
-  if (loading) return <LoadingSpinner />;
+  if (loading) {
+    return (
+      <section className={`bg-transparent min-h-screen ${limit ? 'py-4' : 'py-10'} px-4 md:px-8`}>
+        <div className="max-w-[1500px] mx-auto">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
+            {Array.from({ length: limit || 8 }).map((_, i) => (
+              <ServiceCardSkeleton key={i} />
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   const displayedServices = limit ? services.slice(0, limit) : services;
 

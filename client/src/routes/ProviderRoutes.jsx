@@ -1,6 +1,6 @@
 import { Routes, Route } from "react-router-dom";
 import { lazy, Suspense, useEffect } from "react";
-import LoadingSpinner from "../components/Loader";
+import LoadingSpinner from "../components/ui-skeletons/Loader";
 import ProtectedRoute from "../components/ProtectedRoute";
 
 // 🚀 Advanced preloading factory for critical components

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/auth';
 import * as ContactService from '../../services/ContactService';
 import Pagination from '../../components/Pagination';
+import TableSkeleton from '../../components/ui-skeletons/TableSkeleton';
 import { formatDate, formatDateTime } from '../../utils/format';
 import {
   Search,
@@ -21,41 +22,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 
-// Status Badge Component
-const StatusBadge = ({ status }) => {
-  const getStatusConfig = (status) => {
-    switch (status) {
-      case 'NEW':
-        return {
-          color: 'bg-blue-50 text-blue-700 border-blue-200',
-          icon: AlertCircle,
-          iconColor: 'text-blue-600'
-        };
-      case 'REPLIED':
-        return {
-          color: 'bg-green-50 text-green-700 border-green-200',
-          icon: CheckCircle,
-          iconColor: 'text-green-600'
-        };
-      default:
-        return {
-          color: 'bg-gray-50 text-gray-700 border-gray-200',
-          icon: MessageSquare,
-          iconColor: 'text-gray-600'
-        };
-    }
-  };
 
-  const config = getStatusConfig(status);
-  const Icon = config.icon;
-
-  return (
-    <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium border ${config.color}`}>
-      <Icon className={`w-4 h-4 mr-2 ${config.iconColor}`} />
-      {status === 'NEW' ? 'New' : status === 'REPLIED' ? 'Replied' : status}
-    </span>
-  );
-};
 
 // Stats Card Component
 const StatsCard = ({ title, value, icon: Icon, trend, trendValue }) => (
@@ -166,7 +133,11 @@ const ContactDetailsModal = ({ contact, onClose, onReply }) => {
                     <p className="font-medium text-secondary">{formatDateTime(contact.createdAt)}</p>
                   </div>
                 </div>
-                <StatusBadge status={contact.status} />
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+                  contact.status === 'REPLIED'
+                    ? 'bg-green-50 text-green-800 border-green-200'
+                    : 'bg-yellow-50 text-yellow-800 border-yellow-200'
+                }`}>{contact.status}</span>
               </div>
             </div>
           </div>
@@ -521,34 +492,7 @@ const UserContacts = () => {
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {loading ? (
-                  Array.from({ length: 5 }).map((_, index) => (
-                    <tr key={index} className="animate-pulse">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
-                          <div className="space-y-2">
-                            <div className="h-4 bg-gray-200 rounded w-32"></div>
-                            <div className="h-3 bg-gray-200 rounded w-24"></div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="space-y-2">
-                          <div className="h-4 bg-gray-200 rounded w-40"></div>
-                          <div className="h-3 bg-gray-200 rounded w-32"></div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="h-6 bg-gray-200 rounded w-20"></div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="h-4 bg-gray-200 rounded w-16"></div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="h-8 bg-gray-200 rounded w-24"></div>
-                      </td>
-                    </tr>
-                  ))
+                  <TableSkeleton rows={8} cols={5} />
                 ) : contacts.length === 0 ? (
                   <tr>
                     <td colSpan="5" className="px-6 py-12 text-center">
@@ -592,7 +536,11 @@ const UserContacts = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <StatusBadge status={contact.status} />
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+                          contact.status === 'REPLIED'
+                            ? 'bg-green-50 text-green-800 border-green-200'
+                            : 'bg-yellow-50 text-yellow-800 border-yellow-200'
+                        }`}>{contact.status}</span>
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-sm text-secondary">{formatDate(contact.createdAt)}</div>

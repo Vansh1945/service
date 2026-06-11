@@ -8,6 +8,7 @@ import {
   Sparkles, Award, HeadphonesIcon, Info
 } from 'lucide-react';
 import AddressSelector from '../../components/AddressSelector';
+import Processing from '../../components/ui-skeletons/Processing';
 
 // ─── Static sub-components (defined OUTSIDE to avoid remount) ──────────────
 
@@ -481,24 +482,16 @@ const CustomerRegistration = () => {
                     </button>
                   )}
 
-                  <button
+                  <Processing
                     type="button"
                     onClick={nextStep}
-                    disabled={isLoading}
+                    loading={isLoading}
+                    loadingText="Processing..."
                     className="flex-1 flex items-center justify-center gap-2 py-3 rounded-lg bg-primary text-background text-sm font-bold hover:bg-primary/90 active:scale-[0.99] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    {isLoading ? (
-                      <>
-                        <div className="h-4 w-4 rounded-full border-2 border-background border-t-transparent animate-spin" />
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        {currentStep === totalSteps ? 'Complete Registration' : 'Continue'}
-                        <ArrowRight className="w-4 h-4" />
-                      </>
-                    )}
-                  </button>
+                    {currentStep === totalSteps ? 'Complete Registration' : 'Continue'}
+                    <ArrowRight className="w-4 h-4" />
+                  </Processing>
                 </div>
 
                 <div className="text-center mt-6">

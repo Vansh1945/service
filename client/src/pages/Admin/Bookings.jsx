@@ -2,7 +2,59 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
 import { useSocket } from '../../socket/SocketContext';
-import Loader from '../../components/Loader';
+import TableSkeleton from '../../components/ui-skeletons/TableSkeleton';
+import useDebounce from '../../hooks/useDebounce';
+// Local status helper functions
+const getStatusColor = (status) => {
+    switch (status?.toLowerCase()) {
+        case 'pending':
+            return 'bg-yellow-50 text-yellow-800 border-yellow-200';
+        case 'accepted':
+        case 'new':
+            return 'bg-blue-50 text-blue-800 border-blue-200';
+        case 'in-progress':
+        case 'started':
+            return 'bg-indigo-50 text-indigo-800 border-indigo-200';
+        case 'completed':
+        case 'active':
+        case 'approved':
+        case 'replied':
+            return 'bg-green-50 text-green-800 border-green-200';
+        case 'cancelled':
+        case 'inactive':
+        case 'restricted':
+        case 'rejected':
+            return 'bg-red-50 text-red-800 border-red-200';
+        default:
+            return 'bg-gray-50 text-gray-800 border-gray-200';
+    }
+};
+
+const getStatusIcon = (status) => {
+    const baseClass = "w-4 h-4";
+    switch (status?.toLowerCase()) {
+        case 'pending':
+            return <AlertCircle className={baseClass} />;
+        case 'accepted':
+        case 'new':
+            return <UserCheck className={baseClass} />;
+        case 'in-progress':
+        case 'started':
+            return <Activity className={baseClass} />;
+        case 'completed':
+        case 'active':
+        case 'approved':
+        case 'replied':
+            return <CheckCircle className={baseClass} />;
+        case 'cancelled':
+        case 'inactive':
+        case 'restricted':
+        case 'rejected':
+            return <XCircle className={baseClass} />;
+        default:
+            return <AlertCircle className={baseClass} />;
+    }
+};
 import { MapContainer, TileLayer, Marker, Polyline, useMap, Popup, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 
@@ -33,6 +85,8 @@ const MapBoundsHelper = ({ providerLoc, targetLat, targetLng }) => {
 import * as BookingService from '../../services/BookingService';
 import * as AdminService from '../../services/AdminService';
 import Pagination from '../../components/Pagination';
+import DeleteConfirmModal from '../../components/modals/DeleteConfirmModal';
+import RescheduleModal from '../../components/modals/RescheduleModal';
 import { useAdminFilter } from '../../context/AdminFilterContext';
 import AdminFilterBar from '../../components/AdminFilterBar';
 import { formatDate, formatTime, formatCurrency, LIGHT_MAP_TILES, LIGHT_MAP_ATTRIBUTION } from '../../utils/format';
@@ -93,28 +147,6 @@ const timeRangeOptions = [
 ];
 
 // Helper functions outside component to prevent recreation on every render
-const getStatusColor = (status) => {
-    switch (status) {
-        case 'pending': return 'bg-yellow-50 text-yellow-800 border-yellow-200';
-        case 'accepted': return 'bg-blue-50 text-blue-800 border-blue-200';
-        case 'in-progress': return 'bg-indigo-50 text-indigo-800 border-indigo-200';
-        case 'completed': return 'bg-green-50 text-green-800 border-green-200';
-        case 'cancelled': return 'bg-red-50 text-red-800 border-red-200';
-        default: return 'bg-gray-50 text-gray-800 border-gray-200';
-    }
-};
-
-const getStatusIcon = (status) => {
-    const baseClass = "w-4 h-4";
-    switch (status) {
-        case 'pending': return <AlertCircle className={baseClass} />;
-        case 'accepted': return <UserCheck className={baseClass} />;
-        case 'in-progress': return <Activity className={baseClass} />;
-        case 'completed': return <CheckCircle className={baseClass} />;
-        case 'cancelled': return <XCircle className={baseClass} />;
-        default: return <AlertCircle className={baseClass} />;
-    }
-};
 
 
 // Memoized Booking Row to prevent unnecessary re-renders
@@ -205,13 +237,15 @@ const BookingRow = React.memo(({ booking, onDetails, onReschedule, onAssign, onD
                     <Eye className="w-4 h-4" />
                 </button>
 
-                <button
-                    onClick={() => onReschedule(booking)}
-                    className="p-1 text-blue-600 hover:text-blue-800"
-                    title="Update Date/Time"
-                >
-                    <Calendar className="w-4 h-4" />
-                </button>
+                {!["completed", "cancelled"].includes(booking.status) && (
+                    <button
+                        onClick={() => onReschedule(booking)}
+                        className="p-1 text-blue-600 hover:text-blue-800"
+                        title="Update Date/Time"
+                    >
+                        <Calendar className="w-4 h-4" />
+                    </button>
+                )}
 
                 {booking.status === 'pending' && !booking.provider && (
                     <button
@@ -547,42 +581,25 @@ const AdminBookingsView = () => {
     const [providers, setProviders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
-    const [showRescheduleModal, setShowRescheduleModal] = useState(false);
-    const [showAssignProviderModal, setShowAssignProviderModal] = useState(false);
 
-    // Cancellation enhancements states
-    const [showCancelModal, setShowCancelModal] = useState(false);
-    const [bookingComplaints, setBookingComplaints] = useState([]);
-
-    const fetchBookingComplaints = async (bookingId) => {
-        try {
-            const response = await API.get(`/api/complaint?booking=${bookingId}`);
-            if (response.data.success) {
-                setBookingComplaints(response.data.data || []);
-            }
-        } catch (err) {
-            console.error('Error fetching complaints for booking:', err);
-        }
-    };
-
-    const handleCancelBookingByAdmin = async (payload) => {
-        setActionLoading(true);
-        try {
-            const bookingId = selectedBooking.booking._id;
-            const res = await API.patch(`/api/admin/bookings/${bookingId}/cancel`, payload);
-            if (res.data.success) {
-                showToast('Booking cancelled successfully and refund processed to wallet.', 'success');
-                setShowCancelModal(false);
-                setShowModal(false);
-                fetchBookings();
-            }
-        } catch (err) {
-            showToast(err.response?.data?.message || 'Failed to cancel booking', 'error');
-        } finally {
-            setActionLoading(false);
-        }
-    };
-
+    const [pagination, setPagination] = useState(() => {
+        const params = new URLSearchParams(window.location.search);
+        return {
+            page: parseInt(params.get('page')) || 1,
+            limit: 10,
+            total: 0,
+            pages: 0
+        };
+    });
+    const [filters, setFilters] = useState(() => {
+        const params = new URLSearchParams(window.location.search);
+        return {
+            status: '',
+            search: params.get('search') || '',
+            paymentStatus: ''
+        };
+    });
+    // useAdminFilter hook provides merged query utility
     const {
         filterType,
         year,
@@ -593,52 +610,25 @@ const AdminBookingsView = () => {
         getMergedQuery
     } = useAdminFilter();
 
-    // Filter states - initialize from URL to prevent race conditions and flashes
-    const [filters, setFilters] = useState(() => {
-        const params = new URLSearchParams(window.location.search);
-        return {
-            status: '',
-            search: params.get('search') || '',
-            paymentStatus: ''
-        };
-    });
+    const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+    const [showAssignProviderModal, setShowAssignProviderModal] = useState(false);
+    const [providerSearch, setProviderSearch] = useState('');
 
-    // Pagination state
-    const [pagination, setPagination] = useState(() => {
-        const params = new URLSearchParams(window.location.search);
-        return {
-            page: parseInt(params.get('page')) || 1,
-            limit: 10,
-            total: 0,
-            pages: 0
-        };
-    });
+    // Cancellation enhancements states
+    const [showCancelModal, setShowCancelModal] = useState(false);
+    const [bookingComplaints, setBookingComplaints] = useState([]);
 
-    // Update filters when URL search param changes (for in-page navigation)
-    useEffect(() => {
-        const params = new URLSearchParams(location.search);
-        const searchParam = params.get('search');
-
-        // Only update if the search filter actually changed to avoid infinite loops
-        if (searchParam !== undefined && searchParam !== filters.search) {
-            setFilters(prev => ({ ...prev, search: searchParam || '' }));
-            setPagination(prev => ({ ...prev, page: 1 }));
-        }
-    }, [location.search]);
-
-    // Fetch all providers for assignment — useCallback keeps reference stable
-    const fetchProviders = useCallback(async () => {
+    const fetchBookingComplaints = useCallback(async (bookingId) => {
         try {
-            const response = await AdminService.getAllProviders();
-            const data = response.data;
-            setProviders(data.providers || data.data || []);
-        } catch (error) {
-            console.error('Error fetching providers:', error);
-            showToast(error.message, 'error');
+            const response = await API.get(`/api/complaint?booking=${bookingId}`);
+            if (response.data.success) {
+                setBookingComplaints(response.data.data || []);
+            }
+        } catch (err) {
+            console.error('Error fetching complaints for booking:', err);
         }
-    }, [showToast]);
+    }, [API]);
 
-    // Fetch bookings with filters and pagination
     const fetchBookings = useCallback(async () => {
         try {
             setLoading(true);
@@ -674,8 +664,70 @@ const AdminBookingsView = () => {
         } finally {
             setLoading(false);
         }
-    }, [showToast, filters, pagination.page, pagination.limit]);
+    }, [showToast, filters, pagination.page, pagination.limit, getMergedQuery]);
+    const handleCancelBookingByAdmin = useCallback(async (payload) => {
+        setActionLoading(true);
+        try {
+            const bookingId = selectedBooking.booking._id;
+            const res = await API.patch(`/api/admin/bookings/${bookingId}/cancel`, payload);
+            if (res.data.success) {
+                showToast('Booking cancelled successfully and refund processed to wallet.', 'success');
+                setShowCancelModal(false);
+                setShowModal(false);
+                fetchBookings();
+            }
+        } catch (err) {
+            showToast(err.response?.data?.message || 'Failed to cancel booking', 'error');
+        } finally {
+            setActionLoading(false);
+        }
+    }, [selectedBooking, API, showToast, fetchBookings]);
 
+
+
+    // Search input state (independent of filters.search to enable debouncing)
+    const [searchQuery, setSearchQuery] = useState(() => {
+        const params = new URLSearchParams(window.location.search);
+        return params.get('search') || '';
+    });
+    const debouncedSearchQuery = useDebounce(searchQuery, 500);
+
+    // Sync debounced search to filters.search
+    useEffect(() => {
+        setFilters(prev => {
+            if (prev.search === debouncedSearchQuery) return prev;
+            return { ...prev, search: debouncedSearchQuery };
+        });
+        setPagination(prev => ({ ...prev, page: 1 }));
+    }, [debouncedSearchQuery]);
+
+    // Update filters when URL search param changes (for in-page navigation)
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const searchParam = params.get('search');
+
+        // Only update if the search filter actually changed to avoid infinite loops
+        if (searchParam !== undefined && searchParam !== searchQuery) {
+            setSearchQuery(searchParam || '');
+        }
+    }, [location.search, searchQuery]);
+
+    // Fetch all providers for assignment — useCallback keeps reference stable
+    const fetchProviders = useCallback(async () => {
+        try {
+            const response = await AdminService.getAllProviders();
+            const data = response.data;
+            setProviders(data.providers || data.data || []);
+        } catch (error) {
+            console.error('Error fetching providers:', error);
+            showToast(error.message, 'error');
+        }
+    }, [showToast]);
+
+    // --- fetchBookings definition moved above to avoid temporal dead zone ---
+    // fetchBookings definition moved above
+
+    // fetchBookings definition moved above; original removed
 
 
     // Fetch booking details
@@ -794,25 +846,27 @@ const AdminBookingsView = () => {
         }
     }, [showToast, fetchBookings]);
 
-    // Download booking report
-    // Removed handleDownloadReport as per requirement to only download reports on Earning Reports page
-
     // Handle filter changes — useCallback avoids recreation on every render
     const handleFilterChange = useCallback((key, value) => {
-        setFilters(prev => ({ ...prev, [key]: value }));
-        setPagination(prev => ({ ...prev, page: 1 }));
+        if (key === 'search') {
+            setSearchQuery(value);
+        } else {
+            setFilters(prev => ({ ...prev, [key]: value }));
+            setPagination(prev => ({ ...prev, page: 1 }));
+        }
     }, []);
 
-    const navigateToTransaction = (bookingId) => {
+    const navigateToTransaction = useCallback((bookingId) => {
         if (!bookingId) {
             showToast('No booking ID available', 'error');
             return;
         }
         navigate(`/admin/transactions?bookingId=${bookingId}`);
-    };
+    }, [navigate, showToast]);
 
     // Clear all filters
     const clearFilters = useCallback(() => {
+        setSearchQuery('');
         setFilters({
             status: '',
             search: '',
@@ -838,8 +892,8 @@ const AdminBookingsView = () => {
         );
     }, []);
 
-    // Filter providers by service location match
-    const getFilteredProviders = (booking) => {
+    // Filter providers by service location match (stable callback)
+    const getFilteredProviders = useCallback((booking) => {
         if (!booking || !booking.address) return providers.filter(p => p.approved);
 
         return providers.filter(provider => {
@@ -850,23 +904,35 @@ const AdminBookingsView = () => {
             return providerCity.toLowerCase().includes(bookingCity.toLowerCase()) ||
                 bookingCity.toLowerCase().includes(providerCity.toLowerCase());
         });
-    };
+    }, [providers]);
 
     // Memoized filtered bookings count
     const filteredBookingsCount = useMemo(() => {
         return bookings.length;
     }, [bookings]);
 
-    // Render table content based on loading and data state
+    // Stable handlers for BookingRow to prevent breaking memoization
+    const handleOnReschedule = useCallback((b) => {
+        setSelectedBooking(b);
+        setShowRescheduleModal(true);
+    }, []);
+
+    const handleOnAssign = useCallback((b) => {
+        setSelectedBooking(b);
+        setShowAssignProviderModal(true);
+    }, []);
+
+    const handleOnDelete = useCallback((b) => {
+        setDeleteConfirm({
+            id: b._id,
+            userId: b.customer?._id,
+            type: 'booking'
+        });
+    }, []);
+
     const renderTableContent = () => {
         if (loading) {
-            return (
-                <tr>
-                    <td colSpan="7" className="px-4 py-8">
-                        <Loader />
-                    </td>
-                </tr>
-            );
+            return <TableSkeleton rows={8} cols={7} />;
         }
 
         if (bookings.length === 0) {
@@ -886,14 +952,10 @@ const AdminBookingsView = () => {
                 key={booking._id}
                 booking={booking}
                 onDetails={fetchBookingDetails}
-                onReschedule={(b) => { setSelectedBooking(b); setShowRescheduleModal(true); }}
-                onAssign={(b) => { setSelectedBooking(b); setShowAssignProviderModal(true); }}
+                onReschedule={handleOnReschedule}
+                onAssign={handleOnAssign}
                 onCancel={handleInitiateCancel}
-                onDelete={(b) => setDeleteConfirm({
-                    id: b._id,
-                    userId: b.customer?._id,
-                    type: 'booking'
-                })}
+                onDelete={handleOnDelete}
             />
         ));
     };
@@ -1018,7 +1080,7 @@ const AdminBookingsView = () => {
                             <input
                                 type="text"
                                 placeholder="Search bookings..."
-                                value={filters.search}
+                                value={searchQuery}
                                 onChange={(e) => handleFilterChange('search', e.target.value)}
                                 className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                             />
@@ -1620,7 +1682,7 @@ const AdminBookingsView = () => {
                                             fetchBookingComplaints(bk._id);
                                             setShowCancelModal(true);
                                         }}
-                                        className="px-5 py-1.5 bg-red-650 text-white text-sm font-semibold rounded-lg hover:bg-red-750 transition-colors"
+                                        className="px-5 py-1.5 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 transition-colors"
                                     >
                                         Cancel Booking
                                     </button>
@@ -1645,69 +1707,14 @@ const AdminBookingsView = () => {
 
             {/* Reschedule Booking Modal */}
             {showRescheduleModal && selectedBooking && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-lg max-w-md w-full">
-                        <div className="p-6">
-                            <div className="flex justify-between items-center mb-4">
-                                <h3 className="text-lg font-semibold text-secondary">Reschedule Booking</h3>
-                                <button
-                                    onClick={() => setShowRescheduleModal(false)}
-                                    className="text-gray-400 hover:text-gray-600"
-                                >
-                                    <X className="w-6 h-6" />
-                                </button>
-                            </div>
-
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        New Date
-                                    </label>
-                                    <input
-                                        type="date"
-                                        id="rescheduleDate"
-                                        min={new Date().toISOString().split('T')[0]}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        New Time
-                                    </label>
-                                    <input
-                                        type="time"
-                                        id="rescheduleTime"
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                                    />
-                                </div>
-
-                                <div className="flex space-x-3 pt-4">
-                                    <button
-                                        onClick={() => setShowRescheduleModal(false)}
-                                        className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            const date = document.getElementById('rescheduleDate').value;
-                                            const time = document.getElementById('rescheduleTime').value;
-                                            if (date || time) {
-                                                handleRescheduleBooking(selectedBooking._id, date, time);
-                                            } else {
-                                                showToast('Please provide either date or time', 'error');
-                                            }
-                                        }}
-                                        disabled={actionLoading}
-                                        className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-700 disabled:opacity-50"
-                                    >
-                                        {actionLoading ? 'Updating...' : 'Update Schedule'}
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <RescheduleModal
+                    isOpen={showRescheduleModal}
+                    onClose={() => setShowRescheduleModal(false)}
+                    onConfirm={(date, time) => {
+                        handleRescheduleBooking(selectedBooking._id, date, time);
+                    }}
+                    actionLoading={actionLoading}
+                />
             )}
 
             {/* Assign Provider Modal */}
@@ -1730,17 +1737,27 @@ const AdminBookingsView = () => {
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         Select Provider
                                     </label>
-                                    <select
-                                        id="providerSelect"
+                                    <input
+                                        type="text"
+                                        list="providerOptions"
+                                        value={providerSearch}
+                                        onChange={(e) => setProviderSearch(e.target.value)}
+                                        placeholder="Search providers..."
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                                    >
-                                        <option value="">Select a provider</option>
-                                        {getFilteredProviders(selectedBooking).map(provider => (
-                                            <option key={provider._id} value={provider._id}>
-                                                {provider.providerId ? `[${provider.providerId}] ` : ''}{provider.businessName || provider.name} (Bookings: {provider.completedBookings || 0}, Badge: {provider.performanceBadge || provider.performanceScore?.badge || 'Bronze'}) - {provider.serviceLocation?.city || provider.city || 'N/A'}
-                                            </option>
-                                        ))}
-                                    </select>
+                                    />
+                                    <datalist id="providerOptions">
+                                        {getFilteredProviders(selectedBooking)
+                                            .filter(p =>
+                                                (p.providerId && p.providerId.toString().toLowerCase().includes(providerSearch.toLowerCase())) ||
+                                                (p.businessName && p.businessName.toLowerCase().includes(providerSearch.toLowerCase())) ||
+                                                (p.name && p.name.toLowerCase().includes(providerSearch.toLowerCase()))
+                                            )
+                                            .map(provider => (
+                                                <option key={provider._id} value={provider._id}>
+                                                    {provider.providerId ? `[${provider.providerId}] ` : ''}{provider.businessName || provider.name} (Bookings: {provider.completedBookings || 0}, Badge: {provider.performanceBadge || provider.performanceScore?.badge || 'Bronze'}) - {provider.serviceLocation?.city || provider.city || 'N/A'}
+                                                </option>
+                                            ))}
+                                    </datalist>
                                     <p className="text-xs text-gray-500 mt-1">
                                         Showing providers matching the service location
                                     </p>
@@ -1755,7 +1772,7 @@ const AdminBookingsView = () => {
                                     </button>
                                     <button
                                         onClick={() => {
-                                            const providerId = document.getElementById('providerSelect').value;
+                                            const providerId = providerSearch;
                                             if (providerId) {
                                                 handleAssignProvider(selectedBooking._id, providerId);
                                             } else {
@@ -1776,40 +1793,19 @@ const AdminBookingsView = () => {
 
             {/* Delete Confirmation Modal */}
             {deleteConfirm && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-lg p-6 max-w-md w-full">
-                        <div className="flex items-center mb-4">
-                            <AlertCircle className="w-6 h-6 text-red-600 mr-3" />
-                            <h3 className="text-lg font-semibold text-secondary">
-                                {deleteConfirm.type === 'user' ? 'Delete User Booking' : 'Delete Booking'}
-                            </h3>
-                        </div>
-                        <p className="text-gray-700 mb-6">
-                            Are you sure you want to delete this booking? This action cannot be undone.
-                        </p>
-                        <div className="flex justify-end space-x-3">
-                            <button
-                                onClick={() => setDeleteConfirm(null)}
-                                className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={() => {
-                                    if (deleteConfirm.type === 'user') {
-                                        handleDeleteUserBooking(deleteConfirm.userId, deleteConfirm.id);
-                                    } else {
-                                        handleDeleteBooking(deleteConfirm.id);
-                                    }
-                                }}
-                                disabled={actionLoading}
-                                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
-                            >
-                                {actionLoading ? 'Deleting...' : 'Delete'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                <DeleteConfirmModal
+                    isOpen={!!deleteConfirm}
+                    onClose={() => setDeleteConfirm(null)}
+                    onConfirm={() => {
+                        if (deleteConfirm.type === 'user') {
+                            handleDeleteUserBooking(deleteConfirm.userId, deleteConfirm.id);
+                        } else {
+                            handleDeleteBooking(deleteConfirm.id);
+                        }
+                    }}
+                    actionLoading={actionLoading}
+                    title={deleteConfirm.type === 'user' ? 'Delete User Booking' : 'Delete Booking'}
+                />
             )}
         </div>
     );
