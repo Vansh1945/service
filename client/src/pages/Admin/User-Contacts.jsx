@@ -4,6 +4,7 @@ import * as ContactService from '../../services/ContactService';
 import Pagination from '../../components/Pagination';
 import TableSkeleton from '../../components/ui-skeletons/TableSkeleton';
 import { formatDate, formatDateTime } from '../../utils/format';
+import StatsCard from '../../components/ui/StatsCard';
 import {
   Search,
   MessageSquare,
@@ -21,23 +22,6 @@ import {
   Phone,
   RefreshCw
 } from 'lucide-react';
-
-
-
-// Stats Card Component
-const StatsCard = ({ title, value, icon: Icon, trend, trendValue }) => (
-  <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition-shadow duration-300">
-    <div className="flex items-start justify-between">
-      <div>
-        <p className="text-sm font-medium text-gray-600 mb-2">{title}</p>
-        <p className="text-2xl font-bold text-secondary">{value}</p>
-      </div>
-      <div className="p-3 rounded-lg bg-primary/10">
-        <Icon className="w-6 h-6 text-primary" />
-      </div>
-    </div>
-  </div>
-);
 
 // Contact Details Modal
 const ContactDetailsModal = ({ contact, onClose, onReply }) => {

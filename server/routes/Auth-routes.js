@@ -7,7 +7,8 @@ const {
   forgotPasswordSchema,
   verifyOTPSchema,
   resetPasswordSchema,
-  resendOTPSchema
+  resendOTPSchema,
+  firebaseLoginSchema
 } = require('../validation/auth.validation');
 const { throttleFailedLogins, throttleOtpRequests } = require('../middlewares/fraud-middleware');
 
@@ -20,7 +21,7 @@ router.post('/resend-otp', throttleOtpRequests, validateBody(resendOTPSchema), a
 
 // ── Firebase / Social login ───────────────────────────────────────────────
 // Body: { firebaseToken: string, role: 'customer'|'provider', deviceId?: string }
-router.post('/firebase-login', authController.firebaseLogin);
+router.post('/firebase-login', validateBody(firebaseLoginSchema), authController.firebaseLogin);
 
 // ── Refresh token rotation ────────────────────────────────────────────────
 // Body: { refreshToken: string }

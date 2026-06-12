@@ -65,11 +65,17 @@ const resendOTPSchema = z.object({
   email: z.string().email("Please provide a valid email address")
 });
 
+const firebaseLoginSchema = z.object({
+  firebaseToken: z.string().min(1, "Firebase token is required"),
+  role: z.enum(['customer', 'provider']).optional().default('customer')
+});
+
 module.exports = {
   loginSchema,
   registerSchema,
   forgotPasswordSchema,
   verifyOTPSchema,
   resetPasswordSchema,
-  resendOTPSchema
+  resendOTPSchema,
+  firebaseLoginSchema
 };
