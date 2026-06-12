@@ -15,73 +15,14 @@ import { detectCurrentLocation, toLegacyAddressFields } from '../utils/format';
 
 const CustomerLayout = () => {
     const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
-    const [systemSettings, setSystemSettings] = useState({
-        companyName: '',
-        appName: '',
-        logo: null
-    });
     const location = useLocation();
     const navigate = useNavigate();
-    const { user, logoutUser, API, token, refreshUser } = useAuth();
+    const { user, logoutUser, API, token, refreshUser, systemSettings: authSystemSettings = {}, activeBranding = {} } = useAuth();
     const locationRequestedRef = React.useRef(false);
 
-    useEffect(() => {
-        const fetchSystemSettings = async () => {
-            try {
-                let globalCompany = 'Raj Electrical Services';
-                try {
-                    const globalRes = await SystemService.getSystemSetting();
-                    if (globalRes.data?.success) {
-                        globalCompany = globalRes.data.data?.companyName || globalCompany;
-                    }
-                } catch (globalErr) {
-                    console.error('Failed to fetch global settings in CustomerLayout:', globalErr);
-                }
-
-                const cached = localStorage.getItem('branding_customer');
-                if (cached) {
-                    const data = JSON.parse(cached);
-                    setSystemSettings({
-                        companyName: globalCompany,
-                        appName: data.appName || 'Customer App',
-                        logo: data.logo || null,
-                    });
-                }
-
-                const response = await SystemService.getBrandingSettings('customer');
-                if (response.data?.success) {
-                    const data = response.data.data;
-                    setSystemSettings({
-                        companyName: globalCompany,
-                        appName: data.appName || 'Customer App',
-                        logo: data.logo || null,
-                    });
-                    localStorage.setItem('branding_customer', JSON.stringify(data));
-                }
-            } catch (error) {
-                console.error('Failed to fetch system settings:', error);
-            }
-        };
-
-        if (token) {
-            fetchSystemSettings();
-        }
-    }, [token]);
-
-    useEffect(() => {
-        const handleBrandingUpdate = (e) => {
-            if (e.detail?.role === 'customer') {
-                const data = e.detail.data;
-                setSystemSettings(prev => ({
-                    ...prev,
-                    appName: data.appName || 'Customer App',
-                    logo: data.logo || null
-                }));
-            }
-        };
-        window.addEventListener('brandingUpdated', handleBrandingUpdate);
-        return () => window.removeEventListener('brandingUpdated', handleBrandingUpdate);
-    }, []);
+    const logo = activeBranding?.logo || authSystemSettings?.logo || null;
+    const companyName = authSystemSettings?.companyName || 'Raj Electrical Services';
+    const appName = activeBranding?.appName || 'Customer App';
 
     const navigationItems = [
         { name: 'Services', path: '/customer/services', icon: <FiShoppingBag className="w-5 h-5" /> },
@@ -116,10 +57,10 @@ const CustomerLayout = () => {
                         {/* Logo Section */}
                         <div className="flex flex-1 items-center space-x-2 min-w-0 pr-2">
                             <Link to="/customer/services" className="flex items-center space-x-2 transition-transform duration-200 hover:scale-105 min-w-0 w-full">
-                                {systemSettings.logo ? (
+                                {logo ? (
                                     <img
-                                        src={systemSettings.logo}
-                                        alt={systemSettings.companyName}
+                                        src={logo}
+                                        alt={companyName}
                                         className="flex-shrink-0 h-8 md:h-10 lg:h-12 w-auto object-contain mr-1 md:mr-2"
                                     />
                                 ) : (
@@ -127,10 +68,10 @@ const CustomerLayout = () => {
                                 )}
                                 <div className="flex flex-col min-w-0">
                                     <span className="font-bold text-sm sm:text-base md:text-lg lg:text-xl text-secondary truncate leading-tight">
-                                        {systemSettings.companyName || 'Raj Electrical Services'}
+                                        {companyName}
                                     </span>
                                     <span className="text-[10px] font-extrabold uppercase tracking-wider text-primary truncate">
-                                        {systemSettings.appName || 'Customer App'}
+                                        {appName}
                                     </span>
                                 </div>
                             </Link>

@@ -24,10 +24,7 @@ import * as ContactService from '../services/ContactService';
 import Processing from '../components/ui-skeletons/Processing';
 
 const Contact = () => {
-  const { API, showToast } = useAuth();
-  const [systemData, setSystemData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const { API, showToast, systemSettings: systemData = {} } = useAuth();
 
   const contactInfo = {
     primaryPhone: systemData?.phone || '+91 9625333919',
@@ -49,29 +46,6 @@ const Contact = () => {
     message: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-
-
-  useEffect(() => {
-    const fetchSystemData = async () => {
-      try {
-        const response = await SystemService.getSystemSetting();
-        const data = response.data;
-        if (data.success) {
-          setSystemData(data.data);
-        } else {
-          setError('Failed to load system data');
-        }
-      } catch (err) {
-        setError('Failed to load system data');
-        console.error('Contact fetch error:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchSystemData();
-  }, []);
 
   const handleChange = (e) => {
     setFormData({
@@ -111,13 +85,13 @@ const Contact = () => {
   return (
     <div className="min-h-screen bg-white">
       <Helmet>
-        <title>Contact Us | Raj Electrical Services | 24/7 North India Support</title>
-        <meta name="description" content="Reach our professional electrical support desk. Book emergency electrical support, home maintenance, and residential & commercial wiring services across North India." />
-        <meta name="keywords" content="contact Raj Electrical, electrical services in North India, home electrical maintenance, emergency electrical repair, trusted electrical solutions" />
-        <link rel="canonical" href="https://rajelectricalservices.vercel.app/contact" />
-        <meta property="og:title" content="Contact Us | Raj Electrical Services | 24/7 North India Support" />
-        <meta property="og:description" content="Reach our professional electrical support desk. Book emergency electrical support, home maintenance, and residential & commercial wiring services across North India." />
-        <meta property="og:url" content="https://rajelectricalservices.vercel.app/contact" />
+        <title>Contact Us | {systemData.companyName || "Raj Electrical Services"} | 24/7 North India Support</title>
+        <meta name="description" content={`Reach our professional electrical support desk at ${systemData.companyName || "Raj Electrical Services"}. Book emergency electrical support, home maintenance, and residential & commercial wiring services.`} />
+        <meta name="keywords" content={`contact ${systemData.companyName || "Raj Electrical Services"}, electrical services, home electrical maintenance, emergency electrical repair`} />
+        <link rel="canonical" href={window.location.href} />
+        <meta property="og:title" content={`Contact Us | ${systemData.companyName || "Raj Electrical Services"} | 24/7 North India Support`} />
+        <meta property="og:description" content={`Reach our professional electrical support desk at ${systemData.companyName || "Raj Electrical Services"}.`} />
+        <meta property="og:url" content={window.location.href} />
         <meta property="og:type" content="website" />
       </Helmet>
 

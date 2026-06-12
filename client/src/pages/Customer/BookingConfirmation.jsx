@@ -12,7 +12,6 @@ import { getBooking, updateBookingPayment, payBooking } from '../../services/Boo
 import axiosInstance from '../../api/axiosInstance';
 import * as TransactionService from '../../services/TransactionService';
 import * as CustomerService from '../../services/CustomerService';
-import * as SystemService from '../../services/SystemService';
 import Loader from '../../components/ui-skeletons/Loader';
 import Processing from '../../components/ui-skeletons/Processing';
 import ErrorState from '../../components/Error';
@@ -21,7 +20,7 @@ import PriceDisplay from '../../components/PriceDisplay';
 
 const BookingConfirmation = () => {
   const { bookingId } = useParams();
-  const { token, user, isAuthenticated, API, showToast } = useAuth();
+  const { token, user, isAuthenticated, API, showToast, systemSettings = {} } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -136,10 +135,9 @@ const BookingConfirmation = () => {
           setWalletBalance(profileRes.data.user.wallet.availableBalance || 0);
         }
 
-        const settingsRes = await SystemService.getSystemSetting().catch(() => null);
-        if (settingsRes?.data?.success) {
-          setAllowCOD(settingsRes.data.data?.bookingSettings?.allowCOD !== false);
-          setDefaultCurrency(settingsRes.data.data?.defaultCurrency || 'INR');
+        if (systemSettings) {
+          setAllowCOD(systemSettings.bookingSettings?.allowCOD !== false);
+          setDefaultCurrency(systemSettings.defaultCurrency || 'INR');
         }
 
         if (location.state?.booking) {
@@ -374,7 +372,7 @@ const BookingConfirmation = () => {
         key: import.meta.env.VITE_RAZORPAY_KEY || key,
         amount: order.amount,
         currency: order.currency || defaultCurrency,
-        name: 'Raj Electrical Services',
+        name: systemSettings.companyName || 'Raj Electrical Services',
         description: isMixed
           ? `Mixed Payment: Wallet (₹${walletDeduction}) + Razorpay`
           : `Payment for ${getServiceInfo().title}`,

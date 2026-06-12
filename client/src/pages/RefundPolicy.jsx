@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../context/auth';
 import { 
   RefreshCcw, 
   XCircle, 
@@ -15,6 +16,8 @@ import {
 } from 'lucide-react';
 
 const RefundPolicy = () => {
+  const { systemSettings = {} } = useAuth();
+
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
@@ -68,13 +71,13 @@ const RefundPolicy = () => {
   return (
     <div className="min-h-screen bg-white font-inter">
       <Helmet>
-        <title>Refund Policy | Raj Electrical Services</title>
-        <meta name="description" content="Read our transparent refund and cancellation policy details for bookings made with Raj Electrical Services in North India." />
-        <meta name="keywords" content="refund policy, cancel booking, Raj Electrical Services refund" />
-        <link rel="canonical" href="https://rajelectricalservices.vercel.app/refund-policy" />
-        <meta property="og:title" content="Refund Policy | Raj Electrical Services" />
-        <meta property="og:description" content="Read our transparent refund and cancellation policy details for bookings made with Raj Electrical Services in North India." />
-        <meta property="og:url" content="https://rajelectricalservices.vercel.app/refund-policy" />
+        <title>Refund Policy | {systemSettings.companyName || "Raj Electrical Services"}</title>
+        <meta name="description" content={`Read our transparent refund and cancellation policy details for bookings made with ${systemSettings.companyName || "Raj Electrical Services"} in North India.`} />
+        <meta name="keywords" content={`refund policy, cancel booking, ${systemSettings.companyName || "Raj Electrical Services"} refund`} />
+        <link rel="canonical" href={window.location.href} />
+        <meta property="og:title" content={`Refund Policy | ${systemSettings.companyName || "Raj Electrical Services"}`} />
+        <meta property="og:description" content={`Read our transparent refund and cancellation policy details for bookings made with ${systemSettings.companyName || "Raj Electrical Services"} in North India.`} />
+        <meta property="og:url" content={window.location.href} />
         <meta property="og:type" content="website" />
       </Helmet>
 
@@ -160,7 +163,7 @@ const RefundPolicy = () => {
             <div className="relative z-10 max-w-3xl">
               <h3 className="text-2xl md:text-3xl font-bold mb-4">Our Commitment to Satisfaction</h3>
               <p className="text-gray-300 text-lg leading-relaxed mb-0">
-                At Raj Electrical Services, we value your trust. If you're not satisfied with a service, our support team will work tirelessly to resolve the issue or process your refund as per our transparent guidelines.
+                At {systemSettings.companyName || "Raj Electrical Services"}, we value your trust. If you're not satisfied with a service, our support team will work tirelessly to resolve the issue or process your refund as per our transparent guidelines.
               </p>
             </div>
           </motion.div>
@@ -197,7 +200,7 @@ const RefundPolicy = () => {
       
       {/* Scroll to Top Note */}
       <div className="pb-12 text-center text-gray-400 text-xs uppercase tracking-[0.2em] font-bold">
-        Raj Electrical Services • Fairness • Transparency • Trust
+        {systemSettings.companyName || "Raj Electrical Services"} • Fairness • Transparency • Trust
       </div>
     </div>
   );

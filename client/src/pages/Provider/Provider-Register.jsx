@@ -19,6 +19,35 @@ import * as SystemService from '../../services/SystemService';
 import * as ProviderService from '../../services/ProviderService';
 import { formatTime, compressImage, buildStreetAddress } from '../../utils/format';
 
+const setCookie = (name, value, days = 7) => {
+  let expires = "";
+  if (days) {
+    const date = new Date();
+    date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+    expires = "; expires=" + date.toUTCString();
+  }
+  const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+  document.cookie = `${name}=${encodeURIComponent(value || "")}${expires}; path=/; SameSite=Lax${secure}`;
+};
+
+const getCookie = (name) => {
+  const nameEQ = name + "=";
+  const ca = document.cookie.split(';');
+  for (let i = 0; i < ca.length; i++) {
+    let c = ca[i];
+    while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+    if (c.indexOf(nameEQ) === 0) {
+      try {
+        return decodeURIComponent(c.substring(nameEQ.length, c.length));
+      } catch (e) {
+        return c.substring(nameEQ.length, c.length);
+      }
+    }
+  }
+  return null;
+};
+
+
 // ─── Static sub-components (defined OUTSIDE the main component to avoid remount) ─
 
 const inputCls =
@@ -79,7 +108,7 @@ const STEP_ICONS = [Mail, User, Lock, Briefcase];
 
 const ProviderRegistration = () => {
   const navigate = useNavigate();
-  const { API, loginUser } = useAuth();
+  const { API, loginUser, systemSettings = {} } = useAuth();
 
   const [formData, setFormData] = useState({
     email: '',
@@ -260,7 +289,7 @@ const ProviderRegistration = () => {
         const data = response.data;
 
         // Store the token in the correct 'token' key for axiosInstance to pick up
-        localStorage.setItem('token', data.token);
+        setCookie('token', data.token, 7);
 
         setStep(3);
         resolve('Registration successful! Please login to complete your profile.');
@@ -289,7 +318,7 @@ const ProviderRegistration = () => {
         const data = response.data;
 
         // Store the token in the correct 'token' key
-        localStorage.setItem('token', data.token);
+        setCookie('token', data.token, 7);
 
         setStep(4);
         resolve('Login successful! Please complete your profile.');
@@ -352,7 +381,7 @@ const ProviderRegistration = () => {
         resolve('Profile completed successfully! Your account is pending approval.');
 
         // Grab stored token and log in the user properly
-        const storedToken = localStorage.getItem('token');
+        const storedToken = getCookie('token');
         loginUser(storedToken, 'provider', data.provider);
       } catch (err) {
         reject(err.response?.data?.message || err.message);
@@ -923,7 +952,7 @@ const ProviderRegistration = () => {
         </div>
         <h1 className="text-4xl font-bold text-secondary leading-tight">
           Become a{' '}
-          <span className="text-primary">Raj Electrical Services</span>{' '}
+          <span className="text-primary">{systemSettings.companyName || "Raj Electrical Services"}</span>{' '}
           Provider
         </h1>
         <p className="mt-3 text-sm text-secondary/60 leading-relaxed">
@@ -984,7 +1013,7 @@ const ProviderRegistration = () => {
 
       <div className="bg-background border border-gray-200 rounded-xl p-5">
         <h3 className="text-sm font-bold text-secondary mb-3 flex items-center gap-2">
-          <Users className="w-4 h-4 text-accent" /> Why Providers Trust Raj Electrical Services
+          <Users className="w-4 h-4 text-accent" /> Why Providers Trust {systemSettings.companyName || "Raj Electrical Services"}
         </h3>
         <div className="space-y-2.5">
           {[
@@ -1070,7 +1099,7 @@ const ProviderRegistration = () => {
               <span className="text-xs font-bold text-primary">Join 2,000+ Trusted Providers</span>
             </div>
             <h1 className="text-2xl font-bold text-secondary leading-tight">
-              Become a <span className="text-primary">Raj Electrical Services</span> Provider
+              Become a <span className="text-primary">{systemSettings.companyName || "Raj Electrical Services"}</span> Provider
             </h1>
             <p className="text-xs text-gray-500 mt-1">
               Verified electrical professionals earning more every day

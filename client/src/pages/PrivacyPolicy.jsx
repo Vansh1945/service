@@ -17,7 +17,12 @@ import {
 } from 'lucide-react';
 import { formatDate } from '../utils/format';
 
+import { useAuth } from '../context/auth';
+
 const PrivacyPolicy = () => {
+  const { systemSettings = {} } = useAuth();
+  const companyName = systemSettings.companyName || 'Raj Electrical Services';
+
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
@@ -99,13 +104,13 @@ const PrivacyPolicy = () => {
   return (
     <div className="min-h-screen bg-white font-inter">
       <Helmet>
-        <title>Privacy Policy | Raj Electrical Services</title>
-        <meta name="description" content="Understand how Raj Electrical Services collects, protects, and utilizes your user data for booking electrical services in North India." />
-        <meta name="keywords" content="privacy policy, data protection, security, Raj Electrical Services privacy" />
-        <link rel="canonical" href="https://rajelectricalservices.vercel.app/privacy-policy" />
-        <meta property="og:title" content="Privacy Policy | Raj Electrical Services" />
-        <meta property="og:description" content="Understand how Raj Electrical Services collects, protects, and utilizes your user data for booking electrical services in North India." />
-        <meta property="og:url" content="https://rajelectricalservices.vercel.app/privacy-policy" />
+        <title>Privacy Policy | {companyName}</title>
+        <meta name="description" content={`Understand how ${companyName} collects, protects, and utilizes your user data for booking electrical services.`} />
+        <meta name="keywords" content={`privacy policy, data protection, security, ${companyName} privacy`} />
+        <link rel="canonical" href={window.location.href} />
+        <meta property="og:title" content={`Privacy Policy | ${companyName}`} />
+        <meta property="og:description" content={`Understand how ${companyName} collects, protects, and utilizes your user data.`} />
+        <meta property="og:url" content={window.location.href} />
         <meta property="og:type" content="website" />
       </Helmet>
 

@@ -1,15 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { FiX, FiSmartphone, FiPlusSquare, FiShare } from 'react-icons/fi';
-import * as SystemService from '../services/SystemService';
+import { useAuth } from '../context/auth';
 
 const AppInstall = () => {
-  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const { systemSettings } = useAuth();
+  const [deferredPrompt, setDeferredPrompt] = useState(window.deferredInstallPrompt || null);
   const [isOpen, setIsOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState(null);
   const [isIosInstructions, setIsIosInstructions] = useState(false);
   const [isAndroidInstructions, setIsAndroidInstructions] = useState(false);
   const [customerBranding, setCustomerBranding] = useState(null);
   const [providerBranding, setProviderBranding] = useState(null);
+
+  useEffect(() => {
+    if (systemSettings) {
+      if (systemSettings.customerBranding) {
+        setCustomerBranding(systemSettings.customerBranding);
+      }
+      if (systemSettings.providerBranding) {
+        setProviderBranding(systemSettings.providerBranding);
+      }
+    }
+  }, [systemSettings]);
 
   // Helper to detect current user role based on path or localStorage
   const detectRole = () => {
@@ -99,6 +111,7 @@ const AppInstall = () => {
     const handleBIP = (e) => {
       e.preventDefault();
       setDeferredPrompt(e);
+      window.deferredInstallPrompt = e;
     };
     window.addEventListener('beforeinstallprompt', handleBIP);
     return () => window.removeEventListener('beforeinstallprompt', handleBIP);
@@ -115,20 +128,6 @@ const AppInstall = () => {
     return () => window.removeEventListener('triggerPwaInstall', handleTrigger);
   }, []);
 
-  useEffect(() => {
-    const fetchBranding = async () => {
-      try {
-        const custRes = await SystemService.getBrandingSettings('customer');
-        const provRes = await SystemService.getBrandingSettings('provider');
-        if (custRes.data?.success) setCustomerBranding(custRes.data.data);
-        if (provRes.data?.success) setProviderBranding(provRes.data.data);
-      } catch (err) {
-        console.error("Failed to load branding data in PWA modal:", err);
-      }
-    };
-    fetchBranding();
-  }, []);
-
   if (!isOpen) return null;
 
   const activeBranding = selectedRole === 'customer' ? customerBranding : providerBranding;
@@ -139,7 +138,7 @@ const AppInstall = () => {
         {/* Close Button */}
         <button 
           onClick={() => setIsOpen(false)}
-          className="absolute top-4 right-4 p-2 bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 rounded-full transition-all"
+          className="absolute top-4 right-4 z-50 p-2 bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 rounded-full transition-all"
         >
           <FiX className="w-5 h-5" />
         </button>

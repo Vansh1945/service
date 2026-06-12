@@ -14,7 +14,12 @@ import {
 } from 'lucide-react';
 import { formatDate } from '../utils/format';
 
+import { useAuth } from '../context/auth';
+
 const TermsAndConditions = () => {
+  const { systemSettings = {} } = useAuth();
+  const companyName = systemSettings.companyName || 'Raj Electrical Services';
+
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
@@ -110,13 +115,13 @@ const TermsAndConditions = () => {
   return (
     <div className="min-h-screen bg-white font-inter">
       <Helmet>
-        <title>Terms & Conditions | Raj Electrical Services</title>
-        <meta name="description" content="Read the official terms and conditions for booking electrical repair, installations, and home maintenance services with Raj Electrical Services in North India." />
-        <meta name="keywords" content="terms and conditions, user agreement, electrical services North India, Raj Electrical Services terms" />
-        <link rel="canonical" href="https://rajelectricalservices.vercel.app/terms-and-conditions" />
-        <meta property="og:title" content="Terms & Conditions | Raj Electrical Services" />
-        <meta property="og:description" content="Read the official terms and conditions for booking electrical repair, installations, and home maintenance services with Raj Electrical Services in North India." />
-        <meta property="og:url" content="https://rajelectricalservices.vercel.app/terms-and-conditions" />
+        <title>Terms & Conditions | {companyName}</title>
+        <meta name="description" content={`Read the official terms and conditions for booking electrical repair, installations, and home maintenance services with ${companyName}.`} />
+        <meta name="keywords" content={`terms and conditions, user agreement, electrical services, ${companyName}`} />
+        <link rel="canonical" href={window.location.href} />
+        <meta property="og:title" content={`Terms & Conditions | ${companyName}`} />
+        <meta property="og:description" content={`Read the official terms and conditions for booking electrical repair, installations, and home maintenance services with ${companyName}.`} />
+        <meta property="og:url" content={window.location.href} />
         <meta property="og:type" content="website" />
       </Helmet>
 

@@ -18,14 +18,12 @@ const ProviderLayout = () => {
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
     const [moreMenuOpen, setMoreMenuOpen] = useState(false);
-    const [systemSettings, setSystemSettings] = useState({
-        companyName: '',
-        appName: '',
-        logo: null
-    });
     const location = useLocation();
     const navigate = useNavigate();
-    const { user, logoutUser, token } = useAuth();
+    const { user, logoutUser, token, systemSettings: authSystemSettings = {}, activeBranding = {} } = useAuth();
+    const logo = activeBranding?.logo || authSystemSettings?.logo || null;
+    const companyName = authSystemSettings?.companyName || 'Raj Electrical Services';
+    const appName = activeBranding?.appName || 'Provider App';
     const testPassed = user?.testPassed || false;
 
     const { socket, isConnected } = useSocket();
@@ -147,63 +145,7 @@ const ProviderLayout = () => {
         return () => socket.off('provider-toggle-online-error', handleToggleError);
     }, [socket]);
 
-    useEffect(() => {
-        const fetchSystemSettings = async () => {
-            try {
-                let globalCompany = 'Raj Electrical Services';
-                try {
-                    const globalRes = await SystemService.getSystemSetting();
-                    if (globalRes.data?.success) {
-                        globalCompany = globalRes.data.data?.companyName || globalCompany;
-                    }
-                } catch (globalErr) {
-                    console.error('Failed to fetch global settings in ProviderLayout:', globalErr);
-                }
 
-                const cached = localStorage.getItem('branding_provider');
-                if (cached) {
-                    const data = JSON.parse(cached);
-                    setSystemSettings({
-                        companyName: globalCompany,
-                        appName: data.appName || 'Provider App',
-                        logo: data.logo || null,
-                    });
-                }
-
-                const response = await SystemService.getBrandingSettings('provider');
-                if (response.data?.success) {
-                    const data = response.data.data;
-                    setSystemSettings({
-                        companyName: globalCompany,
-                        appName: data.appName || 'Provider App',
-                        logo: data.logo || null,
-                    });
-                    localStorage.setItem('branding_provider', JSON.stringify(data));
-                }
-            } catch (error) {
-                console.error('Failed to fetch system settings:', error);
-            }
-        };
-
-        if (token) {
-            fetchSystemSettings();
-        }
-    }, [token]);
-
-    useEffect(() => {
-        const handleBrandingUpdate = (e) => {
-            if (e.detail?.role === 'provider') {
-                const data = e.detail.data;
-                setSystemSettings(prev => ({
-                    ...prev,
-                    appName: data.appName || 'Provider App',
-                    logo: data.logo || null
-                }));
-            }
-        };
-        window.addEventListener('brandingUpdated', handleBrandingUpdate);
-        return () => window.removeEventListener('brandingUpdated', handleBrandingUpdate);
-    }, []);
 
     const allMenuItems = [
         { name: 'Dashboard', path: '/provider/dashboard', icon: <FiHome className="w-5 h-5" />, requireTest: false },
@@ -244,19 +186,19 @@ const ProviderLayout = () => {
                     {/* Desktop header */}
                     <div className="flex items-center px-6 py-6 border-b border-gray-200">
                         <div className="flex items-center">
-                            {systemSettings.logo && (
+                            {logo && (
                                 <img
-                                    src={systemSettings.logo}
-                                    alt={systemSettings.companyName}
+                                    src={logo}
+                                    alt={companyName}
                                     className="h-10 w-auto object-contain mr-3"
                                 />
                             )}
                             <div className="flex flex-col">
                                 <span className="text-lg font-bold text-secondary leading-tight">
-                                    {systemSettings.companyName || 'Raj Electrical Services'}
+                                    {companyName}
                                 </span>
                                 <span className="text-[10px] font-extrabold uppercase tracking-wider text-primary">
-                                    {systemSettings.appName || 'Provider App'}
+                                    {appName}
                                 </span>
                             </div>
                         </div>
@@ -504,10 +446,10 @@ const ProviderLayout = () => {
                         </button>
                         <div className="flex flex-col items-center">
                             <span className="text-sm font-bold text-secondary leading-tight">
-                                {systemSettings.companyName || 'Raj Electrical Services'}
+                                {companyName}
                             </span>
                             <span className="text-[9px] font-extrabold uppercase tracking-widest text-primary">
-                                {systemSettings.appName || 'Provider App'}
+                                {appName}
                             </span>
                         </div>
                         {/* Placeholder to balance flex layout */}

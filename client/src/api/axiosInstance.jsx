@@ -23,6 +23,38 @@ const getRequestKey = (config) => {
     return `${method}:${url}:${JSON.stringify(data)}:${JSON.stringify(params)}`;
 };
 
+const setCookie = (name, value, days = 7) => {
+    let expires = "";
+    if (days) {
+        const date = new Date();
+        date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+        expires = "; expires=" + date.toUTCString();
+    }
+    const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+    document.cookie = `${name}=${encodeURIComponent(value || "")}${expires}; path=/; SameSite=Lax${secure}`;
+};
+
+const getCookie = (name) => {
+    const nameEQ = name + "=";
+    const ca = document.cookie.split(';');
+    for (let i = 0; i < ca.length; i++) {
+        let c = ca[i];
+        while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+        if (c.indexOf(nameEQ) === 0) {
+            try {
+                return decodeURIComponent(c.substring(nameEQ.length, c.length));
+            } catch (e) {
+                return c.substring(nameEQ.length, c.length);
+            }
+        }
+    }
+    return null;
+};
+
+const eraseCookie = (name) => {
+    document.cookie = name + '=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax';
+};
+
 const api = axios.create({
     baseURL: import.meta.env.VITE_BACKEND_URL || (window.location.origin + "/api"),
 });
@@ -31,7 +63,6 @@ const api = axios.create({
 api.interceptors.request.use(
     (config) => {
         // Prevent duplicate concurrent mutation requests
-        // Prevent duplicate concurrent mutation requests, but allow token save requests
         if (['post', 'put', 'patch', 'delete'].includes(config.method)) {
             // Skip duplicate check for notification token saving to avoid CancelledError
             const isSaveToken = config.url && config.url.includes('/notifications/save-token');
@@ -47,7 +78,7 @@ api.interceptors.request.use(
             }
         }
 
-        const token = localStorage.getItem("token");
+        const token = getCookie("token");
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
@@ -146,10 +177,14 @@ api.interceptors.response.use(
             originalRequest._retry = true;
             isRefreshing = true;
 
-            const refreshToken = localStorage.getItem("refreshToken");
+            const refreshToken = getCookie("refreshToken");
             if (!refreshToken) {
                 isRefreshing = false;
                 // No refresh token -> logout
+                eraseCookie("token");
+                eraseCookie("refreshToken");
+                eraseCookie("role");
+                eraseCookie("user");
                 const persistentDeviceId = localStorage.getItem("persistentDeviceId");
                 const tempFcmToken = localStorage.getItem("tempFcmToken");
                 const fcmToken = localStorage.getItem("fcmToken");
@@ -165,8 +200,8 @@ api.interceptors.response.use(
                 // Use standard axios to avoid interceptor loop
                 const { data } = await axios.post(`${import.meta.env.VITE_BACKEND_URL || (window.location.origin + "/api")}/auth/refresh-token`, { refreshToken });
                 if (data.success && data.token) {
-                    localStorage.setItem("token", data.token);
-                    if (data.refreshToken) localStorage.setItem("refreshToken", data.refreshToken);
+                    setCookie("token", data.token, 7);
+                    if (data.refreshToken) setCookie("refreshToken", data.refreshToken, 7);
 
                     api.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
                     originalRequest.headers.Authorization = `Bearer ${data.token}`;
@@ -179,6 +214,10 @@ api.interceptors.response.use(
                 processQueue(err, null);
                 isRefreshing = false;
                 // If refresh fails, they must login again
+                eraseCookie("token");
+                eraseCookie("refreshToken");
+                eraseCookie("role");
+                eraseCookie("user");
                 const persistentDeviceId = localStorage.getItem("persistentDeviceId");
                 const tempFcmToken = localStorage.getItem("tempFcmToken");
                 const fcmToken = localStorage.getItem("fcmToken");

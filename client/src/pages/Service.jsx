@@ -2,6 +2,7 @@ import React from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { useAuth } from '../context/auth';
 import {
     Zap,
     Clock,
@@ -20,8 +21,9 @@ import Wiring from '../assets/Service1.png';
 
 const ServicesPage = () => {
     const navigate = useNavigate();
+    const { systemSettings = {} } = useAuth();
 
-    const phoneNumber = '+91 9625333919';
+    const phoneNumber = systemSettings.phone || '+91 9625333919';
     const consultationLink = '/contact';
 
     const services = [
@@ -88,13 +90,13 @@ const ServicesPage = () => {
     return (
         <div className="min-h-screen bg-white">
             <Helmet>
-                <title>Our Services | Raj Electrical Services | Professional Electrical Repair</title>
-                <meta name="description" content="Explore residential and commercial electrical services in North India. Book Raj Electrical Services for certified house wiring, luxe lighting, panel upgrades, and smart home systems." />
+                <title>Our Services | {systemSettings.companyName || "Raj Electrical Services"} | Professional Electrical Repair</title>
+                <meta name="description" content={`Explore residential and commercial electrical services in North India. Book ${systemSettings.companyName || "Raj Electrical Services"} for certified house wiring, luxe lighting, panel upgrades, and smart home systems.`} />
                 <meta name="keywords" content="electrical services in North India, professional electrical repair, home electrical maintenance, residential and commercial electrical services, trusted electrical solutions" />
-                <link rel="canonical" href="https://rajelectricalservices.vercel.app/services" />
-                <meta property="og:title" content="Our Services | Raj Electrical Services | Professional Electrical Repair" />
-                <meta property="og:description" content="Explore residential and commercial electrical services in North India. Book Raj Electrical Services for certified house wiring, luxe lighting, panel upgrades, and smart home systems." />
-                <meta property="og:url" content="https://rajelectricalservices.vercel.app/services" />
+                <link rel="canonical" href={window.location.href} />
+                <meta property="og:title" content={`Our Services | ${systemSettings.companyName || "Raj Electrical Services"} | Professional Electrical Repair`} />
+                <meta property="og:description" content={`Explore residential and commercial electrical services in North India. Book ${systemSettings.companyName || "Raj Electrical Services"} for certified house wiring, luxe lighting, panel upgrades, and smart home systems.`} />
+                <meta property="og:url" content={window.location.href} />
                 <meta property="og:type" content="website" />
             </Helmet>
 

@@ -13,13 +13,12 @@ import { getAvailableCoupons, applyCoupon as applyCouponAPI } from '../../servic
 import { createBooking } from '../../services/BookingService';
 import { resolveActiveSurcharges } from '../../services/SurgeService';
 import { calculateSurchargeAmount, getMergedPrice } from '../../utils/surge';
-import { getSystemSetting } from '../../services/SystemService';
 import * as CustomerService from '../../services/CustomerService';
 import { formatCurrency, formatTime } from '../../utils/format';
 
 const BookService = () => {
   const { serviceId } = useParams();
-  const { token, user } = useAuth();
+  const { token, user, systemSettings } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const prefillBooking = location.state?.prefillBooking;
@@ -39,7 +38,6 @@ const BookService = () => {
   const [isMapModalOpen, setIsMapModalOpen] = useState(false);
   const [showPrefillBanner, setShowPrefillBanner] = useState(true);
   const [activeSurcharges, setActiveSurcharges] = useState([]);
-  const [systemSettings, setSystemSettings] = useState(null);
   const [detectedZoneId, setDetectedZoneId] = useState(null);
   const [zoneAncestry, setZoneAncestry] = useState([]);
 
@@ -405,20 +403,16 @@ const BookService = () => {
           return;
         }
 
-        const [serviceData, addressesData, profileData, settingsRes] = await Promise.all([
+        const [serviceData, addressesData, profileData] = await Promise.all([
           fetchService(),
           fetchUserAddresses(),
-          CustomerService.getProfile().then(res => res.data?.user).catch(() => null),
-          getSystemSetting().catch(() => null)
+          CustomerService.getProfile().then(res => res.data?.user).catch(() => null)
         ]);
 
         setService(serviceData);
         setAddresses(addressesData);
         if (profileData?.wallet) {
           setWalletBalance(profileData.wallet.availableBalance || 0);
-        }
-        if (settingsRes?.data?.success) {
-          setSystemSettings(settingsRes.data.data);
         }
 
         // Fetch initial surcharges immediately to avoid rendering delays

@@ -17,11 +17,10 @@ import {
   Apple,
   Youtube
 } from 'lucide-react';
-import { getSystemSetting } from '../services/SystemService';
+import { useAuth } from '../context/auth';
 
 const Footer = () => {
-  const [systemData, setSystemData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const { systemSettings: systemData = {} } = useAuth();
   const [email, setEmail] = useState('');
   const [newsletterStatus, setNewsletterStatus] = useState(null);
 
@@ -29,22 +28,6 @@ const Footer = () => {
     e.preventDefault();
     window.dispatchEvent(new CustomEvent('triggerPwaInstall'));
   };
-
-  useEffect(() => {
-    const fetchSystemData = async () => {
-      try {
-        const response = await getSystemSetting();
-        if (response.data.success) {
-          setSystemData(response.data.data);
-        }
-      } catch (err) {
-        console.error('Footer fetch error:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchSystemData();
-  }, []);
 
   const handleNewsletterSubmit = (e) => {
     e.preventDefault();

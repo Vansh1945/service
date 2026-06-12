@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import HeroSection from '../components/HeroSection';
 import Services from './Services';
+import { useAuth } from '../context/auth';
 import {
   ShieldCheck,
   Clock,
@@ -16,6 +17,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 
 const Home = () => {
+  const { systemSettings = {} } = useAuth();
   const [openFaq, setOpenFaq] = useState(null);
 
   const toggleFaq = (index) => {
@@ -44,13 +46,13 @@ const Home = () => {
   return (
     <div className="overflow-hidden bg-transparent">
       <Helmet>
-        <title>Raj Electrical Services | Trusted Electrical Services in North India</title>
-        <meta name="description" content="Book certified electricians for home and commercial electrical repairs, installations, and maintenance. Safe, reliable, and affordable services in North India." />
+        <title>{systemSettings.companyName || "Raj Electrical Services"} | Trusted Electrical Services in North India</title>
+        <meta name="description" content={`Book certified electricians for home and commercial electrical repairs, installations, and maintenance. Safe, reliable, and affordable services in North India.`} />
         <meta name="keywords" content="electrical services in North India, professional electrical repair, home electrical maintenance, residential and commercial electrical services, trusted electrical solutions" />
-        <link rel="canonical" href="https://rajelectricalservices.vercel.app/" />
-        <meta property="og:title" content="Raj Electrical Services | Trusted Electrical Services in North India" />
-        <meta property="og:description" content="Book certified electricians for home and commercial electrical repairs, installations, and maintenance. Safe, reliable, and affordable services in North India." />
-        <meta property="og:url" content="https://rajelectricalservices.vercel.app/" />
+        <link rel="canonical" href={window.location.href} />
+        <meta property="og:title" content={`${systemSettings.companyName || "Raj Electrical Services"} | Trusted Electrical Services in North India`} />
+        <meta property="og:description" content={`Book certified electricians for home and commercial electrical repairs, installations, and maintenance. Safe, reliable, and affordable services in North India.`} />
+        <meta property="og:url" content={window.location.href} />
         <meta property="og:type" content="website" />
       </Helmet>
 
@@ -70,7 +72,7 @@ const Home = () => {
               Trust & Quality
             </span>
             <h2 className="text-2xl md:text-3xl font-extrabold text-secondary mt-3 mb-2 font-poppins">
-              Why Choose Raj Electrical Services?
+              Why Choose {systemSettings.companyName || "Raj Electrical Services"}?
             </h2>
             <p className="text-gray-500 text-sm max-w-xl mx-auto font-medium">
               We standardise quality, safety, and reliability for all your home and office electrical maintenance needs.
@@ -133,7 +135,7 @@ const Home = () => {
               </h2>
 
               <p className="text-white/90 text-sm leading-relaxed mb-6 font-normal">
-                Raj Electrical Services connects customers with verified electrical professionals for residential, commercial, and emergency electrical needs. Our focus is on quality workmanship, transparent service, and customer satisfaction.
+                {systemSettings.companyName || "Raj Electrical Services"} connects customers with verified electrical professionals for residential, commercial, and emergency electrical needs. Our focus is on quality workmanship, transparent service, and customer satisfaction.
               </p>
 
               <div className="grid grid-cols-2 gap-4">

@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useMemo, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -8,26 +8,162 @@ import * as AdminService from "../services/AdminService";
 import * as ProviderService from "../services/ProviderService";
 import * as CustomerService from "../services/CustomerService";
 import * as AuthService from "../services/AuthService";
+import * as SystemService from "../services/SystemService";
+
+import {
+    SYSTEM_SETTINGS_UPDATED_EVENT,
+    readCachedSystemSettings,
+    writeSystemSettingsCache
+} from "../utils/systemSettingsCache";
+
+const setCookie = (name, value, days = 7) => {
+    let expires = "";
+    if (days) {
+        const date = new Date();
+        date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+        expires = "; expires=" + date.toUTCString();
+    }
+    const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+    document.cookie = `${name}=${encodeURIComponent(value || "")}${expires}; path=/; SameSite=Lax${secure}`;
+};
+
+const getCookie = (name) => {
+    const nameEQ = name + "=";
+    const ca = document.cookie.split(';');
+    for (let i = 0; i < ca.length; i++) {
+        let c = ca[i];
+        while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+        if (c.indexOf(nameEQ) === 0) {
+            try {
+                return decodeURIComponent(c.substring(nameEQ.length, c.length));
+            } catch (e) {
+                return c.substring(nameEQ.length, c.length);
+            }
+        }
+    }
+    return null;
+};
+
+const eraseCookie = (name) => {
+    document.cookie = name + '=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax';
+};
+
+// Clean up any sensitive data left in localStorage/sessionStorage
+if (typeof window !== "undefined" && window.localStorage) {
+    const keysToRemove = ["token", "refreshToken", "user"];
+    keysToRemove.forEach(key => {
+        if (localStorage.getItem(key)) localStorage.removeItem(key);
+        if (sessionStorage.getItem(key)) sessionStorage.removeItem(key);
+    });
+}
 
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
     const navigate = useNavigate();
+    const location = useLocation();
     const API = import.meta.env.VITE_BACKEND_URL || (window.location.origin + "/api");
     const API_URL_IMAGE = import.meta.env.VITE_BACKEND_URL ? import.meta.env.VITE_BACKEND_URL.replace('/api', '') : window.location.origin;
 
     // State management
-    const [token, setToken] = useState(() => localStorage.getItem("token") || null);
-    const [refreshToken, setRefreshToken] = useState(() => localStorage.getItem("refreshToken") || null);
-    const [role, setRole] = useState(() => localStorage.getItem("role") || null);
+    const [token, setToken] = useState(() => getCookie("token") || null);
+    const [refreshToken, setRefreshToken] = useState(() => getCookie("refreshToken") || null);
+    const [role, setRole] = useState(() => getCookie("role") || null);
     const [user, setUser] = useState(() => {
         try {
-            const userData = localStorage.getItem("user");
+            const userData = getCookie("user");
             return userData ? JSON.parse(userData) : null;
         } catch (error) {
             return null;
         }
     });
+
+    const [systemSettings, setSystemSettings] = useState(() => readCachedSystemSettings());
+    const [activeBranding, setActiveBranding] = useState(() => {
+        const currentRole = getCookie("role") || "customer";
+        try {
+            const cached = localStorage.getItem(`branding_${currentRole}`);
+            return cached ? JSON.parse(cached) : null;
+        } catch (error) {
+            return null;
+        }
+    });
+
+    // Detect layout branding role reactively from location.pathname
+    const currentBrandingRole = useMemo(() => {
+        let currentRole = localStorage.getItem("installRole");
+        if (location.pathname.startsWith("/admin")) {
+            currentRole = "admin";
+        } else if (location.pathname.startsWith("/provider")) {
+            currentRole = "provider";
+        } else if (location.pathname.startsWith("/customer")) {
+            currentRole = "customer";
+        }
+        if (!currentRole || !["customer", "provider", "admin"].includes(currentRole)) {
+            currentRole = "customer";
+        }
+        return currentRole;
+    }, [location.pathname]);
+
+    // Unified setting and branding fetcher
+    const fetchSystemAndBranding = useCallback(async (targetRole) => {
+        const roleToFetch = targetRole || currentBrandingRole;
+        try {
+            // Fetch system settings
+            const globalRes = await SystemService.getSystemSetting();
+            if (globalRes.data?.success) {
+                const settingsData = globalRes.data.data;
+                writeSystemSettingsCache(settingsData);
+                setSystemSettings(settingsData);
+            }
+
+            // Fetch role specific branding
+            const brandingRes = await SystemService.getBrandingSettings(roleToFetch);
+            if (brandingRes.data?.success) {
+                const brandingData = brandingRes.data.data;
+                localStorage.setItem(`branding_${roleToFetch}`, JSON.stringify(brandingData));
+                setActiveBranding(brandingData);
+                window.dispatchEvent(new CustomEvent("brandingUpdated", { detail: { role: roleToFetch, data: brandingData } }));
+            }
+        } catch (error) {
+            console.error("Failed to fetch system/branding settings:", error);
+        }
+    }, [currentBrandingRole]);
+
+    // Fetch system and branding data on mount and on branding role changes
+    useEffect(() => {
+        // Load from cache first
+        const cached = localStorage.getItem(`branding_${currentBrandingRole}`);
+        if (cached) {
+            try {
+                setActiveBranding(JSON.parse(cached));
+            } catch (e) {}
+        }
+        
+        // Background update fetch
+        fetchSystemAndBranding(currentBrandingRole);
+    }, [currentBrandingRole, fetchSystemAndBranding]);
+
+    useEffect(() => {
+        const handleSystemSettingsUpdated = (event) => {
+            const updated = event?.detail || readCachedSystemSettings();
+            setSystemSettings({ ...updated });
+        };
+
+        const handleBrandingUpdated = (event) => {
+            if (event.detail?.role === currentBrandingRole) {
+                setActiveBranding(event.detail.data);
+            }
+        };
+
+        window.addEventListener(SYSTEM_SETTINGS_UPDATED_EVENT, handleSystemSettingsUpdated);
+        window.addEventListener("brandingUpdated", handleBrandingUpdated);
+
+        return () => {
+            window.removeEventListener(SYSTEM_SETTINGS_UPDATED_EVENT, handleSystemSettingsUpdated);
+            window.removeEventListener("brandingUpdated", handleBrandingUpdated);
+        };
+    }, [currentBrandingRole]);
 
     // Deep link state
     const [isDeepLink, setIsDeepLink] = useState(false);
@@ -86,11 +222,11 @@ export const AuthProvider = ({ children }) => {
                 isAdmin: userData?.isAdmin || decodedToken.isAdmin || false
             };
 
-            // Save to localStorage
-            localStorage.setItem("token", newToken);
-            if (newRefreshToken) localStorage.setItem("refreshToken", newRefreshToken);
-            localStorage.setItem("role", finalRole);
-            localStorage.setItem("user", JSON.stringify(userObj));
+            // Save to cookies securely (Fix 5)
+            setCookie("token", newToken, 7);
+            if (newRefreshToken) setCookie("refreshToken", newRefreshToken, 7);
+            setCookie("role", finalRole, 7);
+            setCookie("user", JSON.stringify(userObj), 7);
 
             // Update state
             setToken(newToken);
@@ -132,10 +268,16 @@ export const AuthProvider = ({ children }) => {
 
     // Logout function
     const logoutUser = () => {
-        const currentRefreshToken = localStorage.getItem("refreshToken");
+        const currentRefreshToken = getCookie("refreshToken");
         const currentFcmToken = localStorage.getItem("fcmToken");
 
-        // Selective clear to preserve device identity and PWA branding/installation keys
+        // Erase auth cookies securely (Fix 5)
+        eraseCookie("token");
+        eraseCookie("refreshToken");
+        eraseCookie("role");
+        eraseCookie("user");
+
+        // Selective clear to preserve device identity and PWA keys
         const preserved = {};
         const keysToPreserve = [
             "persistentDeviceId",
@@ -204,7 +346,7 @@ export const AuthProvider = ({ children }) => {
                         isAdmin: role === 'admin' || userData.isAdmin
                     };
                     setUser(userObj);
-                    localStorage.setItem("user", JSON.stringify(userObj));
+                    setCookie("user", JSON.stringify(userObj), 7);
                     return userObj;
                 }
             }
@@ -240,8 +382,11 @@ export const AuthProvider = ({ children }) => {
         API,
         API_URL_IMAGE,
         showToast,
-        isTokenExpired
-    }), [token, refreshToken, role, user, isAdmin, isDeepLink, intendedRoute, API, refreshUser]);
+        isTokenExpired,
+        systemSettings,
+        activeBranding,
+        fetchSystemAndBranding
+    }), [token, refreshToken, role, user, isAdmin, isDeepLink, intendedRoute, API, refreshUser, systemSettings, activeBranding, fetchSystemAndBranding]);
 
     return (
         <AuthContext.Provider value={contextValue}>
@@ -256,4 +401,4 @@ export const useAuth = () => {
         throw new Error("useAuth must be used within an AuthProvider");
     }
     return context;
-};
+};

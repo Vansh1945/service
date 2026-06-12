@@ -46,6 +46,7 @@ const STEP_ICONS = [Mail, Shield, Lock];
 
 const ForgotPassword = () => {
   const navigate = useNavigate();
+  const { systemSettings = {} } = useAuth();
   const [step, setStep] = useState(1);
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
@@ -242,7 +243,7 @@ const ForgotPassword = () => {
 
       <div className="bg-background border border-secondary/10 rounded-xl p-5 shadow-sm">
         <h3 className="text-sm font-bold text-secondary mb-3 flex items-center gap-2">
-          <Award className="w-4 h-4 text-primary" /> Why Raj Electrical Services?
+          <Award className="w-4 h-4 text-primary" /> Why {systemSettings.companyName || "Raj Electrical Services"}?
         </h3>
         <div className="space-y-2.5">
           {[

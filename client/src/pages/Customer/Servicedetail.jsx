@@ -24,7 +24,7 @@ const ServiceDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { showToast, isAuthenticated, user } = useAuth();
+  const { showToast, isAuthenticated, user, systemSettings = {} } = useAuth();
 
   // ==================== STATE MANAGEMENT ====================
   const [service, setService] = useState(null);
@@ -189,7 +189,7 @@ const ServiceDetailPage = () => {
   const handleShare = async () => {
     const shareData = {
       title: service?.title,
-      text: `Check out this ${service?.title} service from Raj Electrical Service`,
+      text: `Check out this ${service?.title} service from ${systemSettings.companyName || "Raj Electrical Service"}`,
       url: window.location.href,
     };
 
@@ -631,7 +631,7 @@ const ServiceDetailPage = () => {
                 {/* Why Choose Us */}
                 <div className="bg-gray-50/50 p-5 rounded-2xl border border-gray-100 space-y-3">
                   <h3 className="text-indigo-700 font-extrabold text-xs tracking-wider uppercase border-b border-indigo-100/50 pb-2">
-                    Why Choose Raj Electrical?
+                    Why Choose {systemSettings.companyName || "Raj Electrical"}?
                   </h3>
                   <ul className="space-y-2">
                     {[

@@ -19,11 +19,10 @@ import { writeSystemSettingsCache } from '../utils/systemSettingsCache';
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const [systemSettings, setSystemSettings] = useState({ companyName: '', logo: null });
   const location = useLocation();
   const menuRef = useRef(null);
   const buttonRef = useRef(null);
-  const { API, isDeepLink, isAuthenticated, resetDeepLink, role } = useAuth();
+  const { API, isDeepLink, isAuthenticated, resetDeepLink, role, systemSettings = {} } = useAuth();
 
   // Handle scroll effect with smoother transition
   useEffect(() => {
@@ -62,27 +61,6 @@ const Navbar = () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [isOpen]);
-
-  // Fetch system settings
-  useEffect(() => {
-    const fetchSystemSettings = async () => {
-      try {
-        const response = await SystemService.getSystemSetting();
-        if (response.data?.success) {
-          const data = response.data.data;
-          setSystemSettings({
-            companyName: data?.companyName || '',
-            logo: data?.logo || null
-          });
-          writeSystemSettingsCache(data);
-        }
-      } catch (error) {
-        console.error('Failed to fetch system settings:', error);
-      }
-    };
-
-    fetchSystemSettings();
-  }, []);
 
   // Navigation links data with icons
   const navLinks = [

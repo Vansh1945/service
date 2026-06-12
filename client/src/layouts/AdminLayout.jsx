@@ -15,72 +15,13 @@ import * as SystemService from '../services/SystemService';
 const AdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
-  const [systemSettings, setSystemSettings] = useState({
-    companyName: '',
-    appName: '',
-    logo: null
-  });
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logoutUser, API, token } = useAuth();
+  const { user, logoutUser, API, token, systemSettings: authSystemSettings = {}, activeBranding = {} } = useAuth();
 
-  useEffect(() => {
-    const fetchSystemSettings = async () => {
-      try {
-        let globalCompany = 'Raj Electrical Services';
-        try {
-          const globalRes = await SystemService.getSystemSetting();
-          if (globalRes.data?.success) {
-            globalCompany = globalRes.data.data?.companyName || globalCompany;
-          }
-        } catch (globalErr) {
-          console.error('Failed to fetch global settings in AdminLayout:', globalErr);
-        }
-
-        const cached = localStorage.getItem('branding_admin');
-        if (cached) {
-          const data = JSON.parse(cached);
-          setSystemSettings({
-            companyName: globalCompany,
-            appName: data.appName || data.dashboardTitle || 'Admin Panel',
-            logo: data.logo || null
-          });
-        }
-
-        const response = await SystemService.getBrandingSettings('admin');
-        if (response.data?.success) {
-          const data = response.data.data;
-          setSystemSettings({
-            companyName: globalCompany,
-            appName: data.appName || data.dashboardTitle || 'Admin Panel',
-            logo: data.logo || null
-          });
-          localStorage.setItem('branding_admin', JSON.stringify(data));
-        }
-      } catch (error) {
-        console.error('Failed to fetch system settings:', error);
-      }
-    };
-
-    if (token) {
-      fetchSystemSettings();
-    }
-  }, [token]);
-
-  useEffect(() => {
-    const handleBrandingUpdate = (e) => {
-      if (e.detail?.role === 'admin') {
-        const data = e.detail.data;
-        setSystemSettings(prev => ({
-          ...prev,
-          appName: data.appName || data.dashboardTitle || 'Admin Panel',
-          logo: data.logo || null
-        }));
-      }
-    };
-    window.addEventListener('brandingUpdated', handleBrandingUpdate);
-    return () => window.removeEventListener('brandingUpdated', handleBrandingUpdate);
-  }, []);
+  const logo = activeBranding?.logo || authSystemSettings?.logo || null;
+  const companyName = authSystemSettings?.companyName || 'Raj Electrical Services';
+  const appName = activeBranding?.appName || 'Admin Panel';
 
   const menuItems = [
     { name: 'Dashboard', path: '/admin/dashboard', icon: <FiHome className="w-5 h-5" /> },
@@ -141,19 +82,19 @@ const AdminLayout = () => {
           {/* Mobile header */}
           <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200">
             <div className="flex items-center flex-1 min-w-0 pr-2">
-              {systemSettings.logo && (
+              {logo && (
                 <img
-                  src={systemSettings.logo}
-                  alt={systemSettings.companyName}
+                  src={logo}
+                  alt={companyName}
                   className="h-8 w-auto object-contain mr-2 flex-shrink-0"
                 />
               )}
               <div className="flex flex-col min-w-0">
                 <span className="text-sm font-bold text-secondary truncate leading-tight">
-                  {systemSettings.companyName || 'Raj Electrical Services'}
+                  {companyName}
                 </span>
                 <span className="text-[10px] font-extrabold uppercase tracking-wider text-primary truncate">
-                  {systemSettings.appName || 'Admin Panel'}
+                  {appName}
                 </span>
               </div>
             </div>
@@ -220,19 +161,19 @@ const AdminLayout = () => {
           {/* Desktop header */}
           <div className="flex items-center px-6 py-6 border-b border-gray-200">
             <div className="flex items-center">
-              {systemSettings.logo && (
+              {logo && (
                 <img
-                  src={systemSettings.logo}
-                  alt={systemSettings.companyName}
+                  src={logo}
+                  alt={companyName}
                   className="h-10 w-auto object-contain mr-3"
                 />
               )}
               <div className="flex flex-col">
                 <span className="text-lg font-bold text-secondary leading-tight">
-                  {systemSettings.companyName || 'Raj Electrical Services'}
+                  {companyName}
                 </span>
                 <span className="text-[10px] font-extrabold uppercase tracking-wider text-primary">
-                  {systemSettings.appName || 'Admin Panel'}
+                  {appName}
                 </span>
               </div>
             </div>

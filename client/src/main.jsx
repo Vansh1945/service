@@ -11,6 +11,12 @@ import "react-toastify/dist/ReactToastify.css";
 import "./index.css";
 import "leaflet/dist/leaflet.css";
 
+// Capture PWA beforeinstallprompt globally as early as possible
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  window.deferredInstallPrompt = e;
+});
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {

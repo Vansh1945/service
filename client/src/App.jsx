@@ -262,16 +262,21 @@ const App = () => {
     return () => window.removeEventListener('appUpdateReceived', handleUpdateReceived);
   }, []);
 
+  const {
+    isDeepLink,
+    setIsDeepLink,
+    isAuthenticated,
+    role: userRole,
+    isAdmin,
+    setIntendedRoute,
+    resetDeepLink,
+    user,
+    systemSettings: globalSettings,
+    activeBranding
+  } = useAuth();
+
   const [showSplash, setShowSplash] = useState(false);
   const [splashFade, setSplashFade] = useState(false);
-  const [globalFavicon, setGlobalFavicon] = useState(null);
-
-  const [systemSettings, setSystemSettings] = useState({
-    companyName: "",
-    favicon: null,
-    splashScreen: null,
-    timeFormat: getCachedTimeFormat(),
-  });
 
   // Check if current route is a protected/dashboard route (Optimized: memoized)
   const isDashboardRoute = React.useMemo(() =>
@@ -280,8 +285,10 @@ const App = () => {
   );
 
   useEffect(() => {
-    document.documentElement.dataset.timeFormat = systemSettings.timeFormat;
-  }, [systemSettings.timeFormat]);
+    if (globalSettings?.timeFormat) {
+      document.documentElement.dataset.timeFormat = globalSettings.timeFormat;
+    }
+  }, [globalSettings?.timeFormat]);
 
   // Session-based Splash Screen check
   useEffect(() => {
@@ -299,33 +306,6 @@ const App = () => {
         clearTimeout(removeTimeout);
       };
     }
-  }, []);
-
-  useEffect(() => {
-    const handleSystemSettingsUpdated = (event) => {
-      const updatedSettings = event?.detail || readCachedSystemSettings();
-      const normalizedSettings = {
-        ...updatedSettings,
-        timeFormat: normalizeTimeFormat(updatedSettings?.timeFormat),
-      };
-
-      setSystemSettings(prev => ({ ...prev, ...normalizedSettings }));
-      setGlobalFavicon(normalizedSettings.favicon || null);
-      applyDocumentSettings(normalizedSettings);
-    };
-
-    const handleStorageUpdate = (event) => {
-      if (event.key && event.key !== SYSTEM_SETTINGS_CACHE_KEY) return;
-      handleSystemSettingsUpdated();
-    };
-
-    window.addEventListener(SYSTEM_SETTINGS_UPDATED_EVENT, handleSystemSettingsUpdated);
-    window.addEventListener("storage", handleStorageUpdate);
-
-    return () => {
-      window.removeEventListener(SYSTEM_SETTINGS_UPDATED_EVENT, handleSystemSettingsUpdated);
-      window.removeEventListener("storage", handleStorageUpdate);
-    };
   }, []);
 
   // Fetch dynamic branding settings and apply dynamically based on current route context
@@ -350,140 +330,67 @@ const App = () => {
       }
     }
 
-    const fetchBranding = async () => {
-      try {
-        let globalFav = globalFavicon;
-        try {
-          const globalRes = await SystemService.getSystemSetting();
-          if (globalRes.data?.success) {
-            globalFav = globalRes.data.data?.favicon || null;
-            setGlobalFavicon(globalFav);
-            writeSystemSettingsCache(globalRes.data.data);
-          }
-        } catch (globalErr) {
-          console.error("Error fetching system settings inside App:", globalErr);
-        }
+    const manifestUrl = generateManifestUrl(currentRole, activeBranding);
+    // Favicon sequence: globalSettings.favicon -> globalSettings.logo -> fallback -> favicon.ico
+    const resolvedFavicon = globalSettings?.favicon || globalSettings?.logo || "/icon-192.png";
 
-        const cached = localStorage.getItem(`branding_${currentRole}`);
-        if (cached) {
-          const brandingData = JSON.parse(cached);
-          applyBrandingData(currentRole, brandingData, globalFav);
-        }
-
-        const response = await SystemService.getBrandingSettings(currentRole);
-        if (response.data?.success) {
-          const brandingData = response.data.data;
-          localStorage.setItem(`branding_${currentRole}`, JSON.stringify(brandingData));
-          applyBrandingData(currentRole, brandingData, globalFav);
-
-          // PWA Check: Compare local version with server version
-          const serverVersion = brandingData.appVersion;
-          if (serverVersion) {
-            const localVersionKey = `app_version_${currentRole}`;
-            const localVersion = parseInt(localStorage.getItem(localVersionKey) || '1', 10);
-
-            if (serverVersion > localVersion) {
-              console.log(`[PWA Update] Server version ${serverVersion} is newer than local version ${localVersion}. Upgrading...`);
-
-              localStorage.setItem(localVersionKey, serverVersion.toString());
-
-              if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.getRegistrations().then((registrations) => {
-                  for (const registration of registrations) {
-                    registration.update().catch(err => console.error('SW update failed:', err));
-                    if (registration.waiting) {
-                      registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-                    } else if (registration.active) {
-                      registration.active.postMessage({ type: 'SKIP_WAITING' });
-                    }
-                  }
-                });
-              }
-
-              setTimeout(() => {
-                window.location.reload();
-              }, 800);
-            }
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching dynamic branding:", error);
-      }
+    const settings = {
+      companyName: activeBranding?.browserTitle || activeBranding?.appName || globalSettings?.companyName || "Raj Electrical Service",
+      shortName: activeBranding?.shortName || globalSettings?.companyName || "Raj Service",
+      favicon: resolvedFavicon,
+      description: activeBranding?.description || globalSettings?.tagline || "",
+      themeColor: activeBranding?.themeColor || (currentRole === 'admin' ? '#4f46e5' : currentRole === 'provider' ? '#10b981' : '#3b82f6'),
+      manifestUrl: manifestUrl,
+      icon: activeBranding?.icon || activeBranding?.logo || globalSettings?.logo || "/icon-192.png",
+      splashScreen: globalSettings?.customerBranding?.splashScreen || activeBranding?.splashScreen || null
     };
 
-    const applyBrandingData = (role, data, globalFav) => {
-      const manifestUrl = generateManifestUrl(role, data);
+    applyDocumentSettings(settings);
+  }, [globalSettings, activeBranding, location.pathname]);
 
-      // Favicon cache bust timestamp - Prefer the global favicon to keep it consistent
-      const faviconUrl = globalFav || data?.favicon || data?.logo || null;
-      const busterFavicon = faviconUrl ? `${faviconUrl}?v=${data?.updatedAt || Date.now()}` : null;
-
-      const settings = {
-        companyName: data?.browserTitle || data?.appName || (role === 'admin' ? 'Raj Electrical Admin' : role === 'provider' ? 'Raj Electrical Provider' : 'Raj Electrical Customer'),
-        shortName: data?.shortName || (role === 'admin' ? 'Admin' : role === 'provider' ? 'Provider' : 'Raj Service'),
-        favicon: busterFavicon,
-        description: data?.description || "",
-        themeColor: data?.themeColor || (role === 'admin' ? '#4f46e5' : role === 'provider' ? '#10b981' : '#3b82f6'),
-        manifestUrl: manifestUrl,
-        icon: data?.icon || data?.logo || null,
-        splashScreen: data?.splashScreen || null
-      };
-
-      setSystemSettings(prev => ({
-        ...prev,
-        companyName: settings.companyName,
-        favicon: settings.favicon,
-        splashScreen: settings.splashScreen
-      }));
-
-      applyDocumentSettings(settings);
-
-      // Notify any listening components
-      window.dispatchEvent(new CustomEvent("brandingUpdated", { detail: { role, data } }));
-    };
-
-    fetchBranding();
-  }, [location.pathname]);
-
-  // Live branding listener to apply instant changes when saving settings
+  // PWA version update check
   useEffect(() => {
-    const handleBrandingChange = (e) => {
-      let currentRole = localStorage.getItem("installRole");
-      if (location.pathname.startsWith("/admin")) {
-        currentRole = "admin";
+    let currentRole = localStorage.getItem("installRole");
+    if (location.pathname.startsWith("/admin")) {
+      currentRole = "admin";
+    }
+    if (!currentRole || !["customer", "provider", "admin"].includes(currentRole)) {
+      if (location.pathname.startsWith("/provider")) {
+        currentRole = "provider";
+      } else {
+        currentRole = "customer";
       }
-      if (!currentRole || !["customer", "provider", "admin"].includes(currentRole)) {
-        if (location.pathname.startsWith("/provider")) {
-          currentRole = "provider";
-        } else {
-          currentRole = "customer";
+    }
+
+    const serverVersion = activeBranding?.appVersion;
+    if (serverVersion) {
+      const localVersionKey = `app_version_${currentRole}`;
+      const localVersion = parseInt(localStorage.getItem(localVersionKey) || '1', 10);
+
+      if (serverVersion > localVersion) {
+        console.log(`[PWA Update] Server version ${serverVersion} is newer than local version ${localVersion}. Upgrading...`);
+        localStorage.setItem(localVersionKey, serverVersion.toString());
+
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then((registrations) => {
+            for (const registration of registrations) {
+              registration.update().catch(err => console.error('SW update failed:', err));
+              if (registration.waiting) {
+                registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+              } else if (registration.active) {
+                registration.active.postMessage({ type: 'SKIP_WAITING' });
+              }
+            }
+          });
         }
+
+        setTimeout(() => {
+          window.location.reload();
+        }, 800);
       }
+    }
+  }, [activeBranding, location.pathname]);
 
-      if (e.detail?.role === currentRole) {
-        const data = e.detail.data;
-        const manifestUrl = generateManifestUrl(currentRole, data);
-
-        const faviconUrl = globalFavicon || data?.favicon || data?.logo || null;
-        const busterFavicon = faviconUrl ? `${faviconUrl}?v=${Date.now()}` : null;
-
-        applyDocumentSettings({
-          companyName: data?.browserTitle || data?.appName || (currentRole === 'admin' ? 'Raj Electrical Admin' : currentRole === 'provider' ? 'Raj Electrical Provider' : 'Raj Electrical Customer'),
-          shortName: data?.shortName || (currentRole === 'admin' ? 'Admin' : currentRole === 'provider' ? 'Provider' : 'Raj Service'),
-          favicon: busterFavicon,
-          description: data?.description || "",
-          themeColor: data?.themeColor || (currentRole === 'admin' ? '#4f46e5' : currentRole === 'provider' ? '#10b981' : '#3b82f6'),
-          manifestUrl: manifestUrl,
-          icon: data?.icon || data?.logo || null,
-          splashScreen: data?.splashScreen || null
-        });
-      }
-    };
-    window.addEventListener("brandingUpdated", handleBrandingChange);
-    return () => window.removeEventListener("brandingUpdated", handleBrandingChange);
-  }, [location.pathname, globalFavicon]);
-
-  const { isDeepLink, setIsDeepLink, isAuthenticated, role: userRole, isAdmin, setIntendedRoute, resetDeepLink, user } = useAuth();
   const navigate_fn = useNavigate();
 
   // 🔄 AUTO-REDIRECT: If logged-in, don't show Home/Login page
@@ -556,17 +463,33 @@ const App = () => {
   return (
     <Suspense fallback={<LoadingSpinner />}>
       {/* 🌟 Dynamic In-App Splash Screen Overlay */}
-      {showSplash && systemSettings.splashScreen && (
+      {showSplash && (
         <div 
-          className={`fixed inset-0 z-[100000] flex items-center justify-center bg-white transition-all duration-500 ease-in-out ${
+          className={`fixed inset-0 z-[100000] flex flex-col items-center justify-center bg-white transition-all duration-500 ease-in-out ${
             splashFade ? 'opacity-0 pointer-events-none' : 'opacity-100'
           }`}
         >
-          <img 
-            src={systemSettings.splashScreen} 
-            alt="Loading Application..." 
-            className="w-full h-full object-cover animate-fade-in" 
-          />
+          {(globalSettings?.customerBranding?.splashScreen || activeBranding?.splashScreen) ? (
+            <img 
+              src={globalSettings?.customerBranding?.splashScreen || activeBranding?.splashScreen} 
+              alt="Loading Application..." 
+              className="w-full h-full object-cover animate-fade-in" 
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center space-y-4 animate-fade-in">
+              {globalSettings?.logo ? (
+                <img src={globalSettings.logo} alt="Logo" className="w-24 h-24 object-contain animate-bounce" />
+              ) : (
+                <div className="w-20 h-20 bg-gradient-to-br from-primary to-accent rounded-2xl flex items-center justify-center shadow-lg animate-bounce">
+                  <span className="text-white text-3xl font-black">R</span>
+                </div>
+              )}
+              <h1 className="text-2xl md:text-3xl font-extrabold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter tracking-tight">
+                {globalSettings?.companyName || "Raj Electrical Service"}
+              </h1>
+              <div className="w-12 h-1 bg-gradient-to-r from-primary to-accent rounded-full animate-pulse" />
+            </div>
+          )}
         </div>
       )}
 

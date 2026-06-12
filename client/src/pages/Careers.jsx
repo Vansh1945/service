@@ -2,6 +2,7 @@ import React from 'react';
 import { Helmet } from 'react-helmet-async';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../context/auth';
 import {
   DollarSign,
   Clock,
@@ -24,6 +25,7 @@ import {
 } from 'lucide-react';
 
 const CareersPage = () => {
+  const { systemSettings = {} } = useAuth();
   const stats = [
     { icon: UserPlus, value: "500+", label: "Service Providers" },
     { icon: Wallet, value: "₹50k+", label: "Avg Monthly Earnings" },
@@ -75,13 +77,13 @@ const CareersPage = () => {
   return (
     <div className="min-h-screen bg-white">
       <Helmet>
-        <title>Careers | Raj Electrical Services | Join as an Electrical Partner</title>
-        <meta name="description" content="Join Raj Electrical Services in North India as a certified electrical partner. Connect with local clients, earn Secure Payments, and grow your service business." />
-        <meta name="keywords" content="careers at Raj Electrical, electrician jobs in North India, join electrical network, trusted electrical solutions" />
-        <link rel="canonical" href="https://rajelectricalservices.vercel.app/careers" />
-        <meta property="og:title" content="Careers | Raj Electrical Services | Join as an Electrical Partner" />
-        <meta property="og:description" content="Join Raj Electrical Services in North India as a certified electrical partner. Connect with local clients, earn Secure Payments, and grow your service business." />
-        <meta property="og:url" content="https://rajelectricalservices.vercel.app/careers" />
+        <title>Careers | {systemSettings.companyName || "Raj Electrical Services"} | Join as an Electrical Partner</title>
+        <meta name="description" content={`Join ${systemSettings.companyName || "Raj Electrical Services"} in North India as a certified electrical partner. Connect with local clients, earn Secure Payments, and grow your service business.`} />
+        <meta name="keywords" content={`careers at ${systemSettings.companyName || "Raj Electrical Services"}, electrician jobs in North India, join electrical network, trusted electrical solutions`} />
+        <link rel="canonical" href={window.location.href} />
+        <meta property="og:title" content={`Careers | ${systemSettings.companyName || "Raj Electrical Services"} | Join as an Electrical Partner`} />
+        <meta property="og:description" content={`Join ${systemSettings.companyName || "Raj Electrical Services"} in North India as a certified electrical partner. Connect with local clients, earn Secure Payments, and grow your service business.`} />
+        <meta property="og:url" content={window.location.href} />
         <meta property="og:type" content="website" />
       </Helmet>
 
@@ -320,7 +322,7 @@ const CareersPage = () => {
                 Built on Trust & Reliability
               </h2>
               <p className="text-gray-500 text-xs font-semibold leading-relaxed mb-6">
-                Our service partners are an important part of Raj Electrical Services. We provide a reliable platform that helps them manage bookings, track earnings, and deliver quality service to customers.
+                Our service partners are an important part of {systemSettings.companyName || "Raj Electrical Services"}. We provide a reliable platform that helps them manage bookings, track earnings, and deliver quality service to customers.
               </p>
 
               <div className="space-y-4">
