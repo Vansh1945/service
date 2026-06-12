@@ -707,7 +707,7 @@ const ServiceCard = ({ service, categoryMap, onBook, getMergedPrice }) => {
           <button
             onClick={() => onBook(service._id, isAvailable)}
             disabled={!isAvailable}
-            className={`px-4 py-2 rounded-xl text-xs font-bold tracking-wide transition-all active:scale-95 ${isAvailable
+            className={`px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs font-bold tracking-wide transition-all active:scale-95 whitespace-nowrap ${isAvailable
               ? 'bg-primary text-white hover:bg-primary/95 shadow-sm shadow-primary/10'
               : 'bg-gray-150 text-gray-400 cursor-not-allowed'
               }`}

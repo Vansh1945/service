@@ -56,15 +56,8 @@ const CustomerRoutes = lazyWithRetry(() => import("./routes/CustomerRoutes"));
 const ProviderRoutes = lazyWithRetry(() => import("./routes/ProviderRoutes"));
 
 
-import * as SystemService from "./services/SystemService";
 import {
-  SYSTEM_SETTINGS_CACHE_KEY,
-  SYSTEM_SETTINGS_UPDATED_EVENT,
   getCachedTimeFormat,
-  normalizeTimeFormat,
-  readCachedSystemSettings,
-  readSystemSettingsCache,
-  writeSystemSettingsCache,
 } from "./utils/systemSettingsCache";
 
 const DATE_TIME_FORMAT_OVERRIDE_KEY = "__rajelectricalTimeFormatOverrideInstalled";

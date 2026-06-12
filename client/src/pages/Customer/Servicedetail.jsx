@@ -2,13 +2,13 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/auth';
 import {
-  MdStar, MdAccessTime, MdSecurity, MdCheck, MdCurrencyRupee,
-  MdChevronRight, MdError, MdShare, MdArrowBack, MdArrowForward,
-  MdPhoto, MdHome, MdCalendarToday, MdHelpOutline
+  MdStar, MdCheck,
+  MdChevronRight, MdShare, MdArrowBack, MdArrowForward,
+  MdHome, MdHelpOutline
 } from 'react-icons/md';
 import {
   StarIcon as StarIconSolid, ShieldCheckIcon, CheckBadgeIcon,
-  WrenchIcon, UserIcon, ClockIcon, ChevronRightIcon, CheckIcon,
+  WrenchIcon, UserIcon, ClockIcon,
   ChatBubbleLeftEllipsisIcon, ChevronDownIcon
 } from '@heroicons/react/24/outline';
 import LoadingSpinner from '../../components/ui-skeletons/Loader';
@@ -246,22 +246,22 @@ const ServiceDetailPage = () => {
     <div className="min-h-screen bg-white font-inter">
       {/* Breadcrumb Section */}
       <div className="max-w-[95%] mx-auto px-4 py-4 sm:px-6 lg:px-8">
-        <nav className="flex text-sm text-gray-500 font-medium" aria-label="Breadcrumb">
-          <ol className="flex items-center space-x-2">
+        <nav className="flex text-xs md:text-sm text-gray-500 font-medium" aria-label="Breadcrumb">
+          <ol className="flex flex-wrap items-center gap-1 sm:gap-2">
             <li>
-              <Link to="/customer/services" className="hover:text-primary transition-colors flex items-center">
-                <MdHome className="w-4 h-4 mr-1" />
+              <Link to="/customer/services" className="hover:text-primary transition-colors flex items-center whitespace-nowrap">
+                <MdHome className="w-4 h-4 mr-0.5" />
                 Home
               </Link>
             </li>
-            <MdChevronRight className="w-4 h-4 text-gray-400" />
-            <li>
-              <button onClick={() => navigate(`/customer/services?category=${getCategoryId}`)} className="hover:text-primary transition-colors">
+            <MdChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+            <li className="truncate max-w-[100px] sm:max-w-[150px]">
+              <button onClick={() => navigate(`/customer/services?category=${getCategoryId}`)} className="hover:text-primary transition-colors truncate whitespace-nowrap block w-full text-left">
                 {categoryName}
               </button>
             </li>
-            <MdChevronRight className="w-4 h-4 text-gray-400" />
-            <li className="text-secondary font-semibold truncate max-w-[200px]">
+            <MdChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+            <li className="text-secondary font-semibold truncate max-w-[120px] sm:max-w-[200px] whitespace-nowrap">
               {service.title}
             </li>
           </ol>
@@ -314,9 +314,8 @@ const ServiceDetailPage = () => {
                     <button
                       key={idx}
                       onClick={() => setCurrentImageIndex(idx)}
-                      className={`w-16 h-16 rounded-xl overflow-hidden border-2 bg-gray-50 flex-shrink-0 transition-all ${
-                        currentImageIndex === idx ? 'border-primary shadow-md scale-95' : 'border-gray-200 hover:border-gray-300'
-                      }`}
+                      className={`w-16 h-16 rounded-xl overflow-hidden border-2 bg-gray-50 flex-shrink-0 transition-all ${currentImageIndex === idx ? 'border-primary shadow-md scale-95' : 'border-gray-200 hover:border-gray-300'
+                        }`}
                     >
                       <img src={img} alt={`thumbnail-${idx}`} className="w-full h-full object-cover" />
                     </button>
@@ -332,7 +331,7 @@ const ServiceDetailPage = () => {
                   <span className="text-[10px] font-extrabold bg-teal-50 text-primary px-2.5 py-1 rounded-lg border border-teal-100/50 uppercase tracking-widest">
                     {categoryName}
                   </span>
-                  
+
                   <h1 className="text-2xl lg:text-3xl font-extrabold text-secondary tracking-tight leading-tight pt-1">
                     {service.title}
                   </h1>
