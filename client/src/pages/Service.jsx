@@ -90,12 +90,12 @@ const ServicesPage = () => {
     return (
         <div className="min-h-screen bg-white">
             <Helmet>
-                <title>Our Services | {systemSettings.companyName || "Raj Electrical Services"} | Professional Electrical Repair</title>
-                <meta name="description" content={`Explore residential and commercial electrical services in North India. Book ${systemSettings.companyName || "Raj Electrical Services"} for certified house wiring, luxe lighting, panel upgrades, and smart home systems.`} />
+                <title>Our Services | {systemSettings.companyName || "Raj Electrical Service"} | Professional Electrical Repair</title>
+                <meta name="description" content={`Explore residential and commercial electrical services in North India. Book ${systemSettings.companyName || "Raj Electrical Service"} for certified house wiring, luxe lighting, panel upgrades, and smart home systems.`} />
                 <meta name="keywords" content="electrical services in North India, professional electrical repair, home electrical maintenance, residential and commercial electrical services, trusted electrical solutions" />
                 <link rel="canonical" href={window.location.href} />
-                <meta property="og:title" content={`Our Services | ${systemSettings.companyName || "Raj Electrical Services"} | Professional Electrical Repair`} />
-                <meta property="og:description" content={`Explore residential and commercial electrical services in North India. Book ${systemSettings.companyName || "Raj Electrical Services"} for certified house wiring, luxe lighting, panel upgrades, and smart home systems.`} />
+                <meta property="og:title" content={`Our Services | ${systemSettings.companyName || "Raj Electrical Service"} | Professional Electrical Repair`} />
+                <meta property="og:description" content={`Explore residential and commercial electrical services in North India. Book ${systemSettings.companyName || "Raj Electrical Service"} for certified house wiring, luxe lighting, panel upgrades, and smart home systems.`} />
                 <meta property="og:url" content={window.location.href} />
                 <meta property="og:type" content="website" />
             </Helmet>

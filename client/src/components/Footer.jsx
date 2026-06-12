@@ -87,7 +87,7 @@ const Footer = () => {
                 </div>
               )}
               <span className="text-xl font-bold tracking-tight bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                {systemData?.companyName || "Raj Electrical Services"}
+                {systemData?.companyName || "Raj Electrical Service"}
               </span>
             </Link>
 
@@ -202,7 +202,7 @@ const Footer = () => {
           <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-gray-500">
             {/* Copyright */}
             <p className="text-center md:text-left">
-              © {currentYear} {systemData?.companyName || "Raj Electrical Services"}. All rights reserved.
+              © {currentYear} {systemData?.companyName || "Raj Electrical Service"}. All rights reserved.
             </p>
 
             {/* Legal Links */}

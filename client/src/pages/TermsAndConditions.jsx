@@ -18,7 +18,7 @@ import { useAuth } from '../context/auth';
 
 const TermsAndConditions = () => {
   const { systemSettings = {} } = useAuth();
-  const companyName = systemSettings.companyName || 'Raj Electrical Services';
+  const companyName = systemSettings.companyName || 'Raj Electrical Service';
 
   useEffect(() => {
     window.scrollTo(0, 0);

@@ -413,7 +413,7 @@ const ChatModal = ({ bookingId, role, isOpen, onClose, roomType = 'provider_cust
                 targetRoomType === 'customer_admin' || targetRoomType === 'provider_admin' ? (
                   <div className="flex flex-col items-center justify-center py-16 text-center text-gray-400">
                     <Info className="w-8 h-8 text-primary opacity-40 mb-2" />
-                    <p className="text-[12px] font-bold text-secondary">Welcome to Raj Electrical Services Support!</p>
+                    <p className="text-[12px] font-bold text-secondary">Welcome to Raj Electrical Service Support!</p>
                     <p className="text-[10px] opacity-80 mt-1 max-w-[220px]">Describe your query or issue below, and our administrative team will assist you shortly.</p>
                   </div>
                 ) : targetRoomType === 'complaint_admin' ? (

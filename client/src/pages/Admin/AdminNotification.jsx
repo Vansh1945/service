@@ -10,7 +10,7 @@ import {
 import { formatDate, formatDateTime } from '../../utils/format';
 const EmojiPicker = lazy(() => import('emoji-picker-react'));
 import { motion, AnimatePresence } from 'framer-motion';
-import toast from 'react-hot-toast';
+import { toast } from 'react-toastify';
 import * as SystemService from '../../services/SystemService';
 import * as ZoneService from '../../services/ZoneService';
 import { ChevronDown, ChevronUp, Search, X } from 'lucide-react';
