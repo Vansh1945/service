@@ -2,9 +2,9 @@
 function withOpacity(variableName) {
   return ({ opacityValue }) => {
     if (opacityValue !== undefined) {
-      return `color-mix(in srgb, var(${variableName}) ${opacityValue * 100}%, transparent)`;
+      return `rgb(var(${variableName}) / ${opacityValue})`;
     }
-    return `var(${variableName})`;
+    return `rgb(var(${variableName}))`;
   };
 }
 
@@ -17,65 +17,65 @@ export default {
     extend: {
       colors: {
         /* Brand core accent definitions */
-        primary: withOpacity('--color-primary'),       /* Teal - Selected states, navigation tags, action triggers */
-        background: withOpacity('--color-background'), /* White - Base layout frames and page shells */
-        secondary: withOpacity('--color-secondary'),   /* Dark Gray - Body headings and side navigation panels */
-        accent: withOpacity('--color-accent'),         /* Orange - Urgent indicators and CTA button highlighting */
+        primary: withOpacity('--color-primary-rgb'),       /* Teal - Selected states, navigation tags, action triggers */
+        background: withOpacity('--color-background-rgb'), /* White - Base layout frames and page shells */
+        secondary: withOpacity('--color-secondary-rgb'),   /* Dark Gray - Body headings and side navigation panels */
+        accent: withOpacity('--color-accent-rgb'),         /* Orange - Urgent indicators and CTA button highlighting */
         
         /* Neutral palette scale mapping to global CSS tokens */
         neutral: {
-          50: withOpacity('--color-neutral-50'),   /* Background shade for sections/tables */
-          100: withOpacity('--color-neutral-100'), /* Cards borders, dividers, hover backgrounds */
-          200: withOpacity('--color-neutral-200'), /* General input outlines and thin borders */
-          300: withOpacity('--color-neutral-300'), /* Muted icons, disabled buttons elements */
-          400: withOpacity('--color-neutral-400'), /* Secondary details and caption texts */
-          500: withOpacity('--color-neutral-500'), /* Default description text color */
-          600: withOpacity('--color-neutral-600'), /* Medium contrast labels and active icons */
-          700: withOpacity('--color-neutral-700'), /* High contrast text, titles, sidebar items */
-          800: withOpacity('--color-neutral-800'), /* Primary page titles and header blocks */
-          900: withOpacity('--color-neutral-900'), /* Dense black for bold callouts */
+          50: withOpacity('--color-neutral-50-rgb'),   /* Background shade for sections/tables */
+          100: withOpacity('--color-neutral-100-rgb'), /* Cards borders, dividers, hover backgrounds */
+          200: withOpacity('--color-neutral-200-rgb'), /* General input outlines and thin borders */
+          300: withOpacity('--color-neutral-300-rgb'), /* Muted icons, disabled buttons elements */
+          400: withOpacity('--color-neutral-400-rgb'), /* Secondary details and caption texts */
+          500: withOpacity('--color-neutral-50-rgb'), /* Default description text color */
+          600: withOpacity('--color-neutral-600-rgb'), /* Medium contrast labels and active icons */
+          700: withOpacity('--color-neutral-700-rgb'), /* High contrast text, titles, sidebar items */
+          800: withOpacity('--color-neutral-800-rgb'), /* Primary page titles and header blocks */
+          900: withOpacity('--color-neutral-900-rgb'), /* Dense black for bold callouts */
         },
         gray: {
-          50: withOpacity('--color-neutral-50'),
-          100: withOpacity('--color-neutral-100'),
-          200: withOpacity('--color-neutral-200'),
-          300: withOpacity('--color-neutral-300'),
-          400: withOpacity('--color-neutral-400'),
-          500: withOpacity('--color-neutral-500'),
-          600: withOpacity('--color-neutral-600'),
-          700: withOpacity('--color-neutral-700'),
-          800: withOpacity('--color-neutral-800'),
-          900: withOpacity('--color-neutral-900'),
+          50: withOpacity('--color-neutral-50-rgb'),
+          100: withOpacity('--color-neutral-100-rgb'),
+          200: withOpacity('--color-neutral-200-rgb'),
+          300: withOpacity('--color-neutral-300-rgb'),
+          400: withOpacity('--color-neutral-400-rgb'),
+          500: withOpacity('--color-neutral-50-rgb'),
+          600: withOpacity('--color-neutral-600-rgb'),
+          700: withOpacity('--color-neutral-700-rgb'),
+          800: withOpacity('--color-neutral-800-rgb'),
+          900: withOpacity('--color-neutral-900-rgb'),
         },
         slate: {
-          50: withOpacity('--color-neutral-50'),
-          100: withOpacity('--color-neutral-100'),
-          200: withOpacity('--color-neutral-200'),
-          300: withOpacity('--color-neutral-300'),
-          400: withOpacity('--color-neutral-400'),
-          500: withOpacity('--color-neutral-500'),
-          600: withOpacity('--color-neutral-600'),
-          700: withOpacity('--color-neutral-700'),
-          800: withOpacity('--color-neutral-800'),
-          900: withOpacity('--color-neutral-900'),
+          50: withOpacity('--color-neutral-50-rgb'),
+          100: withOpacity('--color-neutral-100-rgb'),
+          200: withOpacity('--color-neutral-200-rgb'),
+          300: withOpacity('--color-neutral-300-rgb'),
+          400: withOpacity('--color-neutral-400-rgb'),
+          500: withOpacity('--color-neutral-50-rgb'),
+          600: withOpacity('--color-neutral-600-rgb'),
+          700: withOpacity('--color-neutral-700-rgb'),
+          800: withOpacity('--color-neutral-800-rgb'),
+          900: withOpacity('--color-neutral-900-rgb'),
         },
         
         /* Standard system notification/alert status values */
         danger: {
-          DEFAULT: withOpacity('--color-danger'),      /* Red - Warning flags, delete actions, errors */
-          light: withOpacity('--color-danger-light'),  /* Soft Red - Badge background fills */
+          DEFAULT: withOpacity('--color-danger-rgb'),      /* Red - Warning flags, delete actions, errors */
+          light: withOpacity('--color-danger-light-rgb'),  /* Soft Red - Badge background fills */
         },
         success: {
-          DEFAULT: withOpacity('--color-success'),      /* Green - Done triggers, successful balances */
-          light: withOpacity('--color-success-light'),  /* Soft Green - Complete badges fills */
+          DEFAULT: withOpacity('--color-success-rgb'),      /* Green - Done triggers, successful balances */
+          light: withOpacity('--color-success-light-rgb'),  /* Soft Green - Complete badges fills */
         },
         warning: {
-          DEFAULT: withOpacity('--color-warning'),      /* Amber - Pending tasks alert, feedback stars */
-          light: withOpacity('--color-warning-light'),  /* Soft Amber - Pending statuses badge background */
+          DEFAULT: withOpacity('--color-warning-rgb'),      /* Amber - Pending tasks alert, feedback stars */
+          light: withOpacity('--color-warning-light-rgb'),  /* Soft Amber - Pending statuses badge background */
         },
         info: {
-          DEFAULT: withOpacity('--color-info'),         /* Blue - Tips, instruction headers, info notes */
-          light: withOpacity('--color-info-light'),     /* Soft Blue - Announcement panels background */
+          DEFAULT: withOpacity('--color-info-rgb'),         /* Blue - Tips, instruction headers, info notes */
+          light: withOpacity('--color-info-light-rgb'),     /* Soft Blue - Announcement panels background */
         },
       },
       borderRadius: {

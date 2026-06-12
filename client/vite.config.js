@@ -71,7 +71,7 @@ export default defineConfig(({ mode }) => {
     },
 
     css: {
-      postcss: './postcss.config.js'
+      postcss: './postcss.config.cjs'
     },
     build: {
       chunkSizeWarningLimit: 1000,

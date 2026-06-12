@@ -6,45 +6,89 @@
   :root {
     /* Brand Accent Colors */
     --color-primary: #0D9488;    /* Teal – Main links, positive actions, selected tabs, hero banners */
+    --color-primary-rgb: 13 148 136;
     --color-background: #FFFFFF; /* White – Page layout context, main panel background */
+    --color-background-rgb: 255 255 255;
     --color-secondary: #374151;  /* Dark Gray – Body copy text, sidebar headings, standard labels */
+    --color-secondary-rgb: 55 65 81;
     --color-accent: #F97316;     /* Orange – Strong actions, urgent alerts, key highlight features */
+    --color-accent-rgb: 249 115 22;
 
     /* Neutral Scale (Grays) - Used for layouts, grids, panels, borders, and varying contrasts */
     --color-neutral-50: #FFFFFF;   /* White - Page shell shade, alternate row backgrounds */
+    --color-neutral-50-rgb: 255 255 255;
     --color-neutral-100: #f3f4f6;  /* Light Grey - Card borders, list dividers, standard hover fills */
+    --color-neutral-100-rgb: 243 244 246;
     --color-neutral-200: #e5e7eb;  /* Border Grey - Text input borders, generic grid borders */
+    --color-neutral-200-rgb: 229 231 235;
     --color-neutral-300: #d1d5db;  /* Muted Grey - Placeholder texts, disabled button border frames */
+    --color-neutral-300-rgb: 209 213 219;
     --color-neutral-400: #9ca3af;  /* Medium Muted Grey - Secondary icons, helper note texts */
+    --color-neutral-400-rgb: 156 163 175;
     --color-neutral-500: #6b7280;  /* Standard Grey - Basic description copy, paragraph elements */
+    --color-neutral-500-rgb: 107 114 128;
     --color-neutral-600: #4b5563;  /* High Contrast Grey - Subheadings, navigation icons */
+    --color-neutral-600-rgb: 75 85 99;
     --color-neutral-700: #374151;  /* Slate Grey - Darker body labels, input title headings */
+    --color-neutral-700-rgb: 55 65 81;
     --color-neutral-800: #1f2937;  /* Dark Grey - Main dashboard stats, title headings */
+    --color-neutral-800-rgb: 31 41 55;
     --color-neutral-900: #111827;  /* Deep Black - Critical bold headers, primary brand title texts */
+    --color-neutral-900-rgb: 17 24 39;
 
     /* Status & Alerts Colors */
     --color-danger: #EF4444;          /* Red - Primary delete options, negative states, error messages */
+    --color-danger-rgb: 239 68 68;
     --color-danger-light: #FEF2F2;    /* Soft Red - Warning/Error badge background fills */
+    --color-danger-light-rgb: 254 242 242;
     --color-success: #10B981;         /* Green - Complete status indicators, success check icons */
+    --color-success-rgb: 16 185 129;
     --color-success-light: #ECFDF5;   /* Soft Green - Completed/Paid badge backgrounds */
+    --color-success-light-rgb: 236 253 245;
     --color-warning: #F59E0B;         /* Amber - Pending approvals, action warnings, ratings stars */
+    --color-warning-rgb: 245 158 11;
     --color-warning-light: #FEF3C7;   /* Soft Amber - Pending state badge backgrounds */
+    --color-warning-light-rgb: 254 243 199;
     --color-info: #3B82F6;            /* Blue - General notifications, tips, system announcement links */
+    --color-info-rgb: 59 130 246;
     --color-info-light: #EFF6FF;      /* Soft Blue - System tip/info badge backgrounds */
+    --color-info-light-rgb: 239 246 255;
 
     /* Rounded Borders Scaling */
-    --radius-sm: 0.125rem;   /* Micro elements - checkboxes, toggle keys, small tooltips */
-    --radius-md: 0.375rem;   /* Inline elements - small badges, micro action buttons */
-    --radius-lg: 0.5rem;     /* Components - text inputs, primary buttons, small cards */
-    --radius-xl: 0.75rem;    /* Main Widgets - dashboard cards, categories lists, selection boxes */
-    --radius-2xl: 1rem;      /* Large layouts - primary modal panels, detail cards */
-    --radius-3xl: 1.5rem;    /* Hero layouts - signup/login dialog frames, promotional cards */
-    --radius-full: 9999px;   /* Round tags - user profiles, notification counts, status pill icons */
+    --radius-sm: 0.125rem;
+    /* Micro elements - checkboxes, toggle keys, small tooltips */
+    --radius-md: 0.375rem;
+    /* Inline elements - small badges, micro action buttons */
+    --radius-lg: 0.5rem;
+    /* Components - text inputs, primary buttons, small cards */
+    --radius-xl: 0.75rem;
+    /* Main Widgets - dashboard cards, categories lists, selection boxes */
+    --radius-2xl: 1rem;
+    /* Large layouts - primary modal panels, detail cards */
+    --radius-3xl: 1.5rem;
+    /* Hero layouts - signup/login dialog frames, promotional cards */
+    --radius-full: 9999px;
+    /* Round tags - user profiles, notification counts, status pill icons */
   }
 }
 
 @layer base {
-  body, button, input, select, textarea, span, p, h1, h2, h3, h4, h5, h6, a, div {
+
+  body,
+  button,
+  input,
+  select,
+  textarea,
+  span,
+  p,
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  a,
+  div {
     font-family: 'Inter', sans-serif !important;
   }
 }
@@ -54,6 +98,7 @@
     0% {
       background-position: -200% 0;
     }
+
     100% {
       background-position: 200% 0;
     }
@@ -64,7 +109,7 @@
     background-size: 200% 100%;
     animation: shimmer 1.5s infinite linear;
   }
-  
+
   .dark .animate-shimmer {
     background: linear-gradient(90deg, #1f2937 25%, #374151 50%, #1f2937 75%);
     background-size: 200% 100%;
@@ -82,12 +127,24 @@
     box-shadow: 0 0 0 rgba(16, 185, 129, 0.8);
     animation: pulse-green 1.5s infinite;
   }
+
   @keyframes pulse-green {
-    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-    70% { transform: scale(1); box-shadow: 0 0 0 15px rgba(16, 185, 129, 0); }
-    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    0% {
+      transform: scale(0.95);
+      box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+    }
+
+    70% {
+      transform: scale(1);
+      box-shadow: 0 0 0 15px rgba(16, 185, 129, 0);
+    }
+
+    100% {
+      transform: scale(0.95);
+      box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+    }
   }
-  
+
   .radar-pulse-red {
     display: block;
     width: 20px;
@@ -98,10 +155,22 @@
     box-shadow: 0 0 0 rgba(239, 68, 68, 0.8);
     animation: pulse-red 1.5s infinite;
   }
+
   @keyframes pulse-red {
-    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-    70% { transform: scale(1); box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); }
-    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    0% {
+      transform: scale(0.95);
+      box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+    }
+
+    70% {
+      transform: scale(1);
+      box-shadow: 0 0 0 15px rgba(239, 68, 68, 0);
+    }
+
+    100% {
+      transform: scale(0.95);
+      box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+    }
   }
 
   /* Vehicle Icon styling */
@@ -117,10 +186,12 @@
     height: 32px !important;
     transition: all 0.3s ease;
   }
+
   .vehicle-icon-marker.offline {
     border-color: #64748b;
     filter: grayscale(100%);
   }
+
   .vehicle-icon-marker img {
     width: 18px;
     height: 18px;
@@ -130,17 +201,21 @@
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom);
   }
+
   .pt-safe {
     padding-top: env(safe-area-inset-top);
   }
-  
+
   /* Hide scrollbar for Chrome, Safari and Opera */
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+
   /* Hide scrollbar for IE, Edge and Firefox */
   .scrollbar-hide {
-    -ms-overflow-style: none;  /* IE and Edge */
-    scrollbar-width: none;  /* Firefox */
+    -ms-overflow-style: none;
+    /* IE and Edge */
+    scrollbar-width: none;
+    /* Firefox */
   }
 }
