@@ -11,7 +11,7 @@
     --color-accent: #F97316;     /* Orange – Strong actions, urgent alerts, key highlight features */
 
     /* Neutral Scale (Grays) - Used for layouts, grids, panels, borders, and varying contrasts */
-    --color-neutral-50: #f9fafb;   /* Very Light Grey - Alternate row backgrounds, page shell shade */
+    --color-neutral-50: #FFFFFF;   /* White - Page shell shade, alternate row backgrounds */
     --color-neutral-100: #f3f4f6;  /* Light Grey - Card borders, list dividers, standard hover fills */
     --color-neutral-200: #e5e7eb;  /* Border Grey - Text input borders, generic grid borders */
     --color-neutral-300: #d1d5db;  /* Muted Grey - Placeholder texts, disabled button border frames */
