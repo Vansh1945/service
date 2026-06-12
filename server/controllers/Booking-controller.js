@@ -2459,188 +2459,225 @@ const acceptBooking = async (req, res) => {
       });
     }
 
-    // Check if provider exists and get their services and status
-    const provider = await Provider.findById(providerId).select('services name isSuspended blockedTill performanceScore');
-    if (!provider) {
-      return res.status(404).json({
-        success: false,
-        message: 'Provider not found'
-      });
-    }
+    const result = await runInTransactionOrSequential(async (session) => {
+      // Check if provider exists and get their services and status
+      const provider = session
+        ? await Provider.findById(providerId).select('services name isSuspended blockedTill performanceScore').session(session)
+        : await Provider.findById(providerId).select('services name isSuspended blockedTill performanceScore');
+      if (!provider) {
+        throw new Error('Provider not found');
+      }
 
-    // Check if provider is suspended, blocked or restricted
-    if (provider.isSuspended) {
-      return res.status(403).json({
-        success: false,
-        message: 'Your account is suspended. You cannot accept bookings.'
-      });
-    }
+      // Check if provider is suspended, blocked or restricted
+      if (provider.isSuspended) {
+        throw new Error('Your account is suspended. You cannot accept bookings.');
+      }
 
-    if (provider.blockedTill && new Date(provider.blockedTill) > new Date()) {
-      return res.status(403).json({
-        success: false,
-        message: 'Your account is blocked. You cannot accept bookings.'
-      });
-    }
+      if (provider.blockedTill && new Date(provider.blockedTill) > new Date()) {
+        throw new Error('Your account is blocked. You cannot accept bookings.');
+      }
 
-    if (provider.performanceScore?.restrictionsActive) {
-      return res.status(403).json({
-        success: false,
-        message: 'Your account is restricted from accepting new bookings.'
-      });
-    }
+      if (provider.performanceScore?.restrictionsActive) {
+        throw new Error('Your account is restricted from accepting new bookings.');
+      }
 
-    const booking = await Booking.findById(id).populate('services.service', 'category');
+      const booking = session
+        ? await Booking.findById(id).populate('services.service', 'category').session(session)
+        : await Booking.findById(id).populate('services.service', 'category');
 
-    if (!booking) {
-      return res.status(404).json({
-        success: false,
-        message: 'Booking not found or not available for acceptance'
-      });
-    }
+      if (!booking) {
+        throw new Error('Booking not found or not available for acceptance');
+      }
 
-    // Verify provider can service this booking
-    const canService = booking.services.every(serviceItem =>
-      provider.services.includes(serviceItem.service.category)
-    );
-
-    if (!canService) {
-      return res.status(403).json({
-        success: false,
-        message: 'Provider is not qualified for all services in this booking'
-      });
-    }
-
-    // Validate time format if provided
-    if (time && !/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(time)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid time format (use HH:MM)'
-      });
-    }
-
-    // Check parallel bookings limit & scheduling conflict based on system configuration
-    const { SystemConfig } = require('../models/SystemSetting');
-    let settings = await SystemConfig.findOne();
-    const maxBookings = settings?.bookingSettings?.maxBookingsPerProvider ?? 10;
-    const bufferMinutes = settings?.bookingSettings?.bookingBufferTime ?? 30;
-
-    const providerBookings = await Booking.find({
-      provider: providerId,
-      status: { $in: ['accepted', 'in-progress', 'started', 'confirmed', 'scheduled', 'assigned'] }
-    });
-
-    if (providerBookings.length >= maxBookings) {
-      return res.status(400).json({
-        success: false,
-        message: `You have reached the maximum limit of parallel bookings (${maxBookings}). Complete your current jobs first.`
-      });
-    }
-
-    if (checkProviderOverlap(booking, providerBookings, bufferMinutes)) {
-      return res.status(400).json({
-        success: false,
-        message: `Scheduling conflict: You already have another booking scheduled around this time (considering ${bufferMinutes}-minute buffer).`
-      });
-    }
-
-    /* BACKUP COMMENT: Original acceptBooking saved non-atomically, triggering race conditions. Replacing with atomic findOneAndUpdate. */
-    const updatedBooking = await Booking.findOneAndUpdate(
-      {
-        _id: id,
-        status: { $in: ['pending', 'scheduled'] },
-        $or: [
-          { provider: { $exists: false } },
-          { provider: null }
-        ]
-      },
-      {
-        $set: {
-          status: 'accepted',
-          provider: providerId,
-          updatedAt: new Date(),
-          ...(time && { time })
-        },
-        $push: {
-          statusHistory: {
-            status: 'accepted',
-            timestamp: new Date(),
-            note: `Booking accepted atomically by provider: ${provider.name}`,
-            updatedBy: 'provider'
-          }
-        }
-      },
-      { new: true, runValidators: true }
-    );
-
-    if (!updatedBooking) {
-      return res.status(409).json({
-        success: false,
-        message: 'This booking has already been accepted by another service provider or is unavailable.'
-      });
-    }
-
-    // Sync transaction record with the new provider and calculated commission
-    try {
-      const isOnline = booking.paymentMethod?.toLowerCase() === 'online' || booking.paymentMethod?.toLowerCase() === 'upi';
-      await Transaction.updateMany(
-        { booking: booking._id },
-        {
-          provider: booking.provider,
-          providerId: booking.provider.toString(),
-          commission: isOnline ? (booking.commissionAmount * 100) : (booking.commissionAmount || 0),
-          providerEarning: isOnline ? (booking.providerEarnings * 100) : (booking.providerEarnings || 0),
-          commissionRule: booking.commissionRule,
-          // Sync payment status if booking is already paid
-          ...((booking.paymentStatus === 'paid' || booking.paymentStatus === 'escrow_hold') && {
-            paymentStatus: isOnline ? 'success' : 'completed'
-          })
-        }
+      // Verify provider can service this booking
+      const canService = booking.services.every(serviceItem =>
+        provider.services.includes(serviceItem.service.category)
       );
-    } catch (transError) {
-      console.error('Error syncing transaction on booking acceptance:', transError);
-    }
 
-    // Populate booking details for response
-    const populatedBooking = await Booking.findById(booking._id)
-      .populate('customer', 'name email phone')
-      .populate('services.service', 'title description price');
+      if (!canService) {
+        throw new Error('Provider is not qualified for all services in this booking');
+      }
 
+      // Validate time format if provided
+      if (time && !/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(time)) {
+        throw new Error('Invalid time format (use HH:MM)');
+      }
+
+      // Check parallel bookings limit & scheduling conflict based on system configuration
+      const { SystemConfig } = require('../models/SystemSetting');
+      let settings = session
+        ? await SystemConfig.findOne().session(session)
+        : await SystemConfig.findOne();
+      const maxBookings = settings?.bookingSettings?.maxBookingsPerProvider ?? 10;
+      const bufferMinutes = settings?.bookingSettings?.bookingBufferTime ?? 30;
+
+      const providerBookings = session
+        ? await Booking.find({
+            provider: providerId,
+            status: { $in: ['accepted', 'in-progress', 'started', 'confirmed', 'scheduled', 'assigned'] }
+          }).session(session)
+        : await Booking.find({
+            provider: providerId,
+            status: { $in: ['accepted', 'in-progress', 'started', 'confirmed', 'scheduled', 'assigned'] }
+          });
+
+      if (providerBookings.length >= maxBookings) {
+        throw new Error(`You have reached the maximum limit of parallel bookings (${maxBookings}). Complete your current jobs first.`);
+      }
+
+      if (checkProviderOverlap(booking, providerBookings, bufferMinutes)) {
+        throw new Error(`Scheduling conflict: You already have another booking scheduled around this time (considering ${bufferMinutes}-minute buffer).`);
+      }
+
+      /* BACKUP COMMENT: Original acceptBooking saved non-atomically, triggering race conditions. Replacing with atomic findOneAndUpdate. */
+      const updatedBooking = session
+        ? await Booking.findOneAndUpdate(
+            {
+              _id: id,
+              status: { $in: ['pending', 'scheduled'] },
+              $or: [
+                { provider: { $exists: false } },
+                { provider: null }
+              ]
+            },
+            {
+              $set: {
+                status: 'accepted',
+                provider: providerId,
+                updatedAt: new Date(),
+                ...(time && { time })
+              },
+              $push: {
+                statusHistory: {
+                  status: 'accepted',
+                  timestamp: new Date(),
+                  note: `Booking accepted atomically by provider: ${provider.name}`,
+                  updatedBy: 'provider'
+                }
+              }
+            },
+            { new: true, runValidators: true, session }
+          )
+        : await Booking.findOneAndUpdate(
+            {
+              _id: id,
+              status: { $in: ['pending', 'scheduled'] },
+              $or: [
+                { provider: { $exists: false } },
+                { provider: null }
+              ]
+            },
+            {
+              $set: {
+                status: 'accepted',
+                provider: providerId,
+                updatedAt: new Date(),
+                ...(time && { time })
+              },
+              $push: {
+                statusHistory: {
+                  status: 'accepted',
+                  timestamp: new Date(),
+                  note: `Booking accepted atomically by provider: ${provider.name}`,
+                  updatedBy: 'provider'
+                }
+              }
+            },
+            { new: true, runValidators: true }
+          );
+
+      if (!updatedBooking) {
+        throw new Error('This booking has already been accepted by another service provider or is unavailable.');
+      }
+
+      // Sync transaction record with the new provider and calculated commission
+      try {
+        const isOnline = booking.paymentMethod?.toLowerCase() === 'online' || booking.paymentMethod?.toLowerCase() === 'upi';
+        const transOpts = session ? { session } : {};
+        await Transaction.updateMany(
+          { booking: booking._id },
+          {
+            provider: booking.provider,
+            providerId: booking.provider.toString(),
+            commission: isOnline ? (booking.commissionAmount * 100) : (booking.commissionAmount || 0),
+            providerEarning: isOnline ? (booking.providerEarnings * 100) : (booking.providerEarnings || 0),
+            commissionRule: booking.commissionRule,
+            // Sync payment status if booking is already paid
+            ...((booking.paymentStatus === 'paid' || booking.paymentStatus === 'escrow_hold') && {
+              paymentStatus: isOnline ? 'success' : 'completed'
+            })
+          },
+          transOpts
+        );
+      } catch (transError) {
+        console.error('Error syncing transaction on booking acceptance:', transError);
+      }
+
+      // Populate booking details for response
+      const populatedBooking = session
+        ? await Booking.findById(booking._id)
+            .populate('customer', 'name email phone')
+            .populate('services.service', 'title description price')
+            .session(session)
+        : await Booking.findById(booking._id)
+            .populate('customer', 'name email phone')
+            .populate('services.service', 'title description price');
+
+      return {
+        populatedBooking,
+        providerName: provider.name,
+        paymentStatus: booking.paymentStatus,
+        paymentMethod: booking.paymentMethod
+      };
+    });
 
     // Real-time notification for customer
     try {
-      if (populatedBooking.customer) {
+      if (result.populatedBooking.customer) {
         await sendNotification(
-          populatedBooking.customer._id,
+          result.populatedBooking.customer._id,
           'customer',
           'Booking Accepted',
-          `Your booking for ${populatedBooking.services[0].service.title} has been accepted by ${provider.name}.`,
+          `Your booking for ${result.populatedBooking.services[0].service.title} has been accepted by ${result.providerName}.`,
           'booking',
-          booking._id
+          id
         );
       }
     } catch (fcmError) {
       console.error('FCM Notification Error (Booking Accepted):', fcmError);
     }
 
-    // Invalidate dashboard caches
-    try {
-
-
-    } catch (e) { }
-
     return res.status(200).json({
       success: true,
       message: 'Booking accepted successfully',
       data: {
-        ...populatedBooking.toObject(),
-        paymentStatus: booking.paymentStatus,
-        paymentMethod: booking.paymentMethod
+        ...result.populatedBooking.toObject(),
+        paymentStatus: result.paymentStatus,
+        paymentMethod: result.paymentMethod
       }
     });
 
   } catch (error) {
     console.error('Error accepting booking:', error);
+    const clientErrors = [
+      'Provider not found',
+      'Your account is suspended. You cannot accept bookings.',
+      'Your account is blocked. You cannot accept bookings.',
+      'Your account is restricted from accepting new bookings.',
+      'Booking not found or not available for acceptance',
+      'Provider is not qualified for all services in this booking',
+      'Invalid time format (use HH:MM)',
+      'You have reached the maximum limit of parallel bookings',
+      'Scheduling conflict',
+      'This booking has already been accepted by another service provider'
+    ];
+    const isClientError = clientErrors.some(errMsg => error.message?.includes(errMsg));
+    if (isClientError) {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
     res.status(500).json({
       success: false,
       message: 'Internal server error while accepting booking',
