@@ -1,4 +1,13 @@
 // tailwind.config.js
+function withOpacity(variableName) {
+  return ({ opacityValue }) => {
+    if (opacityValue !== undefined) {
+      return `color-mix(in srgb, var(${variableName}) ${opacityValue * 100}%, transparent)`;
+    }
+    return `var(${variableName})`;
+  };
+}
+
 export default {
   content: [
     "./index.html",
@@ -8,65 +17,65 @@ export default {
     extend: {
       colors: {
         /* Brand core accent definitions */
-        primary: 'var(--color-primary)',       /* Teal - Selected states, navigation tags, action triggers */
-        background: 'var(--color-background)', /* White - Base layout frames and page shells */
-        secondary: 'var(--color-secondary)',   /* Dark Gray - Body headings and side navigation panels */
-        accent: 'var(--color-accent)',         /* Orange - Urgent indicators and CTA button highlighting */
+        primary: withOpacity('--color-primary'),       /* Teal - Selected states, navigation tags, action triggers */
+        background: withOpacity('--color-background'), /* White - Base layout frames and page shells */
+        secondary: withOpacity('--color-secondary'),   /* Dark Gray - Body headings and side navigation panels */
+        accent: withOpacity('--color-accent'),         /* Orange - Urgent indicators and CTA button highlighting */
         
         /* Neutral palette scale mapping to global CSS tokens */
         neutral: {
-          50: 'var(--color-neutral-50)',   /* Background shade for sections/tables */
-          100: 'var(--color-neutral-100)', /* Cards borders, dividers, hover backgrounds */
-          200: 'var(--color-neutral-200)', /* General input outlines and thin borders */
-          300: 'var(--color-neutral-300)', /* Muted icons, disabled buttons elements */
-          400: 'var(--color-neutral-400)', /* Secondary details and caption texts */
-          500: 'var(--color-neutral-500)', /* Default description text color */
-          600: 'var(--color-neutral-600)', /* Medium contrast labels and active icons */
-          700: 'var(--color-neutral-700)', /* High contrast text, titles, sidebar items */
-          800: 'var(--color-neutral-800)', /* Primary page titles and header blocks */
-          900: 'var(--color-neutral-900)', /* Dense black for bold callouts */
+          50: withOpacity('--color-neutral-50'),   /* Background shade for sections/tables */
+          100: withOpacity('--color-neutral-100'), /* Cards borders, dividers, hover backgrounds */
+          200: withOpacity('--color-neutral-200'), /* General input outlines and thin borders */
+          300: withOpacity('--color-neutral-300'), /* Muted icons, disabled buttons elements */
+          400: withOpacity('--color-neutral-400'), /* Secondary details and caption texts */
+          500: withOpacity('--color-neutral-500'), /* Default description text color */
+          600: withOpacity('--color-neutral-600'), /* Medium contrast labels and active icons */
+          700: withOpacity('--color-neutral-700'), /* High contrast text, titles, sidebar items */
+          800: withOpacity('--color-neutral-800'), /* Primary page titles and header blocks */
+          900: withOpacity('--color-neutral-900'), /* Dense black for bold callouts */
         },
         gray: {
-          50: 'var(--color-neutral-50)',
-          100: 'var(--color-neutral-100)',
-          200: 'var(--color-neutral-200)',
-          300: 'var(--color-neutral-300)',
-          400: 'var(--color-neutral-400)',
-          500: 'var(--color-neutral-500)',
-          600: 'var(--color-neutral-600)',
-          700: 'var(--color-neutral-700)',
-          800: 'var(--color-neutral-800)',
-          900: 'var(--color-neutral-900)',
+          50: withOpacity('--color-neutral-50'),
+          100: withOpacity('--color-neutral-100'),
+          200: withOpacity('--color-neutral-200'),
+          300: withOpacity('--color-neutral-300'),
+          400: withOpacity('--color-neutral-400'),
+          500: withOpacity('--color-neutral-500'),
+          600: withOpacity('--color-neutral-600'),
+          700: withOpacity('--color-neutral-700'),
+          800: withOpacity('--color-neutral-800'),
+          900: withOpacity('--color-neutral-900'),
         },
         slate: {
-          50: 'var(--color-neutral-50)',
-          100: 'var(--color-neutral-100)',
-          200: 'var(--color-neutral-200)',
-          300: 'var(--color-neutral-300)',
-          400: 'var(--color-neutral-400)',
-          500: 'var(--color-neutral-500)',
-          600: 'var(--color-neutral-600)',
-          700: 'var(--color-neutral-700)',
-          800: 'var(--color-neutral-800)',
-          900: 'var(--color-neutral-900)',
+          50: withOpacity('--color-neutral-50'),
+          100: withOpacity('--color-neutral-100'),
+          200: withOpacity('--color-neutral-200'),
+          300: withOpacity('--color-neutral-300'),
+          400: withOpacity('--color-neutral-400'),
+          500: withOpacity('--color-neutral-500'),
+          600: withOpacity('--color-neutral-600'),
+          700: withOpacity('--color-neutral-700'),
+          800: withOpacity('--color-neutral-800'),
+          900: withOpacity('--color-neutral-900'),
         },
         
         /* Standard system notification/alert status values */
         danger: {
-          DEFAULT: 'var(--color-danger)',      /* Red - Warning flags, delete actions, errors */
-          light: 'var(--color-danger-light)',  /* Soft Red - Badge background fills */
+          DEFAULT: withOpacity('--color-danger'),      /* Red - Warning flags, delete actions, errors */
+          light: withOpacity('--color-danger-light'),  /* Soft Red - Badge background fills */
         },
         success: {
-          DEFAULT: 'var(--color-success)',      /* Green - Done triggers, successful balances */
-          light: 'var(--color-success-light)',  /* Soft Green - Complete badges fills */
+          DEFAULT: withOpacity('--color-success'),      /* Green - Done triggers, successful balances */
+          light: withOpacity('--color-success-light'),  /* Soft Green - Complete badges fills */
         },
         warning: {
-          DEFAULT: 'var(--color-warning)',      /* Amber - Pending tasks alert, feedback stars */
-          light: 'var(--color-warning-light)',  /* Soft Amber - Pending statuses badge background */
+          DEFAULT: withOpacity('--color-warning'),      /* Amber - Pending tasks alert, feedback stars */
+          light: withOpacity('--color-warning-light'),  /* Soft Amber - Pending statuses badge background */
         },
         info: {
-          DEFAULT: 'var(--color-info)',         /* Blue - Tips, instruction headers, info notes */
-          light: 'var(--color-info-light)',     /* Soft Blue - Announcement panels background */
+          DEFAULT: withOpacity('--color-info'),         /* Blue - Tips, instruction headers, info notes */
+          light: withOpacity('--color-info-light'),     /* Soft Blue - Announcement panels background */
         },
       },
       borderRadius: {
