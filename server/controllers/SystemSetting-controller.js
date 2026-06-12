@@ -441,6 +441,7 @@ const updateBrandingSettings = async (req, res) => {
     }
 
     const fieldsToUpdate = req.body;
+    Object.assign(config[brandingKey], fieldsToUpdate);
 
     // Mark as modified so Mongoose tracks nested changes
     config.markModified(brandingKey);
@@ -495,7 +496,13 @@ const publishBrandingUpdate = async (req, res) => {
         config[brandingKey] = {};
       }
 
-      const fieldsToUpdate = req.body;
+      const fieldsToUpdate = { ...req.body };
+      delete fieldsToUpdate.releaseNotes;
+      delete fieldsToUpdate.forceRefresh;
+      delete fieldsToUpdate.sendNotification;
+      delete fieldsToUpdate.broadcastOnly;
+      
+      Object.assign(config[brandingKey], fieldsToUpdate);
       config.markModified(brandingKey);
     }
 
@@ -721,7 +728,6 @@ const getBrandingManifest = async (req, res) => {
       start_url: getStartUrl(),
       scope: clientOrigin ? `${clientOrigin}${scopeUrl}` : scopeUrl,
       display: "standalone",
-      background_color: backgroundColor,
       orientation: "portrait",
       icons: [
         {

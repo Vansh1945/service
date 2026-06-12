@@ -279,8 +279,6 @@ const Branding = () => {
       short_name: roleData.shortName,
       start_url: role === 'admin' ? '/admin/dashboard' : role === 'provider' ? '/provider/dashboard' : '/',
       display: 'standalone',
-      background_color: '#ffffff',
-      theme_color: '#0D9488',
       orientation: 'portrait',
       icons: [
         {

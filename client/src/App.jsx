@@ -309,14 +309,18 @@ const App = () => {
       localStorage.setItem("installMode", "standalone");
     }
 
-    let currentRole = localStorage.getItem("installRole");
+    let currentRole = null;
     if (location.pathname.startsWith("/admin")) {
       currentRole = "admin";
-    }
-    if (!currentRole || !["customer", "provider", "admin"].includes(currentRole)) {
-      if (location.pathname.startsWith("/provider")) {
-        currentRole = "provider";
-      } else {
+    } else if (location.pathname.startsWith("/provider")) {
+      currentRole = "provider";
+    } else if (location.pathname.startsWith("/customer")) {
+      currentRole = "customer";
+    } else if (isAuthenticated && userRole) {
+      currentRole = userRole;
+    } else {
+      currentRole = localStorage.getItem("installRole");
+      if (!currentRole || !["customer", "provider", "admin"].includes(currentRole)) {
         currentRole = "customer";
       }
     }
@@ -336,18 +340,22 @@ const App = () => {
     };
 
     applyDocumentSettings(settings);
-  }, [globalSettings, activeBranding, location.pathname]);
+  }, [globalSettings, activeBranding, location.pathname, isAuthenticated, userRole]);
 
   // PWA version update check
   useEffect(() => {
-    let currentRole = localStorage.getItem("installRole");
+    let currentRole = null;
     if (location.pathname.startsWith("/admin")) {
       currentRole = "admin";
-    }
-    if (!currentRole || !["customer", "provider", "admin"].includes(currentRole)) {
-      if (location.pathname.startsWith("/provider")) {
-        currentRole = "provider";
-      } else {
+    } else if (location.pathname.startsWith("/provider")) {
+      currentRole = "provider";
+    } else if (location.pathname.startsWith("/customer")) {
+      currentRole = "customer";
+    } else if (isAuthenticated && userRole) {
+      currentRole = userRole;
+    } else {
+      currentRole = localStorage.getItem("installRole");
+      if (!currentRole || !["customer", "provider", "admin"].includes(currentRole)) {
         currentRole = "customer";
       }
     }
@@ -379,7 +387,7 @@ const App = () => {
         }, 800);
       }
     }
-  }, [activeBranding, location.pathname]);
+  }, [activeBranding, location.pathname, isAuthenticated, userRole]);
 
   const navigate_fn = useNavigate();
 
