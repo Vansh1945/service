@@ -6,53 +6,31 @@
   :root {
     /* Brand Accent Colors */
     --color-primary: #0D9488;    /* Teal – Main links, positive actions, selected tabs, hero banners */
-    --color-primary-rgb: 13 148 136;
     --color-background: #FFFFFF; /* White – Page layout context, main panel background */
-    --color-background-rgb: 255 255 255;
     --color-secondary: #374151;  /* Dark Gray – Body copy text, sidebar headings, standard labels */
-    --color-secondary-rgb: 55 65 81;
     --color-accent: #F97316;     /* Orange – Strong actions, urgent alerts, key highlight features */
-    --color-accent-rgb: 249 115 22;
 
     /* Neutral Scale (Grays) - Used for layouts, grids, panels, borders, and varying contrasts */
     --color-neutral-50: #FFFFFF;   /* White - Page shell shade, alternate row backgrounds */
-    --color-neutral-50-rgb: 255 255 255;
     --color-neutral-100: #f3f4f6;  /* Light Grey - Card borders, list dividers, standard hover fills */
-    --color-neutral-100-rgb: 243 244 246;
     --color-neutral-200: #e5e7eb;  /* Border Grey - Text input borders, generic grid borders */
-    --color-neutral-200-rgb: 229 231 235;
     --color-neutral-300: #d1d5db;  /* Muted Grey - Placeholder texts, disabled button border frames */
-    --color-neutral-300-rgb: 209 213 219;
     --color-neutral-400: #9ca3af;  /* Medium Muted Grey - Secondary icons, helper note texts */
-    --color-neutral-400-rgb: 156 163 175;
     --color-neutral-500: #6b7280;  /* Standard Grey - Basic description copy, paragraph elements */
-    --color-neutral-500-rgb: 107 114 128;
     --color-neutral-600: #4b5563;  /* High Contrast Grey - Subheadings, navigation icons */
-    --color-neutral-600-rgb: 75 85 99;
     --color-neutral-700: #374151;  /* Slate Grey - Darker body labels, input title headings */
-    --color-neutral-700-rgb: 55 65 81;
     --color-neutral-800: #1f2937;  /* Dark Grey - Main dashboard stats, title headings */
-    --color-neutral-800-rgb: 31 41 55;
     --color-neutral-900: #111827;  /* Deep Black - Critical bold headers, primary brand title texts */
-    --color-neutral-900-rgb: 17 24 39;
 
     /* Status & Alerts Colors */
     --color-danger: #EF4444;          /* Red - Primary delete options, negative states, error messages */
-    --color-danger-rgb: 239 68 68;
     --color-danger-light: #FEF2F2;    /* Soft Red - Warning/Error badge background fills */
-    --color-danger-light-rgb: 254 242 242;
     --color-success: #10B981;         /* Green - Complete status indicators, success check icons */
-    --color-success-rgb: 16 185 129;
     --color-success-light: #ECFDF5;   /* Soft Green - Completed/Paid badge backgrounds */
-    --color-success-light-rgb: 236 253 245;
     --color-warning: #F59E0B;         /* Amber - Pending approvals, action warnings, ratings stars */
-    --color-warning-rgb: 245 158 11;
     --color-warning-light: #FEF3C7;   /* Soft Amber - Pending state badge backgrounds */
-    --color-warning-light-rgb: 254 243 199;
     --color-info: #3B82F6;            /* Blue - General notifications, tips, system announcement links */
-    --color-info-rgb: 59 130 246;
     --color-info-light: #EFF6FF;      /* Soft Blue - System tip/info badge backgrounds */
-    --color-info-light-rgb: 239 246 255;
 
     /* Rounded Borders Scaling */
     --radius-sm: 0.125rem;
