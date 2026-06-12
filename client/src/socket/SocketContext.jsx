@@ -13,7 +13,7 @@ export const SocketProvider = ({ children }) => {
     // Connect when user logs in
     useEffect(() => {
         if (token && user) {
-            const s = connectSocket();
+            const s = connectSocket(token);
             setSocket(s);
 
             const handleConnect = () => {

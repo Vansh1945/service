@@ -14,7 +14,7 @@ const getSocket = () => {
     if (!socket) {
         socket = io(SERVER_URL, {
             auth: {
-                token: localStorage.getItem('token')
+                token: null
             },
             transports: ['websocket', 'polling'],
             autoConnect: false,
@@ -29,10 +29,9 @@ const getSocket = () => {
 /**
  * Connect socket with fresh token
  */
-const connectSocket = () => {
+const connectSocket = (token) => {
     const s = getSocket();
-    const token = localStorage.getItem('token');
-    if (!token || token === 'null') return;
+    if (!token) return s;
 
     // Update auth token before connecting
     s.auth = { token };
