@@ -718,7 +718,7 @@ const Branding = () => {
           {/* Update Management Console (Broadcasting App Updates) */}
           <div className="bg-white border border-gray-100 shadow-md rounded-2xl p-6 space-y-4">
             <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider border-b border-gray-100 pb-2 flex items-center gap-2">
-              <FiSend className="text-indigo-600 w-4 h-4 animate-bounce" /> Update Management Console
+              <FiSend className="text-indigo-600 w-4 h-4" /> Update Management Console
             </h3>
 
             <div className="space-y-3.5">
