@@ -37,7 +37,7 @@ function lazyWithRetry(importFn) {
       if (!hasReloaded) {
         sessionStorage.setItem('chunk_reload', 'true');
         window.location.reload();
-        return new Promise(() => {}); // Never resolves — page is reloading
+        return new Promise(() => { }); // Never resolves — page is reloading
       }
       sessionStorage.removeItem('chunk_reload');
       throw error; // If reload didn't fix it, throw original error
@@ -146,16 +146,6 @@ const applyDocumentSettings = (settings) => {
 
     const ogDesc = document.querySelector("meta[property='og:description']");
     if (ogDesc) ogDesc.setAttribute("content", settings.description);
-  }
-
-  if (settings.themeColor) {
-    // Meta tag
-    const metaTheme = document.querySelector("meta[name='theme-color']");
-    if (metaTheme) metaTheme.setAttribute("content", settings.themeColor);
-
-    // Dynamically apply primary color styles so buttons, layouts, and components instantly adapt!
-    document.documentElement.style.setProperty('--color-primary', settings.themeColor);
-    document.documentElement.style.setProperty('--primary', settings.themeColor);
   }
 
   if (settings.favicon) {
@@ -290,17 +280,18 @@ const App = () => {
     }
   }, [globalSettings?.timeFormat]);
 
-  // Session-based Splash Screen check
+  // Session-based Splash Screen check (PWA only, 2-3 seconds duration)
   useEffect(() => {
-    if (!sessionStorage.getItem('splash_shown')) {
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    if (isStandalone && !sessionStorage.getItem('splash_shown')) {
       setShowSplash(true);
       const fadeTimeout = setTimeout(() => {
         setSplashFade(true);
-      }, 1500);
+      }, 2500);
       const removeTimeout = setTimeout(() => {
         setShowSplash(false);
         sessionStorage.setItem('splash_shown', 'true');
-      }, 2000);
+      }, 3000);
       return () => {
         clearTimeout(fadeTimeout);
         clearTimeout(removeTimeout);
@@ -339,7 +330,6 @@ const App = () => {
       shortName: activeBranding?.shortName || globalSettings?.companyName || "Raj Service",
       favicon: resolvedFavicon,
       description: activeBranding?.description || globalSettings?.tagline || "",
-      themeColor: activeBranding?.themeColor || (currentRole === 'admin' ? '#4f46e5' : currentRole === 'provider' ? '#10b981' : '#3b82f6'),
       manifestUrl: manifestUrl,
       icon: activeBranding?.icon || activeBranding?.logo || globalSettings?.logo || "/icon-192.png",
       splashScreen: globalSettings?.customerBranding?.splashScreen || activeBranding?.splashScreen || null
@@ -464,26 +454,18 @@ const App = () => {
     <Suspense fallback={<LoadingSpinner />}>
       {/* 🌟 Dynamic In-App Splash Screen Overlay */}
       {showSplash && (
-        <div 
-          className={`fixed inset-0 z-[100000] flex flex-col items-center justify-center bg-white transition-all duration-500 ease-in-out ${
-            splashFade ? 'opacity-0 pointer-events-none' : 'opacity-100'
-          }`}
+        <div
+          className={`fixed inset-0 z-[100000] flex flex-col items-center justify-center bg-white transition-all duration-500 ease-in-out ${splashFade ? 'opacity-0 pointer-events-none' : 'opacity-100'
+            }`}
         >
           {(globalSettings?.customerBranding?.splashScreen || activeBranding?.splashScreen) ? (
-            <img 
-              src={globalSettings?.customerBranding?.splashScreen || activeBranding?.splashScreen} 
-              alt="Loading Application..." 
-              className="w-full h-full object-cover animate-fade-in" 
+            <img
+              src={globalSettings?.customerBranding?.splashScreen || activeBranding?.splashScreen}
+              alt="Loading Application..."
+              className="w-full h-full object-cover animate-fade-in"
             />
           ) : (
             <div className="flex flex-col items-center justify-center space-y-4 animate-fade-in">
-              {globalSettings?.logo ? (
-                <img src={globalSettings.logo} alt="Logo" className="w-24 h-24 object-contain animate-bounce" />
-              ) : (
-                <div className="w-20 h-20 bg-gradient-to-br from-primary to-accent rounded-2xl flex items-center justify-center shadow-lg animate-bounce">
-                  <span className="text-white text-3xl font-black">R</span>
-                </div>
-              )}
               <h1 className="text-2xl md:text-3xl font-extrabold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter tracking-tight">
                 {globalSettings?.companyName || "Raj Electrical Service"}
               </h1>

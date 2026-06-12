@@ -441,12 +441,6 @@ const updateBrandingSettings = async (req, res) => {
     }
 
     const fieldsToUpdate = req.body;
-    for (const key of Object.keys(fieldsToUpdate)) {
-      // Exclude any inadvertent theme colors
-      if (key !== 'themeColor' && key !== 'backgroundColor') {
-        config[brandingKey][key] = fieldsToUpdate[key];
-      }
-    }
 
     // Mark as modified so Mongoose tracks nested changes
     config.markModified(brandingKey);
@@ -502,12 +496,6 @@ const publishBrandingUpdate = async (req, res) => {
       }
 
       const fieldsToUpdate = req.body;
-      const ignoreFields = ['themeColor', 'backgroundColor', 'releaseNotes', 'forceRefresh', 'sendNotification', 'broadcastOnly'];
-      for (const key of Object.keys(fieldsToUpdate)) {
-        if (!ignoreFields.includes(key)) {
-          config[brandingKey][key] = fieldsToUpdate[key];
-        }
-      }
       config.markModified(brandingKey);
     }
 
@@ -713,9 +701,6 @@ const getBrandingManifest = async (req, res) => {
     const shortName = branding?.shortName || (role === 'admin' ? 'Admin' : role === 'provider' ? 'Provider' : 'Raj Service');
     const description = branding?.description || (role === 'admin' ? 'Raj Electrical Admin Panel' : `${shortName} App`);
 
-    // Support custom branding colors if defined in the DB, fallback to defaults
-    const themeColor = branding?.themeColor || (role === 'admin' ? '#4f46e5' : role === 'provider' ? '#10b981' : '#3b82f6');
-    const backgroundColor = branding?.backgroundColor || '#ffffff';
 
     const logoUrl = branding?.logo || '/icon-192.png';
     const iconUrl = branding?.icon || logoUrl;
@@ -737,7 +722,6 @@ const getBrandingManifest = async (req, res) => {
       scope: clientOrigin ? `${clientOrigin}${scopeUrl}` : scopeUrl,
       display: "standalone",
       background_color: backgroundColor,
-      theme_color: themeColor,
       orientation: "portrait",
       icons: [
         {

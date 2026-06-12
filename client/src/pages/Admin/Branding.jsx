@@ -20,7 +20,7 @@ const Branding = () => {
   const [releaseNotes, setReleaseNotes] = useState('');
   const [forceRefresh, setForceRefresh] = useState(true);
 
-  // States for role branding fields (strictly NO themeColor/backgroundColor controls)
+  // States for role branding fields 
   const [formData, setFormData] = useState({
     customer: {
       appName: 'Raj Electrical Service',
