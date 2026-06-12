@@ -17,6 +17,7 @@ const AdminLayout = () => {
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [systemSettings, setSystemSettings] = useState({
     companyName: '',
+    appName: '',
     logo: null
   });
   const location = useLocation();
@@ -26,11 +27,22 @@ const AdminLayout = () => {
   useEffect(() => {
     const fetchSystemSettings = async () => {
       try {
+        let globalCompany = 'Raj Electrical Services';
+        try {
+          const globalRes = await SystemService.getSystemSetting();
+          if (globalRes.data?.success) {
+            globalCompany = globalRes.data.data?.companyName || globalCompany;
+          }
+        } catch (globalErr) {
+          console.error('Failed to fetch global settings in AdminLayout:', globalErr);
+        }
+
         const cached = localStorage.getItem('branding_admin');
         if (cached) {
           const data = JSON.parse(cached);
           setSystemSettings({
-            companyName: data.appName || data.dashboardTitle || 'RAJ ELECTRICAL SERVICES',
+            companyName: globalCompany,
+            appName: data.appName || data.dashboardTitle || 'Admin Panel',
             logo: data.logo || null
           });
         }
@@ -39,7 +51,8 @@ const AdminLayout = () => {
         if (response.data?.success) {
           const data = response.data.data;
           setSystemSettings({
-            companyName: data.appName || data.dashboardTitle || 'RAJ ELECTRICAL SERVICES',
+            companyName: globalCompany,
+            appName: data.appName || data.dashboardTitle || 'Admin Panel',
             logo: data.logo || null
           });
           localStorage.setItem('branding_admin', JSON.stringify(data));
@@ -58,10 +71,11 @@ const AdminLayout = () => {
     const handleBrandingUpdate = (e) => {
       if (e.detail?.role === 'admin') {
         const data = e.detail.data;
-        setSystemSettings({
-          companyName: data.appName || data.dashboardTitle || 'RAJ ELECTRICAL SERVICES',
+        setSystemSettings(prev => ({
+          ...prev,
+          appName: data.appName || data.dashboardTitle || 'Admin Panel',
           logo: data.logo || null
-        });
+        }));
       }
     };
     window.addEventListener('brandingUpdated', handleBrandingUpdate);
@@ -134,9 +148,14 @@ const AdminLayout = () => {
                   className="h-8 w-auto object-contain mr-2 flex-shrink-0"
                 />
               )}
-              <span className="text-lg font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter truncate">
-                {systemSettings.companyName || 'RAJ ELECTRICAL SERVICES'}
-              </span>
+              <div className="flex flex-col min-w-0">
+                <span className="text-sm font-bold text-secondary truncate leading-tight">
+                  {systemSettings.companyName || 'Raj Electrical Services'}
+                </span>
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-primary truncate">
+                  {systemSettings.appName || 'Admin Panel'}
+                </span>
+              </div>
             </div>
             <button
               onClick={() => setSidebarOpen(false)}
@@ -208,9 +227,14 @@ const AdminLayout = () => {
                   className="h-10 w-auto object-contain mr-3"
                 />
               )}
-              <span className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter">
-                {systemSettings.companyName || 'RAJ ELECTRICAL SERVICES'}
-              </span>
+              <div className="flex flex-col">
+                <span className="text-lg font-bold text-secondary leading-tight">
+                  {systemSettings.companyName || 'Raj Electrical Services'}
+                </span>
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-primary">
+                  {systemSettings.appName || 'Admin Panel'}
+                </span>
+              </div>
             </div>
           </div>
 

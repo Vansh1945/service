@@ -17,8 +17,8 @@ const CustomerLayout = () => {
     const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
     const [systemSettings, setSystemSettings] = useState({
         companyName: '',
-        logo: null,
-        // tagline: ''
+        appName: '',
+        logo: null
     });
     const location = useLocation();
     const navigate = useNavigate();
@@ -28,13 +28,23 @@ const CustomerLayout = () => {
     useEffect(() => {
         const fetchSystemSettings = async () => {
             try {
+                let globalCompany = 'Raj Electrical Services';
+                try {
+                    const globalRes = await SystemService.getSystemSetting();
+                    if (globalRes.data?.success) {
+                        globalCompany = globalRes.data.data?.companyName || globalCompany;
+                    }
+                } catch (globalErr) {
+                    console.error('Failed to fetch global settings in CustomerLayout:', globalErr);
+                }
+
                 const cached = localStorage.getItem('branding_customer');
                 if (cached) {
                     const data = JSON.parse(cached);
                     setSystemSettings({
-                        companyName: data.appName || 'RAJ ELECTRICAL SERVICES',
+                        companyName: globalCompany,
+                        appName: data.appName || 'Customer App',
                         logo: data.logo || null,
-                        // tagline: data.description || ''
                     });
                 }
 
@@ -42,9 +52,9 @@ const CustomerLayout = () => {
                 if (response.data?.success) {
                     const data = response.data.data;
                     setSystemSettings({
-                        companyName: data.appName || 'RAJ ELECTRICAL SERVICES',
+                        companyName: globalCompany,
+                        appName: data.appName || 'Customer App',
                         logo: data.logo || null,
-                        // tagline: data.description || ''
                     });
                     localStorage.setItem('branding_customer', JSON.stringify(data));
                 }
@@ -62,11 +72,11 @@ const CustomerLayout = () => {
         const handleBrandingUpdate = (e) => {
             if (e.detail?.role === 'customer') {
                 const data = e.detail.data;
-                setSystemSettings({
-                    companyName: data.appName || 'RAJ ELECTRICAL SERVICES',
-                    logo: data.logo || null,
-                    tagline: data.description || ''
-                });
+                setSystemSettings(prev => ({
+                    ...prev,
+                    appName: data.appName || 'Customer App',
+                    logo: data.logo || null
+                }));
             }
         };
         window.addEventListener('brandingUpdated', handleBrandingUpdate);
@@ -116,8 +126,11 @@ const CustomerLayout = () => {
                                     <FaBolt className="h-8 md:h-10 lg:h-12 w-auto text-primary" />
                                 )}
                                 <div className="flex flex-col min-w-0">
-                                    <span className="font-bold text-sm sm:text-base md:text-lg lg:text-2xl bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent truncate">
-                                        {systemSettings.companyName || 'RAJ ELECTRICAL SERVICES'}
+                                    <span className="font-bold text-sm sm:text-base md:text-lg lg:text-xl text-secondary truncate leading-tight">
+                                        {systemSettings.companyName || 'Raj Electrical Services'}
+                                    </span>
+                                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-primary truncate">
+                                        {systemSettings.appName || 'Customer App'}
                                     </span>
                                 </div>
                             </Link>

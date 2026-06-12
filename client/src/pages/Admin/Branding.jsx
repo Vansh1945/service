@@ -673,7 +673,7 @@ const Branding = () => {
             <button
               type="button"
               onClick={() => handlePublishUpdate(activeTab)}
-              className="px-6 py-2.5 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white rounded-xl font-extrabold text-xs flex items-center gap-2 transition-all shadow-md hover:shadow-lg transform active:scale-95 animate-pulse"
+              className="px-6 py-2.5 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white rounded-xl font-extrabold text-xs flex items-center gap-2 transition-all shadow-md hover:shadow-lg transform active:scale-95"
               disabled={loading}
             >
               {loading ? <FiRefreshCw className="w-3.5 h-3.5 animate-spin" /> : <FiSend className="w-3.5 h-3.5" />}
@@ -807,74 +807,78 @@ const Branding = () => {
                     <span className="w-1.5 h-1.5 bg-gray-300 rounded-full" />
                   </div>
                   <div className="bg-gray-50 border border-gray-150 rounded-md flex-1 text-[8px] text-gray-400 py-1 px-2 font-mono truncate">
-                    https://rajelectricalservices.vercel.app/{activeTab === 'customer' ? '' : activeTab}
+                    {window.location.origin}/{activeTab === 'customer' ? '' : activeTab}
                   </div>
                 </div>
               </div>
             </div>
 
             {/* B. Install app preview (Mobile Prompt) */}
-            <div className="space-y-2.5">
-              <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider flex items-center gap-1">
-                <FiSmartphone className="w-3.5 h-3.5" /> PWA Application Installer
-              </span>
-              <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 space-y-3.5">
-                <div className="flex gap-3">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-white border border-gray-150 overflow-hidden shadow-sm">
+            {activeTab !== 'admin' && (
+              <div className="space-y-2.5">
+                <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider flex items-center gap-1">
+                  <FiSmartphone className="w-3.5 h-3.5" /> PWA Application Installer
+                </span>
+                <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 space-y-3.5">
+                  <div className="flex gap-3">
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-white border border-gray-150 overflow-hidden shadow-sm">
+                      {currentBranding.icon ? (
+                        <img src={currentBranding.icon} alt="App Icon" className="w-full h-full object-cover" />
+                      ) : (
+                        currentBranding.logo ? (
+                          <img src={currentBranding.logo} alt="App Logo Icon" className="w-full h-full object-contain p-1" />
+                        ) : (
+                          <div className="w-full h-full bg-teal-50 flex items-center justify-center font-black text-teal-600 text-sm">
+                            SV
+                          </div>
+                        )
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-extrabold text-xs text-gray-900 truncate">{currentBranding.appName}</h4>
+                      <p className="text-[10px] text-teal-600 font-bold truncate mt-0.5">{currentBranding.shortName || 'Raj'}</p>
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] text-gray-500 leading-relaxed font-medium line-clamp-2">
+                    Dynamic installation prompt preview for {currentBranding.shortName || 'PWA'}.
+                  </p>
+
+                  <button
+                    className="w-full py-2.5 bg-teal-600 hover:bg-teal-700 rounded-xl font-bold text-xs text-white transition-all text-center shadow-md shadow-teal-600/10"
+                  >
+                    Install Application
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* C. App Launcher Mockup */}
+            {activeTab !== 'admin' && (
+              <div className="space-y-2.5">
+                <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider flex items-center gap-1">
+                  <FiLayers className="w-3.5 h-3.5" /> Smartphone Launcher Mockup
+                </span>
+                <div className="bg-slate-100 rounded-2xl p-4 py-6 flex flex-col items-center justify-center gap-1 border border-gray-200/50">
+                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-white border border-gray-200/80 overflow-hidden shadow-md transform hover:scale-105 transition-all">
                     {currentBranding.icon ? (
                       <img src={currentBranding.icon} alt="App Icon" className="w-full h-full object-cover" />
                     ) : (
                       currentBranding.logo ? (
-                        <img src={currentBranding.logo} alt="App Logo Icon" className="w-full h-full object-contain p-1" />
+                        <img src={currentBranding.logo} alt="App Icon" className="w-full h-full object-contain p-1" />
                       ) : (
-                        <div className="w-full h-full bg-teal-50 flex items-center justify-center font-black text-teal-600 text-sm">
+                        <div className="w-full h-full bg-teal-50 flex items-center justify-center font-extrabold text-teal-600 text-base">
                           SV
                         </div>
                       )
                     )}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-extrabold text-xs text-gray-900 truncate">{currentBranding.appName}</h4>
-                    <p className="text-[10px] text-teal-600 font-bold truncate mt-0.5">{currentBranding.shortName || 'Raj'}</p>
-                  </div>
+                  <span className="text-[9px] font-extrabold text-slate-800 truncate max-w-[80px] drop-shadow-sm mt-1">
+                    {currentBranding.shortName || 'App Launcher'}
+                  </span>
                 </div>
-
-                <p className="text-[10px] text-gray-500 leading-relaxed font-medium line-clamp-2">
-                  Dynamic installation prompt preview for {currentBranding.shortName || 'PWA'}.
-                </p>
-
-                <button
-                  className="w-full py-2.5 bg-teal-600 hover:bg-teal-700 rounded-xl font-bold text-xs text-white transition-all text-center shadow-md shadow-teal-600/10"
-                >
-                  Install Application
-                </button>
               </div>
-            </div>
-
-            {/* C. App Launcher Mockup */}
-            <div className="space-y-2.5">
-              <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider flex items-center gap-1">
-                <FiLayers className="w-3.5 h-3.5" /> Smartphone Launcher Mockup
-              </span>
-              <div className="bg-slate-100 rounded-2xl p-4 py-6 flex flex-col items-center justify-center gap-1 border border-gray-200/50">
-                <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-white border border-gray-200/80 overflow-hidden shadow-md transform hover:scale-105 transition-all">
-                  {currentBranding.icon ? (
-                    <img src={currentBranding.icon} alt="App Icon" className="w-full h-full object-cover" />
-                  ) : (
-                    currentBranding.logo ? (
-                      <img src={currentBranding.logo} alt="App Icon" className="w-full h-full object-contain p-1" />
-                    ) : (
-                      <div className="w-full h-full bg-teal-50 flex items-center justify-center font-extrabold text-teal-600 text-base">
-                        SV
-                      </div>
-                    )
-                  )}
-                </div>
-                <span className="text-[9px] font-extrabold text-slate-800 truncate max-w-[80px] drop-shadow-sm mt-1">
-                  {currentBranding.shortName || 'App Launcher'}
-                </span>
-              </div>
-            </div>
+            )}
 
             {/* General dynamic info box */}
             <div className="bg-teal-50/50 p-4 border border-teal-100 rounded-xl flex items-start gap-2.5 text-xs animate-in fade-in duration-300">

@@ -262,9 +262,14 @@ const App = () => {
     return () => window.removeEventListener('appUpdateReceived', handleUpdateReceived);
   }, []);
 
+  const [showSplash, setShowSplash] = useState(false);
+  const [splashFade, setSplashFade] = useState(false);
+  const [globalFavicon, setGlobalFavicon] = useState(null);
+
   const [systemSettings, setSystemSettings] = useState({
     companyName: "",
     favicon: null,
+    splashScreen: null,
     timeFormat: getCachedTimeFormat(),
   });
 
@@ -278,6 +283,24 @@ const App = () => {
     document.documentElement.dataset.timeFormat = systemSettings.timeFormat;
   }, [systemSettings.timeFormat]);
 
+  // Session-based Splash Screen check
+  useEffect(() => {
+    if (!sessionStorage.getItem('splash_shown')) {
+      setShowSplash(true);
+      const fadeTimeout = setTimeout(() => {
+        setSplashFade(true);
+      }, 1500);
+      const removeTimeout = setTimeout(() => {
+        setShowSplash(false);
+        sessionStorage.setItem('splash_shown', 'true');
+      }, 2000);
+      return () => {
+        clearTimeout(fadeTimeout);
+        clearTimeout(removeTimeout);
+      };
+    }
+  }, []);
+
   useEffect(() => {
     const handleSystemSettingsUpdated = (event) => {
       const updatedSettings = event?.detail || readCachedSystemSettings();
@@ -287,6 +310,7 @@ const App = () => {
       };
 
       setSystemSettings(prev => ({ ...prev, ...normalizedSettings }));
+      setGlobalFavicon(normalizedSettings.favicon || null);
       applyDocumentSettings(normalizedSettings);
     };
 
@@ -328,17 +352,29 @@ const App = () => {
 
     const fetchBranding = async () => {
       try {
+        let globalFav = globalFavicon;
+        try {
+          const globalRes = await SystemService.getSystemSetting();
+          if (globalRes.data?.success) {
+            globalFav = globalRes.data.data?.favicon || null;
+            setGlobalFavicon(globalFav);
+            writeSystemSettingsCache(globalRes.data.data);
+          }
+        } catch (globalErr) {
+          console.error("Error fetching system settings inside App:", globalErr);
+        }
+
         const cached = localStorage.getItem(`branding_${currentRole}`);
         if (cached) {
           const brandingData = JSON.parse(cached);
-          applyBrandingData(currentRole, brandingData);
+          applyBrandingData(currentRole, brandingData, globalFav);
         }
 
         const response = await SystemService.getBrandingSettings(currentRole);
         if (response.data?.success) {
           const brandingData = response.data.data;
           localStorage.setItem(`branding_${currentRole}`, JSON.stringify(brandingData));
-          applyBrandingData(currentRole, brandingData);
+          applyBrandingData(currentRole, brandingData, globalFav);
 
           // PWA Check: Compare local version with server version
           const serverVersion = brandingData.appVersion;
@@ -375,11 +411,11 @@ const App = () => {
       }
     };
 
-    const applyBrandingData = (role, data) => {
+    const applyBrandingData = (role, data, globalFav) => {
       const manifestUrl = generateManifestUrl(role, data);
 
-      // Favicon cache bust timestamp
-      const faviconUrl = data?.favicon || data?.logo || null;
+      // Favicon cache bust timestamp - Prefer the global favicon to keep it consistent
+      const faviconUrl = globalFav || data?.favicon || data?.logo || null;
       const busterFavicon = faviconUrl ? `${faviconUrl}?v=${data?.updatedAt || Date.now()}` : null;
 
       const settings = {
@@ -396,7 +432,8 @@ const App = () => {
       setSystemSettings(prev => ({
         ...prev,
         companyName: settings.companyName,
-        favicon: settings.favicon
+        favicon: settings.favicon,
+        splashScreen: settings.splashScreen
       }));
 
       applyDocumentSettings(settings);
@@ -427,7 +464,7 @@ const App = () => {
         const data = e.detail.data;
         const manifestUrl = generateManifestUrl(currentRole, data);
 
-        const faviconUrl = data?.favicon || data?.logo || null;
+        const faviconUrl = globalFavicon || data?.favicon || data?.logo || null;
         const busterFavicon = faviconUrl ? `${faviconUrl}?v=${Date.now()}` : null;
 
         applyDocumentSettings({
@@ -444,7 +481,7 @@ const App = () => {
     };
     window.addEventListener("brandingUpdated", handleBrandingChange);
     return () => window.removeEventListener("brandingUpdated", handleBrandingChange);
-  }, [location.pathname]);
+  }, [location.pathname, globalFavicon]);
 
   const { isDeepLink, setIsDeepLink, isAuthenticated, role: userRole, isAdmin, setIntendedRoute, resetDeepLink, user } = useAuth();
   const navigate_fn = useNavigate();
@@ -518,6 +555,21 @@ const App = () => {
 
   return (
     <Suspense fallback={<LoadingSpinner />}>
+      {/* 🌟 Dynamic In-App Splash Screen Overlay */}
+      {showSplash && systemSettings.splashScreen && (
+        <div 
+          className={`fixed inset-0 z-[100000] flex items-center justify-center bg-white transition-all duration-500 ease-in-out ${
+            splashFade ? 'opacity-0 pointer-events-none' : 'opacity-100'
+          }`}
+        >
+          <img 
+            src={systemSettings.splashScreen} 
+            alt="Loading Application..." 
+            className="w-full h-full object-cover animate-fade-in" 
+          />
+        </div>
+      )}
+
       {/* Hide Navbar on deep link if authenticated as per requirements */}
       {(!isDashboardRoute && !(isDeepLink && isAuthenticated)) && <Navbar />}
 

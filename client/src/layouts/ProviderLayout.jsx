@@ -20,8 +20,8 @@ const ProviderLayout = () => {
     const [moreMenuOpen, setMoreMenuOpen] = useState(false);
     const [systemSettings, setSystemSettings] = useState({
         companyName: '',
-        logo: null,
-        tagline: ''
+        appName: '',
+        logo: null
     });
     const location = useLocation();
     const navigate = useNavigate();
@@ -150,13 +150,23 @@ const ProviderLayout = () => {
     useEffect(() => {
         const fetchSystemSettings = async () => {
             try {
+                let globalCompany = 'Raj Electrical Services';
+                try {
+                    const globalRes = await SystemService.getSystemSetting();
+                    if (globalRes.data?.success) {
+                        globalCompany = globalRes.data.data?.companyName || globalCompany;
+                    }
+                } catch (globalErr) {
+                    console.error('Failed to fetch global settings in ProviderLayout:', globalErr);
+                }
+
                 const cached = localStorage.getItem('branding_provider');
                 if (cached) {
                     const data = JSON.parse(cached);
                     setSystemSettings({
-                        companyName: data.appName || 'RAJ ELECTRICAL SERVICES',
+                        companyName: globalCompany,
+                        appName: data.appName || 'Provider App',
                         logo: data.logo || null,
-                        tagline: data.description || ''
                     });
                 }
 
@@ -164,9 +174,9 @@ const ProviderLayout = () => {
                 if (response.data?.success) {
                     const data = response.data.data;
                     setSystemSettings({
-                        companyName: data.appName || 'RAJ ELECTRICAL SERVICES',
+                        companyName: globalCompany,
+                        appName: data.appName || 'Provider App',
                         logo: data.logo || null,
-                        tagline: data.description || ''
                     });
                     localStorage.setItem('branding_provider', JSON.stringify(data));
                 }
@@ -184,11 +194,11 @@ const ProviderLayout = () => {
         const handleBrandingUpdate = (e) => {
             if (e.detail?.role === 'provider') {
                 const data = e.detail.data;
-                setSystemSettings({
-                    companyName: data.appName || 'Raj Electrical Services',
-                    logo: data.logo || null,
-                    tagline: data.description || ''
-                });
+                setSystemSettings(prev => ({
+                    ...prev,
+                    appName: data.appName || 'Provider App',
+                    logo: data.logo || null
+                }));
             }
         };
         window.addEventListener('brandingUpdated', handleBrandingUpdate);
@@ -241,9 +251,14 @@ const ProviderLayout = () => {
                                     className="h-10 w-auto object-contain mr-3"
                                 />
                             )}
-                            <span className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent font-inter">
-                                {systemSettings.companyName || 'RAJ ELECTRICAL SERVICES'}
-                            </span>
+                            <div className="flex flex-col">
+                                <span className="text-lg font-bold text-secondary leading-tight">
+                                    {systemSettings.companyName || 'Raj Electrical Services'}
+                                </span>
+                                <span className="text-[10px] font-extrabold uppercase tracking-wider text-primary">
+                                    {systemSettings.appName || 'Provider App'}
+                                </span>
+                            </div>
                         </div>
                     </div>
 
@@ -487,9 +502,14 @@ const ProviderLayout = () => {
                         <button onClick={() => setMoreMenuOpen(false)} className="text-primary hover:text-primary/80 focus:outline-none">
                             <FiArrowLeft className="w-5 h-5" />
                         </button>
-                        <span className="text-lg font-semibold text-primary" title={systemSettings.companyName}>
-                            {systemSettings.companyName || 'RAJ ELECTRICAL SERVICES'}
-                        </span>
+                        <div className="flex flex-col items-center">
+                            <span className="text-sm font-bold text-secondary leading-tight">
+                                {systemSettings.companyName || 'Raj Electrical Services'}
+                            </span>
+                            <span className="text-[9px] font-extrabold uppercase tracking-widest text-primary">
+                                {systemSettings.appName || 'Provider App'}
+                            </span>
+                        </div>
                         {/* Placeholder to balance flex layout */}
                         <div className="w-5 h-5 opacity-0" />
                     </div>
